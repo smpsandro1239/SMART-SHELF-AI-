@@ -223,3 +223,17 @@ class UserCreate(BaseModel):
     password: str = Field(min_length=12, max_length=128)
     role: UserRole = "EMPLOYEE"
     store_id: int | None = None
+
+
+class ShelfImageRead(BaseModel):
+    id: int
+    shelf_id: int
+    original_filename: str
+    mime_type: str
+    file_size_bytes: int
+    sha256: str
+    analysis_status: str
+    model_version: str | None
+    captured_at: datetime
+    created_at: datetime
+    model_config = ConfigDict(from_attributes=True)
