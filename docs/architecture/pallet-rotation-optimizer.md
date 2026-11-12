@@ -170,3 +170,9 @@ separados.
 
 
 A lista é ordenada por prioridade operacional e depois por código/posição de prateleira. O atributo `route_order` é calculado independentemente pela ordem estável das prateleiras. Prioridade de execução não é uma rota física otimizada.
+
+
+O perfil de 24 horas e o planeador de janela também filtram por uma única
+origem (`source`, predefinição `POS`). O mesmo valor é aplicado a vendas e
+afluência para impedir que contagens duplicadas entre origens sejam somadas.
+Registos importados com origem `IMPORT` requerem `source=IMPORT`.
