@@ -76,3 +76,24 @@ Consultar os produtos associados a uma prateleira:
     curl "http://localhost:8000/api/v1/shelf-products?shelf_id=1"
 
 A quantidade-alvo e o mínimo de exposição descrevem a organização da prateleira. Não representam stock de retaguarda nem stock total da loja.
+
+
+## Inventário de retaguarda
+
+O inventário é registado como histórico de snapshots provenientes de ERP, WMS, POS, importação ou registo manual. Cada registo preserva a origem e a data/hora de captura; não deve ser tratado como uma contagem visual da prateleira.
+
+Criar um snapshot:
+
+    curl -X POST http://localhost:8000/api/v1/inventory/snapshots \
+      -H "Content-Type: application/json" \
+      -d '{"store_id":1,"product_id":1,"on_hand_quantity":25,"reserved_quantity":5,"source":"ERP","external_reference":"ERP-0001"}'
+
+A quantidade disponível é calculada como stock existente menos stock reservado. Consultar histórico:
+
+    curl "http://localhost:8000/api/v1/inventory/snapshots?store_id=1&product_id=1"
+
+Consultar o último snapshot:
+
+    curl "http://localhost:8000/api/v1/inventory/latest?store_id=1&product_id=1"
+
+Fontes aceites: ERP, WMS, POS, MANUAL e IMPORT. A referência externa é opcional, mas quando fornecida não pode repetir-se para a mesma loja, produto e origem. A API mantém os snapshots anteriores para auditoria; a integração real com sistemas ERP/WMS ainda não está implementada.
