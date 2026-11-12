@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, ForeignKey, String, Text, Float, Integer, Boolean, UniqueConstraint, CheckConstraint
+from sqlalchemy import DateTime, ForeignKey, String, Text, Float, Integer, Boolean, Numeric, UniqueConstraint, CheckConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -79,3 +79,28 @@ class ShelfProduct(Base):
     position: Mapped[str | None] = mapped_column(String(80), nullable=True)
     shelf: Mapped[Shelf] = relationship(back_populates="product_links")
     product: Mapped[Product] = relationship(back_populates="shelf_links")
+
+
+class InventorySnapshot(Base):
+    """Immutable observation of backroom stock from an authoritative source."""
+    __tablename__ = "inventory_snapshots"
+    __table_args__ = (
+        UniqueConstraint("store_id", "product_id", "source", "external_reference",
+                         name="uq_inventory_snapshot_source_reference"),
+        CheckConstraint("on_hand_quantity >= 0", name="ck_inventory_on_hand_nonnegative"),
+        CheckConstraint("reserved_quantity >= 0", name="ck_inventory_reserved_nonnegative"),
+        CheckConstraint("reserved_quantity <= on_hand_quantity", name="ck_inventory_reserved_lte_on_hand"),
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    store_id: Mapped[int] = mapped_column(ForeignKey("stores.id", ondelete="CASCADE"), index=True)
+    product_id: Mapped[int] = mapped_column(ForeignKey("products.id", ondelete="CASCADE"), index=True)
+    on_hand_quantity: Mapped[float] = mapped_column(Numeric(12, 3), nullable=False)
+    reserved_quantity: Mapped[float] = mapped_column(Numeric(12, 3), default=0, nullable=False)
+    source: Mapped[str] = mapped_column(String(20), nullable=False)
+    external_reference: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    captured_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+    @property
+    def available_quantity(self) -> float:
+        return float(self.on_hand_quantity - self.reserved_quantity)
