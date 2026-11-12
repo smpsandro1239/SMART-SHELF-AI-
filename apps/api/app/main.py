@@ -37,7 +37,7 @@ from app.schemas import (
     ShelfImageOCRRunCreate, ShelfImageOCRRunRead, ShelfImageOCREvidenceRead,
     ShelfImageOCRMatchRead,
     ShelfImageFusedEvidenceRead,
-    ShelfImageReviewQueueItem,
+    ShelfImageReviewQueueItem, ShelfImageTrainingCandidateRead,
 )
 
 app = FastAPI(title=settings.app_name, version="0.2.0", description="Operational API for SMART SHELF AI.")
@@ -93,6 +93,7 @@ async def require_api_authentication(request: Request, call_next):
             (method == "POST" and path in {"/api/v1/sales/daily", "/api/v1/sales/import-csv"})
             or path == "/api/v1/product-embedding-exemplars"
             or path.startswith("/api/v1/product-embedding-exemplars/")
+            or (method == "GET" and path == "/api/v1/training-candidates/reviewed")
             or (method == "GET" and path in {"/api/v1/shelf-image-review-queue", "/api/v1/shelf-image-review-queue/summary", "/api/v1/sku-evaluation/reviewed"})
             or (method == "POST" and path.startswith("/api/v1/shelf-image-detections/"))
             or (
@@ -773,6 +774,98 @@ def list_shelf_image_review_queue(
         }
         for evidence, detection, image, shelf in rows
     ]
+
+
+@app.get(
+    "/api/v1/training-candidates/reviewed",
+    response_model=list[ShelfImageTrainingCandidateRead],
+    tags=["computer-vision"],
+)
+def list_reviewed_training_candidates(
+    request: Request,
+    product_id: int | None = None,
+    limit: int = 100,
+    offset: int = 0,
+    db: Session = Depends(get_db),
+):
+    """List human-labelled image crops eligible for dataset curation, never auto-training."""
+    actor = _request_user(db, request)
+    latest_review_id = (
+        db.query(func.max(models.DetectionSkuReview.id))
+        .filter(models.DetectionSkuReview.detection_id == models.ShelfImageDetection.id)
+        .correlate(models.ShelfImageDetection)
+        .scalar_subquery()
+    )
+    query = (
+        db.query(
+            models.DetectionSkuReview,
+            models.ShelfImageDetection,
+            models.ShelfImage,
+            models.Shelf,
+            models.Product,
+            models.Zone,
+        )
+        .join(models.ShelfImageDetection, models.DetectionSkuReview.detection_id == models.ShelfImageDetection.id)
+        .join(models.ShelfImage, models.ShelfImageDetection.shelf_image_id == models.ShelfImage.id)
+        .join(models.Shelf, models.ShelfImage.shelf_id == models.Shelf.id)
+        .join(models.Zone, models.Shelf.zone_id == models.Zone.id)
+        .join(models.Product, models.DetectionSkuReview.selected_product_id == models.Product.id)
+        .filter(
+            models.DetectionSkuReview.id == latest_review_id,
+            models.DetectionSkuReview.decision.in_(("CONFIRMED", "CORRECTED")),
+            models.DetectionSkuReview.selected_product_id.isnot(None),
+            models.Product.is_active.is_(True),
+        )
+    )
+    if actor is not None and actor.role != "ADMIN":
+        query = query.filter(models.Zone.store_id == actor.store_id)
+    if product_id is not None:
+        query = query.filter(models.Product.id == product_id)
+    rows = query.order_by(
+        models.ShelfImage.captured_at.asc(),
+        models.ShelfImage.id.asc(),
+        models.ShelfImageDetection.id.asc(),
+    ).offset(max(0, offset)).limit(max(1, min(limit, 250))).all()
+
+    candidates = []
+    for review, detection, image, shelf, product, zone in rows:
+        existing = (
+            db.query(models.ProductEmbeddingExemplar.id)
+            .filter(
+                models.ProductEmbeddingExemplar.product_id == product.id,
+                models.ProductEmbeddingExemplar.image_sha256 == image.sha256,
+            )
+            .first()
+        )
+        if existing:
+            continue
+        candidates.append({
+            "review_id": review.id,
+            "detection_id": detection.id,
+            "shelf_image_id": image.id,
+            "store_id": zone.store_id,
+            "shelf_id": shelf.id,
+            "product_id": product.id,
+            "sku": product.sku,
+            "product_name": product.name,
+            "decision": review.decision,
+            "reviewed_at": review.created_at,
+            "image_sha256": image.sha256,
+            "captured_at": image.captured_at,
+            "capture_group_key": f"image:{image.sha256}",
+            "bbox": {
+                "x_min": detection.x_min,
+                "y_min": detection.y_min,
+                "x_max": detection.x_max,
+                "y_max": detection.y_max,
+            },
+            "detector_model_version": detection.model_version,
+            "embedding_model_version": detection.embedding_model_version,
+            "dataset_status": "CANDIDATE",
+            "split_policy": "Keep all crops from the same source image in one split; session metadata is not yet available.",
+            "requires_exemplar_approval": True,
+        })
+    return candidates
 
 
 @app.get("/api/v1/shelf-images/{image_id}/evidence-fusion", response_model=list[ShelfImageFusedEvidenceRead], tags=["computer-vision"])
