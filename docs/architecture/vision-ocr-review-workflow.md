@@ -32,7 +32,7 @@ Sem `OCR_PROVIDER_FACTORY`, o worker executa apenas a visão. Se a inicializaç�
 3. Cada região OCR é associada geometricamente a, no máximo, uma deteção. Regiões sem sobreposição suficiente ficam `UNASSIGNED`.
 4. Calcular matching textual com `POST /api/v1/shelf-images/{image_id}/ocr-matches`.
 5. Calcular fusão com `POST /api/v1/shelf-images/{image_id}/evidence-fusion`.
-6. Consultar a fila com `GET /api/v1/shelf-image-review-queue`; filtrar por `status`, `limit` e `offset`.
+6. Consultar os totais por estado em `GET /api/v1/shelf-image-review-queue/summary` e a fila em `GET /api/v1/shelf-image-review-queue`; filtrar por `status`, `limit` e `offset`.
 7. Consultar a fotografia e as deteções e submeter a decisão humana em `POST /api/v1/shelf-image-detections/{detection_id}/reviews`.
 
 ## Prioridade e decisão
