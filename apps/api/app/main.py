@@ -24,7 +24,8 @@ from app.schemas import (
     InventorySnapshotCreate, InventorySnapshotRead, ReplenishmentRecommendationRead,
     ReplenishmentTaskCreate, ReplenishmentTaskStatusUpdate, ReplenishmentTaskRead,
     BootstrapAdminCreate, LoginRequest, TokenRead, UserRead, UserCreate, ShelfImageRead,
-    ShelfImageDetectionRead,
+    ShelfImageDetectionRead, ProductEmbeddingExemplarCreate,
+    ProductEmbeddingExemplarReview, ProductEmbeddingExemplarRead,
 )
 
 app = FastAPI(title=settings.app_name, version="0.2.0", description="Operational API for SMART SHELF AI.")
@@ -76,6 +77,12 @@ async def require_api_authentication(request: Request, call_next):
                 "/api/v1/products", "/api/v1/shelf-products",
             })
         )
+        supervisor_or_admin = (
+            path == "/api/v1/product-embedding-exemplars"
+            or path.startswith("/api/v1/product-embedding-exemplars/")
+        )
+        if supervisor_or_admin and user.role not in {"ADMIN", "SUPERVISOR"}:
+            return JSONResponse(status_code=403, content={"detail": "Supervisor role required"})
         if admin_only and user.role != "ADMIN":
             return JSONResponse(status_code=403, content={"detail": "Administrator role required"})
         if user.role == "EMPLOYEE":
@@ -416,6 +423,123 @@ def list_products(active_only: bool = True, limit: int = 100, db: Session = Depe
     if active_only:
         query = query.filter(models.Product.is_active.is_(True))
     return query.order_by(models.Product.name).limit(limit).all()
+
+
+
+@app.post(
+    "/api/v1/product-embedding-exemplars",
+    response_model=ProductEmbeddingExemplarRead,
+    status_code=201,
+    tags=["computer-vision"],
+)
+def create_product_embedding_exemplar(
+    payload: ProductEmbeddingExemplarCreate,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Register a reference embedding as PENDING; it is not used for matching yet."""
+    product = db.get(models.Product, payload.product_id)
+    if product is None or not product.is_active:
+        raise HTTPException(status_code=404, detail="Active product not found")
+    actor = _request_user(db, request)
+    if payload.shelf_image_id is not None:
+        source_image = db.get(models.ShelfImage, payload.shelf_image_id)
+        if source_image is None:
+            raise HTTPException(status_code=404, detail="Source shelf image not found")
+        if source_image.sha256.lower() != payload.image_sha256.lower():
+            raise HTTPException(status_code=422, detail="image_sha256 does not match source shelf image")
+        _enforce_store_scope(actor, _shelf_image_store_id(db, source_image.id))
+    item = models.ProductEmbeddingExemplar(
+        product_id=payload.product_id,
+        shelf_image_id=payload.shelf_image_id,
+        embedding=payload.embedding,
+        embedding_dimension=len(payload.embedding),
+        model_version=payload.model_version.strip(),
+        image_sha256=payload.image_sha256.lower(),
+        licence=payload.licence.strip(),
+        review_status="PENDING",
+        created_by_user_id=actor.id if actor else None,
+    )
+    db.add(item)
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="This product/model/image exemplar already exists") from exc
+    db.refresh(item)
+    return item
+
+
+@app.get(
+    "/api/v1/product-embedding-exemplars",
+    response_model=list[ProductEmbeddingExemplarRead],
+    tags=["computer-vision"],
+)
+def list_product_embedding_exemplars(
+    product_id: int | None = None,
+    review_status: str | None = None,
+    model_version: str | None = None,
+    limit: int = 100,
+    request: Request = None,
+    db: Session = Depends(get_db),
+):
+    if review_status is not None and review_status not in {"PENDING", "APPROVED", "REJECTED"}:
+        raise HTTPException(status_code=422, detail="Invalid review_status")
+    query = db.query(models.ProductEmbeddingExemplar)
+    if product_id is not None:
+        query = query.filter(models.ProductEmbeddingExemplar.product_id == product_id)
+    if review_status is not None:
+        query = query.filter(models.ProductEmbeddingExemplar.review_status == review_status)
+    if model_version is not None:
+        query = query.filter(models.ProductEmbeddingExemplar.model_version == model_version)
+    actor = _request_user(db, request)
+    if actor is not None and actor.role != "ADMIN":
+        query = query.join(
+            models.ShelfImage,
+            models.ProductEmbeddingExemplar.shelf_image_id == models.ShelfImage.id,
+            isouter=True,
+        ).join(
+            models.Shelf,
+            models.ShelfImage.shelf_id == models.Shelf.id,
+            isouter=True,
+        ).join(
+            models.Zone,
+            models.Shelf.zone_id == models.Zone.id,
+            isouter=True,
+        ).filter(
+            (models.ProductEmbeddingExemplar.shelf_image_id.is_(None))
+            | (models.Zone.store_id == actor.store_id)
+        )
+    return query.order_by(models.ProductEmbeddingExemplar.created_at.desc()).limit(max(1, min(limit, 500))).all()
+
+
+@app.patch(
+    "/api/v1/product-embedding-exemplars/{exemplar_id}/review",
+    response_model=ProductEmbeddingExemplarRead,
+    tags=["computer-vision"],
+)
+def review_product_embedding_exemplar(
+    exemplar_id: int,
+    payload: ProductEmbeddingExemplarReview,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Approve or reject a pending exemplar with reviewer attribution."""
+    item = db.get(models.ProductEmbeddingExemplar, exemplar_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="Embedding exemplar not found")
+    actor = _request_user(db, request)
+    if item.shelf_image_id is not None:
+        _enforce_store_scope(actor, _shelf_image_store_id(db, item.shelf_image_id))
+    if item.review_status != "PENDING":
+        raise HTTPException(status_code=409, detail="Only pending exemplars can be reviewed")
+    item.review_status = payload.review_status
+    item.review_notes = payload.review_notes
+    item.reviewed_by_user_id = actor.id if actor else None
+    item.reviewed_at = models.utc_now()
+    db.commit()
+    db.refresh(item)
+    return item
 
 
 @app.post("/api/v1/shelf-products", response_model=ShelfProductRead, status_code=201, tags=["catalog"])
