@@ -87,7 +87,8 @@ async def require_api_authentication(request: Request, call_next):
             })
         )
         supervisor_or_admin = (
-            path == "/api/v1/product-embedding-exemplars"
+            (method == "POST" and path == "/api/v1/sales/daily")
+            or path == "/api/v1/product-embedding-exemplars"
             or path.startswith("/api/v1/product-embedding-exemplars/")
             or (method == "GET" and path in {"/api/v1/shelf-image-review-queue", "/api/v1/shelf-image-review-queue/summary"})
             or (method == "POST" and path.startswith("/api/v1/shelf-image-detections/"))
