@@ -373,3 +373,39 @@ purchase_decision = suggest_purchase_reorder(PurchaseReorderInput(
 A política de refill já está ligada ao endpoint `GET /api/v1/replenishment/recommendations`: quando a observação inclui `observed_quantity`, a API calcula a diferença até ao alvo e limita a sugestão ao stock disponível. `POST /api/v1/tasks/from-recommendation` usa essa quantidade quando o pedido não indica outra. Observações antigas, de baixa confiança, sem quantidade medida ou sem snapshot de inventário não geram uma quantidade exata.
 
 A política de compra/transferência (`suggest_purchase_reorder`) continua isolada e não cria pedidos. A integração com visão automática ainda depende de um provider que identifique SKU e produza uma contagem validada; por agora, `observed_quantity` pode ser fornecida por um processo de observação controlado. Nenhum dos métodos foi validado com dados de loja.
+
+
+## Exemplares de produto e revisão humana para reconhecimento SKU
+
+Os embeddings de referência são guardados na tabela `product_embedding_exemplars`. A criação regista sempre um exemplar como `PENDING`; não fica disponível para reconhecimento até ser revisto.
+
+Em ambiente autenticado, estes endpoints estão limitados a administradores e supervisores:
+- `POST /api/v1/product-embedding-exemplars`: registar exemplar.
+- `GET /api/v1/product-embedding-exemplars?product_id=1&review_status=PENDING&model_version=embedding-model-v1`: consultar e filtrar exemplares.
+- `PATCH /api/v1/product-embedding-exemplars/{id}/review`: aprovar ou rejeitar.
+
+Exemplo de registo:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/product-embedding-exemplars \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "product_id": 1,
+    "embedding": [0.12, 0.34, 0.56],
+    "model_version": "embedding-model-v1",
+    "image_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "licence": "store-owned-reference-image"
+  }'
+```
+
+Rever o exemplar:
+
+```bash
+curl -X PATCH http://localhost:8000/api/v1/product-embedding-exemplars/1/review \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"review_status":"APPROVED","review_notes":"SKU e imagem confirmados"}'
+```
+
+Se for fornecido `shelf_image_id`, o SHA-256 enviado tem de coincidir com a captura guardada. Os endpoints de leitura não devolvem o vetor. A aprovação regista revisor e data, e não pode ser repetida para o mesmo exemplar. Os vetores estão guardados como JSON relacional; ainda não existe pgvector nem índice de pesquisa vetorial, e o motor de correspondência ainda não carrega estes registos automaticamente.
