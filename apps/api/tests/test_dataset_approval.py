@@ -149,6 +149,7 @@ def test_inference_gate_requires_model_metrics():
     record = make_record("a" * 64)
     errors = validate_release_record(record, mode="inference")
     assert any("approved_for_operational_inference" in error for error in errors)
+    assert any("approvals.operational_inference" in error for error in errors)
     assert any("model.metrics_by_class" in error for error in errors)
 
 
