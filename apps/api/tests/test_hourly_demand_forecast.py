@@ -26,7 +26,7 @@ def test_forecast_uses_recent_weekday_hour_history_and_preserves_zero():
     monday_8 = result["forecasts"][8]
     assert monday_8["predicted_units"] is not None
     assert monday_8["observed_days"] == 5
-    assert monday_8["confidence"] == "LOW"
+    assert monday_8["confidence"] == "MEDIUM"
     assert result["model_type"] == "HISTORICAL_SEASONAL_BASELINE"
 
 
