@@ -225,3 +225,8 @@ O worker é independente do processo HTTP e consome uma captura pendente:
 Por segurança, não existe um modelo ativo por omissão. Para ligar um provider, definir `VISION_PROVIDER_FACTORY` com um caminho Python `modulo:factory`. A factory deve devolver um objeto com `analyze(image_path)`, que devolve um objeto com `model_version` e `detections`. Cada deteção deve conter `label`, `confidence`, `x_min`, `y_min`, `x_max`, `y_max` e, opcionalmente, `product_id`. As coordenadas são normalizadas entre 0 e 1. Sem provider configurado, o worker termina sem alterar capturas pendentes; não cria resultados artificiais.
 
 O worker pode ser executado repetidamente por um supervisor externo. A seleção da captura usa bloqueio de linha quando suportado pela base de dados, para reduzir o risco de dois workers processarem a mesma imagem.
+
+
+### Repetir uma análise falhada
+
+Um administrador ou supervisor da loja pode colocar novamente uma captura no estado `PENDING` através de `POST /api/v1/shelf-images/{image_id}/retry`. Apenas imagens no estado `FAILED` podem ser repetidas; o endpoint limpa os metadados da tentativa anterior e respeita o isolamento por loja. O worker só voltará a processar a imagem se existir um provider real configurado.
