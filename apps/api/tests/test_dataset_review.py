@@ -127,3 +127,14 @@ def test_template_rejects_invalid_split_and_hash():
 
     assert template is None
     assert len(errors) == 2
+
+
+def test_unhashable_decision_is_rejected_without_crashing():
+    document = coco()
+    record, digest = approved_record(document)
+    record["reviews"][0]["decision"] = ["APPROVED"]
+
+    errors, report = validate_visual_review_record(record, document, "train", digest)
+
+    assert report["status"] == "BLOCKED"
+    assert any(".decision must be APPROVED" in error for error in errors)
