@@ -93,11 +93,12 @@ def test_any_unobserved_hour_prevents_claiming_global_lowest_traffic():
 def test_rejects_invalid_hourly_observation_values(field, value):
     rows = profile()
     rows[4][field] = value
-    with pytest.raises(ValueError):
-        recommend_low_traffic_window(
-            rows, current_hour=8, duration_hours=1,
-            residual_base_units=200, minimum_observed_days=7,
-        )
+    result = recommend_low_traffic_window(
+        rows, current_hour=8, duration_hours=1,
+        residual_base_units=200, minimum_observed_days=7,
+    )
+    assert result.recommendation == "INSUFFICIENT_DATA"
+    assert result.reason_code == "HOURLY_PROFILE_INCOMPLETE"
 
 
 def test_insufficient_coverage_prevents_global_window_recommendation():
