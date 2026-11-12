@@ -194,6 +194,7 @@ Consultar também os endpoints de catálogo, observações e inventário na docu
 
 - [Âmbito e requisitos](docs/requirements/scope.md)
 - [Plano do piloto](docs/requirements/pilot-plan.md)
+- [REA — revisão de projetos externos de monitorização de prateleiras](docs/research/retail-shelf-project-review.md)
 - [Arquitetura detalhada](docs/architecture/overview.md)
 - [Decisões de arquitetura](docs/architecture/decisions.md)
 - [Privacidade e segurança](docs/security/privacy.md)
