@@ -86,12 +86,34 @@ def build_replenishment_plan(
         key = (item.get("zone_id"), str(item.get("zone_name") or "Zona não identificada"))
         grouped.setdefault(key, []).append(item)
 
-    groups = tuple(
-        PlannedZone(zone_id=key[0], zone_name=key[1], items=tuple(items))
-        for key, items in sorted(
-            grouped.items(), key=lambda pair: (pair[0][1].casefold(), pair[0][0] or 0)
+    groups_list: list[PlannedZone] = []
+    for key, zone_items in sorted(
+        grouped.items(), key=lambda pair: (pair[0][1].casefold(), pair[0][0] or 0)
+    ):
+        # No shelf coordinates or aisle graph exist yet. Use a stable, transparent
+        # shelf-code/position ordering and label it as a suggested sequence only.
+        ordered_items = sorted(
+            zone_items,
+            key=lambda row: (
+                str(row.get("shelf_code") or "").casefold(),
+                str(row.get("position") or "").casefold(),
+                row["priority_rank"],
+                int(row.get("shelf_id") or 0),
+                int(row.get("product_id") or 0),
+            ),
         )
-    )
+        route_order_by_shelf: dict[int, int] = {}
+        for item in ordered_items:
+            shelf_id = int(item.get("shelf_id") or 0)
+            if shelf_id not in route_order_by_shelf:
+                route_order_by_shelf[shelf_id] = len(route_order_by_shelf) + 1
+            item["route_order"] = route_order_by_shelf[shelf_id]
+            item["route_basis"] = "ZONE_THEN_SHELF_CODE_AND_POSITION"
+            item["physical_route_optimized"] = False
+        groups_list.append(PlannedZone(
+            zone_id=key[0], zone_name=key[1], items=tuple(ordered_items)
+        ))
+    groups = tuple(groups_list)
     return ReplenishmentPlan(
         groups=groups,
         total_candidates=len(candidates),
