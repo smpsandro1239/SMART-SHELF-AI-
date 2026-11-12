@@ -6,7 +6,7 @@ import hashlib
 from fastapi import Depends, FastAPI, HTTPException, Request, UploadFile, File, Form
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import text
+from sqlalchemy import text, case
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from sqlalchemy import func
@@ -655,7 +655,16 @@ def list_shelf_image_review_queue(
         query = query.filter(models.Zone.store_id == actor.store_id)
     if status is not None:
         query = query.filter(models.ShelfImageFusedEvidence.status == status)
+    priority = case(
+        (models.ShelfImageFusedEvidence.status == "CONFLICT", 0),
+        (models.ShelfImageFusedEvidence.status == "AMBIGUOUS", 1),
+        (models.ShelfImageFusedEvidence.status == "TEXT_ONLY", 2),
+        (models.ShelfImageFusedEvidence.status == "UNKNOWN", 3),
+        (models.ShelfImageFusedEvidence.status == "VISUAL_ONLY", 4),
+        else_=5,
+    )
     rows = query.order_by(
+        priority.asc(),
         models.ShelfImageFusedEvidence.created_at.asc(),
         models.ShelfImageFusedEvidence.id.asc(),
     ).offset(max(0, offset)).limit(max(1, min(limit, 250))).all()
@@ -691,19 +700,30 @@ def list_shelf_image_review_queue(
 
 
 @app.get("/api/v1/shelf-images/{image_id}/evidence-fusion", response_model=list[ShelfImageFusedEvidenceRead], tags=["computer-vision"])
-def list_shelf_image_fused_evidence(image_id: int, request: Request, limit: int = 500, db: Session = Depends(get_db)):
-    """List persisted fused evidence without applying SKU or inventory changes."""
+def list_shelf_image_fused_evidence(
+    image_id: int,
+    request: Request,
+    limit: int = 500,
+    status: str | None = None,
+    db: Session = Depends(get_db),
+):
+    """List persisted fused evidence, optionally filtered by review status."""
+    allowed_statuses = {"CONSENSUS", "VISUAL_ONLY", "TEXT_ONLY", "CONFLICT", "AMBIGUOUS", "UNKNOWN"}
+    if status is not None and status not in allowed_statuses:
+        raise HTTPException(status_code=422, detail="Unsupported evidence-fusion status")
     image_record = db.get(models.ShelfImage, image_id)
     if image_record is None:
         raise HTTPException(status_code=404, detail="Shelf image not found")
     _enforce_store_scope(_request_user(db, request), _shelf_image_store_id(db, image_id))
-    return (
+    query = (
         db.query(models.ShelfImageFusedEvidence)
         .join(models.ShelfImageDetection, models.ShelfImageFusedEvidence.detection_id == models.ShelfImageDetection.id)
         .filter(models.ShelfImageDetection.shelf_image_id == image_id)
-        .order_by(models.ShelfImageFusedEvidence.id.desc())
-        .limit(max(1, min(limit, 1000))).all()
     )
+    if status is not None:
+        query = query.filter(models.ShelfImageFusedEvidence.status == status)
+    return query.order_by(models.ShelfImageFusedEvidence.id.desc()).limit(max(1, min(limit, 1000))).all()
+
 
 
 @app.post("/api/v1/shelf-images/{image_id}/ocr-runs", response_model=ShelfImageOCRRunRead, status_code=201, tags=["computer-vision"])
