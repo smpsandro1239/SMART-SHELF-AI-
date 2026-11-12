@@ -510,4 +510,4 @@ Foi adicionado um provider local CPU-first em `apps/api/app/vision_onnx.py`, com
 - [Implementação do provider](apps/api/app/vision_onnx.py)
 - [Testes do descodificador de deteções](apps/api/tests/test_vision_onnx.py)
 
-Dependências adicionais: ONNX Runtime CPU, NumPy e Pillow. A API continua separada do worker de inferência; não executa inferência durante o upload.
+Dependências adicionais: ONNX Runtime CPU, NumPy e Pillow. A API continua separada do worker de inferência; não executa inferência durante o upload. O serviço `vision-worker` está disponível no perfil opcional `vision` e só deve ser iniciado depois de configurar pesos e variáveis: `docker compose --profile vision up -d vision-worker`.
