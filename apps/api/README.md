@@ -954,7 +954,7 @@ GET /api/v1/warehouse/pallet-rotation/window-plan?store_id=1&product_id=42&palle
 
 O motor avalia as próximas 24 horas, seleciona a janela com menor afluência
 histórica e só a considera se o stock residual cobrir o consumo médio observado
-até ao início. Exige 1 a 4 horas de duração, 7 a 90 dias de histórico e um
+até ao fim da operação. Exige 1 a 4 horas de duração, 7 a 90 dias de histórico e um
 mínimo configurável de dias observados por hora. Se a cobertura for insuficiente,
 devolve `INSUFFICIENT_DATA`; se o stock não alcançar nenhuma janela elegível,
 devolve `REPLENISH_CURRENT`.
