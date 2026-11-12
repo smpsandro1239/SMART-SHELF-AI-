@@ -209,3 +209,12 @@ O projeto está em desenvolvimento incremental. O backend já inclui catálogo, 
 ## Licença
 
 A licença ainda não foi definida. Até existir uma licença explícita no repositório, não assumir que o código pode ser redistribuído ou reutilizado como software open-source.
+
+
+## Autenticação e perfis
+
+A API inclui início controlado do primeiro administrador, login com palavra-passe protegida por Argon2, tokens JWT de curta duração, consulta do perfil autenticado e criação/listagem de contas por administrador.
+
+![Fluxo de autenticação e permissões](docs/images/authentication-flow.svg)
+
+Perfis disponíveis: `ADMIN`, `SUPERVISOR` e `EMPLOYEE`. As regras atuais são uma primeira camada de autorização; o isolamento por loja e a associação de tarefas a contas individuais são etapas seguintes. O campo legado `assigned_to` continua a ser texto e não equivale a uma identidade autenticada.
