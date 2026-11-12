@@ -146,7 +146,7 @@ Transições suportadas:
 - `ASSIGNED -> IN_PROGRESS` ou `CANCELLED`
 - `IN_PROGRESS -> COMPLETED` ou `CANCELLED`
 
-As transições inválidas são rejeitadas com HTTP 409. A API regista as datas de início e conclusão. O identificador do funcionário é texto nesta fase; autenticação e gestão de utilizadores serão desenvolvidas numa etapa própria.
+As transições inválidas são rejeitadas com HTTP 409. A API regista as datas de início e conclusão. A tarefa pode ser associada a uma conta ativa da mesma loja através de `assigned_user_id`; o campo textual `assigned_to` é mantido por compatibilidade.
 
 A criação valida a loja, a pertença da prateleira à loja e a associação do produto à prateleira. A quantidade pedida é opcional e tem de ser positiva. A tarefa não é criada automaticamente a partir da recomendação nesta primeira versão.
 
@@ -181,7 +181,7 @@ Os tokens de acesso expiram ao fim do período configurado em `JWT_ACCESS_TOKEN_
 
 ## Dashboard operacional
 
-`GET /api/v1/dashboard/summary` devolve contagens de tarefas por estado e observações que requerem atenção. Os administradores podem filtrar por `store_id`; supervisores ficam limitados à loja da sua conta; funcionários veem apenas as tarefas que lhes foram atribuídas e podem iniciar/concluir essas tarefas, sem alterar a atribuição nem cancelar tarefas. Este endpoint fornece dados agregados para a futura interface, ainda não incluída no repositório.
+`GET /api/v1/dashboard/summary` devolve contagens de tarefas por estado e observações que requerem atenção. Os administradores podem filtrar por `store_id`; supervisores ficam limitados à loja da sua conta; funcionários veem apenas as tarefas que lhes foram atribuídas e podem iniciar/concluir essas tarefas, sem alterar a atribuição nem cancelar tarefas. Este endpoint fornece dados agregados consumidos pela primeira aplicação web em `apps/web`.
 
 ## Atribuição de tarefas a utilizadores
 
