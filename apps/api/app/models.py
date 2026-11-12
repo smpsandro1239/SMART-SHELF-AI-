@@ -203,6 +203,7 @@ class StorePallet(Base):
     __table_args__ = (
         UniqueConstraint("store_id", "pallet_code", name="uq_store_pallet_store_code"),
         CheckConstraint("base_quantity >= 0", name="ck_store_pallet_quantity_nonnegative"),
+        CheckConstraint("(status = 'EMPTY' AND base_quantity = 0) OR (status <> 'EMPTY' AND base_quantity > 0)", name="ck_store_pallet_status_quantity"),
         CheckConstraint("status IN ('READY', 'ON_DISPLAY', 'PARTIAL', 'RETURNED', 'REBUILDING', 'EMPTY', 'QUARANTINED')", name="ck_store_pallet_status"),
         CheckConstraint("location_type IN ('WAREHOUSE', 'PREPARATION', 'SALES_FLOOR', 'OTHER')", name="ck_store_pallet_location_type"),
     )
