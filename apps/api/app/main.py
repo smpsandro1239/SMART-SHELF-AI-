@@ -16,7 +16,9 @@ from app.config import settings
 from app.database import get_db, SessionLocal
 from app import models
 from app.security import hash_password, verify_password, create_access_token, decode_access_token
-from app.product_text import (\n    CatalogueProduct, normalize_product_text, rank_product_catalogue_candidates,\n)
+from app.product_text import (
+    CatalogueProduct, normalize_product_text, rank_product_catalogue_candidates,
+)
 from app.replenishment_policy import ShelfRefillInput, suggest_shelf_refill
 from app.schemas import (
     ObservationCreate, ObservationRead, ShelfCreate, ShelfRead,
@@ -28,7 +30,8 @@ from app.schemas import (
     ShelfImageDetectionRead, ProductEmbeddingExemplarCreate,
     ProductEmbeddingExemplarReview, ProductEmbeddingExemplarRead,
     DetectionSkuReviewCreate, DetectionSkuReviewRead,
-    ShelfImageOCRRunCreate, ShelfImageOCRRunRead, ShelfImageOCREvidenceRead,\n    ShelfImageOCRMatchRead,
+    ShelfImageOCRRunCreate, ShelfImageOCRRunRead, ShelfImageOCREvidenceRead,
+    ShelfImageOCRMatchRead,
 )
 
 app = FastAPI(title=settings.app_name, version="0.2.0", description="Operational API for SMART SHELF AI.")
