@@ -132,9 +132,11 @@ def test_operational_decisions_reject_unknown_store():
 def test_operational_decisions_prioritize_high_confidence_empty_shelves():
     with TestClient(app) as client:
         store_id, shelf_id, product_id = create_context(client)
+        second_zone = client.post("/api/v1/zones", json={
+            "store_id": store_id, "name": "Bebidas",
+        }).json()
         second_shelf = client.post("/api/v1/shelves", json={
-            "zone_id": client.get("/api/v1/zones", params={"store_id": store_id}).json()[0]["id"],
-            "code": "MER-02",
+            "zone_id": second_zone["id"], "code": "BEB-02",
         }).json()
         second_product = client.post("/api/v1/products", json={
             "sku": "DEC-SKU-02", "name": "Massa",
