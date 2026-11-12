@@ -1120,3 +1120,26 @@ curl "http://localhost:8000/api/v1/warehouse/pallet-rotation/portfolio?store_id=
 - `GET /api/v1/forecasting/hourly-demand?store_id=1&product_id=1&horizon_days=7`
 
 O baseline horário requer histórico suficiente por dia da semana/hora. Valores em falta permanecem desconhecidos; não são convertidos em zero. Os endpoints são de consulta/simulação e declaram `automatic_stock_movement_allowed=false`.
+
+
+## Portfolio inteligente de paletes baseado em histórico
+
+O endpoint `GET /api/v1/warehouse/pallet-rotation/portfolio-from-history` constrói um portfolio por palete e SKU usando registos históricos horários de vendas e tráfego. Ao contrário do endpoint `/portfolio`, não exige que o operador forneça uma única previsão de consumo e nível de afluência para todos os produtos.
+
+Exemplo:
+
+```bash
+curl "http://localhost:8000/api/v1/warehouse/pallet-rotation/portfolio-from-history?store_id=1&current_hour=10&days=28&duration_hours=1&source=POS&minimum_observed_days=7&backroom_capacity_available=true"
+```
+
+Parâmetros principais:
+- `current_hour`: hora local da loja, entre 0 e 23; tem de ser fornecida pelo sistema chamador.
+- `days`: janela histórica consultada, entre 7 e 90 dias.
+- `duration_hours`: duração operacional da janela, entre 1 e 4 horas.
+- `minimum_observed_days`: cobertura mínima exigida por hora.
+- `source`: origem coerente dos registos (POS, IMPORT, etc.).
+- `backroom_capacity_available`: confirmação operacional explícita; não é inferida pelo histórico.
+
+O resultado inclui `recommendations`, `candidate_evidence`, contagem de candidatos excluídos e eventuais erros de perfil por produto. Perfis incompletos ficam em `UNKNOWN`/sem previsão e não entram no ranking operacional. A evidência histórica é específica por SKU; a capacidade da retaguarda continua a ser confirmada pelo operador.
+
+Este endpoint é apenas consultivo: não reserva paletes, não cria tarefas e não movimenta stock. O forecast é um baseline histórico, não uma previsão em tempo real nem uma integração com POS/WMS.
