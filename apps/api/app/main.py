@@ -97,7 +97,7 @@ async def require_api_authentication(request: Request, call_next):
             })
         )
         supervisor_or_admin = (
-            (method == "POST" and path in {"/api/v1/sales/daily", "/api/v1/sales/import-csv"})
+            (method == "POST" and path in {"/api/v1/sales/daily", "/api/v1/sales/import-csv", "/api/v1/warehouse/locations", "/api/v1/warehouse/placements"})
             or path == "/api/v1/product-embedding-exemplars"
             or path.startswith("/api/v1/product-embedding-exemplars/")
             or (method == "GET" and path == "/api/v1/training-candidates/reviewed")
