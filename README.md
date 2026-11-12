@@ -72,8 +72,16 @@ A API já suporta criação de tarefas, atribuição, início, conclusão e canc
 | Registo de observações e respetiva confiança | Implementado |
 | Histórico de snapshots de inventário | Implementado |
 | Cálculo de stock disponível (existente - reservado) | Implementado |
-| Recomendações com base em observação e inventário | Implementado |\n| Plano de reposição agrupado por zona e exclusão de tarefas duplicadas ativas | Implementado na API |\n| Priorização opcional por risco de rutura calculado com vendas diárias e inventário recente | Implementado na API; depende de histórico completo |\n| Estimativa opcional de tempo decorrido por zona/prioridade, com amostra mínima | Implementado na API; requer tarefas concluídas |\n| Rotação de paletes e seleção consultiva de janelas horárias | Implementado como motor de decisão consultivo |
-| Tarefas, prioridade, atribuição e estados operacionais | Implementado na API |\n| Autenticação JWT e hash Argon2 | Implementado na API |\n| Perfis ADMIN, SUPERVISOR e EMPLOYEE | Implementado na primeira camada |\n| Associação de utilizadores e tarefas a lojas | Implementado no modelo/API |\n| Resumo operacional para dashboard | Endpoint inicial implementado |
+| Recomendações com base em observação e inventário | Implementado |
+| Plano de reposição agrupado por zona e exclusão de tarefas duplicadas ativas | Implementado na API |
+| Priorização opcional por risco de rutura calculado com vendas diárias e inventário recente | Implementado na API; depende de histórico completo |
+| Estimativa opcional de tempo decorrido por zona/prioridade, com amostra mínima | Implementado na API; requer tarefas concluídas |
+| Rotação de paletes e seleção consultiva de janelas horárias | Implementado como motor de decisão consultivo |
+| Tarefas, prioridade, atribuição e estados operacionais | Implementado na API |
+| Autenticação JWT e hash Argon2 | Implementado na API |
+| Perfis ADMIN, SUPERVISOR e EMPLOYEE | Implementado na primeira camada |
+| Associação de utilizadores e tarefas a lojas | Implementado no modelo/API |
+| Resumo operacional para dashboard | Endpoint inicial implementado |
 | Dashboard web e PWA móvel | Planeado |
 | Inferência de visão computacional | Planeado |
 | Integrações POS / ERP / WMS / robô | Dependentes de acesso e validação |
