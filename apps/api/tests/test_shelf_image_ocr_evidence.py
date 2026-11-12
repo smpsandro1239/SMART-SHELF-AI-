@@ -45,7 +45,8 @@ def isolated_database():
 
 def create_image_with_detection():
     db = TestingSession()
-    store = models.Store(code="OCR-01", name="Loja OCR")
+    suffix = db.query(models.ShelfImage).count() + 1
+    store = models.Store(code=f"OCR-{suffix:02d}", name="Loja OCR")
     db.add(store)
     db.flush()
     zone = models.Zone(store_id=store.id, name="Zona")
@@ -57,7 +58,7 @@ def create_image_with_detection():
     image = models.ShelfImage(
         shelf_id=shelf.id,
         original_filename="shelf.jpg",
-        storage_path="/tmp/ocr-shelf.jpg",
+        storage_path=f"/tmp/ocr-shelf-{suffix}.jpg",
         mime_type="image/jpeg",
         file_size_bytes=100,
         sha256="a" * 64,
