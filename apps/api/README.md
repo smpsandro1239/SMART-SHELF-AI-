@@ -1022,3 +1022,6 @@ atómica. Os zeros são preservados; horas sem registo não são criadas.
 O perfil por dia da semana aceita `source` (predefinição `POS`) para evitar
 somar contagens potencialmente sobrepostas de fontes diferentes. As médias
 de vendas e afluência são calculadas exclusivamente para a origem selecionada.
+
+
+No plano por zona, os itens são apresentados por prioridade operacional primeiro e, dentro da mesma prioridade, por código de prateleira. O campo `route_order` é calculado separadamente a partir do código/posição da prateleira. A urgência não fica escondida pela sequência heurística; esta continua sem representar um percurso físico otimizado.
