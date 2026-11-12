@@ -14,7 +14,7 @@ def upgrade() -> None:
         sa.Column("id", sa.Integer(), primary_key=True),
         sa.Column("detection_id", sa.Integer(), sa.ForeignKey("shelf_image_detections.id", ondelete="CASCADE"), nullable=False),
         sa.Column("previous_product_id", sa.Integer(), sa.ForeignKey("products.id", ondelete="SET NULL"), nullable=True),
-        sa.Column("selected_product_id", sa.Integer(), sa.ForeignKey("products.id", ondelete="SET NULL"), nullable=True),
+        sa.Column("selected_product_id", sa.Integer(), sa.ForeignKey("products.id", ondelete="RESTRICT"), nullable=True),
         sa.Column("decision", sa.String(length=12), nullable=False),
         sa.Column("reviewer_user_id", sa.Integer(), sa.ForeignKey("users.id", ondelete="SET NULL"), nullable=True),
         sa.Column("notes", sa.Text(), nullable=True),
