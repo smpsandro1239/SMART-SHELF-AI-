@@ -534,6 +534,32 @@ class HourlyStoreTrafficRecordRead(HourlyStoreTrafficRecordCreate):
     created_at: datetime
     model_config = ConfigDict(from_attributes=True)
 
+class HourlySalesBatchCreate(BaseModel):
+    records: list[HourlySalesRecordCreate] = Field(min_length=1, max_length=500)
+
+    @model_validator(mode="after")
+    def unique_external_keys(self):
+        keys = [(r.store_id, r.product_id, r.business_date, r.hour_of_day, r.source, r.external_reference) for r in self.records]
+        if len(keys) != len(set(keys)):
+            raise ValueError("Batch contains duplicate hourly sales external keys")
+        if len({r.store_id for r in self.records}) != 1:
+            raise ValueError("A batch must contain records for exactly one store")
+        return self
+
+
+class HourlyStoreTrafficBatchCreate(BaseModel):
+    records: list[HourlyStoreTrafficRecordCreate] = Field(min_length=1, max_length=500)
+
+    @model_validator(mode="after")
+    def unique_external_keys(self):
+        keys = [(r.store_id, r.business_date, r.hour_of_day, r.source, r.external_reference) for r in self.records]
+        if len(keys) != len(set(keys)):
+            raise ValueError("Batch contains duplicate hourly traffic external keys")
+        if len({r.store_id for r in self.records}) != 1:
+            raise ValueError("A batch must contain records for exactly one store")
+        return self
+
+
 
 WarehouseTemperature = Literal["AMBIENT", "CHILLED", "FROZEN"]
 
