@@ -179,12 +179,19 @@ export default function App() {
     if (imageDetections[item.id]) return;
     setDetectionLoading(item.id);
     try {
-      const [result, imageResponse, activeProducts, assignedProducts] = await Promise.all([
+      const [result, imageResponse] = await Promise.all([
         request<ShelfImageDetection[]>(`/api/v1/shelf-images/${item.id}/detections`),
         fetch(`${API_BASE}/api/v1/shelf-images/${item.id}/content`, { headers: { Authorization: `Bearer ${token}` } }),
-        request<Product[]>("/api/v1/products?active_only=true&limit=500"),
-        request<ShelfProduct[]>(`/api/v1/shelf-products?shelf_id=${item.shelf_id}`),
       ]);
+      const canReview = user?.role === "ADMIN" || user?.role === "SUPERVISOR";
+      if (canReview) {
+        const [activeProducts, assignedProducts] = await Promise.all([
+          request<Product[]>("/api/v1/products?active_only=true&limit=500"),
+          request<ShelfProduct[]>(`/api/v1/shelf-products?shelf_id=${item.shelf_id}`),
+        ]);
+        setProducts(activeProducts);
+        setShelfProducts(current => ({ ...current, [item.shelf_id]: assignedProducts.map(link => link.product_id) }));
+      }
       if (!imageResponse.ok) {
         const body = await imageResponse.json().catch(() => ({}));
         throw new Error(body.detail || `Não foi possível abrir a fotografia (HTTP ${imageResponse.status}).`);
@@ -195,8 +202,6 @@ export default function App() {
         return { ...current, [item.id]: blobUrl };
       });
       setImageDetections(current => ({ ...current, [item.id]: result }));
-      setProducts(activeProducts);
-      setShelfProducts(current => ({ ...current, [item.shelf_id]: assignedProducts.map(link => link.product_id) }));
       const reviewPairs = await Promise.all(result.map(async detection => {
         const history = await request<DetectionSkuReview[]>(`/api/v1/shelf-image-detections/${detection.id}/reviews`);
         return [detection.id, history] as const;
