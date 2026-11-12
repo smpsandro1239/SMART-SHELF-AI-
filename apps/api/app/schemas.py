@@ -620,6 +620,19 @@ class PalletRotationPolicyRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class PalletRotationSimulationRequest(BaseModel):
+    store_id: int
+    pallet_id: int
+    traffic_level: Literal["HIGH", "LOW", "UNKNOWN"]
+    backroom_capacity_available: bool
+    conventional_replenishment_minutes: float = Field(ge=0, le=1440, allow_inf_nan=False)
+    pallet_swap_minutes: float = Field(ge=0, le=1440, allow_inf_nan=False)
+    transport_minutes: float = Field(ge=0, le=1440, allow_inf_nan=False)
+    pallet_rebuild_minutes: float = Field(ge=0, le=1440, allow_inf_nan=False)
+    labour_cost_per_hour: float = Field(gt=0, le=10000, allow_inf_nan=False)
+    forecast_consumption_until_low_traffic: float = Field(ge=0, le=1_000_000_000, allow_inf_nan=False)
+
+
 class PalletLifecycleUpdate(BaseModel):
     expected_status: PalletStatus
     expected_base_quantity: float = Field(ge=0, le=1_000_000_000, allow_inf_nan=False)
