@@ -172,3 +172,38 @@ def test_hourly_traffic_schema_rejects_negative_customer_count():
     with pytest.raises(ValidationError):
         HourlyStoreTrafficRecordCreate(store_id=1, business_date="2026-11-10",
             hour_of_day=12, customer_count=-1, source="POS", external_reference="traffic-invalid")
+
+
+def test_hourly_sales_batch_rejects_duplicate_external_keys():
+    from app.schemas import HourlySalesBatchCreate
+    row = dict(store_id=1, product_id=7, business_date="2026-11-10",
+        hour_of_day=8, quantity=2, source="POS", external_reference="same-ref")
+    with pytest.raises(ValidationError):
+        HourlySalesBatchCreate(records=[row, row])
+
+
+def test_hourly_sales_batch_rejects_mixed_stores():
+    from app.schemas import HourlySalesBatchCreate
+    base = dict(product_id=7, business_date="2026-11-10", hour_of_day=8,
+        quantity=2, source="POS", external_reference="ref")
+    with pytest.raises(ValidationError):
+        HourlySalesBatchCreate(records=[dict(base, store_id=1), dict(base, store_id=2, external_reference="ref-2")])
+
+
+def test_hourly_traffic_batch_accepts_multiple_unique_rows():
+    from app.schemas import HourlyStoreTrafficBatchCreate
+    base = dict(store_id=1, business_date="2026-11-10", customer_count=10, source="POS")
+    payload = HourlyStoreTrafficBatchCreate(records=[
+        dict(base, hour_of_day=8, external_reference="traffic-08"),
+        dict(base, hour_of_day=9, external_reference="traffic-09"),
+    ])
+    assert len(payload.records) == 2
+
+
+def test_hourly_batches_enforce_maximum_of_500_rows():
+    from app.schemas import HourlySalesBatchCreate
+    row = dict(store_id=1, product_id=7, business_date="2026-11-10",
+        hour_of_day=8, quantity=2, source="POS", external_reference="row")
+    rows = [dict(row, external_reference=f"ref-{i}") for i in range(501)]
+    with pytest.raises(ValidationError):
+        HourlySalesBatchCreate(records=rows)
