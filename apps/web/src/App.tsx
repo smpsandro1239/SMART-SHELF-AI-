@@ -187,7 +187,7 @@ function TaskRow({ task, canAssign, canProgress, onUpdate }: { task: Task; canAs
     <div className="task-info"><strong>Reposição · Prateleira #{task.shelf_id}</strong><span>Produto #{task.product_id} · {task.assigned_to || "Por atribuir"} · #{task.id}</span></div>
     <span className={`priority ${task.priority.toLowerCase()}`}>{task.priority}</span>
     <span className={`task-status ${task.status.toLowerCase()}`}>{task.status.replace("_", " ")}</span>
-    {canAssign && task.status === "PENDING" && <div className="assign-control"><input aria-label={`ID do funcionário para a tarefa ${task.id}`} inputMode="numeric" placeholder="ID funcionário" value={assigneeId} onChange={e => setAssigneeId(e.target.value)} /><button className="row-action" disabled={!/^\\d+$/.test(assigneeId) || Number(assigneeId) < 1} onClick={() => onUpdate(task, "ASSIGNED", Number(assigneeId))}>Atribuir</button></div>}
+    {canAssign && task.status === "PENDING" && <div className="assign-control"><input aria-label={`ID do funcionário para a tarefa ${task.id}`} inputMode="numeric" placeholder="ID funcionário" value={assigneeId} onChange={e => setAssigneeId(e.target.value)} /><button className="row-action" disabled={!/^\d+$/.test(assigneeId) || Number(assigneeId) < 1} onClick={() => onUpdate(task, "ASSIGNED", Number(assigneeId))}>Atribuir</button></div>}
     {canProgress && next && <button className="row-action" onClick={() => onUpdate(task, next)}>{next === "IN_PROGRESS" ? "Iniciar" : "Concluir"} <ArrowUpRight size={14} /></button>}
   </div>;
 }
