@@ -4106,7 +4106,7 @@ def operational_decisions(
         "store_id": store_id,
         "count": len(decisions),
         "status_counts": counts,
-        "forecast_policy": "Média diária simples dos últimos sete dias de vendas registadas; não ajusta promoções, sazonalidade, tráfego ou dias sem registo.",
+        "forecast_policy": "Média diária simples dos dias com vendas registadas na janela móvel de sete dias; não ajusta promoções, sazonalidade, tráfego ou dias sem registo.",
         "decisions": decisions,
         "side_effects": {"tasks_created": 0, "inventory_changed": False},
     }
