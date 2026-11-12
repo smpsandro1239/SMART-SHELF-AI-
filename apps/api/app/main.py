@@ -24,6 +24,7 @@ from app.replenishment_policy import ShelfRefillInput, suggest_shelf_refill
 from app.demand_forecasting import DemandForecastInput, forecast_demand
 from app.stockout_risk import StockoutRiskInput, assess_stockout_risk
 from app.replenishment_planning import build_replenishment_plan
+from app.replenishment_risk_bridge import enrich_replenishment_with_stockout_risk
 from app.replenishment_workload import summarize_workload
 from app.warehouse_slotting import recommend_warehouse_slotting, recommend_physical_slot
 from app.packaging_units import calculate_replenishment_packs
@@ -3560,14 +3561,26 @@ def get_replenishment_plan(
     store_id: int,
     stale_after_minutes: int = 120,
     limit: int = 200,
+    include_stockout_risk: bool = False,
+    risk_source: SalesSource = "POS",
+    risk_days: int = 28,
+    risk_lead_time_days: float = 3.0,
+    risk_max_inventory_age_minutes: int = 240,
     request: Request = None,
     db: Session = Depends(get_db),
 ):
-    """Build a read-only, zone-grouped work queue from current shelf recommendations."""
+    """Build a read-only, zone-grouped work queue with optional evidence-based stockout risk."""
     if stale_after_minutes < 1 or stale_after_minutes > 10080:
         raise HTTPException(status_code=422, detail="stale_after_minutes must be between 1 and 10080")
     if limit < 1 or limit > 500:
         raise HTTPException(status_code=422, detail="limit must be between 1 and 500")
+    if include_stockout_risk:
+        if risk_days < 7 or risk_days > 365:
+            raise HTTPException(status_code=422, detail="risk_days must be between 7 and 365")
+        if risk_max_inventory_age_minutes < 1 or risk_max_inventory_age_minutes > 10080:
+            raise HTTPException(status_code=422, detail="risk_max_inventory_age_minutes must be between 1 and 10080")
+        if isinstance(risk_lead_time_days, bool) or not isinstance(risk_lead_time_days, (int, float)) or not 0 < risk_lead_time_days <= 365:
+            raise HTTPException(status_code=422, detail="risk_lead_time_days must be greater than 0 and at most 365")
     _enforce_store_scope(_request_user(db, request), store_id)
     if not db.get(models.Store, store_id):
         raise HTTPException(status_code=404, detail="Store not found")
@@ -3575,6 +3588,41 @@ def get_replenishment_plan(
     recommendations = list_replenishment_recommendations(
         store_id=store_id, stale_after_minutes=stale_after_minutes, request=request, db=db,
     )
+    risk_assessment = {
+        "enabled": include_stockout_risk,
+        "source": risk_source if include_stockout_risk else None,
+        "history_days": risk_days if include_stockout_risk else None,
+        "lead_time_days": risk_lead_time_days if include_stockout_risk else None,
+        "basis": "COMPLETE_DAILY_SALES_AND_FRESH_INVENTORY" if include_stockout_risk else None,
+        "unknown_risk_is_not_treated_as_low": True,
+    }
+    if include_stockout_risk and recommendations:
+        product_ids = sorted({
+            item["product_id"] for item in recommendations
+            if isinstance(item.get("product_id"), int) and not isinstance(item.get("product_id"), bool)
+        })
+        through_date = date.today()
+        history_start = through_date - timedelta(days=risk_days - 1)
+        sales_records = db.query(models.DailySalesRecord).filter(
+            models.DailySalesRecord.store_id == store_id,
+            models.DailySalesRecord.product_id.in_(product_ids),
+            models.DailySalesRecord.source == risk_source,
+            models.DailySalesRecord.sales_date >= history_start,
+            models.DailySalesRecord.sales_date <= through_date,
+        ).all() if product_ids else []
+        try:
+            recommendations = enrich_replenishment_with_stockout_risk(
+                recommendations,
+                sales_records,
+                through_date=through_date,
+                now=models.utc_now(),
+                days=risk_days,
+                lead_time_days=float(risk_lead_time_days),
+                max_inventory_age_minutes=risk_max_inventory_age_minutes,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
     active_tasks = db.query(models.ReplenishmentTask).filter(
         models.ReplenishmentTask.store_id == store_id,
         models.ReplenishmentTask.status.in_(("PENDING", "ASSIGNED", "IN_PROGRESS")),
@@ -3592,7 +3640,9 @@ def get_replenishment_plan(
             for group in plan.groups
         ],
         "excluded": plan.excluded,
+        "risk_assessment": risk_assessment,
         "policy": "Proposta de organização; não cria nem atribui tarefas e não substitui validação humana.",
+        "automatic_stock_movement_allowed": False,
     }
 
 
