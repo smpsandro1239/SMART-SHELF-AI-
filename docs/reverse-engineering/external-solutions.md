@@ -46,7 +46,7 @@ Uma deteção de espaço vazio não prova, isoladamente, que o produto está em 
 - Deduplicar alertas por localização e manter evidência.
 - Manter o motor de alertas independente do modelo de visão.
 
-**Limitações e verificações necessárias:**
+**Dataset e interpretação:** SKU-110K contém imagens densas de prateleiras e caixas delimitadoras para uma única classe genérica de objeto; o nome 110K refere-se aos SKUs representados nas imagens, não a 110 mil classes de identificação. O próprio repositório limita o uso do dataset a fins académicos e não comerciais. Por isso, é útil para treinar/avaliar localização e contagem de facings, mas não resolve reconhecimento SKU nem deve ser usado num produto comercial sem autorização/licença alternativa.\n\n**Limitações e verificações necessárias:**
 - O README/relatório anuncia YOLOv12-M, mas o adaptador inspecionado chama-se `YOLOv11Detector`; a versão efetivamente usada deve ser confirmada no caminho de configuração/pesos.
 - Os valores de mAP e 93% Top-1 são declarações do projeto; não foram reproduzidos nesta análise.
 - O código de identificação requer um catálogo de recortes de referência por SKU e uma estratégia para produtos visualmente semelhantes, embalagens novas e variantes.
