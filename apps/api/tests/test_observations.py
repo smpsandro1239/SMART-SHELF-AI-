@@ -310,7 +310,7 @@ def test_vision_worker_marks_provider_errors_as_failed(tmp_path, monkeypatch):
             assert process_next_image(db, BrokenProvider()) == image_id
             image = db.get(models.ShelfImage, image_id)
             assert image.analysis_status == "FAILED"
-            assert "provider unavailable" in image.analysis_error
+            assert image.analysis_error == "RuntimeError: processing failed"
             assert image.analysis_completed_at is not None
             assert db.query(models.ShelfImageDetection).filter_by(shelf_image_id=image_id).count() == 0
         finally:
