@@ -305,3 +305,10 @@ curl -X POST http://localhost:8000/api/v1/shelf-images \
 ```
 
 Definir `IMAGE_STORAGE_PATH` para um volume persistente no ambiente de execução. Em produção, recomenda-se migrar para armazenamento de objetos privado (por exemplo, S3 compatível), com encriptação, políticas de retenção, antivírus/validação completa de imagem e URLs temporárias de acesso.
+
+
+## 17. Estrutura de resultados de visão computacional
+
+Foi adicionada a tabela `shelf_image_detections` para guardar resultados produzidos por um futuro modelo: etiqueta da classe, confiança, caixa delimitadora normalizada, associação opcional a um produto e versão do modelo. O endpoint `GET /api/v1/shelf-images/{image_id}/detections` consulta estes registos respeitando o isolamento por loja.
+
+**Limite atual:** esta entrega é apenas o contrato de persistência e consulta. Não existe ainda inferência YOLO/OpenCV, worker de processamento, nem deteções automáticas. Uma classe genérica detetada não equivale à identificação fiável de um SKU; isso exigirá dados anotados e validação do modelo.
