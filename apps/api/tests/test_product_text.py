@@ -46,3 +46,36 @@ def test_invalid_ocr_confidence_and_empty_text_are_rejected():
 def test_invalid_text_queries_are_rejected():
     with pytest.raises(ValueError):
         rank_product_text_candidates("!!!", [(1, "Coca Cola")])
+
+
+
+def test_catalogue_name_match_is_not_penalized_when_optional_brand_is_missing():
+    from app.product_text import CatalogueProduct, rank_product_catalogue_candidates
+
+    result = rank_product_catalogue_candidates(
+        "Leite Meio-Gordo 1 L",
+        [
+            CatalogueProduct(1, "LEITE-1L", "Leite Meio-Gordo 1 L", "Marca A", "1 L"),
+            CatalogueProduct(2, "BEBIDA-1L", "Bebida de Aveia 1 L", "Marca B", "1 L"),
+        ],
+    )
+
+    assert result.status == "SUGGESTED"
+    assert result.product_id == 1
+    assert result.score == 1.0
+
+
+def test_catalogue_brand_is_used_as_positive_evidence_when_ocr_captures_it():
+    from app.product_text import CatalogueProduct, rank_product_catalogue_candidates
+
+    result = rank_product_catalogue_candidates(
+        "Marca A Leite Meio-Gordo 1 L",
+        [
+            CatalogueProduct(1, "LEITE-1L", "Leite Meio-Gordo 1 L", "Marca A", "1 L"),
+            CatalogueProduct(2, "LEITE-1L-B", "Leite Meio-Gordo 1 L", "Marca B", "1 L"),
+        ],
+    )
+
+    assert result.status == "SUGGESTED"
+    assert result.product_id == 1
+    assert "brand_tokens_present" in result.candidates[0].reasons
