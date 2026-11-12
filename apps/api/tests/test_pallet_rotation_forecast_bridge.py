@@ -151,3 +151,19 @@ def test_insufficient_residual_is_reported_as_interim_replenishment_not_missing_
     assert row["planning_reason"] == "RESIDUAL_CANNOT_REACH_WINDOW"
     assert row["forecast_consumption_until_low_traffic"] is None
     assert row["traffic_level"] in {"LOW", "HIGH"}
+
+
+@pytest.mark.parametrize("malformed", [None, "bad-candidate", 17, []])
+def test_malformed_candidate_is_reported_without_stopping_enrichment(malformed):
+    result = enrich_pallet_candidates_with_hourly_profiles(
+        [malformed, candidate()],
+        {42: profile()},
+        current_hour=8,
+        duration_hours=2,
+        minimum_observed_days=7,
+    )
+    assert result["candidate_count"] == 2
+    assert result["without_sufficient_profile"] == 1
+    assert result["candidates"][0]["planning_reason"] == "INVALID_CANDIDATE"
+    assert result["candidates"][0]["traffic_level"] == "UNKNOWN"
+    assert result["candidates"][1]["planning_recommendation"] == "WAIT_FOR_LOW_TRAFFIC"
