@@ -1,8 +1,8 @@
-"Explainable stockout-risk assessment from available stock and demand forecasts.
+"""Explainable stockout-risk assessment from available stock and demand forecasts.
 
 This module produces a deterministic operational risk band, not a calibrated
 probability. It does not mutate inventory or create replenishment tasks.
-"
+"""
 from __future__ import annotations
 
 from dataclasses import dataclass
