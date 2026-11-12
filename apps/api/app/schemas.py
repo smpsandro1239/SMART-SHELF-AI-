@@ -118,3 +118,30 @@ class InventorySnapshotRead(BaseModel):
     captured_at: datetime
     created_at: datetime
     model_config = ConfigDict(from_attributes=True)
+
+
+ReplenishmentStatus = Literal[
+    "NEEDS_REPLENISHMENT",
+    "BACKROOM_OUT_OF_STOCK",
+    "INVENTORY_UNKNOWN",
+    "STALE_OBSERVATION",
+    "LOW_CONFIDENCE",
+    "NO_ACTION",
+]
+
+
+class ReplenishmentRecommendationRead(BaseModel):
+    store_id: int
+    shelf_id: int
+    shelf_code: str
+    product_id: int
+    product_name: str
+    sku: str
+    observation_status: str | None
+    observation_confidence: float | None
+    observed_at: datetime | None
+    inventory_available_quantity: float | None
+    inventory_captured_at: datetime | None
+    recommendation_status: ReplenishmentStatus
+    suggested_quantity: float | None = None
+    explanation: str
