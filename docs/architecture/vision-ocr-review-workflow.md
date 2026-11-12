@@ -30,10 +30,11 @@ Sem `OCR_PROVIDER_FACTORY`, o worker executa apenas a visão. Se a inicializaç�
 1. Carregar a fotografia para `POST /api/v1/shelf-images`.
 2. O worker cria deteções visuais e, se configurado, persiste regiões OCR.
 3. Cada região OCR é associada geometricamente a, no máximo, uma deteção. Regiões sem sobreposição suficiente ficam `UNASSIGNED`.
-4. Calcular matching textual com `POST /api/v1/shelf-images/{image_id}/ocr-matches`.
-5. Calcular fusão com `POST /api/v1/shelf-images/{image_id}/evidence-fusion`.
-6. Consultar os totais por estado em `GET /api/v1/shelf-image-review-queue/summary` e a fila em `GET /api/v1/shelf-image-review-queue`; filtrar por `status`, `limit` e `offset`.
-7. Consultar a fotografia e as deteções e submeter a decisão humana em `POST /api/v1/shelf-image-detections/{detection_id}/reviews`.
+4. Depois de persistir uma execução OCR concluída, o worker chama automaticamente o serviço `app.product_pipeline.process_completed_ocr_run`: cria correspondências textuais contra produtos ativos e funde-as com os resultados visuais.
+5. O matching e a fusão são executados num savepoint isolado. Uma falha nesta fase é registada, mas não invalida as deteções visuais nem as regiões OCR já persistidas.
+6. O serviço é idempotente: preserva correspondências e fusões existentes e cria apenas os registos em falta. Os endpoints `POST /api/v1/shelf-images/{image_id}/ocr-matches` e `POST /api/v1/shelf-images/{image_id}/evidence-fusion` continuam disponíveis para execução manual.
+7. Consultar os totais por estado em `GET /api/v1/shelf-image-review-queue/summary` e a fila em `GET /api/v1/shelf-image-review-queue`; filtrar por `status`, `limit` e `offset`.
+8. Consultar a fotografia e as deteções e submeter a decisão humana em `POST /api/v1/shelf-image-detections/{detection_id}/reviews`.
 
 ## Prioridade e decisão
 
@@ -50,3 +51,10 @@ Uma revisão é um registo append-only. Se for criada nova evidência depois da 
 - A decisão humana não reescreve a saída original do modelo.
 - A execução com provider simulado valida integração, não a precisão em imagens reais.
 - Antes de um piloto, medir precisão/recall OCR, taxa de associação correta, precisão de SKU quando sugerido, cobertura, taxa de abstenção e tempo médio de revisão num conjunto de imagens autorizado e representativo.
+
+
+## Interface de operação
+
+O dashboard React apresenta a fila de revisão a administradores e supervisores, com contagens por estado, prioridade, identificação da fotografia e motivo da decisão. A ação **Abrir fotografia e rever** leva à captura correspondente, onde o operador pode consultar as caixas de deteção, os produtos atribuídos à prateleira e o histórico de decisões humanas.
+
+A fila do dashboard carrega até 50 itens prioritários. O endpoint suporta paginação por `limit` e `offset`; a navegação de todas as páginas pode ser adicionada quando o volume operacional o justificar.
