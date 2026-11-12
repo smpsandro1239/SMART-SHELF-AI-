@@ -47,3 +47,6 @@ python -m app.dataset_release \
   --visual-audit /data/reports/visual-similarity.json \
   --registry /data/dataset-registry
 ```
+
+
+A release também regista instâncias por classe e por split. Classes sem exemplos num dos conjuntos são apresentadas como avisos; é possível transformar esse requisito num gate bloqueante com `--min-class-instances N`. O número mínimo de imagens por split é configurável com `--min-images-per-split N` (por omissão, 1).
