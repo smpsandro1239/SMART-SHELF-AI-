@@ -18,6 +18,7 @@ from app.vision import VisionAnalysis, VisionProviderNotConfigured
 from app.product_embedding_service import build_approved_product_registry
 from app.product_ocr_association import associate_ocr_regions
 from app.product_text import normalize_product_text
+from app.product_pipeline import process_completed_ocr_run
 
 logger = logging.getLogger("smart_shelf.vision_worker")
 
@@ -173,6 +174,18 @@ def process_next_image(db: Session, provider, ocr_provider=None) -> int | None:
         db.flush()
         if ocr_provider is not None:
             persist_ocr_evidence(db, image_id, image_path, detection_rows, ocr_provider)
+            try:
+                # Matching/fusion is isolated from both vision and OCR persistence.
+                with db.begin_nested():
+                    pipeline_counts = process_completed_ocr_run(db, image_id)
+                    db.flush()
+                logger.info("OCR pipeline completed for shelf image %s: %s", image_id, pipeline_counts)
+            except Exception:
+                logger.exception(
+                    "OCR catalogue matching/fusion failed for shelf image %s; "
+                    "visual detections and OCR regions are retained",
+                    image_id,
+                )
         image = db.get(models.ShelfImage, image_id)
         image.analysis_status = "COMPLETED"
         image.analysis_error = None
