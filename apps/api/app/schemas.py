@@ -554,3 +554,73 @@ class ReplenishmentPackCalculationRequest(BaseModel):
     required_base_units: float = Field(gt=0, le=1_000_000_000, allow_inf_nan=False)
     packaging_code: str = Field(min_length=1, max_length=40)
     allow_open_package: bool = False
+
+
+PalletStatus = Literal["READY", "ON_DISPLAY", "PARTIAL", "RETURNED", "REBUILDING", "EMPTY", "QUARANTINED"]
+PalletLocationType = Literal["WAREHOUSE", "PREPARATION", "SALES_FLOOR", "OTHER"]
+
+
+class StorePalletCreate(BaseModel):
+    store_id: int
+    product_id: int
+    packaging_level_id: int
+    pallet_code: str = Field(min_length=1, max_length=100)
+    lot_code: str | None = Field(default=None, max_length=100)
+    expiry_date: date | None = None
+    base_quantity: float = Field(ge=0, le=1_000_000_000, allow_inf_nan=False)
+    status: PalletStatus = "READY"
+    location_type: PalletLocationType = "WAREHOUSE"
+    location_code: str | None = Field(default=None, max_length=100)
+
+
+class StorePalletRead(BaseModel):
+    id: int
+    store_id: int
+    product_id: int
+    packaging_level_id: int
+    pallet_code: str
+    lot_code: str | None
+    expiry_date: date | None
+    base_quantity: float
+    status: PalletStatus
+    location_type: PalletLocationType
+    location_code: str | None
+    created_at: datetime
+    updated_at: datetime
+    model_config = ConfigDict(from_attributes=True)
+
+
+class PalletRotationPolicyCreate(BaseModel):
+    store_id: int
+    product_id: int
+    threshold_ratio: float = Field(default=0.5, gt=0, le=1, allow_inf_nan=False)
+    is_enabled: bool = True
+
+
+class PalletRotationPolicyRead(BaseModel):
+    id: int
+    store_id: int
+    product_id: int
+    threshold_ratio: float
+    is_enabled: bool
+    created_at: datetime
+    updated_at: datetime
+    model_config = ConfigDict(from_attributes=True)
+
+
+class PalletRotationEventRead(BaseModel):
+    id: int
+    pallet_id: int
+    event_type: str
+    from_location_type: str | None
+    from_location_code: str | None
+    to_location_type: str | None
+    to_location_code: str | None
+    quantity_before: float
+    quantity_after: float
+    lot_code: str | None
+    expiry_date: date | None
+    reason: str | None
+    performed_by_user_id: int | None
+    occurred_at: datetime
+    model_config = ConfigDict(from_attributes=True)
