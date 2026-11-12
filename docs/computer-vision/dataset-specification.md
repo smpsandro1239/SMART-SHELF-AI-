@@ -83,3 +83,15 @@ Registar a licença e origem de cada imagem, modelo base, pesos, código e ferra
 - [NVIDIA — formato COCO e preparação de dados RT-DETR](https://docs.nvidia.com/tao/tao-toolkit/7.3.0/text/cv_finetuning/pytorch/object_detection/rt_detr.html)
 
 Esta especificação não afirma que existe um dataset, modelo treinado ou capacidade de inferência em produção.
+
+
+## 11. Validar anotações antes do treino
+
+Foi disponibilizado um validador Python baseado apenas na biblioteca standard. A partir de `apps/api`, executar:
+
+```bash
+python -m app.coco_dataset --annotations /caminho/annotations/instances_train.json
+python -m app.coco_dataset --annotations /caminho/annotations/instances_train.json --image-root /caminho/images/train --check-files
+```
+
+O validador verifica IDs duplicados, referências a imagens/categorias inexistentes, dimensões, caixas fora da imagem, áreas inválidas e, opcionalmente, existência dos ficheiros e tentativas de escapar ao diretório de imagens. Não substitui revisão visual das anotações nem valida o conteúdo real das imagens.
