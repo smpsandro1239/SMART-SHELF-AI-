@@ -40,6 +40,8 @@ def parse_daily_sales_csv(payload: bytes) -> list[ParsedSalesRow]:
     rows: list[ParsedSalesRow] = []
     seen_references: set[str] = set()
     for line_number, raw in enumerate(reader, start=2):
+        if None in raw:
+            raise ValueError(f"Too many columns at CSV line {line_number}")
         if not raw or all(value is None or not value.strip() for value in raw.values()):
             continue
         if len(rows) >= MAX_IMPORT_ROWS:
