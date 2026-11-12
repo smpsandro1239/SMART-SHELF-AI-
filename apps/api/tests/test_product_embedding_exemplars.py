@@ -141,7 +141,7 @@ def test_exemplar_requires_valid_nonzero_finite_embedding():
         )
         non_finite = client.post(
             "/api/v1/product-embedding-exemplars",
-            json=exemplar_payload(product_id, embedding=[1, float("nan"), 2]),
+            json=exemplar_payload(product_id, embedding=[1, "NaN", 2]),
         )
 
         assert zero.status_code == 422
