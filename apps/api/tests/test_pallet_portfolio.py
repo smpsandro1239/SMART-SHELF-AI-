@@ -177,3 +177,20 @@ def test_boolean_numeric_evidence_is_excluded(field, value):
     assert result.considered == 0
     assert result.excluded == 1
     assert result.recommendations == ()
+
+
+
+def test_ready_replacement_pallet_is_allocated_to_only_one_display_pallet():
+    from app.pallet_portfolio import allocate_ready_replacements
+
+    candidates = [(42, 3), (42, 3), (42, 3), (99, 3)]
+    ready = [(42, 3), (99, 3)]
+    assert allocate_ready_replacements(candidates, ready) == (True, False, False, True)
+
+
+def test_ready_replacement_allocation_preserves_candidate_order_and_counts():
+    from app.pallet_portfolio import allocate_ready_replacements
+
+    candidates = [(42, 3), (42, 3), (42, 3)]
+    ready = [(42, 3), (42, 3)]
+    assert allocate_ready_replacements(candidates, ready) == (True, True, False)
