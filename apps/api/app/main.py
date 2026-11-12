@@ -419,14 +419,6 @@ def list_shelf_image_detections(
     )
 
 
-@app.post(
-    "/api/v1/shelf-image-detections/{detection_id}/reviews",
-    response_model=DetectionSkuReviewRead,
-    status_code=201,
-    tags=["computer-vision"],
-)
-
-
 @app.post("/api/v1/shelf-images/{image_id}/ocr-matches", response_model=list[ShelfImageOCRMatchRead], tags=["computer-vision"])
 def match_shelf_image_ocr_to_catalogue(image_id: int, request: Request, db: Session = Depends(get_db)):
     """Rank active catalogue candidates for OCR text grouped by product detection."""
@@ -604,6 +596,14 @@ def list_shelf_image_ocr_runs(image_id: int, request: Request, limit: int = 100,
         .order_by(models.ShelfImageOCRRun.id.desc())
         .limit(max(1, min(limit, 500))).all()
     )
+
+
+@app.post(
+    "/api/v1/shelf-image-detections/{detection_id}/reviews",
+    response_model=DetectionSkuReviewRead,
+    status_code=201,
+    tags=["computer-vision"],
+)
 
 
 def create_detection_sku_review(
