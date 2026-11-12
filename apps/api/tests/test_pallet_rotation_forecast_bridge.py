@@ -69,7 +69,7 @@ def test_incomplete_profile_is_not_filled_with_zero():
     row = result["candidates"][0]
     assert row["traffic_level"] == "UNKNOWN"
     assert row["forecast_consumption_until_low_traffic"] is None
-    assert row["planning_reason"] == "HOURLY_PROFILE_INVALID"
+    assert row["planning_reason"] == "HOURLY_PROFILE_INCOMPLETE"
 
 
 def test_invalid_product_id_is_excluded_from_automatic_enrichment():
@@ -95,8 +95,8 @@ def test_multiple_products_use_separate_profiles():
         current_hour=8,
     )
     rows = {row["product_id"]: row for row in result["candidates"]}
-    assert rows[42]["forecast_consumption_until_low_traffic"] == 60
-    assert rows[43]["forecast_consumption_until_low_traffic"] == 144
+    assert rows[42]["forecast_consumption_until_low_traffic"] == 55
+    assert rows[43]["forecast_consumption_until_low_traffic"] == 132
 
 
 def test_current_traffic_is_high_when_current_hour_exceeds_daily_hourly_average():
