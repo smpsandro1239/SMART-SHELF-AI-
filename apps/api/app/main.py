@@ -26,6 +26,7 @@ from app.stockout_risk import StockoutRiskInput, assess_stockout_risk
 from app.replenishment_planning import build_replenishment_plan
 from app.replenishment_workload import summarize_workload
 from app.warehouse_slotting import recommend_warehouse_slotting, recommend_physical_slot
+from app.packaging_units import calculate_replenishment_packs, convert_to_base_units
 from app.sku_review_evaluation import build_reviewed_prediction_report
 from app.sales_import import parse_daily_sales_csv
 from app.schemas import (
@@ -44,6 +45,7 @@ from app.schemas import (
     ShelfImageFusedEvidenceRead,
     ShelfImageReviewQueueItem, ShelfImageTrainingCandidateRead, CaptureSessionCreate, CaptureSessionRead,
     WarehouseLocationCreate, WarehouseProductProfileCreate, WarehousePlacementCreate,
+    ProductPackagingLevelCreate,
 )
 
 app = FastAPI(title=settings.app_name, version="0.2.0", description="Operational API for SMART SHELF AI.")
@@ -93,7 +95,7 @@ async def require_api_authentication(request: Request, call_next):
             or (method == "POST" and path in {
                 "/api/v1/stores", "/api/v1/zones", "/api/v1/shelves",
                 "/api/v1/products", "/api/v1/shelf-products",
-                "/api/v1/warehouse/product-profiles",
+                "/api/v1/warehouse/product-profiles", "/api/v1/warehouse/product-packaging",
             })
         )
         supervisor_or_admin = (
@@ -1586,6 +1588,106 @@ def create_warehouse_placement(
         raise HTTPException(status_code=409, detail="A placement for this product already exists at this location") from exc
     db.refresh(placement)
     return placement
+
+
+@app.post("/api/v1/warehouse/product-packaging", status_code=201, tags=["warehouse"])
+def create_product_packaging_level(
+    payload: ProductPackagingLevelCreate,
+    db: Session = Depends(get_db),
+):
+    product = db.get(models.Product, payload.product_id)
+    if product is None:
+        raise HTTPException(status_code=404, detail="Product not found")
+    if payload.package_type == "UNIT" and payload.base_units_per_package != 1:
+        raise HTTPException(status_code=422, detail="UNIT packaging must equal exactly one base unit")
+    if payload.package_type in {"CASE", "PALLET"} and payload.base_units_per_package <= 1:
+        raise HTTPException(status_code=422, detail="CASE and PALLET packaging must contain more than one base unit")
+    if db.query(models.ProductPackagingLevel).filter_by(product_id=payload.product_id, code=payload.code).first():
+        raise HTTPException(status_code=409, detail="Packaging code already exists for this product")
+    if payload.is_replenishment_unit and db.query(models.ProductPackagingLevel).filter_by(
+        product_id=payload.product_id, is_replenishment_unit=True, is_active=True
+    ).first():
+        raise HTTPException(status_code=409, detail="A replenishment unit is already configured for this product")
+    if payload.is_ordering_unit and db.query(models.ProductPackagingLevel).filter_by(
+        product_id=payload.product_id, is_ordering_unit=True, is_active=True
+    ).first():
+        raise HTTPException(status_code=409, detail="An ordering unit is already configured for this product")
+    level = models.ProductPackagingLevel(**payload.model_dump())
+    db.add(level)
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Packaging level conflicts with existing product data") from exc
+    db.refresh(level)
+    return level
+
+
+@app.get("/api/v1/warehouse/product-packaging", tags=["warehouse"])
+def list_product_packaging_levels(
+    product_id: int,
+    db: Session = Depends(get_db),
+):
+    if db.get(models.Product, product_id) is None:
+        raise HTTPException(status_code=404, detail="Product not found")
+    return (
+        db.query(models.ProductPackagingLevel)
+        .filter(
+            models.ProductPackagingLevel.product_id == product_id,
+            models.ProductPackagingLevel.is_active.is_(True),
+        )
+        .order_by(models.ProductPackagingLevel.base_units_per_package)
+        .all()
+    )
+
+
+@app.get("/api/v1/warehouse/replenishment-units", tags=["warehouse"])
+def calculate_replenishment_units(
+    store_id: int,
+    product_id: int,
+    required_base_units: float,
+    packaging_code: str,
+    allow_open_package: bool = False,
+    request: Request = None,
+    db: Session = Depends(get_db),
+):
+    """Convert a shelf refill quantity into logistics packs and base units."""
+    _enforce_store_scope(_request_user(db, request), store_id)
+    if db.get(models.Store, store_id) is None:
+        raise HTTPException(status_code=404, detail="Store not found")
+    product = db.get(models.Product, product_id)
+    if product is None or not product.is_active:
+        raise HTTPException(status_code=404, detail="Active product not found")
+    level = db.query(models.ProductPackagingLevel).filter_by(
+        product_id=product_id, code=packaging_code, is_active=True
+    ).first()
+    if level is None:
+        raise HTTPException(status_code=404, detail="Active packaging level not found")
+    base_level = db.query(models.ProductPackagingLevel).filter_by(
+        product_id=product_id, package_type="UNIT", base_units_per_package=1,
+        is_replenishment_unit=True, is_active=True,
+    ).first()
+    try:
+        result = calculate_replenishment_packs(
+            required_base_units=required_base_units,
+            base_units_per_package=level.base_units_per_package,
+            allow_open_package=allow_open_package,
+            base_unit_replenishment_available=base_level is not None,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {
+        "store_id": store_id,
+        "product_id": product_id,
+        "product_name": product.name,
+        "base_unit": product.unit,
+        "packaging_code": level.code,
+        "packaging_name": level.name,
+        "package_type": level.package_type,
+        "base_units_per_package": float(level.base_units_per_package),
+        "allow_open_package": allow_open_package,
+        **result,
+    }
 
 
 @app.get("/api/v1/warehouse/physical-slotting", tags=["warehouse"])
