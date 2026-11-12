@@ -27,6 +27,7 @@ from app.replenishment_planning import build_replenishment_plan
 from app.replenishment_risk_bridge import enrich_replenishment_with_stockout_risk
 from app.replenishment_workload import summarize_workload
 from app.replenishment_effort import enrich_plan_with_effort_estimates
+from app.warehouse_pick_planning import build_warehouse_pick_plan
 from app.warehouse_slotting import recommend_warehouse_slotting, recommend_physical_slot
 from app.packaging_units import calculate_replenishment_packs
 from app.pallet_rotation import evaluate_pallet_rotation, PalletRotationInputError
@@ -3570,6 +3571,7 @@ def get_replenishment_plan(
     include_effort_estimates: bool = False,
     effort_history_days: int = 90,
     effort_minimum_sample_size: int = 5,
+    include_warehouse_pick_plan: bool = False,
     request: Request = None,
     db: Session = Depends(get_db),
 ):
@@ -3678,6 +3680,67 @@ def get_replenishment_plan(
     ).all()
     active_keys = {(task.shelf_id, task.product_id) for task in active_tasks}
     plan = build_replenishment_plan(recommendations, active_keys=active_keys, limit=limit)
+
+    warehouse_pick_plan = {
+        "enabled": include_warehouse_pick_plan,
+        "status": "NOT_REQUESTED",
+        "read_only": True,
+        "stock_reserved": False,
+        "stock_movement_allowed": False,
+    }
+    if include_warehouse_pick_plan:
+        planned_items = [dict(item) for group in plan.groups for item in group.items]
+        planned_product_ids = sorted({
+            item["product_id"] for item in planned_items
+            if isinstance(item.get("product_id"), int)
+            and not isinstance(item.get("product_id"), bool)
+        })
+        profile_rows = db.query(
+            models.WarehouseProductProfile.product_id,
+            models.WarehouseProductProfile.temperature_requirement,
+        ).filter(
+            models.WarehouseProductProfile.product_id.in_(planned_product_ids)
+        ).all() if planned_product_ids else []
+        profile_by_product = {
+            product_id: temperature for product_id, temperature in profile_rows
+        }
+        for item in planned_items:
+            item["temperature_requirement"] = profile_by_product.get(item["product_id"])
+
+        placement_rows = db.query(
+            models.WarehouseProductPlacement,
+            models.WarehouseLocation,
+            models.WarehouseProductProfile.temperature_requirement,
+        ).join(
+            models.WarehouseLocation,
+            models.WarehouseProductPlacement.location_id == models.WarehouseLocation.id,
+        ).outerjoin(
+            models.WarehouseProductProfile,
+            models.WarehouseProductPlacement.product_id == models.WarehouseProductProfile.product_id,
+        ).filter(
+            models.WarehouseLocation.store_id == store_id,
+            models.WarehouseLocation.is_active.is_(True),
+            models.WarehouseProductPlacement.is_active.is_(True),
+            models.WarehouseProductPlacement.product_id.in_(planned_product_ids),
+        ).all() if planned_product_ids else []
+        placements = [
+            {
+                "product_id": placement.product_id,
+                "location_id": location.id,
+                "location_code": location.code,
+                "aisle": location.aisle,
+                "rack": location.rack,
+                "bin_code": location.bin_code,
+                "distance_to_picking_m": location.distance_to_picking_m,
+                "temperature_zone": location.temperature_zone,
+                "quantity": placement.quantity,
+                "is_active": placement.is_active,
+            }
+            for placement, location, _temperature in placement_rows
+        ]
+        warehouse_pick_plan = build_warehouse_pick_plan(planned_items, placements)
+        warehouse_pick_plan["enabled"] = True
+
     return {
         "store_id": store_id,
         "generated_at": models.utc_now(),
@@ -3691,6 +3754,7 @@ def get_replenishment_plan(
         "excluded": plan.excluded,
         "risk_assessment": risk_assessment,
         "effort_estimation": effort_summary,
+        "warehouse_pick_plan": warehouse_pick_plan,
         "policy": "Proposta de organização; não cria nem atribui tarefas e não substitui validação humana.",
         "automatic_stock_movement_allowed": False,
     }
