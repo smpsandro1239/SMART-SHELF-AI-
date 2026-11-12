@@ -1,25 +1,58 @@
 from datetime import timedelta, timezone
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Request\nfrom fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session\nfrom sqlalchemy import func\nfrom jwt import InvalidTokenError
 
 from app.config import settings
-from app.database import get_db
-from app import models
+from app.database import get_db, SessionLocal
+from app import models\nfrom app.security import hash_password, verify_password, create_access_token, decode_access_token
 from app.schemas import (
     ObservationCreate, ObservationRead, ShelfCreate, ShelfRead,
     StoreCreate, StoreRead, ZoneCreate, ZoneRead,
     ProductCreate, ProductRead, ShelfProductCreate, ShelfProductRead,
     InventorySnapshotCreate, InventorySnapshotRead, ReplenishmentRecommendationRead,
-    ReplenishmentTaskCreate, ReplenishmentTaskStatusUpdate, ReplenishmentTaskRead,
+    ReplenishmentTaskCreate, ReplenishmentTaskStatusUpdate, ReplenishmentTaskRead,\n    BootstrapAdminCreate, LoginRequest, TokenRead, UserRead,
 )
 
 app = FastAPI(title=settings.app_name, version="0.2.0", description="Operational API for SMART SHELF AI.")
 
 
-@app.get("/health", tags=["system"])
+
+
+PUBLIC_API_PATHS = {"/api/v1/auth/bootstrap", "/api/v1/auth/login"}
+
+
+@app.middleware("http")
+async def require_api_authentication(request: Request, call_next):
+    if not request.url.path.startswith("/api/v1/") or request.url.path in PUBLIC_API_PATHS:
+        return await call_next(request)
+    authorization = request.headers.get("Authorization", "")
+    scheme, _, token = authorization.partition(" ")
+    if scheme.lower() != "bearer" or not token:
+        return JSONResponse(status_code=401, content={"detail": "Bearer token required"},
+                            headers={"WWW-Authenticate": "Bearer"})
+    try:
+        claims = decode_access_token(token)
+        user_id = int(claims["sub"])
+    except (InvalidTokenError, KeyError, TypeError, ValueError):
+        return JSONResponse(status_code=401, content={"detail": "Invalid or expired access token"},
+                            headers={"WWW-Authenticate": "Bearer"})
+    db = SessionLocal()
+    try:
+        user = db.get(models.User, user_id)
+        if user is None or not user.is_active:
+            return JSONResponse(status_code=401, content={"detail": "User account is inactive or unavailable"},
+                                headers={"WWW-Authenticate": "Bearer"})
+        request.state.user_id = user.id
+        request.state.user_role = user.role
+    finally:
+        db.close()
+    return await call_next(request)
+
+
+\n@app.get("/health", tags=["system"])
 def health():
     return {"status": "ok", "service": "smart-shelf-ai-api", "environment": settings.app_env}
 
@@ -450,3 +483,54 @@ def update_replenishment_task_status(
     db.commit()
     db.refresh(task)
     return task
+
+
+@app.post("/api/v1/auth/bootstrap", response_model=TokenRead, status_code=201, tags=["authentication"])
+def bootstrap_first_admin(
+    payload: BootstrapAdminCreate,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Create the first administrator exactly once using a private bootstrap key."""
+    supplied_key = request.headers.get("X-Bootstrap-Key", "")
+    if not settings.bootstrap_admin_key or supplied_key != settings.bootstrap_admin_key:
+        raise HTTPException(status_code=403, detail="Invalid or unconfigured bootstrap key")
+    if db.query(models.User).count() > 0:
+        raise HTTPException(status_code=409, detail="Administrator bootstrap has already been completed")
+    email = payload.email.strip().lower()
+    if "@" not in email:
+        raise HTTPException(status_code=422, detail="A valid email address is required")
+    user = models.User(
+        email=email,
+        full_name=payload.full_name.strip(),
+        password_hash=hash_password(payload.password),
+        role="ADMIN",
+        is_active=True,
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    token, expires_in = create_access_token(user_id=user.id, role=user.role)
+    return {"access_token": token, "expires_in": expires_in, "user": user}
+
+
+@app.post("/api/v1/auth/login", response_model=TokenRead, tags=["authentication"])
+def login(payload: LoginRequest, db: Session = Depends(get_db)):
+    email = payload.email.strip().lower()
+    user = db.query(models.User).filter(func.lower(models.User.email) == email).first()
+    if user is None or not user.is_active or not verify_password(payload.password, user.password_hash):
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid email or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    token, expires_in = create_access_token(user_id=user.id, role=user.role)
+    return {"access_token": token, "expires_in": expires_in, "user": user}
+
+
+@app.get("/api/v1/auth/me", response_model=UserRead, tags=["authentication"])
+def current_user(request: Request, db: Session = Depends(get_db)):
+    user = db.get(models.User, request.state.user_id)
+    if user is None or not user.is_active:
+        raise HTTPException(status_code=401, detail="User account is inactive or unavailable")
+    return user
