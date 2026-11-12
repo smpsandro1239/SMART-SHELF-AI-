@@ -45,7 +45,8 @@ from app.schemas import (
     ShelfImageFusedEvidenceRead,
     ShelfImageReviewQueueItem, ShelfImageTrainingCandidateRead, CaptureSessionCreate, CaptureSessionRead,
     WarehouseLocationCreate, WarehouseProductProfileCreate, WarehousePlacementCreate,
-    ProductPackagingLevelCreate,
+    ProductPackagingLevelCreate, StorePalletCreate, StorePalletRead,
+    PalletRotationPolicyCreate, PalletRotationPolicyRead, PalletRotationEventRead,
 )
 
 app = FastAPI(title=settings.app_name, version="0.2.0", description="Operational API for SMART SHELF AI.")
@@ -99,7 +100,7 @@ async def require_api_authentication(request: Request, call_next):
             })
         )
         supervisor_or_admin = (
-            (method == "POST" and path in {"/api/v1/sales/daily", "/api/v1/sales/import-csv", "/api/v1/warehouse/locations", "/api/v1/warehouse/placements"})
+            (method == "POST" and path in {"/api/v1/sales/daily", "/api/v1/sales/import-csv", "/api/v1/warehouse/locations", "/api/v1/warehouse/placements", "/api/v1/warehouse/pallets", "/api/v1/warehouse/pallet-rotation/policies"})
             or path == "/api/v1/product-embedding-exemplars"
             or path.startswith("/api/v1/product-embedding-exemplars/")
             or (method == "GET" and path == "/api/v1/training-candidates/reviewed")
@@ -1639,6 +1640,141 @@ def list_product_packaging_levels(
         .order_by(models.ProductPackagingLevel.base_units_per_package)
         .all()
     )
+
+
+@app.post("/api/v1/warehouse/pallets", response_model=StorePalletRead, status_code=201, tags=["warehouse"])
+def register_store_pallet(
+    payload: StorePalletCreate,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Register one identified physical pallet; does not change aggregate inventory."""
+    actor = _request_user(db, request)
+    _enforce_store_scope(actor, payload.store_id)
+    if db.get(models.Store, payload.store_id) is None:
+        raise HTTPException(status_code=404, detail="Store not found")
+    product = db.get(models.Product, payload.product_id)
+    if product is None or not product.is_active:
+        raise HTTPException(status_code=404, detail="Active product not found")
+    level = db.get(models.ProductPackagingLevel, payload.packaging_level_id)
+    if level is None or not level.is_active:
+        raise HTTPException(status_code=404, detail="Active packaging level not found")
+    if level.product_id != payload.product_id or level.package_type != "PALLET":
+        raise HTTPException(status_code=422, detail="Packaging level must be a PALLET level belonging to this product")
+    if payload.base_quantity > float(level.base_units_per_package):
+        raise HTTPException(status_code=422, detail="Pallet quantity cannot exceed configured pallet capacity")
+    if payload.status == "ON_DISPLAY" and payload.location_type != "SALES_FLOOR":
+        raise HTTPException(status_code=422, detail="ON_DISPLAY pallets must have SALES_FLOOR location type")
+    if payload.status in {"READY", "RETURNED", "REBUILDING"} and payload.location_type == "SALES_FLOOR":
+        raise HTTPException(status_code=422, detail="This pallet status is incompatible with SALES_FLOOR location")
+
+    pallet = models.StorePallet(**payload.model_dump())
+    db.add(pallet)
+    try:
+        db.flush()
+        db.add(models.PalletRotationEvent(
+            pallet_id=pallet.id,
+            event_type="REGISTERED",
+            to_location_type=pallet.location_type,
+            to_location_code=pallet.location_code,
+            quantity_before=0,
+            quantity_after=pallet.base_quantity,
+            lot_code=pallet.lot_code,
+            expiry_date=pallet.expiry_date,
+            reason="Initial pallet registration; no physical movement or aggregate stock adjustment was performed.",
+            performed_by_user_id=actor.id if actor else None,
+            occurred_at=models.utc_now(),
+        ))
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Pallet code already exists in this store or pallet data conflicts") from exc
+    db.refresh(pallet)
+    return pallet
+
+
+@app.get("/api/v1/warehouse/pallets", response_model=list[StorePalletRead], tags=["warehouse"])
+def list_store_pallets(
+    store_id: int,
+    product_id: int | None = None,
+    status: str | None = None,
+    limit: int = 200,
+    request: Request = None,
+    db: Session = Depends(get_db),
+):
+    actor = _request_user(db, request)
+    _enforce_store_scope(actor, store_id)
+    if db.get(models.Store, store_id) is None:
+        raise HTTPException(status_code=404, detail="Store not found")
+    allowed_statuses = {"READY", "ON_DISPLAY", "PARTIAL", "RETURNED", "REBUILDING", "EMPTY", "QUARANTINED"}
+    if status is not None and status not in allowed_statuses:
+        raise HTTPException(status_code=422, detail="Invalid pallet status")
+    query = db.query(models.StorePallet).filter(models.StorePallet.store_id == store_id)
+    if product_id is not None:
+        query = query.filter(models.StorePallet.product_id == product_id)
+    if status is not None:
+        query = query.filter(models.StorePallet.status == status)
+    return query.order_by(models.StorePallet.updated_at.desc(), models.StorePallet.id.desc()).limit(max(1, min(limit, 500))).all()
+
+
+@app.post("/api/v1/warehouse/pallet-rotation/policies", response_model=PalletRotationPolicyRead, status_code=201, tags=["warehouse"])
+def create_pallet_rotation_policy(
+    payload: PalletRotationPolicyCreate,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    actor = _request_user(db, request)
+    _enforce_store_scope(actor, payload.store_id)
+    if db.get(models.Store, payload.store_id) is None:
+        raise HTTPException(status_code=404, detail="Store not found")
+    product = db.get(models.Product, payload.product_id)
+    if product is None or not product.is_active:
+        raise HTTPException(status_code=404, detail="Active product not found")
+    if not db.query(models.ProductPackagingLevel).filter_by(
+        product_id=payload.product_id, package_type="PALLET", is_active=True
+    ).first():
+        raise HTTPException(status_code=422, detail="Product requires an active PALLET packaging level")
+    policy = models.PalletRotationPolicy(**payload.model_dump())
+    db.add(policy)
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="A pallet rotation policy already exists for this store and product") from exc
+    db.refresh(policy)
+    return policy
+
+
+@app.get("/api/v1/warehouse/pallet-rotation/policies", response_model=list[PalletRotationPolicyRead], tags=["warehouse"])
+def list_pallet_rotation_policies(
+    store_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    actor = _request_user(db, request)
+    _enforce_store_scope(actor, store_id)
+    if db.get(models.Store, store_id) is None:
+        raise HTTPException(status_code=404, detail="Store not found")
+    return db.query(models.PalletRotationPolicy).filter_by(store_id=store_id).order_by(
+        models.PalletRotationPolicy.product_id
+    ).all()
+
+
+@app.get("/api/v1/warehouse/pallets/{pallet_id}/events", response_model=list[PalletRotationEventRead], tags=["warehouse"])
+def list_pallet_lifecycle_events(
+    pallet_id: int,
+    store_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    actor = _request_user(db, request)
+    _enforce_store_scope(actor, store_id)
+    pallet = db.query(models.StorePallet).filter_by(id=pallet_id, store_id=store_id).first()
+    if pallet is None:
+        raise HTTPException(status_code=404, detail="Pallet not found")
+    return db.query(models.PalletRotationEvent).filter_by(pallet_id=pallet_id).order_by(
+        models.PalletRotationEvent.occurred_at, models.PalletRotationEvent.id
+    ).all()
 
 
 @app.get("/api/v1/warehouse/replenishment-units", tags=["warehouse"])
