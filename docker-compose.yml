@@ -41,6 +41,32 @@ services:
       db:
         condition: service_healthy
 
+  vision-worker:
+    profiles: ["vision"]
+    build:
+      context: ./apps/api
+    restart: unless-stopped
+    command: ["python", "-m", "app.vision_worker", "--poll-interval", "5"]
+    environment:
+      APP_ENV: development
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-smart_shelf}:${POSTGRES_PASSWORD:-local_only_change_me}@db:5432/${POSTGRES_DB:-smart_shelf}
+      IMAGE_STORAGE_PATH: /app/storage/shelf-images
+      VISION_PROVIDER_FACTORY: ${VISION_PROVIDER_FACTORY:-}
+      VISION_DETECTOR_MODEL_PATH: ${VISION_DETECTOR_MODEL_PATH:-/models/shelf-detector.onnx}
+      VISION_EMBEDDING_MODEL_PATH: ${VISION_EMBEDDING_MODEL_PATH:-}
+      VISION_MODEL_VERSION: ${VISION_MODEL_VERSION:-shelf-onnx-v1}
+      VISION_EMBEDDING_MODEL_VERSION: ${VISION_EMBEDDING_MODEL_VERSION:-shelf-embedding-v1}
+      VISION_INPUT_SIZE: ${VISION_INPUT_SIZE:-640}
+      VISION_CONFIDENCE_THRESHOLD: ${VISION_CONFIDENCE_THRESHOLD:-0.25}
+      VISION_MAX_DETECTIONS: ${VISION_MAX_DETECTIONS:-300}
+    volumes:
+      - shelf_images:/app/storage
+      - ${VISION_MODELS_DIR:-./models}:/models:ro
+    depends_on:
+      db:
+        condition: service_healthy
+
+
 volumes:
   shelf_images:
   postgres_data:
