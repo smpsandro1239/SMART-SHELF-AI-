@@ -728,3 +728,98 @@ A quantidade pedida representa unidades adicionais à ocupação já registada. 
 O resultado é uma proposta, não uma ordem de transferência. automatic_movement_allowed permanece false. A fragilidade é sinalizada para revisão de manuseamento, mas ainda não existe uma certificação de compatibilidade de materiais nem um modelo de risco de empilhamento. Também não existe otimização de percurso por grafo, apenas distância linear registada à zona de preparação.
 
 A criação de localizações e de colocações é reservada a ADMIN/SUPERVISOR e respeita o isolamento por loja. A definição do perfil físico é reservada a ADMIN, porque esse perfil é partilhado no catálogo global; as posições e quantidades permanecem associadas à loja.
+
+
+## Unidades de medida e embalagens logísticas (UOM)
+
+Cada produto tem uma unidade base (por exemplo, unidade, kg ou litro) e pode ter vários níveis logísticos configurados diretamente nessa unidade base. Os fatores não são inferidos pelo nome da embalagem.
+
+Exemplo ilustrativo para uma bebida:
+- UNIT: 1 garrafa.
+- CASE: 12 garrafas.
+- PALLET: 720 garrafas (60 caixas).
+
+Aplicar a migração:
+
+```bash
+cd apps/api
+alembic upgrade head
+```
+
+### Configurar níveis de embalagem
+
+Endpoint administrativo:
+
+```http
+POST /api/v1/warehouse/product-packaging
+Authorization: Bearer <ACCESS_TOKEN>
+Content-Type: application/json
+```
+
+Exemplo de configuração para o produto 42 (três pedidos separados):
+
+```json
+{
+  "product_id": 42,
+  "code": "UNIT",
+  "name": "Garrafa",
+  "package_type": "UNIT",
+  "base_units_per_package": 1,
+  "is_replenishment_unit": true
+}
+```
+
+```json
+{
+  "product_id": 42,
+  "code": "CASE12",
+  "name": "Caixa de 12",
+  "package_type": "CASE",
+  "base_units_per_package": 12,
+  "gross_weight_kg": 5.4,
+  "package_volume_cm3": 14000,
+  "is_ordering_unit": true
+}
+```
+
+```json
+{
+  "product_id": 42,
+  "code": "PALLET720",
+  "name": "Palete de 60 caixas",
+  "package_type": "PALLET",
+  "base_units_per_package": 720,
+  "gross_weight_kg": 340,
+  "package_volume_cm3": 950000,
+  "is_ordering_unit": false
+}
+```
+
+Cada nível declara quantas unidades base contém. UNIT tem obrigatoriamente fator 1; CASE e PALLET têm fator superior a 1. Só pode existir uma unidade de encomenda ativa e uma unidade de reposição ativa por produto. O código é único dentro de cada produto.
+
+Consultar os níveis ativos:
+
+```http
+GET /api/v1/warehouse/product-packaging?product_id=42
+Authorization: Bearer <ACCESS_TOKEN>
+```
+
+### Calcular a quantidade de reposição
+
+```http
+GET /api/v1/warehouse/replenishment-units?store_id=1&product_id=42&required_base_units=20&packaging_code=CASE12
+Authorization: Bearer <ACCESS_TOKEN>
+```
+
+Sem abertura de caixas, 20 unidades necessárias são arredondadas para 2 caixas, ou seja, 24 unidades planeadas e 4 unidades excedentes.
+
+Se a operação permitir abrir uma caixa, e existir uma unidade base configurada como unidade de reposição, pode pedir:
+
+```http
+GET /api/v1/warehouse/replenishment-units?store_id=1&product_id=42&required_base_units=20&packaging_code=CASE12&allow_open_package=true
+Authorization: Bearer <ACCESS_TOKEN>
+```
+
+O resultado será 1 caixa mais 8 unidades soltas, totalizando exatamente 20 unidades. A API não executa movimentos nem altera inventário; apenas calcula a proposta.
+
+**Regra de integridade:** todos os fatores de conversão são explícitos e relativos à unidade base do produto. O sistema não assume que todas as caixas ou paletes têm a mesma quantidade. O peso e volume de embalagem podem ser registados para planeamento logístico, mas ainda não são usados para substituir automaticamente o perfil dimensional do produto no motor de capacidade das localizações.
