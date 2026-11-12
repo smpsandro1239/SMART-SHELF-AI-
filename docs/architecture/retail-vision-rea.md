@@ -26,7 +26,7 @@ Esta separação evita treinar uma classe de deteção por SKU e permite adicion
 | [SKU-110K / CVPR 2019](https://github.com/eg4000/SKU110K_CVPR19) | 11 743 imagens de prateleiras densas e mais de 1,7 milhões de caixas; treino, validação e teste | **Muito alta para localização/densidade** | É uma classe genérica `object`, não identifica cada SKU. A documentação consultada assinala termos research-only. Não assumir autorização para uso comercial |
 | [Ultralytics SKU-110K guide](https://docs.ultralytics.com/datasets/detect/sku-110k) | Conversão/configuração do dataset e exemplo de treino de detetor | **Útil como documentação de pipeline** | A framework Ultralytics tem obrigações de licença próprias (AGPL-3.0 ou licença empresarial). Separar licença do código, pesos e dataset |
 | [RPC Dataset](https://rpc-dataset.github.io/) | Dataset de checkout/retalho com deteção e reconhecimento de produtos; leaderboard público | **Complementar** | O cenário é checkout, não prateleira contínua. Confirmar termos de acesso e licença antes de utilização; não tratar o leaderboard como prova de adequação ao piloto |
-| [DINOv2](https://github.com/facebookresearch/dinov2) | Representações visuais auto-supervisionadas para embeddings e comparação de recortes | **Alta para protótipo de SKU matching** | A licença do modelo/código não concede automaticamente direitos sobre imagens de catálogo ou datasets usados |
+| [DINOv2](https://github.com/facebookresearch/dinov2) | Representações visuais auto-supervisionadas para embeddings e comparação de recortes | **Alta para protótipo de SKU matching** | A licença do modelo/código não concede automaticamente direitos sobre imagens de catálogo ou datasets usados |\n| [Shelf Management](https://github.com/rokopi-byte/shelf_management) | Pipeline de deteção, deteção de filas, embeddings MobileNetV3 com triplet loss, pesquisa FAISS e localização determinística; publica SHARD e SHAPE | **Muito alta para auditoria/planograma e referência de pipeline** | Resultados publicados no artigo (mAP 0.752, F1 de filas 97%, top-1 de SKU 93%) não são comparáveis diretamente com o nosso cenário. Rever licença do código, pesos e datasets antes de reutilizar |\n| [Real-world grocery product recognition framework (2026)](https://www.nature.com/articles/s41598-026-42266-9) | Dataset de 13 000+ imagens, 349 categorias, oito lojas e pipeline compacto de reconhecimento de produtos | **Alta para desenhar avaliação em condições reais** | Dataset recolhido na Índia; verificar disponibilidade, licença e adequação ao retalho português. Métricas publicadas não substituem validação local |
 
 ## 3. O que devemos aproveitar
 
@@ -103,7 +103,7 @@ O avaliador COCO do projeto já produz mAP, precisão/recall e contagens TP/FP/F
 
 ## 7. Referências
 
-- SkuScope: https://github.com/escudero/skuscope
+- Shelf Management (Pietrini et al., 2024): https://doi.org/10.1016/j.eswa.2024.124635\n- SHARD / SHAPE e código: https://github.com/rokopi-byte/shelf_management\n- Real-world grocery product recognition framework (Scientific Reports, 2026): https://www.nature.com/articles/s41598-026-42266-9\n- SkuScope: https://github.com/escudero/skuscope
 - SKU-110K original: https://github.com/eg4000/SKU110K_CVPR19
 - SKU-110K documentação: https://docs.ultralytics.com/datasets/detect/sku-110k
 - RPC Dataset: https://rpc-dataset.github.io/
