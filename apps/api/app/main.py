@@ -2587,6 +2587,14 @@ def get_pallet_rotation_portfolio_from_history(
             if row.get("forecast_consumption_until_low_traffic") is not None
             and row.get("traffic_level") in {"HIGH", "LOW"}
         ]
+        interim_replenishment = [
+            row for row in enriched["candidates"]
+            if row.get("planning_recommendation") == "REPLENISH_CURRENT"
+        ]
+        insufficient_evidence = [
+            row for row in enriched["candidates"]
+            if row.get("traffic_level") == "UNKNOWN"
+        ]
         plan = build_pallet_portfolio_plan(planned_candidates, limit=limit)
     except (PalletPortfolioInputError, TypeError, ValueError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -2598,10 +2606,12 @@ def get_pallet_rotation_portfolio_from_history(
         "source": source,
         "minimum_observed_days": minimum_observed_days,
         "recommendations": list(plan.recommendations),
+        "interim_replenishment_required": interim_replenishment,
         "candidate_evidence": enriched["candidates"],
         "considered": plan.considered,
-        "excluded": len(enriched["candidates"]) - len(planned_candidates) + plan.excluded,
+        "excluded": len(insufficient_evidence) + plan.excluded,
         "candidate_pallets": len(pallets),
+        "insufficient_evidence_count": len(insufficient_evidence),
         "profiles_missing_or_invalid": profile_errors,
         "input_provenance": "HISTORICAL_HOURLY_SALES_AND_STORE_TRAFFIC",
         "simulation_only": True,
