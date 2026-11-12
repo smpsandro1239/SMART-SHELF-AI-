@@ -164,6 +164,7 @@ class ReplenishmentTaskCreate(BaseModel):
 class ReplenishmentTaskStatusUpdate(BaseModel):
     status: TaskStatus
     assigned_to: str | None = Field(default=None, min_length=1, max_length=120)
+    assigned_user_id: int | None = None
 
 
 class ReplenishmentTaskRead(BaseModel):
@@ -174,6 +175,7 @@ class ReplenishmentTaskRead(BaseModel):
     priority: TaskPriority
     status: TaskStatus
     assigned_to: str | None
+    assigned_user_id: int | None
     requested_quantity: float | None
     notes: str | None
     created_at: datetime
@@ -199,6 +201,7 @@ class LoginRequest(BaseModel):
 
 class UserRead(BaseModel):
     id: int
+    store_id: int | None
     email: str
     full_name: str
     role: UserRole
@@ -218,3 +221,4 @@ class UserCreate(BaseModel):
     full_name: str = Field(min_length=2, max_length=160)
     password: str = Field(min_length=12, max_length=128)
     role: UserRole = "EMPLOYEE"
+    store_id: int | None = None
