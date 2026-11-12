@@ -27,6 +27,7 @@ from app.replenishment_planning import build_replenishment_plan
 from app.replenishment_workload import summarize_workload
 from app.warehouse_slotting import recommend_warehouse_slotting, recommend_physical_slot
 from app.packaging_units import calculate_replenishment_packs
+from app.pallet_rotation import evaluate_pallet_rotation, PalletRotationInputError
 from app.sku_review_evaluation import build_reviewed_prediction_report
 from app.sales_import import parse_daily_sales_csv
 from app.schemas import (
@@ -46,7 +47,7 @@ from app.schemas import (
     ShelfImageReviewQueueItem, ShelfImageTrainingCandidateRead, CaptureSessionCreate, CaptureSessionRead,
     WarehouseLocationCreate, WarehouseProductProfileCreate, WarehousePlacementCreate,
     ProductPackagingLevelCreate, StorePalletCreate, StorePalletRead,
-    PalletRotationPolicyCreate, PalletRotationPolicyRead, PalletRotationPolicyUpdate, PalletRotationEventRead, PalletLifecycleUpdate,
+    PalletRotationPolicyCreate, PalletRotationPolicyRead, PalletRotationPolicyUpdate, PalletRotationEventRead, PalletLifecycleUpdate, PalletRotationSimulationRequest,
 )
 
 app = FastAPI(title=settings.app_name, version="0.2.0", description="Operational API for SMART SHELF AI.")
@@ -100,7 +101,7 @@ async def require_api_authentication(request: Request, call_next):
             })
         )
         supervisor_or_admin = (
-            (method == "POST" and (path in {"/api/v1/sales/daily", "/api/v1/sales/import-csv", "/api/v1/warehouse/locations", "/api/v1/warehouse/placements", "/api/v1/warehouse/pallets", "/api/v1/warehouse/pallet-rotation/policies"} or (path.startswith("/api/v1/warehouse/pallets/") and path.endswith("/events"))))
+            (method == "POST" and (path in {"/api/v1/sales/daily", "/api/v1/sales/import-csv", "/api/v1/warehouse/locations", "/api/v1/warehouse/placements", "/api/v1/warehouse/pallets", "/api/v1/warehouse/pallet-rotation/policies", "/api/v1/warehouse/pallet-rotation/simulate"} or (path.startswith("/api/v1/warehouse/pallets/") and path.endswith("/events"))))
             or (method == "PATCH" and path.startswith("/api/v1/warehouse/pallet-rotation/policies/"))
             or path == "/api/v1/product-embedding-exemplars"
             or path.startswith("/api/v1/product-embedding-exemplars/")
@@ -1782,6 +1783,108 @@ def list_pallet_rotation_policies(
     return db.query(models.PalletRotationPolicy).filter_by(store_id=store_id).order_by(
         models.PalletRotationPolicy.product_id
     ).all()
+
+
+@app.post("/api/v1/warehouse/pallet-rotation/simulate", tags=["warehouse"])
+def simulate_pallet_rotation(
+    payload: PalletRotationSimulationRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Evaluate one displayed pallet against registered replacement stock; read-only."""
+    actor = _request_user(db, request)
+    _enforce_store_scope(actor, payload.store_id)
+    if db.get(models.Store, payload.store_id) is None:
+        raise HTTPException(status_code=404, detail="Store not found")
+
+    pallet = db.query(models.StorePallet).filter_by(
+        id=payload.pallet_id, store_id=payload.store_id
+    ).first()
+    if pallet is None:
+        raise HTTPException(status_code=404, detail="Pallet not found")
+    if pallet.status not in {"ON_DISPLAY", "PARTIAL"} or pallet.location_type != "SALES_FLOOR":
+        raise HTTPException(status_code=422, detail="Only ON_DISPLAY or PARTIAL pallets at SALES_FLOOR can be simulated")
+
+    policy = db.query(models.PalletRotationPolicy).filter_by(
+        store_id=payload.store_id, product_id=pallet.product_id, is_enabled=True
+    ).first()
+    level = db.get(models.ProductPackagingLevel, pallet.packaging_level_id)
+    if level is None or not level.is_active or level.package_type != "PALLET":
+        raise HTTPException(status_code=422, detail="Pallet packaging level is unavailable or invalid")
+
+    replacement = db.query(models.StorePallet).filter(
+        models.StorePallet.store_id == payload.store_id,
+        models.StorePallet.product_id == pallet.product_id,
+        models.StorePallet.packaging_level_id == pallet.packaging_level_id,
+        models.StorePallet.id != pallet.id,
+        models.StorePallet.status == "READY",
+        models.StorePallet.location_type.in_(["WAREHOUSE", "PREPARATION"]),
+        models.StorePallet.base_quantity == level.base_units_per_package,
+        or_(models.StorePallet.expiry_date.is_(None), models.StorePallet.expiry_date >= date.today()),
+    ).order_by(
+        models.StorePallet.expiry_date.asc().nullslast(),
+        models.StorePallet.created_at.asc(),
+        models.StorePallet.id.asc(),
+    ).first()
+
+    try:
+        result = evaluate_pallet_rotation(
+            product_eligible=policy is not None,
+            residual_base_units=pallet.base_quantity,
+            pallet_capacity_base_units=level.base_units_per_package,
+            threshold_ratio=policy.threshold_ratio if policy else 0.5,
+            traffic_level=payload.traffic_level,
+            replacement_pallet_available=replacement is not None,
+            backroom_capacity_available=payload.backroom_capacity_available,
+            conventional_replenishment_minutes=payload.conventional_replenishment_minutes,
+            pallet_swap_minutes=payload.pallet_swap_minutes,
+            transport_minutes=payload.transport_minutes,
+            pallet_rebuild_minutes=payload.pallet_rebuild_minutes,
+            labour_cost_per_hour=payload.labour_cost_per_hour,
+            forecast_consumption_until_low_traffic=payload.forecast_consumption_until_low_traffic,
+        )
+    except PalletRotationInputError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    return {
+        "store_id": payload.store_id,
+        "product_id": pallet.product_id,
+        "display_pallet": {
+            "id": pallet.id,
+            "pallet_code": pallet.pallet_code,
+            "status": pallet.status,
+            "base_quantity": float(pallet.base_quantity),
+            "lot_code": pallet.lot_code,
+            "expiry_date": pallet.expiry_date,
+        },
+        "replacement_pallet": None if replacement is None else {
+            "id": replacement.id,
+            "pallet_code": replacement.pallet_code,
+            "base_quantity": float(replacement.base_quantity),
+            "lot_code": replacement.lot_code,
+            "expiry_date": replacement.expiry_date,
+            "location_type": replacement.location_type,
+            "location_code": replacement.location_code,
+        },
+        "policy": None if policy is None else {
+            "threshold_ratio": float(policy.threshold_ratio),
+            "is_enabled": policy.is_enabled,
+        },
+        "decision": {
+            "recommendation": result.recommendation,
+            "reason_code": result.reason_code,
+            "explanation": result.explanation,
+            "residual_ratio": result.residual_ratio,
+            "threshold_ratio": result.threshold_ratio,
+            "conventional_cost": result.conventional_cost,
+            "swap_cost": result.swap_cost,
+            "estimated_minutes_saved": result.estimated_minutes_saved,
+            "inputs_complete": result.inputs_complete,
+            "automatic_stock_movement_allowed": False,
+        },
+        "simulation_only": True,
+        "backroom_capacity_source": "OPERATOR_CONFIRMED",
+    }
 
 
 @app.get("/api/v1/warehouse/pallets/{pallet_id}/events", response_model=list[PalletRotationEventRead], tags=["warehouse"])
