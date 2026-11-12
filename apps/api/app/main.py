@@ -22,6 +22,7 @@ from app.product_text import (
 from app.replenishment_policy import ShelfRefillInput, suggest_shelf_refill
 from app.demand_forecasting import DemandForecastInput, forecast_demand
 from app.stockout_risk import StockoutRiskInput, assess_stockout_risk
+from app.replenishment_planning import build_replenishment_plan
 from app.sku_review_evaluation import build_reviewed_prediction_report
 from app.sales_import import parse_daily_sales_csv
 from app.schemas import (
@@ -1997,6 +1998,8 @@ def list_replenishment_recommendations(
             "store_id": store_id,
             "shelf_id": shelf.id,
             "shelf_code": shelf.code,
+            "zone_id": shelf.zone_id,
+            "zone_name": shelf.zone.name,
             "product_id": product.id,
             "product_name": product.name,
             "sku": product.sku,
@@ -2012,6 +2015,47 @@ def list_replenishment_recommendations(
         })
     return recommendations
 
+
+
+@app.get("/api/v1/replenishment/plan", tags=["replenishment"])
+def get_replenishment_plan(
+    store_id: int,
+    stale_after_minutes: int = 120,
+    limit: int = 200,
+    request: Request = None,
+    db: Session = Depends(get_db),
+):
+    """Build a read-only, zone-grouped work queue from current shelf recommendations."""
+    if stale_after_minutes < 1 or stale_after_minutes > 10080:
+        raise HTTPException(status_code=422, detail="stale_after_minutes must be between 1 and 10080")
+    if limit < 1 or limit > 500:
+        raise HTTPException(status_code=422, detail="limit must be between 1 and 500")
+    _enforce_store_scope(_request_user(db, request), store_id)
+    if not db.get(models.Store, store_id):
+        raise HTTPException(status_code=404, detail="Store not found")
+
+    recommendations = list_replenishment_recommendations(
+        store_id=store_id, stale_after_minutes=stale_after_minutes, request=request, db=db,
+    )
+    active_tasks = db.query(models.ReplenishmentTask).filter(
+        models.ReplenishmentTask.store_id == store_id,
+        models.ReplenishmentTask.status.in_(("PENDING", "ASSIGNED", "IN_PROGRESS")),
+    ).all()
+    active_keys = {(task.shelf_id, task.product_id) for task in active_tasks}
+    plan = build_replenishment_plan(recommendations, active_keys=active_keys, limit=limit)
+    return {
+        "store_id": store_id,
+        "generated_at": models.utc_now(),
+        "read_only": True,
+        "total_candidates": plan.total_candidates,
+        "returned_candidates": plan.returned_candidates,
+        "groups": [
+            {"zone_id": group.zone_id, "zone_name": group.zone_name, "tasks": list(group.items)}
+            for group in plan.groups
+        ],
+        "excluded": plan.excluded,
+        "policy": "Proposta de organização; não cria nem atribui tarefas e não substitui validação humana.",
+    }
 
 
 @app.post("/api/v1/tasks", response_model=ReplenishmentTaskRead, status_code=201, tags=["tasks"])
