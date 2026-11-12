@@ -158,3 +158,67 @@ def test_task_from_recommendation_is_rejected_without_backroom_stock():
             "store_id": store_id, "shelf_id": shelf_id, "product_id": product_id,
         })
         assert response.status_code == 409
+
+
+
+def test_task_can_be_assigned_to_active_employee_from_same_store():
+    from app.security import hash_password
+
+    with TestClient(app) as client:
+        store_id, shelf_id, product_id = create_task_context(client)
+        with TestingSession() as db:
+            employee = models.User(
+                email="employee@example.com",
+                full_name="Funcionário de teste",
+                password_hash=hash_password("Test-password-12345"),
+                role="EMPLOYEE",
+                store_id=store_id,
+                is_active=True,
+            )
+            db.add(employee)
+            db.commit()
+            db.refresh(employee)
+            employee_id = employee.id
+
+        created = client.post("/api/v1/tasks", json={
+            "store_id": store_id,
+            "shelf_id": shelf_id,
+            "product_id": product_id,
+            "assigned_user_id": employee_id,
+        })
+        assert created.status_code == 201
+        assert created.json()["assigned_user_id"] == employee_id
+        assert created.json()["assigned_to"] == "Funcionário de teste"
+        assert created.json()["status"] == "ASSIGNED"
+
+
+def test_task_rejects_employee_from_another_store():
+    from app.security import hash_password
+
+    with TestClient(app) as client:
+        store_id, shelf_id, product_id = create_task_context(client)
+        with TestingSession() as db:
+            other_store = models.Store(code="OTHER-STORE", name="Outra loja")
+            db.add(other_store)
+            db.commit()
+            db.refresh(other_store)
+            employee = models.User(
+                email="other@example.com",
+                full_name="Funcionário externo",
+                password_hash=hash_password("Test-password-12345"),
+                role="EMPLOYEE",
+                store_id=other_store.id,
+                is_active=True,
+            )
+            db.add(employee)
+            db.commit()
+            db.refresh(employee)
+            employee_id = employee.id
+
+        response = client.post("/api/v1/tasks", json={
+            "store_id": store_id,
+            "shelf_id": shelf_id,
+            "product_id": product_id,
+            "assigned_user_id": employee_id,
+        })
+        assert response.status_code == 422
