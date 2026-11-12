@@ -16,6 +16,7 @@ from app.config import settings
 from app.database import get_db, SessionLocal
 from app import models
 from app.security import hash_password, verify_password, create_access_token, decode_access_token
+from app.replenishment_policy import ShelfRefillInput, suggest_shelf_refill
 from app.schemas import (
     ObservationCreate, ObservationRead, ShelfCreate, ShelfRead,
     StoreCreate, StoreRead, ZoneCreate, ZoneRead,
@@ -579,6 +580,12 @@ def list_replenishment_recommendations(
         status = "NO_ACTION"
         explanation = "A observação mais recente não indica baixa disponibilidade."
         available = float(inventory.available_quantity) if inventory is not None else None
+        suggested_quantity = None
+        observed_shelf_quantity = (
+            float(observation.observed_quantity)
+            if observation is not None and observation.observed_quantity is not None
+            else None
+        )
 
         if observation is None:
             status = "STALE_OBSERVATION"
@@ -587,7 +594,8 @@ def list_replenishment_recommendations(
             observed_at = observation.observed_at
             if observed_at.tzinfo is None:
                 observed_at = observed_at.replace(tzinfo=timezone.utc)
-            if now - observed_at > timedelta(minutes=stale_after_minutes):
+            observation_age_minutes = max(0.0, (now - observed_at).total_seconds() / 60)
+            if observation_age_minutes > stale_after_minutes:
                 status = "STALE_OBSERVATION"
                 explanation = "A observação é demasiado antiga para suportar uma tarefa de reposição."
             elif observation.status in ("LOW_STOCK", "EMPTY"):
@@ -600,9 +608,22 @@ def list_replenishment_recommendations(
                 elif available <= 0:
                     status = "BACKROOM_OUT_OF_STOCK"
                     explanation = "A prateleira necessita de atenção, mas o stock disponível na retaguarda é zero."
-                else:
+                elif observed_shelf_quantity is None:
                     status = "NEEDS_REPLENISHMENT"
-                    explanation = "A prateleira apresenta baixa disponibilidade e existe stock na retaguarda."
+                    explanation = "A prateleira apresenta baixa disponibilidade e existe stock na retaguarda; a quantidade exata ainda não foi medida."
+                else:
+                    decision = suggest_shelf_refill(ShelfRefillInput(
+                        shelf_quantity=observed_shelf_quantity,
+                        target_quantity=link.target_quantity,
+                        min_display_quantity=link.min_display_quantity,
+                        backroom_available_quantity=available,
+                        observation_confidence=observation.confidence,
+                        observation_age_minutes=observation_age_minutes,
+                        max_observation_age_minutes=stale_after_minutes,
+                    ))
+                    status = decision.status
+                    suggested_quantity = decision.suggested_quantity
+                    explanation = decision.explanation
             elif observation.status == "UNKNOWN":
                 status = "LOW_CONFIDENCE"
                 explanation = "O estado visual é desconhecido e deve ser confirmado."
@@ -616,11 +637,12 @@ def list_replenishment_recommendations(
             "sku": product.sku,
             "observation_status": observation.status if observation else None,
             "observation_confidence": observation.confidence if observation else None,
+            "observed_shelf_quantity": observed_shelf_quantity,
             "observed_at": observation.observed_at if observation else None,
             "inventory_available_quantity": available,
             "inventory_captured_at": inventory.captured_at if inventory else None,
             "recommendation_status": status,
-            "suggested_quantity": None,
+            "suggested_quantity": suggested_quantity,
             "explanation": explanation,
         })
     return recommendations
@@ -713,6 +735,8 @@ def create_task_from_recommendation(
         raise HTTPException(status_code=409, detail="An active replenishment task already exists")
 
     data = payload.model_dump()
+    if data["requested_quantity"] is None:
+        data["requested_quantity"] = recommendation["suggested_quantity"]
     assigned_user_id = data.pop("assigned_user_id", None)
     if assigned_user_id is not None:
         assignee = db.get(models.User, assigned_user_id)
