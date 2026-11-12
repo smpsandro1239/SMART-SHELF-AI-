@@ -190,3 +190,38 @@ python -m app.dataset_quality \\
 ```
 
 Os valores acima são apenas um exemplo de configuração, não critérios aprovados para este projeto. O limite mínimo é aplicado a cada classe em cada split; o rácio ignora classes com zero instâncias e compara as restantes. Definir os limites apenas depois de observar a dimensão e os objetivos do dataset. O relatório mede distribuição quantitativa; não avalia qualidade visual das caixas, validade semântica das classes ou representatividade das imagens.
+
+
+## 16. Gate de aprovação de uma versão do dataset
+
+Foi adicionada a ferramenta `app.dataset_approval`. Ao contrário de uma simples checklist, executa novamente os controlos técnicos sobre os artefactos indicados e exige um registo explícito de proveniência, privacidade e aprovação humana.
+
+Começar por copiar `docs/computer-vision/dataset-release-template.json` para uma localização privada de trabalho e preencher apenas dados comprovados. O template começa deliberadamente com aprovações a `false`; não é uma autorização.
+
+A partir de `apps/api`:
+
+```bash
+python -m app.dataset_approval \\
+  --release-record /dados/private/dataset-release.json \\
+  --manifest /dados/metadata/image_manifest.csv \\
+  --train /dados/annotations/instances_train.json \\
+  --val /dados/annotations/instances_val.json \\
+  --test /dados/annotations/instances_test.json \\
+  --mode training \\
+  --json-report /dados/reports/release-gate.json
+```
+
+O gate verifica:
+
+1. Identificação e versão do dataset, data, responsável e SHA-256 do manifesto.
+2. Finalidade, utilizações permitidas/excluídas, origem, autorização de recolha, direitos e licença declarados.
+3. Revisão de privacidade, remoção EXIF/GPS declarada, revisão de dados pessoais, retenção e incidentes.
+4. Protocolo e revisão de qualidade das anotações.
+5. Aprovação técnica e aprovação de privacidade/licença, com revisor, data e decisão explícita.
+6. Hash real do manifesto, estrutura do CSV, correspondência COCO/manifesto, auditoria de leakage e relatório quantitativo de qualidade.
+
+O resultado `APPROVED` significa apenas que os campos declarados e os controlos automatizados passaram para o modo escolhido. Não autentica a identidade dos revisores, não verifica a veracidade de autorizações, não presta aconselhamento jurídico e não substitui inspeção visual humana.
+
+Para treino, é obrigatória a aprovação explícita `approved_for_training: true`. Para inferência operacional, usar `--mode inference`: além da aprovação para treino, exige aprovação operacional separada, identificação/licença do modelo, protocolo de avaliação e métricas medidas por classe (`precision`, `recall`, `ap50`). Não preencher métricas com estimativas ou valores de exemplo.
+
+A ferramenta não faz upload de imagens nem publica o registo privado. Manter dataset, manifesto e registos de autorização em armazenamento com acesso controlado; não colocar dados pessoais, contratos ou credenciais no GitHub.
