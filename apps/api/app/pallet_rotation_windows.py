@@ -53,6 +53,8 @@ def recommend_low_traffic_window(
 
     by_hour = {}
     for row in hourly_profile:
+        if not isinstance(row, Mapping):
+            raise ValueError("hourly_profile rows must be mappings")
         hour = row.get("hour_of_day")
         if isinstance(hour, bool) or not isinstance(hour, int) or not 0 <= hour <= 23 or hour in by_hour:
             raise ValueError("hourly_profile must contain each hour exactly once")
