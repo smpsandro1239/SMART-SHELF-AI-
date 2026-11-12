@@ -242,6 +242,15 @@ Capacidades relevantes:
 | Persistência operacional | PostgreSQL/Redis descritos | Artefactos locais | Memória | ERP | ERP |
 | Licença declarada | MIT (código) | Não identificada | Não identificada | Consultar licença por edição | GPL-3.0 |
 
+### 4.1 Comparação complementar
+
+| Projeto | Foco mais útil | Maturidade observada | Licença / reutilização | Decisão para SMART SHELF AI |
+|---|---|---|---|---|
+| Jackson Marcus — ShelfSight | OpenCV clássico, gaps, share-of-shelf e compliance | Protótipo com testes sintéticos | README mostra badge MIT, mas não foi encontrada licença formal no repo | Usar como baseline explicável; não copiar até esclarecer licença |
+| swd07 — Retail Shelf Detection | Operação offline-first, jobs duráveis, guardrails, abstention e shadow rollout | Case study de sistema de produção; implementação integral não publicada | Sem licença identificada | Adotar padrões arquiteturais e critérios de validação |
+| Sanket758 — SKU Vision Pipeline | Deteção + embeddings + registry de SKU + revisão humana | Tese/protótipo, 6 commits observados | MIT para código; dados e pesos gated separados | Estudar matching por exemplares e revisão; verificar termos dos pesos |
+| AnKu-02 — MAiRA | RGB-D, pose 3D, grasp e pick-and-place | Demonstração específica de robô | Sem licença identificada; backend/dados proprietários omitidos | Referência futura para adaptadores robóticos, não integrar agora |
+
 ## 5. Arquitetura alvo resultante da REA
 
 A proposta é combinar princípios, não fundir repositórios:
