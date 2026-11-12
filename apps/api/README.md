@@ -1208,3 +1208,22 @@ Cada candidato recebe `estimated_elapsed_minutes`, `effort_estimate_status`,
 `effort_estimate_basis` e `effort_estimate_sample_count`. A resposta agrega o número de candidatos estimados, os não estimados e o total de minutos estimados.
 
 **Limitação importante:** o tempo medido decorre entre início e conclusão da tarefa. Pode incluir esperas, pausas e interrupções; não é tempo de trabalho ativo nem produtividade individual. O sistema não distribui tarefas por colaboradores e não usa estimativas sem amostra suficiente. Os valores devem ser comparados com observações reais antes de serem usados para dimensionamento de equipas.
+
+
+### Plano de picking da retaguarda (consultivo)
+
+O endpoint `GET /api/v1/replenishment/plan` aceita `include_warehouse_pick_plan=true` para acrescentar uma proposta de recolha na retaguarda:
+
+```http
+GET /api/v1/replenishment/plan?store_id=1&include_warehouse_pick_plan=true
+```
+
+O motor agrega a procura quantitativa por SKU, consulta as colocações ativas em localizações de armazém e propõe recolhas apenas em localizações compatíveis com a temperatura exigida pelo produto. Quando existem várias localizações elegíveis, consome primeiro a quantidade registada na localização mais próxima do ponto de picking; os restantes desempates usam corredor, rack e posição. As recolhas são depois consolidadas por localização para reduzir paragens repetidas.
+
+Estados possíveis por produto:
+- `READY_FOR_REVIEW`: a quantidade proposta está coberta por stock colocado em localizações compatíveis.
+- `PARTIAL_STOCK`: existe stock compatível, mas não cobre toda a quantidade.
+- `NO_COMPATIBLE_STOCK`: não foi encontrada quantidade compatível suficiente.
+- `PROFILE_UNKNOWN`: falta o perfil térmico do produto; não se assume temperatura ambiente.
+
+A resposta identifica `distance_metric` como distância ao ponto de picking, não distância entre localizações. Por isso, a sequência é uma heurística de picking e **não** uma rota física otimizada: ainda não existe grafo de corredores nem matriz de distâncias entre localizações. A quantidade das colocações é uma fotografia de stock, não uma reserva. A proposta não reserva stock, não cria tarefas, não atualiza inventário e não autoriza movimentos físicos. Antes de executar, é necessário confirmar disponibilidade, reservas concorrentes, lote/validade e capacidade real de transporte.
