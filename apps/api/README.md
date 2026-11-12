@@ -837,3 +837,22 @@ O campo `package_count` conta as embalagens completas que permanecem fechadas; `
 O cálculo é consultivo: não recebe mercadoria, não transfere stock, não cria tarefas e não altera inventário. A operação física deve ser registada por um fluxo transacional próprio.
 
 **Limitação importante:** esta configuração ainda não modela a cadeia completa de receção, armazenamento, picking e reposição por loja. A mesma palete pode ser a unidade de receção, a caixa a unidade de picking e a garrafa a unidade de venda. Essas funções devem ser configuradas separadamente por produto e, quando necessário, por loja; não devem ser deduzidas automaticamente do tipo de embalagem.
+
+
+## Simulação de rotação de paletes em períodos de pico
+
+O motor consultivo está em `app/pallet_rotation.py`. A documentação funcional
+e os limites encontram-se em
+`docs/architecture/pallet-rotation-optimizer.md`. A análise REA de projetos
+externos está em `docs/research/existing-applications-pallet-rotation.md`.
+
+Esta fase disponibiliza a lógica pura de decisão e os respetivos testes
+unitários. Ainda não existe endpoint nem persistência de paletes individuais.
+A função recebe quantidades na unidade base, classe de afluência, disponibilidade
+de palete de substituição e capacidade de retaguarda, tempos operacionais,
+custo laboral e consumo previsto até à próxima janela de baixa afluência.
+
+O resultado é apenas uma recomendação. Não cria tarefas, não reserva paletes,
+não altera inventário e não regista movimentos. Os custos atuais comparam
+apenas mão de obra; equipamento, espaço, perdas e impacto no serviço ainda
+terão de ser medidos num piloto.
