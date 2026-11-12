@@ -240,7 +240,7 @@ class DetectionSkuReview(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     detection_id: Mapped[int] = mapped_column(ForeignKey("shelf_image_detections.id", ondelete="CASCADE"), index=True, nullable=False)
     previous_product_id: Mapped[int | None] = mapped_column(ForeignKey("products.id", ondelete="SET NULL"), nullable=True)
-    selected_product_id: Mapped[int | None] = mapped_column(ForeignKey("products.id", ondelete="SET NULL"), nullable=True, index=True)
+    selected_product_id: Mapped[int | None] = mapped_column(ForeignKey("products.id", ondelete="RESTRICT"), nullable=True, index=True)
     decision: Mapped[str] = mapped_column(String(12), nullable=False, index=True)
     reviewer_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
