@@ -69,3 +69,12 @@ def test_rotation_policy_can_be_disabled_without_changing_threshold():
     update = PalletRotationPolicyUpdate(is_enabled=False)
     assert update.is_enabled is False
     assert update.threshold_ratio is None
+
+
+@pytest.mark.parametrize("payload", [
+    {"threshold_ratio": None},
+    {"is_enabled": None},
+])
+def test_rotation_policy_update_rejects_explicit_null_values(payload):
+    with pytest.raises(ValidationError):
+        PalletRotationPolicyUpdate(**payload)
