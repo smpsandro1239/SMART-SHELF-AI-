@@ -268,9 +268,32 @@ class UserCreate(BaseModel):
     store_id: int | None = None
 
 
+class CaptureSessionCreate(BaseModel):
+    shelf_id: int
+    source_type: Literal["fixed_camera", "robot", "mobile"]
+    source_device_id: str | None = Field(default=None, min_length=1, max_length=120)
+    capture_mode: Literal["single", "burst", "video_sample"] = "single"
+    started_at: datetime | None = None
+
+
+class CaptureSessionRead(BaseModel):
+    id: int
+    store_id: int
+    shelf_id: int
+    source_type: str
+    source_device_id: str | None
+    capture_mode: str
+    started_at: datetime
+    ended_at: datetime | None
+    created_by_user_id: int | None
+    created_at: datetime
+    model_config = ConfigDict(from_attributes=True)
+
+
 class ShelfImageRead(BaseModel):
     id: int
     shelf_id: int
+    capture_session_id: int | None = None
     original_filename: str
     mime_type: str
     file_size_bytes: int
@@ -421,6 +444,7 @@ class ShelfImageTrainingCandidateRead(BaseModel):
     image_sha256: str
     captured_at: datetime
     capture_group_key: str
+    capture_session_id: int | None = None
     bbox: dict[str, float]
     detector_model_version: str
     embedding_model_version: str | None
