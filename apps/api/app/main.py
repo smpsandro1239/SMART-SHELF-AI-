@@ -389,7 +389,14 @@ def create_replenishment_task(payload: ReplenishmentTaskCreate, db: Session = De
     if assignment is None:
         raise HTTPException(status_code=409, detail="Product is not assigned to this shelf")
     data = payload.model_dump()
-    data["status"] = "ASSIGNED" if data["assigned_to"] else "PENDING"
+    assigned_user_id = data.pop("assigned_user_id", None)
+    if assigned_user_id is not None:
+        assignee = db.get(models.User, assigned_user_id)
+        if assignee is None or not assignee.is_active or assignee.store_id != payload.store_id:
+            raise HTTPException(status_code=422, detail="Assigned user must be active and belong to this store")
+        data["assigned_to"] = assignee.full_name
+    data["assigned_user_id"] = assigned_user_id
+    data["status"] = "ASSIGNED" if (data["assigned_to"] or assigned_user_id) else "PENDING"
     item = models.ReplenishmentTask(**data)
     db.add(item)
     db.commit()
@@ -441,12 +448,20 @@ def create_task_from_recommendation(
         raise HTTPException(status_code=409, detail="An active replenishment task already exists")
 
     data = payload.model_dump()
-    data["status"] = "ASSIGNED" if data["assigned_to"] else "PENDING"
+    assigned_user_id = data.pop("assigned_user_id", None)
+    if assigned_user_id is not None:
+        assignee = db.get(models.User, assigned_user_id)
+        if assignee is None or not assignee.is_active or assignee.store_id != payload.store_id:
+            raise HTTPException(status_code=422, detail="Assigned user must be active and belong to this store")
+        data["assigned_to"] = assignee.full_name
+    data["assigned_user_id"] = assigned_user_id
+    data["status"] = "ASSIGNED" if (data["assigned_to"] or assigned_user_id) else "PENDING"
     item = models.ReplenishmentTask(**data)
     db.add(item)
     db.commit()
     db.refresh(item)
     return item
+
 
 
 @app.get("/api/v1/tasks", response_model=list[ReplenishmentTaskRead], tags=["tasks"])
@@ -494,11 +509,17 @@ def update_replenishment_task_status(
         )
     if payload.status == "ASSIGNED":
         assignee = payload.assigned_to or task.assigned_to
+        if payload.assigned_user_id is not None:
+            user = db.get(models.User, payload.assigned_user_id)
+            if user is None or not user.is_active or user.store_id != task.store_id:
+                raise HTTPException(status_code=422, detail="Assigned user must be active and belong to this store")
+            task.assigned_user_id = user.id
+            assignee = user.full_name
         if not assignee:
             raise HTTPException(status_code=422, detail="assigned_to is required to assign a task")
         task.assigned_to = assignee
-    elif payload.assigned_to is not None:
-        raise HTTPException(status_code=422, detail="assigned_to can only be set when assigning a task")
+    elif payload.assigned_to is not None or payload.assigned_user_id is not None:
+        raise HTTPException(status_code=422, detail="Assignee can only be set when assigning a task")
 
     now = models.utc_now()
     task.status = payload.status
@@ -568,6 +589,10 @@ def create_user(payload: UserCreate, db: Session = Depends(get_db)):
     email = payload.email.strip().lower()
     if "@" not in email:
         raise HTTPException(status_code=422, detail="A valid email address is required")
+    if payload.role != "ADMIN" and payload.store_id is None:
+        raise HTTPException(status_code=422, detail="A store_id is required for supervisors and employees")
+    if payload.store_id is not None and db.get(models.Store, payload.store_id) is None:
+        raise HTTPException(status_code=404, detail="Store not found")
     if db.query(models.User).filter(func.lower(models.User.email) == email).first():
         raise HTTPException(status_code=409, detail="Email address already exists")
     user = models.User(
@@ -575,6 +600,7 @@ def create_user(payload: UserCreate, db: Session = Depends(get_db)):
         full_name=payload.full_name.strip(),
         password_hash=hash_password(payload.password),
         role=payload.role,
+        store_id=payload.store_id,
         is_active=True,
     )
     db.add(user)
