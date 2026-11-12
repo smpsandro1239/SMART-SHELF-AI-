@@ -25,7 +25,7 @@ from app.demand_forecasting import DemandForecastInput, forecast_demand
 from app.stockout_risk import StockoutRiskInput, assess_stockout_risk
 from app.replenishment_planning import build_replenishment_plan
 from app.replenishment_workload import summarize_workload
-from app.warehouse_slotting import recommend_warehouse_slotting
+from app.warehouse_slotting import recommend_warehouse_slotting, recommend_physical_slot
 from app.sku_review_evaluation import build_reviewed_prediction_report
 from app.sales_import import parse_daily_sales_csv
 from app.schemas import (
