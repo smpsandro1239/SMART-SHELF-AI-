@@ -5,16 +5,33 @@ Run with:
 """
 import argparse
 import json
+import math
 from pathlib import Path
 from typing import Any
 
 
-def validate_coco_document(document: dict[str, Any], image_root: Path | None = None) -> list[str]:
+def _is_integer(value: Any) -> bool:
+    """Return true for JSON integers, explicitly excluding booleans."""
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
+def _is_finite_number(value: Any) -> bool:
+    return (
+        isinstance(value, (int, float))
+        and not isinstance(value, bool)
+        and math.isfinite(value)
+    )
+
+
+def validate_coco_document(document: Any, image_root: Path | None = None) -> list[str]:
     errors: list[str] = []
+    if not isinstance(document, dict):
+        return ["COCO document must be a JSON object"]
+
     images = document.get("images")
     annotations = document.get("annotations")
     categories = document.get("categories")
-    if not isinstance(images, list) or not isinstance(annotations, list) or not isinstance(categories, list):
+    if not all(isinstance(value, list) for value in (images, annotations, categories)):
         return ["COCO document must contain images, annotations and categories arrays"]
 
     image_by_id: dict[int, dict[str, Any]] = {}
@@ -26,22 +43,25 @@ def validate_coco_document(document: dict[str, Any], image_root: Path | None = N
             errors.append(f"images[{index}] must be an object")
             continue
         image_id = item.get("id")
-        if not isinstance(image_id, int) or isinstance(image_id, bool):
-            errors.append(f"images[{index}].id must be an integer")
+        if not _is_integer(image_id) or image_id < 0:
+            errors.append(f"images[{index}].id must be a non-negative integer")
             continue
         if image_id in image_by_id:
             errors.append(f"duplicate image id: {image_id}")
+            continue
         image_by_id[image_id] = item
-        if not isinstance(item.get("width"), int) or item["width"] <= 0:
-            errors.append(f"image {image_id} has invalid width")
-        if not isinstance(item.get("height"), int) or item["height"] <= 0:
-            errors.append(f"image {image_id} has invalid height")
+
+        for dimension in ("width", "height"):
+            value = item.get(dimension)
+            if not _is_integer(value) or value <= 0:
+                errors.append(f"image {image_id} has invalid {dimension}")
+
         file_name = item.get("file_name")
-        if not isinstance(file_name, str) or not file_name.strip():
+        if not isinstance(file_name, str) or not file_name.strip() or "\\x00" in file_name:
             errors.append(f"image {image_id} has invalid file_name")
         elif image_root is not None:
-            candidate = (image_root / file_name).resolve()
             root = image_root.resolve()
+            candidate = (root / file_name).resolve()
             if candidate != root and root not in candidate.parents:
                 errors.append(f"image {image_id} file_name escapes image root")
             elif not candidate.is_file():
@@ -52,8 +72,8 @@ def validate_coco_document(document: dict[str, Any], image_root: Path | None = N
             errors.append(f"categories[{index}] must be an object")
             continue
         category_id = item.get("id")
-        if not isinstance(category_id, int) or isinstance(category_id, bool):
-            errors.append(f"categories[{index}].id must be an integer")
+        if not _is_integer(category_id) or category_id < 0:
+            errors.append(f"categories[{index}].id must be a non-negative integer")
             continue
         if category_id in category_ids:
             errors.append(f"duplicate category id: {category_id}")
@@ -66,43 +86,52 @@ def validate_coco_document(document: dict[str, Any], image_root: Path | None = N
             errors.append(f"annotations[{index}] must be an object")
             continue
         annotation_id = item.get("id")
-        if not isinstance(annotation_id, int) or isinstance(annotation_id, bool):
-            errors.append(f"annotations[{index}].id must be an integer")
-        elif annotation_id in annotation_ids:
-            errors.append(f"duplicate annotation id: {annotation_id}")
+        if not _is_integer(annotation_id) or annotation_id < 0:
+            errors.append(f"annotations[{index}].id must be a non-negative integer")
+            annotation_label = f"at index {index}"
         else:
-            annotation_ids.add(annotation_id)
+            annotation_label = str(annotation_id)
+            if annotation_id in annotation_ids:
+                errors.append(f"duplicate annotation id: {annotation_id}")
+            else:
+                annotation_ids.add(annotation_id)
 
         image_id = item.get("image_id")
-        image = image_by_id.get(image_id) if isinstance(image_id, int) else None
+        image = image_by_id.get(image_id) if _is_integer(image_id) else None
         if image is None:
-            errors.append(f"annotation {annotation_id} references unknown image_id {image_id}")
+            errors.append(f"annotation {annotation_label} references unknown image_id {image_id}")
             continue
+
         category_id = item.get("category_id")
-        if category_id not in category_ids:
-            errors.append(f"annotation {annotation_id} references unknown category_id {category_id}")
+        if not _is_integer(category_id) or category_id not in category_ids:
+            errors.append(f"annotation {annotation_label} references unknown category_id {category_id}")
+
         bbox = item.get("bbox")
-        if not isinstance(bbox, list) or len(bbox) != 4 or any(
-            not isinstance(value, (int, float)) or isinstance(value, bool) for value in (bbox or [])
+        if (
+            not isinstance(bbox, list)
+            or len(bbox) != 4
+            or not all(_is_finite_number(value) for value in bbox)
         ):
-            errors.append(f"annotation {annotation_id} bbox must be [x, y, width, height]")
+            errors.append(f"annotation {annotation_label} bbox must contain four finite numbers [x, y, width, height]")
             continue
+
         x, y, width, height = bbox
         if width <= 0 or height <= 0 or x < 0 or y < 0:
-            errors.append(f"annotation {annotation_id} bbox has non-positive size or negative origin")
+            errors.append(f"annotation {annotation_label} bbox has non-positive size or negative origin")
             continue
+
         image_width, image_height = image.get("width"), image.get("height")
-        if isinstance(image_width, int) and isinstance(image_height, int):
+        if _is_integer(image_width) and _is_integer(image_height):
             if x + width > image_width or y + height > image_height:
-                errors.append(f"annotation {annotation_id} bbox exceeds image dimensions")
+                errors.append(f"annotation {annotation_label} bbox exceeds image dimensions")
+
         area = item.get("area")
-        if area is not None and (
-            not isinstance(area, (int, float)) or isinstance(area, bool) or area <= 0
-        ):
-            errors.append(f"annotation {annotation_id} has invalid area")
+        if area is not None and (not _is_finite_number(area) or area <= 0):
+            errors.append(f"annotation {annotation_label} has invalid area")
+
         iscrowd = item.get("iscrowd", 0)
-        if iscrowd not in (0, 1):
-            errors.append(f"annotation {annotation_id} iscrowd must be 0 or 1")
+        if not _is_integer(iscrowd) or iscrowd not in (0, 1):
+            errors.append(f"annotation {annotation_label} iscrowd must be integer 0 or 1")
 
     return errors
 
