@@ -606,3 +606,21 @@ python -m app.image_similarity_audit \
 ```
 
 O relatório inclui pares encontrados, distância de Hamming, hashes dHash e imagens ilegíveis. O limiar deve ser calibrado com fotografias reais da loja antes de ser usado como gate de produção. Testes: `apps/api/tests/test_image_similarity_audit.py`.
+
+
+### Dataset Release Registry
+
+O módulo `app.dataset_release` cria registos imutáveis de versões do dataset. Só aceita manifests CSV com os três splits (`train`, `val`, `test`) e relatórios recentes que declarem explicitamente `status: passed` e `errors: []`. A impressão digital SHA-256 é calculada sobre as entradas normalizadas do manifest; a mesma versão é idempotente e não cria um segundo registo.
+
+Antes de criar uma release, gerar os relatórios com `--json-report` nos dois auditores. Depois:
+
+```bash
+cd apps/api
+python -m app.dataset_release \
+  --manifest /data/metadata/image_manifest.csv \
+  --split-audit /data/reports/split-audit.json \
+  --visual-audit /data/reports/visual-similarity.json \
+  --registry /data/dataset-registry
+```
+
+Os registos ficam em `dataset-registry/releases/<fingerprint>.json`. Cada registo conserva o hash do manifest, contagens por split, hashes dos relatórios de qualidade e informação de equilíbrio de classes disponível no relatório COCO. A release não copia as imagens nem equivale a aprovação de um modelo; é um registo local, ainda sem assinatura criptográfica, controlo de acesso ou armazenamento remoto.
