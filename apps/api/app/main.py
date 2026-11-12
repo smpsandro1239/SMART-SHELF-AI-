@@ -4055,12 +4055,14 @@ def operational_decisions(
         forecast_input = None
         if sales_rows:
             total_sold = sum(float(row.quantity) for row in sales_rows)
+            recorded_sales_days = len({row.sales_date for row in sales_rows})
             forecast_input = {
-                "predicted_units": total_sold / 7.0,
+                "predicted_units": total_sold / recorded_sales_days,
                 "horizon_hours": 24,
                 "generated_at": aware(now),
-                "method": "SEVEN_DAY_DAILY_AVERAGE",
+                "method": "RECORDED_DAY_DAILY_AVERAGE",
                 "source_records": len(sales_rows),
+                "observed_sales_days": recorded_sales_days,
                 "sales_window_start": sales_start.isoformat(),
                 "sales_window_end": today.isoformat(),
             }
