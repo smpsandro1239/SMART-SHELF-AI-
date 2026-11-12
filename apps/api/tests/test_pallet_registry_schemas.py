@@ -93,3 +93,52 @@ def test_nonempty_pallet_requires_positive_quantity():
 def test_display_pallet_requires_sales_floor_location():
     with pytest.raises(ValidationError):
         StorePalletCreate(**pallet_payload(status="ON_DISPLAY", location_type="WAREHOUSE"))
+
+
+def test_pallet_lifecycle_update_requires_expected_state_and_reason():
+    from app.schemas import PalletLifecycleUpdate
+
+    payload = PalletLifecycleUpdate(
+        expected_status="READY",
+        expected_base_quantity=720,
+        status="ON_DISPLAY",
+        location_type="SALES_FLOOR",
+        reason="Colocação confirmada pelo supervisor",
+    )
+    assert payload.expected_status == "READY"
+    assert payload.status == "ON_DISPLAY"
+
+
+def test_pallet_lifecycle_update_rejects_empty_change():
+    from app.schemas import PalletLifecycleUpdate
+
+    with pytest.raises(ValidationError):
+        PalletLifecycleUpdate(
+            expected_status="READY",
+            expected_base_quantity=720,
+            reason="Sem alterações",
+        )
+
+
+@pytest.mark.parametrize("quantity", [-1, float("nan"), float("inf")])
+def test_pallet_lifecycle_update_rejects_invalid_quantity(quantity):
+    from app.schemas import PalletLifecycleUpdate
+
+    with pytest.raises(ValidationError):
+        PalletLifecycleUpdate(
+            expected_status="READY",
+            expected_base_quantity=720,
+            base_quantity=quantity,
+            reason="Contagem corrigida",
+        )
+
+
+def test_pallet_lifecycle_update_requires_reason():
+    from app.schemas import PalletLifecycleUpdate
+
+    with pytest.raises(ValidationError):
+        PalletLifecycleUpdate(
+            expected_status="READY",
+            expected_base_quantity=720,
+            status="ON_DISPLAY",
+        )
