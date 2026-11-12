@@ -212,3 +212,16 @@ A resposta contém o ID da captura, tipo MIME, tamanho, SHA-256 e `analysis_stat
 Cada captura pode ter zero ou mais registos em `shelf_image_detections`. O endpoint `GET /api/v1/shelf-images/{image_id}/detections` devolve as deteções persistidas, limitadas ao âmbito da loja do utilizador. Cada registo contém classe/etiqueta, confiança entre 0 e 1, caixa delimitadora normalizada (coordenadas entre 0 e 1), produto associado opcional e versão do modelo.
 
 Esta estrutura não executa inferência nem cria deteções automaticamente. A ligação a um modelo real e a um worker de processamento continuam por implementar; não são gerados resultados artificiais.
+
+
+## Pipeline de inferência e worker
+
+O ciclo de análise está preparado com os estados `PENDING`, `PROCESSING`, `COMPLETED` e `FAILED`. A API guarda também os instantes de início/conclusão e uma mensagem técnica de erro sem incluir caminhos internos dos ficheiros.
+
+O worker é independente do processo HTTP e consome uma captura pendente:
+
+    docker compose exec api python -m app.vision_worker --once
+
+Por segurança, não existe um modelo ativo por omissão. Para ligar um provider, definir `VISION_PROVIDER_FACTORY` com um caminho Python `modulo:factory`. A factory deve devolver um objeto com `analyze(image_path)`, que devolve um objeto com `model_version` e `detections`. Cada deteção deve conter `label`, `confidence`, `x_min`, `y_min`, `x_max`, `y_max` e, opcionalmente, `product_id`. As coordenadas são normalizadas entre 0 e 1. Sem provider configurado, o worker termina sem alterar capturas pendentes; não cria resultados artificiais.
+
+O worker pode ser executado repetidamente por um supervisor externo. A seleção da captura usa bloqueio de linha quando suportado pela base de dados, para reduzir o risco de dois workers processarem a mesma imagem.
