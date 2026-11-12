@@ -43,6 +43,7 @@ class ObservationCreate(BaseModel):
     source: ObservationSource = "mobile"
     status: ObservationStatus = "UNKNOWN"
     confidence: float | None = Field(default=None, ge=0, le=1)
+    observed_quantity: float | None = Field(default=None, ge=0)
     notes: str | None = None
     observed_at: datetime | None = None
     model_version: str | None = Field(default=None, max_length=100)
@@ -54,6 +55,7 @@ class ObservationRead(BaseModel):
     source: str
     status: str
     confidence: float | None
+    observed_quantity: float | None
     notes: str | None
     observed_at: datetime
     model_version: str | None
@@ -139,6 +141,7 @@ class ReplenishmentRecommendationRead(BaseModel):
     sku: str
     observation_status: str | None
     observation_confidence: float | None
+    observed_shelf_quantity: float | None = None
     observed_at: datetime | None
     inventory_available_quantity: float | None
     inventory_captured_at: datetime | None
