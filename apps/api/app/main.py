@@ -2036,6 +2036,19 @@ def create_replenishment_task(payload: ReplenishmentTaskCreate, request: Request
     ).first()
     if assignment is None:
         raise HTTPException(status_code=409, detail="Product is not assigned to this shelf")
+    active_task = db.query(models.ReplenishmentTask).filter(
+        models.ReplenishmentTask.store_id == payload.store_id,
+        models.ReplenishmentTask.shelf_id == payload.shelf_id,
+        models.ReplenishmentTask.product_id == payload.product_id,
+        models.ReplenishmentTask.status.in_(("PENDING", "ASSIGNED", "IN_PROGRESS")),
+    ).first()
+    if active_task is not None:
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "ACTIVE_TASK_EXISTS", "task_id": active_task.id,
+                    "status": active_task.status,
+                    "message": "Já existe uma tarefa ativa para este produto nesta prateleira."},
+        )
     data = payload.model_dump()
     assigned_user_id = data.pop("assigned_user_id", None)
     if assigned_user_id is not None:
@@ -2100,8 +2113,24 @@ def create_task_from_recommendation(
         raise HTTPException(status_code=409, detail="An active replenishment task already exists")
 
     data = payload.model_dump()
+    suggested_quantity = recommendation["suggested_quantity"]
+    available_quantity = recommendation["inventory_available_quantity"]
+    if suggested_quantity is None and data["requested_quantity"] is None:
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "QUANTITY_REQUIRES_CONFIRMATION",
+                    "message": "A recomendação não tem uma quantidade observada fiável. Confirme a quantidade antes de criar a tarefa."},
+        )
     if data["requested_quantity"] is None:
-        data["requested_quantity"] = recommendation["suggested_quantity"]
+        data["requested_quantity"] = suggested_quantity
+    if available_quantity is None or data["requested_quantity"] > available_quantity:
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "INSUFFICIENT_BACKROOM_STOCK",
+                    "available_quantity": available_quantity,
+                    "requested_quantity": data["requested_quantity"],
+                    "message": "A quantidade solicitada não pode exceder o stock disponível na retaguarda."},
+        )
     assigned_user_id = data.pop("assigned_user_id", None)
     if assigned_user_id is not None:
         assignee = db.get(models.User, assigned_user_id)
