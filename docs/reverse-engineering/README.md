@@ -87,7 +87,7 @@ Relações principais reconstruídas:
 - Store/User 1:N, com utilizadores não administradores associados à sua loja.
 - ReplenishmentTask liga loja, prateleira, produto e, opcionalmente, utilizador atribuído.
 
-As migrações `0001` a `0009` registam a evolução do esquema. A migração mais recente do ciclo de imagens acrescenta metadados de início/fim e erro da análise.
+As migrações `0001` a `0010` registam a evolução do esquema. A migração `0010` acrescenta `observed_quantity` às observações, com validação não negativa, para permitir calcular quantidades de refill apenas quando existe uma contagem explícita.
 
 ### 3.2 Fluxo de recomendação reconstruído
 
@@ -112,6 +112,15 @@ Esta separação é estruturalmente correta: a quantidade visível na prateleira
 - Deteções e imagens consultadas com verificação de âmbito de loja.
 
 **Ponto de atenção:** o middleware e as verificações de âmbito estão concentrados em `main.py`. Antes de produção, recomenda-se uma revisão endpoint a endpoint, incluindo autorização por objeto, rotas indiretas, operações de administrador, proteção contra abuso e testes de isolamento multi-loja.
+
+
+### 3.4 Política de reposição integrada
+
+O módulo `replenishment_policy.py` contém dois cálculos independentes:
+- refill da prateleira a partir da quantidade observada, alvo, limiar mínimo e stock disponível;
+- reaprovisionamento de inventário a partir do stock projetado, procura até à receção, ponto de encomenda, nível máximo e múltiplo de embalagem.
+
+A primeira política está ligada ao endpoint de recomendações quando `Observation.observed_quantity` está preenchido. A criação de tarefa a partir de recomendação herda a quantidade calculada quando o utilizador não indica outra. A política de compra/transferência permanece isolada e não cria ordens.
 
 ## 4. Frontend — realidade encontrada vs documentação
 
