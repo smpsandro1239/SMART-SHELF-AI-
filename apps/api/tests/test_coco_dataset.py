@@ -1,3 +1,5 @@
+import math
+
 from app.coco_dataset import validate_coco_document
 
 
@@ -14,6 +16,10 @@ def valid_document():
 
 def test_coco_validator_accepts_valid_document():
     assert validate_coco_document(valid_document()) == []
+
+
+def test_coco_validator_rejects_non_object_document():
+    assert validate_coco_document([]) == ["COCO document must be a JSON object"]
 
 
 def test_coco_validator_rejects_bbox_outside_image():
@@ -37,6 +43,22 @@ def test_coco_validator_rejects_duplicate_ids_and_invalid_boxes():
     errors = validate_coco_document(document)
     assert any("duplicate image id" in error for error in errors)
     assert any("non-positive size" in error for error in errors)
+
+
+def test_coco_validator_rejects_boolean_integer_fields():
+    document = valid_document()
+    document["images"][0]["width"] = True
+    document["annotations"][0]["iscrowd"] = True
+    errors = validate_coco_document(document)
+    assert any("invalid width" in error for error in errors)
+    assert any("iscrowd must be integer" in error for error in errors)
+
+
+def test_coco_validator_rejects_non_finite_bbox_values():
+    document = valid_document()
+    document["annotations"][0]["bbox"] = [10, 10, math.inf, 5]
+    errors = validate_coco_document(document)
+    assert any("four finite numbers" in error for error in errors)
 
 
 def test_coco_validator_prevents_image_path_traversal(tmp_path):
