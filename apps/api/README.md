@@ -619,7 +619,7 @@ O endpoint read-only `GET /api/v1/replenishment/plan?store_id=1` organiza as rec
 - `RECAPTURE`: observação expirada; é necessária nova captura.
 - `NONE`: não é incluído na fila de trabalho.
 
-O plano exclui tarefas já ativas para a mesma combinação prateleira/produto, limita o número de resultados e agrupa os restantes por zona. `task_creation_allowed` só é verdadeiro quando existe uma recomendação quantitativa positiva. O endpoint não cria nem atribui tarefas, não reserva stock e não distribui trabalho por funcionários. A ordenação por zona é apenas uma organização inicial; não representa um percurso físico otimizado. A atribuição automática fica dependente de dados fiáveis sobre disponibilidade, turnos, capacidade e localização dos funcionários.
+O plano exclui tarefas já ativas para a mesma combinação prateleira/produto, limita o número de resultados e agrupa os restantes por zona. `task_creation_allowed` só é verdadeiro quando existe uma recomendação quantitativa positiva. O endpoint não cria nem atribui tarefas, não reserva stock e não distribui trabalho por funcionários. Cada item inclui `route_order`, `route_basis` e `physical_route_optimized`. A sequência agrupa por zona e ordena por código de prateleira e posição configurada; o número é repetido para produtos na mesma prateleira. Como ainda não existem coordenadas, corredores ou ligações entre corredores no modelo, `physical_route_optimized` é sempre `false`: trata-se de uma sequência determinística de apoio, não de um percurso físico mínimo. A atribuição automática fica dependente de dados fiáveis sobre disponibilidade, turnos, capacidade e localização dos funcionários.
 
 
 ## Indicadores de carga de trabalho
