@@ -31,6 +31,16 @@ Cada imagem deve manter `captured_at`, `sha256` e proveniência; a sessão acres
 7. Nunca dividir imagens da mesma sessão por treino/validação/teste.
 8. A separação final deve ainda ser temporal e, quando aplicável, por loja/dispositivo para medir generalização real.
 
+## API implementada
+
+- `POST /api/v1/capture-sessions`: criar sessão para uma prateleira da loja do utilizador autenticado.
+- `GET /api/v1/capture-sessions`: listar sessões no âmbito da loja, com filtros `shelf_id`, `include_closed` e `limit`.
+- `POST /api/v1/capture-sessions/{session_id}/close`: fechar sessão de forma idempotente.
+- `POST /api/v1/shelf-images`: aceita agora `capture_session_id` opcional em multipart/form-data e valida prateleira, loja e estado aberto.
+- `GET /api/v1/training-candidates/reviewed`: devolve `capture_session_id` e usa `session:{id}` como chave de agrupamento; imagens antigas sem sessão continuam agrupadas por SHA-256.
+
+A criação e o fecho são reservados a ADMIN/SUPERVISOR; o upload de imagens mantém as permissões operacionais existentes. A migração `0016_capture_sessions` usa alteração em batch para suportar SQLite e PostgreSQL.
+
 ## API proposta
 
 - `POST /api/v1/capture-sessions`: criar sessão.
@@ -51,15 +61,18 @@ As operações de criação/fecho devem ser auditáveis e sujeitas ao isolamento
 - Registos antigos sem sessão continuam consultáveis, mas são sinalizados como não agrupados por sessão.
 - Testes cobrem ADMIN, SUPERVISOR e EMPLOYEE, incluindo tentativas cross-store.
 
+## Estado e validação
+
+Implementação publicada no backend e testes automatizados adicionados em `apps/api/tests/test_capture_sessions.py`. Os testes cobrem ciclo de vida, listagem, ligação de imagem, rejeição de prateleira incorreta, bloqueio de upload após fecho e agrupamento de candidatos. A execução CI ainda tem de confirmar o resultado após estes commits.
+
 ## Sequência de implementação
 
-1. Migração aditiva: criar `capture_sessions` e adicionar `shelf_images.capture_session_id` nullable.
-2. Modelos SQLAlchemy e schemas Pydantic.
-3. Endpoints e validação de escopo por loja.
-4. Integração no upload de imagens.
-5. Atualização dos candidatos supervisionados.
-6. Auditor de split por sessão e testes de regressão.
-7. Atualizar documentação e dashboard para iniciar/terminar sessões de captura.
+1. Concluído: migração aditiva, modelos e schemas.
+2. Concluído: endpoints, isolamento por loja e fecho idempotente.
+3. Concluído: associação opcional no upload e validação de sessão aberta.
+4. Concluído: candidatos supervisionados agrupados por sessão ou SHA-256 legado.
+5. Em curso: auditor de split que falha perante a mesma sessão em mais do que um split.
+6. Seguinte: integração no dashboard para iniciar/terminar sessões.
 
 ## Limites
 
