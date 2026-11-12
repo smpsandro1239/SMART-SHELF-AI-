@@ -197,6 +197,72 @@ class ProductPackagingLevel(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
 
+class StorePallet(Base):
+    """Identity and current operational state of one physical pallet."""
+    __tablename__ = "store_pallets"
+    __table_args__ = (
+        UniqueConstraint("store_id", "pallet_code", name="uq_store_pallet_store_code"),
+        CheckConstraint("base_quantity >= 0", name="ck_store_pallet_quantity_nonnegative"),
+        CheckConstraint("status IN ('READY', 'ON_DISPLAY', 'PARTIAL', 'RETURNED', 'REBUILDING', 'EMPTY', 'QUARANTINED')", name="ck_store_pallet_status"),
+        CheckConstraint("location_type IN ('WAREHOUSE', 'PREPARATION', 'SALES_FLOOR', 'OTHER')", name="ck_store_pallet_location_type"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    store_id: Mapped[int] = mapped_column(ForeignKey("stores.id", ondelete="CASCADE"), nullable=False, index=True)
+    product_id: Mapped[int] = mapped_column(ForeignKey("products.id", ondelete="RESTRICT"), nullable=False, index=True)
+    packaging_level_id: Mapped[int] = mapped_column(ForeignKey("product_packaging_levels.id", ondelete="RESTRICT"), nullable=False, index=True)
+    pallet_code: Mapped[str] = mapped_column(String(100), nullable=False)
+    lot_code: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
+    expiry_date: Mapped[date | None] = mapped_column(Date, nullable=True, index=True)
+    base_quantity: Mapped[float] = mapped_column(Numeric(14, 3), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), default="READY", nullable=False, index=True)
+    location_type: Mapped[str] = mapped_column(String(16), default="WAREHOUSE", nullable=False)
+    location_code: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False)
+
+
+class PalletRotationPolicy(Base):
+    """Store/product-specific policy for evaluating pallet exchange."""
+    __tablename__ = "pallet_rotation_policies"
+    __table_args__ = (
+        UniqueConstraint("store_id", "product_id", name="uq_pallet_rotation_policy_store_product"),
+        CheckConstraint("threshold_ratio > 0 AND threshold_ratio <= 1", name="ck_pallet_rotation_threshold_range"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    store_id: Mapped[int] = mapped_column(ForeignKey("stores.id", ondelete="CASCADE"), nullable=False, index=True)
+    product_id: Mapped[int] = mapped_column(ForeignKey("products.id", ondelete="CASCADE"), nullable=False, index=True)
+    threshold_ratio: Mapped[float] = mapped_column(Numeric(5, 4), default=0.5, nullable=False)
+    is_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False)
+
+
+class PalletRotationEvent(Base):
+    """Append-only audit event for the lifecycle of a physical pallet."""
+    __tablename__ = "pallet_rotation_events"
+    __table_args__ = (
+        CheckConstraint("event_type IN ('REGISTERED', 'STATUS_REVIEWED', 'LOCATION_RECORDED', 'QUANTITY_RECORDED', 'LOT_REVIEWED', 'EXCEPTION_RECORDED')", name="ck_pallet_event_type"),
+        CheckConstraint("quantity_before >= 0 AND quantity_after >= 0", name="ck_pallet_event_quantities_nonnegative"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    pallet_id: Mapped[int] = mapped_column(ForeignKey("store_pallets.id", ondelete="RESTRICT"), nullable=False, index=True)
+    event_type: Mapped[str] = mapped_column(String(24), nullable=False)
+    from_location_type: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    from_location_code: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    to_location_type: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    to_location_code: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    quantity_before: Mapped[float] = mapped_column(Numeric(14, 3), nullable=False)
+    quantity_after: Mapped[float] = mapped_column(Numeric(14, 3), nullable=False)
+    lot_code: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    expiry_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    performed_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False, index=True)
+
+
 class InventorySnapshot(Base):
     """Immutable observation of backroom stock from an authoritative source."""
     __tablename__ = "inventory_snapshots"
