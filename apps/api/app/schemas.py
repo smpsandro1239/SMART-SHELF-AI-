@@ -572,6 +572,18 @@ class StorePalletCreate(BaseModel):
     location_type: PalletLocationType = "WAREHOUSE"
     location_code: str | None = Field(default=None, max_length=100)
 
+    @model_validator(mode="after")
+    def validate_initial_state(self):
+        if self.status == "EMPTY" and self.base_quantity != 0:
+            raise ValueError("EMPTY pallets must have zero base quantity")
+        if self.status != "EMPTY" and self.base_quantity <= 0:
+            raise ValueError("Non-empty pallet statuses require positive base quantity")
+        if self.status == "ON_DISPLAY" and self.location_type != "SALES_FLOOR":
+            raise ValueError("ON_DISPLAY pallets must have SALES_FLOOR location type")
+        if self.status in {"READY", "RETURNED", "REBUILDING"} and self.location_type == "SALES_FLOOR":
+            raise ValueError("This pallet status is incompatible with SALES_FLOOR location")
+        return self
+
 
 class StorePalletRead(BaseModel):
     id: int
