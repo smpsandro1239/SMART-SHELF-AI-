@@ -145,3 +145,39 @@ class ReplenishmentRecommendationRead(BaseModel):
     recommendation_status: ReplenishmentStatus
     suggested_quantity: float | None = None
     explanation: str
+
+
+TaskPriority = Literal["LOW", "NORMAL", "HIGH", "URGENT"]
+TaskStatus = Literal["PENDING", "ASSIGNED", "IN_PROGRESS", "COMPLETED", "CANCELLED"]
+
+
+class ReplenishmentTaskCreate(BaseModel):
+    store_id: int
+    shelf_id: int
+    product_id: int
+    priority: TaskPriority = "NORMAL"
+    assigned_to: str | None = Field(default=None, min_length=1, max_length=120)
+    requested_quantity: float | None = Field(default=None, gt=0)
+    notes: str | None = Field(default=None, max_length=2000)
+
+
+class ReplenishmentTaskStatusUpdate(BaseModel):
+    status: TaskStatus
+    assigned_to: str | None = Field(default=None, min_length=1, max_length=120)
+
+
+class ReplenishmentTaskRead(BaseModel):
+    id: int
+    store_id: int
+    shelf_id: int
+    product_id: int
+    priority: TaskPriority
+    status: TaskStatus
+    assigned_to: str | None
+    requested_quantity: float | None
+    notes: str | None
+    created_at: datetime
+    updated_at: datetime
+    started_at: datetime | None
+    completed_at: datetime | None
+    model_config = ConfigDict(from_attributes=True)
