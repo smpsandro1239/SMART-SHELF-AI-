@@ -337,6 +337,58 @@ def create_replenishment_task(payload: ReplenishmentTaskCreate, db: Session = De
     return item
 
 
+
+@app.post(
+    "/api/v1/tasks/from-recommendation",
+    response_model=ReplenishmentTaskRead,
+    status_code=201,
+    tags=["tasks"],
+)
+def create_task_from_recommendation(
+    payload: ReplenishmentTaskCreate,
+    stale_after_minutes: int = 120,
+    db: Session = Depends(get_db),
+):
+    recommendations = list_replenishment_recommendations(
+        store_id=payload.store_id,
+        product_id=payload.product_id,
+        stale_after_minutes=stale_after_minutes,
+        db=db,
+    )
+    recommendation = next(
+        (
+            item for item in recommendations
+            if item["shelf_id"] == payload.shelf_id
+            and item["product_id"] == payload.product_id
+        ),
+        None,
+    )
+    if recommendation is None:
+        raise HTTPException(status_code=404, detail="Product is not assigned to a shelf in this store")
+    if recommendation["recommendation_status"] != "NEEDS_REPLENISHMENT":
+        raise HTTPException(
+            status_code=409,
+            detail=f"Cannot create replenishment task: recommendation status is {recommendation['recommendation_status']}",
+        )
+
+    active_task = db.query(models.ReplenishmentTask).filter(
+        models.ReplenishmentTask.store_id == payload.store_id,
+        models.ReplenishmentTask.shelf_id == payload.shelf_id,
+        models.ReplenishmentTask.product_id == payload.product_id,
+        models.ReplenishmentTask.status.in_(("PENDING", "ASSIGNED", "IN_PROGRESS")),
+    ).first()
+    if active_task is not None:
+        raise HTTPException(status_code=409, detail="An active replenishment task already exists")
+
+    data = payload.model_dump()
+    data["status"] = "ASSIGNED" if data["assigned_to"] else "PENDING"
+    item = models.ReplenishmentTask(**data)
+    db.add(item)
+    db.commit()
+    db.refresh(item)
+    return item
+
+
 @app.get("/api/v1/tasks", response_model=list[ReplenishmentTaskRead], tags=["tasks"])
 def list_replenishment_tasks(
     store_id: int | None = None,
