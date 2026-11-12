@@ -87,11 +87,11 @@ export default function App() {
     finally { setLoading(false); }
   }
 
-  async function updateTask(task: Task, status: "IN_PROGRESS" | "COMPLETED") {
+  async function updateTask(task: Task, status: "ASSIGNED" | "IN_PROGRESS" | "COMPLETED", assignedUserId?: number) {
     setError("");
     try {
       await request<Task>(`/api/v1/tasks/${task.id}/status`, {
-        method: "PATCH", body: JSON.stringify({ status }),
+        method: "PATCH", body: JSON.stringify({ status, ...(assignedUserId ? { assigned_user_id: assignedUserId } : {}) }),
       });
       await refresh();
     } catch (err) { setError(err instanceof Error ? err.message : "Não foi possível atualizar a tarefa."); }
@@ -155,7 +155,7 @@ export default function App() {
               <div className="panel-heading"><div><p className="eyebrow">EXECUÇÃO</p><h2>Tarefas de reposição</h2><p className="muted">Acompanhamento das intervenções registadas na API.</p></div><span className="subtle-pill">{taskRows.length} registos</span></div>
               <div className="task-list">
                 {taskRows.length === 0 && <div className="empty-state"><PackageSearch size={28} /><strong>Sem tarefas registadas</strong><span>Quando forem criadas tarefas, aparecerão aqui.</span></div>}
-                {taskRows.map(task => <TaskRow key={task.id} task={task} canProgress={user?.role === "EMPLOYEE" ? task.assigned_user_id === user.id : user?.role === "ADMIN" || user?.role === "SUPERVISOR"} onUpdate={updateTask} />)}
+                {taskRows.map(task => <TaskRow key={task.id} task={task} canAssign={user?.role === "ADMIN" || user?.role === "SUPERVISOR"} canProgress={user?.role === "EMPLOYEE" ? task.assigned_user_id === user.id : user?.role === "ADMIN" || user?.role === "SUPERVISOR"} onUpdate={updateTask} />)}
               </div>
             </article>
             <article className="panel status-panel">
@@ -179,13 +179,15 @@ export default function App() {
 function Metric({ icon, label, value, tone, detail }: { icon: ReactNode; label: string; value: number; tone: string; detail: string }) {
   return <article className="metric-card"><div className={`metric-icon ${tone}`}>{icon}</div><p>{label}</p><strong>{value.toLocaleString("pt-PT")}</strong><span>{detail}</span></article>;
 }
-function TaskRow({ task, canProgress, onUpdate }: { task: Task; canProgress: boolean; onUpdate: (task: Task, status: "IN_PROGRESS" | "COMPLETED") => void }) {
+function TaskRow({ task, canAssign, canProgress, onUpdate }: { task: Task; canAssign: boolean; canProgress: boolean; onUpdate: (task: Task, status: "ASSIGNED" | "IN_PROGRESS" | "COMPLETED", assignedUserId?: number) => void }) {
+  const [assigneeId, setAssigneeId] = useState("");
   const next = task.status === "ASSIGNED" ? "IN_PROGRESS" : task.status === "IN_PROGRESS" ? "COMPLETED" : null;
   return <div className="task-row">
     <div className="task-symbol"><ArrowDownToLine size={18} /></div>
     <div className="task-info"><strong>Reposição · Prateleira #{task.shelf_id}</strong><span>Produto #{task.product_id} · {task.assigned_to || "Por atribuir"} · #{task.id}</span></div>
     <span className={`priority ${task.priority.toLowerCase()}`}>{task.priority}</span>
     <span className={`task-status ${task.status.toLowerCase()}`}>{task.status.replace("_", " ")}</span>
+    {canAssign && task.status === "PENDING" && <div className="assign-control"><input aria-label={`ID do funcionário para a tarefa ${task.id}`} inputMode="numeric" placeholder="ID funcionário" value={assigneeId} onChange={e => setAssigneeId(e.target.value)} /><button className="row-action" disabled={!/^\\d+$/.test(assigneeId) || Number(assigneeId) < 1} onClick={() => onUpdate(task, "ASSIGNED", Number(assigneeId))}>Atribuir</button></div>}
     {canProgress && next && <button className="row-action" onClick={() => onUpdate(task, next)}>{next === "IN_PROGRESS" ? "Iniciar" : "Concluir"} <ArrowUpRight size={14} /></button>}
   </div>;
 }
