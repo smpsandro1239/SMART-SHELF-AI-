@@ -245,3 +245,33 @@ Para filtrar classes, repetir `--class-id` (por exemplo, `--class-id 0 --class-i
 
 O HTML é estático e funciona sem servidor ou dependências JavaScript. Mantém referências relativas às imagens de origem, pelo que os ficheiros têm de continuar acessíveis no caminho original. Não copia, modifica ou transmite fotografias. O gerador rejeita documentos COCO inválidos, ficheiros ausentes e caminhos que escapem à raiz indicada. A revisão visual continua a exigir uma pessoa: o programa não avalia se a caixa envolve o objeto correto, se a classe é semanticamente adequada ou se existe autorização para usar a imagem.
 
+
+
+## 18. Registo de revisão humana por imagem
+
+A revisão visual deve deixar um registo estruturado e associado à versão do COCO. O módulo `app.dataset_review` cria um template por split com uma entrada por imagem, o SHA-256 do ficheiro COCO e um SHA-256 canónico das anotações de cada imagem.
+
+Criar os três templates em armazenamento privado:
+
+```bash
+python -m app.dataset_review --coco /dados/annotations/instances_train.json --split train --create-template /dados/private/review-train.json
+python -m app.dataset_review --coco /dados/annotations/instances_val.json --split val --create-template /dados/private/review-val.json
+python -m app.dataset_review --coco /dados/annotations/instances_test.json --split test --create-template /dados/private/review-test.json
+```
+
+Para cada imagem, o revisor tem de preencher:
+- `decision`: `APPROVED`, `NEEDS_CORRECTION` ou `REJECTED`;
+- `reviewer`: identificador legível do revisor;
+- `reviewed_at`: timestamp ISO 8601;
+- `notes`: observações opcionais.
+
+Validar um registo:
+
+```bash
+python -m app.dataset_review --coco /dados/annotations/instances_train.json --split train --record /dados/private/review-train.json
+```
+
+O gate `app.dataset_approval` aceita `--require-visual-review` e os três caminhos `--review-train`, `--review-val`, `--review-test`. Quando ativado, exige uma decisão `APPROVED` para todas as imagens dos três splits, sem duplicados ou omissões, e verifica os hashes da versão atual. Uma alteração ao COCO invalida o registo anterior.
+
+Este mecanismo regista decisões declaradas; não autentica a identidade do revisor, não prova que a inspeção foi executada e não substitui controlos de acesso. Guardar os registos fora do repositório, em armazenamento controlado.
+
