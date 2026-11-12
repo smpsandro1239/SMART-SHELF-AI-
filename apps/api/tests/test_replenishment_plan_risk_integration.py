@@ -44,12 +44,14 @@ def isolated_database():
     Base.metadata.drop_all(bind=TEST_ENGINE)
 
 
-def _create_candidate(client, store_id, code, sku, name, stock):
-    zone = client.post("/api/v1/zones", json={
-        "store_id": store_id, "name": "Mercearia",
-    }).json()
+def _create_candidate(client, store_id, code, sku, name, stock, zone_id=None):
+    if zone_id is None:
+        zone = client.post("/api/v1/zones", json={
+            "store_id": store_id, "name": "Mercearia",
+        }).json()
+        zone_id = zone["id"]
     shelf = client.post("/api/v1/shelves", json={
-        "zone_id": zone["id"], "code": code,
+        "zone_id": zone_id, "code": code,
     }).json()
     product = client.post("/api/v1/products", json={
         "sku": sku, "name": name,
@@ -81,15 +83,19 @@ def test_replenishment_plan_uses_fresh_inventory_and_complete_sales_history_for_
         assert store.status_code == 201
         store_id = store.json()["id"]
 
+        zone = client.post("/api/v1/zones", json={
+            "store_id": store_id, "name": "Mercearia",
+        }).json()
         critical_product_id = _create_candidate(
             client, store_id, "MER-CRIT", "RISK-CRIT", "Produto crítico", 20,
+            zone_id=zone["id"],
         )
         medium_product_id = _create_candidate(
             client, store_id, "MER-MED", "RISK-MED", "Produto médio", 50,
+            zone_id=zone["id"],
         )
 
         today = date.today()
-        now = datetime.now(timezone.utc)
         with TestingSession() as db:
             for product_id in (critical_product_id, medium_product_id):
                 for offset in range(28):
