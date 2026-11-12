@@ -17,7 +17,7 @@ Identificar componentes comprovados ou promissores para resolver o fluxo complet
 7. gerar tarefa auditável com validação humana;
 8. medir disponibilidade na prateleira, falsos alertas e tempo até reposição.
 
-Uma deteção de espaço vazio não prova, isoladamente, que o produto está em rutura: pode estar temporariamente oculto, deslocado, numa posição diferente ou existir stock na retaguarda.
+Uma deteção de espaço vazio não prova, isoladamente, que o produto está em rutura: pode estar temporariamente oculto, deslocado, numa posição diferente ou existir stock na retaguarda.\n\n![Fluxo conceptual derivado da REA externa](../images/external-rea-replenishment-flow.svg)
 
 ## 2. Projetos analisados
 
