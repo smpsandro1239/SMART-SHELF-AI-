@@ -440,6 +440,7 @@ Foi realizada uma análise estática do repositório para reconstruir os módulo
 
 ![Arquitetura atualmente implementada](docs/images/as-built-architecture.svg)
 
+- [Integridade das sessões de captura e separação de datasets](docs/architecture/capture-session-integrity.md)
 - [Relatório REA — Engenharia reversa do projeto](docs/reverse-engineering/README.md)
 - [Arquitetura as-built / to-be](docs/architecture/overview.md)
 - [ADR-006 — stack realmente implementada](docs/architecture/adr-006-as-built-stack.md)
@@ -483,6 +484,12 @@ A política de refill já está ligada às recomendações: quando existe quanti
 ### Correspondência SKU integrada no worker
 
 O worker aceita embeddings opcionais por deteção e compara-os apenas com exemplares aprovados da mesma versão de embedding. Cada deteção guarda `MATCHED`, `AMBIGUOUS` ou `UNKNOWN`, similaridade, margem e versão do embedding. Só `MATCHED` recebe `product_id`; os restantes estados abstêm. A versão do detector não é confundida com a versão do embedding. A integração permanece experimental: não existe provider real configurado, thresholds calibrados nem contagem automática de unidades.
+
+## Integridade das sessões de captura
+
+![Integridade das sessões de captura](docs/images/capture-session-integrity.svg)
+
+Foi especificada a próxima evolução da curadoria de dados: agrupar imagens por sessão de captura (câmara fixa, robô ou telemóvel), com loja, prateleira, dispositivo pseudónimo e janela temporal. O objetivo é impedir que frames da mesma sessão contaminem simultaneamente treino, validação e teste. Esta fase está documentada; a migração e os endpoints ainda não estão implementados.
 
 ## 17. Revisão de projetos externos de visão computacional
 
