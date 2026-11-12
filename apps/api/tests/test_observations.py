@@ -148,6 +148,6 @@ def test_supervisor_cannot_upload_image_to_another_store(tmp_path, monkeypatch):
         response = client.post(
             "/api/v1/shelf-images",
             data={"shelf_id": str(shelf.json()["id"])},
-            files={"image": ("capture.png", b"\\x89PNG\\r\\n\\x1a\\nvalid-signature", "image/png")},
+            files={"image": ("capture.png", b"\x89PNG\r\n\x1a\nvalid-signature", "image/png")},
         )
         assert response.status_code == 403
