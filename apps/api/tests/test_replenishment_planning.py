@@ -102,3 +102,49 @@ def test_route_order_is_independent_per_zone():
     groups = {group.zone_name: group for group in plan.groups}
     assert [item["route_order"] for item in groups["Bebidas"].items] == [1, 2]
     assert [item["route_order"] for item in groups["Frio"].items] == [1]
+
+
+def test_plan_prioritises_stockout_risk_before_general_status_priority():
+    plan = build_replenishment_plan([
+        recommendation(1, "NEEDS_REPLENISHMENT", stockout_risk_level="LOW"),
+        recommendation(2, "NEEDS_REPLENISHMENT", stockout_risk_level="CRITICAL"),
+        recommendation(3, "NEEDS_REPLENISHMENT", stockout_risk_level="HIGH"),
+        recommendation(4, "NEEDS_REPLENISHMENT"),
+    ])
+
+    items = [item for group in plan.groups for item in group.items]
+    assert [item["shelf_id"] for item in items] == [2, 3, 4, 1]
+    assert [item["operational_urgency"] for item in items] == [
+        "CRITICAL", "HIGH", "NOT_ASSESSED", "LOW"
+    ]
+    assert all(item["task_creation_allowed"] for item in items)
+
+
+def test_stockout_risk_never_bypasses_task_creation_safety_gate():
+    plan = build_replenishment_plan([
+        recommendation(
+            1, "NEEDS_REPLENISHMENT",
+            suggested_quantity=None,
+            stockout_risk_level="CRITICAL",
+        ),
+        recommendation(
+            2, "NEEDS_REPLENISHMENT",
+            suggested_quantity=4,
+            stockout_risk_level="LOW",
+        ),
+    ])
+
+    items = [item for group in plan.groups for item in group.items]
+    assert items[0]["shelf_id"] == 1
+    assert items[0]["operational_urgency"] == "CRITICAL"
+    assert items[0]["task_creation_allowed"] is False
+    assert items[1]["task_creation_allowed"] is True
+
+
+def test_unknown_risk_values_are_marked_not_assessed():
+    plan = build_replenishment_plan([
+        recommendation(1, "NEEDS_REPLENISHMENT", stockout_risk_level="PREDICTED_99_PERCENT"),
+    ])
+    item = plan.groups[0].items[0]
+    assert item["stockout_risk_level"] == "NOT_ASSESSED"
+    assert item["risk_priority_basis"] == "STATUS_ONLY"
