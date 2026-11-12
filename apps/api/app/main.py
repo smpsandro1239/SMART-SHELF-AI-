@@ -417,11 +417,12 @@ def create_replenishment_task(payload: ReplenishmentTaskCreate, request: Request
 )
 def create_task_from_recommendation(
     payload: ReplenishmentTaskCreate,
+    request: Request,
     stale_after_minutes: int = 120,
     db: Session = Depends(get_db),
 ):
-    actor = db.get(models.User, request.state.user_id)
-    if actor.role != "ADMIN" and actor.store_id != payload.store_id:
+    actor = db.get(models.User, getattr(request.state, "user_id", None))
+    if actor is not None and actor.role != "ADMIN" and actor.store_id != payload.store_id:
         raise HTTPException(status_code=403, detail="Access to this store is not allowed")
     recommendations = list_replenishment_recommendations(
         store_id=payload.store_id,
