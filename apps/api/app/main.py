@@ -43,6 +43,7 @@ from app.schemas import (
     ShelfImageOCRMatchRead,
     ShelfImageFusedEvidenceRead,
     ShelfImageReviewQueueItem, ShelfImageTrainingCandidateRead, CaptureSessionCreate, CaptureSessionRead,
+    WarehouseLocationCreate, WarehouseProductProfileCreate, WarehousePlacementCreate,
 )
 
 app = FastAPI(title=settings.app_name, version="0.2.0", description="Operational API for SMART SHELF AI.")
@@ -1504,6 +1505,181 @@ def get_warehouse_slotting_recommendations(
         "products": list(result.products),
         "read_only": True,
         "policy": "Sugestão de slotting baseada em vendas diárias completas. Não escolhe uma localização física nem move stock; validar capacidade, dimensões, peso, segurança, temperatura e distância real.",
+    }
+
+
+@app.post("/api/v1/warehouse/locations", status_code=201, tags=["warehouse"])
+def create_warehouse_location(
+    payload: WarehouseLocationCreate,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    actor = _request_user(db, request)
+    _enforce_store_scope(actor, payload.store_id)
+    if db.get(models.Store, payload.store_id) is None:
+        raise HTTPException(status_code=404, detail="Store not found")
+    location = models.WarehouseLocation(**payload.model_dump())
+    db.add(location)
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="A warehouse location with this code already exists in the store") from exc
+    db.refresh(location)
+    return location
+
+
+@app.get("/api/v1/warehouse/locations", tags=["warehouse"])
+def list_warehouse_locations(
+    store_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    actor = _request_user(db, request)
+    _enforce_store_scope(actor, store_id)
+    return (
+        db.query(models.WarehouseLocation)
+        .filter(models.WarehouseLocation.store_id == store_id)
+        .order_by(models.WarehouseLocation.distance_to_picking_m, models.WarehouseLocation.code)
+        .all()
+    )
+
+
+@app.post("/api/v1/warehouse/product-profiles", status_code=201, tags=["warehouse"])
+def create_warehouse_product_profile(
+    payload: WarehouseProductProfileCreate,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    actor = _request_user(db, request)
+    product = db.get(models.Product, payload.product_id)
+    if product is None:
+        raise HTTPException(status_code=404, detail="Product not found")
+    if db.query(models.WarehouseProductProfile).filter_by(product_id=payload.product_id).first():
+        raise HTTPException(status_code=409, detail="Warehouse profile already exists for this product")
+    profile = models.WarehouseProductProfile(**payload.model_dump())
+    db.add(profile)
+    db.commit()
+    db.refresh(profile)
+    return profile
+
+
+@app.post("/api/v1/warehouse/placements", status_code=201, tags=["warehouse"])
+def create_warehouse_placement(
+    payload: WarehousePlacementCreate,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    actor = _request_user(db, request)
+    location = db.get(models.WarehouseLocation, payload.location_id)
+    if location is None:
+        raise HTTPException(status_code=404, detail="Warehouse location not found")
+    _enforce_store_scope(actor, location.store_id)
+    if db.get(models.Product, payload.product_id) is None:
+        raise HTTPException(status_code=404, detail="Product not found")
+    placement = models.WarehouseProductPlacement(**payload.model_dump())
+    db.add(placement)
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="A placement for this product already exists at this location") from exc
+    db.refresh(placement)
+    return placement
+
+
+@app.get("/api/v1/warehouse/physical-slotting", tags=["warehouse"])
+def get_physical_warehouse_slotting(
+    store_id: int,
+    product_id: int,
+    required_quantity: float,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Rank feasible physical bins for an additional quantity; never moves stock."""
+    actor = _request_user(db, request)
+    _enforce_store_scope(actor, store_id)
+    if db.get(models.Store, store_id) is None:
+        raise HTTPException(status_code=404, detail="Store not found")
+    product = db.get(models.Product, product_id)
+    if product is None or not product.is_active:
+        raise HTTPException(status_code=404, detail="Active product not found")
+    profile = db.query(models.WarehouseProductProfile).filter_by(product_id=product_id).first()
+    profile_data = None if profile is None else {
+        "unit_volume_cm3": float(profile.unit_volume_cm3),
+        "unit_weight_kg": float(profile.unit_weight_kg),
+        "temperature_requirement": profile.temperature_requirement,
+        "is_fragile": profile.is_fragile,
+        "requires_segregation": profile.requires_segregation,
+    }
+
+    locations = db.query(models.WarehouseLocation).filter(
+        models.WarehouseLocation.store_id == store_id,
+        models.WarehouseLocation.is_active.is_(True),
+    ).all()
+    placement_rows = (
+        db.query(models.WarehouseProductPlacement, models.WarehouseProductProfile)
+        .join(models.WarehouseLocation, models.WarehouseProductPlacement.location_id == models.WarehouseLocation.id)
+        .outerjoin(models.WarehouseProductProfile, models.WarehouseProductPlacement.product_id == models.WarehouseProductProfile.product_id)
+        .filter(
+            models.WarehouseLocation.store_id == store_id,
+            models.WarehouseProductPlacement.is_active.is_(True),
+            models.WarehouseProductPlacement.quantity > 0,
+        )
+        .all()
+    )
+    occupancy = {}
+    for placement, other_profile in placement_rows:
+        item = occupancy.setdefault(placement.location_id, {
+            "volume": 0.0, "weight": 0.0, "unknown_profile": False, "products": set()
+        })
+        item["products"].add(placement.product_id)
+        if other_profile is None:
+            item["unknown_profile"] = True
+        else:
+            quantity = float(placement.quantity)
+            item["volume"] += quantity * float(other_profile.unit_volume_cm3)
+            item["weight"] += quantity * float(other_profile.unit_weight_kg)
+
+    location_inputs = []
+    for location in locations:
+        current = occupancy.get(location.id, {
+            "volume": 0.0, "weight": 0.0, "unknown_profile": False, "products": set()
+        })
+        location_inputs.append({
+            "location_id": location.id,
+            "code": location.code,
+            "distance_to_picking_m": float(location.distance_to_picking_m),
+            "max_volume_cm3": float(location.max_volume_cm3),
+            "max_weight_kg": float(location.max_weight_kg),
+            "occupied_volume_cm3": None if current["unknown_profile"] else current["volume"],
+            "occupied_weight_kg": None if current["unknown_profile"] else current["weight"],
+            "temperature_zone": location.temperature_zone,
+            "is_active": location.is_active,
+            "other_product_count": len(current["products"] - {product_id}),
+        })
+
+    try:
+        result = recommend_physical_slot(
+            product_id=product_id,
+            required_quantity=required_quantity,
+            product_profile=profile_data,
+            locations=location_inputs,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    return {
+        "store_id": store_id,
+        "product_id": product_id,
+        "sku": product.sku,
+        "product_name": product.name,
+        "required_quantity": required_quantity,
+        "status": result.status,
+        "candidates": list(result.candidates),
+        "rejected_locations": list(result.rejected_locations),
+        "automatic_movement_allowed": False,
+        "policy": "A quantidade indicada é adicional à ocupação atual. Localizações com stock existente sem perfil dimensional conhecido são excluídas; validar fisicamente antes de qualquer transferência.",
     }
 
 
