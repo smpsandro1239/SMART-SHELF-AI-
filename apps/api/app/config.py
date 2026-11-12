@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     jwt_secret_key: str = "INSECURE-DEVELOPMENT-KEY-CHANGE-ME"
     jwt_access_token_minutes: int = Field(default=30, ge=1, le=1440)
     bootstrap_admin_key: str = ""
+    cors_allowed_origins: str = "http://localhost:5173"
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
