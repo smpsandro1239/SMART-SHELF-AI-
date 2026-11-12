@@ -620,6 +620,22 @@ class PalletRotationPolicyRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class PalletLifecycleUpdate(BaseModel):
+    expected_status: PalletStatus
+    expected_base_quantity: float = Field(ge=0, le=1_000_000_000, allow_inf_nan=False)
+    status: PalletStatus | None = None
+    base_quantity: float | None = Field(default=None, ge=0, le=1_000_000_000, allow_inf_nan=False)
+    location_type: PalletLocationType | None = None
+    location_code: str | None = Field(default=None, max_length=100)
+    reason: str = Field(min_length=3, max_length=1000)
+
+    @model_validator(mode="after")
+    def validate_change(self):
+        if all(getattr(self, field) is None for field in ("status", "base_quantity", "location_type", "location_code")):
+            raise ValueError("At least one pallet field must change")
+        return self
+
+
 class PalletRotationEventRead(BaseModel):
     id: int
     pallet_id: int
