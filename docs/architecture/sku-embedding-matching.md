@@ -89,3 +89,8 @@ Esta revisão manual ainda não alimenta `Observation.observed_quantity`, não c
 ## Avaliação offline
 
 Antes de selecionar thresholds para o worker, usar o avaliador offline e a grelha de calibração documentados em [Avaliação offline do matching de SKU](sku-matching-evaluation.md). A avaliação deve incluir produtos ausentes da galeria e manter o conjunto final separado.
+
+
+## Filas, frentes visíveis e OCR auxiliar
+
+A localização geométrica das deteções e o contrato de OCR auxiliar estão documentados em [Filas, frentes visíveis e OCR](shelf-layout-and-product-text.md). Estes módulos ainda não estão ligados ao worker de produção.
