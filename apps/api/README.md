@@ -939,3 +939,24 @@ válido e diferente de ausência de observação. O perfil devolve `null` e indi
 as horas em falta quando não há dados; não preenche lacunas com zeros nem gera
 uma previsão. O período aceite é de 7 a 90 dias. A API ainda não calcula
 janelas ótimas automaticamente; fornece a base empírica para essa fase.
+
+
+### Recomendar uma janela horária de baixa afluência
+
+`GET /api/v1/warehouse/pallet-rotation/window-plan` cruza o perfil horário
+histórico de vendas do produto com a contagem de clientes da loja. Exemplo:
+
+```http
+GET /api/v1/warehouse/pallet-rotation/window-plan?store_id=1&product_id=42&pallet_id=15&current_hour=10&residual_base_units=300&duration_hours=1&days=28&minimum_observed_days=7
+```
+
+O motor avalia as próximas 24 horas, seleciona a janela com menor afluência
+histórica e só a considera se o stock residual cobrir o consumo médio observado
+até ao início. Exige 1 a 4 horas de duração, 7 a 90 dias de histórico e um
+mínimo configurável de dias observados por hora. Se a cobertura for insuficiente,
+devolve `INSUFFICIENT_DATA`; se o stock não alcançar nenhuma janela elegível,
+devolve `REPLENISH_CURRENT`.
+
+A hora atual é fornecida pelo chamador na hora local da loja. O cálculo usa
+médias históricas, não uma previsão probabilística nem dados em tempo real.
+Não agenda, reserva nem executa movimentos.
