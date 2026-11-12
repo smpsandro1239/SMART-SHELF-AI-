@@ -157,7 +157,7 @@ O conjunto de ferramentas forma um pipeline coerente:
 5. `dataset_quality.py`: mede cobertura, distribuição por classe e imagens sem anotações.
 6. `coco_review.py`: produz galeria offline para inspeção visual.
 7. `dataset_review.py`: regista decisões humanas por imagem e hash das anotações.
-8. `dataset_approval.py`: agrega as verificações e bloqueia release quando faltam evidências exigidas.
+8. `dataset_approval.py`: agrega as verificações e bloqueia release quando faltam evidências exigidas.\n9. `dataset_diff.py`: compara duas versões, hashes, imagens, splits e alterações semânticas às anotações.
 
 O gate é um controlo técnico/documental, não autentica revisores nem prova direitos de utilização. Os registos de aprovação, imagens e manifestos reais devem permanecer em armazenamento privado e controlado.
 
@@ -170,7 +170,7 @@ O gate é um controlo técnico/documental, não autentica revisores nem prova di
 | Alta | Sem dataset real anotado no repositório | Não há métricas de visão válidas | Recolha autorizada, anotação e gate |
 | Alta | Sem integração POS/ERP/WMS ativa | Inventário depende de snapshots introduzidos pela API | Definir contrato e fonte oficial |
 | Alta | Recuperação de jobs `PROCESSING` não está demonstrada | Jobs podem ficar presos após interrupção | Implementar lease/timeout e recuperação |
-| Média | Sem gestão formal de versões/diffs do dataset | Difícil identificar o impacto entre releases | Implementar comparação de versões |
+| Média | A comparação de versões foi agora implementada; falta validação com releases reais | Difícil provar comportamento em dados operacionais | Executar comparações controladas e rever os relatórios |
 | Média | Frontend cobre apenas os fluxos iniciais | Administração operacional incompleta | Expandir por módulos e permissões |
 | Média | Observabilidade de worker e integrações limitada | Diagnóstico operacional difícil | Logs estruturados, métricas e alertas |
 | Média | ADR e overview descrevem partes propostas como arquitetura futura | Pode confundir intenção com implementação | Manter estado explícito por componente |
