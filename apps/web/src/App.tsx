@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNo
 import {
   Activity, AlertTriangle, ArrowDownToLine, ArrowUpRight, Boxes, CheckCircle2,
   CircleUserRound, Clock3, LogOut, PackageSearch, RefreshCw, ShieldCheck,
-  Store, Truck, UserRound, Warehouse,
+  Store, Truck, UserRound, Warehouse, Check, X, History, Image as ImageIcon,
 } from "lucide-react";
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || "http://localhost:8000").replace(/\/$/, "");
@@ -17,7 +17,10 @@ type Task = {
   requested_quantity: number | null; notes: string | null; created_at: string;
 };
 type ShelfImage = { id: number; shelf_id: number; original_filename: string; mime_type: string; file_size_bytes: number; sha256: string; analysis_status: "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED"; analysis_error: string | null; analysis_started_at: string | null; analysis_completed_at: string | null; captured_at: string; created_at: string };
-type ShelfImageDetection = { id: number; shelf_image_id: number; product_id: number | null; label: string; confidence: number; x_min: number; y_min: number; x_max: number; y_max: number; model_version: string; created_at: string };
+type ShelfImageDetection = { id: number; shelf_image_id: number; product_id: number | null; label: string; confidence: number; x_min: number; y_min: number; x_max: number; y_max: number; model_version: string; sku_match_status?: "MATCHED" | "AMBIGUOUS" | "UNKNOWN" | null; sku_similarity?: number | null; sku_match_margin?: number | null; created_at: string };
+type Product = { id: number; sku: string; name: string; is_active: boolean };
+type ShelfProduct = { id: number; shelf_id: number; product_id: number; target_quantity: number; position: number | null };
+type DetectionSkuReview = { id: number; detection_id: number; previous_product_id: number | null; selected_product_id: number | null; decision: "CONFIRMED" | "CORRECTED" | "REJECTED"; reviewer_user_id: number | null; notes: string | null; created_at: string };
 type Summary = {
   store_id: number | null; role: Role; active_tasks: number;
   shelves_requiring_attention: number;
@@ -36,6 +39,12 @@ export default function App() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [captures, setCaptures] = useState<ShelfImage[]>([]);
   const [imageDetections, setImageDetections] = useState<Record<number, ShelfImageDetection[]>>({});
+  const [imageUrls, setImageUrls] = useState<Record<number, string>>({});
+  const [detectionReviews, setDetectionReviews] = useState<Record<number, DetectionSkuReview[]>>({});
+  const [products, setProducts] = useState<Product[]>([]);
+  const [shelfProducts, setShelfProducts] = useState<Record<number, number[]>>({});
+  const [reviewProductSelection, setReviewProductSelection] = useState<Record<number, string>>({});
+  const [reviewLoading, setReviewLoading] = useState<number | null>(null);
   const [expandedDetectionImage, setExpandedDetectionImage] = useState<number | null>(null);
   const [detectionLoading, setDetectionLoading] = useState<number | null>(null);
   const [retryLoading, setRetryLoading] = useState<number | null>(null);
@@ -64,8 +73,10 @@ export default function App() {
 
   const logout = useCallback(() => {
     sessionStorage.removeItem("smart-shelf-token");
-    setToken(""); setUser(null); setSummary(null); setTasks([]); setCaptures([]); setImageDetections({}); setExpandedDetectionImage(null);
-  }, []);
+    Object.values(imageUrls).forEach(url => URL.revokeObjectURL(url));
+    setImageUrls({});
+    setToken(""); setUser(null); setSummary(null); setTasks([]); setCaptures([]); setImageDetections({}); setDetectionReviews({}); setExpandedDetectionImage(null);
+  }, [imageUrls]);
 
   const refresh = useCallback(async () => {
     if (!token) return;
@@ -168,13 +179,72 @@ export default function App() {
     if (imageDetections[item.id]) return;
     setDetectionLoading(item.id);
     try {
-      const result = await request<ShelfImageDetection[]>(`/api/v1/shelf-images/${item.id}/detections`);
+      const [result, imageResponse, activeProducts, assignedProducts] = await Promise.all([
+        request<ShelfImageDetection[]>(`/api/v1/shelf-images/${item.id}/detections`),
+        fetch(`${API_BASE}/api/v1/shelf-images/${item.id}/content`, { headers: { Authorization: `Bearer ${token}` } }),
+        request<Product[]>("/api/v1/products?active_only=true&limit=500"),
+        request<ShelfProduct[]>(`/api/v1/shelf-products?shelf_id=${item.shelf_id}`),
+      ]);
+      if (!imageResponse.ok) {
+        const body = await imageResponse.json().catch(() => ({}));
+        throw new Error(body.detail || `Não foi possível abrir a fotografia (HTTP ${imageResponse.status}).`);
+      }
+      const blobUrl = URL.createObjectURL(await imageResponse.blob());
+      setImageUrls(current => {
+        if (current[item.id]) URL.revokeObjectURL(current[item.id]);
+        return { ...current, [item.id]: blobUrl };
+      });
       setImageDetections(current => ({ ...current, [item.id]: result }));
+      setProducts(activeProducts);
+      setShelfProducts(current => ({ ...current, [item.shelf_id]: assignedProducts.map(link => link.product_id) }));
+      const reviewPairs = await Promise.all(result.map(async detection => {
+        const history = await request<DetectionSkuReview[]>(`/api/v1/shelf-image-detections/${detection.id}/reviews`);
+        return [detection.id, history] as const;
+      }));
+      setDetectionReviews(current => ({ ...current, ...Object.fromEntries(reviewPairs) }));
+      setReviewProductSelection(current => {
+        const next = { ...current };
+        result.forEach(detection => {
+          if (next[detection.id] === undefined) next[detection.id] = detection.product_id ? String(detection.product_id) : "";
+        });
+        return next;
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Não foi possível consultar as deteções.");
       setExpandedDetectionImage(null);
     } finally {
       setDetectionLoading(null);
+    }
+  }
+
+  async function reviewDetection(detection: ShelfImageDetection, decision: "CONFIRMED" | "CORRECTED" | "REJECTED") {
+    const selected = reviewProductSelection[detection.id] || "";
+    if (decision !== "REJECTED" && !selected) {
+      setError("Seleciona um produto atribuído a esta prateleira.");
+      return;
+    }
+    if (decision === "CONFIRMED" && Number(selected) !== detection.product_id) {
+      setError("Para confirmar, seleciona o SKU proposto. Usa corrigir para escolher outro produto.");
+      return;
+    }
+    setReviewLoading(detection.id);
+    setError("");
+    try {
+      const created = await request<DetectionSkuReview>(`/api/v1/shelf-image-detections/${detection.id}/reviews`, {
+        method: "POST",
+        body: JSON.stringify({
+          decision,
+          ...(decision === "REJECTED" ? {} : { selected_product_id: Number(selected) }),
+        }),
+      });
+      setDetectionReviews(current => ({
+        ...current,
+        [detection.id]: [...(current[detection.id] || []), created],
+      }));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Não foi possível guardar a revisão.");
+    } finally {
+      setReviewLoading(null);
     }
   }
 
@@ -265,9 +335,41 @@ export default function App() {
                 {captures.length === 0 && <div className="empty-state"><PackageSearch size={25} /><strong>Sem fotografias registadas</strong><span>As próximas capturas serão apresentadas aqui.</span></div>}
                 {captures.map(item => <div className="capture-item" key={item.id}>
                   <div className="capture-row"><div className="capture-thumb"><Boxes size={17} /></div><div className="capture-meta"><strong>Prateleira #{item.shelf_id} · {item.original_filename}</strong><span>{(item.file_size_bytes / 1024).toFixed(0)} KB · {new Date(item.created_at).toLocaleString("pt-PT")}</span></div><span className={`task-status ${item.analysis_status.toLowerCase()}`}>{item.analysis_status}</span>{(user?.role === "ADMIN" || user?.role === "SUPERVISOR") && item.analysis_status === "FAILED" && <button className="row-action detection-toggle" disabled={retryLoading === item.id} onClick={() => void retryImageAnalysis(item)}>{retryLoading === item.id ? "A repetir…" : "Repetir análise"}</button>}<button className="row-action detection-toggle" onClick={() => void toggleImageDetections(item)}>{detectionLoading === item.id ? "A consultar…" : expandedDetectionImage === item.id ? "Fechar" : "Deteções"}</button></div>
-                  {expandedDetectionImage === item.id && <div className="detection-list">
+                  {expandedDetectionImage === item.id && <div className="detection-workspace">
+                    {imageUrls[item.id] && <div className="detection-image-stage">
+                      <img src={imageUrls[item.id]} alt={`Fotografia da prateleira ${item.shelf_id}`} />
+                      {imageDetections[item.id]?.map(detection => <div key={detection.id} className={`detection-box ${(detectionReviews[detection.id] || []).length ? "reviewed" : ""}`} style={{ left: `${detection.x_min * 100}%`, top: `${detection.y_min * 100}%`, width: `${(detection.x_max - detection.x_min) * 100}%`, height: `${(detection.y_max - detection.y_min) * 100}%` }}><span>#{detection.id}</span></div>)}
+                    </div>}
                     {!imageDetections[item.id]?.length && <p className="detection-empty">{item.analysis_status === "COMPLETED" ? "A análise terminou sem registar objetos nesta fotografia." : item.analysis_status === "FAILED" ? `A análise falhou. ${item.analysis_error || "Pode ser repetida por um supervisor."}` : item.analysis_status === "PROCESSING" ? "A fotografia está a ser analisada pelo worker." : "Ainda não existem deteções guardadas. A fotografia aguarda processamento."}</p>}
-                    {imageDetections[item.id]?.map(detection => <div className="detection-row" key={detection.id}><strong>{detection.label}</strong><span>{(detection.confidence * 100).toFixed(1)}% confiança</span><span>Caixa: {(detection.x_min * 100).toFixed(1)}%, {(detection.y_min * 100).toFixed(1)}% – {(detection.x_max * 100).toFixed(1)}%, {(detection.y_max * 100).toFixed(1)}%</span><small>Modelo {detection.model_version}{detection.product_id ? ` · Produto #${detection.product_id}` : ""}</small></div>)}
+                    {imageDetections[item.id]?.map(detection => {
+                      const assignedIds = shelfProducts[item.shelf_id] || [];
+                      const selectableProducts = products.filter(product => assignedIds.includes(product.id));
+                      const history = detectionReviews[detection.id] || [];
+                      const selectedId = reviewProductSelection[detection.id] || "";
+                      const canReview = user?.role === "ADMIN" || user?.role === "SUPERVISOR";
+                      return <article className="detection-review-card" key={detection.id}>
+                        <div className="detection-review-heading"><div><strong>Deteção #{detection.id} · {detection.label}</strong><span>{(detection.confidence * 100).toFixed(1)}% confiança · {detection.sku_match_status || "Estado SKU não disponível"}</span></div><span className={`review-state ${history.length ? "reviewed" : "pending"}`}>{history.length ? "Com revisão" : "Por rever"}</span></div>
+                        <div className="detection-review-meta"><span>SKU proposto: <strong>{detection.product_id ? `#${detection.product_id}` : "Sem correspondência"}</strong></span><span>Modelo: {detection.model_version}</span>{detection.sku_similarity !== null && detection.sku_similarity !== undefined && <span>Similaridade: {(detection.sku_similarity * 100).toFixed(1)}%</span>}</div>
+                        {canReview && <div className="review-controls">
+                          <label>Produto atribuído à prateleira
+                            <select value={selectedId} onChange={event => setReviewProductSelection(current => ({ ...current, [detection.id]: event.target.value }))}>
+                              <option value="">Selecionar produto…</option>
+                              {selectableProducts.map(product => <option key={product.id} value={product.id}>{product.sku} — {product.name}</option>)}
+                            </select>
+                          </label>
+                          <div className="review-actions">
+                            <button className="review-button confirm" disabled={reviewLoading === detection.id || !detection.product_id || Number(selectedId) !== detection.product_id} onClick={() => void reviewDetection(detection, "CONFIRMED")}><Check size={14} /> Confirmar</button>
+                            <button className="review-button correct" disabled={reviewLoading === detection.id || !selectedId || Number(selectedId) === detection.product_id} onClick={() => void reviewDetection(detection, "CORRECTED")}><ImageIcon size={14} /> Corrigir</button>
+                            <button className="review-button reject" disabled={reviewLoading === detection.id} onClick={() => void reviewDetection(detection, "REJECTED")}><X size={14} /> Rejeitar</button>
+                          </div>
+                        </div>}
+                        <div className="review-history">
+                          <strong><History size={14} /> Histórico ({history.length})</strong>
+                          {history.length === 0 && <span>Sem decisões humanas registadas.</span>}
+                          {history.map(review => <div className="review-history-row" key={review.id}><span>{review.decision === "CONFIRMED" ? "Confirmado" : review.decision === "CORRECTED" ? "Corrigido" : "Rejeitado"}</span><span>{review.selected_product_id ? `Produto #${review.selected_product_id}` : "Sem SKU"}</span><time>{new Date(review.created_at).toLocaleString("pt-PT")}</time>{review.notes && <small>{review.notes}</small>}</div>)}
+                        </div>
+                      </article>;
+                    })}
                   </div>}
                 </div>)}
               </div>
