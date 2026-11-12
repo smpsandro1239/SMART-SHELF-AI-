@@ -33,6 +33,7 @@ from app.schemas import (
     ShelfImageOCRRunCreate, ShelfImageOCRRunRead, ShelfImageOCREvidenceRead,
     ShelfImageOCRMatchRead,
     ShelfImageFusedEvidenceRead,
+    ShelfImageReviewQueueItem,
 )
 
 app = FastAPI(title=settings.app_name, version="0.2.0", description="Operational API for SMART SHELF AI.")
@@ -87,6 +88,7 @@ async def require_api_authentication(request: Request, call_next):
         supervisor_or_admin = (
             path == "/api/v1/product-embedding-exemplars"
             or path.startswith("/api/v1/product-embedding-exemplars/")
+            or (method == "GET" and path == "/api/v1/shelf-image-review-queue")
             or (method == "POST" and path.startswith("/api/v1/shelf-image-detections/"))
             or (
                 method == "POST"
@@ -619,6 +621,73 @@ def fuse_shelf_image_evidence(image_id: int, request: Request, db: Session = Dep
     for result in results:
         db.refresh(result)
     return results
+
+
+
+@app.get(
+    "/api/v1/shelf-image-review-queue",
+    response_model=list[ShelfImageReviewQueueItem],
+    tags=["computer-vision"],
+)
+def list_shelf_image_review_queue(
+    request: Request,
+    status: str | None = None,
+    limit: int = 100,
+    offset: int = 0,
+    db: Session = Depends(get_db),
+):
+    """Return fused detections awaiting a human decision, scoped to the actor's store."""
+    allowed_statuses = {"CONSENSUS", "VISUAL_ONLY", "TEXT_ONLY", "CONFLICT", "AMBIGUOUS", "UNKNOWN"}
+    if status is not None and status not in allowed_statuses:
+        raise HTTPException(status_code=422, detail="Unsupported evidence-fusion status")
+    actor = _request_user(db, request)
+    query = (
+        db.query(models.ShelfImageFusedEvidence, models.ShelfImageDetection, models.ShelfImage, models.Shelf)
+        .join(models.ShelfImageDetection, models.ShelfImageFusedEvidence.detection_id == models.ShelfImageDetection.id)
+        .join(models.ShelfImage, models.ShelfImageDetection.shelf_image_id == models.ShelfImage.id)
+        .join(models.Shelf, models.ShelfImage.shelf_id == models.Shelf.id)
+        .join(models.Zone, models.Shelf.zone_id == models.Zone.id)
+        .filter(~db.query(models.DetectionSkuReview.id).filter(
+            models.DetectionSkuReview.detection_id == models.ShelfImageDetection.id
+        ).exists())
+    )
+    if actor is not None and actor.role != "ADMIN":
+        query = query.filter(models.Zone.store_id == actor.store_id)
+    if status is not None:
+        query = query.filter(models.ShelfImageFusedEvidence.status == status)
+    rows = query.order_by(
+        models.ShelfImageFusedEvidence.created_at.asc(),
+        models.ShelfImageFusedEvidence.id.asc(),
+    ).offset(max(0, offset)).limit(max(1, min(limit, 250))).all()
+    return [
+        {
+            "fused_evidence_id": evidence.id,
+            "detection_id": detection.id,
+            "shelf_image_id": image.id,
+            "shelf_id": shelf.id,
+            "shelf_code": shelf.code,
+            "image_filename": image.original_filename,
+            "status": evidence.status,
+            "suggested_product_id": evidence.suggested_product_id,
+            "visual_product_id": evidence.visual_product_id,
+            "text_product_id": evidence.text_product_id,
+            "detection_label": detection.label,
+            "detection_confidence": detection.confidence,
+            "x_min": detection.x_min,
+            "y_min": detection.y_min,
+            "x_max": detection.x_max,
+            "y_max": detection.y_max,
+            "visual_similarity": evidence.visual_similarity,
+            "text_score": evidence.text_score,
+            "ocr_confidence": evidence.ocr_confidence,
+            "visual_model_version": evidence.visual_model_version,
+            "ocr_provider": evidence.ocr_provider,
+            "ocr_model_version": evidence.ocr_model_version,
+            "reason": evidence.reason,
+            "created_at": evidence.created_at,
+        }
+        for evidence, detection, image, shelf in rows
+    ]
 
 
 @app.get("/api/v1/shelf-images/{image_id}/evidence-fusion", response_model=list[ShelfImageFusedEvidenceRead], tags=["computer-vision"])
