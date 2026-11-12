@@ -93,6 +93,7 @@ async def require_api_authentication(request: Request, call_next):
             or (method == "POST" and path in {
                 "/api/v1/stores", "/api/v1/zones", "/api/v1/shelves",
                 "/api/v1/products", "/api/v1/shelf-products",
+                "/api/v1/warehouse/product-profiles",
             })
         )
         supervisor_or_admin = (
@@ -1551,7 +1552,6 @@ def create_warehouse_product_profile(
     request: Request,
     db: Session = Depends(get_db),
 ):
-    actor = _request_user(db, request)
     product = db.get(models.Product, payload.product_id)
     if product is None:
         raise HTTPException(status_code=404, detail="Product not found")
