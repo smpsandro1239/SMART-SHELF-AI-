@@ -1,6 +1,6 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
-from sqlalchemy import JSON, DateTime, ForeignKey, String, Text, Float, Integer, Boolean, Numeric, UniqueConstraint, CheckConstraint
+from sqlalchemy import JSON, Date, DateTime, ForeignKey, String, Text, Float, Integer, Boolean, Numeric, UniqueConstraint, CheckConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -337,4 +337,24 @@ class ShelfImageFusedEvidence(Base):
     ocr_provider: Mapped[str] = mapped_column(String(80), nullable=False)
     ocr_model_version: Mapped[str] = mapped_column(String(120), nullable=False)
     reason: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+
+class DailySalesRecord(Base):
+    """Immutable daily POS/ERP sales aggregate for one store and product."""
+    __tablename__ = "daily_sales_records"
+    __table_args__ = (
+        UniqueConstraint("store_id", "product_id", "sales_date", "source", "external_reference",
+                         name="uq_daily_sales_external_reference"),
+        CheckConstraint("quantity >= 0", name="ck_daily_sales_quantity_nonnegative"),
+        CheckConstraint("source IN ('POS', 'ERP', 'MANUAL', 'IMPORT')", name="ck_daily_sales_source"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    store_id: Mapped[int] = mapped_column(ForeignKey("stores.id", ondelete="CASCADE"), index=True)
+    product_id: Mapped[int] = mapped_column(ForeignKey("products.id", ondelete="CASCADE"), index=True)
+    sales_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    quantity: Mapped[float] = mapped_column(Numeric(12, 3), nullable=False)
+    source: Mapped[str] = mapped_column(String(20), nullable=False)
+    external_reference: Mapped[str] = mapped_column(String(120), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
