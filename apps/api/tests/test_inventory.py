@@ -177,3 +177,68 @@ def test_replenishment_does_not_recommend_when_backroom_is_empty():
         )
         assert response.status_code == 200
         assert response.json()[0]["recommendation_status"] == "BACKROOM_OUT_OF_STOCK"
+
+
+def test_measured_shelf_quantity_produces_capped_refill_recommendation():
+    with TestClient(app) as client:
+        store_id, product_id = create_store_and_product(client)
+        zone = client.post("/api/v1/zones", json={"store_id": store_id, "name": "Mercearia"})
+        shelf = client.post("/api/v1/shelves", json={"zone_id": zone.json()["id"], "code": "MER-02"})
+        shelf_id = shelf.json()["id"]
+        client.post("/api/v1/shelf-products", json={
+            "shelf_id": shelf_id, "product_id": product_id,
+            "target_quantity": 12, "min_display_quantity": 3,
+        })
+        observation = client.post("/api/v1/observations", json={
+            "shelf_id": shelf_id, "source": "simulation", "status": "LOW_STOCK",
+            "confidence": 0.93, "observed_quantity": 2,
+        })
+        assert observation.status_code == 201
+        assert observation.json()["observed_quantity"] == 2
+
+        client.post("/api/v1/inventory/snapshots", json={
+            "store_id": store_id, "product_id": product_id,
+            "on_hand_quantity": 25, "reserved_quantity": 5, "source": "ERP",
+        })
+        response = client.get("/api/v1/replenishment/recommendations", params={"store_id": store_id})
+        recommendation = response.json()[0]
+        assert recommendation["observed_shelf_quantity"] == 2
+        assert recommendation["recommendation_status"] == "NEEDS_REPLENISHMENT"
+        assert recommendation["suggested_quantity"] == 10
+
+
+def test_measured_shelf_refill_is_capped_by_backroom_availability():
+    with TestClient(app) as client:
+        store_id, product_id = create_store_and_product(client)
+        zone = client.post("/api/v1/zones", json={"store_id": store_id, "name": "Bebidas"})
+        shelf = client.post("/api/v1/shelves", json={"zone_id": zone.json()["id"], "code": "BEB-02"})
+        shelf_id = shelf.json()["id"]
+        client.post("/api/v1/shelf-products", json={
+            "shelf_id": shelf_id, "product_id": product_id,
+            "target_quantity": 12, "min_display_quantity": 3,
+        })
+        client.post("/api/v1/observations", json={
+            "shelf_id": shelf_id, "status": "EMPTY", "confidence": 0.98,
+            "observed_quantity": 0,
+        })
+        client.post("/api/v1/inventory/snapshots", json={
+            "store_id": store_id, "product_id": product_id,
+            "on_hand_quantity": 4, "reserved_quantity": 0, "source": "WMS",
+        })
+
+        response = client.get("/api/v1/replenishment/recommendations", params={"store_id": store_id})
+        recommendation = response.json()[0]
+        assert recommendation["suggested_quantity"] == 4
+        assert "parcial" in recommendation["explanation"].lower()
+
+
+def test_observation_rejects_negative_measured_shelf_quantity():
+    with TestClient(app) as client:
+        store = client.post("/api/v1/stores", json={"code": "OBS-QTY", "name": "Loja observação"})
+        zone = client.post("/api/v1/zones", json={"store_id": store.json()["id"], "name": "Teste"})
+        shelf = client.post("/api/v1/shelves", json={"zone_id": zone.json()["id"], "code": "OBS-QTY-01"})
+        response = client.post("/api/v1/observations", json={
+            "shelf_id": shelf.json()["id"], "status": "LOW_STOCK",
+            "confidence": 0.9, "observed_quantity": -1,
+        })
+        assert response.status_code == 422
