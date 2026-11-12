@@ -51,3 +51,28 @@ Registar uma observação fictícia:
 ## Nota de estado
 
 Esta é a primeira base de desenvolvimento, ainda não validada por execução neste ambiente. As observações de exemplo são dados fictícios, não deteções de visão computacional. Antes de produção, faltam autenticação, autorização, hardening, observabilidade e validação operacional.
+
+
+## Catálogo de produtos e prateleiras
+
+Criar um produto:
+
+    curl -X POST http://localhost:8000/api/v1/products \
+      -H "Content-Type: application/json" \
+      -d '{"sku":"SKU-AGUA-15","name":"Água 1,5 L","brand":"Marca Exemplo","unit":"un"}'
+
+Associar o produto a uma prateleira (substituir os IDs pelos valores reais):
+
+    curl -X POST http://localhost:8000/api/v1/shelf-products \
+      -H "Content-Type: application/json" \
+      -d '{"shelf_id":1,"product_id":1,"target_quantity":12,"min_display_quantity":4,"position":"nível 2"}'
+
+Consultar o catálogo:
+
+    curl "http://localhost:8000/api/v1/products?active_only=true"
+
+Consultar os produtos associados a uma prateleira:
+
+    curl "http://localhost:8000/api/v1/shelf-products?shelf_id=1"
+
+A quantidade-alvo e o mínimo de exposição descrevem a organização da prateleira. Não representam stock de retaguarda nem stock total da loja.
