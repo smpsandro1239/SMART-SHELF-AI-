@@ -6,12 +6,13 @@ create tasks, or issue warehouse movements.
 from __future__ import annotations
 
 import math
+from decimal import Decimal
 from collections import defaultdict
 from typing import Any, Iterable, Mapping
 
 
 def _number(value: Any) -> float | None:
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
+    if isinstance(value, bool) or not isinstance(value, (int, float, Decimal)):
         return None
     result = float(value)
     return result if math.isfinite(result) and result >= 0 else None
