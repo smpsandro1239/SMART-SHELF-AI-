@@ -32,6 +32,14 @@ _PRIORITY = {
     "STALE_OBSERVATION": ("RECAPTURE", 4),
     "NO_ACTION": ("NONE", 5),
 }
+_RISK_PRIORITY = {
+    "CRITICAL": 0,
+    "HIGH": 1,
+    "MEDIUM": 2,
+    "NOT_ASSESSED": 3,
+    "UNKNOWN": 3,
+    "LOW": 4,
+}
 
 
 def build_replenishment_plan(
@@ -40,7 +48,11 @@ def build_replenishment_plan(
     active_keys: set[tuple[int, int]] | None = None,
     limit: int = 200,
 ) -> ReplenishmentPlan:
-    """Rank recommendation rows and group them by zone without mutating input."""
+    """Rank recommendations by stockout risk, then status, and group by zone.
+
+    A risk band changes ordering only. It never makes an unquantified or
+    otherwise non-actionable recommendation eligible for task creation.
+    """
     if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 500:
         raise ValueError("limit must be between 1 and 500")
 
@@ -70,9 +82,21 @@ def build_replenishment_plan(
         if not item["task_creation_allowed"]:
             item["proposed_priority"] = "RECAPTURE" if status == "STALE_OBSERVATION" else "REVIEW"
             item["priority_rank"] = 4 if status == "STALE_OBSERVATION" else 2
+
+        raw_risk = str(item.get("stockout_risk_level") or "NOT_ASSESSED").upper()
+        risk_level = raw_risk if raw_risk in _RISK_PRIORITY else "NOT_ASSESSED"
+        item["stockout_risk_level"] = risk_level
+        item["stockout_risk_rank"] = _RISK_PRIORITY[risk_level]
+        item["operational_urgency"] = (
+            risk_level if risk_level != "NOT_ASSESSED" else "NOT_ASSESSED"
+        )
+        item["risk_priority_basis"] = (
+            "STOCKOUT_RISK_ASSESSMENT" if risk_level != "NOT_ASSESSED" else "STATUS_ONLY"
+        )
         candidates.append(item)
 
     candidates.sort(key=lambda row: (
+        row["stockout_risk_rank"],
         row["priority_rank"],
         str(row.get("zone_name") or "").casefold(),
         str(row.get("shelf_code") or "").casefold(),
@@ -108,10 +132,11 @@ def build_replenishment_plan(
             if route_key not in route_order_by_shelf:
                 route_order_by_shelf[route_key] = len(route_order_by_shelf) + 1
 
-        # Present work by operational priority; route_order remains an independent shelf hint.
+        # Operational urgency remains the primary work order; route_order is an independent hint.
         ordered_items = sorted(
             zone_items,
             key=lambda row: (
+                row["stockout_risk_rank"],
                 row["priority_rank"],
                 str(row.get("shelf_code") or "").casefold(),
                 str(row.get("position") or "").casefold(),
