@@ -177,3 +177,12 @@ Configurar no ambiente da API `JWT_SECRET_KEY` e `BOOTSTRAP_ADMIN_KEY` com valor
 5. O administrador pode criar contas em `POST /api/v1/auth/users` e consultar `GET /api/v1/auth/users`.
 
 Os tokens de acesso expiram ao fim do período configurado em `JWT_ACCESS_TOKEN_MINUTES`. Ainda não existem refresh tokens, recuperação de palavra-passe, isolamento por loja nem associação das tarefas a IDs de utilizador. Não expor a chave de bootstrap nem os segredos JWT.
+
+
+## Dashboard operacional
+
+`GET /api/v1/dashboard/summary` devolve contagens de tarefas por estado e observações que requerem atenção. Os administradores podem filtrar por `store_id`; supervisores ficam limitados à loja da sua conta; funcionários veem apenas as tarefas que lhes foram atribuídas. Este endpoint fornece dados agregados para a futura interface, ainda não incluída no repositório.
+
+## Atribuição de tarefas a utilizadores
+
+Ao criar ou atribuir uma tarefa, pode ser enviado `assigned_user_id`. A conta tem de estar ativa e associada à mesma loja da tarefa. O campo textual `assigned_to` é mantido para compatibilidade com tarefas antigas.
