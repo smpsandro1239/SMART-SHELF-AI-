@@ -152,3 +152,6 @@ Fluxo recomendado antes de preparar qualquer treino:
 5. Rever manualmente a proveniência, as autorizações e uma amostra visual das anotações.
 
 Estas ferramentas verificam metadados e estrutura. Não confirmam que um ficheiro é realmente uma imagem válida, que as caixas estão bem anotadas ou que existe autorização legal para utilizar os dados.
+
+
+A opção `--enriched-dir` é opcional. Quando indicada, escreve cópias dos três JSON COCO com os campos `sha256` e `file_size_bytes` preenchidos a partir do manifesto. Os ficheiros originais não são alterados. Essas cópias permitem que verificações futuras comparem os hashes e tamanhos, em vez de se limitarem a confirmar nomes e splits. O enriquecimento só é feito depois de a correspondência entre manifesto e COCO passar.
