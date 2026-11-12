@@ -4097,15 +4097,35 @@ def operational_decisions(
             "decision": result,
         })
 
+    status_order = {
+        "ACTION_RECOMMENDED": 0,
+        "ALREADY_IN_PROGRESS": 1,
+        "INSUFFICIENT_EVIDENCE": 2,
+        "MONITOR": 3,
+    }
+    priority_order = {"HIGH": 0, "NORMAL": 1, "NONE": 2}
+    decisions.sort(key=lambda item: (
+        status_order.get(item["decision"].get("status"), 4),
+        priority_order.get(item["decision"].get("priority"), 3),
+        item["decision"].get("inventory_coverage_hours")
+            if item["decision"].get("inventory_coverage_hours") is not None else float("inf"),
+        item["shelf_id"],
+        item["product_id"],
+    ))
+
     counts = {}
+    priority_counts = {}
     for item in decisions:
         key = item["decision"]["status"]
         counts[key] = counts.get(key, 0) + 1
+        priority = item["decision"].get("priority", "NONE")
+        priority_counts[priority] = priority_counts.get(priority, 0) + 1
     return {
         "generated_at": aware(now).isoformat(),
         "store_id": store_id,
         "count": len(decisions),
         "status_counts": counts,
+        "priority_counts": priority_counts,
         "forecast_policy": "Média diária simples dos dias com vendas registadas na janela móvel de sete dias; não ajusta promoções, sazonalidade, tráfego ou dias sem registo.",
         "decisions": decisions,
         "side_effects": {"tasks_created": 0, "inventory_changed": False},
