@@ -1017,3 +1017,8 @@ business_date,hour_of_day,customer_count,external_reference
 Datas ISO, horas 0–23, quantidades e contagens não negativas e referências
 externas únicas são obrigatórias. A importação valida tudo antes de gravar e é
 atómica. Os zeros são preservados; horas sem registo não são criadas.
+
+
+O perfil por dia da semana aceita `source` (predefinição `POS`) para evitar
+somar contagens potencialmente sobrepostas de fontes diferentes. As médias
+de vendas e afluência são calculadas exclusivamente para a origem selecionada.
