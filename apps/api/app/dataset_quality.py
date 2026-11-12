@@ -34,7 +34,10 @@ def analyze_dataset_quality(
     if min_instances_per_class < 0:
         errors.append("min_instances_per_class must be zero or greater")
     if max_class_imbalance_ratio is not None and (
-        not math.isfinite(max_class_imbalance_ratio) or max_class_imbalance_ratio < 1
+        isinstance(max_class_imbalance_ratio, bool)
+        or not isinstance(max_class_imbalance_ratio, (int, float))
+        or not math.isfinite(max_class_imbalance_ratio)
+        or max_class_imbalance_ratio < 1
     ):
         errors.append("max_class_imbalance_ratio must be a finite number greater than or equal to 1")
     if errors:
