@@ -84,7 +84,7 @@ def process_next_image(db: Session, provider) -> int | None:
         image = db.get(models.ShelfImage, image_id)
         if image is not None:
             image.analysis_status = "FAILED"
-            image.analysis_error = f"{type(exc).__name__}: {str(exc)[:450]}"
+            image.analysis_error = f"{type(exc).__name__}: processing failed"
             image.analysis_completed_at = models.utc_now()
             db.commit()
         logger.exception("Image analysis failed for shelf image %s", image_id)
