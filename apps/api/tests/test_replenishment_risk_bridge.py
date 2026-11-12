@@ -160,3 +160,14 @@ def test_bridge_rejects_datetime_as_through_date():
             through_date=datetime(2026, 11, 12, 0, tzinfo=timezone.utc),
             now=datetime(2026, 11, 12, 11, tzinfo=timezone.utc),
         )
+
+
+def test_bridge_rejects_datetime_in_daily_sales_date():
+    today = date(2026, 11, 12)
+    history = _history(today)
+    history[0].sales_date = datetime(2026, 11, 12, 0, tzinfo=timezone.utc)
+    with pytest.raises(ValueError, match="calendar date"):
+        enrich_replenishment_with_stockout_risk(
+            [_recommendation()], history, through_date=today,
+            now=datetime(2026, 11, 12, 11, tzinfo=timezone.utc),
+        )
