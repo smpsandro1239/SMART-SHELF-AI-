@@ -427,9 +427,9 @@ O worker pode executar OCR automaticamente depois da deteção visual, quando `O
 
 ## Worker com OCR opcional
 
-O OCR está desligado por omissão. Configurar `OCR_PROVIDER_FACTORY=app.ocr_paddle:create_provider`, `OCR_PROVIDER_NAME=paddleocr` e `OCR_MODEL_VERSION=PP-OCRv5-pt` no ambiente do worker. Instalar primeiro PaddlePaddle CPU compatível e depois `requirements-ocr.txt`. O worker persiste regiões OCR e associações geométricas, mas não identifica nem aprova SKUs automaticamente.
+O OCR está desligado por omissão. Configurar `OCR_PROVIDER_FACTORY=app.ocr_paddle:create_provider`, `OCR_PROVIDER_NAME=paddleocr` e `OCR_MODEL_VERSION=PP-OCRv5-pt` no ambiente do worker. Instalar primeiro PaddlePaddle CPU compatível e depois `requirements-ocr.txt`. O worker persiste regiões OCR e associações geométricas. Depois de uma execução OCR concluída, executa automaticamente `app.product_pipeline.process_completed_ocr_run`, que faz matching textual contra o catálogo ativo e cria a fusão com a evidência visual. A operação é idempotente e isolada num savepoint: se falhar, a análise visual e as regiões OCR persistidas são preservadas. Não confirma SKUs nem atualiza inventário.
 
-Sequência após processamento: `POST /api/v1/shelf-images/{image_id}/ocr-matches`, `POST /api/v1/shelf-images/{image_id}/evidence-fusion`, consulta da fila `GET /api/v1/shelf-image-review-queue` e decisão humana pelo endpoint de reviews da deteção.
+Os endpoints `POST /api/v1/shelf-images/{image_id}/ocr-matches` e `POST /api/v1/shelf-images/{image_id}/evidence-fusion` continuam disponíveis para execução manual. A fila `GET /api/v1/shelf-image-review-queue` e o resumo `GET /api/v1/shelf-image-review-queue/summary` alimentam a secção de revisão do dashboard para ADMIN/SUPERVISOR. A decisão humana é registada pelo endpoint de reviews da deteção.
 
 
 A fila tem também o endpoint `GET /api/v1/shelf-image-review-queue/summary`, que devolve contagens pendentes por estado de fusão para alimentar dashboards de revisão. Ambos os endpoints são reservados a ADMIN/SUPERVISOR e limitados à loja do supervisor.
