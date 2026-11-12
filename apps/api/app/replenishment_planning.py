@@ -68,7 +68,8 @@ def build_replenishment_plan(
             and item["suggested_quantity"] > 0
         )
         if not item["task_creation_allowed"]:
-            item["proposed_priority"] = "REVIEW" if status not in {"STALE_OBSERVATION"} else "RECAPTURE"
+            item["proposed_priority"] = "RECAPTURE" if status == "STALE_OBSERVATION" else "REVIEW"
+            item["priority_rank"] = 4 if status == "STALE_OBSERVATION" else 2
         candidates.append(item)
 
     candidates.sort(key=lambda row: (
