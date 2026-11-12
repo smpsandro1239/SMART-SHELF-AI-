@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 ObservationStatus = Literal["NORMAL", "LOW_STOCK", "EMPTY", "MISPLACED", "DAMAGED", "UNKNOWN", "OCCLUDED"]
 ObservationSource = Literal["fixed_camera", "robot", "mobile", "simulation"]
@@ -84,4 +84,37 @@ class ShelfProductCreate(BaseModel):
 
 class ShelfProductRead(ShelfProductCreate):
     id: int
+    model_config = ConfigDict(from_attributes=True)
+
+
+InventorySource = Literal["ERP", "WMS", "POS", "MANUAL", "IMPORT"]
+
+
+class InventorySnapshotCreate(BaseModel):
+    store_id: int
+    product_id: int
+    on_hand_quantity: float = Field(ge=0)
+    reserved_quantity: float = Field(default=0, ge=0)
+    source: InventorySource
+    external_reference: str | None = Field(default=None, max_length=120)
+    captured_at: datetime | None = None
+
+    @model_validator(mode="after")
+    def reserved_must_not_exceed_on_hand(self):
+        if self.reserved_quantity > self.on_hand_quantity:
+            raise ValueError("reserved_quantity cannot exceed on_hand_quantity")
+        return self
+
+
+class InventorySnapshotRead(BaseModel):
+    id: int
+    store_id: int
+    product_id: int
+    on_hand_quantity: float
+    reserved_quantity: float
+    available_quantity: float
+    source: str
+    external_reference: str | None
+    captured_at: datetime
+    created_at: datetime
     model_config = ConfigDict(from_attributes=True)
