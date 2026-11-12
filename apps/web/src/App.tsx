@@ -85,6 +85,7 @@ type OperationalDecisionRow = {
 };
 type OperationalDecisionResponse = {
   generated_at: string; count: number; status_counts: Record<string, number>;
+  priority_counts?: Record<string, number>;
   forecast_policy: string; decisions: OperationalDecisionRow[];
 };
 type Summary = {
@@ -477,6 +478,7 @@ export default function App() {
               <div className="decision-counts">
                 <div><span>Itens avaliados</span><strong>{operationalDecisions.count}</strong></div>
                 <div><span>Ação recomendada</span><strong>{operationalDecisions.status_counts.ACTION_RECOMMENDED || 0}</strong></div>
+                <div><span>Prioridade alta</span><strong>{operationalDecisions.priority_counts?.HIGH || 0}</strong></div>
                 <div><span>Em acompanhamento</span><strong>{operationalDecisions.status_counts.MONITOR || 0}</strong></div>
                 <div><span>Já em execução</span><strong>{operationalDecisions.status_counts.ALREADY_IN_PROGRESS || 0}</strong></div>
               </div>
