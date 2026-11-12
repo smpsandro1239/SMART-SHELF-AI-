@@ -36,13 +36,16 @@ def load_provider():
     return provider
 
 
-def resolve_sku_match(db: Session, detection):
-    """Match only provider embeddings against approved exemplars of the exact model."""
+def resolve_sku_match(db: Session, detection, registry_cache=None):
+    """Match only against approved exemplars; reuse one registry per model version."""
     if detection.embedding is None or not detection.embedding_model_version:
         return {"product_id": None, "status": "UNKNOWN", "similarity": None, "margin": None}
     try:
-        registry = build_approved_product_registry(db, model_version=detection.embedding_model_version)
-        match = registry.match(detection.embedding)
+        cache = registry_cache if registry_cache is not None else {}
+        version = detection.embedding_model_version
+        if version not in cache:
+            cache[version] = build_approved_product_registry(db, model_version=version)
+        match = cache[version].match(detection.embedding)
     except (ValueError, TypeError):
         logger.warning("SKU matching abstained: incompatible or invalid embedding registry")
         return {"product_id": None, "status": "UNKNOWN", "similarity": None, "margin": None}
@@ -75,8 +78,9 @@ def process_next_image(db: Session, provider) -> int | None:
         for detection in result.detections:
             detection.validate_box()
         db.query(models.ShelfImageDetection).filter_by(shelf_image_id=image_id).delete()
+        registry_cache = {}
         for detection in result.detections:
-            sku_match = resolve_sku_match(db, detection)
+            sku_match = resolve_sku_match(db, detection, registry_cache)
             db.add(models.ShelfImageDetection(
                 shelf_image_id=image_id,
                 product_id=sku_match["product_id"],
