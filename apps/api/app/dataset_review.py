@@ -176,7 +176,7 @@ def main() -> int:
                 raise ValueError("; ".join(errors))
             args.create_template.parent.mkdir(parents=True, exist_ok=True)
             args.create_template.write_text(
-                json.dumps(template, ensure_ascii=False, indent=2) + "\\n",
+                json.dumps(template, ensure_ascii=False, indent=2) + "\n",
                 encoding="utf-8",
             )
             print(f"Review template created: {args.create_template}")
@@ -195,7 +195,7 @@ def main() -> int:
     if args.json_report:
         try:
             args.json_report.parent.mkdir(parents=True, exist_ok=True)
-            args.json_report.write_text(rendered + "\\n", encoding="utf-8")
+            args.json_report.write_text(rendered + "\n", encoding="utf-8")
         except OSError as exc:
             print(f"ERROR: cannot write report: {exc}")
             return 2
