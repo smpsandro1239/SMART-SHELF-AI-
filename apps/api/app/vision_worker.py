@@ -15,6 +15,7 @@ from app.config import settings
 from app.database import SessionLocal
 from app import models
 from app.vision import VisionAnalysis, VisionProviderNotConfigured
+from app.product_embedding_service import build_approved_product_registry
 
 logger = logging.getLogger("smart_shelf.vision_worker")
 
@@ -33,6 +34,19 @@ def load_provider():
     if not callable(getattr(provider, "analyze", None)):
         raise TypeError("Vision provider must implement analyze(image_path)")
     return provider
+
+
+def resolve_sku_match(db: Session, detection):
+    """Match only provider embeddings against approved exemplars of the exact model."""
+    if detection.embedding is None or not detection.embedding_model_version:
+        return {"product_id": None, "status": "UNKNOWN", "similarity": None, "margin": None}
+    try:
+        registry = build_approved_product_registry(db, model_version=detection.embedding_model_version)
+        match = registry.match(detection.embedding)
+    except (ValueError, TypeError):
+        logger.warning("SKU matching abstained: incompatible or invalid embedding registry")
+        return {"product_id": None, "status": "UNKNOWN", "similarity": None, "margin": None}
+    return {"product_id": match.product_id if match.status == "MATCHED" else None, "status": match.status, "similarity": match.similarity, "margin": match.margin}
 
 
 def process_next_image(db: Session, provider) -> int | None:
@@ -62,9 +76,10 @@ def process_next_image(db: Session, provider) -> int | None:
             detection.validate_box()
         db.query(models.ShelfImageDetection).filter_by(shelf_image_id=image_id).delete()
         for detection in result.detections:
+            sku_match = resolve_sku_match(db, detection)
             db.add(models.ShelfImageDetection(
                 shelf_image_id=image_id,
-                product_id=detection.product_id,
+                product_id=sku_match["product_id"],
                 label=detection.label,
                 confidence=detection.confidence,
                 x_min=detection.x_min,
@@ -72,6 +87,10 @@ def process_next_image(db: Session, provider) -> int | None:
                 x_max=detection.x_max,
                 y_max=detection.y_max,
                 model_version=result.model_version,
+                embedding_model_version=detection.embedding_model_version,
+                sku_match_status=sku_match["status"],
+                sku_similarity=sku_match["similarity"],
+                sku_match_margin=sku_match["margin"],
             ))
         image = db.get(models.ShelfImage, image_id)
         image.analysis_status = "COMPLETED"
