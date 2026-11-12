@@ -92,7 +92,7 @@ def test_forecast_refuses_to_treat_missing_sales_days_as_zero():
         store_id, product_id = create_store_and_product(client)
         today = date.today()
         for offset in range(6):
-            day = today - timedelta(days=5 - offset)
+            day = today - timedelta(days=6 - offset)
             client.post(
                 "/api/v1/sales/daily",
                 json=record_payload(store_id, product_id, day, 2, f"POS-{day.isoformat()}"),
