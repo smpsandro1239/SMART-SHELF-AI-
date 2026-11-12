@@ -103,7 +103,7 @@ transacional, poderá fazê-lo.
 
 O módulo `app/pallet_rotation_windows.py` escolhe uma janela contínua de 1 a
 4 horas nas próximas 24 horas. Compara a afluência média histórica e verifica
-se a quantidade residual cobre o consumo médio por hora até ao início da janela.
+se a quantidade residual cobre o consumo médio por hora até ao fim da operação.
 Cada hora considerada tem de atingir o mínimo configurado de dias observados.
 Ausência de dados nunca é convertida em zero.
 
