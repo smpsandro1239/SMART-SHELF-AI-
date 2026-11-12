@@ -7,7 +7,7 @@
 ![Base de dados](https://img.shields.io/badge/Base%20de%20dados-PostgreSQL-4169E1)
 ![Execução](https://img.shields.io/badge/ambiente-Docker-2496ED)
 
-> **Transparência:** o backend inicial de lojas, zonas, prateleiras, catálogo, observações, snapshots de inventário e recomendações está implementado no repositório. A gestão de tarefas, dashboard, PWA, inferência visual e integrações externas continuam em desenvolvimento. Os diagramas mostram a arquitetura pretendida e não significam que todos os módulos estejam já operacionais.
+> **Transparência:** o backend inicial de lojas, zonas, prateleiras, catálogo, observações, snapshots de inventário e recomendações está implementado no repositório. A gestão básica de tarefas já foi acrescentada à API. Dashboard, PWA, inferência visual e integrações externas continuam em desenvolvimento. Os diagramas mostram a arquitetura pretendida e não significam que todos os módulos estejam já operacionais.
 
 ## 1. O que é o SMART SHELF AI?
 
@@ -47,11 +47,11 @@ Estados de recomendação disponíveis:
 
 A API não inventa uma quantidade exata a repor a partir dos rótulos visuais `LOW_STOCK` ou `EMPTY`. A quantidade sugerida permanece nula até existir uma regra quantitativa fiável.
 
-## 4. Ciclo de vida operacional previsto
+## 4. Ciclo de vida operacional das tarefas
 
 ![Ciclo de vida de uma tarefa de reposição](docs/images/task-lifecycle.svg)
 
-A gestão de tarefas será o próximo módulo de backend: criação a partir de recomendações, prioridade, atribuição, início, conclusão e histórico auditável. O diagrama representa o fluxo pretendido; não confundir com funcionalidades já entregues.
+A API já suporta criação de tarefas, atribuição, início, conclusão e cancelamento, com validação das transições. O diagrama mostra o ciclo implementado no backend; a interface visual para funcionários ainda não está disponível.
 
 ## 5. Funcionalidades implementadas no backend
 
@@ -65,7 +65,7 @@ A gestão de tarefas será o próximo módulo de backend: criação a partir de 
 | Histórico de snapshots de inventário | Implementado |
 | Cálculo de stock disponível (existente - reservado) | Implementado |
 | Recomendações com base em observação e inventário | Implementado |
-| Tarefas e atribuição de funcionários | Próxima etapa |
+| Tarefas, prioridade, atribuição e estados operacionais | Implementado na API |
 | Dashboard web e PWA móvel | Planeado |
 | Inferência de visão computacional | Planeado |
 | Integrações POS / ERP / WMS / robô | Dependentes de acesso e validação |
@@ -144,7 +144,31 @@ Pré-requisitos: Docker e Docker Compose.
 
 As migrações Alembic são aplicadas no arranque do serviço API.
 
-## 9. Endpoint de recomendações
+## 9. Tarefas de reposição
+
+Criar uma tarefa para um produto já associado à prateleira:
+
+```http
+POST /api/v1/tasks
+Content-Type: application/json
+
+{
+  "store_id": 1,
+  "shelf_id": 1,
+  "product_id": 1,
+  "priority": "HIGH",
+  "requested_quantity": 8,
+  "notes": "Reposição após verificação da prateleira"
+}
+```
+
+Consultar tarefas e filtrar por loja, estado ou responsável: `GET /api/v1/tasks`.
+
+Atualizar o estado: `PATCH /api/v1/tasks/{task_id}/status`. Estados permitidos: `PENDING → ASSIGNED → IN_PROGRESS → COMPLETED`; também é possível cancelar tarefas não concluídas. A atribuição requer o campo `assigned_to`.
+
+A API valida que a prateleira pertence à loja e que o produto está associado à prateleira. O identificador do responsável é, nesta fase, um texto operacional; autenticação e gestão de contas de funcionários ainda não estão implementadas.
+
+## 10. Endpoint de recomendações
 
 Exemplo:
 
@@ -158,7 +182,7 @@ Parâmetros opcionais:
 
 Consultar também os endpoints de catálogo, observações e inventário na documentação Swagger.
 
-## 10. Documentação adicional
+## 11. Documentação adicional
 
 - [Âmbito e requisitos](docs/requirements/scope.md)
 - [Plano do piloto](docs/requirements/pilot-plan.md)
@@ -167,7 +191,7 @@ Consultar também os endpoints de catálogo, observações e inventário na docu
 - [Privacidade e segurança](docs/security/privacy.md)
 - [Documentação da API](apps/api/README.md)
 
-## 11. Princípios de engenharia e segurança
+## 12. Princípios de engenharia e segurança
 
 - Não confundir deteção visual com quantidade real em stock.
 - Não criar uma recomendação de reposição sem verificar inventário disponível.
@@ -178,9 +202,9 @@ Consultar também os endpoints de catálogo, observações e inventário na docu
 - Validar alterações com testes automatizados antes de as considerar prontas.
 - Distinguir sempre funcionalidades implementadas, planeadas e ainda não testadas.
 
-## 12. Estado do projeto
+## 13. Estado do projeto
 
-O projeto está em desenvolvimento incremental. O foco atual é consolidar o backend operacional e a documentação, seguindo-se a gestão de tarefas. A visão computacional e as interfaces serão introduzidas depois de existir um fluxo operacional consistente e testável.
+O projeto está em desenvolvimento incremental. O backend já inclui catálogo, inventário, recomendações e ciclo básico de tarefas. O próximo passo é reforçar a geração de tarefas a partir de recomendações, adicionar autenticação e construir a interface operacional. A visão computacional e as integrações serão introduzidas depois de existir um fluxo operacional consistente e testável.
 
 ## Licença
 
