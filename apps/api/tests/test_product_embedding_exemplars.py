@@ -175,3 +175,75 @@ def test_source_image_hash_must_match_uploaded_image_record():
         )
 
         assert response.status_code == 422
+
+
+
+def test_matching_registry_loads_only_approved_reviewed_exemplars():
+    from app.product_embedding_service import build_approved_product_registry
+
+    with TestClient(app) as client:
+        product_id = create_product(client)
+        approved = client.post(
+            "/api/v1/product-embedding-exemplars",
+            json=exemplar_payload(product_id),
+        ).json()
+        pending = client.post(
+            "/api/v1/product-embedding-exemplars",
+            json=exemplar_payload(
+                product_id,
+                image_sha256="d" * 64,
+                embedding=[0, 1, 0],
+            ),
+        ).json()
+
+        db = TestingSession()
+        reviewer = models.User(
+            email="reviewer@example.test",
+            full_name="Revisor",
+            password_hash="test-hash",
+            role="ADMIN",
+            is_active=True,
+        )
+        db.add(reviewer)
+        db.commit()
+        db.refresh(reviewer)
+        approved_row = db.get(models.ProductEmbeddingExemplar, approved["id"])
+        approved_row.review_status = "APPROVED"
+        approved_row.reviewed_by_user_id = reviewer.id
+        approved_row.reviewed_at = models.utc_now()
+        rejected_row = db.get(models.ProductEmbeddingExemplar, pending["id"])
+        rejected_row.review_status = "REJECTED"
+        rejected_row.reviewed_by_user_id = reviewer.id
+        rejected_row.reviewed_at = models.utc_now()
+        db.commit()
+
+        registry = build_approved_product_registry(
+            db,
+            model_version="embedding-model-v1",
+            minimum_similarity=0.8,
+        )
+        result = registry.match([0.25, 0.5, 0.75])
+
+        assert result.status == "MATCHED"
+        assert result.product_id == product_id
+        db.close()
+
+
+def test_matching_registry_does_not_load_pending_or_other_model_exemplars():
+    from app.product_embedding_service import build_approved_product_registry
+
+    with TestClient(app) as client:
+        product_id = create_product(client)
+        client.post(
+            "/api/v1/product-embedding-exemplars",
+            json=exemplar_payload(product_id),
+        )
+        db = TestingSession()
+        registry = build_approved_product_registry(
+            db,
+            model_version="embedding-model-v1",
+        )
+        result = registry.match([0.25, 0.5, 0.75])
+
+        assert result.status == "UNKNOWN"
+        db.close()
