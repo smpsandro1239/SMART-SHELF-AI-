@@ -640,3 +640,91 @@ O motor identifica produtos de rotação elevada com base na média diária de v
 A recomendação `CONSIDER_NEAR_PICKING_AREA` é um sinal para revisão humana. O limiar combina um mínimo configurável (por omissão, uma unidade/dia) com o percentil 75 dos produtos analisáveis. Não é uma decisão automática de mudança de localização.
 
 **Limitação atual:** o modelo ainda não regista localizações/bin locations, coordenadas, distâncias, capacidades, dimensões, peso ou requisitos de conservação. Por isso, a API identifica candidatos a aproximar da zona de preparação, mas não escolhe uma posição concreta nem calcula poupanças de percurso. A mudança física exige validação operacional.
+
+
+## Localizações físicas e recomendações de slotting
+
+A fase física do Warehouse Slotting introduz três estruturas de dados:
+
+- warehouse_locations: posições físicas por loja, com código, corredor/estante/compartimento, distância à zona de preparação, capacidade volumétrica e capacidade de peso, além da zona de temperatura.
+- warehouse_product_profiles: volume e peso unitários, temperatura exigida, fragilidade e necessidade de segregação por produto.
+- warehouse_product_placements: quantidade atualmente colocada em cada localização.
+
+Antes de utilizar os novos endpoints, aplicar a migração:
+
+```bash
+cd apps/api
+alembic upgrade head
+```
+
+### Configurar uma localização
+
+```http
+POST /api/v1/warehouse/locations
+Authorization: Bearer <ACCESS_TOKEN>
+Content-Type: application/json
+```
+
+```json
+{
+  "store_id": 1,
+  "code": "A01-R02-B03",
+  "aisle": "A01",
+  "rack": "R02",
+  "bin_code": "B03",
+  "distance_to_picking_m": 8.5,
+  "max_volume_cm3": 120000,
+  "max_weight_kg": 250,
+  "temperature_zone": "AMBIENT"
+}
+```
+
+### Definir os requisitos físicos do produto
+
+```http
+POST /api/v1/warehouse/product-profiles
+Authorization: Bearer <ACCESS_TOKEN>
+Content-Type: application/json
+```
+
+```json
+{
+  "product_id": 42,
+  "unit_volume_cm3": 850,
+  "unit_weight_kg": 0.42,
+  "temperature_requirement": "AMBIENT",
+  "is_fragile": false,
+  "requires_segregation": false
+}
+```
+
+### Registar uma colocação existente
+
+```http
+POST /api/v1/warehouse/placements
+Authorization: Bearer <ACCESS_TOKEN>
+Content-Type: application/json
+```
+
+```json
+{
+  "location_id": 1,
+  "product_id": 42,
+  "quantity": 60
+}
+```
+
+### Pedir recomendações de localização
+
+```http
+GET /api/v1/warehouse/physical-slotting?store_id=1&product_id=42&required_quantity=20
+Authorization: Bearer <ACCESS_TOKEN>
+```
+
+O motor elimina localizações incompatíveis com a temperatura, capacidade volumétrica, capacidade de peso ou segregação exigida. As localizações viáveis são ordenadas primeiro pela distância à zona de preparação e depois pela utilização de capacidade projetada.
+
+A quantidade pedida representa unidades adicionais à ocupação já registada. Para calcular ocupação, todos os produtos existentes numa localização têm de ter perfil dimensional; se faltar um perfil, a posição é excluída em vez de assumir ocupação zero. Localizações sem capacidade ou distância válidas também não são recomendadas.
+
+O resultado é uma proposta, não uma ordem de transferência. automatic_movement_allowed permanece false. A fragilidade é sinalizada para revisão de manuseamento, mas ainda não existe uma certificação de compatibilidade de materiais nem um modelo de risco de empilhamento. Também não existe otimização de percurso por grafo, apenas distância linear registada à zona de preparação.
+
+Os endpoints de configuração são reservados a ADMIN/SUPERVISOR e respeitam o isolamento por loja. O perfil físico do produto é partilhado no catálogo global; as posições e quantidades permanecem associadas à loja.
