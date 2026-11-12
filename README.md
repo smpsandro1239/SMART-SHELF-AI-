@@ -33,7 +33,7 @@ A imagem seguinte é um **mockup de interface**, para mostrar como os indicadore
 
 ![Conceito de dashboard operacional](docs/images/operations-dashboard.svg)
 
-O endpoint inicial de resumo está disponível em `GET /api/v1/dashboard/summary`. A interface web ainda não foi construída.
+O endpoint inicial de resumo está disponível em `GET /api/v1/dashboard/summary`. A primeira interface web está disponível em `apps/web` e já consome os endpoints de autenticação, resumo e tarefas. A interface continua em fase inicial e será expandida com gestão de catálogo, observações e filtros.
 
 ## 3. Como funciona uma recomendação?
 
@@ -235,3 +235,41 @@ Perfis disponíveis: `ADMIN`, `SUPERVISOR` e `EMPLOYEE`. As regras atuais são u
 A API suporta criação controlada do primeiro administrador, login, tokens JWT, consulta do utilizador autenticado e gestão de contas por administrador. As palavras-passe são guardadas com hash Argon2. Os utilizadores supervisores e funcionários têm de estar associados a uma loja. As tarefas podem ser atribuídas a uma conta dessa mesma loja.
 
 O endpoint `GET /api/v1/dashboard/summary` devolve contagens de tarefas e observações para alimentar a futura interface. Os funcionários recebem apenas as contagens das tarefas que lhes foram atribuídas e podem iniciar/concluir as próprias tarefas; supervisores ficam limitados à sua loja. O isolamento completo de todos os endpoints de catálogo/inventário continua a ser trabalho necessário antes de produção.
+
+
+## 15. Dashboard web (primeira versão)
+
+Foi criada uma aplicação React + TypeScript + Vite em `apps/web`.
+
+![Mockup de referência do dashboard](docs/images/operations-dashboard.svg)
+
+### Funcionalidades desta versão
+- Início de sessão através de `POST /api/v1/auth/login`.
+- Consulta do utilizador autenticado.
+- Indicadores agregados de tarefas e observações.
+- Listagem de tarefas e apresentação de prioridade/estado.
+- Funcionários podem iniciar e concluir apenas as tarefas que lhes estão atribuídas.
+- Supervisores e administradores podem acompanhar e atualizar tarefas, respeitando as permissões da API.
+- Atualização manual dos dados e filtro por loja para administradores.
+
+### Executar localmente
+
+Terminal 1 — API:
+
+```bash
+cd apps/api
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+Terminal 2 — dashboard:
+
+```bash
+cd apps/web
+cp .env.example .env
+npm install
+npm run dev
+```
+
+Abrir [http://localhost:5173](http://localhost:5173). Configurar `VITE_API_BASE_URL` se a API não estiver em `http://localhost:8000`. Na API, definir `CORS_ALLOWED_ORIGINS` com a origem exata do frontend.
+
+**Nota:** o token é guardado em `sessionStorage` e removido ao terminar sessão ou fechar a sessão do navegador. Para produção, é necessária uma revisão adicional de segurança, incluindo estratégia de cookies seguros, CSP, gestão de expiração e auditoria de permissões.
