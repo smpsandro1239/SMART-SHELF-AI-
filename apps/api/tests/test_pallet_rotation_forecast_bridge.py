@@ -186,3 +186,10 @@ def test_non_mapping_profile_row_becomes_unknown_instead_of_crashing():
     assert row["traffic_level"] == "UNKNOWN"
     assert row["forecast_consumption_until_low_traffic"] is None
     assert row["planning_reason"] == "HOURLY_PROFILE_INVALID"
+
+
+def test_non_mapping_profiles_container_is_rejected_explicitly():
+    with pytest.raises(ValueError, match="profiles_by_product must be a mapping"):
+        enrich_pallet_candidates_with_hourly_profiles(
+            [candidate()], None, current_hour=8,
+        )
