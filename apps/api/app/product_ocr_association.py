@@ -24,9 +24,14 @@ class DetectionOCR:
         """Join lines in reading order, retaining the weakest line confidence."""
         if not self.texts:
             return None
-        ordered = sorted(self.texts, key=lambda item: (item.y_min, item.x_min))
-        joined = " ".join(item.text.text.strip() for item in ordered)
-        return OCRText(joined, min(item.text.confidence for item in ordered))
+        if self.regions:
+            ordered_regions = sorted(self.regions, key=lambda item: (item.y_min, item.x_min))
+            ordered_texts = [region.text for region in ordered_regions]
+        else:
+            # Backwards compatibility for callers that construct DetectionOCR directly.
+            ordered_texts = list(self.texts)
+        joined = " ".join(item.text.strip() for item in ordered_texts)
+        return OCRText(joined, min(item.confidence for item in ordered_texts))
 
 
 def _area(box: Sequence[float]) -> float:
