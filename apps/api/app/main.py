@@ -335,6 +335,36 @@ def get_shelf_image_content(image_id: int, request: Request, db: Session = Depen
     return FileResponse(path, media_type=item.mime_type, filename=item.original_filename, content_disposition_type="inline")
 
 
+@app.post(
+    "/api/v1/shelf-images/{image_id}/retry",
+    response_model=ShelfImageRead,
+    tags=["computer-vision"],
+)
+def retry_shelf_image_analysis(
+    image_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Requeue a failed image analysis for an authorized store supervisor."""
+    item = db.get(models.ShelfImage, image_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="Shelf image not found")
+    actor = _request_user(db, request)
+    if actor is not None and actor.role not in {"ADMIN", "SUPERVISOR"}:
+        raise HTTPException(status_code=403, detail="Supervisor role required")
+    _enforce_store_scope(actor, _shelf_image_store_id(db, image_id))
+    if item.analysis_status != "FAILED":
+        raise HTTPException(status_code=409, detail="Only failed image analyses can be retried")
+    item.analysis_status = "PENDING"
+    item.analysis_error = None
+    item.analysis_started_at = None
+    item.analysis_completed_at = None
+    item.model_version = None
+    db.commit()
+    db.refresh(item)
+    return item
+
+
 @app.get(
     "/api/v1/shelf-images/{image_id}/detections",
     response_model=list[ShelfImageDetectionRead],
