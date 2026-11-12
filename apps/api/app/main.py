@@ -28,6 +28,7 @@ from app.replenishment_workload import summarize_workload
 from app.warehouse_slotting import recommend_warehouse_slotting, recommend_physical_slot
 from app.packaging_units import calculate_replenishment_packs
 from app.pallet_rotation import evaluate_pallet_rotation, PalletRotationInputError
+from app.pallet_portfolio import build_pallet_portfolio_plan, PalletPortfolioInputError
 from app.pallet_rotation_windows import recommend_low_traffic_window
 from app.hourly_patterns import build_weekday_hour_profile
 from app.hourly_demand_forecast import forecast_hourly_demand
@@ -2393,6 +2394,116 @@ def simulate_pallet_rotation(
         },
         "simulation_only": True,
         "backroom_capacity_source": "OPERATOR_CONFIRMED",
+    }
+
+
+@app.get("/api/v1/warehouse/pallet-rotation/portfolio", tags=["warehouse"])
+def get_pallet_rotation_portfolio(
+    store_id: int,
+    traffic_level: str,
+    forecast_consumption_until_low_traffic: float,
+    backroom_capacity_available: bool = False,
+    conventional_minutes: float = 24,
+    swap_minutes: float = 4,
+    transport_minutes: float = 3,
+    rebuild_minutes: float = 5,
+    limit: int = 100,
+    request: Request = None,
+    db: Session = Depends(get_db),
+):
+    """Build a read-only, store-scoped portfolio from registered pallets and policies.
+
+    Traffic, demand horizon and backroom capacity are explicit operator inputs;
+    this endpoint does not present them as live sensor or forecast integrations.
+    """
+    actor = _request_user(db, request)
+    _enforce_store_scope(actor, store_id)
+    if db.get(models.Store, store_id) is None:
+        raise HTTPException(status_code=404, detail="Store not found")
+    if traffic_level not in {"HIGH", "LOW", "UNKNOWN"}:
+        raise HTTPException(status_code=422, detail="traffic_level must be HIGH, LOW or UNKNOWN")
+    try:
+        plan_limit = int(limit)
+        candidates_limit = max(1, min(plan_limit, 500))
+        if plan_limit != candidates_limit:
+            raise PalletPortfolioInputError("limit must be between 1 and 500")
+        # The pure planner performs finite/non-negative validation for all numeric inputs.
+        policies = db.query(models.PalletRotationPolicy).filter_by(
+            store_id=store_id, is_enabled=True
+        ).all()
+        policy_by_product = {item.product_id: item for item in policies}
+        if not policy_by_product:
+            return {
+                "store_id": store_id, "recommendations": [], "considered": 0,
+                "excluded": 0, "candidate_pallets": 0,
+                "input_provenance": "OPERATOR_SUPPLIED_TRAFFIC_DEMAND_AND_BACKROOM_CONFIRMATION",
+                "simulation_only": True, "automatic_stock_movement_allowed": False,
+            }
+
+        pallets = db.query(models.StorePallet).filter(
+            models.StorePallet.store_id == store_id,
+            models.StorePallet.product_id.in_(list(policy_by_product)),
+            models.StorePallet.status.in_(["ON_DISPLAY", "PARTIAL"]),
+            models.StorePallet.location_type == "SALES_FLOOR",
+        ).order_by(models.StorePallet.id).limit(5000).all()
+        active_levels = {
+            item.id: item
+            for item in db.query(models.ProductPackagingLevel).filter(
+                models.ProductPackagingLevel.id.in_([p.packaging_level_id for p in pallets] or [-1]),
+                models.ProductPackagingLevel.is_active.is_(True),
+                models.ProductPackagingLevel.package_type == "PALLET",
+            ).all()
+        }
+        product_ids = {p.product_id for p in pallets}
+        ready_pallets = db.query(models.StorePallet).filter(
+            models.StorePallet.store_id == store_id,
+            models.StorePallet.product_id.in_(list(product_ids) or [-1]),
+            models.StorePallet.status == "READY",
+            models.StorePallet.location_type.in_(["WAREHOUSE", "PREPARATION"]),
+            or_(models.StorePallet.expiry_date.is_(None), models.StorePallet.expiry_date >= date.today()),
+        ).all()
+        ready_keys = {
+            (p.product_id, p.packaging_level_id)
+            for p in ready_pallets
+            if p.packaging_level_id in active_levels
+            and float(p.base_quantity) == float(active_levels[p.packaging_level_id].base_units_per_package)
+        }
+
+        candidate_rows = []
+        for pallet in pallets:
+            level = active_levels.get(pallet.packaging_level_id)
+            policy = policy_by_product.get(pallet.product_id)
+            if level is None or policy is None:
+                continue
+            candidate_rows.append({
+                "store_id": store_id,
+                "product_id": pallet.product_id,
+                "pallet_id": pallet.id,
+                "residual_base_units": float(pallet.base_quantity),
+                "pallet_capacity_base_units": float(level.base_units_per_package),
+                "threshold_ratio": float(policy.threshold_ratio),
+                "traffic_level": traffic_level,
+                "replacement_pallet_available": (pallet.product_id, pallet.packaging_level_id) in ready_keys,
+                "backroom_capacity_available": backroom_capacity_available,
+                "forecast_consumption_until_low_traffic": forecast_consumption_until_low_traffic,
+                "conventional_minutes": conventional_minutes,
+                "swap_minutes": swap_minutes,
+                "transport_minutes": transport_minutes,
+                "rebuild_minutes": rebuild_minutes,
+            })
+        result = build_pallet_portfolio_plan(candidate_rows, limit=candidates_limit)
+    except (PalletPortfolioInputError, TypeError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    return {
+        "store_id": store_id,
+        "recommendations": list(result.recommendations),
+        "considered": result.considered,
+        "excluded": result.excluded,
+        "candidate_pallets": len(pallets),
+        "input_provenance": "OPERATOR_SUPPLIED_TRAFFIC_DEMAND_AND_BACKROOM_CONFIRMATION",
+        "simulation_only": True,
+        "automatic_stock_movement_allowed": False,
     }
 
 
