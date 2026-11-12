@@ -532,3 +532,25 @@ class WarehousePlacementCreate(BaseModel):
     location_id: int
     product_id: int
     quantity: float = Field(ge=0, le=1_000_000_000)
+
+
+PackagingType = Literal["UNIT", "CASE", "PALLET", "OTHER"]
+
+
+class ProductPackagingLevelCreate(BaseModel):
+    product_id: int
+    code: str = Field(min_length=1, max_length=40)
+    name: str = Field(min_length=1, max_length=100)
+    package_type: PackagingType
+    base_units_per_package: float = Field(gt=0, le=1_000_000_000, allow_inf_nan=False)
+    barcode: str | None = Field(default=None, max_length=80)
+    gross_weight_kg: float | None = Field(default=None, gt=0, le=1_000_000, allow_inf_nan=False)
+    package_volume_cm3: float | None = Field(default=None, gt=0, le=1_000_000_000, allow_inf_nan=False)
+    is_ordering_unit: bool = False
+    is_replenishment_unit: bool = False
+
+
+class ReplenishmentPackCalculationRequest(BaseModel):
+    required_base_units: float = Field(gt=0, le=1_000_000_000, allow_inf_nan=False)
+    packaging_code: str = Field(min_length=1, max_length=40)
+    allow_open_package: bool = False
