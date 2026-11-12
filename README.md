@@ -199,6 +199,7 @@ Consultar também os endpoints de catálogo, observações e inventário na docu
 - [Privacidade e segurança](docs/security/privacy.md)
 - [Documentação da API](apps/api/README.md)
 - [Contrato de correspondência de SKU por embeddings](docs/architecture/sku-embedding-matching.md)
+- [Avaliação offline e calibração de thresholds de SKU](docs/architecture/sku-matching-evaluation.md)
 - [ADR-008 — correspondência conservadora de SKU](docs/architecture/adr-008-sku-embedding-matching.md)
 
 ## 12. Princípios de engenharia e segurança
@@ -216,7 +217,7 @@ Consultar também os endpoints de catálogo, observações e inventário na docu
 
 ![Fluxo conservador de correspondência de SKU](docs/images/sku-matching-flow.svg)
 
-Foi adicionada uma camada independente de comparação de embeddings com exemplares de produtos revistos. O mecanismo devolve `MATCHED`, `AMBIGUOUS` ou `UNKNOWN`, exige proveniência dos exemplares e abstém quando a evidência é insuficiente. A API já persiste exemplares e proveniência na tabela `product_embedding_exemplars`, com estados `PENDING`, `APPROVED` e `REJECTED` e revisão atribuída a utilizadores. Os vetores são armazenados como JSON relacional, sem índice vetorial dedicado. A camada ainda não está ligada a um modelo real; os thresholds carecem de calibração com imagens autorizadas.
+Foi adicionada uma camada independente de comparação de embeddings com exemplares de produtos revistos. O mecanismo devolve `MATCHED`, `AMBIGUOUS` ou `UNKNOWN`, exige proveniência dos exemplares e abstém quando a evidência é insuficiente. A API já persiste exemplares e proveniência na tabela `product_embedding_exemplars`, com estados `PENDING`, `APPROVED` e `REJECTED` e revisão atribuída a utilizadores. Os vetores são armazenados como JSON relacional, sem índice vetorial dedicado. Foi acrescentado um avaliador offline para comparar thresholds, medir top-1 accuracy, cobertura, falsos matches e rejeição de produtos desconhecidos. A camada ainda não está ligada a um modelo real; os thresholds carecem de calibração com imagens autorizadas.
 
 Detalhes técnicos: [contrato de correspondência de SKU](docs/architecture/sku-embedding-matching.md) e [ADR-008](docs/architecture/adr-008-sku-embedding-matching.md).
 
