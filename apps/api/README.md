@@ -306,3 +306,25 @@ python -m app.dataset_review --coco /dados/annotations/instances_train.json --sp
 
 Para tornar obrigatória a revisão completa dos três splits no gate, acrescentar `--require-visual-review`, `--review-train`, `--review-val` e `--review-test` ao comando `app.dataset_approval`. O gate compara o SHA-256 do COCO e o hash das anotações de cada imagem; qualquer alteração após revisão bloqueia a aprovação até nova revisão. Os registos são privados e não devem ser guardados no Git.
 
+
+
+## Comparação entre versões do dataset
+
+A ferramenta `app.dataset_diff` compara duas releases COCO com os respetivos manifestos SHA-256. Identifica imagens adicionadas, removidas, modificadas, renomeadas e movidas entre splits. Também compara as anotações por imagem, usando o nome do ficheiro e o conteúdo semântico da anotação (classe, bbox, área e iscrowd), ignorando alterações isoladas de IDs de anotação.
+
+Exemplo:
+
+```bash
+python -m app.dataset_diff \
+  --old-manifest /dados/releases/v1/image_manifest.csv \
+  --new-manifest /dados/releases/v2/image_manifest.csv \
+  --old-train /dados/releases/v1/instances_train.json \
+  --new-train /dados/releases/v2/instances_train.json \
+  --old-val /dados/releases/v1/instances_val.json \
+  --new-val /dados/releases/v2/instances_val.json \
+  --old-test /dados/releases/v1/instances_test.json \
+  --new-test /dados/releases/v2/instances_test.json \
+  --json-report /dados/reports/v1-v2-diff.json
+```
+
+O relatório inclui os hashes dos manifestos e dos seis documentos COCO, resumos e diferenças por split. Não inclui imagens nem notas privadas. Uma alteração de bbox é contabilizada como uma anotação alterada quando existe uma remoção e adição correspondente na mesma imagem. Renomes e mudanças de split só são inferidos quando o SHA-256 é único em cada versão. O relatório não inspeciona pixels, não decide se uma anotação está correta e não substitui a revisão humana. Qualquer mudança no COCO deve continuar a passar pelo gate de release e pela revisão aplicável.
