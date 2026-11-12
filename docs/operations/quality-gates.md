@@ -56,3 +56,13 @@ O workflow verifica compilação e testes unitários/integrados já presentes no
 A avaliação de risco de rutura exige histórico diário completo e um snapshot de inventário recente. Um snapshot com data futura é rejeitado como `FUTURE_INVENTORY`: não é convertido artificialmente numa idade zero. Quantidades booleanas também são rejeitadas, em vez de serem convertidas em 0/1.
 
 O planeador de paletes ignora candidatos que não sejam objetos de mapeamento e contabiliza-os como excluídos, sem interromper a avaliação dos restantes candidatos. Estas regras são cobertas por testes de regressão.
+
+## Pallet planning and historical evidence validation
+
+- Hourly pallet profiles must contain 24 mapping rows, one per hour. Non-mapping rows are rejected as invalid evidence rather than causing an unhandled attribute error.
+- Sales and traffic coverage counts must be actual integers; booleans, decimal values and numeric strings are not accepted as observation counts.
+- Residual pallet quantities cannot be booleans. This prevents Python's boolean-to-number coercion from turning `True` into one unit of stock.
+- The hourly-profile bridge validates its time-window parameters before processing candidates, including when the candidate list or profile map is empty.
+- Malformed pallet candidates are retained only as explicitly unknown evidence and do not interrupt processing of valid candidates.
+- Daily sales history accepts calendar dates only. Datetime values are rejected to avoid mixed date/datetime comparisons and ambiguous business-day assignment.
+- All these paths remain read-only. Planning evidence and recommendations never authorize physical stock movement.
