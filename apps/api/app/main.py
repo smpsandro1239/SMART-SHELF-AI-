@@ -2425,14 +2425,15 @@ def get_pallet_rotation_portfolio_from_history(
     _enforce_store_scope(actor, store_id)
     if db.get(models.Store, store_id) is None:
         raise HTTPException(status_code=404, detail="Store not found")
-    if isinstance(current_hour, bool) or not 0 <= current_hour <= 23:
-        raise HTTPException(status_code=422, detail="current_hour must be between 0 and 23")
-    if not 7 <= days <= 90:
-        raise HTTPException(status_code=422, detail="days must be between 7 and 90")
-    if not 1 <= duration_hours <= 4:
-        raise HTTPException(status_code=422, detail="duration_hours must be between 1 and 4")
-    if not 1 <= minimum_observed_days <= 90:
-        raise HTTPException(status_code=422, detail="minimum_observed_days must be between 1 and 90")
+    if isinstance(current_hour, bool) or not isinstance(current_hour, int) or not 0 <= current_hour <= 23:
+        raise HTTPException(status_code=422, detail="current_hour must be an integer between 0 and 23")
+    if isinstance(days, bool) or not isinstance(days, int) or not 7 <= days <= 90:
+        raise HTTPException(status_code=422, detail="days must be an integer between 7 and 90")
+    if isinstance(duration_hours, bool) or not isinstance(duration_hours, int) or not 1 <= duration_hours <= 4:
+        raise HTTPException(status_code=422, detail="duration_hours must be an integer between 1 and 4")
+    if (isinstance(minimum_observed_days, bool) or not isinstance(minimum_observed_days, int)
+            or not 1 <= minimum_observed_days <= 90):
+        raise HTTPException(status_code=422, detail="minimum_observed_days must be an integer between 1 and 90")
     numeric_inputs = {
         "conventional_minutes": conventional_minutes,
         "swap_minutes": swap_minutes,
@@ -2440,12 +2441,18 @@ def get_pallet_rotation_portfolio_from_history(
         "rebuild_minutes": rebuild_minutes,
     }
     for field, value in numeric_inputs.items():
-        if not math.isfinite(value) or value < 0:
+        if isinstance(value, bool):
+            raise HTTPException(status_code=422, detail=f"{field} must be numeric, not boolean")
+        try:
+            valid_number = math.isfinite(value) and value >= 0
+        except (TypeError, ValueError, OverflowError):
+            valid_number = False
+        if not valid_number:
             raise HTTPException(status_code=422, detail=f"{field} must be finite and non-negative")
 
     try:
-        if isinstance(limit, bool) or not 1 <= limit <= 500:
-            raise PalletPortfolioInputError("limit must be between 1 and 500")
+        if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 500:
+            raise PalletPortfolioInputError("limit must be an integer between 1 and 500")
         policies = db.query(models.PalletRotationPolicy).filter_by(
             store_id=store_id, is_enabled=True
         ).all()
@@ -2652,10 +2659,18 @@ def get_pallet_rotation_portfolio(
         "rebuild_minutes": rebuild_minutes,
     }
     for field, value in numeric_inputs.items():
-        if not math.isfinite(value) or value < 0:
+        if isinstance(value, bool):
+            raise HTTPException(status_code=422, detail=f"{field} must be numeric, not boolean")
+        try:
+            valid_number = math.isfinite(value) and value >= 0
+        except (TypeError, ValueError, OverflowError):
+            valid_number = False
+        if not valid_number:
             raise HTTPException(status_code=422, detail=f"{field} must be finite and non-negative")
     try:
-        plan_limit = int(limit)
+        if isinstance(limit, bool) or not isinstance(limit, int):
+            raise PalletPortfolioInputError("limit must be an integer between 1 and 500")
+        plan_limit = limit
         candidates_limit = max(1, min(plan_limit, 500))
         if plan_limit != candidates_limit:
             raise PalletPortfolioInputError("limit must be between 1 and 500")
