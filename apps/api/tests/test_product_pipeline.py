@@ -241,7 +241,7 @@ def test_worker_automatically_runs_catalogue_matching_and_fusion(db, tmp_path):
         def recognize(self, path):
             return (
                 OCRRegion(
-                    OCRText("Produto teste", 0.94),
+                    OCRText("Leite Meio-Gordo 1 L", 0.94),
                     0.2,
                     0.2,
                     0.6,
@@ -263,7 +263,7 @@ def test_worker_automatically_runs_catalogue_matching_and_fusion(db, tmp_path):
     fused = db.query(models.ShelfImageFusedEvidence).filter_by(ocr_run_id=run.id).one()
 
     assert match.status == "SUGGESTED"
-    assert match.suggested_product_id == db.info["product_id"]
+    assert match.suggested_product_id == db.info["product_a_id"]
     assert fused.status == "TEXT_ONLY"
-    assert fused.suggested_product_id == db.info["product_id"]
+    assert fused.suggested_product_id == db.info["product_a_id"]
     assert db.query(models.InventorySnapshot).count() == 0
