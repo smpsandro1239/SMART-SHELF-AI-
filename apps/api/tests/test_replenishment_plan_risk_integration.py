@@ -228,3 +228,98 @@ def test_replenishment_plan_validates_effort_estimate_parameters():
             "effort_minimum_sample_size": 1,
         })
         assert response.status_code == 422
+
+
+def test_replenishment_plan_exposes_read_only_warehouse_pick_proposal():
+    with TestClient(app) as client:
+        store = client.post("/api/v1/stores", json={
+            "code": "PICK-PLAN-01", "name": "Loja plano de picking",
+        })
+        assert store.status_code == 201
+        store_id = store.json()["id"]
+        product_id = _create_candidate(
+            client, store_id, "PICK-SHELF", "PICK-SKU", "Produto picking", 30,
+        )
+
+        with TestingSession() as db:
+            shelf = db.query(models.Shelf).filter_by(code="PICK-SHELF").one()
+            observation = db.query(models.Observation).filter_by(shelf_id=shelf.id).one()
+            observation.observed_quantity = 2
+            db.add(models.WarehouseProductProfile(
+                product_id=product_id,
+                unit_volume_cm3=100,
+                unit_weight_kg=0.5,
+                temperature_requirement="AMBIENT",
+            ))
+            location = models.WarehouseLocation(
+                store_id=store_id,
+                code="A-01-01",
+                aisle="A",
+                rack="01",
+                bin_code="01",
+                distance_to_picking_m=4,
+                max_volume_cm3=100000,
+                max_weight_kg=100,
+                temperature_zone="AMBIENT",
+                is_active=True,
+            )
+            db.add(location)
+            db.flush()
+            db.add(models.WarehouseProductPlacement(
+                location_id=location.id,
+                product_id=product_id,
+                quantity=20,
+                is_active=True,
+            ))
+            db.commit()
+
+        response = client.get("/api/v1/replenishment/plan", params={
+            "store_id": store_id,
+            "include_warehouse_pick_plan": "true",
+        })
+        assert response.status_code == 200, response.text
+        payload = response.json()
+        pick_plan = payload["warehouse_pick_plan"]
+        assert pick_plan["enabled"] is True
+        assert pick_plan["read_only"] is True
+        assert pick_plan["stock_reserved"] is False
+        assert pick_plan["stock_movement_allowed"] is False
+        assert pick_plan["summary"]["products_with_demand"] == 1
+        assert pick_plan["products"][0]["status"] == "READY_FOR_REVIEW"
+        assert pick_plan["allocations"][0]["location_code"] == "A-01-01"
+        assert pick_plan["allocations"][0]["proposed_pick_quantity"] == 10
+
+
+def test_replenishment_plan_blocks_warehouse_pick_when_temperature_profile_missing():
+    with TestClient(app) as client:
+        store = client.post("/api/v1/stores", json={
+            "code": "PICK-PLAN-02", "name": "Loja perfil em falta",
+        })
+        store_id = store.json()["id"]
+        product_id = _create_candidate(
+            client, store_id, "PICK-SHELF-2", "PICK-SKU-2", "Produto sem perfil", 30,
+        )
+        with TestingSession() as db:
+            shelf = db.query(models.Shelf).filter_by(code="PICK-SHELF-2").one()
+            observation = db.query(models.Observation).filter_by(shelf_id=shelf.id).one()
+            observation.observed_quantity = 2
+            location = models.WarehouseLocation(
+                store_id=store_id, code="A-02-01", aisle="A", rack="02",
+                bin_code="01", distance_to_picking_m=5, max_volume_cm3=10000,
+                max_weight_kg=20, temperature_zone="AMBIENT", is_active=True,
+            )
+            db.add(location)
+            db.flush()
+            db.add(models.WarehouseProductPlacement(
+                location_id=location.id, product_id=product_id,
+                quantity=20, is_active=True,
+            ))
+            db.commit()
+
+        response = client.get("/api/v1/replenishment/plan", params={
+            "store_id": store_id, "include_warehouse_pick_plan": "true",
+        })
+        assert response.status_code == 200, response.text
+        pick_plan = response.json()["warehouse_pick_plan"]
+        assert pick_plan["products"][0]["status"] == "PROFILE_UNKNOWN"
+        assert pick_plan["allocations"] == []
