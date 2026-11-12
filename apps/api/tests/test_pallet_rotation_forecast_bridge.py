@@ -108,3 +108,14 @@ def test_current_traffic_is_high_when_current_hour_exceeds_daily_hourly_average(
     row = result["candidates"][0]
     assert row["traffic_level"] == "HIGH"
     assert row["current_hour_average_customers"] == 100
+
+
+def test_profile_row_order_does_not_change_current_hour_classification():
+    rows = list(reversed(profile()))
+    result = enrich_pallet_candidates_with_hourly_profiles(
+        [candidate()],
+        {42: rows},
+        current_hour=12,
+    )
+    assert result["candidates"][0]["traffic_level"] == "HIGH"
+    assert result["candidates"][0]["current_hour_average_customers"] == 100
