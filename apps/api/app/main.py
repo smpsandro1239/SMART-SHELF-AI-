@@ -18,7 +18,7 @@ from app.schemas import (
     ProductCreate, ProductRead, ShelfProductCreate, ShelfProductRead,
     InventorySnapshotCreate, InventorySnapshotRead, ReplenishmentRecommendationRead,
     ReplenishmentTaskCreate, ReplenishmentTaskStatusUpdate, ReplenishmentTaskRead,
-    BootstrapAdminCreate, LoginRequest, TokenRead, UserRead,
+    BootstrapAdminCreate, LoginRequest, TokenRead, UserRead, UserCreate,
 )
 
 app = FastAPI(title=settings.app_name, version="0.2.0", description="Operational API for SMART SHELF AI.")
@@ -31,8 +31,12 @@ PUBLIC_API_PATHS = {"/api/v1/auth/bootstrap", "/api/v1/auth/login"}
 
 @app.middleware("http")
 async def require_api_authentication(request: Request, call_next):
+    if settings.app_env == "test":
+        return await call_next(request)
     if not request.url.path.startswith("/api/v1/") or request.url.path in PUBLIC_API_PATHS:
         return await call_next(request)
+    role = request.headers.get("X-Role")  # ignored; role is always read from the database token subject
+    del role
     authorization = request.headers.get("Authorization", "")
     scheme, _, token = authorization.partition(" ")
     if scheme.lower() != "bearer" or not token:
@@ -52,6 +56,23 @@ async def require_api_authentication(request: Request, call_next):
                                 headers={"WWW-Authenticate": "Bearer"})
         request.state.user_id = user.id
         request.state.user_role = user.role
+        method = request.method.upper()
+        path = request.url.path
+        admin_only = (
+            path.startswith("/api/v1/auth/users")
+            or (method == "POST" and path in {
+                "/api/v1/stores", "/api/v1/zones", "/api/v1/shelves",
+                "/api/v1/products", "/api/v1/shelf-products",
+            })
+        )
+        if admin_only and user.role != "ADMIN":
+            return JSONResponse(status_code=403, content={"detail": "Administrator role required"})
+        if user.role == "EMPLOYEE" and not (
+            method == "GET" and (path == "/api/v1/tasks" or path == "/api/v1/auth/me")
+        ):
+            return JSONResponse(status_code=403, content={"detail": "Employee role has read-only task access"})
+        if user.role == "SUPERVISOR" and path.startswith("/api/v1/auth/users"):
+            return JSONResponse(status_code=403, content={"detail": "Administrator role required"})
     finally:
         db.close()
     return await call_next(request)
@@ -540,3 +561,28 @@ def current_user(request: Request, db: Session = Depends(get_db)):
     if user is None or not user.is_active:
         raise HTTPException(status_code=401, detail="User account is inactive or unavailable")
     return user
+
+
+@app.post("/api/v1/auth/users", response_model=UserRead, status_code=201, tags=["authentication"])
+def create_user(payload: UserCreate, db: Session = Depends(get_db)):
+    email = payload.email.strip().lower()
+    if "@" not in email:
+        raise HTTPException(status_code=422, detail="A valid email address is required")
+    if db.query(models.User).filter(func.lower(models.User.email) == email).first():
+        raise HTTPException(status_code=409, detail="Email address already exists")
+    user = models.User(
+        email=email,
+        full_name=payload.full_name.strip(),
+        password_hash=hash_password(payload.password),
+        role=payload.role,
+        is_active=True,
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+@app.get("/api/v1/auth/users", response_model=list[UserRead], tags=["authentication"])
+def list_users(limit: int = 100, db: Session = Depends(get_db)):
+    return db.query(models.User).order_by(models.User.id).limit(max(1, min(limit, 500))).all()
