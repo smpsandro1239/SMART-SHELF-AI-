@@ -21,6 +21,18 @@ type ShelfImageDetection = { id: number; shelf_image_id: number; product_id: num
 type Product = { id: number; sku: string; name: string; is_active: boolean };
 type ShelfProduct = { id: number; shelf_id: number; product_id: number; target_quantity: number; position: number | null };
 type DetectionSkuReview = { id: number; detection_id: number; previous_product_id: number | null; selected_product_id: number | null; decision: "CONFIRMED" | "CORRECTED" | "REJECTED"; reviewer_user_id: number | null; notes: string | null; created_at: string };
+type ReviewQueueItem = {
+  fused_evidence_id: number; detection_id: number; shelf_image_id: number;
+  shelf_id: number; shelf_code: string; image_filename: string;
+  status: "CONSENSUS" | "VISUAL_ONLY" | "TEXT_ONLY" | "CONFLICT" | "AMBIGUOUS" | "UNKNOWN";
+  suggested_product_id: number | null; visual_product_id: number | null; text_product_id: number | null;
+  detection_label: string; detection_confidence: number;
+  x_min: number; y_min: number; x_max: number; y_max: number;
+  visual_similarity: number | null; text_score: number | null; ocr_confidence: number | null;
+  visual_model_version: string | null; ocr_provider: string; ocr_model_version: string;
+  reason: string; created_at: string;
+};
+type ReviewQueueSummary = Record<ReviewQueueItem["status"], number>;
 type Summary = {
   store_id: number | null; role: Role; active_tasks: number;
   shelves_requiring_attention: number;
@@ -41,6 +53,8 @@ export default function App() {
   const [imageDetections, setImageDetections] = useState<Record<number, ShelfImageDetection[]>>({});
   const [imageUrls, setImageUrls] = useState<Record<number, string>>({});
   const [detectionReviews, setDetectionReviews] = useState<Record<number, DetectionSkuReview[]>>({});
+  const [reviewQueue, setReviewQueue] = useState<ReviewQueueItem[]>([]);
+  const [reviewQueueSummary, setReviewQueueSummary] = useState<ReviewQueueSummary | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
   const [shelfProducts, setShelfProducts] = useState<Record<number, number[]>>({});
   const [reviewProductSelection, setReviewProductSelection] = useState<Record<number, string>>({});
@@ -90,6 +104,23 @@ export default function App() {
         request<ShelfImage[]>("/api/v1/shelf-images?limit=30"),
       ]);
       setUser(me); setSummary(kpis); setTasks(taskList); setCaptures(captureList); setLastUpdated(new Date());
+      if (me.role === "ADMIN" || me.role === "SUPERVISOR") {
+        try {
+          const [queue, queueSummary] = await Promise.all([
+            request<ReviewQueueItem[]>("/api/v1/shelf-image-review-queue?limit=50"),
+            request<ReviewQueueSummary>("/api/v1/shelf-image-review-queue/summary"),
+          ]);
+          setReviewQueue(queue);
+          setReviewQueueSummary(queueSummary);
+        } catch (queueError) {
+          setReviewQueue([]);
+          setReviewQueueSummary(null);
+          setError(queueError instanceof Error ? queueError.message : "Não foi possível carregar a fila de revisão.");
+        }
+      } else {
+        setReviewQueue([]);
+        setReviewQueueSummary(null);
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Não foi possível carregar os dados.";
       setError(message);
@@ -220,6 +251,15 @@ export default function App() {
     } finally {
       setDetectionLoading(null);
     }
+  }
+
+  function openQueueImage(item: ReviewQueueItem) {
+    const capture = captures.find(image => image.id === item.shelf_image_id);
+    if (!capture) {
+      setError("Esta fotografia já não está na lista das 30 capturas recentes. Consulta o registo da imagem pela API.");
+      return;
+    }
+    if (expandedDetectionImage !== capture.id) void toggleImageDetections(capture);
   }
 
   async function reviewDetection(detection: ShelfImageDetection, decision: "CONFIRMED" | "CORRECTED" | "REJECTED") {
@@ -380,6 +420,27 @@ export default function App() {
               </div>
             </article>
           </section>
+          {(user?.role === "ADMIN" || user?.role === "SUPERVISOR") && <section className="panel review-queue-panel">
+            <div className="panel-heading">
+              <div><p className="eyebrow">CONTROLO DE QUALIDADE</p><h2>Fila de revisão de SKU</h2><p className="muted">Sugestões da fusão visual + OCR que aguardam decisão humana.</p></div>
+              <span className="subtle-pill">{reviewQueue.length} itens prioritários</span>
+            </div>
+            {reviewQueueSummary && <div className="review-queue-counts">
+              {(["CONFLICT", "AMBIGUOUS", "TEXT_ONLY", "UNKNOWN", "VISUAL_ONLY", "CONSENSUS"] as const).map(status => <div key={status} className={`review-queue-count ${status.toLowerCase()}`}><span>{status === "CONFLICT" ? "Conflito" : status === "AMBIGUOUS" ? "Ambíguo" : status === "TEXT_ONLY" ? "Só OCR" : status === "UNKNOWN" ? "Desconhecido" : status === "VISUAL_ONLY" ? "Só visual" : "Consenso"}</span><strong>{reviewQueueSummary[status] || 0}</strong></div>)}
+            </div>}
+            <div className="review-queue-list">
+              {reviewQueue.length === 0 && <div className="empty-state"><ShieldCheck size={25} /><strong>Sem revisões pendentes</strong><span>Quando existirem resultados de OCR e fusão, os casos a validar aparecerão aqui.</span></div>}
+              {reviewQueue.map(item => <article className="review-queue-row" key={item.fused_evidence_id}>
+                <div className="review-queue-main">
+                  <div><strong>Prateleira {item.shelf_code} · Deteção #{item.detection_id}</strong><span>{item.image_filename} · {new Date(item.created_at).toLocaleString("pt-PT")}</span></div>
+                  <span className={`review-queue-status ${item.status.toLowerCase()}`}>{item.status}</span>
+                </div>
+                <p>{item.reason}</p>
+                <div className="review-queue-meta"><span>Visual: {item.visual_product_id ? `SKU #${item.visual_product_id}` : "sem candidato"}</span><span>OCR: {item.text_product_id ? `SKU #${item.text_product_id}` : "sem candidato"}</span><span>Proposta: {item.suggested_product_id ? `SKU #${item.suggested_product_id}` : "abstenção"}</span></div>
+                <div className="review-queue-actions"><button className="row-action" onClick={() => openQueueImage(item)}>Abrir fotografia e rever <ArrowUpRight size={14} /></button></div>
+              </article>)}
+            </div>
+          </section>}
           <footer className="data-note"><ShieldCheck size={15} /> {summary.note} <span>·</span> {summary.role} {summary.store_id ? `· Loja #${summary.store_id}` : "· Visão global"}</footer>
         </>}
         {!summary && loading && <div className="loading-state"><RefreshCw className="spin" /> A carregar os indicadores…</div>}
