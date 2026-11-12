@@ -128,3 +128,17 @@ O projeto ainda não guarda um identificador de fuso horário por loja; a
 integração deve normalizar os dados de origem e respeitar alterações de hora
 legal antes de importar. Os valores zero devem ser enviados explicitamente;
 ausência de registo permanece desconhecida.
+
+
+## Importação em lote e critérios de qualidade
+
+Os endpoints `/api/v1/sales/hourly/batch` e
+`/api/v1/sales/traffic/hourly/batch` recebem até 500 observações por pedido.
+Um lote pertence a uma só loja e não pode repetir a chave externa. A persistência
+é atómica; qualquer colisão na base de dados rejeita o lote completo.
+
+O planeador exige cobertura mínima de vendas e tráfego em todas as 24 horas
+antes de classificar uma janela como a de menor afluência. Esta restrição é
+deliberadamente conservadora: sem cobertura global, o sistema não conhece
+alternativas potencialmente mais calmas. Valores negativos, não finitos ou
+ausência de observações não são convertidos em zeros.
