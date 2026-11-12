@@ -634,4 +634,8 @@ class PalletRotationPolicyUpdate(BaseModel):
     def require_at_least_one_change(self):
         if self.threshold_ratio is None and self.is_enabled is None:
             raise ValueError("At least one policy field must be supplied")
+        if "threshold_ratio" in self.model_fields_set and self.threshold_ratio is None:
+            raise ValueError("threshold_ratio cannot be null")
+        if "is_enabled" in self.model_fields_set and self.is_enabled is None:
+            raise ValueError("is_enabled cannot be null")
         return self
