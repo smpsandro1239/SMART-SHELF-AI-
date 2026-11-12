@@ -46,7 +46,7 @@ from app.schemas import (
     ShelfImageReviewQueueItem, ShelfImageTrainingCandidateRead, CaptureSessionCreate, CaptureSessionRead,
     WarehouseLocationCreate, WarehouseProductProfileCreate, WarehousePlacementCreate,
     ProductPackagingLevelCreate, StorePalletCreate, StorePalletRead,
-    PalletRotationPolicyCreate, PalletRotationPolicyRead, PalletRotationEventRead,
+    PalletRotationPolicyCreate, PalletRotationPolicyRead, PalletRotationPolicyUpdate, PalletRotationEventRead,
 )
 
 app = FastAPI(title=settings.app_name, version="0.2.0", description="Operational API for SMART SHELF AI.")
@@ -101,6 +101,7 @@ async def require_api_authentication(request: Request, call_next):
         )
         supervisor_or_admin = (
             (method == "POST" and path in {"/api/v1/sales/daily", "/api/v1/sales/import-csv", "/api/v1/warehouse/locations", "/api/v1/warehouse/placements", "/api/v1/warehouse/pallets", "/api/v1/warehouse/pallet-rotation/policies"})
+            or (method == "PATCH" and path.startswith("/api/v1/warehouse/pallet-rotation/policies/"))
             or path == "/api/v1/product-embedding-exemplars"
             or path.startswith("/api/v1/product-embedding-exemplars/")
             or (method == "GET" and path == "/api/v1/training-candidates/reviewed")
@@ -1741,6 +1742,29 @@ def create_pallet_rotation_policy(
     except IntegrityError as exc:
         db.rollback()
         raise HTTPException(status_code=409, detail="A pallet rotation policy already exists for this store and product") from exc
+    db.refresh(policy)
+    return policy
+
+
+@app.patch("/api/v1/warehouse/pallet-rotation/policies/{policy_id}", response_model=PalletRotationPolicyRead, tags=["warehouse"])
+def update_pallet_rotation_policy(
+    policy_id: int,
+    payload: PalletRotationPolicyUpdate,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    policy = db.get(models.PalletRotationPolicy, policy_id)
+    if policy is None:
+        raise HTTPException(status_code=404, detail="Pallet rotation policy not found")
+    actor = _request_user(db, request)
+    _enforce_store_scope(actor, policy.store_id)
+    for field, value in payload.model_dump(exclude_unset=True).items():
+        setattr(policy, field, value)
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(status_code=422, detail="Invalid pallet rotation policy") from exc
     db.refresh(policy)
     return policy
 
