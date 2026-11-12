@@ -42,7 +42,6 @@ def test_exact_multiple_does_not_create_loose_units():
         required_base_units=24,
         base_units_per_package=12,
         allow_open_package=True,
-        base_unit_replenishment_available=True,
     )
 
     assert result["package_count"] == 2
