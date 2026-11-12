@@ -63,7 +63,7 @@ As operações de criação/fecho devem ser auditáveis e sujeitas ao isolamento
 
 ## Estado e validação
 
-Implementação publicada no backend e testes automatizados adicionados em `apps/api/tests/test_capture_sessions.py`. Os testes cobrem ciclo de vida, listagem, ligação de imagem, rejeição de prateleira incorreta, bloqueio de upload após fecho e agrupamento de candidatos. A execução CI ainda tem de confirmar o resultado após estes commits.
+Implementação publicada no backend e testes automatizados adicionados em `apps/api/tests/test_capture_sessions.py`. Os testes cobrem ciclo de vida, listagem, ligação de imagem, rejeição de prateleira incorreta, bloqueio de upload após fecho e agrupamento de candidatos. O workflow GitHub Actions `API CI` concluiu com sucesso no commit de testes `9f2cb7632c7869de301b9c9852fb409fd2188d69`.
 
 ## Sequência de implementação
 
