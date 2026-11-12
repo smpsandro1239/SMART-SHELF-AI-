@@ -125,3 +125,31 @@ def test_partial_pallet_is_never_treated_as_ready_replacement_by_planner():
     item = result.recommendations[0]
     assert item["action"] == "PREPARE_REPLACEMENT"
     assert item["automatic_stock_movement_allowed"] is False
+
+
+def test_invalid_candidate_does_not_reserve_pallet_id_against_later_valid_row():
+    result = build_pallet_portfolio_plan([
+        candidate(7, residual_base_units=float("nan")),
+        candidate(7),
+    ])
+    assert result.considered == 1
+    assert result.excluded == 1
+    assert len(result.recommendations) == 1
+    assert result.recommendations[0]["pallet_id"] == 7
+    assert result.recommendations[0]["action"] == "SWAP_PALLET"
+
+
+def test_missing_required_candidate_fields_are_excluded():
+    incomplete = candidate(8)
+    del incomplete["replacement_pallet_available"]
+    result = build_pallet_portfolio_plan([incomplete, candidate(9)])
+    assert result.considered == 1
+    assert result.excluded == 1
+    assert [item["pallet_id"] for item in result.recommendations] == [9]
+
+
+def test_forecast_equal_to_residual_does_not_trigger_interim_replenishment():
+    result = build_pallet_portfolio_plan([
+        candidate(residual_base_units=300, forecast_consumption_until_low_traffic=300)
+    ])
+    assert result.recommendations[0]["action"] == "SWAP_PALLET"
