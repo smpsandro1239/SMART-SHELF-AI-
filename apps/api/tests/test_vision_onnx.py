@@ -24,7 +24,7 @@ def test_decode_maps_letterboxed_boxes_back_to_original_image():
     assert len(boxes) == 1
     score, x1, y1, x2, y2 = boxes[0]
     assert score == pytest.approx(0.95)
-    assert (x1, y1, x2, y2) == pytest.approx((0.1, 0.0, 0.9, 1.0))
+    assert (x1, y1, x2, y2) == pytest.approx((0.1, 0.25, 0.9, 0.75))
 
 
 def test_decode_discards_low_confidence_and_degenerate_boxes():
