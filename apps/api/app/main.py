@@ -30,6 +30,7 @@ from app.packaging_units import calculate_replenishment_packs
 from app.pallet_rotation import evaluate_pallet_rotation, PalletRotationInputError
 from app.pallet_rotation_windows import recommend_low_traffic_window
 from app.hourly_patterns import build_weekday_hour_profile
+from app.hourly_demand_forecast import forecast_hourly_demand
 from app.sku_review_evaluation import build_reviewed_prediction_report
 from app.sales_import import parse_daily_sales_csv
 from app.sales_import_hourly import parse_hourly_sales_csv, parse_hourly_traffic_csv
@@ -1654,6 +1655,55 @@ def get_pallet_rotation_hourly_profile(
         "missing_sales_hours": [hour for hour in range(24) if hour not in sales_by_hour],
         "missing_traffic_hours": [hour for hour in range(24) if hour not in traffic_by_hour],
         "forecast_generated": False, "simulation_only": True,
+    }
+
+
+@app.get("/api/v1/forecasting/hourly-demand", tags=["forecasting"])
+def get_hourly_demand_forecast(
+    store_id: int,
+    product_id: int,
+    horizon_days: int = 7,
+    history_days: int = 180,
+    minimum_observed_days: int = 4,
+    source: SalesSource = "POS",
+    request: Request = None,
+    db: Session = Depends(get_db),
+):
+    """Return a transparent same-weekday/hour seasonal baseline; read-only."""
+    if not 28 <= history_days <= 365:
+        raise HTTPException(status_code=422, detail="history_days must be between 28 and 365")
+    actor = _request_user(db, request)
+    _enforce_store_scope(actor, store_id)
+    if db.get(models.Store, store_id) is None:
+        raise HTTPException(status_code=404, detail="Store not found")
+    product = db.get(models.Product, product_id)
+    if product is None or not product.is_active:
+        raise HTTPException(status_code=404, detail="Active product not found")
+    forecast_start = date.today() + timedelta(days=1)
+    history_start = forecast_start - timedelta(days=history_days)
+    records = db.query(models.HourlySalesRecord).filter(
+        models.HourlySalesRecord.store_id == store_id,
+        models.HourlySalesRecord.product_id == product_id,
+        models.HourlySalesRecord.source == source,
+        models.HourlySalesRecord.business_date >= history_start,
+        models.HourlySalesRecord.business_date < forecast_start,
+    ).all()
+    try:
+        result = forecast_hourly_demand(
+            records,
+            forecast_start=forecast_start,
+            horizon_days=horizon_days,
+            minimum_observed_days=minimum_observed_days,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {
+        "store_id": store_id,
+        "product_id": product_id,
+        "source": source,
+        "history_start": history_start,
+        "history_end": forecast_start - timedelta(days=1),
+        **result,
     }
 
 
