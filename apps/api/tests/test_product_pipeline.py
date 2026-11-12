@@ -189,3 +189,81 @@ def test_pipeline_abstains_for_low_confidence_ocr(db):
     assert match.status == "UNKNOWN"
     assert match.suggested_product_id is None
     assert fused.status == "VISUAL_ONLY"
+
+
+def test_worker_automatically_runs_catalogue_matching_and_fusion(db, tmp_path):
+    from app.ocr_paddle import OCRRegion
+    from app.product_text import OCRText
+    from app.vision import DetectionResult, VisionAnalysis
+    from app.vision_worker import process_next_image
+
+    store = models.Store(code="AUTO-PIPELINE", name="Automatic pipeline")
+    db.add(store)
+    db.flush()
+    zone = models.Zone(store_id=store.id, name="Zona")
+    db.add(zone)
+    db.flush()
+    shelf = models.Shelf(zone_id=zone.id, code="AUTO-01")
+    db.add(shelf)
+    db.flush()
+    image_path = tmp_path / "automatic.jpg"
+    image_path.write_bytes(b"test-image")
+    image = models.ShelfImage(
+        shelf_id=shelf.id,
+        original_filename="automatic.jpg",
+        storage_path=str(image_path),
+        mime_type="image/jpeg",
+        file_size_bytes=image_path.stat().st_size,
+        sha256="b" * 64,
+        analysis_status="PENDING",
+    )
+    db.add(image)
+    db.flush()
+    image_id = image.id
+
+    class FakeVision:
+        def analyze(self, path):
+            return VisionAnalysis(
+                model_version="detector-test-v1",
+                detections=[
+                    DetectionResult(
+                        label="product",
+                        confidence=0.95,
+                        x_min=0.1,
+                        y_min=0.1,
+                        x_max=0.8,
+                        y_max=0.8,
+                    )
+                ],
+            )
+
+    class FakeOCR:
+        def recognize(self, path):
+            return (
+                OCRRegion(
+                    OCRText("Produto teste", 0.94),
+                    0.2,
+                    0.2,
+                    0.6,
+                    0.5,
+                ),
+            )
+
+    processed_id = process_next_image(db, FakeVision(), ocr_provider=FakeOCR())
+
+    assert processed_id == image_id
+    processed_image = db.get(models.ShelfImage, image_id)
+    assert processed_image.analysis_status == "COMPLETED"
+
+    run = db.query(models.ShelfImageOCRRun).filter_by(
+        shelf_image_id=image_id,
+        status="COMPLETED",
+    ).one()
+    match = db.query(models.ShelfImageOCRMatch).filter_by(run_id=run.id).one()
+    fused = db.query(models.ShelfImageFusedEvidence).filter_by(ocr_run_id=run.id).one()
+
+    assert match.status == "SUGGESTED"
+    assert match.suggested_product_id == db.info["product_id"]
+    assert fused.status == "TEXT_ONLY"
+    assert fused.suggested_product_id == db.info["product_id"]
+    assert db.query(models.InventorySnapshot).count() == 0
