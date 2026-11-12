@@ -26,3 +26,30 @@ def test_access_token_rejects_tampering():
     token, _ = create_access_token(user_id=17, role="EMPLOYEE")
     with pytest.raises(jwt.InvalidTokenError):
         decode_access_token(token + "tampered")
+
+
+def test_store_scope_allows_admin_to_access_any_store():
+    from types import SimpleNamespace
+    from app.main import _enforce_store_scope
+
+    admin = SimpleNamespace(role="ADMIN", store_id=None)
+    _enforce_store_scope(admin, 987)
+
+
+def test_store_scope_rejects_supervisor_access_to_another_store():
+    from types import SimpleNamespace
+    from fastapi import HTTPException
+    from app.main import _enforce_store_scope
+
+    supervisor = SimpleNamespace(role="SUPERVISOR", store_id=12)
+    with pytest.raises(HTTPException) as error:
+        _enforce_store_scope(supervisor, 13)
+    assert error.value.status_code == 403
+
+
+def test_store_scope_allows_supervisor_access_to_own_store():
+    from types import SimpleNamespace
+    from app.main import _enforce_store_scope
+
+    supervisor = SimpleNamespace(role="SUPERVISOR", store_id=12)
+    _enforce_store_scope(supervisor, 12)
