@@ -328,3 +328,46 @@ python -m app.dataset_diff \
 ```
 
 O relatório inclui os hashes dos manifestos e dos seis documentos COCO, resumos e diferenças por split. Não inclui imagens nem notas privadas. Uma alteração de bbox é contabilizada como uma anotação alterada quando existe uma remoção e adição correspondente na mesma imagem. Renomes e mudanças de split só são inferidos quando o SHA-256 é único em cada versão. O relatório não inspeciona pixels, não decide se uma anotação está correta e não substitui a revisão humana. Qualquer mudança no COCO deve continuar a passar pelo gate de release e pela revisão aplicável.
+
+
+## Motor de políticas de reposição (primeira versão)
+
+O módulo `app.replenishment_policy` implementa dois cálculos determinísticos e independentes, inspirados nos conceitos de reposição por limiares e stock projetado documentados por Odoo e ERPNext:
+
+- `suggest_shelf_refill(ShelfRefillInput)`: recebe quantidade observada na prateleira, alvo, limiar mínimo, stock disponível na retaguarda, confiança e idade da observação. Só sugere unidades até ao alvo, limitadas pelo stock de retaguarda. Observações antigas, pouco fiáveis ou sem inventário não geram uma quantidade automática.
+- `suggest_purchase_reorder(PurchaseReorderInput)`: calcula stock projetado à data de receção (`on_hand + incoming - reserved - demand_until_receipt`), compara com o ponto de encomenda e sugere quantidade até ao máximo, arredondada ao múltiplo de embalagem e respeitando a quantidade mínima.
+
+Exemplo de utilização:
+
+```python
+from app.replenishment_policy import (
+    ShelfRefillInput,
+    PurchaseReorderInput,
+    suggest_shelf_refill,
+    suggest_purchase_reorder,
+)
+
+shelf_decision = suggest_shelf_refill(ShelfRefillInput(
+    shelf_quantity=2,
+    target_quantity=12,
+    min_display_quantity=3,
+    backroom_available_quantity=8,
+    observation_confidence=0.91,
+    observation_age_minutes=2,
+))
+# Exemplo sintético: sugere 8 unidades e deixa 2 unidades de diferença.
+
+purchase_decision = suggest_purchase_reorder(PurchaseReorderInput(
+    on_hand_quantity=8,
+    reserved_quantity=1,
+    incoming_quantity=2,
+    demand_until_receipt=5,
+    reorder_point=6,
+    target_max_quantity=24,
+    minimum_order_quantity=6,
+    pack_multiple=6,
+))
+# Exemplo sintético: stock projetado 4; propõe 24 unidades (4 packs de 6).
+```
+
+Estes métodos são funções de domínio isoladas: **não estão ainda ligados ao endpoint de recomendações, não criam tarefas, transferências ou encomendas e não foram validados com dados de loja**. O endpoint atual mantém `suggested_quantity = null` enquanto não existir quantidade observada de SKU suficientemente fiável. A integração requer dados de visão e inventário com origem, timestamp e unidade de medida.
