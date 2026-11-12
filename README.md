@@ -225,7 +225,7 @@ A API inclui início controlado do primeiro administrador, login com palavra-pas
 
 ![Fluxo de autenticação e permissões](docs/images/authentication-flow.svg)
 
-Perfis disponíveis: `ADMIN`, `SUPERVISOR` e `EMPLOYEE`. As regras atuais são uma primeira camada de autorização; o isolamento por loja e a associação de tarefas a contas individuais são etapas seguintes. O campo legado `assigned_to` continua a ser texto e não equivale a uma identidade autenticada.
+Perfis disponíveis: `ADMIN`, `SUPERVISOR` e `EMPLOYEE`. A associação de utilizadores a lojas e a atribuição de tarefas por `assigned_user_id` já estão implementadas. O campo legado `assigned_to` é mantido para compatibilidade, mas a identidade operacional é o ID do utilizador.
 
 
 ## 14. Autenticação e dashboard
