@@ -50,6 +50,7 @@ class ONNXShelfVisionProvider:
         embedding_path: str | Path | None = None,
         *,
         model_version: str = "shelf-onnx-v1",
+        embedding_model_version: str = "shelf-embedding-v1",
         input_size: int = 640,
         confidence_threshold: float = 0.25,
         max_detections: int = 300,
@@ -58,6 +59,7 @@ class ONNXShelfVisionProvider:
         self.detector_path = Path(detector_path)
         self.embedding_path = Path(embedding_path) if embedding_path else None
         self.model_version = model_version
+        self.embedding_model_version = embedding_model_version
         self.input_size = input_size
         self.confidence_threshold = confidence_threshold
         self.max_detections = max_detections
@@ -189,7 +191,7 @@ class ONNXShelfVisionProvider:
                 x_max=x2,
                 y_max=y2,
                 embedding=embedding,
-                embedding_model_version=self.model_version if embedding is not None else None,
+                embedding_model_version=self.embedding_model_version if embedding is not None else None,
             ))
         return VisionAnalysis(model_version=self.model_version, detections=detections)
 
@@ -199,14 +201,18 @@ def create_provider() -> ONNXShelfVisionProvider:
     detector = os.getenv("VISION_DETECTOR_MODEL_PATH", "").strip()
     embedder = os.getenv("VISION_EMBEDDING_MODEL_PATH", "").strip() or None
     version = os.getenv("VISION_MODEL_VERSION", "shelf-onnx-v1").strip()
+    embedding_version = os.getenv("VISION_EMBEDDING_MODEL_VERSION", "shelf-embedding-v1").strip()
     if not detector:
         raise ONNXConfigurationError("VISION_DETECTOR_MODEL_PATH is required")
     if not version:
         raise ONNXConfigurationError("VISION_MODEL_VERSION cannot be empty")
+    if embedder and not embedding_version:
+        raise ONNXConfigurationError("VISION_EMBEDDING_MODEL_VERSION cannot be empty when an embedder is configured")
     return ONNXShelfVisionProvider(
         detector,
         embedder,
         model_version=version,
+        embedding_model_version=embedding_version,
         input_size=_env_int("VISION_INPUT_SIZE", 640, 32, 4096),
         confidence_threshold=_env_float("VISION_CONFIDENCE_THRESHOLD", 0.25),
         max_detections=_env_int("VISION_MAX_DETECTIONS", 300, 1, 2000),
