@@ -85,8 +85,9 @@ def test_plan_adds_deterministic_shelf_sequence_without_claiming_physical_optimi
     ])
 
     items = [item for group in plan.groups for item in group.items]
-    assert [item["shelf_id"] for item in items] == [1, 2, 4, 3]
-    assert [item["route_order"] for item in items] == [1, 2, 2, 3]
+    assert [item["shelf_id"] for item in items] == [2, 4, 3, 1]
+    # Work is prioritised first; route_order independently reflects shelf-code order.
+    assert [item["route_order"] for item in items] == [2, 2, 3, 1]
     assert all(item["route_basis"] == "ZONE_THEN_SHELF_CODE_AND_POSITION" for item in items)
     assert all(item["physical_route_optimized"] is False for item in items)
 
