@@ -607,3 +607,16 @@ O endpoint `GET /api/v1/sku-evaluation/reviewed` compara a última sugestão vis
 O relatório mede precisão quando existe proposta, cobertura de produtos conhecidos, abstenções, falsos positivos em deteções rejeitadas e resultados por versão do modelo. Para evitar fuga temporal, considera apenas a evidência de fusão existente no momento da decisão humana; reprocessamentos posteriores não alteram a avaliação histórica.
 
 A avaliação é apenas de leitura. Inclui apenas deteções revistas e não deve ser interpretada como benchmark independente ou amostra estatística aleatória. Não treina modelos, não aprova exemplares e não altera inventário. A rota está disponível a ADMIN/SUPERVISOR, com supervisores limitados à respetiva loja.
+
+
+## Planeamento operacional de reposição por zona
+
+O endpoint read-only `GET /api/v1/replenishment/plan?store_id=1` organiza as recomendações atuais por zona e apresenta uma prioridade operacional proposta. As prioridades não são probabilidades nem previsões de tempo de execução:
+
+- `HIGH`: existe uma recomendação quantitativa válida de reposição.
+- `URGENT_REVIEW`: a prateleira precisa de atenção, mas não existe stock de retaguarda; não autoriza criar uma tarefa de reposição.
+- `REVIEW`: inventário desconhecido ou confiança visual insuficiente.
+- `RECAPTURE`: observação expirada; é necessária nova captura.
+- `NONE`: não é incluído na fila de trabalho.
+
+O plano exclui tarefas já ativas para a mesma combinação prateleira/produto, limita o número de resultados e agrupa os restantes por zona. `task_creation_allowed` só é verdadeiro quando existe uma recomendação quantitativa positiva. O endpoint não cria nem atribui tarefas, não reserva stock e não distribui trabalho por funcionários. A ordenação por zona é apenas uma organização inicial; não representa um percurso físico otimizado. A atribuição automática fica dependente de dados fiáveis sobre disponibilidade, turnos, capacidade e localização dos funcionários.
