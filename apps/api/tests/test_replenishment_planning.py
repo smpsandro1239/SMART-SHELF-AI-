@@ -63,3 +63,13 @@ def test_visual_status_without_numeric_quantity_never_allows_task_creation():
     item = plan.groups[0].items[0]
     assert item["task_creation_allowed"] is False
     assert item["proposed_priority"] == "REVIEW"
+
+
+def test_unquantified_low_stock_is_sorted_as_review_not_as_actionable_refill():
+    plan = build_replenishment_plan([
+        recommendation(1, "NEEDS_REPLENISHMENT", suggested_quantity=None),
+        recommendation(2, "NEEDS_REPLENISHMENT", suggested_quantity=3),
+    ])
+    items = [item for group in plan.groups for item in group.items]
+    assert items[0]["shelf_id"] == 2
+    assert items[1]["proposed_priority"] == "REVIEW"
