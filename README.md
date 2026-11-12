@@ -227,6 +227,7 @@ Consultar também os endpoints de catálogo, observações e inventário na docu
 - [Decisões de arquitetura](docs/architecture/decisions.md)
 - [Privacidade e segurança](docs/security/privacy.md)
 - [Documentação da API](apps/api/README.md)
+- [Quality gates e validação contínua](docs/operations/quality-gates.md)
 - [Contrato de correspondência de SKU por embeddings](docs/architecture/sku-embedding-matching.md)
 - [Avaliação offline e calibração de thresholds de SKU](docs/architecture/sku-matching-evaluation.md)
 - [ADR-008 — correspondência conservadora de SKU](docs/architecture/adr-008-sku-embedding-matching.md)
