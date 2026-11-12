@@ -497,3 +497,17 @@ A principal referência arquitetural é a separação entre deteção genérica 
 - [RPC — Retail Product Checkout Dataset](https://rpc-dataset.github.io/)
 
 **Nota:** a revisão é documental. Nenhum código ou peso externo foi copiado para o projeto e nenhum modelo real foi ativado. A utilização comercial de datasets e pesos depende da confirmação das respetivas licenças e termos.
+
+
+## Provider ONNX de visão computacional (experimental)
+
+Foi adicionado um provider local CPU-first em `apps/api/app/vision_onnx.py`, compatível com o contrato `VisionProvider`. Suporta um detetor ONNX pós-NMS e, opcionalmente, um extrator ONNX de embeddings para matching de SKU. O Compose monta os pesos a partir de uma pasta local em modo só de leitura; os modelos não são descarregados nem versionados pelo projeto.
+
+**Importante:** o provider não vem ativado por defeito e não inclui pesos. Para o ativar são necessários modelos exportados com o contrato documentado, confirmação de licenças, validação no dataset autorizado e configuração de `VISION_PROVIDER_FACTORY`. Sem embedder, as deteções não são identificadas por SKU e o sistema abstém com `UNKNOWN`.
+
+- [Contrato, configuração e execução do provider ONNX](docs/architecture/onnx-vision-provider.md)
+- [Exemplo de variáveis de ambiente](apps/api/.env.vision.example)
+- [Implementação do provider](apps/api/app/vision_onnx.py)
+- [Testes do descodificador de deteções](apps/api/tests/test_vision_onnx.py)
+
+Dependências adicionais: ONNX Runtime CPU, NumPy e Pillow. A API continua separada do worker de inferência; não executa inferência durante o upload.
