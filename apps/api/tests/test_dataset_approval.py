@@ -169,3 +169,70 @@ def test_inference_gate_rejects_unmeasured_metric_values():
     })
     errors = validate_release_record(record, mode="inference")
     assert any("product.recall" in error for error in errors)
+
+
+def write_approved_visual_reviews(tmp_path, paths):
+    import copy
+    from app.dataset_review import create_review_template
+
+    review_paths = {}
+    for split, coco_path in paths.items():
+        document = json.loads(coco_path.read_text(encoding="utf-8"))
+        digest = hashlib.sha256(coco_path.read_bytes()).hexdigest()
+        record, errors = create_review_template(document, split, digest)
+        assert errors == []
+        for item in record["reviews"]:
+            item.update({
+                "decision": "APPROVED",
+                "reviewer": "Human reviewer",
+                "reviewed_at": "2026-11-12T12:00:00Z",
+                "notes": "Reviewed visually",
+            })
+        review_path = tmp_path / f"{split}-review.json"
+        review_path.write_text(json.dumps(record), encoding="utf-8")
+        review_paths[split] = review_path
+    return review_paths
+
+
+def test_release_gate_can_require_complete_visual_reviews(tmp_path):
+    manifest, paths = write_dataset(tmp_path)
+    record = make_record(hashlib.sha256(manifest.read_bytes()).hexdigest())
+    reviews = write_approved_visual_reviews(tmp_path, paths)
+
+    errors, report = run_release_gate(
+        record, manifest, paths, review_paths=reviews, require_visual_review=True
+    )
+
+    assert errors == []
+    assert report["status"] == "APPROVED"
+    assert report["checks"]["visual_review"]["passed"] is True
+
+
+def test_release_gate_blocks_when_required_visual_reviews_are_missing(tmp_path):
+    manifest, paths = write_dataset(tmp_path)
+    record = make_record(hashlib.sha256(manifest.read_bytes()).hexdigest())
+
+    errors, report = run_release_gate(
+        record, manifest, paths, require_visual_review=True
+    )
+
+    assert any("visual review records are required" in error for error in errors)
+    assert report["status"] == "BLOCKED"
+
+
+def test_release_gate_detects_stale_visual_review_after_coco_change(tmp_path):
+    manifest, paths = write_dataset(tmp_path)
+    record = make_record(hashlib.sha256(manifest.read_bytes()).hexdigest())
+    reviews = write_approved_visual_reviews(tmp_path, paths)
+
+    document = json.loads(paths["train"].read_text(encoding="utf-8"))
+    document["annotations"][0]["bbox"] = [11, 10, 20, 20]
+    paths["train"].write_text(json.dumps(document), encoding="utf-8")
+
+    errors, report = run_release_gate(
+        record, manifest, paths, review_paths=reviews, require_visual_review=True
+    )
+
+    assert report["status"] == "BLOCKED"
+    assert any("different COCO file hash" in error for error in errors)
+    assert any("annotations changed since review" in error for error in errors)
