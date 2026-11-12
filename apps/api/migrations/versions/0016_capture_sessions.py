@@ -28,15 +28,23 @@ def upgrade() -> None:
     op.create_index("ix_capture_sessions_store_id", "capture_sessions", ["store_id"])
     op.create_index("ix_capture_sessions_shelf_id", "capture_sessions", ["shelf_id"])
     op.create_index("ix_capture_sessions_source_device_id", "capture_sessions", ["source_device_id"])
-    op.add_column("shelf_images", sa.Column("capture_session_id", sa.Integer(), nullable=True))
-    op.create_foreign_key("fk_shelf_images_capture_session_id_capture_sessions", "shelf_images", "capture_sessions", ["capture_session_id"], ["id"], ondelete="SET NULL")
-    op.create_index("ix_shelf_images_capture_session_id", "shelf_images", ["capture_session_id"])
+    with op.batch_alter_table("shelf_images") as batch_op:
+        batch_op.add_column(sa.Column("capture_session_id", sa.Integer(), nullable=True))
+        batch_op.create_foreign_key(
+            "fk_shelf_images_capture_session_id_capture_sessions",
+            "capture_sessions",
+            ["capture_session_id"],
+            ["id"],
+            ondelete="SET NULL",
+        )
+        batch_op.create_index("ix_shelf_images_capture_session_id", ["capture_session_id"])
 
 
 def downgrade() -> None:
-    op.drop_index("ix_shelf_images_capture_session_id", table_name="shelf_images")
-    op.drop_constraint("fk_shelf_images_capture_session_id_capture_sessions", "shelf_images", type_="foreignkey")
-    op.drop_column("shelf_images", "capture_session_id")
+    with op.batch_alter_table("shelf_images") as batch_op:
+        batch_op.drop_index("ix_shelf_images_capture_session_id")
+        batch_op.drop_constraint("fk_shelf_images_capture_session_id_capture_sessions", type_="foreignkey")
+        batch_op.drop_column("capture_session_id")
     op.drop_index("ix_capture_sessions_source_device_id", table_name="capture_sessions")
     op.drop_index("ix_capture_sessions_shelf_id", table_name="capture_sessions")
     op.drop_index("ix_capture_sessions_store_id", table_name="capture_sessions")
