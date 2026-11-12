@@ -65,6 +65,15 @@ class PaddleOCRProvider:
         raise ValueError("Unsupported PaddleOCR result object; expected mapping or .json")
 
     @staticmethod
+    def _as_sequence(value: Any) -> list[Any]:
+        if value is None:
+            return []
+        tolist = getattr(value, "tolist", None)
+        if callable(tolist):
+            value = tolist()
+        return list(value)
+
+    @staticmethod
     def _points_to_box(points: Any, width: int, height: int) -> tuple[float, float, float, float]:
         # PaddleOCR returns a polygon with pixel coordinates (normally 4x2).
         coordinates = list(points)
@@ -98,9 +107,12 @@ class PaddleOCRProvider:
         regions: list[OCRRegion] = []
         for raw in raw_results:
             result = self._as_mapping(raw)
-            texts = result.get("rec_texts") or []
-            scores = result.get("rec_scores") or []
-            polygons = result.get("dt_polys") or result.get("rec_polys") or []
+            texts = self._as_sequence(result.get("rec_texts"))
+            scores = self._as_sequence(result.get("rec_scores"))
+            polygon_values = result.get("dt_polys")
+            if polygon_values is None:
+                polygon_values = result.get("rec_polys")
+            polygons = self._as_sequence(polygon_values)
             if not (len(texts) == len(scores) == len(polygons)):
                 raise ValueError("PaddleOCR texts, scores and polygons have inconsistent lengths")
             for text, score, polygon in zip(texts, scores, polygons):
