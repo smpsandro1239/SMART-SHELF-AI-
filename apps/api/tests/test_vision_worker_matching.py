@@ -101,3 +101,35 @@ def test_detection_rejects_embedding_without_model_version():
             x_min=0.1, y_min=0.1, x_max=0.8, y_max=0.8,
             embedding=[1.0, 0.0],
         )
+
+
+def test_worker_reuses_registry_for_detections_with_same_embedding_version(db, monkeypatch):
+    import app.vision_worker as worker
+
+    product_id = db.info["product_id"]
+    add_approved_exemplar(
+        db, product_id, db.info["reviewer_id"], [1.0, 0.0, 0.0], "c"
+    )
+    calls = []
+    original = worker.build_approved_product_registry
+
+    def counted_registry(session, *, model_version, **kwargs):
+        calls.append(model_version)
+        return original(session, model_version=model_version, **kwargs)
+
+    monkeypatch.setattr(worker, "build_approved_product_registry", counted_registry)
+    cache = {}
+    detections = [
+        DetectionResult(
+            label="product", confidence=0.9,
+            x_min=0.1, y_min=0.1, x_max=0.8, y_max=0.8,
+            embedding=[1.0, 0.0, 0.0],
+            embedding_model_version="embed-v1",
+        )
+        for _ in range(3)
+    ]
+
+    results = [worker.resolve_sku_match(db, item, cache) for item in detections]
+
+    assert all(item["status"] == "MATCHED" for item in results)
+    assert calls == ["embed-v1"]
