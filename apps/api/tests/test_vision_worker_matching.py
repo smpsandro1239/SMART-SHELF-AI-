@@ -133,3 +133,24 @@ def test_worker_reuses_registry_for_detections_with_same_embedding_version(db, m
 
     assert all(item["status"] == "MATCHED" for item in results)
     assert calls == ["embed-v1"]
+
+
+
+def test_worker_uses_configured_similarity_threshold(db, monkeypatch):
+    import app.vision_worker as worker
+
+    add_approved_exemplar(
+        db, db.info["product_id"], db.info["reviewer_id"], [1.0, 0.0, 0.0], "d"
+    )
+    monkeypatch.setattr(worker.settings, "product_matching_min_similarity", 1.0)
+    detection = DetectionResult(
+        label="product", confidence=0.9,
+        x_min=0.1, y_min=0.1, x_max=0.8, y_max=0.8,
+        embedding=[0.99, 0.01, 0.0],
+        embedding_model_version="embed-v1",
+    )
+
+    result = worker.resolve_sku_match(db, detection)
+
+    assert result["status"] == "UNKNOWN"
+    assert result["product_id"] is None
