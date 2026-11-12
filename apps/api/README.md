@@ -1192,3 +1192,19 @@ O adaptador `app/replenishment_risk_bridge.py` agrega vendas por produto/dia e e
 Quando existe evidência suficiente, o motor usa a previsão diária ponderada, o prazo de abastecimento e o stock de segurança para classificar o risco. A resposta inclui a banda, cobertura em dias, stock projetado à receção, diferença para o stock de segurança, procura média e fundamento da avaliação. O planeador usa essa banda para ordenar os candidatos.
 
 A integração é consultiva e opcional: não cria tarefas, não reserva stock, não emite encomendas e não movimenta inventário. A prioridade de risco também não ultrapassa o controlo de segurança de criação de tarefas: continua a ser necessária uma recomendação quantificada e elegível. A classificação é uma heurística explicável, não uma probabilidade calibrada; deve ser validada com dados reais da loja antes de qualquer automatização.
+
+
+### Estimativa de esforço da fila de reposição
+
+O endpoint `GET /api/v1/replenishment/plan` aceita também:
+
+```http
+GET /api/v1/replenishment/plan?store_id=1&include_effort_estimates=true&effort_history_days=90&effort_minimum_sample_size=5
+```
+
+A opção está desativada por omissão. Quando ativada, o planeador consulta tarefas concluídas na mesma loja, nos últimos 7 a 730 dias, e estima o tempo decorrido com base em tarefas da mesma zona e prioridade. Se não houver amostra suficiente nessa combinação, tenta uma referência por zona. Por omissão, exige cinco observações válidas; o limite configurável é 2 a 100.
+
+Cada candidato recebe `estimated_elapsed_minutes`, `effort_estimate_status`,
+`effort_estimate_basis` e `effort_estimate_sample_count`. A resposta agrega o número de candidatos estimados, os não estimados e o total de minutos estimados.
+
+**Limitação importante:** o tempo medido decorre entre início e conclusão da tarefa. Pode incluir esperas, pausas e interrupções; não é tempo de trabalho ativo nem produtividade individual. O sistema não distribui tarefas por colaboradores e não usa estimativas sem amostra suficiente. Os valores devem ser comparados com observações reais antes de serem usados para dimensionamento de equipas.
