@@ -230,3 +230,18 @@ O worker pode ser executado repetidamente por um supervisor externo. A seleção
 ### Repetir uma análise falhada
 
 Um administrador ou supervisor da loja pode colocar novamente uma captura no estado `PENDING` através de `POST /api/v1/shelf-images/{image_id}/retry`. Apenas imagens no estado `FAILED` podem ser repetidas; o endpoint limpa os metadados da tentativa anterior e respeita o isolamento por loja. O worker só voltará a processar a imagem se existir um provider real configurado.
+
+
+## Ferramentas de qualidade do dataset visual
+
+A partir de `apps/api`, depois de preparar os três ficheiros COCO:
+
+```bash
+python -m app.dataset_quality \\
+  --train /dados/annotations/instances_train.json \\
+  --val /dados/annotations/instances_val.json \\
+  --test /dados/annotations/instances_test.json \\
+  --json-report /dados/reports/dataset-quality.json
+```
+
+O relatório inclui distribuição de instâncias por classe, classes sem exemplos, imagens sem anotações e estatísticas de instâncias por imagem. As imagens sem anotações são avisos para revisão, não falhas automáticas. Para ativar critérios quantitativos explícitos, podem ser usados `--min-instances-per-class` e `--max-class-imbalance-ratio`; por omissão, o comando apenas reporta e não impõe limites arbitrários. Consultar `docs/computer-vision/dataset-specification.md` para a interpretação dos resultados.
