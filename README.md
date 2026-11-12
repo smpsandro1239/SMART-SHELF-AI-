@@ -7,7 +7,7 @@
 ![Base de dados](https://img.shields.io/badge/Base%20de%20dados-PostgreSQL-4169E1)
 ![Execução](https://img.shields.io/badge/ambiente-Docker-2496ED)
 
-> **Transparência:** o backend inclui lojas, zonas, prateleiras, catálogo, observações, inventário, recomendações, tarefas e a primeira camada de autenticação/gestão de utilizadores. Existe agora um endpoint de resumo operacional para alimentar um dashboard; a interface gráfica do dashboard, a PWA, a inferência visual e as integrações externas continuam em desenvolvimento. Os mockups são ilustrativos e não representam dados reais.
+> **Transparência:** o backend inclui lojas, zonas, prateleiras, catálogo, observações, inventário, recomendações, tarefas, autenticação, captura de imagens e um worker de inferência com provider configurável. Existe uma aplicação web inicial com dashboard e fluxo de captura. Ainda não existe modelo de visão real configurado ou treinado, PWA nem integração POS/ERP/WMS operacional. Os mockups são ilustrativos e não representam dados reais.
 
 ## 1. O que é o SMART SHELF AI?
 
@@ -239,7 +239,7 @@ O endpoint `GET /api/v1/dashboard/summary` devolve contagens de tarefas e observ
 
 ## 15. Dashboard web (primeira versão)
 
-Foi criada uma aplicação React + TypeScript + Vite em `apps/web`.
+Foi criada uma aplicação React + TypeScript + Vite em `apps/web`, com dashboard inicial, gestão visual de tarefas e captura/histórico de fotografias de prateleiras.
 
 ![Mockup de referência do dashboard](docs/images/operations-dashboard.svg)
 
@@ -332,7 +332,7 @@ Um administrador ou supervisor da loja pode colocar novamente uma captura no est
 
 ## 19. Preparação do dataset de visão computacional
 
-Foi criada a especificação inicial de recolha e anotação, com quatro classes de deteção genéricas, regras de privacidade, controlo de qualidade, separação treino/validação/teste e métricas de avaliação. A estrutura segue COCO Object Detection, compatível com a preparação de dados documentada para RT-DETR.
+Foi criada a especificação inicial de recolha e anotação, com quatro classes de deteção genéricas, regras de privacidade, controlo de qualidade, separação treino/validação/teste e métricas de avaliação. A estrutura segue COCO Object Detection, compatível com a preparação de dados documentada para RT-DETR. Foi também adicionado um validador de anotações para detetar IDs duplicados, referências inválidas, caixas fora dos limites e ficheiros em falta.
 
 - [Especificação do dataset](docs/computer-vision/dataset-specification.md)
 - [Exemplo mínimo COCO JSON](docs/computer-vision/coco-example.json)
