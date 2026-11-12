@@ -11,7 +11,7 @@ from app import models
 from app.schemas import (
     ObservationCreate, ObservationRead, ShelfCreate, ShelfRead,
     StoreCreate, StoreRead, ZoneCreate, ZoneRead,
-    ProductCreate, ProductRead, ShelfProductCreate, ShelfProductRead,
+    ProductCreate, ProductRead, ShelfProductCreate, ShelfProductRead,\n    InventorySnapshotCreate, InventorySnapshotRead,
 )
 
 app = FastAPI(title=settings.app_name, version="0.2.0", description="Operational API for SMART SHELF AI.")
@@ -148,3 +148,57 @@ def list_shelf_products(shelf_id: int | None = None, product_id: int | None = No
     if product_id is not None:
         query = query.filter(models.ShelfProduct.product_id == product_id)
     return query.order_by(models.ShelfProduct.shelf_id, models.ShelfProduct.position).all()
+
+
+
+@app.post("/api/v1/inventory/snapshots", response_model=InventorySnapshotRead, status_code=201, tags=["inventory"])
+def create_inventory_snapshot(payload: InventorySnapshotCreate, db: Session = Depends(get_db)):
+    if not db.get(models.Store, payload.store_id):
+        raise HTTPException(status_code=404, detail="Store not found")
+    if not db.get(models.Product, payload.product_id):
+        raise HTTPException(status_code=404, detail="Product not found")
+    data = payload.model_dump()
+    if data["captured_at"] is None:
+        data["captured_at"] = models.utc_now()
+    elif data["captured_at"].tzinfo is None:
+        data["captured_at"] = data["captured_at"].replace(tzinfo=timezone.utc)
+    item = models.InventorySnapshot(**data)
+    db.add(item)
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Inventory source reference already exists") from exc
+    db.refresh(item)
+    return item
+
+
+@app.get("/api/v1/inventory/snapshots", response_model=list[InventorySnapshotRead], tags=["inventory"])
+def list_inventory_snapshots(
+    store_id: int | None = None,
+    product_id: int | None = None,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+):
+    limit = max(1, min(limit, 500))
+    query = db.query(models.InventorySnapshot)
+    if store_id is not None:
+        query = query.filter(models.InventorySnapshot.store_id == store_id)
+    if product_id is not None:
+        query = query.filter(models.InventorySnapshot.product_id == product_id)
+    return query.order_by(models.InventorySnapshot.captured_at.desc(), models.InventorySnapshot.id.desc()).limit(limit).all()
+
+
+@app.get("/api/v1/inventory/latest", response_model=InventorySnapshotRead, tags=["inventory"])
+def get_latest_inventory_snapshot(
+    store_id: int,
+    product_id: int,
+    db: Session = Depends(get_db),
+):
+    item = db.query(models.InventorySnapshot).filter(
+        models.InventorySnapshot.store_id == store_id,
+        models.InventorySnapshot.product_id == product_id,
+    ).order_by(models.InventorySnapshot.captured_at.desc(), models.InventorySnapshot.id.desc()).first()
+    if item is None:
+        raise HTTPException(status_code=404, detail="No inventory snapshot found for this store and product")
+    return item
