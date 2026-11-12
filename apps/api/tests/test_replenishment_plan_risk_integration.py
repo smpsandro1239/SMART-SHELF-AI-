@@ -63,7 +63,7 @@ def _create_candidate(client, store_id, code, sku, name, stock, zone_id=None):
     assert linked.status_code == 201
     observation = client.post("/api/v1/observations", json={
         "shelf_id": shelf["id"], "status": "LOW_STOCK",
-        "confidence": 0.95, "source": "test",
+        "confidence": 0.95, "source": "simulation",
     })
     assert observation.status_code == 201
     inventory = client.post("/api/v1/inventory/snapshots", json={
