@@ -43,3 +43,36 @@ def test_workload_returns_none_when_there_are_no_valid_durations():
     result = summarize_workload([], [])
     assert result.average_completion_minutes is None
     assert result.completed_tasks_with_duration == 0
+
+
+
+def test_duration_benchmarks_are_grouped_and_hidden_below_five_samples():
+    start = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    tasks = [
+        {
+            "status": "COMPLETED",
+            "started_at": start,
+            "completed_at": start + timedelta(minutes=10 + index),
+            "zone_name": "Bebidas",
+            "priority": "HIGH",
+        }
+        for index in range(5)
+    ]
+    tasks.append({
+        "status": "COMPLETED",
+        "started_at": start,
+        "completed_at": start + timedelta(minutes=20),
+        "zone_name": "Frio",
+        "priority": "LOW",
+    })
+
+    result = summarize_workload([{"id": 1, "name": "Ana"}], tasks)
+
+    by_zone = {row["group"]: row for row in result.duration_by_zone}
+    by_priority = {row["group"]: row for row in result.duration_by_priority}
+    assert by_zone["Bebidas"]["status"] == "READY"
+    assert by_zone["Bebidas"]["sample_count"] == 5
+    assert by_zone["Frio"]["status"] == "INSUFFICIENT_SAMPLE"
+    assert by_zone["Frio"]["average_completion_minutes"] is None
+    assert by_priority["HIGH"]["average_completion_minutes"] == 12.0
+    assert by_priority["LOW"]["status"] == "INSUFFICIENT_SAMPLE"
