@@ -57,6 +57,14 @@ type ReplenishmentPlan = {
   excluded: Record<string, number>;
   risk_assessment: { enabled: boolean; history_days: number | null };
   effort_estimation: { enabled: boolean; estimated_candidates?: number; unestimated_candidates?: number; estimated_total_elapsed_minutes?: number; metric?: string | null };
+  warehouse_pick_plan?: {
+    enabled: boolean; status: string; read_only: boolean;
+    stock_reserved: boolean; stock_movement_allowed: boolean;
+    products?: { product_id: number; required_quantity: number; allocated_quantity: number; shortfall_quantity: number; status: string; temperature_requirement: string | null }[];
+    stops?: { sequence: number; location_code: string; aisle?: string | null; rack?: string | null; bin_code?: string | null; distance_to_picking_m: number; items: { product_id: number; proposed_pick_quantity: number }[] }[];
+    summary?: { products_with_demand: number; ready_for_review: number; partial_stock: number; blocked: number; proposed_pick_lines: number; warehouse_stops: number; total_proposed_units: number; total_shortfall_units: number };
+    route_basis?: string; physical_route_optimized?: boolean; distance_metric?: string;
+  };
   automatic_stock_movement_allowed: boolean;
 };
 type Summary = {
@@ -198,7 +206,7 @@ export default function App() {
     setPlanError("");
     try {
       const plan = await request<ReplenishmentPlan>(
-        `/api/v1/replenishment/plan?store_id=${selectedStoreId}&include_stockout_risk=true&risk_days=28&include_effort_estimates=true&effort_history_days=90&effort_minimum_sample_size=5`
+        `/api/v1/replenishment/plan?store_id=${selectedStoreId}&include_stockout_risk=true&risk_days=28&include_effort_estimates=true&effort_history_days=90&effort_minimum_sample_size=5&include_warehouse_pick_plan=true`
       );
       setReplenishmentPlan(plan);
     } catch (err) {
@@ -437,6 +445,21 @@ export default function App() {
                 <div><span>Minutos estimados</span><strong>{replenishmentPlan.effort_estimation.estimated_total_elapsed_minutes == null ? "—" : replenishmentPlan.effort_estimation.estimated_total_elapsed_minutes.toFixed(0)}</strong></div>
               </div>
               <p className="plan-hint">Risco de rutura baseado em 28 dias de vendas; estimativas de tempo baseadas em tarefas concluídas. Tempo decorrido não equivale a trabalho ativo. Movimentação automática de stock: desativada.</p>
+              {replenishmentPlan.warehouse_pick_plan?.enabled && <div className="warehouse-pick-summary">
+                <div className="plan-zone-heading"><strong>Picking da retaguarda</strong><span>{replenishmentPlan.warehouse_pick_plan.summary?.warehouse_stops ?? 0} localizações</span></div>
+                <div className="plan-metrics">
+                  <div><span>Produtos cobertos</span><strong>{replenishmentPlan.warehouse_pick_plan.summary?.ready_for_review ?? 0}</strong></div>
+                  <div><span>Parcial / bloqueado</span><strong>{(replenishmentPlan.warehouse_pick_plan.summary?.partial_stock ?? 0) + (replenishmentPlan.warehouse_pick_plan.summary?.blocked ?? 0)}</strong></div>
+                  <div><span>Unidades propostas</span><strong>{replenishmentPlan.warehouse_pick_plan.summary?.total_proposed_units ?? 0}</strong></div>
+                  <div><span>Unidades em falta</span><strong>{replenishmentPlan.warehouse_pick_plan.summary?.total_shortfall_units ?? 0}</strong></div>
+                </div>
+                <p className="plan-hint">Proposta não vinculativa. Stock não reservado; confirmar disponibilidade e compatibilidade antes da recolha. Distâncias referem-se ao ponto de picking, não a percursos entre localizações.</p>
+                {(replenishmentPlan.warehouse_pick_plan.stops ?? []).map(stop => <div className="pick-stop" key={stop.location_code}>
+                  <div><strong>{stop.sequence}. {stop.location_code}</strong><span>{[stop.aisle, stop.rack, stop.bin_code].filter(Boolean).join(" · ") || "Localização"}</span></div>
+                  <span>{stop.distance_to_picking_m} m</span>
+                  <span>{stop.items.map(item => `SKU #${item.product_id}: ${item.proposed_pick_quantity}`).join(" · ")}</span>
+                </div>)}
+              </div>}
               <div className="plan-groups">
                 {replenishmentPlan.groups.length === 0 && <div className="empty-state"><CheckCircle2 size={24} /><strong>Sem candidatos para reposição</strong><span>Não existem recomendações elegíveis nesta consulta.</span></div>}
                 {replenishmentPlan.groups.map(group => <div className="plan-zone" key={group.zone_id ?? group.zone_name}>
