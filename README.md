@@ -512,3 +512,14 @@ Foi adicionado um provider local CPU-first em `apps/api/app/vision_onnx.py`, com
 - [Testes do descodificador de deteções](apps/api/tests/test_vision_onnx.py)
 
 Dependências adicionais: ONNX Runtime CPU, NumPy e Pillow. A API continua separada do worker de inferência; não executa inferência durante o upload. O serviço `vision-worker` está disponível no perfil opcional `vision` e só deve ser iniciado depois de configurar pesos e variáveis: `docker compose --profile vision up -d vision-worker`.
+
+
+## Localização de filas e OCR auxiliar (experimental)
+
+Foram adicionados módulos independentes para agrupar deteções em filas horizontais (`app.shelf_layout`) e normalizar/classificar texto OCR contra o catálogo (`app.product_text`). São componentes determinísticos sem dependência de um motor OCR específico; ainda não estão ligados ao worker nem calibrados com imagens reais.
+
+- [Arquitetura de filas, frentes visíveis e OCR](docs/architecture/shelf-layout-and-product-text.md)
+- [Implementação da localização de filas](apps/api/app/shelf_layout.py)
+- [Contrato e ranking de texto OCR](apps/api/app/product_text.py)
+
+A contagem de frentes representa apenas objetos detetados na face visível. Não estima unidades em profundidade nem substitui o inventário.
