@@ -544,3 +544,11 @@ Foi acrescentado um adaptador experimental PaddleOCR 3.x/PP-OCRv5 para portuguê
 
 
 A associação geométrica das regiões OCR às deteções individuais está em `apps/api/app/product_ocr_association.py`. A associação é experimental e ainda não está ligada ao worker nem persistida na base de dados. Ver [documentação da associação OCR](docs/architecture/ocr-detection-association.md).
+
+
+### Persistência de evidência OCR
+
+A migração `0014_shelf_image_ocr_evidence` introduz histórico de execuções OCR e regiões reconhecidas associadas (ou não) a deteções de produto. A API permite registar e consultar evidência com controlo de acesso por loja. A integração com o worker ainda não está ativa.
+
+- [Documentação de persistência OCR](docs/architecture/ocr-evidence-persistence.md)
+- Aplicar em ambiente de desenvolvimento: `cd apps/api && alembic upgrade head`
