@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, ForeignKey, String, Text, Float, Integer, Boolean, Numeric, UniqueConstraint, CheckConstraint
+from sqlalchemy import JSON, DateTime, ForeignKey, String, Text, Float, Integer, Boolean, Numeric, UniqueConstraint, CheckConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -66,6 +66,35 @@ class Product(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     shelf_links: Mapped[list["ShelfProduct"]] = relationship(back_populates="product", cascade="all, delete-orphan")
+
+
+
+class ProductEmbeddingExemplar(Base):
+    """Reviewed reference embedding used for conservative SKU matching."""
+    __tablename__ = "product_embedding_exemplars"
+    __table_args__ = (
+        UniqueConstraint("product_id", "model_version", "image_sha256",
+                         name="uq_product_embedding_product_model_image"),
+        CheckConstraint("review_status IN ('PENDING', 'APPROVED', 'REJECTED')",
+                        name="ck_product_embedding_review_status"),
+        CheckConstraint("length(image_sha256) = 64",
+                        name="ck_product_embedding_image_sha256_length"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    product_id: Mapped[int] = mapped_column(ForeignKey("products.id", ondelete="CASCADE"), index=True)
+    shelf_image_id: Mapped[int | None] = mapped_column(ForeignKey("shelf_images.id", ondelete="SET NULL"), nullable=True, index=True)
+    embedding: Mapped[list] = mapped_column(JSON, nullable=False)
+    embedding_dimension: Mapped[int] = mapped_column(Integer, nullable=False)
+    model_version: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    image_sha256: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    licence: Mapped[str] = mapped_column(String(250), nullable=False)
+    review_status: Mapped[str] = mapped_column(String(12), default="PENDING", nullable=False, index=True)
+    created_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    reviewed_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    review_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
 
 class ShelfProduct(Base):
