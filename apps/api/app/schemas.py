@@ -407,6 +407,28 @@ class ShelfImageFusedEvidenceRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class ShelfImageTrainingCandidateRead(BaseModel):
+    review_id: int
+    detection_id: int
+    shelf_image_id: int
+    store_id: int
+    shelf_id: int
+    product_id: int
+    sku: str
+    product_name: str
+    decision: Literal["CONFIRMED", "CORRECTED"]
+    reviewed_at: datetime
+    image_sha256: str
+    captured_at: datetime
+    capture_group_key: str
+    bbox: dict[str, float]
+    detector_model_version: str
+    embedding_model_version: str | None
+    dataset_status: Literal["CANDIDATE"]
+    split_policy: str
+    requires_exemplar_approval: bool
+
+
 class ShelfImageReviewQueueItem(BaseModel):
     fused_evidence_id: int
     detection_id: int
