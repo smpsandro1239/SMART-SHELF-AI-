@@ -191,8 +191,7 @@ def rank_product_catalogue_candidates(
             score = max(score, 0.96)
             reasons.add("sku_substring")
 
-        # Variant words and pack-size values are meaningful discriminators.
-        reference_tokens = set((name + " " + brand + " " + unit).split())
+        # Variant phrases and pack-size values are meaningful discriminators.
         observed_variants = _variant_markers(observed)
         reference_variants = _variant_markers(" ".join((name, brand, unit)))
         if observed_variants and reference_variants and observed_variants.isdisjoint(reference_variants):
