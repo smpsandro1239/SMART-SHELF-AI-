@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import {
   Activity, AlertTriangle, ArrowDownToLine, ArrowUpRight, Boxes, CheckCircle2,
   CircleUserRound, Clock3, LogOut, PackageSearch, RefreshCw, ShieldCheck,
@@ -75,7 +75,7 @@ export default function App() {
 
   useEffect(() => { if (token) void refresh(); }, [token, refresh]);
 
-  async function login(event: React.FormEvent<HTMLFormElement>) {
+  async function login(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setLoading(true); setError("");
     try {
       const result = await request<{ access_token: string; token_type: string }>("/api/v1/auth/login", {
@@ -176,7 +176,7 @@ export default function App() {
   );
 }
 
-function Metric({ icon, label, value, tone, detail }: { icon: React.ReactNode; label: string; value: number; tone: string; detail: string }) {
+function Metric({ icon, label, value, tone, detail }: { icon: ReactNode; label: string; value: number; tone: string; detail: string }) {
   return <article className="metric-card"><div className={`metric-icon ${tone}`}>{icon}</div><p>{label}</p><strong>{value.toLocaleString("pt-PT")}</strong><span>{detail}</span></article>;
 }
 function TaskRow({ task, canProgress, onUpdate }: { task: Task; canProgress: boolean; onUpdate: (task: Task, status: "IN_PROGRESS" | "COMPLETED") => void }) {
