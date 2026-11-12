@@ -454,3 +454,16 @@ python -m app.dataset_diff \
 ```
 
 O relatório distingue imagens novas, removidas, modificadas, renomeadas e movidas entre splits, e compara alterações de anotações. A deteção de renomeações/movimentos depende de hashes únicos. A comparação é de metadados e anotações; não valida qualidade semântica nem substitui revisão humana.
+
+
+## 17. REA externa — projetos de referência para reposição
+
+A REA externa compara soluções públicas de monitorização de prateleiras e plataformas ERP consolidadas. O objetivo é aproveitar padrões técnicos comprováveis, respeitando licenças e distinguindo demonstrações académicas de sistemas de produção.
+
+![Fluxo conceptual da REA externa](docs/images/external-rea-replenishment-flow.svg)
+
+- [Relatório comparativo de projetos externos](docs/reverse-engineering/external-solutions.md)
+- [ADR-007 — separação entre refill e reaprovisionamento](docs/architecture/adr-007-replenishment-policies.md)
+- [Motor de políticas determinísticas](apps/api/app/replenishment_policy.py)
+
+A primeira versão do motor já calcula separadamente o refill da prateleira e a proposta de reaprovisionamento do stock, com limites de confiança, frescura, stock disponível, ponto de encomenda, nível máximo e múltiplos de embalagem. Ainda não cria movimentos nem encomendas.
