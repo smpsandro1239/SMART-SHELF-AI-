@@ -176,7 +176,7 @@ Configurar no ambiente da API `JWT_SECRET_KEY` e `BOOTSTRAP_ADMIN_KEY` com valor
 4. Consultar `GET /api/v1/auth/me`.
 5. O administrador pode criar contas em `POST /api/v1/auth/users` e consultar `GET /api/v1/auth/users`.
 
-Os tokens de acesso expiram ao fim do período configurado em `JWT_ACCESS_TOKEN_MINUTES`. Ainda não existem refresh tokens, recuperação de palavra-passe, isolamento por loja nem associação das tarefas a IDs de utilizador. Não expor a chave de bootstrap nem os segredos JWT.
+Os tokens de acesso expiram ao fim do período configurado em `JWT_ACCESS_TOKEN_MINUTES`. Ainda não existem refresh tokens nem recuperação de palavra-passe. Não expor a chave de bootstrap nem os segredos JWT.
 
 
 ## Dashboard operacional
@@ -191,3 +191,17 @@ Ao criar ou atribuir uma tarefa, pode ser enviado `assigned_user_id`. A conta te
 ## CORS para o dashboard
 
 Defina `CORS_ALLOWED_ORIGINS` como uma lista de origens separadas por vírgulas, por exemplo `http://localhost:5173`. Em produção, configure apenas o domínio real do frontend; não use curingas.
+
+
+## Captura de imagens de prateleiras
+
+A API aceita capturas JPEG, PNG e WebP através de `POST /api/v1/shelf-images`:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/shelf-images \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  -F "shelf_id=1" \
+  -F "image=@./prateleira.jpg;type=image/jpeg"
+```
+
+A resposta contém o ID da captura, tipo MIME, tamanho, SHA-256 e `analysis_status=PENDING`. A imagem pode ser listada em `GET /api/v1/shelf-images` e consultada em `GET /api/v1/shelf-images/{image_id}/content`. O armazenamento é persistido no volume Docker `shelf_images`; configurar `IMAGE_STORAGE_PATH` e `MAX_IMAGE_UPLOAD_BYTES` no ambiente. A validação atual confirma tipo declarado, assinatura inicial e tamanho, mas ainda não descodifica a imagem nem executa um modelo de visão computacional.
