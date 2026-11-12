@@ -161,3 +161,19 @@ def test_non_mapping_candidates_are_excluded_without_crashing(malformed):
     assert result.considered == 1
     assert result.excluded == 1
     assert [item["pallet_id"] for item in result.recommendations] == [11]
+
+
+@pytest.mark.parametrize("field,value", [
+    ("residual_base_units", True),
+    ("pallet_capacity_base_units", False),
+    ("threshold_ratio", True),
+    ("forecast_consumption_until_low_traffic", False),
+    ("conventional_minutes", True),
+])
+def test_boolean_numeric_evidence_is_excluded(field, value):
+    row = candidate()
+    row[field] = value
+    result = build_pallet_portfolio_plan([row])
+    assert result.considered == 0
+    assert result.excluded == 1
+    assert result.recommendations == ()
