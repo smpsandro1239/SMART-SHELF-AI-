@@ -222,4 +222,8 @@ class ShelfImageDetection(Base):
     x_max: Mapped[float] = mapped_column(Float, nullable=False)
     y_max: Mapped[float] = mapped_column(Float, nullable=False)
     model_version: Mapped[str] = mapped_column(String(100), nullable=False)
+    embedding_model_version: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    sku_match_status: Mapped[str] = mapped_column(String(12), default="UNKNOWN", nullable=False)
+    sku_similarity: Mapped[float | None] = mapped_column(Float, nullable=True)
+    sku_match_margin: Mapped[float | None] = mapped_column(Float, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
