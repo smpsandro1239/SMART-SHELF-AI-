@@ -38,3 +38,9 @@ Fontes consultadas:
 - [RT-DETR — repositório oficial e licença](https://github.com/lyuwenyu/RT-DETR)
 
 **Decisão provisória:** manter a interface `VisionProvider` agnóstica ao modelo. Avaliar RT-DETR PyTorch como primeira implementação experimental depois de confirmar hardware e dataset. Não descarregar pesos, instalar runtimes de ML ou ativar inferência em produção nesta fase.
+
+
+## ADR-006 — Arquitetura implementada (as-built)
+**Estado:** aceite como registo do estado atual.
+
+O frontend presente no repositório é React 18, TypeScript e Vite; a referência antiga a Angular descreve uma intenção anterior e não a implementação atual. A API é FastAPI/SQLAlchemy, com PostgreSQL/Alembic, autenticação JWT/Argon2, captura de imagens e worker de visão configurável sem provider ativo por omissão. Edge AI, MQTT, robô e integrações POS/ERP/WMS permanecem propostas. O detalhe e as consequências desta decisão estão em [ADR-006](adr-006-as-built-stack.md) e no [relatório REA](../reverse-engineering/README.md).
