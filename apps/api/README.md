@@ -474,6 +474,12 @@ Executar os testes:
     pytest -q tests/test_demand_forecasting.py
 
 
+## Avaliação explicável do risco de rutura
+
+O módulo `app.stockout_risk` acrescenta uma classificação determinística de risco (`CRITICAL`, `HIGH`, `MEDIUM`, `LOW` ou `UNKNOWN`) a partir do stock disponível, procura média prevista, prazo de abastecimento e stock de segurança. Não apresenta os níveis como probabilidades calibradas, não altera inventário e não cria tarefas ou encomendas automaticamente.
+
+A implementação inclui testes unitários para os diferentes níveis, histórico insuficiente, procura média nula e validação de entradas. Consultar [Avaliação explicável do risco de rutura](../../docs/architecture/stockout-risk-assessment.md). A integração com o endpoint de previsão e com o dashboard será feita numa fase posterior, após validação com dados reais.
+
 ## Ingestão diária de vendas e previsão por loja/produto
 
 A previsão de procura pode agora consumir agregados diários importados de um POS/ERP, sem assumir que as observações visuais da prateleira representam vendas.
