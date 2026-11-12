@@ -65,7 +65,7 @@ def _finite_nonnegative(value: Any, field: str) -> float:
 
 
 def _age_minutes(timestamp: datetime, now: datetime) -> float:
-    return max(0.0, (now - timestamp).total_seconds() / 60.0)
+    return (now - timestamp).total_seconds() / 60.0
 
 
 def evaluate_shelf_decision(
@@ -101,14 +101,16 @@ def evaluate_shelf_decision(
             observation_confidence = _finite_nonnegative(raw_confidence, "observation.confidence")
             if observation_confidence > 1:
                 raise ValueError("observation.confidence cannot exceed 1")
-        observation_fresh = age <= selected_policy.observation_max_age_minutes
+        observation_fresh = 0 <= age <= selected_policy.observation_max_age_minutes
         evidence.append({
             "type": "SHELF_OBSERVATION", "status": observation_status,
             "source": str(observation.get("source") or "unspecified"),
             "observed_at": observed_at.isoformat(), "age_minutes": round(age, 2),
             "fresh": observation_fresh, "confidence": observation_confidence,
         })
-        if not observation_fresh:
+        if age < 0:
+            warnings.append("A observação da prateleira tem timestamp no futuro e foi ignorada.")
+        elif not observation_fresh:
             warnings.append("A observação da prateleira está desatualizada.")
         if observation_confidence is None or observation_confidence < selected_policy.minimum_confidence:
             warnings.append("A confiança da observação é insuficiente para uma decisão automática.")
@@ -119,13 +121,15 @@ def evaluate_shelf_decision(
         inventory_quantity = _finite_nonnegative(inventory.get("available_quantity"), "inventory.available_quantity")
         recorded_at = _parse_timestamp(inventory.get("recorded_at"), "inventory.recorded_at")
         age = _age_minutes(recorded_at, current)
-        inventory_fresh = age <= selected_policy.inventory_max_age_minutes
+        inventory_fresh = 0 <= age <= selected_policy.inventory_max_age_minutes
         evidence.append({
             "type": "INVENTORY_SNAPSHOT", "available_quantity": inventory_quantity,
             "recorded_at": recorded_at.isoformat(), "age_minutes": round(age, 2),
             "fresh": inventory_fresh,
         })
-        if not inventory_fresh:
+        if age < 0:
+            warnings.append("O snapshot de inventário tem timestamp no futuro e foi ignorado.")
+        elif not inventory_fresh:
             warnings.append("O snapshot de inventário está desatualizado.")
 
     forecast_quantity: float | None = None
@@ -138,13 +142,15 @@ def evaluate_shelf_decision(
             raise ValueError("demand_forecast.horizon_hours must be positive")
         generated_at = _parse_timestamp(demand_forecast.get("generated_at"), "demand_forecast.generated_at")
         age = _age_minutes(generated_at, current)
-        forecast_fresh = age <= selected_policy.demand_horizon_hours * 60
+        forecast_fresh = 0 <= age <= selected_policy.demand_horizon_hours * 60
         evidence.append({
             "type": "DEMAND_FORECAST", "predicted_units": forecast_quantity,
             "horizon_hours": forecast_hours, "generated_at": generated_at.isoformat(),
             "age_minutes": round(age, 2), "fresh": forecast_fresh,
         })
-        if not forecast_fresh:
+        if age < 0:
+            warnings.append("A previsão de procura tem timestamp no futuro e foi ignorada.")
+        elif not forecast_fresh:
             warnings.append("A previsão de procura está desatualizada.")
 
     tasks = list(active_tasks)
