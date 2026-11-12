@@ -28,6 +28,7 @@ def test_regions_are_assigned_to_the_product_box_that_contains_them():
     result = associate_ocr_regions(detections, regions)
 
     assert [item.text.text for item in result[0].texts] == ["SUMO"]
+    assert [item.text.text for item in result[0].regions] == ["SUMO"]
     assert [item.text.text for item in result[1].texts] == ["LARANJA"]
 
 
@@ -38,6 +39,7 @@ def test_region_with_too_little_overlap_is_left_unassigned():
     result = associate_ocr_regions(detections, regions, minimum_region_coverage=0.5)
 
     assert result[0].texts == ()
+    assert result[0].regions == ()
 
 
 def test_text_region_is_assigned_only_once_to_best_detection():
