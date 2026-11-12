@@ -17,8 +17,9 @@ operações de inventário.
   próxima janela de baixa afluência e custo laboral inferior.
 - **REPLENISH_CURRENT**: manter a palete atual; o limiar não foi atingido,
   a afluência é baixa ou falta um recurso operacional.
-- **WAIT_FOR_LOW_TRAFFIC**: o stock residual não cobre a procura prevista até
-  à próxima janela de baixa afluência.
+- **REPLENISH_CURRENT** com motivo INTERIM_REPLENISHMENT_REQUIRED: o stock
+  residual não cobre a procura até à próxima janela; é necessária reposição
+  intermédia para evitar rutura.
 - **INSUFFICIENT_DATA**: faltam dados críticos de tráfego, procura, duração ou custo.
 - **NOT_ECONOMICAL**: a troca não reduz o custo laboral estimado.
 - **NOT_ELIGIBLE**: produto não configurado para exposição/troca por palete.
