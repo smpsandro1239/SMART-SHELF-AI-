@@ -119,3 +119,20 @@ def test_profile_row_order_does_not_change_current_hour_classification():
     )
     assert result["candidates"][0]["traffic_level"] == "HIGH"
     assert result["candidates"][0]["current_hour_average_customers"] == 100
+
+
+def test_incomplete_profile_returns_unknown_without_crashing_on_missing_current_hour_value():
+    rows = profile()
+    rows[8]["average_customers"] = None
+    rows[8]["traffic_observed_days"] = 0
+    result = enrich_pallet_candidates_with_hourly_profiles(
+        [candidate()],
+        {42: rows},
+        current_hour=8,
+        minimum_observed_days=7,
+    )
+    row = result["candidates"][0]
+    assert row["traffic_level"] == "UNKNOWN"
+    assert row["forecast_consumption_until_low_traffic"] is None
+    assert row["planning_recommendation"] == "INSUFFICIENT_DATA"
+    assert row["planning_reason"] == "HOURLY_PROFILE_INCOMPLETE"
