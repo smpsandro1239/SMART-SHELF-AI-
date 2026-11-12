@@ -127,3 +127,35 @@ def test_operational_decisions_reject_unknown_store():
     with TestClient(app) as client:
         response = client.get("/api/v1/operational-decisions", params={"store_id": 9999})
         assert response.status_code == 404
+
+
+def test_operational_decisions_prioritize_high_confidence_empty_shelves():
+    with TestClient(app) as client:
+        store_id, shelf_id, product_id = create_context(client)
+        second_shelf = client.post("/api/v1/shelves", json={
+            "zone_id": client.get("/api/v1/zones", params={"store_id": store_id}).json()[0]["id"],
+            "code": "MER-02",
+        }).json()
+        second_product = client.post("/api/v1/products", json={
+            "sku": "DEC-SKU-02", "name": "Massa",
+        }).json()
+        client.post("/api/v1/shelf-products", json={
+            "shelf_id": second_shelf["id"], "product_id": second_product["id"],
+            "target_quantity": 12, "min_display_quantity": 3,
+        })
+        client.post("/api/v1/observations", json={
+            "shelf_id": shelf_id, "source": "simulation",
+            "status": "LOW_STOCK", "confidence": 0.90,
+        })
+        client.post("/api/v1/observations", json={
+            "shelf_id": second_shelf["id"], "source": "simulation",
+            "status": "EMPTY", "confidence": 0.99,
+        })
+
+        response = client.get("/api/v1/operational-decisions", params={"store_id": store_id})
+        assert response.status_code == 200
+        body = response.json()
+        assert body["decisions"][0]["product_id"] == second_product["id"]
+        assert body["decisions"][0]["decision"]["priority"] == "HIGH"
+        assert body["priority_counts"]["HIGH"] == 1
+        assert body["priority_counts"]["NORMAL"] == 1
