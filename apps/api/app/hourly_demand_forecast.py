@@ -19,6 +19,8 @@ def _daily_observations(records: Iterable[Any]) -> dict[tuple[date, int], float]
     for row in records:
         day = row.business_date
         hour = row.hour_of_day
+        if isinstance(row.quantity, bool):
+            raise ValueError("Hourly quantity must be numeric, not boolean")
         try:
             quantity = float(row.quantity)
         except (TypeError, ValueError, OverflowError) as exc:
