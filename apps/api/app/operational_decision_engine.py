@@ -165,12 +165,21 @@ def evaluate_shelf_decision(
         and observation_confidence >= selected_policy.minimum_confidence
     )
     visual_attention = reliable_visual_signal and observation_status in ATTENTION_OBSERVATION_STATUSES
+    demand_rate_per_hour = (
+        forecast_quantity / forecast_hours
+        if forecast_quantity is not None and forecast_hours is not None and forecast_hours > 0
+        else None
+    )
+    inventory_coverage_hours = None
+    if inventory_quantity is not None and demand_rate_per_hour is not None and demand_rate_per_hour > 0:
+        inventory_coverage_hours = inventory_quantity / demand_rate_per_hour
+
     projected_shortage = (
         inventory is not None and inventory_fresh
         and demand_forecast is not None and forecast_fresh
         and forecast_hours is not None and forecast_hours <= selected_policy.demand_horizon_hours
-        and inventory_quantity is not None and forecast_quantity is not None
-        and inventory_quantity <= forecast_quantity
+        and inventory_coverage_hours is not None
+        and inventory_coverage_hours <= selected_policy.low_stock_coverage_hours
     )
 
     if active:
@@ -209,6 +218,9 @@ def evaluate_shelf_decision(
         "priority": priority,
         "reason": reason,
         "suggested_replenishment_quantity": quantity_to_replenish,
+        "inventory_coverage_hours": (
+            round(inventory_coverage_hours, 2) if inventory_coverage_hours is not None else None
+        ),
         "automatic_stock_movement_allowed": False,
         "requires_human_approval": status == "ACTION_RECOMMENDED",
         "evidence": evidence,
