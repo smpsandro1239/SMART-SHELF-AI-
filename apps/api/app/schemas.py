@@ -296,5 +296,9 @@ class ShelfImageDetectionRead(BaseModel):
     x_max: float
     y_max: float
     model_version: str
+    embedding_model_version: str | None
+    sku_match_status: Literal["MATCHED", "AMBIGUOUS", "UNKNOWN"]
+    sku_similarity: float | None
+    sku_match_margin: float | None
     created_at: datetime
     model_config = ConfigDict(from_attributes=True)
