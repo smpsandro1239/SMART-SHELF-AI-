@@ -45,3 +45,8 @@ estes módulos automaticamente.
 ## Fusão de evidências
 
 A combinação de resultados visuais e OCR está especificada em [Fusão de evidências para identificação de SKU](product-evidence-fusion.md). A camada devolve sugestões conservadoras e não altera os registos persistidos.
+
+
+## Provider OCR opcional
+
+O adaptador PaddleOCR experimental e os passos de instalação isolada estão documentados em [Provider OCR PaddleOCR](paddleocr-provider.md). Ainda não existe integração no worker nem inferência real validada.
