@@ -118,3 +118,34 @@ Estados possíveis:
 - `NO_ACTION`: a observação recente não indica baixa disponibilidade.
 
 A API não calcula uma quantidade exata de reposição a partir de rótulos visuais como `LOW_STOCK` ou `EMPTY`. Para isso será necessária uma contagem quantitativa validada ou uma regra operacional adicional.
+
+
+## Tarefas de reposição
+
+Criar uma tarefa para um produto já associado à prateleira:
+
+    curl -X POST http://localhost:8000/api/v1/tasks \
+      -H "Content-Type: application/json" \
+      -d '{"store_id":1,"shelf_id":1,"product_id":1,"priority":"HIGH","requested_quantity":8,"notes":"Reposição após verificação"}'
+
+Se for indicado `assigned_to` na criação, a tarefa começa no estado `ASSIGNED`; caso contrário começa em `PENDING`.
+
+Consultar tarefas:
+
+    curl "http://localhost:8000/api/v1/tasks?store_id=1&status=PENDING"
+    curl "http://localhost:8000/api/v1/tasks?assigned_to=funcionario-01"
+
+Atualizar o estado:
+
+    curl -X PATCH http://localhost:8000/api/v1/tasks/1/status \
+      -H "Content-Type: application/json" \
+      -d '{"status":"ASSIGNED","assigned_to":"funcionario-01"}'
+
+Transições suportadas:
+- `PENDING -> ASSIGNED` ou `CANCELLED`
+- `ASSIGNED -> IN_PROGRESS` ou `CANCELLED`
+- `IN_PROGRESS -> COMPLETED` ou `CANCELLED`
+
+As transições inválidas são rejeitadas com HTTP 409. A API regista as datas de início e conclusão. O identificador do funcionário é texto nesta fase; autenticação e gestão de utilizadores serão desenvolvidas numa etapa própria.
+
+A criação valida a loja, a pertença da prateleira à loja e a associação do produto à prateleira. A quantidade pedida é opcional e tem de ser positiva. A tarefa não é criada automaticamente a partir da recomendação nesta primeira versão.
