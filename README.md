@@ -482,3 +482,18 @@ A política de refill já está ligada às recomendações: quando existe quanti
 ### Correspondência SKU integrada no worker
 
 O worker aceita embeddings opcionais por deteção e compara-os apenas com exemplares aprovados da mesma versão de embedding. Cada deteção guarda `MATCHED`, `AMBIGUOUS` ou `UNKNOWN`, similaridade, margem e versão do embedding. Só `MATCHED` recebe `product_id`; os restantes estados abstêm. A versão do detector não é confundida com a versão do embedding. A integração permanece experimental: não existe provider real configurado, thresholds calibrados nem contagem automática de unidades.
+
+## 17. Revisão de projetos externos de visão computacional
+
+Foi adicionada uma revisão técnica de projetos e datasets externos para deteção de produtos em prateleiras, identificação de SKU, gestão de produtos desconhecidos e contagem em vídeo.
+
+![Pipeline de visão computacional do SMART-SHELF-AI](docs/images/retail-vision-pipeline.svg)
+
+A principal referência arquitetural é a separação entre deteção genérica de produtos e identificação por embeddings do catálogo. A revisão também documenta limitações de datasets, licenças e o plano de integração incremental.
+
+- [Revisão de projetos externos e decisão arquitetural](docs/architecture/retail-vision-rea.md)
+- [SkuScope — projeto de referência](https://github.com/escudero/skuscope)
+- [SKU-110K — dataset de prateleiras densas](https://github.com/eg4000/SKU110K_CVPR19)
+- [RPC — Retail Product Checkout Dataset](https://rpc-dataset.github.io/)
+
+**Nota:** a revisão é documental. Nenhum código ou peso externo foi copiado para o projeto e nenhum modelo real foi ativado. A utilização comercial de datasets e pesos depende da confirmação das respetivas licenças e termos.
