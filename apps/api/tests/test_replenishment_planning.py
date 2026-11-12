@@ -73,3 +73,31 @@ def test_unquantified_low_stock_is_sorted_as_review_not_as_actionable_refill():
     items = [item for group in plan.groups for item in group.items]
     assert items[0]["shelf_id"] == 2
     assert items[1]["proposed_priority"] == "REVIEW"
+
+
+
+def test_plan_adds_deterministic_shelf_sequence_without_claiming_physical_optimization():
+    plan = build_replenishment_plan([
+        recommendation(3, "NEEDS_REPLENISHMENT", shelf_code="S-03", position="B"),
+        recommendation(1, "LOW_CONFIDENCE", shelf_code="S-01", position="A"),
+        recommendation(2, "NEEDS_REPLENISHMENT", shelf_code="S-02", position="A"),
+        recommendation(4, "NEEDS_REPLENISHMENT", shelf_code="S-02", position="B"),
+    ])
+
+    items = [item for group in plan.groups for item in group.items]
+    assert [item["shelf_id"] for item in items] == [1, 2, 4, 3]
+    assert [item["route_order"] for item in items] == [1, 2, 2, 3]
+    assert all(item["route_basis"] == "ZONE_THEN_SHELF_CODE_AND_POSITION" for item in items)
+    assert all(item["physical_route_optimized"] is False for item in items)
+
+
+def test_route_order_is_independent_per_zone():
+    plan = build_replenishment_plan([
+        recommendation(1, "NEEDS_REPLENISHMENT", zone_id=10, zone_name="Bebidas", shelf_code="B-02"),
+        recommendation(2, "NEEDS_REPLENISHMENT", zone_id=10, zone_name="Bebidas", shelf_code="B-01"),
+        recommendation(3, "NEEDS_REPLENISHMENT", zone_id=20, zone_name="Frio", shelf_code="F-09"),
+    ])
+
+    groups = {group.zone_name: group for group in plan.groups}
+    assert [item["route_order"] for item in groups["Bebidas"].items] == [1, 2]
+    assert [item["route_order"] for item in groups["Frio"].items] == [1]
