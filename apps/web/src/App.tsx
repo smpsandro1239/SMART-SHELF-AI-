@@ -286,6 +286,7 @@ export default function App() {
         ...current,
         [detection.id]: [...(current[detection.id] || []), created],
       }));
+      await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Não foi possível guardar a revisão.");
     } finally {
