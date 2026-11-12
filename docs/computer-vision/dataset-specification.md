@@ -127,3 +127,28 @@ python -m app.dataset_manifest \
 ```
 
 O gerador percorre os diretórios de forma determinística, suporta JPEG, PNG, WebP, BMP e TIFF e calcula SHA-256 em blocos para evitar carregar cada imagem inteira em memória. Não altera as imagens nem remove EXIF; a remoção de metadados pessoais continua a ser uma etapa de preparação separada. O manifesto também não consegue inferir sessões de captura ou autorizações: esses dados têm de ser registados a partir da recolha.
+
+
+## 14. Verificar correspondência entre manifesto e COCO
+
+Depois de gerar o manifesto e validar os três ficheiros COCO, executar esta verificação adicional:
+
+```bash
+python -m app.dataset_integrity \
+  --manifest /dados/metadata/image_manifest.csv \
+  --train /dados/annotations/instances_train.json \
+  --val /dados/annotations/instances_val.json \
+  --test /dados/annotations/instances_test.json
+```
+
+A verificação confirma que cada imagem COCO tem uma entrada no manifesto no split correto e que não existem imagens extra no manifesto. Se o COCO incluir os campos opcionais `sha256` e `file_size_bytes` por imagem, compara-os também com os valores do CSV. O manifesto exige colunas `split`, `file_name`, `size_bytes` e `sha256`, e rejeita caminhos absolutos ou com traversal.
+
+Fluxo recomendado antes de preparar qualquer treino:
+
+1. Gerar o manifesto com `app.dataset_manifest`.
+2. Validar cada COCO com `app.coco_dataset`.
+3. Auditar leakage com `app.dataset_audit`.
+4. Cruzar o manifesto e os três COCO com `app.dataset_integrity`.
+5. Rever manualmente a proveniência, as autorizações e uma amostra visual das anotações.
+
+Estas ferramentas verificam metadados e estrutura. Não confirmam que um ficheiro é realmente uma imagem válida, que as caixas estão bem anotadas ou que existe autorização legal para utilizar os dados.
