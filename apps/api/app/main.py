@@ -5,18 +5,11 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.database import Base, engine, get_db
+from app.database import get_db
 from app import models
 from app.schemas import ObservationCreate, ObservationRead, ShelfCreate, ShelfRead, StoreCreate, StoreRead, ZoneCreate, ZoneRead
 
 app = FastAPI(title=settings.app_name, version="0.1.0", description="Initial operational API for SMART SHELF AI.")
-
-
-@app.on_event("startup")
-def create_local_schema() -> None:
-    # Development convenience only. Production schema changes must use Alembic.
-    if settings.app_env == "development":
-        Base.metadata.create_all(bind=engine)
 
 
 @app.get("/health", tags=["system"])
