@@ -1060,3 +1060,22 @@ o limiar configurado face à média das horas observadas desse mesmo dia.
 A classificação exige cobertura mínima para a célula e para a linha de base.
 Horas ausentes não são tratadas como zero. É classificação histórica, não
 previsão de tráfego.
+
+
+## Previsão horária da procura
+
+O endpoint `GET /api/v1/forecasting/hourly-demand` calcula um baseline estatístico por dia da semana e hora, usando as observações POS (ou outra origem selecionada) dos últimos 28 a 365 dias. Por omissão, projeta os próximos 7 dias e exige pelo menos 4 dias observados para cada combinação dia-da-semana/hora.
+
+Exemplo:
+
+    curl "http://localhost:8000/api/v1/forecasting/hourly-demand?store_id=1&product_id=1&horizon_days=7&history_days=180&minimum_observed_days=4&source=POS"
+
+A resposta inclui:
+- quantidade prevista por data e hora;
+- número de dias observados e nível de confiança;
+- versão e identificação explícita do baseline;
+- backtesting rolling-origin com MAE e WAPE, quando existe histórico suficiente.
+
+Horas sem cobertura suficiente devolvem `predicted_units=null`; não são convertidas em vendas zero. Um zero só é preservado quando existe um registo explícito de zero vendas. O endpoint é apenas de leitura e não altera stock, não cria tarefas e não executa movimentos de paletes.
+
+**Limite importante:** trata-se de um baseline sazonal transparente, não de um modelo de machine learning treinado nem de uma previsão validada em produção. Antes de usar os resultados para decisões operacionais, comparar o backtest com períodos representativos e verificar a qualidade/completude dos dados POS.
