@@ -430,3 +430,6 @@ O worker pode executar OCR automaticamente depois da deteção visual, quando `O
 O OCR está desligado por omissão. Configurar `OCR_PROVIDER_FACTORY=app.ocr_paddle:create_provider`, `OCR_PROVIDER_NAME=paddleocr` e `OCR_MODEL_VERSION=PP-OCRv5-pt` no ambiente do worker. Instalar primeiro PaddlePaddle CPU compatível e depois `requirements-ocr.txt`. O worker persiste regiões OCR e associações geométricas, mas não identifica nem aprova SKUs automaticamente.
 
 Sequência após processamento: `POST /api/v1/shelf-images/{image_id}/ocr-matches`, `POST /api/v1/shelf-images/{image_id}/evidence-fusion`, consulta da fila `GET /api/v1/shelf-image-review-queue` e decisão humana pelo endpoint de reviews da deteção.
+
+
+A fila tem também o endpoint `GET /api/v1/shelf-image-review-queue/summary`, que devolve contagens pendentes por estado de fusão para alimentar dashboards de revisão. Ambos os endpoints são reservados a ADMIN/SUPERVISOR e limitados à loja do supervisor.
