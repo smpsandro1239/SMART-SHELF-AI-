@@ -254,7 +254,7 @@ def main() -> int:
     if args.output:
         try:
             args.output.parent.mkdir(parents=True, exist_ok=True)
-            args.output.write_text(rendered + "\\n", encoding="utf-8")
+            args.output.write_text(rendered + "\n", encoding="utf-8")
         except OSError as exc:
             print(f"ERROR: cannot write report: {exc}")
             return 2
