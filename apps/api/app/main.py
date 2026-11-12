@@ -12,7 +12,8 @@ from app.schemas import (
     ObservationCreate, ObservationRead, ShelfCreate, ShelfRead,
     StoreCreate, StoreRead, ZoneCreate, ZoneRead,
     ProductCreate, ProductRead, ShelfProductCreate, ShelfProductRead,
-    InventorySnapshotCreate, InventorySnapshotRead, ReplenishmentRecommendationRead,\n    ReplenishmentTaskCreate, ReplenishmentTaskStatusUpdate, ReplenishmentTaskRead,
+    InventorySnapshotCreate, InventorySnapshotRead, ReplenishmentRecommendationRead,
+    ReplenishmentTaskCreate, ReplenishmentTaskStatusUpdate, ReplenishmentTaskRead,
 )
 
 app = FastAPI(title=settings.app_name, version="0.2.0", description="Operational API for SMART SHELF AI.")
