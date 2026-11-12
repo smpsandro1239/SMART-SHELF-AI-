@@ -86,3 +86,6 @@ Nas confirmações e correções, o produto tem de estar ativo e atribuído à p
 Cada decisão cria um registo em `detection_sku_reviews`, incluindo SKU original, SKU selecionado, revisor, data e notas. As decisões anteriores não são alteradas e a deteção original do modelo não é sobrescrita. A chave estrangeira do SKU selecionado impede a eliminação de produtos ainda referenciados no histórico.
 
 Esta revisão manual ainda não alimenta `Observation.observed_quantity`, não conta unidades automaticamente e não substitui uma avaliação de visão com imagens reais anotadas.
+## Avaliação offline
+
+Antes de selecionar thresholds para o worker, usar o avaliador offline e a grelha de calibração documentados em [Avaliação offline do matching de SKU](sku-matching-evaluation.md). A avaliação deve incluir produtos ausentes da galeria e manter o conjunto final separado.
