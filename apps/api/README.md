@@ -508,6 +508,29 @@ Salvaguardas:
 
 A rota é consultiva e não substitui a validação humana nem a reconciliação com POS/WMS/ERP.
 
+### Portefólio de risco de rutura por loja
+
+O endpoint `GET /api/v1/forecasting/stockout-risk/portfolio` agrega os produtos ativos associados às prateleiras de uma loja e ordena-os por gravidade do risco.
+
+Exemplo:
+
+```http
+GET /api/v1/forecasting/stockout-risk/portfolio?store_id=1&source=POS&lead_time_days=3&days=28&limit=100
+Authorization: Bearer <ACCESS_TOKEN>
+```
+
+A resposta inclui:
+- Identificação do produto (SKU, nome e marca).
+- Prateleiras e zonas onde o produto está configurado, incluindo quantidades-alvo e mínimo de exposição.
+- Estado e idade do snapshot de inventário.
+- Estado da previsão e dias de vendas em falta.
+- Nível de risco e explicação, quando os dados permitem a avaliação.
+- Número de tarefas de reposição abertas para o produto.
+
+A ordenação é `CRITICAL`, `HIGH`, `MEDIUM`, `UNKNOWN`, `LOW`. Os produtos sem histórico diário completo ou sem inventário recente permanecem em `UNKNOWN`; não são presumidos dias sem vendas nem stock disponível. O parâmetro `limit` aceita valores entre 1 e 200 e limita o número de produtos devolvidos. `total_products` informa quantos produtos ativos estão associados às prateleiras da loja.
+
+Este endpoint é apenas de leitura: não cria tarefas, encomendas, transferências nem movimentos de inventário. A lista é um instrumento de triagem operacional, não uma ordem automática de reposição.
+
 ## Ingestão diária de vendas e previsão por loja/produto
 
 A previsão de procura pode agora consumir agregados diários importados de um POS/ERP, sem assumir que as observações visuais da prateleira representam vendas.
