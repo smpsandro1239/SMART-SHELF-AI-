@@ -1,6 +1,10 @@
 import hashlib
 
-from app.dataset_integrity import audit_manifest_against_coco, read_manifest
+from app.dataset_integrity import (
+    audit_manifest_against_coco,
+    enrich_coco_document,
+    read_manifest,
+)
 
 
 def coco(file_name, sha256=None, size=None):
@@ -78,3 +82,20 @@ def test_read_manifest_validates_required_fields_and_hash(tmp_path):
     rows, errors = read_manifest(path)
     assert rows == []
     assert any("path traversal" in error for error in errors)
+
+
+def test_enrich_coco_adds_manifest_hash_and_size_without_mutating_source():
+    content = b"image-bytes"
+    source = coco("a.jpg")
+    enriched, errors = enrich_coco_document(source, [row("train", "a.jpg", content)], "train")
+    assert errors == []
+    assert enriched is not None
+    assert enriched["images"][0]["sha256"] == hashlib.sha256(content).hexdigest()
+    assert enriched["images"][0]["file_size_bytes"] == len(content)
+    assert "sha256" not in source["images"][0]
+
+
+def test_enrich_coco_fails_when_manifest_entry_is_missing():
+    enriched, errors = enrich_coco_document(coco("missing.jpg"), [], "train")
+    assert enriched is None
+    assert any("missing from manifest" in error for error in errors)
