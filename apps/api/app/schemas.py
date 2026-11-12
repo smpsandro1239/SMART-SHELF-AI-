@@ -320,3 +320,52 @@ class DetectionSkuReviewRead(BaseModel):
     notes: str | None
     created_at: datetime
     model_config = ConfigDict(from_attributes=True)
+
+
+class ShelfImageOCREvidenceInput(BaseModel):
+    detection_id: int | None = None
+    text: str = Field(min_length=1, max_length=2000)
+    confidence: float = Field(ge=0, le=1)
+    x_min: float = Field(ge=0, le=1)
+    y_min: float = Field(ge=0, le=1)
+    x_max: float = Field(gt=0, le=1)
+    y_max: float = Field(gt=0, le=1)
+
+    @model_validator(mode="after")
+    def validate_box(self):
+        if self.x_min >= self.x_max or self.y_min >= self.y_max:
+            raise ValueError("OCR region coordinates must be ordered")
+        return self
+
+
+class ShelfImageOCRRunCreate(BaseModel):
+    provider: str = Field(min_length=1, max_length=80)
+    model_version: str = Field(min_length=1, max_length=120)
+    regions: list[ShelfImageOCREvidenceInput] = Field(max_length=1000)
+
+
+class ShelfImageOCRRunRead(BaseModel):
+    id: int
+    shelf_image_id: int
+    provider: str
+    model_version: str
+    status: Literal["COMPLETED", "FAILED"]
+    created_by_user_id: int | None
+    created_at: datetime
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ShelfImageOCREvidenceRead(BaseModel):
+    id: int
+    run_id: int
+    detection_id: int | None
+    text: str
+    normalized_text: str
+    confidence: float
+    x_min: float
+    y_min: float
+    x_max: float
+    y_max: float
+    association_status: Literal["ASSIGNED", "UNASSIGNED"]
+    created_at: datetime
+    model_config = ConfigDict(from_attributes=True)
