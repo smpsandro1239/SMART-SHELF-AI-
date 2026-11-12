@@ -98,7 +98,7 @@ async def require_api_authentication(request: Request, call_next):
             allowed_employee_image_upload = method == "POST" and path == "/api/v1/shelf-images"
             allowed_employee_image_content = method == "GET" and path.startswith("/api/v1/shelf-images/") and path.endswith("/content")
             allowed_employee_image_detections = method == "GET" and path.startswith("/api/v1/shelf-images/") and path.endswith("/detections")
-            allowed_employee_ocr_evidence = method == "GET" and path.startswith("/api/v1/shelf-images/") and (path.endswith("/ocr-evidence") or path.endswith("/ocr-runs"))
+            allowed_employee_ocr_evidence = method == "GET" and path.startswith("/api/v1/shelf-images/") and (path.endswith("/ocr-evidence") or path.endswith("/ocr-runs") or path.endswith("/ocr-matches"))
             allowed_employee_detection_review_history = method == "GET" and path.startswith("/api/v1/shelf-image-detections/") and path.endswith("/reviews")
             allowed_employee_task_update = (
                 method == "PATCH"
