@@ -2238,16 +2238,21 @@ def get_replenishment_workload(
         models.User.role == "EMPLOYEE",
         models.User.is_active.is_(True),
     ).order_by(models.User.full_name.asc(), models.User.id.asc()).all()
-    tasks = db.query(models.ReplenishmentTask).filter(
-        models.ReplenishmentTask.store_id == store_id,
-    ).all()
+    tasks = (
+        db.query(models.ReplenishmentTask, models.Zone.name)
+        .outerjoin(models.Shelf, models.ReplenishmentTask.shelf_id == models.Shelf.id)
+        .outerjoin(models.Zone, models.Shelf.zone_id == models.Zone.id)
+        .filter(models.ReplenishmentTask.store_id == store_id)
+        .all()
+    )
     summary = summarize_workload(
         [{"id": user.id, "name": user.full_name} for user in users],
         [{
             "id": task.id, "assigned_user_id": task.assigned_user_id,
             "status": task.status, "started_at": task.started_at,
-            "completed_at": task.completed_at,
-        } for task in tasks],
+            "completed_at": task.completed_at, "zone_name": zone_name,
+            "priority": task.priority,
+        } for task, zone_name in tasks],
     )
     return {
         "store_id": store_id,
@@ -2256,7 +2261,10 @@ def get_replenishment_workload(
         "unassigned_active_tasks": summary.unassigned_active_tasks,
         "completed_tasks_with_duration": summary.completed_tasks_with_duration,
         "average_completion_minutes": summary.average_completion_minutes,
-        "policy": "Indicadores históricos e de carga registada; não representam disponibilidade, turno ou capacidade real.",
+        "duration_by_zone": list(summary.duration_by_zone),
+        "duration_by_priority": list(summary.duration_by_priority),
+        "duration_benchmark_minimum_sample_size": 5,
+        "policy": "Indicadores históricos e de carga registada; médias segmentadas só são publicadas com pelo menos cinco tarefas válidas por grupo. Não representam disponibilidade, turno ou capacidade real.",
     }
 
 
