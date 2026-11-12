@@ -620,3 +620,10 @@ O endpoint read-only `GET /api/v1/replenishment/plan?store_id=1` organiza as rec
 - `NONE`: não é incluído na fila de trabalho.
 
 O plano exclui tarefas já ativas para a mesma combinação prateleira/produto, limita o número de resultados e agrupa os restantes por zona. `task_creation_allowed` só é verdadeiro quando existe uma recomendação quantitativa positiva. O endpoint não cria nem atribui tarefas, não reserva stock e não distribui trabalho por funcionários. A ordenação por zona é apenas uma organização inicial; não representa um percurso físico otimizado. A atribuição automática fica dependente de dados fiáveis sobre disponibilidade, turnos, capacidade e localização dos funcionários.
+
+
+## Indicadores de carga de trabalho
+
+O endpoint `GET /api/v1/replenishment/workload?store_id=1` está disponível para administradores e supervisores. Apresenta tarefas ativas registadas por funcionário (atribuídas e em curso), tarefas ativas sem funcionário válido e duração média entre início e conclusão para tarefas concluídas com timestamps válidos.
+
+A duração média exclui registos incompletos, negativos e superiores a sete dias. É um indicador descritivo, não um SLA nem uma estimativa de produtividade individual. O endpoint não assume que um funcionário está de turno ou disponível, não calcula capacidade real e não atribui tarefas automaticamente. Funcionários não podem consultar a carga dos colegas.
