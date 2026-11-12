@@ -979,3 +979,13 @@ ADMIN/SUPERVISOR e respeita o âmbito de loja do utilizador.
 O planeador exige agora cobertura mínima de vendas e tráfego em todas as 24
 horas antes de classificar uma janela como a de menor afluência. Uma lacuna
 horária não permite recomendar uma janela como se fosse a melhor.
+
+
+### Consulta e auditoria dos dados horários
+
+- `GET /api/v1/sales/hourly?store_id=1&product_id=42&start_date=2026-10-01&end_date=2026-10-31&limit=500`
+- `GET /api/v1/sales/traffic/hourly?store_id=1&start_date=2026-10-01&end_date=2026-10-31&limit=500`
+
+Os endpoints permitem consultar os registos de origem por loja, período e,
+no caso das vendas, produto. O limite é de 1 a 1000 registos por pedido.
+Ambos respeitam o âmbito de loja do utilizador e não alteram dados.
