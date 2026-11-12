@@ -68,3 +68,43 @@ def test_forecast_rejects_negative_or_non_finite_history():
     bad = [SimpleNamespace(business_date=date(2026, 11, 9), hour_of_day=8, quantity=float("nan"))]
     with pytest.raises(ValueError):
         forecast_hourly_demand(bad, forecast_start=date(2026, 11, 16))
+
+
+def test_forecast_excludes_observations_on_or_after_forecast_start():
+    start = date(2026, 1, 5)
+    history = _rows(start, 4, lambda _week, _hour: 8)
+    future = _rows(date(2026, 2, 2), 1, lambda _week, _hour: 999)
+    result = forecast_hourly_demand(
+        history + future,
+        forecast_start=date(2026, 2, 2),
+        horizon_days=1,
+        minimum_observed_days=4,
+        max_seasonal_samples=4,
+    )
+    assert result["forecasts"][8]["observed_days"] == 4
+    assert result["forecasts"][8]["predicted_units"] == pytest.approx(8)
+
+
+def test_four_observations_are_low_confidence_not_medium():
+    rows = _rows(date(2026, 1, 5), 4, lambda _week, _hour: 3)
+    result = forecast_hourly_demand(
+        rows,
+        forecast_start=date(2026, 2, 2),
+        horizon_days=1,
+        minimum_observed_days=4,
+        max_seasonal_samples=4,
+    )
+    assert result["forecasts"][8]["confidence"] == "LOW"
+
+
+def test_zero_demand_backtest_does_not_divide_by_zero():
+    rows = _rows(date(2026, 1, 5), 6, lambda _week, _hour: 0)
+    result = forecast_hourly_demand(
+        rows,
+        forecast_start=date(2026, 2, 16),
+        horizon_days=1,
+        minimum_observed_days=3,
+        max_seasonal_samples=4,
+    )
+    assert result["backtest"]["mae_units"] == 0
+    assert result["backtest"]["wape"] is None
