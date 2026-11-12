@@ -58,7 +58,7 @@ def build_manifest(split_roots: dict[str, Path]) -> tuple[list[dict[str, Any]], 
 
             rows.append({
                 "split": split_name,
-                "file_name": path.relative_to(root_path).as_posix(),
+                "file_name": path.relative_to(root).as_posix(),
                 "size_bytes": size_bytes,
                 "sha256": digest,
             })
