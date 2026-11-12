@@ -529,3 +529,12 @@ product_id,sales_date,quantity,external_reference
 ```
 
 O importador aceita até 5 000 linhas, datas ISO `YYYY-MM-DD`, quantidades não negativas com até três casas decimais e referências externas únicas no ficheiro. Valida todos os produtos antes de gravar. A operação é atómica: se uma referência já existir na base de dados, ou se alguma linha for inválida, não é gravada nenhuma linha. Dias sem vendas devem ser incluídos com quantidade zero.
+
+
+## Qualidade do reconhecimento SKU com revisão humana
+
+O endpoint `GET /api/v1/sku-evaluation/reviewed` compara a última sugestão visual/OCR de cada deteção com a última decisão humana registada. Pode ser filtrado por `store_id` (ADMIN) e `model_version`.
+
+O relatório mede precisão quando existe proposta, cobertura de produtos conhecidos, abstenções, falsos positivos em deteções rejeitadas e resultados por versão do modelo. Para evitar fuga temporal, considera apenas a evidência de fusão existente no momento da decisão humana; reprocessamentos posteriores não alteram a avaliação histórica.
+
+A avaliação é apenas de leitura. Inclui apenas deteções revistas e não deve ser interpretada como benchmark independente ou amostra estatística aleatória. Não treina modelos, não aprova exemplares e não altera inventário. A rota está disponível a ADMIN/SUPERVISOR, com supervisores limitados à respetiva loja.
