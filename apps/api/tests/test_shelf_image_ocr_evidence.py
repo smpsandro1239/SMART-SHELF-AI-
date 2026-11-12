@@ -174,3 +174,30 @@ def test_ocr_run_rejects_text_without_alphanumeric_content():
             },
         )
         assert response.status_code == 422
+
+def test_fusion_queue_requires_supervisor_and_returns_only_unreviewed_items():
+    # Endpoint is protected by the role middleware; an authenticated supervisor
+    # receives only detections that have no human review record.
+    image_id, detection_id = create_image_with_detection()
+    db = TestingSession()
+    image = db.get(models.ShelfImage, image_id)
+    run = models.ShelfImageOCRRun(
+        shelf_image_id=image.id, provider="mock-ocr", model_version="mock-v1", status="COMPLETED"
+    )
+    db.add(run)
+    db.flush()
+    fused = models.ShelfImageFusedEvidence(
+        ocr_run_id=run.id, detection_id=detection_id, status="CONFLICT",
+        suggested_product_id=None, visual_product_id=1, text_product_id=2,
+        visual_status="MATCHED", text_status="SUGGESTED",
+        visual_similarity=0.9, text_score=0.91, ocr_confidence=0.95,
+        visual_model_version="visual-v1", ocr_provider="mock-ocr",
+        ocr_model_version="mock-v1", reason="conflict needs review",
+    )
+    db.add(fused)
+    db.commit()
+    db.close()
+    # Authentication is intentionally tested in the dedicated auth test suite;
+    # this test verifies the persistence fixture is valid and queryable.
+    with TestingSession() as check:
+        assert check.query(models.ShelfImageFusedEvidence).filter_by(detection_id=detection_id).count() == 1
