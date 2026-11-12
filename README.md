@@ -384,3 +384,40 @@ python -m app.coco_review \
 
 Abrir o ficheiro HTML gerado num navegador. O relatório referencia as imagens no diretório de origem; manter os caminhos e os ficheiros disponíveis enquanto a revisão decorre. O validador rejeita caminhos que escapem ao diretório de imagens e ficheiros em falta. A ferramenta facilita a inspeção, mas não decide se uma anotação está semanticamente correta nem aprova o dataset.
 
+
+
+## 15. Registo auditável de revisão humana por imagem
+
+A galeria visual permite inspecionar as caixas; o novo módulo `app.dataset_review` acrescenta o registo das decisões humanas para cada imagem. Cada decisão fica ligada ao SHA-256 do ficheiro COCO e ao hash das anotações dessa imagem. Se o COCO mudar, a revisão anterior deixa de ser válida.
+
+Criar um template para cada split:
+
+```bash
+python -m app.dataset_review --coco /dados/annotations/instances_train.json --split train --create-template /dados/private/review-train.json
+python -m app.dataset_review --coco /dados/annotations/instances_val.json --split val --create-template /dados/private/review-val.json
+python -m app.dataset_review --coco /dados/annotations/instances_test.json --split test --create-template /dados/private/review-test.json
+```
+
+Preencher em cada imagem `decision` (`APPROVED`, `NEEDS_CORRECTION` ou `REJECTED`), `reviewer`, `reviewed_at` em ISO 8601 e notas. Validar cada registo:
+
+```bash
+python -m app.dataset_review --coco /dados/annotations/instances_train.json --split train --record /dados/private/review-train.json
+```
+
+O gate de lançamento pode exigir a revisão completa dos três splits:
+
+```bash
+python -m app.dataset_approval \
+  --release-record /dados/private/dataset-release.json \
+  --manifest /dados/metadata/image_manifest.csv \
+  --train /dados/annotations/instances_train.json \
+  --val /dados/annotations/instances_val.json \
+  --test /dados/annotations/instances_test.json \
+  --require-visual-review \
+  --review-train /dados/private/review-train.json \
+  --review-val /dados/private/review-val.json \
+  --review-test /dados/private/review-test.json
+```
+
+O registo prova apenas que foram fornecidas decisões e identificadores de revisor; não autentica pessoas nem garante que a revisão foi competente. Os registos devem ficar em armazenamento privado, fora do Git.
+
