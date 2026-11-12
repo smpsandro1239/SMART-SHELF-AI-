@@ -175,3 +175,45 @@ def test_physical_slotting_rejects_unknown_current_occupancy():
 
     assert result.status == "NO_COMPATIBLE_LOCATION"
     assert result.rejected_locations[0]["reason"] == "UNKNOWN_CURRENT_OCCUPANCY"
+
+
+
+def test_slotting_accepts_decimal_sales_from_sqlalchemy_numeric():
+    from decimal import Decimal
+
+    result = recommend_warehouse_slotting([
+        row(1, Decimal("280.500")),
+        row(2, Decimal("56.250")),
+        row(3, Decimal("28.000")),
+        row(4, Decimal("0.000")),
+    ])
+
+    assert result.analysed_products == 4
+    assert result.products[0]["product_id"] == 1
+    assert result.products[0]["average_daily_sales"] == 10.018
+
+
+def test_physical_slotting_accepts_decimal_database_measurements():
+    from decimal import Decimal
+
+    result = recommend_physical_slot(
+        product_id=7,
+        required_quantity=Decimal("2.500"),
+        product_profile=profile(
+            unit_volume_cm3=Decimal("100.00"),
+            unit_weight_kg=Decimal("0.500"),
+        ),
+        locations=[location(
+            "A-01",
+            Decimal("2.00"),
+            max_volume_cm3=Decimal("1000.00"),
+            max_weight_kg=Decimal("10.000"),
+            occupied_volume_cm3=Decimal("100.00"),
+            occupied_weight_kg=Decimal("1.000"),
+        )],
+    )
+
+    assert result.status == "CANDIDATES_FOUND"
+    assert result.candidates[0]["required_volume_cm3"] == 250
+    assert result.candidates[0]["required_weight_kg"] == 1.25
+    assert result.candidates[0]["distance_to_picking_m"] == 2
