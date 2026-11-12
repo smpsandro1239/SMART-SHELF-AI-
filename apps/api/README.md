@@ -158,3 +158,22 @@ Criar uma tarefa diretamente a partir de uma recomendação confirmada:
       -d '{"store_id":1,"shelf_id":1,"product_id":1,"priority":"HIGH","requested_quantity":8}'
 
 Este endpoint só cria a tarefa quando a recomendação atual é `NEEDS_REPLENISHMENT`. Rejeita observações antigas, baixa confiança, inventário desconhecido ou stock indisponível. Também impede a criação de uma segunda tarefa ativa para a mesma combinação loja/prateleira/produto.
+
+
+## Autenticação inicial
+
+Configurar no ambiente da API `JWT_SECRET_KEY` e `BOOTSTRAP_ADMIN_KEY` com valores aleatórios fortes e distintos. Não utilizar os valores de exemplo em produção.
+
+1. Aplicar migrações: `alembic upgrade head`.
+2. Criar o primeiro administrador uma única vez:
+
+    curl -X POST http://localhost:8000/api/v1/auth/bootstrap \
+      -H "Content-Type: application/json" \
+      -H "X-Bootstrap-Key: $BOOTSTRAP_ADMIN_KEY" \
+      -d '{"email":"admin@example.com","full_name":"Administrador","password":"uma-palavra-passe-com-12-ou-mais-caracteres"}'
+
+3. Usar o `access_token` devolvido como `Authorization: Bearer <token>`.
+4. Consultar `GET /api/v1/auth/me`.
+5. O administrador pode criar contas em `POST /api/v1/auth/users` e consultar `GET /api/v1/auth/users`.
+
+Os tokens de acesso expiram ao fim do período configurado em `JWT_ACCESS_TOKEN_MINUTES`. Ainda não existem refresh tokens, recuperação de palavra-passe, isolamento por loja nem associação das tarefas a IDs de utilizador. Não expor a chave de bootstrap nem os segredos JWT.
