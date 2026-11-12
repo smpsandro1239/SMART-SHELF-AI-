@@ -154,3 +154,52 @@ def test_worker_uses_configured_similarity_threshold(db, monkeypatch):
 
     assert result["status"] == "UNKNOWN"
     assert result["product_id"] is None
+
+
+def test_worker_ocr_persists_assigned_and_unassigned_regions_without_stock_mutation(db, tmp_path, monkeypatch):
+    from app.ocr_paddle import OCRRegion
+    from app.product_text import OCRText
+    from app.vision_worker import persist_ocr_evidence
+
+    store = models.Store(code="OCR-WORKER", name="OCR Worker")
+    db.add(store)
+    db.flush()
+    zone = models.Zone(store_id=store.id, name="Zona")
+    db.add(zone)
+    db.flush()
+    shelf = models.Shelf(zone_id=zone.id, code="OCR-01")
+    db.add(shelf)
+    db.flush()
+    image = models.ShelfImage(
+        shelf_id=shelf.id, original_filename="worker.jpg",
+        storage_path=str(tmp_path / "worker.jpg"), mime_type="image/jpeg",
+        file_size_bytes=10, sha256="e" * 64, analysis_status="PROCESSING",
+        model_version="detector-v1",
+    )
+    db.add(image)
+    db.flush()
+    detection = models.ShelfImageDetection(
+        shelf_image_id=image.id, label="product", confidence=0.9,
+        x_min=0.1, y_min=0.1, x_max=0.6, y_max=0.8,
+        model_version="detector-v1",
+    )
+    db.add(detection)
+    db.flush()
+
+    class FakeOCR:
+        def recognize(self, path):
+            return (
+                OCRRegion(OCRText("Leite Meio-Gordo 1 L", 0.94), 0.2, 0.2, 0.5, 0.3),
+                OCRRegion(OCRText("PROMOÇÃO", 0.8), 0.8, 0.05, 0.95, 0.1),
+            )
+
+    persist_ocr_evidence(db, image.id, tmp_path / "worker.jpg", [detection], FakeOCR())
+    db.flush()
+    run = db.query(models.ShelfImageOCRRun).filter_by(shelf_image_id=image.id).one()
+    evidence = db.query(models.ShelfImageOCREvidence).filter_by(run_id=run.id).order_by(models.ShelfImageOCREvidence.id).all()
+    assert run.status == "COMPLETED"
+    assert evidence[0].detection_id == detection.id
+    assert evidence[0].association_status == "ASSIGNED"
+    assert evidence[1].detection_id is None
+    assert evidence[1].association_status == "UNASSIGNED"
+    assert db.query(models.InventorySnapshot).count() == 0
