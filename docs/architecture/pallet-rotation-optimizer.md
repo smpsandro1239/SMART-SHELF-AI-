@@ -151,3 +151,13 @@ Os endpoints GET `/api/v1/sales/hourly` e
 filtrando por loja e intervalo de datas; as vendas permitem ainda filtrar SKU.
 As respostas são limitadas a 1000 linhas por pedido e ordenadas por data/hora
 descendente. A consulta é read-only e respeita o âmbito de loja.
+
+
+## Importação CSV horária
+
+Foram adicionados importadores CSV para vendas por SKU e contagem de clientes.
+Ambos limitam os ficheiros a 5 MB e 5000 linhas, validam UTF-8, cabeçalhos,
+datas ISO, horas 0–23, valores não negativos e referências externas únicas.
+A persistência só começa após validação completa e é atómica. Os zeros são
+preservados como observações explícitas; não são fabricadas linhas para horas
+ausentes.
