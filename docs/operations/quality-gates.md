@@ -49,3 +49,10 @@ npm run build
 ## Limitações conhecidas
 
 O workflow verifica compilação e testes unitários/integrados já presentes no repositório. Não substitui testes end-to-end com POS/ERP/WMS, validação de modelos de visão computacional, testes de carga, análise de dependências dedicada nem um piloto físico em loja. O frontend é compilado, mas ainda não tem uma suite de testes de componentes dedicada.
+
+
+## Salvaguardas de evidência de inventário
+
+A avaliação de risco de rutura exige histórico diário completo e um snapshot de inventário recente. Um snapshot com data futura é rejeitado como `FUTURE_INVENTORY`: não é convertido artificialmente numa idade zero. Quantidades booleanas também são rejeitadas, em vez de serem convertidas em 0/1.
+
+O planeador de paletes ignora candidatos que não sejam objetos de mapeamento e contabiliza-os como excluídos, sem interromper a avaliação dos restantes candidatos. Estas regras são cobertas por testes de regressão.
