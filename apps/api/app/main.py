@@ -16,7 +16,7 @@ from app.config import settings
 from app.database import get_db, SessionLocal
 from app import models
 from app.security import hash_password, verify_password, create_access_token, decode_access_token
-from app.product_text import normalize_product_text
+from app.product_text import (\n    CatalogueProduct, normalize_product_text, rank_product_catalogue_candidates,\n)
 from app.replenishment_policy import ShelfRefillInput, suggest_shelf_refill
 from app.schemas import (
     ObservationCreate, ObservationRead, ShelfCreate, ShelfRead,
@@ -28,7 +28,7 @@ from app.schemas import (
     ShelfImageDetectionRead, ProductEmbeddingExemplarCreate,
     ProductEmbeddingExemplarReview, ProductEmbeddingExemplarRead,
     DetectionSkuReviewCreate, DetectionSkuReviewRead,
-    ShelfImageOCRRunCreate, ShelfImageOCRRunRead, ShelfImageOCREvidenceRead,
+    ShelfImageOCRRunCreate, ShelfImageOCRRunRead, ShelfImageOCREvidenceRead,\n    ShelfImageOCRMatchRead,
 )
 
 app = FastAPI(title=settings.app_name, version="0.2.0", description="Operational API for SMART SHELF AI.")
@@ -84,7 +84,7 @@ async def require_api_authentication(request: Request, call_next):
             path == "/api/v1/product-embedding-exemplars"
             or path.startswith("/api/v1/product-embedding-exemplars/")
             or (method == "POST" and path.startswith("/api/v1/shelf-image-detections/"))
-            or (method == "POST" and path.startswith("/api/v1/shelf-images/") and path.endswith("/ocr-runs"))
+            or (method == "POST" and path.startswith("/api/v1/shelf-images/") and (path.endswith("/ocr-runs") or path.endswith("/ocr-matches"))))
         )
         if supervisor_or_admin and user.role not in {"ADMIN", "SUPERVISOR"}:
             return JSONResponse(status_code=403, content={"detail": "Supervisor role required"})
@@ -418,6 +418,104 @@ def list_shelf_image_detections(
     status_code=201,
     tags=["computer-vision"],
 )
+
+
+@app.post("/api/v1/shelf-images/{image_id}/ocr-matches", response_model=list[ShelfImageOCRMatchRead], tags=["computer-vision"])
+def match_shelf_image_ocr_to_catalogue(image_id: int, request: Request, db: Session = Depends(get_db)):
+    """Rank active catalogue candidates for OCR text grouped by product detection."""
+    image_record = db.get(models.ShelfImage, image_id)
+    if image_record is None:
+        raise HTTPException(status_code=404, detail="Shelf image not found")
+    actor = _request_user(db, request)
+    _enforce_store_scope(actor, _shelf_image_store_id(db, image_id))
+
+    run = (
+        db.query(models.ShelfImageOCRRun)
+        .filter(models.ShelfImageOCRRun.shelf_image_id == image_id,
+                models.ShelfImageOCRRun.status == "COMPLETED")
+        .order_by(models.ShelfImageOCRRun.id.desc())
+        .first()
+    )
+    if run is None:
+        raise HTTPException(status_code=409, detail="No completed OCR run exists for this image")
+
+    existing = (
+        db.query(models.ShelfImageOCRMatch)
+        .filter(models.ShelfImageOCRMatch.run_id == run.id)
+        .order_by(models.ShelfImageOCRMatch.detection_id.asc())
+        .all()
+    )
+    if existing:
+        return existing
+
+    evidence = (
+        db.query(models.ShelfImageOCREvidence)
+        .filter(models.ShelfImageOCREvidence.run_id == run.id,
+                models.ShelfImageOCREvidence.detection_id.is_not(None))
+        .order_by(models.ShelfImageOCREvidence.id.asc())
+        .all()
+    )
+    grouped = {}
+    for item in evidence:
+        grouped.setdefault(item.detection_id, []).append(item)
+
+    products = db.query(models.Product).filter(models.Product.is_active.is_(True)).all()
+    catalogue = [
+        CatalogueProduct(product.id, product.sku, product.name, product.brand, product.unit)
+        for product in products
+    ]
+    results = []
+    for detection_id, regions in grouped.items():
+        observed_text = " ".join(item.text.strip() for item in regions if item.text.strip())
+        confidence = min(item.confidence for item in regions)
+        if confidence < 0.65 or not observed_text:
+            match = None
+            status, suggested_id, top_score, margin, candidates = "UNKNOWN", None, None, None, []
+        else:
+            match = rank_product_catalogue_candidates(observed_text, catalogue)
+            status = match.status
+            suggested_id = match.product_id
+            top_score = match.score
+            margin = match.margin
+            candidates = [
+                {"product_id": item.product_id, "score": item.score, "reasons": list(item.reasons)}
+                for item in match.candidates
+            ]
+        row = models.ShelfImageOCRMatch(
+            run_id=run.id,
+            detection_id=detection_id,
+            suggested_product_id=suggested_id,
+            observed_text=observed_text,
+            ocr_confidence=confidence,
+            status=status,
+            top_score=top_score,
+            margin=margin,
+            candidates=candidates,
+        )
+        db.add(row)
+        results.append(row)
+
+    db.commit()
+    for row in results:
+        db.refresh(row)
+    return results
+
+
+@app.get("/api/v1/shelf-images/{image_id}/ocr-matches", response_model=list[ShelfImageOCRMatchRead], tags=["computer-vision"])
+def list_shelf_image_ocr_matches(image_id: int, request: Request, limit: int = 500, db: Session = Depends(get_db)):
+    """List persisted OCR catalogue suggestions for an image."""
+    image_record = db.get(models.ShelfImage, image_id)
+    if image_record is None:
+        raise HTTPException(status_code=404, detail="Shelf image not found")
+    _enforce_store_scope(_request_user(db, request), _shelf_image_store_id(db, image_id))
+    return (
+        db.query(models.ShelfImageOCRMatch)
+        .join(models.ShelfImageOCRRun, models.ShelfImageOCRMatch.run_id == models.ShelfImageOCRRun.id)
+        .filter(models.ShelfImageOCRRun.shelf_image_id == image_id)
+        .order_by(models.ShelfImageOCRMatch.id.desc())
+        .limit(max(1, min(limit, 1000))).all()
+    )
+
 
 @app.post("/api/v1/shelf-images/{image_id}/ocr-runs", response_model=ShelfImageOCRRunRead, status_code=201, tags=["computer-vision"])
 def create_shelf_image_ocr_run(image_id: int, payload: ShelfImageOCRRunCreate, request: Request, db: Session = Depends(get_db)):
