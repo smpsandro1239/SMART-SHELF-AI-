@@ -75,3 +75,29 @@ O relatório apresenta uma grelha de thresholds (similaridade e margem). Não es
 6. Manter revisão humana e stock contabilístico independente da inferência.
 
 O módulo não executa modelos nem prova a precisão do DINOv2. É a ferramenta para medir o comportamento quando existirem embeddings reais e um conjunto de avaliação autorizado.
+
+
+## Avaliação com decisões humanas da operação
+
+O endpoint `GET /api/v1/sku-evaluation/reviewed` disponibiliza métricas agregadas a partir das decisões humanas já registadas. É um complemento operacional ao benchmark offline por embeddings, não o substitui.
+
+Exemplo:
+
+```http
+GET /api/v1/sku-evaluation/reviewed?store_id=1&model_version=dinov2-small-v1
+```
+
+A resposta inclui:
+- precisão dos SKU efetivamente propostos;
+- cobertura de produtos conhecidos e cobertura correta;
+- produtos conhecidos que o sistema não identificou (abstenções);
+- falsos positivos em deteções rejeitadas pelo operador;
+- taxa de rejeição de deteções desconhecidas;
+- distribuição por estado da fusão e por decisão humana;
+- métricas separadas por versão do modelo visual.
+
+**Regra temporal:** para cada deteção, o relatório usa a última decisão humana e a última fusão disponível até ao instante dessa decisão. Uma reanálise posterior não altera retroativamente a previsão avaliada.
+
+**Âmbito:** só entram deteções revistas. O relatório indica quantas deteções revistas não tinham uma fusão correspondente. As métricas não representam uma amostra aleatória: os casos difíceis tendem a ser revistos com maior frequência. Para comparar versões de modelos, manter também um conjunto de teste independente, separado por loja e sessão de captura.
+
+O endpoint é apenas de leitura e está limitado a ADMIN/SUPERVISOR; supervisores ficam confinados à sua loja.
