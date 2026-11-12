@@ -16,7 +16,7 @@ type Task = {
   assigned_to: string | null; assigned_user_id: number | null;
   requested_quantity: number | null; notes: string | null; created_at: string;
 };
-type ShelfImage = { id: number; shelf_id: number; original_filename: string; mime_type: string; file_size_bytes: number; sha256: string; analysis_status: string; captured_at: string; created_at: string };
+type ShelfImage = { id: number; shelf_id: number; original_filename: string; mime_type: string; file_size_bytes: number; sha256: string; analysis_status: "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED"; analysis_error: string | null; analysis_started_at: string | null; analysis_completed_at: string | null; captured_at: string; created_at: string };
 type ShelfImageDetection = { id: number; shelf_image_id: number; product_id: number | null; label: string; confidence: number; x_min: number; y_min: number; x_max: number; y_max: number; model_version: string; created_at: string };
 type Summary = {
   store_id: number | null; role: Role; active_tasks: number;
@@ -38,6 +38,7 @@ export default function App() {
   const [imageDetections, setImageDetections] = useState<Record<number, ShelfImageDetection[]>>({});
   const [expandedDetectionImage, setExpandedDetectionImage] = useState<number | null>(null);
   const [detectionLoading, setDetectionLoading] = useState<number | null>(null);
+  const [retryLoading, setRetryLoading] = useState<number | null>(null);
   const [captureShelfId, setCaptureShelfId] = useState("");
   const [captureFile, setCaptureFile] = useState<File | null>(null);
   const [captureReset, setCaptureReset] = useState(0);
@@ -134,6 +135,27 @@ export default function App() {
     } catch (err) {
       setCaptureMessage(err instanceof Error ? err.message : "Não foi possível enviar a fotografia.");
     } finally { setCaptureLoading(false); }
+  }
+
+
+
+  async function retryImageAnalysis(item: ShelfImage) {
+    setRetryLoading(item.id);
+    try {
+      const updated = await request<ShelfImage>(`/api/v1/shelf-images/${item.id}/retry`, { method: "POST" });
+      setCaptures(current => current.map(capture => capture.id === item.id ? updated : capture));
+      setImageDetections(current => {
+        const next = { ...current };
+        delete next[item.id];
+        return next;
+      });
+      setCaptureMessage(`A análise da fotografia #${item.id} foi colocada novamente na fila.`);
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Não foi possível repetir a análise.");
+    } finally {
+      setRetryLoading(null);
+    }
   }
 
 
@@ -242,9 +264,9 @@ export default function App() {
               <div className="capture-list">
                 {captures.length === 0 && <div className="empty-state"><PackageSearch size={25} /><strong>Sem fotografias registadas</strong><span>As próximas capturas serão apresentadas aqui.</span></div>}
                 {captures.map(item => <div className="capture-item" key={item.id}>
-                  <div className="capture-row"><div className="capture-thumb"><Boxes size={17} /></div><div className="capture-meta"><strong>Prateleira #{item.shelf_id} · {item.original_filename}</strong><span>{(item.file_size_bytes / 1024).toFixed(0)} KB · {new Date(item.created_at).toLocaleString("pt-PT")}</span></div><span className="task-status pending">{item.analysis_status}</span><button className="row-action detection-toggle" onClick={() => void toggleImageDetections(item)}>{detectionLoading === item.id ? "A consultar…" : expandedDetectionImage === item.id ? "Fechar" : "Deteções"}</button></div>
+                  <div className="capture-row"><div className="capture-thumb"><Boxes size={17} /></div><div className="capture-meta"><strong>Prateleira #{item.shelf_id} · {item.original_filename}</strong><span>{(item.file_size_bytes / 1024).toFixed(0)} KB · {new Date(item.created_at).toLocaleString("pt-PT")}</span></div><span className={`task-status ${item.analysis_status.toLowerCase()}`}>{item.analysis_status}</span>{(user?.role === "ADMIN" || user?.role === "SUPERVISOR") && item.analysis_status === "FAILED" && <button className="row-action detection-toggle" disabled={retryLoading === item.id} onClick={() => void retryImageAnalysis(item)}>{retryLoading === item.id ? "A repetir…" : "Repetir análise"}</button>}<button className="row-action detection-toggle" onClick={() => void toggleImageDetections(item)}>{detectionLoading === item.id ? "A consultar…" : expandedDetectionImage === item.id ? "Fechar" : "Deteções"}</button></div>
                   {expandedDetectionImage === item.id && <div className="detection-list">
-                    {!imageDetections[item.id]?.length && <p className="detection-empty">Ainda não existem deteções guardadas para esta fotografia. A análise automática ainda não está ativa.</p>}
+                    {!imageDetections[item.id]?.length && <p className="detection-empty">{item.analysis_status === "COMPLETED" ? "A análise terminou sem registar objetos nesta fotografia." : item.analysis_status === "FAILED" ? `A análise falhou. ${item.analysis_error || "Pode ser repetida por um supervisor."}` : item.analysis_status === "PROCESSING" ? "A fotografia está a ser analisada pelo worker." : "Ainda não existem deteções guardadas. A fotografia aguarda processamento."}</p>}
                     {imageDetections[item.id]?.map(detection => <div className="detection-row" key={detection.id}><strong>{detection.label}</strong><span>{(detection.confidence * 100).toFixed(1)}% confiança</span><span>Caixa: {(detection.x_min * 100).toFixed(1)}%, {(detection.y_min * 100).toFixed(1)}% – {(detection.x_max * 100).toFixed(1)}%, {(detection.y_max * 100).toFixed(1)}%</span><small>Modelo {detection.model_version}{detection.product_id ? ` · Produto #${detection.product_id}` : ""}</small></div>)}
                   </div>}
                 </div>)}
