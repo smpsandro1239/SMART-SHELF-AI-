@@ -408,4 +408,4 @@ curl -X PATCH http://localhost:8000/api/v1/product-embedding-exemplars/1/review 
   -d '{"review_status":"APPROVED","review_notes":"SKU e imagem confirmados"}'
 ```
 
-Se for fornecido `shelf_image_id`, o SHA-256 enviado tem de coincidir com a captura guardada. Os endpoints de leitura não devolvem o vetor. A aprovação regista revisor e data, e não pode ser repetida para o mesmo exemplar. Os vetores estão guardados como JSON relacional; ainda não existe pgvector nem índice de pesquisa vetorial, e o motor de correspondência ainda não carrega estes registos automaticamente.
+Se for fornecido `shelf_image_id`, o SHA-256 enviado tem de coincidir com a captura guardada. Os endpoints de leitura não devolvem o vetor. A aprovação regista revisor e data, e não pode ser repetida para o mesmo exemplar. Os vetores estão guardados como JSON relacional; ainda não existe pgvector nem índice de pesquisa vetorial. O serviço interno `app.product_embedding_service.build_approved_product_registry` já consegue carregar apenas exemplares aprovados, revistos e da versão de modelo pedida para o motor experimental; a integração automática com o worker de inferência continua pendente.
