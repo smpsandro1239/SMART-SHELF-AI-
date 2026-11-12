@@ -186,3 +186,8 @@ Os tokens de acesso expiram ao fim do período configurado em `JWT_ACCESS_TOKEN_
 ## Atribuição de tarefas a utilizadores
 
 Ao criar ou atribuir uma tarefa, pode ser enviado `assigned_user_id`. A conta tem de estar ativa e associada à mesma loja da tarefa. O campo textual `assigned_to` é mantido para compatibilidade com tarefas antigas.
+
+
+## CORS para o dashboard
+
+Defina `CORS_ALLOWED_ORIGINS` como uma lista de origens separadas por vírgulas, por exemplo `http://localhost:5173`. Em produção, configure apenas o domínio real do frontend; não use curingas.
