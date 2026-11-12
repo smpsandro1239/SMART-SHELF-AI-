@@ -30,7 +30,7 @@ def test_evaluator_reports_known_accuracy_and_unknown_rejection():
     report = evaluate_sku_matching(
         exemplars,
         queries,
-        similarity_thresholds=[0.80, 0.95],
+        similarity_thresholds=[0.80, 0.99999],
         margin_thresholds=[0.05],
     )
 
