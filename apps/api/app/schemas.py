@@ -405,3 +405,30 @@ class ShelfImageFusedEvidenceRead(BaseModel):
     reason: str
     created_at: datetime
     model_config = ConfigDict(from_attributes=True)
+
+
+class ShelfImageReviewQueueItem(BaseModel):
+    fused_evidence_id: int
+    detection_id: int
+    shelf_image_id: int
+    shelf_id: int
+    shelf_code: str
+    image_filename: str
+    status: Literal["CONSENSUS", "VISUAL_ONLY", "TEXT_ONLY", "CONFLICT", "AMBIGUOUS", "UNKNOWN"]
+    suggested_product_id: int | None
+    visual_product_id: int | None
+    text_product_id: int | None
+    detection_label: str
+    detection_confidence: float
+    x_min: float
+    y_min: float
+    x_max: float
+    y_max: float
+    visual_similarity: float | None
+    text_score: float | None
+    ocr_confidence: float | None
+    visual_model_version: str | None
+    ocr_provider: str
+    ocr_model_version: str
+    reason: str
+    created_at: datetime
