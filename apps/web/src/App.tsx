@@ -44,6 +44,21 @@ type ReviewEvaluationReport = {
   human_decision_breakdown: Record<string, number>;
   reviewed_detections_without_matching_fusion: number; model_version_filter: string | null;
 };
+type PlannedTask = {
+  shelf_id: number; product_id: number; shelf_code?: string; product_name?: string;
+  recommendation_status: string; proposed_priority: string; stockout_risk_level?: string;
+  stockout_explanation?: string; estimated_elapsed_minutes?: number | null;
+  effort_estimate_status?: string; effort_estimate_basis?: string;
+  suggested_quantity?: number | null; explanation?: string; task_creation_allowed: boolean;
+};
+type ReplenishmentPlan = {
+  store_id: number; total_candidates: number; returned_candidates: number;
+  groups: { zone_id: number | null; zone_name: string; tasks: PlannedTask[] }[];
+  excluded: Record<string, number>;
+  risk_assessment: { enabled: boolean; history_days: number | null };
+  effort_estimation: { enabled: boolean; estimated_candidates?: number; unestimated_candidates?: number; estimated_total_elapsed_minutes?: number; metric?: string | null };
+  automatic_stock_movement_allowed: boolean;
+};
 type Summary = {
   store_id: number | null; role: Role; active_tasks: number;
   shelves_requiring_attention: number;
@@ -82,6 +97,10 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [replenishmentPlan, setReplenishmentPlan] = useState<ReplenishmentPlan | null>(null);
+  const [planLoading, setPlanLoading] = useState(false);
+  const [planError, setPlanError] = useState("");
+
 
   const request = useCallback(async <T,>(path: string, init: RequestInit = {}): Promise<T> => {
     const response = await fetch(`${API_BASE}${path}`, {
@@ -169,6 +188,26 @@ export default function App() {
   }
 
  
+  async function loadReplenishmentPlan() {
+    const selectedStoreId = user?.role === "ADMIN" ? Number(storeFilter) : Number(user?.store_id);
+    if (!Number.isInteger(selectedStoreId) || selectedStoreId < 1) {
+      setPlanError("Indica um ID de loja válido para gerar o plano.");
+      return;
+    }
+    setPlanLoading(true);
+    setPlanError("");
+    try {
+      const plan = await request<ReplenishmentPlan>(
+        `/api/v1/replenishment/plan?store_id=${selectedStoreId}&include_stockout_risk=true&risk_days=28&include_effort_estimates=true&effort_history_days=90&effort_minimum_sample_size=5`
+      );
+      setReplenishmentPlan(plan);
+    } catch (err) {
+      setPlanError(err instanceof Error ? err.message : "Não foi possível gerar o plano de reposição.");
+    } finally {
+      setPlanLoading(false);
+    }
+  }
+
   async function uploadCapture(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!captureShelfId.trim() || !captureFile) {
@@ -381,6 +420,37 @@ export default function App() {
               <div className="panel-note"><AlertTriangle size={16} /><span>{summary.observations.empty || 0} prateleiras sem stock e {summary.observations.low_stock || 0} com stock baixo, segundo as observações registadas.</span></div>
             </article>
           </section>
+          {(user?.role === "ADMIN" || user?.role === "SUPERVISOR") && <section className="panel replenishment-plan-panel">
+            <div className="panel-heading">
+              <div><p className="eyebrow">PLANEAMENTO ASSISTIDO</p><h2>Plano inteligente de reposição</h2><p className="muted">Prioriza por risco de rutura e estima esforço quando existe histórico suficiente.</p></div>
+              <button className="row-action" onClick={() => void loadReplenishmentPlan()} disabled={planLoading || (user?.role === "ADMIN" && !storeFilter.trim())}>
+                {planLoading ? "A calcular…" : replenishmentPlan ? "Atualizar plano" : "Gerar plano"} <ArrowUpRight size={14} />
+              </button>
+            </div>
+            {user?.role === "ADMIN" && !storeFilter.trim() && <p className="plan-hint">Para administradores, indica primeiro o ID da loja no filtro superior.</p>}
+            {planError && <p className="plan-error" role="alert">{planError}</p>}
+            {replenishmentPlan && <>
+              <div className="plan-metrics">
+                <div><span>Candidatos</span><strong>{replenishmentPlan.total_candidates}</strong></div>
+                <div><span>Incluídos no plano</span><strong>{replenishmentPlan.returned_candidates}</strong></div>
+                <div><span>Com estimativa de esforço</span><strong>{replenishmentPlan.effort_estimation.estimated_candidates ?? 0}</strong></div>
+                <div><span>Minutos estimados</span><strong>{replenishmentPlan.effort_estimation.estimated_total_elapsed_minutes == null ? "—" : replenishmentPlan.effort_estimation.estimated_total_elapsed_minutes.toFixed(0)}</strong></div>
+              </div>
+              <p className="plan-hint">Risco de rutura baseado em 28 dias de vendas; estimativas de tempo baseadas em tarefas concluídas. Tempo decorrido não equivale a trabalho ativo. Movimentação automática de stock: desativada.</p>
+              <div className="plan-groups">
+                {replenishmentPlan.groups.length === 0 && <div className="empty-state"><CheckCircle2 size={24} /><strong>Sem candidatos para reposição</strong><span>Não existem recomendações elegíveis nesta consulta.</span></div>}
+                {replenishmentPlan.groups.map(group => <div className="plan-zone" key={group.zone_id ?? group.zone_name}>
+                  <div className="plan-zone-heading"><strong>{group.zone_name}</strong><span>{group.tasks.length} itens</span></div>
+                  {group.tasks.map(item => <div className="plan-task" key={`${item.shelf_id}-${item.product_id}`}>
+                    <div><strong>{item.product_name || `Produto #${item.product_id}`}</strong><span>Prateleira {item.shelf_code || `#${item.shelf_id}`} · {item.recommendation_status}</span></div>
+                    <span className={`plan-risk ${(item.stockout_risk_level || "UNKNOWN").toLowerCase()}`}>{item.stockout_risk_level || "UNKNOWN"}</span>
+                    <span className="plan-duration">{item.estimated_elapsed_minutes == null ? "Tempo —" : `${item.estimated_elapsed_minutes.toFixed(0)} min`}</span>
+                    {!item.task_creation_allowed && <span className="plan-review">Requer validação</span>}
+                  </div>)}
+                </div>)}
+              </div>
+            </>}
+          </section>}
           <section className="capture-grid">
             <article className="panel capture-panel">
               <div className="panel-heading"><div><p className="eyebrow">VISÃO COMPUTACIONAL</p><h2>Nova captura de prateleira</h2><p className="muted">Envia uma fotografia para registo e futura análise automática.</p></div><div className="capture-icon"><PackageSearch size={20} /></div></div>
