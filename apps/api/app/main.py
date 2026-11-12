@@ -68,7 +68,7 @@ async def require_api_authentication(request: Request, call_next):
         if admin_only and user.role != "ADMIN":
             return JSONResponse(status_code=403, content={"detail": "Administrator role required"})
         if user.role == "EMPLOYEE" and not (
-            method == "GET" and (path == "/api/v1/tasks" or path == "/api/v1/auth/me")
+            method == "GET" and (path == "/api/v1/tasks" or path == "/api/v1/auth/me" or path == "/api/v1/dashboard/summary")
         ):
             return JSONResponse(status_code=403, content={"detail": "Employee role has read-only task access"})
         if user.role == "SUPERVISOR" and path.startswith("/api/v1/auth/users"):
@@ -276,6 +276,7 @@ def list_replenishment_recommendations(
     store_id: int,
     product_id: int | None = None,
     stale_after_minutes: int = 120,
+    request: Request = None,
     db: Session = Depends(get_db),
 ):
     """Combine shelf observations with the latest backroom inventory snapshot.
@@ -370,7 +371,10 @@ def list_replenishment_recommendations(
 
 
 @app.post("/api/v1/tasks", response_model=ReplenishmentTaskRead, status_code=201, tags=["tasks"])
-def create_replenishment_task(payload: ReplenishmentTaskCreate, db: Session = Depends(get_db)):
+def create_replenishment_task(payload: ReplenishmentTaskCreate, request: Request, db: Session = Depends(get_db)):
+    actor = db.get(models.User, request.state.user_id)
+    if actor.role != "ADMIN" and actor.store_id != payload.store_id:
+        raise HTTPException(status_code=403, detail="Access to this store is not allowed")
     if not db.get(models.Store, payload.store_id):
         raise HTTPException(status_code=404, detail="Store not found")
     shelf = (
@@ -416,6 +420,9 @@ def create_task_from_recommendation(
     stale_after_minutes: int = 120,
     db: Session = Depends(get_db),
 ):
+    actor = db.get(models.User, request.state.user_id)
+    if actor.role != "ADMIN" and actor.store_id != payload.store_id:
+        raise HTTPException(status_code=403, detail="Access to this store is not allowed")
     recommendations = list_replenishment_recommendations(
         store_id=payload.store_id,
         product_id=payload.product_id,
@@ -470,10 +477,16 @@ def list_replenishment_tasks(
     status: str | None = None,
     assigned_to: str | None = None,
     limit: int = 100,
+    request: Request = None,
     db: Session = Depends(get_db),
 ):
     limit = max(1, min(limit, 500))
+    actor = db.get(models.User, request.state.user_id)
     query = db.query(models.ReplenishmentTask)
+    if actor.role == "EMPLOYEE":
+        query = query.filter(models.ReplenishmentTask.assigned_user_id == actor.id)
+    elif actor.role != "ADMIN":
+        query = query.filter(models.ReplenishmentTask.store_id == actor.store_id)
     if store_id is not None:
         query = query.filter(models.ReplenishmentTask.store_id == store_id)
     if status is not None:
@@ -489,11 +502,15 @@ def list_replenishment_tasks(
 def update_replenishment_task_status(
     task_id: int,
     payload: ReplenishmentTaskStatusUpdate,
+    request: Request,
     db: Session = Depends(get_db),
 ):
     task = db.get(models.ReplenishmentTask, task_id)
     if task is None:
         raise HTTPException(status_code=404, detail="Task not found")
+    actor = db.get(models.User, request.state.user_id)
+    if actor.role != "ADMIN" and task.store_id != actor.store_id:
+        raise HTTPException(status_code=403, detail="Access to this task is not allowed")
 
     allowed = {
         "PENDING": {"ASSIGNED", "CANCELLED"},
