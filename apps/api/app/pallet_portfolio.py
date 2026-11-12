@@ -22,6 +22,29 @@ class PalletPortfolioPlan:
     automatic_stock_movement_allowed: bool = False
 
 
+def allocate_ready_replacements(
+    candidate_keys: Iterable[tuple[int, int]],
+    ready_keys: Iterable[tuple[int, int]],
+) -> tuple[bool, ...]:
+    """Allocate each physically ready replacement pallet to at most one candidate.
+
+    Keys are (product_id, packaging_level_id). Candidate order is preserved so
+    callers can use a stable pallet ordering. A single ready pallet must never
+    make several display pallets appear independently replaceable.
+    """
+    available: dict[tuple[int, int], int] = {}
+    for key in ready_keys:
+        available[key] = available.get(key, 0) + 1
+
+    allocations: list[bool] = []
+    for key in candidate_keys:
+        count = available.get(key, 0)
+        allocations.append(count > 0)
+        if count > 0:
+            available[key] = count - 1
+    return tuple(allocations)
+
+
 def _number(value: Any, field: str, *, minimum: float = 0.0) -> float:
     if isinstance(value, bool):
         raise PalletPortfolioInputError(f"{field} must be numeric")
