@@ -123,12 +123,11 @@ def test_forecast_rejects_boolean_hourly_quantities(quantity):
 
 def test_forecast_aggregates_multiple_records_for_same_business_hour():
     day = date(2026, 11, 9)
-    rows = [
+    history = [
         SimpleNamespace(business_date=day, hour_of_day=8, quantity=3),
         SimpleNamespace(business_date=day, hour_of_day=8, quantity=4),
     ]
-    history = []
-    for week in range(4):
+    for week in range(1, 4):
         observed_day = day - __import__("datetime").timedelta(days=7 * week)
         history.append(SimpleNamespace(
             business_date=observed_day, hour_of_day=8, quantity=7
