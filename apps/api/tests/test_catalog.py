@@ -3,6 +3,7 @@ import os
 os.environ["APP_ENV"] = "test"
 os.environ["DATABASE_URL"] = "sqlite:///./test_unused.db"
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -28,19 +29,21 @@ def override_get_db():
         db.close()
 
 
-def setup_module():
+@pytest.fixture(autouse=True)
+def isolated_database():
+    previous_override = app.dependency_overrides.get(get_db)
+    Base.metadata.drop_all(bind=TEST_ENGINE)
     Base.metadata.create_all(bind=TEST_ENGINE)
     app.dependency_overrides[get_db] = override_get_db
-
-
-def teardown_module():
-    app.dependency_overrides.pop(get_db, None)
+    yield
+    if previous_override is None:
+        app.dependency_overrides.pop(get_db, None)
+    else:
+        app.dependency_overrides[get_db] = previous_override
     Base.metadata.drop_all(bind=TEST_ENGINE)
 
 
 def test_product_catalog_and_shelf_assignment():
-    Base.metadata.drop_all(bind=TEST_ENGINE)
-    Base.metadata.create_all(bind=TEST_ENGINE)
     with TestClient(app) as client:
         store = client.post("/api/v1/stores", json={"code": "CAT-01", "name": "Loja catálogo"})
         zone = client.post("/api/v1/zones", json={"store_id": store.json()["id"], "name": "Bebidas"})
@@ -68,8 +71,6 @@ def test_product_catalog_and_shelf_assignment():
 
 
 def test_duplicate_sku_and_duplicate_assignment_are_rejected():
-    Base.metadata.drop_all(bind=TEST_ENGINE)
-    Base.metadata.create_all(bind=TEST_ENGINE)
     with TestClient(app) as client:
         store = client.post("/api/v1/stores", json={"code": "CAT-02", "name": "Loja teste"})
         zone = client.post("/api/v1/zones", json={"store_id": store.json()["id"], "name": "Laticínios"})
