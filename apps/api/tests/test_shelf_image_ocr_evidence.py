@@ -222,6 +222,10 @@ def test_review_queue_returns_unreviewed_conflicts_and_removes_reviewed_items(mo
     token, _ = create_access_token(user_id=supervisor_id, role="SUPERVISOR")
     headers = {"Authorization": f"Bearer {token}"}
     with TestClient(app) as client:
+        summary = client.get("/api/v1/shelf-image-review-queue/summary", headers=headers)
+        assert summary.status_code == 200
+        assert summary.json()["CONFLICT"] == 1
+
         queue = client.get("/api/v1/shelf-image-review-queue", headers=headers)
         assert queue.status_code == 200
         assert len(queue.json()) == 1
@@ -239,3 +243,6 @@ def test_review_queue_returns_unreviewed_conflicts_and_removes_reviewed_items(mo
         queue_after_review = client.get("/api/v1/shelf-image-review-queue", headers=headers)
         assert queue_after_review.status_code == 200
         assert queue_after_review.json() == []
+        summary_after_review = client.get("/api/v1/shelf-image-review-queue/summary", headers=headers)
+        assert summary_after_review.status_code == 200
+        assert summary_after_review.json()["CONFLICT"] == 0
