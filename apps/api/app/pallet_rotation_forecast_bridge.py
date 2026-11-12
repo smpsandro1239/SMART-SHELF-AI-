@@ -27,6 +27,15 @@ def enrich_pallet_candidates_with_hourly_profiles(
     enriched = []
     excluded = 0
     for candidate in candidates:
+        if not isinstance(candidate, Mapping):
+            enriched.append({
+                "traffic_level": "UNKNOWN",
+                "forecast_consumption_until_low_traffic": None,
+                "planning_reason": "INVALID_CANDIDATE",
+                "automatic_stock_movement_allowed": False,
+            })
+            excluded += 1
+            continue
         row = dict(candidate)
         product_id = row.get("product_id")
         residual = row.get("residual_base_units")
