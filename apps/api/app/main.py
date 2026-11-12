@@ -46,7 +46,7 @@ from app.schemas import (
     ShelfImageReviewQueueItem, ShelfImageTrainingCandidateRead, CaptureSessionCreate, CaptureSessionRead,
     WarehouseLocationCreate, WarehouseProductProfileCreate, WarehousePlacementCreate,
     ProductPackagingLevelCreate, StorePalletCreate, StorePalletRead,
-    PalletRotationPolicyCreate, PalletRotationPolicyRead, PalletRotationPolicyUpdate, PalletRotationEventRead,
+    PalletRotationPolicyCreate, PalletRotationPolicyRead, PalletRotationPolicyUpdate, PalletRotationEventRead, PalletLifecycleUpdate,
 )
 
 app = FastAPI(title=settings.app_name, version="0.2.0", description="Operational API for SMART SHELF AI.")
@@ -100,7 +100,7 @@ async def require_api_authentication(request: Request, call_next):
             })
         )
         supervisor_or_admin = (
-            (method == "POST" and path in {"/api/v1/sales/daily", "/api/v1/sales/import-csv", "/api/v1/warehouse/locations", "/api/v1/warehouse/placements", "/api/v1/warehouse/pallets", "/api/v1/warehouse/pallet-rotation/policies"})
+            (method == "POST" and (path in {"/api/v1/sales/daily", "/api/v1/sales/import-csv", "/api/v1/warehouse/locations", "/api/v1/warehouse/placements", "/api/v1/warehouse/pallets", "/api/v1/warehouse/pallet-rotation/policies"} or (path.startswith("/api/v1/warehouse/pallets/") and path.endswith("/events"))))
             or (method == "PATCH" and path.startswith("/api/v1/warehouse/pallet-rotation/policies/"))
             or path == "/api/v1/product-embedding-exemplars"
             or path.startswith("/api/v1/product-embedding-exemplars/")
@@ -1799,6 +1799,86 @@ def list_pallet_lifecycle_events(
     return db.query(models.PalletRotationEvent).filter_by(pallet_id=pallet_id).order_by(
         models.PalletRotationEvent.occurred_at, models.PalletRotationEvent.id
     ).all()
+
+
+@app.post("/api/v1/warehouse/pallets/{pallet_id}/events", response_model=PalletRotationEventRead, status_code=201, tags=["warehouse"])
+def record_pallet_lifecycle_update(
+    pallet_id: int,
+    payload: PalletLifecycleUpdate,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Record a supervised, optimistic-concurrency-protected pallet state update."""
+    actor = _request_user(db, request)
+    pallet = db.query(models.StorePallet).filter_by(id=pallet_id).with_for_update().first()
+    if pallet is None:
+        raise HTTPException(status_code=404, detail="Pallet not found")
+    _enforce_store_scope(actor, pallet.store_id)
+
+    if pallet.status != payload.expected_status or float(pallet.base_quantity) != payload.expected_base_quantity:
+        raise HTTPException(status_code=409, detail="Pallet state changed; refresh and retry with the current status and quantity")
+
+    allowed_transitions = {
+        "READY": {"ON_DISPLAY", "QUARANTINED"},
+        "ON_DISPLAY": {"PARTIAL", "RETURNED", "QUARANTINED"},
+        "PARTIAL": {"RETURNED", "REBUILDING", "ON_DISPLAY", "QUARANTINED"},
+        "RETURNED": {"REBUILDING", "QUARANTINED"},
+        "REBUILDING": {"READY", "QUARANTINED"},
+        "EMPTY": {"QUARANTINED"},
+        "QUARANTINED": set(),
+    }
+    next_status = payload.status or pallet.status
+    next_quantity = payload.base_quantity if payload.base_quantity is not None else float(pallet.base_quantity)
+    next_location_type = payload.location_type or pallet.location_type
+    next_location_code = payload.location_code if payload.location_code is not None else pallet.location_code
+
+    if next_status != pallet.status and next_status not in allowed_transitions[pallet.status]:
+        raise HTTPException(status_code=422, detail=f"Invalid pallet transition: {pallet.status} -> {next_status}")
+    if (next_status == "EMPTY" and next_quantity != 0) or (next_status != "EMPTY" and next_quantity <= 0):
+        raise HTTPException(status_code=422, detail="EMPTY requires zero quantity; all other statuses require positive quantity")
+    if next_status == "ON_DISPLAY" and next_location_type != "SALES_FLOOR":
+        raise HTTPException(status_code=422, detail="ON_DISPLAY pallets must be at SALES_FLOOR")
+    if next_status in {"READY", "RETURNED", "REBUILDING", "EMPTY"} and next_location_type == "SALES_FLOOR":
+        raise HTTPException(status_code=422, detail="The requested status is incompatible with SALES_FLOOR")
+    if next_quantity > float(db.get(models.ProductPackagingLevel, pallet.packaging_level_id).base_units_per_package):
+        raise HTTPException(status_code=422, detail="Pallet quantity exceeds configured pallet capacity")
+
+    old_status = pallet.status
+    old_quantity = float(pallet.base_quantity)
+    old_location_type = pallet.location_type
+    old_location_code = pallet.location_code
+    if next_status != old_status:
+        event_type = "STATUS_REVIEWED"
+    elif next_quantity != old_quantity:
+        event_type = "QUANTITY_RECORDED"
+    else:
+        event_type = "LOCATION_RECORDED"
+
+    pallet.status = next_status
+    pallet.base_quantity = next_quantity
+    pallet.location_type = next_location_type
+    pallet.location_code = next_location_code
+    pallet.updated_at = models.utc_now()
+    event = models.PalletRotationEvent(
+        pallet_id=pallet.id,
+        event_type=event_type,
+        from_location_type=old_location_type,
+        from_location_code=old_location_code,
+        to_location_type=next_location_type,
+        to_location_code=next_location_code,
+        quantity_before=old_quantity,
+        quantity_after=next_quantity,
+        lot_code=pallet.lot_code,
+        expiry_date=pallet.expiry_date,
+        reason=payload.reason,
+        performed_by_user_id=actor.id if actor else None,
+        occurred_at=models.utc_now(),
+    )
+    db.add(event)
+    db.add(pallet)
+    db.commit()
+    db.refresh(event)
+    return event
 
 
 @app.get("/api/v1/warehouse/replenishment-units", tags=["warehouse"])
