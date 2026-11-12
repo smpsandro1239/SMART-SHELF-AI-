@@ -140,7 +140,7 @@ def test_exactly_half_a_pallet_remaining_is_the_default_swap_boundary():
     assert result.recommendation == "SWAP_PALLET"
 
 
-def test_more_than_half_a_pallet_sold_does_not_trigger_swap_early():
+def test_more_than_half_a_pallet_remaining_does_not_trigger_swap():
     result = evaluate_pallet_rotation(**inputs(residual_base_units=361))
     assert result.residual_ratio > 0.5
     assert result.recommendation == "REPLENISH_CURRENT"
