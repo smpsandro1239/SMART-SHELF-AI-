@@ -136,3 +136,18 @@ def test_incomplete_profile_returns_unknown_without_crashing_on_missing_current_
     assert row["forecast_consumption_until_low_traffic"] is None
     assert row["planning_recommendation"] == "INSUFFICIENT_DATA"
     assert row["planning_reason"] == "HOURLY_PROFILE_INCOMPLETE"
+
+
+def test_insufficient_residual_is_reported_as_interim_replenishment_not_missing_data():
+    result = enrich_pallet_candidates_with_hourly_profiles(
+        [candidate(residual_base_units=1)],
+        {42: profile()},
+        current_hour=8,
+        duration_hours=2,
+        minimum_observed_days=7,
+    )
+    row = result["candidates"][0]
+    assert row["planning_recommendation"] == "REPLENISH_CURRENT"
+    assert row["planning_reason"] == "RESIDUAL_CANNOT_REACH_WINDOW"
+    assert row["forecast_consumption_until_low_traffic"] is None
+    assert row["traffic_level"] in {"LOW", "HIGH"}
