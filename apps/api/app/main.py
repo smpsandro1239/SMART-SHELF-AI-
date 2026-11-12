@@ -1619,6 +1619,7 @@ def get_pallet_rotation_hourly_profile(
         models.HourlySalesRecord.store_id == store_id,
         models.HourlySalesRecord.product_id == product_id,
         models.HourlySalesRecord.business_date >= start_date,
+        models.HourlySalesRecord.business_date <= date.today(),
         models.HourlySalesRecord.source == source,
     ).group_by(models.HourlySalesRecord.business_date, models.HourlySalesRecord.hour_of_day).subquery()
     sales_rows = db.query(
@@ -1634,6 +1635,7 @@ def get_pallet_rotation_hourly_profile(
     ).filter(
         models.HourlyStoreTrafficRecord.store_id == store_id,
         models.HourlyStoreTrafficRecord.business_date >= start_date,
+        models.HourlyStoreTrafficRecord.business_date <= date.today(),
         models.HourlyStoreTrafficRecord.source == source,
     ).group_by(models.HourlyStoreTrafficRecord.business_date, models.HourlyStoreTrafficRecord.hour_of_day).subquery()
     traffic_rows = db.query(
