@@ -36,11 +36,15 @@ a um SKU do catálogo.
 
 ## Calibração antes de produção
 
-Os valores por omissão (`minimum_similarity=0.90` e
-`minimum_margin=0.05`) são apenas valores conservadores para testes de
+Os valores por omissão (`PRODUCT_MATCHING_MIN_SIMILARITY=0.90` e
+`PRODUCT_MATCHING_MIN_MARGIN=0.05`) são configuráveis no ambiente do worker.
+O primeiro define a semelhança mínima do melhor candidato; o segundo define a
+diferença mínima entre os dois melhores SKUs. Valores mais exigentes reduzem
+matches automáticos e aumentam a abstenção. São apenas valores conservadores para testes de
 contrato. Não são métricas de precisão nem thresholds certificados. Devem ser
 calibrados com imagens reais autorizadas, separadas por loja, produto, sessão
-de captura e condições de iluminação. A avaliação deve incluir falsos matches,
+de captura e condições de iluminação. As variáveis são lidas pelo worker no
+arranque; alterar o `.env` exige reiniciar o worker. A avaliação deve incluir falsos matches,
 taxa de abstention, top-1 accuracy e cobertura por SKU.
 
 ## API de persistência e revisão
