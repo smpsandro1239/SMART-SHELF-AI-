@@ -135,3 +135,6 @@ curl "http://localhost:8000/api/v1/warehouse/pallet-rotation/portfolio-from-hist
 ```
 
 A integração utiliza dados históricos por SKU, não um único valor de consumo partilhado por todos os produtos. Continua a ser necessário validar a resposta com testes de integração e dados de piloto antes de uso operacional.
+
+
+A resposta separa `interim_replenishment_required` dos candidatos com dados insuficientes. Se a quantidade residual não cobrir o consumo até nenhuma janela elegível, a palete aparece como necessidade de reposição intermédia; não é ocultada no contador de exclusões. Os candidatos com cobertura horária insuficiente permanecem em `UNKNOWN` e são contabilizados separadamente.
