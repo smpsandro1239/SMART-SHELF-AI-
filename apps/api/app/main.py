@@ -31,6 +31,7 @@ from app.pallet_rotation import evaluate_pallet_rotation, PalletRotationInputErr
 from app.pallet_rotation_windows import recommend_low_traffic_window
 from app.sku_review_evaluation import build_reviewed_prediction_report
 from app.sales_import import parse_daily_sales_csv
+from app.sales_import_hourly import parse_hourly_sales_csv, parse_hourly_traffic_csv
 from app.schemas import (
     ObservationCreate, ObservationRead, ShelfCreate, ShelfRead,
     StoreCreate, StoreRead, ZoneCreate, ZoneRead,
@@ -104,7 +105,7 @@ async def require_api_authentication(request: Request, call_next):
             })
         )
         supervisor_or_admin = (
-            (method == "POST" and (path in {"/api/v1/sales/daily", "/api/v1/sales/import-csv", "/api/v1/warehouse/locations", "/api/v1/warehouse/placements", "/api/v1/warehouse/pallets", "/api/v1/warehouse/pallet-rotation/policies", "/api/v1/warehouse/pallet-rotation/simulate", "/api/v1/sales/hourly", "/api/v1/sales/traffic/hourly", "/api/v1/sales/hourly/batch", "/api/v1/sales/traffic/hourly/batch"} or (path.startswith("/api/v1/warehouse/pallets/") and path.endswith("/events"))))
+            (method == "POST" and (path in {"/api/v1/sales/daily", "/api/v1/sales/import-csv", "/api/v1/warehouse/locations", "/api/v1/warehouse/placements", "/api/v1/warehouse/pallets", "/api/v1/warehouse/pallet-rotation/policies", "/api/v1/warehouse/pallet-rotation/simulate", "/api/v1/sales/hourly", "/api/v1/sales/traffic/hourly", "/api/v1/sales/hourly/batch", "/api/v1/sales/traffic/hourly/batch", "/api/v1/sales/hourly/import-csv", "/api/v1/sales/traffic/hourly/import-csv"} or (path.startswith("/api/v1/warehouse/pallets/") and path.endswith("/events"))))
             or (method == "PATCH" and path.startswith("/api/v1/warehouse/pallet-rotation/policies/"))
             or path == "/api/v1/product-embedding-exemplars"
             or path.startswith("/api/v1/product-embedding-exemplars/")
@@ -1392,6 +1393,100 @@ def create_hourly_store_traffic_record(payload: HourlyStoreTrafficRecordCreate, 
     db.refresh(item)
     return item
 
+
+
+
+@app.post("/api/v1/sales/hourly/import-csv", tags=["sales"])
+async def import_hourly_sales_csv(
+    request: Request,
+    store_id: int = Form(...),
+    source: SalesSource = Form("IMPORT"),
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    max_file_bytes = 5 * 1024 * 1024
+    actor = _request_user(db, request)
+    _enforce_store_scope(actor, store_id)
+    if not db.get(models.Store, store_id):
+        raise HTTPException(status_code=404, detail="Store not found")
+    if file.filename and not file.filename.lower().endswith(".csv"):
+        raise HTTPException(status_code=415, detail="Only .csv files are accepted")
+    payload = await file.read(max_file_bytes + 1)
+    if len(payload) > max_file_bytes:
+        raise HTTPException(status_code=413, detail="CSV file exceeds the 5 MB limit")
+    try:
+        rows = parse_hourly_sales_csv(payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    product_ids = {row.product_id for row in rows}
+    active_ids = {
+        item.id for item in db.query(models.Product).filter(
+            models.Product.id.in_(product_ids), models.Product.is_active.is_(True)
+        ).all()
+    }
+    missing = sorted(product_ids - active_ids)
+    if missing:
+        raise HTTPException(status_code=422, detail={"code": "UNKNOWN_OR_INACTIVE_PRODUCTS", "product_ids": missing})
+    items = [
+        models.HourlySalesRecord(
+            store_id=store_id, product_id=row.product_id, business_date=row.business_date,
+            hour_of_day=row.hour_of_day, quantity=row.quantity, source=source,
+            external_reference=row.external_reference,
+        ) for row in rows
+    ]
+    db.add_all(items)
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Hourly sales CSV conflicts with existing records; no rows were saved") from exc
+    return {
+        "status": "IMPORTED", "store_id": store_id, "source": source,
+        "rows_imported": len(items), "product_count": len(product_ids),
+        "period_start": min(row.business_date for row in rows),
+        "period_end": max(row.business_date for row in rows), "atomic": True,
+    }
+
+
+@app.post("/api/v1/sales/traffic/hourly/import-csv", tags=["sales"])
+async def import_hourly_traffic_csv(
+    request: Request,
+    store_id: int = Form(...),
+    source: SalesSource = Form("IMPORT"),
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    max_file_bytes = 5 * 1024 * 1024
+    actor = _request_user(db, request)
+    _enforce_store_scope(actor, store_id)
+    if not db.get(models.Store, store_id):
+        raise HTTPException(status_code=404, detail="Store not found")
+    if file.filename and not file.filename.lower().endswith(".csv"):
+        raise HTTPException(status_code=415, detail="Only .csv files are accepted")
+    payload = await file.read(max_file_bytes + 1)
+    if len(payload) > max_file_bytes:
+        raise HTTPException(status_code=413, detail="CSV file exceeds the 5 MB limit")
+    try:
+        rows = parse_hourly_traffic_csv(payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    items = [
+        models.HourlyStoreTrafficRecord(
+            store_id=store_id, business_date=row.business_date, hour_of_day=row.hour_of_day,
+            customer_count=row.customer_count, source=source, external_reference=row.external_reference,
+        ) for row in rows
+    ]
+    db.add_all(items)
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Hourly traffic CSV conflicts with existing records; no rows were saved") from exc
+    return {
+        "status": "IMPORTED", "store_id": store_id, "source": source,
+        "rows_imported": len(items), "period_start": min(row.business_date for row in rows),
+        "period_end": max(row.business_date for row in rows), "atomic": True,
+    }
 
 
 @app.get("/api/v1/sales/hourly", response_model=list[HourlySalesRecordRead], tags=["sales"])
