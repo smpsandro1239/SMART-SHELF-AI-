@@ -128,3 +128,19 @@ class ReplenishmentTask(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class User(Base):
+    """Application account with a role scoped to the platform."""
+    __tablename__ = "users"
+    __table_args__ = (
+        CheckConstraint("role IN ('ADMIN', 'SUPERVISOR', 'EMPLOYEE')", name="ck_user_role"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    email: Mapped[str] = mapped_column(String(254), unique=True, index=True, nullable=False)
+    full_name: Mapped[str] = mapped_column(String(160), nullable=False)
+    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    role: Mapped[str] = mapped_column(String(16), default="EMPLOYEE", nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
