@@ -418,3 +418,8 @@ O contrato do provider aceita `embedding` e `embedding_model_version` opcionais 
 A versão do detector (`model_version`) e a versão do modelo de embeddings (`embedding_model_version`) são distintas. A tabela `shelf_image_detections` guarda estado, similaridade, margem e versão de embeddings para auditoria. Os thresholds não estão calibrados e a integração não deve alimentar contagens de stock sem validação humana.
 
 Aplicar a migração `0012_detection_sku_matching` antes de executar o worker atualizado.
+
+
+### OCR opcional no worker
+
+O worker pode executar OCR automaticamente depois da deteção visual, quando `OCR_PROVIDER_FACTORY` estiver configurado. O adaptador PaddleOCR é opcional; sem ele, o worker mantém o comportamento visual anterior. As regiões são associadas geometricamente às deteções, e as regiões sem sobreposição suficiente ficam `UNASSIGNED`. A execução e as regiões ficam persistidas para posterior matching de catálogo e fusão. Falhas OCR são registadas como execução `FAILED` e não invalidam a análise visual.
