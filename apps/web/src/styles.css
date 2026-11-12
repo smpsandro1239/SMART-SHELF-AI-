@@ -83,3 +83,32 @@
 .evaluation-caveat{margin:10px 0 0;padding:10px 12px;border-left:2px solid #c9d4df;background:#f7f9fb;color:#7b8998;font-size:9px;line-height:1.5}
 @media(max-width:900px){.evaluation-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:520px){.evaluation-metrics{gap:7px}.evaluation-metrics>div{padding:10px}.evaluation-metrics strong{font-size:18px}.evaluation-detail{display:grid;grid-template-columns:1fr 1fr;gap:8px}}
+
+
+/* Evidence-based replenishment planning */
+.replenishment-plan-panel{margin:18px 0}
+.plan-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px;margin:18px 0}
+.plan-metrics>div{display:grid;gap:6px;padding:12px;border:1px solid #e8edf2;border-radius:9px;background:#fafbfd}
+.plan-metrics span{font-size:9px;color:#8290a0}
+.plan-metrics strong{font:800 20px Manrope,sans-serif;color:#26384b}
+.plan-hint{font-size:10px;line-height:1.6;color:#8290a0;margin:12px 0}
+.plan-error{font-size:10px;color:#a43f36;background:#fff0ef;padding:9px 11px;border-radius:8px}
+.plan-groups{display:grid;gap:12px;margin-top:14px}
+.plan-zone{border:1px solid #e8edf2;border-radius:9px;padding:12px}
+.plan-zone-heading{display:flex;justify-content:space-between;gap:10px;padding-bottom:9px;border-bottom:1px solid #edf0f3;font-size:11px;color:#35485b}
+.plan-zone-heading span{font-size:9px;color:#8995a2}
+.plan-task{display:grid;grid-template-columns:minmax(0,1fr) auto auto auto;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid #f0f2f5}
+.plan-task:last-child{border-bottom:0}
+.plan-task>div{min-width:0}
+.plan-task>div strong,.plan-task>div span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.plan-task>div strong{font-size:10px;color:#35485b}
+.plan-task>div span{font-size:9px;color:#8995a2;margin-top:4px}
+.plan-risk,.plan-duration,.plan-review{font-size:9px;padding:5px 7px;border-radius:6px;white-space:nowrap}
+.plan-risk.critical{background:#fff0ed;color:#b44839}
+.plan-risk.high{background:#fff3e5;color:#a66a21}
+.plan-risk.medium{background:#fff8e9;color:#987126}
+.plan-risk.low{background:#eaf5ef;color:#237b57}
+.plan-risk.unknown,.plan-risk.not_assessed{background:#eef2f6;color:#68798a}
+.plan-duration{background:#edf4ff;color:#4778b9}
+.plan-review{background:#f3f4f6;color:#68798a}
+@media(max-width:700px){.plan-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.plan-task{grid-template-columns:minmax(0,1fr) auto;gap:7px}.plan-duration,.plan-review{grid-row:2}.plan-task>div{grid-column:1/-1}.plan-risk{grid-column:1}.plan-duration{grid-column:2}.plan-review{grid-column:1/-1;justify-self:start}}
