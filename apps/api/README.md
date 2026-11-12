@@ -1146,3 +1146,25 @@ Este endpoint é apenas consultivo: não reserva paletes, não cria tarefas e n�
 
 
 A resposta separa também `interim_replenishment_required`: paletes cujo residual não cobre o consumo histórico até qualquer janela operacional elegível. Estes casos não são descartados como simples falta de dados; são apresentados como necessidade de intervenção intermédia. `insufficient_evidence_count` contabiliza candidatos que não podem ser avaliados por falta de cobertura.
+
+
+### Prioridade de reposição informada pelo risco de rutura
+
+O planeador `app/replenishment_planning.py` aceita opcionalmente o campo
+`stockout_risk_level` em cada recomendação (`CRITICAL`, `HIGH`, `MEDIUM`,
+`LOW` ou `UNKNOWN`). Quando presente, o risco é usado antes do estado
+genérico da recomendação para ordenar o trabalho. Valores desconhecidos ou
+ausentes são normalizados para `NOT_ASSESSED` e não são tratados como baixo
+risco.
+
+Esta classificação altera apenas a ordenação: não representa uma probabilidade
+calibrada, não altera quantidades e não autoriza a criação de tarefas. A regra
+`task_creation_allowed` continua a exigir o estado
+`NEEDS_REPLENISHMENT` e uma quantidade positiva, numérica e não booleana.
+Recomendações sem quantidade continuam a exigir revisão humana mesmo que
+tenham risco `CRITICAL`.
+
+A sequência de prateleiras continua a ser uma heurística por zona/código/posição,
+não um percurso físico otimizado. Para ativar esta prioridade nos resultados
+de um endpoint, o respetivo adaptador deve fornecer explicitamente
+`stockout_risk_level`; a ausência de integração não é mascarada nem inferida.
