@@ -36,3 +36,12 @@ A interface web pode consumir este endpoint para apresentar exceções e recomen
 
 Quando existe previsão válida, o motor calcula as horas de cobertura estimada:
 `inventário disponível / procura média por hora`. Uma recomendação por risco de procura é emitida quando a cobertura fica abaixo ou igual ao limiar configurado (12 horas por omissão). Este indicador é uma estimativa, não uma garantia de disponibilidade física.
+
+
+## Ordenação e prioridade operacional
+
+A resposta é ordenada para colocar primeiro recomendações que exigem ação, depois trabalho já em execução, evidência insuficiente e itens em monitorização. Dentro das recomendações, prioridade alta precede prioridade normal; quando existe cobertura estimada, a menor cobertura aparece primeiro.
+
+A prioridade alta exige uma observação de estado EMPTY recente e com confiança suficiente, ou uma previsão válida de cobertura com inventário disponível igual a zero. Um estado EMPTY antigo ou de baixa confiança não pode, por si só, elevar a prioridade.
+
+A resposta inclui `priority_counts`, permitindo ao dashboard distinguir quantidade de ações recomendadas e quantidade de ações de prioridade alta.
