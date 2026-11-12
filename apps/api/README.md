@@ -286,3 +286,23 @@ Opções:
 
 Abrir o HTML localmente num navegador. A página referencia as imagens na pasta indicada por `--image-root`; não as copia, modifica nem envia. A ferramenta valida o documento COCO, verifica a existência das imagens e bloqueia caminhos absolutos/traversal. É uma ajuda de revisão humana, não um mecanismo de aprovação semântica.
 
+
+
+## Registo de revisão humana por imagem
+
+Criar templates ligados à versão exata de cada ficheiro COCO:
+
+```bash
+python -m app.dataset_review --coco /dados/annotations/instances_train.json --split train --create-template /dados/private/review-train.json
+python -m app.dataset_review --coco /dados/annotations/instances_val.json --split val --create-template /dados/private/review-val.json
+python -m app.dataset_review --coco /dados/annotations/instances_test.json --split test --create-template /dados/private/review-test.json
+```
+
+Editar cada entrada e preencher `decision` (`APPROVED`, `NEEDS_CORRECTION` ou `REJECTED`), `reviewer`, `reviewed_at` (ISO 8601) e notas. Validar um split:
+
+```bash
+python -m app.dataset_review --coco /dados/annotations/instances_train.json --split train --record /dados/private/review-train.json
+```
+
+Para tornar obrigatória a revisão completa dos três splits no gate, acrescentar `--require-visual-review`, `--review-train`, `--review-val` e `--review-test` ao comando `app.dataset_approval`. O gate compara o SHA-256 do COCO e o hash das anotações de cada imagem; qualquer alteração após revisão bloqueia a aprovação até nova revisão. Os registos são privados e não devem ser guardados no Git.
+
