@@ -16,6 +16,7 @@ from app.config import settings
 from app.database import get_db, SessionLocal
 from app import models
 from app.security import hash_password, verify_password, create_access_token, decode_access_token
+from app.product_text import normalize_product_text
 from app.replenishment_policy import ShelfRefillInput, suggest_shelf_refill
 from app.schemas import (
     ObservationCreate, ObservationRead, ShelfCreate, ShelfRead,
@@ -27,6 +28,7 @@ from app.schemas import (
     ShelfImageDetectionRead, ProductEmbeddingExemplarCreate,
     ProductEmbeddingExemplarReview, ProductEmbeddingExemplarRead,
     DetectionSkuReviewCreate, DetectionSkuReviewRead,
+    ShelfImageOCRRunCreate, ShelfImageOCRRunRead, ShelfImageOCREvidenceRead,
 )
 
 app = FastAPI(title=settings.app_name, version="0.2.0", description="Operational API for SMART SHELF AI.")
@@ -82,6 +84,7 @@ async def require_api_authentication(request: Request, call_next):
             path == "/api/v1/product-embedding-exemplars"
             or path.startswith("/api/v1/product-embedding-exemplars/")
             or (method == "POST" and path.startswith("/api/v1/shelf-image-detections/"))
+            or (method == "POST" and path.startswith("/api/v1/shelf-images/") and path.endswith("/ocr-runs"))
         )
         if supervisor_or_admin and user.role not in {"ADMIN", "SUPERVISOR"}:
             return JSONResponse(status_code=403, content={"detail": "Supervisor role required"})
@@ -95,6 +98,7 @@ async def require_api_authentication(request: Request, call_next):
             allowed_employee_image_upload = method == "POST" and path == "/api/v1/shelf-images"
             allowed_employee_image_content = method == "GET" and path.startswith("/api/v1/shelf-images/") and path.endswith("/content")
             allowed_employee_image_detections = method == "GET" and path.startswith("/api/v1/shelf-images/") and path.endswith("/detections")
+            allowed_employee_ocr_evidence = method == "GET" and path.startswith("/api/v1/shelf-images/") and path.endswith("/ocr-evidence")
             allowed_employee_detection_review_history = method == "GET" and path.startswith("/api/v1/shelf-image-detections/") and path.endswith("/reviews")
             allowed_employee_task_update = (
                 method == "PATCH"
@@ -414,6 +418,89 @@ def list_shelf_image_detections(
     status_code=201,
     tags=["computer-vision"],
 )
+
+@app.post("/api/v1/shelf-images/{image_id}/ocr-runs", response_model=ShelfImageOCRRunRead, status_code=201, tags=["computer-vision"])
+def create_shelf_image_ocr_run(image_id: int, payload: ShelfImageOCRRunCreate, request: Request, db: Session = Depends(get_db)):
+    """Persist one immutable OCR pass and its per-region detection associations."""
+    image_record = db.get(models.ShelfImage, image_id)
+    if image_record is None:
+        raise HTTPException(status_code=404, detail="Shelf image not found")
+    actor = _request_user(db, request)
+    _enforce_store_scope(actor, _shelf_image_store_id(db, image_id))
+
+    detection_ids = {item.detection_id for item in payload.regions if item.detection_id is not None}
+    if detection_ids:
+        valid_ids = {
+            row[0] for row in db.query(models.ShelfImageDetection.id)
+            .filter(
+                models.ShelfImageDetection.shelf_image_id == image_id,
+                models.ShelfImageDetection.id.in_(detection_ids),
+            ).all()
+        }
+        if valid_ids != detection_ids:
+            raise HTTPException(status_code=422, detail="Every detection_id must belong to the supplied shelf image")
+
+    run = models.ShelfImageOCRRun(
+        shelf_image_id=image_id,
+        provider=payload.provider.strip(),
+        model_version=payload.model_version.strip(),
+        status="COMPLETED",
+        created_by_user_id=actor.id if actor else None,
+    )
+    db.add(run)
+    db.flush()
+    for item in payload.regions:
+        normalized = normalize_product_text(item.text)
+        if not normalized:
+            raise HTTPException(status_code=422, detail="OCR text must contain letters or digits")
+        db.add(models.ShelfImageOCREvidence(
+            run_id=run.id,
+            detection_id=item.detection_id,
+            text=item.text.strip(),
+            normalized_text=normalized[:1000],
+            confidence=item.confidence,
+            x_min=item.x_min,
+            y_min=item.y_min,
+            x_max=item.x_max,
+            y_max=item.y_max,
+            association_status="ASSIGNED" if item.detection_id is not None else "UNASSIGNED",
+        ))
+    db.commit()
+    db.refresh(run)
+    return run
+
+
+@app.get("/api/v1/shelf-images/{image_id}/ocr-evidence", response_model=list[ShelfImageOCREvidenceRead], tags=["computer-vision"])
+def list_shelf_image_ocr_evidence(image_id: int, request: Request, limit: int = 500, db: Session = Depends(get_db)):
+    """List OCR evidence for an image, newest inference run first."""
+    image_record = db.get(models.ShelfImage, image_id)
+    if image_record is None:
+        raise HTTPException(status_code=404, detail="Shelf image not found")
+    _enforce_store_scope(_request_user(db, request), _shelf_image_store_id(db, image_id))
+    return (
+        db.query(models.ShelfImageOCREvidence)
+        .join(models.ShelfImageOCRRun, models.ShelfImageOCREvidence.run_id == models.ShelfImageOCRRun.id)
+        .filter(models.ShelfImageOCRRun.shelf_image_id == image_id)
+        .order_by(models.ShelfImageOCREvidence.id.desc())
+        .limit(max(1, min(limit, 1000))).all()
+    )
+
+
+@app.get("/api/v1/shelf-images/{image_id}/ocr-runs", response_model=list[ShelfImageOCRRunRead], tags=["computer-vision"])
+def list_shelf_image_ocr_runs(image_id: int, request: Request, limit: int = 100, db: Session = Depends(get_db)):
+    """List OCR inference provenance for a shelf image."""
+    image_record = db.get(models.ShelfImage, image_id)
+    if image_record is None:
+        raise HTTPException(status_code=404, detail="Shelf image not found")
+    _enforce_store_scope(_request_user(db, request), _shelf_image_store_id(db, image_id))
+    return (
+        db.query(models.ShelfImageOCRRun)
+        .filter(models.ShelfImageOCRRun.shelf_image_id == image_id)
+        .order_by(models.ShelfImageOCRRun.id.desc())
+        .limit(max(1, min(limit, 500))).all()
+    )
+
+
 def create_detection_sku_review(
     detection_id: int,
     payload: DetectionSkuReviewCreate,
