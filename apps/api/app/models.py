@@ -246,3 +246,44 @@ class DetectionSkuReview(Base):
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
 
+
+
+class ShelfImageOCRRun(Base):
+    """Append-only record of one OCR inference pass over a shelf image."""
+    __tablename__ = "shelf_image_ocr_runs"
+    __table_args__ = (
+        CheckConstraint("status IN ('COMPLETED', 'FAILED')", name="ck_shelf_image_ocr_run_status"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    shelf_image_id: Mapped[int] = mapped_column(ForeignKey("shelf_images.id", ondelete="CASCADE"), index=True, nullable=False)
+    provider: Mapped[str] = mapped_column(String(80), nullable=False)
+    model_version: Mapped[str] = mapped_column(String(120), nullable=False)
+    status: Mapped[str] = mapped_column(String(12), default="COMPLETED", nullable=False)
+    created_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+
+class ShelfImageOCREvidence(Base):
+    """Immutable OCR text region and optional association to one product detection."""
+    __tablename__ = "shelf_image_ocr_evidence"
+    __table_args__ = (
+        CheckConstraint("confidence >= 0 AND confidence <= 1", name="ck_shelf_ocr_confidence_range"),
+        CheckConstraint("x_min >= 0 AND x_min <= 1 AND y_min >= 0 AND y_min <= 1", name="ck_shelf_ocr_bbox_min_range"),
+        CheckConstraint("x_max >= 0 AND x_max <= 1 AND y_max >= 0 AND y_max <= 1", name="ck_shelf_ocr_bbox_max_range"),
+        CheckConstraint("x_min < x_max AND y_min < y_max", name="ck_shelf_ocr_bbox_order"),
+        CheckConstraint("association_status IN ('ASSIGNED', 'UNASSIGNED')", name="ck_shelf_ocr_association_status"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    run_id: Mapped[int] = mapped_column(ForeignKey("shelf_image_ocr_runs.id", ondelete="CASCADE"), index=True, nullable=False)
+    detection_id: Mapped[int | None] = mapped_column(ForeignKey("shelf_image_detections.id", ondelete="SET NULL"), index=True, nullable=True)
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    normalized_text: Mapped[str] = mapped_column(String(1000), nullable=False)
+    confidence: Mapped[float] = mapped_column(Float, nullable=False)
+    x_min: Mapped[float] = mapped_column(Float, nullable=False)
+    y_min: Mapped[float] = mapped_column(Float, nullable=False)
+    x_max: Mapped[float] = mapped_column(Float, nullable=False)
+    y_max: Mapped[float] = mapped_column(Float, nullable=False)
+    association_status: Mapped[str] = mapped_column(String(12), default="UNASSIGNED", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
