@@ -66,3 +66,10 @@ O planeador de paletes ignora candidatos que não sejam objetos de mapeamento e 
 - Malformed pallet candidates are retained only as explicitly unknown evidence and do not interrupt processing of valid candidates.
 - Daily sales history accepts calendar dates only. Datetime values are rejected to avoid mixed date/datetime comparisons and ambiguous business-day assignment.
 - All these paths remain read-only. Planning evidence and recommendations never authorize physical stock movement.
+
+## HTTP pallet portfolio input guards
+
+- Historical portfolio query parameters (`current_hour`, `days`, `duration_hours`, `minimum_observed_days`, and `limit`) must be actual integers within their documented ranges; booleans and fractional values are rejected.
+- Cost/time inputs and operator-supplied demand values must be finite, non-negative numeric values. Boolean values are rejected explicitly instead of being interpreted as 0 or 1.
+- The operator-input portfolio endpoint no longer truncates fractional limits with `int(limit)`; the requested limit must already be an integer.
+- Invalid input is rejected with HTTP 422 before portfolio database work proceeds. Both portfolio endpoints remain read-only.
