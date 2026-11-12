@@ -44,7 +44,7 @@ def resolve_sku_match(db: Session, detection, registry_cache=None):
         cache = registry_cache if registry_cache is not None else {}
         version = detection.embedding_model_version
         if version not in cache:
-            cache[version] = build_approved_product_registry(db, model_version=version)
+            cache[version] = build_approved_product_registry(\n                db,\n                model_version=version,\n                minimum_similarity=settings.product_matching_min_similarity,\n                minimum_margin=settings.product_matching_min_margin,\n            )
         match = cache[version].match(detection.embedding)
     except (ValueError, TypeError):
         logger.warning("SKU matching abstained: incompatible or invalid embedding registry")
