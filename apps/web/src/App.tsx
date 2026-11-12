@@ -67,6 +67,25 @@ type ReplenishmentPlan = {
   };
   automatic_stock_movement_allowed: boolean;
 };
+type OperationalDecision = {
+  status: "INSUFFICIENT_EVIDENCE" | "MONITOR" | "ACTION_RECOMMENDED" | "ALREADY_IN_PROGRESS" | string;
+  priority: "NONE" | "NORMAL" | "HIGH" | string;
+  reason: string;
+  suggested_replenishment_quantity: number | null;
+  requires_human_approval: boolean;
+  automatic_stock_movement_allowed: boolean;
+  warnings: string[];
+  evidence: { type: string; status?: string; confidence?: number | null; available_quantity?: number; predicted_units?: number; fresh?: boolean; source?: string }[];
+};
+type OperationalDecisionRow = {
+  store_id: number; zone_name: string; shelf_id: number; shelf_code: string;
+  product_id: number; product_sku: string; product_name: string;
+  decision: OperationalDecision;
+};
+type OperationalDecisionResponse = {
+  generated_at: string; count: number; status_counts: Record<string, number>;
+  forecast_policy: string; decisions: OperationalDecisionRow[];
+};
 type Summary = {
   store_id: number | null; role: Role; active_tasks: number;
   shelves_requiring_attention: number;
@@ -82,6 +101,8 @@ export default function App() {
   const [password, setPassword] = useState("");
   const [storeFilter, setStoreFilter] = useState("");
   const [summary, setSummary] = useState<Summary | null>(null);
+  const [operationalDecisions, setOperationalDecisions] = useState<OperationalDecisionResponse | null>(null);
+  const [decisionLoading, setDecisionLoading] = useState(false);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [captures, setCaptures] = useState<ShelfImage[]>([]);
   const [imageDetections, setImageDetections] = useState<Record<number, ShelfImageDetection[]>>({});
@@ -128,7 +149,7 @@ export default function App() {
     sessionStorage.removeItem("smart-shelf-token");
     Object.values(imageUrls).forEach(url => URL.revokeObjectURL(url));
     setImageUrls({});
-    setToken(""); setUser(null); setSummary(null); setTasks([]); setCaptures([]); setImageDetections({}); setDetectionReviews({}); setExpandedDetectionImage(null);
+    setToken(""); setUser(null); setSummary(null); setOperationalDecisions(null); setTasks([]); setCaptures([]); setImageDetections({}); setDetectionReviews({}); setExpandedDetectionImage(null);
   }, [imageUrls]);
 
   const refresh = useCallback(async () => {
@@ -143,6 +164,23 @@ export default function App() {
         request<ShelfImage[]>("/api/v1/shelf-images?limit=30"),
       ]);
       setUser(me); setSummary(kpis); setTasks(taskList); setCaptures(captureList); setLastUpdated(new Date());
+      if (me.role === "ADMIN" || me.role === "SUPERVISOR") {
+        setDecisionLoading(true);
+        try {
+          const decisionQuery = me.role === "ADMIN" && storeFilter.trim()
+            ? `?store_id=${encodeURIComponent(storeFilter.trim())}`
+            : "";
+          const decisions = await request<OperationalDecisionResponse>(`/api/v1/operational-decisions${decisionQuery}`);
+          setOperationalDecisions(decisions);
+        } catch (decisionError) {
+          setOperationalDecisions(null);
+          setError(decisionError instanceof Error ? decisionError.message : "Não foi possível carregar as decisões operacionais.");
+        } finally {
+          setDecisionLoading(false);
+        }
+      } else {
+        setOperationalDecisions(null);
+      }
       if (me.role === "ADMIN" || me.role === "SUPERVISOR") {
         try {
           const [queue, queueSummary, evaluation] = await Promise.all([
@@ -428,6 +466,37 @@ export default function App() {
               <div className="panel-note"><AlertTriangle size={16} /><span>{summary.observations.empty || 0} prateleiras sem stock e {summary.observations.low_stock || 0} com stock baixo, segundo as observações registadas.</span></div>
             </article>
           </section>
+          {(user?.role === "ADMIN" || user?.role === "SUPERVISOR") && <section className="panel decision-panel">
+            <div className="panel-heading">
+              <div><p className="eyebrow">INTELIGÊNCIA OPERACIONAL</p><h2>Decisões e alertas por prateleira</h2><p className="muted">Cruza observações, inventário, vendas recentes e tarefas ativas. Apenas recomenda; não cria tarefas nem altera stock.</p></div>
+              <button className="row-action" onClick={() => void refresh()} disabled={loading || decisionLoading}>{decisionLoading ? "A atualizar…" : "Atualizar decisões"} <RefreshCw size={14} /></button>
+            </div>
+            {decisionLoading && !operationalDecisions && <div className="loading-state">A avaliar evidência operacional…</div>}
+            {operationalDecisions && <>
+              <div className="decision-counts">
+                <div><span>Itens avaliados</span><strong>{operationalDecisions.count}</strong></div>
+                <div><span>Ação recomendada</span><strong>{operationalDecisions.status_counts.ACTION_RECOMMENDED || 0}</strong></div>
+                <div><span>Em acompanhamento</span><strong>{operationalDecisions.status_counts.MONITOR || 0}</strong></div>
+                <div><span>Já em execução</span><strong>{operationalDecisions.status_counts.ALREADY_IN_PROGRESS || 0}</strong></div>
+              </div>
+              <p className="decision-method">{operationalDecisions.forecast_policy}</p>
+              <div className="decision-list">
+                {operationalDecisions.decisions.length === 0 && <div className="empty-state"><ShieldCheck size={24} /><strong>Sem produtos associados a prateleiras</strong><span>Quando existirem associações e evidência registada, o motor apresentará as decisões aqui.</span></div>}
+                {operationalDecisions.decisions.map(item => <article className="decision-row" key={`${item.shelf_id}-${item.product_id}`}>
+                  <div className="decision-product"><strong>{item.product_name}</strong><span>{item.product_sku} · {item.zone_name} · Prateleira {item.shelf_code}</span></div>
+                  <span className={`decision-status ${item.decision.status.toLowerCase()}`}>{item.decision.status === "ACTION_RECOMMENDED" ? "Requer avaliação" : item.decision.status === "ALREADY_IN_PROGRESS" ? "Tarefa ativa" : item.decision.status === "INSUFFICIENT_EVIDENCE" ? "Dados insuficientes" : "Monitorizar"}</span>
+                  <p>{item.decision.reason}</p>
+                  <div className="decision-meta">
+                    <span>Prioridade: <strong>{item.decision.priority}</strong></span>
+                    <span>Quantidade sugerida: <strong>{item.decision.suggested_replenishment_quantity == null ? "Não calculada" : item.decision.suggested_replenishment_quantity}</strong></span>
+                    <span>Fontes: <strong>{item.decision.evidence.length}</strong></span>
+                  </div>
+                  {item.decision.warnings.length > 0 && <ul className="decision-warnings">{item.decision.warnings.map((warning, index) => <li key={index}>{warning}</li>)}</ul>}
+                </article>)}
+              </div>
+              <p className="decision-method">Gerado em {new Date(operationalDecisions.generated_at).toLocaleString("pt-PT")}. Todas as recomendações requerem validação humana.</p>
+            </>}
+          </section>}
           {(user?.role === "ADMIN" || user?.role === "SUPERVISOR") && <section className="panel replenishment-plan-panel">
             <div className="panel-heading">
               <div><p className="eyebrow">PLANEAMENTO ASSISTIDO</p><h2>Plano inteligente de reposição</h2><p className="muted">Prioriza por risco de rutura e estima esforço quando existe histórico suficiente.</p></div>
