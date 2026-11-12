@@ -624,3 +624,14 @@ class PalletRotationEventRead(BaseModel):
     performed_by_user_id: int | None
     occurred_at: datetime
     model_config = ConfigDict(from_attributes=True)
+
+
+class PalletRotationPolicyUpdate(BaseModel):
+    threshold_ratio: float | None = Field(default=None, gt=0, le=1, allow_inf_nan=False)
+    is_enabled: bool | None = None
+
+    @model_validator(mode="after")
+    def require_at_least_one_change(self):
+        if self.threshold_ratio is None and self.is_enabled is None:
+            raise ValueError("At least one policy field must be supplied")
+        return self
