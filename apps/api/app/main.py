@@ -272,9 +272,9 @@ def list_replenishment_recommendations(
                 status = "STALE_OBSERVATION"
                 explanation = "A observação é demasiado antiga para suportar uma tarefa de reposição."
             elif observation.status in ("LOW_STOCK", "EMPTY"):
-                if observation.confidence is not None and observation.confidence < 0.6:
+                if observation.confidence is None or observation.confidence < 0.6:
                     status = "LOW_CONFIDENCE"
-                    explanation = "A deteção tem confiança inferior a 0,60; requer confirmação humana."
+                    explanation = "A deteção não tem confiança suficiente (mínimo 0,60); requer confirmação humana."
                 elif inventory is None:
                     status = "INVENTORY_UNKNOWN"
                     explanation = "Não existe snapshot de inventário; verificar stock antes de repor."
