@@ -167,3 +167,6 @@ O perfil por dia da semana seleciona uma única origem (`source`, por
 predefinição `POS`) para não somar contagens possivelmente sobrepostas entre
 POS, ERP e sensores. A comparação de fontes deve ser feita em pedidos
 separados.
+
+
+A lista é ordenada por prioridade operacional e depois por código/posição de prateleira. O atributo `route_order` é calculado independentemente pela ordem estável das prateleiras. Prioridade de execução não é uma rota física otimizada.
