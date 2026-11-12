@@ -97,3 +97,20 @@ política e a decisão do motor. A operação é estritamente read-only: não re
 a palete candidata, não cria tarefa, não muda estado nem regista movimento.
 Apenas uma futura operação de execução, com confirmação por scan e controlo
 transacional, poderá fazê-lo.
+
+
+## Planeamento de janela de baixa afluência
+
+O módulo `app/pallet_rotation_windows.py` escolhe uma janela contínua de 1 a
+4 horas nas próximas 24 horas. Compara a afluência média histórica e verifica
+se a quantidade residual cobre o consumo médio por hora até ao início da janela.
+Cada hora considerada tem de atingir o mínimo configurado de dias observados.
+Ausência de dados nunca é convertida em zero.
+
+Endpoint:
+`GET /api/v1/warehouse/pallet-rotation/window-plan`
+
+A hora atual é a hora local da loja e é fornecida explicitamente pelo chamador.
+O algoritmo é determinístico e heurístico: não prevê vendas futuras, não usa
+tráfego em tempo real e não agenda tarefas. O resultado é consultivo e não
+executa qualquer movimento.
