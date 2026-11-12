@@ -43,10 +43,13 @@ def create_review_template(
     document: Any, split: str, coco_sha256: str
 ) -> tuple[dict[str, Any] | None, list[str]]:
     """Create one pending review item per COCO image, bound to this COCO file."""
+    errors = []
     if split not in SPLITS:
-        return None, ["split must be train, val or test"]
+        errors.append("split must be train, val or test")
     if not isinstance(coco_sha256, str) or not SHA256_PATTERN.fullmatch(coco_sha256):
-        return None, ["coco_sha256 must be a 64-character lowercase SHA-256"]
+        errors.append("coco_sha256 must be a 64-character lowercase SHA-256")
+    if errors:
+        return None, errors
     errors = validate_coco_document(document)
     if errors:
         return None, ["invalid COCO document: " + "; ".join(errors[:10])]
