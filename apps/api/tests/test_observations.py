@@ -226,3 +226,92 @@ def test_detection_query_respects_store_scope(tmp_path, monkeypatch):
         )
         response = client.get(f"/api/v1/shelf-images/{uploaded.json()['id']}/detections")
         assert response.status_code == 403
+
+
+def test_vision_worker_persists_provider_detections(tmp_path, monkeypatch):
+    from app.config import settings
+    from app.vision import VisionAnalysis
+    from app.vision_worker import process_next_image
+
+    monkeypatch.setattr(settings, "image_storage_path", str(tmp_path))
+    Base.metadata.drop_all(bind=TEST_ENGINE)
+    Base.metadata.create_all(bind=TEST_ENGINE)
+
+    class FakeProvider:
+        def analyze(self, image_path):
+            assert image_path.is_file()
+            return VisionAnalysis.model_validate({
+                "model_version": "fake-test-1",
+                "detections": [{
+                    "label": "water_bottle",
+                    "confidence": 0.97,
+                    "x_min": 0.1,
+                    "y_min": 0.2,
+                    "x_max": 0.7,
+                    "y_max": 0.9,
+                }],
+            })
+
+    with TestClient(app) as client:
+        store = client.post("/api/v1/stores", json={"code": "WORK-01", "name": "Worker test"})
+        zone = client.post("/api/v1/zones", json={"store_id": store.json()["id"], "name": "Bebidas"})
+        shelf = client.post("/api/v1/shelves", json={"zone_id": zone.json()["id"], "code": "WK-01"})
+        uploaded = client.post(
+            "/api/v1/shelf-images",
+            data={"shelf_id": str(shelf.json()["id"])},
+            files={"image": ("worker.png", b"\x89PNG\r\n\x1a\nworker-test", "image/png")},
+        )
+        assert uploaded.status_code == 201
+        image_id = uploaded.json()["id"]
+
+        db = TestingSession()
+        try:
+            assert process_next_image(db, FakeProvider()) == image_id
+            image = db.get(models.ShelfImage, image_id)
+            assert image.analysis_status == "COMPLETED"
+            assert image.model_version == "fake-test-1"
+            assert image.analysis_started_at is not None
+            assert image.analysis_completed_at is not None
+            assert image.analysis_error is None
+            detections = db.query(models.ShelfImageDetection).filter_by(shelf_image_id=image_id).all()
+            assert len(detections) == 1
+            assert detections[0].label == "water_bottle"
+            assert detections[0].confidence == 0.97
+        finally:
+            db.close()
+
+
+def test_vision_worker_marks_provider_errors_as_failed(tmp_path, monkeypatch):
+    from app.config import settings
+    from app.vision_worker import process_next_image
+
+    monkeypatch.setattr(settings, "image_storage_path", str(tmp_path))
+    Base.metadata.drop_all(bind=TEST_ENGINE)
+    Base.metadata.create_all(bind=TEST_ENGINE)
+
+    class BrokenProvider:
+        def analyze(self, image_path):
+            raise RuntimeError("provider unavailable")
+
+    with TestClient(app) as client:
+        store = client.post("/api/v1/stores", json={"code": "WORK-02", "name": "Worker failure"})
+        zone = client.post("/api/v1/zones", json={"store_id": store.json()["id"], "name": "Frescos"})
+        shelf = client.post("/api/v1/shelves", json={"zone_id": zone.json()["id"], "code": "WK-02"})
+        uploaded = client.post(
+            "/api/v1/shelf-images",
+            data={"shelf_id": str(shelf.json()["id"])},
+            files={"image": ("worker.png", b"\x89PNG\r\n\x1a\nworker-test", "image/png")},
+        )
+        assert uploaded.status_code == 201
+        image_id = uploaded.json()["id"]
+
+        db = TestingSession()
+        try:
+            assert process_next_image(db, BrokenProvider()) == image_id
+            image = db.get(models.ShelfImage, image_id)
+            assert image.analysis_status == "FAILED"
+            assert "provider unavailable" in image.analysis_error
+            assert image.analysis_completed_at is not None
+            assert db.query(models.ShelfImageDetection).filter_by(shelf_image_id=image_id).count() == 0
+        finally:
+            db.close()
