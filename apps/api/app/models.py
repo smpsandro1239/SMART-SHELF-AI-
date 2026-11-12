@@ -287,3 +287,26 @@ class ShelfImageOCREvidence(Base):
     y_max: Mapped[float] = mapped_column(Float, nullable=False)
     association_status: Mapped[str] = mapped_column(String(12), default="UNASSIGNED", nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+
+class ShelfImageOCRMatch(Base):
+    """Append-only catalogue matching result for one detected product and OCR run."""
+    __tablename__ = "shelf_image_ocr_matches"
+    __table_args__ = (
+        UniqueConstraint("run_id", "detection_id", name="uq_ocr_match_run_detection"),
+        CheckConstraint("status IN ('SUGGESTED', 'AMBIGUOUS', 'UNKNOWN')", name="ck_ocr_match_status"),
+        CheckConstraint("top_score IS NULL OR (top_score >= 0 AND top_score <= 1)", name="ck_ocr_match_score"),
+        CheckConstraint("ocr_confidence >= 0 AND ocr_confidence <= 1", name="ck_ocr_match_confidence"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    run_id: Mapped[int] = mapped_column(ForeignKey("shelf_image_ocr_runs.id", ondelete="CASCADE"), index=True, nullable=False)
+    detection_id: Mapped[int] = mapped_column(ForeignKey("shelf_image_detections.id", ondelete="CASCADE"), index=True, nullable=False)
+    suggested_product_id: Mapped[int | None] = mapped_column(ForeignKey("products.id", ondelete="SET NULL"), nullable=True, index=True)
+    observed_text: Mapped[str] = mapped_column(Text, nullable=False)
+    ocr_confidence: Mapped[float] = mapped_column(Float, nullable=False)
+    status: Mapped[str] = mapped_column(String(12), nullable=False, index=True)
+    top_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    margin: Mapped[float | None] = mapped_column(Float, nullable=True)
+    candidates: Mapped[list] = mapped_column(JSON, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
