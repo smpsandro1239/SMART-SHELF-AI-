@@ -552,3 +552,13 @@ A migração `0014_shelf_image_ocr_evidence` introduz histórico de execuções 
 
 - [Documentação de persistência OCR](docs/architecture/ocr-evidence-persistence.md)
 - Aplicar em ambiente de desenvolvimento: `cd apps/api && alembic upgrade head`
+
+
+### Matching OCR com o catálogo
+
+O motor de matching OCR compara texto reconhecido com SKU, nome, marca e pistas de embalagem do catálogo, devolvendo candidatos explicáveis em estados `SUGGESTED`, `AMBIGUOUS` ou `UNKNOWN`. Os resultados são persistidos por execução OCR e deteção, sem aprovar SKU nem alterar stock.
+
+- [Documentação do matching OCR](docs/architecture/ocr-catalogue-matching.md)
+- Endpoint de cálculo: `POST /api/v1/shelf-images/{id}/ocr-matches`
+- Endpoint de consulta: `GET /api/v1/shelf-images/{id}/ocr-matches`
+- Migração: `0015_shelf_image_ocr_matches`
