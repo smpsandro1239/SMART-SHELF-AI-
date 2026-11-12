@@ -155,3 +155,38 @@ Estas ferramentas verificam metadados e estrutura. Não confirmam que um ficheir
 
 
 A opção `--enriched-dir` é opcional. Quando indicada, escreve cópias dos três JSON COCO com os campos `sha256` e `file_size_bytes` preenchidos a partir do manifesto. Os ficheiros originais não são alterados. Essas cópias permitem que verificações futuras comparem os hashes e tamanhos, em vez de se limitarem a confirmar nomes e splits. O enriquecimento só é feito depois de a correspondência entre manifesto e COCO passar.
+
+
+## 15. Relatório de qualidade e equilíbrio do dataset
+
+Depois das validações estruturais, gerar um relatório de qualidade dos três splits:
+
+```bash
+python -m app.dataset_quality \\
+  --train /dados/annotations/instances_train.json \\
+  --val /dados/annotations/instances_val.json \\
+  --test /dados/annotations/instances_test.json \\
+  --json-report /dados/reports/dataset-quality.json
+```
+
+O relatório apresenta, por split e no total:
+
+- número de imagens e anotações;
+- instâncias e proporção por classe, incluindo classes com zero instâncias;
+- imagens sem anotações e respetiva proporção;
+- mínimo, mediana, máximo e média de instâncias por imagem;
+- rácio entre a classe mais frequente e a menos frequente entre as classes com instâncias.
+
+Imagens sem anotações são assinaladas como aviso, não como erro automático: podem ser exemplos negativos válidos, mas têm de ser revistos. Classes com zero instâncias são sempre visíveis no relatório. Os limites são opcionais e configuráveis, sem impor um mínimo universal:
+
+```bash
+python -m app.dataset_quality \\
+  --train /dados/annotations/instances_train.json \\
+  --val /dados/annotations/instances_val.json \\
+  --test /dados/annotations/instances_test.json \\
+  --min-instances-per-class 20 \\
+  --max-class-imbalance-ratio 10 \\
+  --json-report /dados/reports/dataset-quality-gated.json
+```
+
+Os valores acima são apenas um exemplo de configuração, não critérios aprovados para este projeto. O limite mínimo é aplicado a cada classe em cada split; o rácio ignora classes com zero instâncias e compara as restantes. Definir os limites apenas depois de observar a dimensão e os objetivos do dataset. O relatório mede distribuição quantitativa; não avalia qualidade visual das caixas, validade semântica das classes ou representatividade das imagens.
