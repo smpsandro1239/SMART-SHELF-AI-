@@ -52,10 +52,14 @@ def forecast_demand(data: DemandForecastInput) -> DemandForecast:
     """
     if not isinstance(data.daily_sales, Sequence) or isinstance(data.daily_sales, (str, bytes)):
         raise ValueError("daily_sales must be a sequence of daily quantities")
-    if isinstance(data.recent_window_days, bool) or data.recent_window_days < 2:
-        raise ValueError("recent_window_days must be at least 2")
-    if isinstance(data.minimum_history_days, bool) or data.minimum_history_days < 2:
-        raise ValueError("minimum_history_days must be at least 2")
+    if (isinstance(data.recent_window_days, bool)
+            or not isinstance(data.recent_window_days, int)
+            or data.recent_window_days < 2 or data.recent_window_days > 365):
+        raise ValueError("recent_window_days must be an integer between 2 and 365")
+    if (isinstance(data.minimum_history_days, bool)
+            or not isinstance(data.minimum_history_days, int)
+            or data.minimum_history_days < 2):
+        raise ValueError("minimum_history_days must be an integer of at least 2")
     if data.minimum_history_days > data.recent_window_days:
         raise ValueError("minimum_history_days cannot exceed recent_window_days")
 
