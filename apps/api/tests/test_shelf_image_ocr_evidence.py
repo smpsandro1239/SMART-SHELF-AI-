@@ -12,6 +12,8 @@ from sqlalchemy.pool import StaticPool
 from app.database import Base, get_db
 from app import models
 from app.main import app
+from app import main as main_module
+from app.security import create_access_token
 
 TEST_ENGINE = create_engine(
     "sqlite://",
@@ -175,27 +177,65 @@ def test_ocr_run_rejects_text_without_alphanumeric_content():
         )
         assert response.status_code == 422
 
-def test_fused_evidence_record_is_persisted_for_review_queue_projection():
-    # This checks the persisted evidence row used by the review queue projection.
+def test_review_queue_returns_unreviewed_conflicts_and_removes_reviewed_items(monkeypatch):
     image_id, detection_id = create_image_with_detection()
     db = TestingSession()
     image = db.get(models.ShelfImage, image_id)
+    shelf = db.get(models.Shelf, image.shelf_id)
+    zone = db.get(models.Zone, shelf.zone_id)
+    supervisor = models.User(
+        email="supervisor-queue@test.local",
+        full_name="Supervisor Queue",
+        password_hash="test-hash",
+        role="SUPERVISOR",
+        store_id=zone.store_id,
+        is_active=True,
+    )
+    db.add(supervisor)
     run = models.ShelfImageOCRRun(
         shelf_image_id=image.id, provider="mock-ocr", model_version="mock-v1", status="COMPLETED"
     )
     db.add(run)
     db.flush()
-    fused = models.ShelfImageFusedEvidence(
-        ocr_run_id=run.id, detection_id=detection_id, status="CONFLICT",
-        suggested_product_id=None, visual_product_id=None, text_product_id=None,
-        visual_status="MATCHED", text_status="SUGGESTED",
-        visual_similarity=0.9, text_score=0.91, ocr_confidence=0.95,
-        visual_model_version="visual-v1", ocr_provider="mock-ocr",
-        ocr_model_version="mock-v1", reason="conflict needs review",
-    )
-    db.add(fused)
+    db.add(models.ShelfImageFusedEvidence(
+        ocr_run_id=run.id,
+        detection_id=detection_id,
+        status="CONFLICT",
+        suggested_product_id=None,
+        visual_product_id=None,
+        text_product_id=None,
+        visual_status="MATCHED",
+        text_status="SUGGESTED",
+        visual_similarity=0.9,
+        text_score=0.91,
+        ocr_confidence=0.95,
+        visual_model_version="visual-v1",
+        ocr_provider="mock-ocr",
+        ocr_model_version="mock-v1",
+        reason="conflict needs review",
+    ))
     db.commit()
+    supervisor_id = supervisor.id
     db.close()
-    # The queue endpoint's role and store-scope checks are enforced by middleware.
-    with TestingSession() as check:
-        assert check.query(models.ShelfImageFusedEvidence).filter_by(detection_id=detection_id).count() == 1
+
+    monkeypatch.setattr(main_module, "SessionLocal", TestingSession)
+    token, _ = create_access_token(user_id=supervisor_id, role="SUPERVISOR")
+    headers = {"Authorization": f"Bearer {token}"}
+    with TestClient(app) as client:
+        queue = client.get("/api/v1/shelf-image-review-queue", headers=headers)
+        assert queue.status_code == 200
+        assert len(queue.json()) == 1
+        assert queue.json()[0]["status"] == "CONFLICT"
+        assert queue.json()[0]["detection_id"] == detection_id
+
+        reviewed = client.post(
+            f"/api/v1/shelf-image-detections/{detection_id}/reviews",
+            headers=headers,
+            json={"decision": "REJECTED", "selected_product_id": None, "notes": "OCR/visual conflict rejected"},
+        )
+        assert reviewed.status_code == 201
+        assert reviewed.json()["decision"] == "REJECTED"
+
+        queue_after_review = client.get("/api/v1/shelf-image-review-queue", headers=headers)
+        assert queue_after_review.status_code == 200
+        assert queue_after_review.json() == []
