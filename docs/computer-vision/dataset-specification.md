@@ -275,3 +275,30 @@ O gate `app.dataset_approval` aceita `--require-visual-review` e os três caminh
 
 Este mecanismo regista decisões declaradas; não autentica a identidade do revisor, não prova que a inspeção foi executada e não substitui controlos de acesso. Guardar os registos fora do repositório, em armazenamento controlado.
 
+
+
+## 14. Avaliação reproduzível de deteções
+
+O módulo `app.detection_metrics` compara resultados de inferência em formato
+COCO Results (`image_id`, `category_id`, `bbox`, `score`) com anotações
+COCO revistas. Executar a partir de `apps/api`:
+
+```bash
+python -m app.detection_metrics \
+  --ground-truth /dados/annotations/instances_test.json \
+  --predictions /dados/predictions/test-results.json \
+  --confidence-threshold 0.25 \
+  --output /dados/reports/model-v1-test.json
+```
+
+O relatório inclui mAP@0.50, mAP@0.50:0.95 com AP interpolada em 101 pontos,
+precisão/recall a IoU 0.50 no limiar de confiança escolhido, contagens TP/FP/FN
+e resultados por classe. O limiar de confiança deve ser escolhido no conjunto
+de validação; o conjunto de teste deve permanecer intocado até à avaliação
+final. Para comparar modelos, manter iguais o conjunto de teste, as categorias,
+os limiares e as regras de avaliação.
+
+Este avaliador é uma implementação transparente do projeto, não uma
+substituição certificada da API oficial COCO: exclui `iscrowd=1` em vez de
+implementar a semântica de crowd do COCO. Os resultados só são fiáveis quando
+as anotações de referência são completas e aprovadas por revisão humana.
