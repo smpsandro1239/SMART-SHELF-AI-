@@ -9,3 +9,6 @@ httpx==0.28.1
 pwdlib[argon2]==0.3.0
 PyJWT==2.10.1
 python-multipart==0.0.20
+numpy==2.2.6
+Pillow==11.2.1
+onnxruntime==1.22.0
