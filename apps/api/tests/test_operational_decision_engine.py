@@ -120,3 +120,28 @@ def test_no_evidence_returns_insufficient_evidence():
     result = evaluate_shelf_decision(now=NOW, observation=None, inventory=None)
     assert result["status"] == "INSUFFICIENT_EVIDENCE"
     assert result["priority"] == "NONE"
+
+
+def test_future_dated_observation_is_not_trusted():
+    result = evaluate_shelf_decision(
+        now=NOW,
+        observation={"status": "EMPTY", "observed_at": NOW + timedelta(minutes=5), "confidence": 0.99},
+        inventory=None,
+    )
+
+    assert result["status"] == "MONITOR"
+    assert any("timestamp no futuro" in warning for warning in result["warnings"])
+
+
+def test_future_dated_inventory_and_forecast_are_not_used_for_quantity():
+    result = evaluate_shelf_decision(
+        now=NOW,
+        observation={"status": "LOW_STOCK", "observed_at": NOW, "confidence": 0.9},
+        inventory={"available_quantity": 1, "recorded_at": NOW + timedelta(minutes=1)},
+        demand_forecast={"predicted_units": 10, "horizon_hours": 12,
+                         "generated_at": NOW + timedelta(minutes=1)},
+    )
+
+    assert result["status"] == "ACTION_RECOMMENDED"
+    assert result["suggested_replenishment_quantity"] is None
+    assert any("timestamp no futuro" in warning for warning in result["warnings"])
