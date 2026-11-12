@@ -344,6 +344,8 @@ Foi criada a especificação inicial de recolha e anotação, com quatro classes
 
 ## 13. Preparação e aprovação do dataset de visão
 
+![Fluxo de aprovação do dataset](docs/images/dataset-release-gate.svg)
+
 O repositório inclui ferramentas para validar COCO, auditar separação entre treino/validação/teste, criar e cruzar manifestos SHA-256, analisar equilíbrio de classes e executar um gate de aprovação de uma versão do dataset.
 
 - [Especificação do dataset e comandos](docs/computer-vision/dataset-specification.md)
