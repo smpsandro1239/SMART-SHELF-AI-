@@ -191,7 +191,10 @@ def evaluate_shelf_decision(
         reason = "Já existe uma tarefa operacional ativa para este produto/localização."
     elif visual_attention or projected_shortage:
         status = "ACTION_RECOMMENDED"
-        priority = "HIGH" if observation_status == "EMPTY" or (inventory_quantity == 0 and inventory_fresh) else "NORMAL"
+        priority = "HIGH" if (
+            (visual_attention and observation_status == "EMPTY")
+            or (projected_shortage and inventory_quantity == 0 and inventory_fresh)
+        ) else "NORMAL"
         reason_parts = []
         if visual_attention:
             reason_parts.append(f"observação fiável indica {observation_status.lower()}")
