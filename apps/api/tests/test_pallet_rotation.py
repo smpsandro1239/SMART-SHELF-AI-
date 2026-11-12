@@ -58,7 +58,8 @@ def test_missing_operational_resource_prevents_swap(override, reason):
 
 def test_residual_must_cover_demand_until_low_traffic():
     result = evaluate_pallet_rotation(**inputs(forecast_consumption_until_low_traffic=350))
-    assert result.recommendation == "WAIT_FOR_LOW_TRAFFIC"
+    assert result.recommendation == "REPLENISH_CURRENT"
+    assert result.reason_code == "INTERIM_REPLENISHMENT_REQUIRED"
 
 
 def test_more_expensive_swap_is_rejected():
