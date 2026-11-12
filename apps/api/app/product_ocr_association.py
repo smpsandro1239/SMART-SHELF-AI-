@@ -17,6 +17,7 @@ from app.product_text import OCRText
 class DetectionOCR:
     detection_index: int
     texts: tuple[OCRText, ...]
+    regions: tuple[OCRRegion, ...] = ()
 
     @property
     def combined_text(self) -> OCRText | None:
@@ -79,6 +80,7 @@ def associate_ocr_regions(
                 region.text
                 for region in sorted(items, key=lambda item: (item.y_min, item.x_min))
             ),
+            regions=tuple(sorted(items, key=lambda item: (item.y_min, item.x_min))),
         )
         for index, items in enumerate(assignments)
     )
