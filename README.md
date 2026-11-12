@@ -166,7 +166,7 @@ Consultar tarefas e filtrar por loja, estado ou responsável: `GET /api/v1/tasks
 
 Atualizar o estado: `PATCH /api/v1/tasks/{task_id}/status`. Estados permitidos: `PENDING → ASSIGNED → IN_PROGRESS → COMPLETED`; também é possível cancelar tarefas não concluídas. A atribuição requer o campo `assigned_to`.
 
-A API valida que a prateleira pertence à loja e que o produto está associado à prateleira. O identificador do responsável é, nesta fase, um texto operacional; autenticação e gestão de contas de funcionários ainda não estão implementadas.
+A API valida que a prateleira pertence à loja e que o produto está associado à prateleira. Também existe `POST /api/v1/tasks/from-recommendation`: só cria uma tarefa quando a recomendação atual é `NEEDS_REPLENISHMENT` e não existe outra tarefa ativa para a mesma prateleira/produto. O identificador do responsável é, nesta fase, um texto operacional; autenticação e gestão de contas de funcionários ainda não estão implementadas.
 
 ## 10. Endpoint de recomendações
 
