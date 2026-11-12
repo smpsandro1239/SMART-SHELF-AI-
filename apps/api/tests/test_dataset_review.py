@@ -102,7 +102,10 @@ def test_duplicate_and_unknown_image_ids_are_rejected():
     document = coco()
     record, digest = approved_record(document)
     record["reviews"].append(copy.deepcopy(record["reviews"][0]))
-    record["reviews"][-1]["image_id"] = 999
+    unknown = copy.deepcopy(record["reviews"][0])
+    unknown["image_id"] = 999
+    unknown["file_name"] = "unknown.jpg"
+    record["reviews"].append(unknown)
 
     errors, _ = validate_visual_review_record(record, document, "train", digest)
 
