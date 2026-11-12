@@ -19,7 +19,9 @@ def _ratio(numerator: int, denominator: int) -> float | None:
     return round(numerator / denominator, 6) if denominator else None
 
 
-def aggregate_reviewed_predictions(samples: Iterable[dict[str, Any]]) -> dict[str, Any]:
+def aggregate_reviewed_predictions(
+    samples: Iterable[dict[str, Any]], *, include_model_breakdown: bool = True
+) -> dict[str, Any]:
     """Calculate selective-classification metrics from independently reviewed cases."""
     rows = list(samples)
     known = [row for row in rows if row["expected_product_id"] is not None]
@@ -81,9 +83,9 @@ def aggregate_reviewed_predictions(samples: Iterable[dict[str, Any]]) -> dict[st
         ],
     }
     for version, model_rows in sorted(models.items()):
-        if version == "UNKNOWN_MODEL":
+        if version == "UNKNOWN_MODEL" or not include_model_breakdown:
             continue
-        sub = aggregate_reviewed_predictions(model_rows)
+        sub = aggregate_reviewed_predictions(model_rows, include_model_breakdown=False)
         result["by_model_version"][version] = {
             key: sub[key]
             for key in (
