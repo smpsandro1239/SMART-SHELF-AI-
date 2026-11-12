@@ -2,7 +2,6 @@ from datetime import date, timedelta, timezone
 from pathlib import Path
 from uuid import uuid4
 import hashlib
-from decimal import Decimal
 
 from fastapi import Depends, FastAPI, HTTPException, Request, UploadFile, File, Form
 from fastapi.responses import JSONResponse, FileResponse
