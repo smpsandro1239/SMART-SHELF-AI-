@@ -2,6 +2,7 @@ from datetime import date, timedelta, timezone
 from pathlib import Path
 from uuid import uuid4
 import hashlib
+from decimal import Decimal
 
 from fastapi import Depends, FastAPI, HTTPException, Request, UploadFile, File, Form
 from fastapi.responses import JSONResponse, FileResponse
@@ -21,6 +22,7 @@ from app.product_text import (
 )
 from app.replenishment_policy import ShelfRefillInput, suggest_shelf_refill
 from app.demand_forecasting import DemandForecastInput, forecast_demand
+from app.sales_import import parse_daily_sales_csv
 from app.schemas import (
     ObservationCreate, ObservationRead, ShelfCreate, ShelfRead,
     StoreCreate, StoreRead, ZoneCreate, ZoneRead,
@@ -88,7 +90,7 @@ async def require_api_authentication(request: Request, call_next):
             })
         )
         supervisor_or_admin = (
-            (method == "POST" and path == "/api/v1/sales/daily")
+            (method == "POST" and path in {"/api/v1/sales/daily", "/api/v1/sales/import-csv"})
             or path == "/api/v1/product-embedding-exemplars"
             or path.startswith("/api/v1/product-embedding-exemplars/")
             or (method == "GET" and path in {"/api/v1/shelf-image-review-queue", "/api/v1/shelf-image-review-queue/summary"})
@@ -1149,6 +1151,77 @@ def create_daily_sales_record(
         raise HTTPException(status_code=409, detail="Daily sales external reference already exists") from exc
     db.refresh(item)
     return item
+
+
+@app.post("/api/v1/sales/import-csv", tags=["sales"])
+async def import_daily_sales_csv(
+    request: Request,
+    store_id: int = Form(...),
+    source: SalesSource = Form("IMPORT"),
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    """Import a bounded CSV atomically; every row must be valid."""
+    MAX_FILE_BYTES = 5 * 1024 * 1024
+    actor = _request_user(db, request)
+    _enforce_store_scope(actor, store_id)
+    if not db.get(models.Store, store_id):
+        raise HTTPException(status_code=404, detail="Store not found")
+    if file.filename and not file.filename.lower().endswith(".csv"):
+        raise HTTPException(status_code=415, detail="Only .csv files are accepted")
+    payload = await file.read(MAX_FILE_BYTES + 1)
+    if len(payload) > MAX_FILE_BYTES:
+        raise HTTPException(status_code=413, detail="CSV file exceeds the 5 MB limit")
+    try:
+        rows = parse_daily_sales_csv(payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    product_ids = {row.product_id for row in rows}
+    active_products = {
+        product.id
+        for product in db.query(models.Product).filter(
+            models.Product.id.in_(product_ids),
+            models.Product.is_active.is_(True),
+        ).all()
+    }
+    missing_products = sorted(product_ids - active_products)
+    if missing_products:
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "UNKNOWN_OR_INACTIVE_PRODUCTS", "product_ids": missing_products},
+        )
+
+    items = [
+        models.DailySalesRecord(
+            store_id=store_id,
+            product_id=row.product_id,
+            sales_date=row.sales_date,
+            quantity=row.quantity,
+            source=source,
+            external_reference=row.external_reference,
+        )
+        for row in rows
+    ]
+    db.add_all(items)
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="CSV contains a sales reference already imported for this store, product, date and source; no rows were saved",
+        ) from exc
+    return {
+        "status": "IMPORTED",
+        "store_id": store_id,
+        "source": source,
+        "rows_imported": len(items),
+        "product_count": len(product_ids),
+        "period_start": min(row.sales_date for row in rows),
+        "period_end": max(row.sales_date for row in rows),
+        "note": "Import is atomic: all rows were saved together.",
+    }
 
 
 @app.get("/api/v1/sales/daily", response_model=list[DailySalesRecordRead], tags=["sales"])
