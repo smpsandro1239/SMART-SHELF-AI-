@@ -541,3 +541,6 @@ Foi acrescentado um adaptador experimental PaddleOCR 3.x/PP-OCRv5 para portuguê
 - [Documentação do provider OCR](docs/architecture/paddleocr-provider.md)
 - [Adaptador PaddleOCR](apps/api/app/ocr_paddle.py)
 - [Dependências OCR opcionais](apps/api/requirements-ocr.txt)
+
+
+A associação geométrica das regiões OCR às deteções individuais está em `apps/api/app/product_ocr_association.py`. A associação é experimental e ainda não está ligada ao worker nem persistida na base de dados. Ver [documentação da associação OCR](docs/architecture/ocr-detection-association.md).
