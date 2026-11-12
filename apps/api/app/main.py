@@ -81,7 +81,7 @@ async def require_api_authentication(request: Request, call_next):
         supervisor_or_admin = (
             path == "/api/v1/product-embedding-exemplars"
             or path.startswith("/api/v1/product-embedding-exemplars/")
-            or path.startswith("/api/v1/shelf-image-detections/")
+            or (method == "POST" and path.startswith("/api/v1/shelf-image-detections/"))
         )
         if supervisor_or_admin and user.role not in {"ADMIN", "SUPERVISOR"}:
             return JSONResponse(status_code=403, content={"detail": "Supervisor role required"})
@@ -95,12 +95,13 @@ async def require_api_authentication(request: Request, call_next):
             allowed_employee_image_upload = method == "POST" and path == "/api/v1/shelf-images"
             allowed_employee_image_content = method == "GET" and path.startswith("/api/v1/shelf-images/") and path.endswith("/content")
             allowed_employee_image_detections = method == "GET" and path.startswith("/api/v1/shelf-images/") and path.endswith("/detections")
+            allowed_employee_detection_review_history = method == "GET" and path.startswith("/api/v1/shelf-image-detections/") and path.endswith("/reviews")
             allowed_employee_task_update = (
                 method == "PATCH"
                 and path.startswith("/api/v1/tasks/")
                 and path.endswith("/status")
             )
-            if not (allowed_employee_read or allowed_employee_task_update or allowed_employee_image_upload or allowed_employee_image_content or allowed_employee_image_detections):
+            if not (allowed_employee_read or allowed_employee_task_update or allowed_employee_image_upload or allowed_employee_image_content or allowed_employee_image_detections or allowed_employee_detection_review_history):
                 return JSONResponse(status_code=403, content={"detail": "Employee access is limited to assigned tasks"})
         if user.role == "SUPERVISOR" and path.startswith("/api/v1/auth/users"):
             return JSONResponse(status_code=403, content={"detail": "Administrator role required"})
