@@ -589,3 +589,20 @@ A fusão não soma scores incompatíveis, não altera o SKU atribuído, o catál
 ## Fluxo operacional visão + OCR + revisão
 
 Consultar [Fluxo operacional de visão, OCR e revisão humana](docs/architecture/vision-ocr-review-workflow.md) para a configuração opcional do PaddleOCR, a sequência de endpoints e os critérios de validação antes de um piloto.
+
+
+### Deteção de imagens visualmente semelhantes entre splits
+
+O módulo `app.image_similarity_audit` calcula dHash de 64 bits (com correção da orientação EXIF) e usa uma BK-tree para encontrar imagens visualmente próximas entre `train`, `val` e `test`. Por omissão, uma distância de Hamming até 6 sinaliza um possível par semelhante; pares entre splits bloqueiam a auditoria. É uma barreira complementar ao SHA-256 e à integridade por sessão: deteta algumas alterações de compressão/redimensionamento, mas não substitui revisão visual nem deteção semântica.
+
+```bash
+cd apps/api
+python -m app.image_similarity_audit \
+  --train /data/images/train \
+  --val /data/images/val \
+  --test /data/images/test \
+  --max-distance 6 \
+  --json-report /data/reports/visual-similarity.json
+```
+
+O relatório inclui pares encontrados, distância de Hamming, hashes dHash e imagens ilegíveis. O limiar deve ser calibrado com fotografias reais da loja antes de ser usado como gate de produção. Testes: `apps/api/tests/test_image_similarity_audit.py`.
