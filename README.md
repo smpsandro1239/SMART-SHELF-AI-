@@ -212,7 +212,7 @@ Consultar também os endpoints de catálogo, observações e inventário na docu
 
 ## 13. Estado do projeto
 
-O projeto está em desenvolvimento incremental. O backend já inclui catálogo, inventário, recomendações e ciclo básico de tarefas. O próximo passo é reforçar a autorização por loja em todos os recursos e construir a interface operacional. A visão computacional e as integrações serão introduzidas depois de existir um fluxo operacional consistente e testável.
+O projeto está em desenvolvimento incremental. O backend inclui catálogo, inventário, recomendações, tarefas e uma primeira camada de autorização por loja. A aplicação web inicial está em `apps/web`. A API já recebe e armazena fotografias de prateleiras, com validação de formato, limite de tamanho, hash SHA-256 e estado de análise pendente. A deteção automática de produtos ainda não está implementada.
 
 ## Licença
 
@@ -273,3 +273,35 @@ npm run dev
 Abrir [http://localhost:5173](http://localhost:5173). Configurar `VITE_API_BASE_URL` se a API não estiver em `http://localhost:8000`. Na API, definir `CORS_ALLOWED_ORIGINS` com a origem exata do frontend.
 
 **Nota:** o token é guardado em `sessionStorage` e removido ao terminar sessão ou fechar a sessão do navegador. Para produção, é necessária uma revisão adicional de segurança, incluindo estratégia de cookies seguros, CSP, gestão de expiração e auditoria de permissões.
+
+
+## 16. Captura de imagens para visão computacional
+
+A API disponibiliza uma primeira etapa de ingestão de fotografias de prateleiras. O objetivo é criar um registo auditável da captura antes de introduzir inferência por um modelo de visão computacional.
+
+![Fluxo de captura e preparação de imagens](docs/images/shelf-image-capture-flow.svg)
+
+### Endpoints
+- `POST /api/v1/shelf-images` — recebe uma imagem multipart/form-data e o `shelf_id`.
+- `GET /api/v1/shelf-images?shelf_id=1` — lista capturas dentro do âmbito de acesso.
+- `GET /api/v1/shelf-images/{image_id}/content` — devolve o ficheiro, também sujeito ao âmbito por loja.
+
+### Segurança e armazenamento
+- Formatos aceites: JPEG, PNG e WebP, com validação da assinatura binária inicial.
+- Limite padrão: 10 MiB, configurável através de `MAX_IMAGE_UPLOAD_BYTES` (máximo de 50 MiB).
+- Nome de armazenamento aleatório; o nome original é guardado apenas como metadado.
+- SHA-256 calculado para integridade e deduplicação futura.
+- Ficheiros guardados por ID da loja num volume Docker persistente `shelf_images`.
+- Supervisores e funcionários só podem carregar/consultar imagens da sua loja; a API verifica a associação da prateleira à loja.
+- O estado inicial é `PENDING`; não existe ainda análise automática nem deteção de produtos.
+
+### Exemplo de captura
+
+```bash
+curl -X POST http://localhost:8000/api/v1/shelf-images \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  -F "shelf_id=1" \
+  -F "image=@./fotografia-prateleira.jpg;type=image/jpeg"
+```
+
+Definir `IMAGE_STORAGE_PATH` para um volume persistente no ambiente de execução. Em produção, recomenda-se migrar para armazenamento de objetos privado (por exemplo, S3 compatível), com encriptação, políticas de retenção, antivírus/validação completa de imagem e URLs temporárias de acesso.
