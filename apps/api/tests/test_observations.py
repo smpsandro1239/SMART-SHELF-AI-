@@ -315,3 +315,63 @@ def test_vision_worker_marks_provider_errors_as_failed(tmp_path, monkeypatch):
             assert db.query(models.ShelfImageDetection).filter_by(shelf_image_id=image_id).count() == 0
         finally:
             db.close()
+
+
+def test_failed_image_analysis_can_be_retried_by_store_supervisor(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    from app.config import settings
+    import app.main as main_module
+
+    monkeypatch.setattr(settings, "image_storage_path", str(tmp_path))
+    actor = SimpleNamespace(id=77, role="SUPERVISOR", store_id=None)
+    monkeypatch.setattr(main_module, "_request_user", lambda db, request: actor)
+    Base.metadata.drop_all(bind=TEST_ENGINE)
+    Base.metadata.create_all(bind=TEST_ENGINE)
+
+    with TestClient(app) as client:
+        store = client.post("/api/v1/stores", json={"code": "RETRY-01", "name": "Loja retry"})
+        actor.store_id = store.json()["id"]
+        zone = client.post("/api/v1/zones", json={"store_id": actor.store_id, "name": "Bebidas"})
+        shelf = client.post("/api/v1/shelves", json={"zone_id": zone.json()["id"], "code": "RT-01"})
+        uploaded = client.post(
+            "/api/v1/shelf-images",
+            data={"shelf_id": str(shelf.json()["id"])},
+            files={"image": ("retry.png", b"\x89PNG\r\n\x1a\nretry-test", "image/png")},
+        )
+        assert uploaded.status_code == 201
+        image_id = uploaded.json()["id"]
+
+        db = TestingSession()
+        try:
+            image = db.get(models.ShelfImage, image_id)
+            image.analysis_status = "FAILED"
+            image.analysis_error = "RuntimeError: processing failed"
+            image.model_version = "old-model"
+            image.analysis_started_at = models.utc_now()
+            image.analysis_completed_at = models.utc_now()
+            db.commit()
+        finally:
+            db.close()
+
+        retried = client.post(f"/api/v1/shelf-images/{image_id}/retry")
+        assert retried.status_code == 200
+        assert retried.json()["analysis_status"] == "PENDING"
+        assert retried.json()["analysis_error"] is None
+        assert retried.json()["analysis_started_at"] is None
+        assert retried.json()["analysis_completed_at"] is None
+        assert retried.json()["model_version"] is None
+
+        conflict = client.post(f"/api/v1/shelf-images/{image_id}/retry")
+        assert conflict.status_code == 409
+
+        db = TestingSession()
+        try:
+            image = db.get(models.ShelfImage, image_id)
+            image.analysis_status = "FAILED"
+            db.commit()
+        finally:
+            db.close()
+
+        actor.store_id = 999
+        forbidden = client.post(f"/api/v1/shelf-images/{image_id}/retry")
+        assert forbidden.status_code == 403
