@@ -217,3 +217,21 @@ def test_physical_slotting_accepts_decimal_database_measurements():
     assert result.candidates[0]["required_volume_cm3"] == 250
     assert result.candidates[0]["required_weight_kg"] == 1.25
     assert result.candidates[0]["distance_to_picking_m"] == 2
+
+
+
+def test_physical_slotting_does_not_assume_missing_occupancy_is_zero():
+    unknown = location("UNKNOWN", 1)
+    unknown.pop("occupied_volume_cm3")
+    unknown.pop("occupied_weight_kg")
+
+    result = recommend_physical_slot(
+        product_id=7,
+        required_quantity=1,
+        product_profile=profile(),
+        locations=[unknown],
+    )
+
+    assert result.status == "NO_COMPATIBLE_LOCATION"
+    assert result.candidates == ()
+    assert result.rejected_locations[0]["reason"] == "UNKNOWN_CURRENT_OCCUPANCY"
