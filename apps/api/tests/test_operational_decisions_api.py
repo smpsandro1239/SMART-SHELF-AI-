@@ -60,7 +60,7 @@ def test_operational_decisions_use_latest_shelf_evidence_and_do_not_create_tasks
     with TestClient(app) as client:
         store_id, shelf_id, product_id = create_context(client)
         created = client.post("/api/v1/observations", json={
-            "shelf_id": shelf_id, "source": "manual-review",
+            "shelf_id": shelf_id, "source": "simulation",
             "status": "EMPTY", "confidence": 0.96,
         })
         assert created.status_code == 201
@@ -96,7 +96,7 @@ def test_operational_decisions_suppress_duplicate_work_for_active_task():
     with TestClient(app) as client:
         store_id, shelf_id, product_id = create_context(client)
         client.post("/api/v1/observations", json={
-            "shelf_id": shelf_id, "source": "manual-review",
+            "shelf_id": shelf_id, "source": "simulation",
             "status": "EMPTY", "confidence": 0.99,
         })
         task = client.post("/api/v1/tasks", json={
