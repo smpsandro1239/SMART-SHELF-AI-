@@ -59,7 +59,10 @@ def parse_daily_sales_csv(payload: bytes) -> list[ParsedSalesRow]:
             quantity = Decimal(row["quantity"])
             if not quantity.is_finite() or quantity < 0 or quantity > Decimal("999999999.999"):
                 raise InvalidOperation
-            quantity = quantity.quantize(Decimal("0.001"))
+            rounded_quantity = quantity.quantize(Decimal("0.001"))
+            if rounded_quantity != quantity:
+                raise InvalidOperation
+            quantity = rounded_quantity
         except (InvalidOperation, TypeError, ValueError) as exc:
             raise ValueError(f"Invalid quantity at CSV line {line_number}") from exc
         reference = row["external_reference"]
