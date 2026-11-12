@@ -1592,7 +1592,7 @@ def create_hourly_traffic_batch(payload: HourlyStoreTrafficBatchCreate, request:
 
 @app.get("/api/v1/warehouse/pallet-rotation/hourly-profile", tags=["warehouse"])
 def get_pallet_rotation_hourly_profile(
-    store_id: int, product_id: int, days: int = 28,
+    store_id: int, product_id: int, days: int = 28, source: SalesSource = "POS",
     request: Request = None, db: Session = Depends(get_db),
 ):
     """Return local-hour demand and traffic averages without filling missing observations."""
@@ -1615,6 +1615,7 @@ def get_pallet_rotation_hourly_profile(
         models.HourlySalesRecord.store_id == store_id,
         models.HourlySalesRecord.product_id == product_id,
         models.HourlySalesRecord.business_date >= start_date,
+        models.HourlySalesRecord.source == source,
     ).group_by(models.HourlySalesRecord.business_date, models.HourlySalesRecord.hour_of_day).subquery()
     sales_rows = db.query(
         sales_daily.c.hour,
@@ -1629,6 +1630,7 @@ def get_pallet_rotation_hourly_profile(
     ).filter(
         models.HourlyStoreTrafficRecord.store_id == store_id,
         models.HourlyStoreTrafficRecord.business_date >= start_date,
+        models.HourlyStoreTrafficRecord.source == source,
     ).group_by(models.HourlyStoreTrafficRecord.business_date, models.HourlyStoreTrafficRecord.hour_of_day).subquery()
     traffic_rows = db.query(
         traffic_daily.c.hour,
@@ -1639,7 +1641,7 @@ def get_pallet_rotation_hourly_profile(
     sales_by_hour = {int(row.hour): row for row in sales_rows}
     traffic_by_hour = {int(row.hour): row for row in traffic_rows}
     return {
-        "store_id": store_id, "product_id": product_id, "period_days": days,
+        "store_id": store_id, "product_id": product_id, "period_days": days, "source": source,
         "period_start": start_date, "period_end": date.today(),
         "hour_basis": "STORE_LOCAL_HOUR",
         "hours": [{
@@ -1714,6 +1716,7 @@ def plan_pallet_rotation_window(
     residual_base_units: float,
     duration_hours: int = 1,
     days: int = 28,
+    source: SalesSource = "POS",
     minimum_observed_days: int = 7,
     request: Request = None,
     db: Session = Depends(get_db),
@@ -1737,7 +1740,7 @@ def plan_pallet_rotation_window(
         raise HTTPException(status_code=422, detail="Product has no active pallet rotation policy")
     try:
         profile = get_pallet_rotation_hourly_profile(
-            store_id=store_id, product_id=product_id, days=days, request=request, db=db
+            store_id=store_id, product_id=product_id, days=days, source=source, request=request, db=db
         )
         decision = recommend_low_traffic_window(
             profile["hours"],
@@ -1754,6 +1757,7 @@ def plan_pallet_rotation_window(
         "pallet_id": pallet_id,
         "current_hour": current_hour,
         "period_days": days,
+        "source": source,
         "minimum_observed_days": minimum_observed_days,
         "decision": {
             "recommendation": decision.recommendation,
