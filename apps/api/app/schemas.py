@@ -232,7 +232,10 @@ class ShelfImageRead(BaseModel):
     mime_type: str
     file_size_bytes: int
     sha256: str
-    analysis_status: str
+    analysis_status: Literal["PENDING", "PROCESSING", "COMPLETED", "FAILED"]
+    analysis_error: str | None
+    analysis_started_at: datetime | None
+    analysis_completed_at: datetime | None
     model_version: str | None
     captured_at: datetime
     created_at: datetime
