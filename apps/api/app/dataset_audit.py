@@ -1,7 +1,8 @@
 """Audit COCO train/validation/test splits for leakage and class coverage.
 
 Optional image metadata keys supported by this audit:
-- capture_group_id (preferred): stable ID for a capture session/sequence
+- capture_group_id / capture_group_key: stable capture group identifiers
+- capture_session_id: database session identifier (namespaced as session:<id>)
 - sequence_id: alternative grouping key
 - sha256: content hash recorded by the dataset preparation pipeline
 
@@ -110,7 +111,18 @@ def audit_splits(splits: dict[str, Any]) -> tuple[list[str], dict[str, Any]]:
                 else:
                     seen_hashes[content_hash] = split_name
 
-            group_id = image.get("capture_group_id", image.get("sequence_id"))
+            # Accept metadata emitted by the reviewed-candidate API as well as
+            # COCO's canonical capture_group_id. Prefix database IDs to avoid
+            # collisions with arbitrary sequence/group labels.
+            group_id = image.get("capture_group_id")
+            if group_id is None:
+                group_id = image.get("capture_group_key")
+            if group_id is None and image.get("capture_session_id") is not None:
+                session_id = image.get("capture_session_id")
+                if isinstance(session_id, (str, int)) and not isinstance(session_id, bool):
+                    group_id = f"session:{str(session_id).strip()}"
+            if group_id is None:
+                group_id = image.get("sequence_id")
             if isinstance(group_id, (str, int)) and not isinstance(group_id, bool):
                 group_key = str(group_id).strip()
                 if group_key:
