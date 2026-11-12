@@ -35,7 +35,7 @@ from app.schemas import (
     StoreCreate, StoreRead, ZoneCreate, ZoneRead,
     ProductCreate, ProductRead, ShelfProductCreate, ShelfProductRead,
     InventorySnapshotCreate, InventorySnapshotRead, ReplenishmentRecommendationRead,
-    DailySalesRecordCreate, DailySalesRecordRead, SalesSource,
+    DailySalesRecordCreate, DailySalesRecordRead, SalesSource,\n    HourlySalesRecordCreate, HourlySalesRecordRead, HourlyStoreTrafficRecordCreate, HourlyStoreTrafficRecordRead,
     ReplenishmentTaskCreate, ReplenishmentTaskStatusUpdate, ReplenishmentTaskRead,
     BootstrapAdminCreate, LoginRequest, TokenRead, UserRead, UserCreate, ShelfImageRead,
     ShelfImageDetectionRead, ProductEmbeddingExemplarCreate,
@@ -101,7 +101,7 @@ async def require_api_authentication(request: Request, call_next):
             })
         )
         supervisor_or_admin = (
-            (method == "POST" and (path in {"/api/v1/sales/daily", "/api/v1/sales/import-csv", "/api/v1/warehouse/locations", "/api/v1/warehouse/placements", "/api/v1/warehouse/pallets", "/api/v1/warehouse/pallet-rotation/policies", "/api/v1/warehouse/pallet-rotation/simulate"} or (path.startswith("/api/v1/warehouse/pallets/") and path.endswith("/events"))))
+            (method == "POST" and (path in {"/api/v1/sales/daily", "/api/v1/sales/import-csv", "/api/v1/warehouse/locations", "/api/v1/warehouse/placements", "/api/v1/warehouse/pallets", "/api/v1/warehouse/pallet-rotation/policies", "/api/v1/warehouse/pallet-rotation/simulate", "/api/v1/sales/hourly", "/api/v1/sales/traffic/hourly"} or (path.startswith("/api/v1/warehouse/pallets/") and path.endswith("/events"))))
             or (method == "PATCH" and path.startswith("/api/v1/warehouse/pallet-rotation/policies/"))
             or path == "/api/v1/product-embedding-exemplars"
             or path.startswith("/api/v1/product-embedding-exemplars/")
@@ -1351,6 +1351,108 @@ def create_daily_sales_record(
         raise HTTPException(status_code=409, detail="Daily sales external reference already exists") from exc
     db.refresh(item)
     return item
+
+
+@app.post("/api/v1/sales/hourly", response_model=HourlySalesRecordRead, status_code=201, tags=["sales"])
+def create_hourly_sales_record(payload: HourlySalesRecordCreate, request: Request, db: Session = Depends(get_db)):
+    actor = _request_user(db, request)
+    _enforce_store_scope(actor, payload.store_id)
+    if db.get(models.Store, payload.store_id) is None:
+        raise HTTPException(status_code=404, detail="Store not found")
+    product = db.get(models.Product, payload.product_id)
+    if product is None or not product.is_active:
+        raise HTTPException(status_code=404, detail="Active product not found")
+    item = models.HourlySalesRecord(**payload.model_dump())
+    db.add(item)
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Hourly sales external reference already exists") from exc
+    db.refresh(item)
+    return item
+
+
+@app.post("/api/v1/sales/traffic/hourly", response_model=HourlyStoreTrafficRecordRead, status_code=201, tags=["sales"])
+def create_hourly_store_traffic_record(payload: HourlyStoreTrafficRecordCreate, request: Request, db: Session = Depends(get_db)):
+    actor = _request_user(db, request)
+    _enforce_store_scope(actor, payload.store_id)
+    if db.get(models.Store, payload.store_id) is None:
+        raise HTTPException(status_code=404, detail="Store not found")
+    item = models.HourlyStoreTrafficRecord(**payload.model_dump())
+    db.add(item)
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Hourly traffic external reference already exists") from exc
+    db.refresh(item)
+    return item
+
+
+@app.get("/api/v1/warehouse/pallet-rotation/hourly-profile", tags=["warehouse"])
+def get_pallet_rotation_hourly_profile(
+    store_id: int, product_id: int, days: int = 28,
+    request: Request = None, db: Session = Depends(get_db),
+):
+    """Return local-hour demand and traffic averages without filling missing observations."""
+    if not 7 <= days <= 90:
+        raise HTTPException(status_code=422, detail="days must be between 7 and 90")
+    actor = _request_user(db, request)
+    _enforce_store_scope(actor, store_id)
+    if db.get(models.Store, store_id) is None:
+        raise HTTPException(status_code=404, detail="Store not found")
+    product = db.get(models.Product, product_id)
+    if product is None or not product.is_active:
+        raise HTTPException(status_code=404, detail="Active product not found")
+
+    start_date = date.today() - timedelta(days=days - 1)
+    sales_daily = db.query(
+        models.HourlySalesRecord.business_date.label("business_date"),
+        models.HourlySalesRecord.hour_of_day.label("hour"),
+        func.sum(models.HourlySalesRecord.quantity).label("quantity"),
+    ).filter(
+        models.HourlySalesRecord.store_id == store_id,
+        models.HourlySalesRecord.product_id == product_id,
+        models.HourlySalesRecord.business_date >= start_date,
+    ).group_by(models.HourlySalesRecord.business_date, models.HourlySalesRecord.hour_of_day).subquery()
+    sales_rows = db.query(
+        sales_daily.c.hour,
+        func.avg(sales_daily.c.quantity).label("average_quantity"),
+        func.count(sales_daily.c.business_date).label("observed_days"),
+    ).group_by(sales_daily.c.hour).all()
+
+    traffic_daily = db.query(
+        models.HourlyStoreTrafficRecord.business_date.label("business_date"),
+        models.HourlyStoreTrafficRecord.hour_of_day.label("hour"),
+        func.sum(models.HourlyStoreTrafficRecord.customer_count).label("customers"),
+    ).filter(
+        models.HourlyStoreTrafficRecord.store_id == store_id,
+        models.HourlyStoreTrafficRecord.business_date >= start_date,
+    ).group_by(models.HourlyStoreTrafficRecord.business_date, models.HourlyStoreTrafficRecord.hour_of_day).subquery()
+    traffic_rows = db.query(
+        traffic_daily.c.hour,
+        func.avg(traffic_daily.c.customers).label("average_customers"),
+        func.count(traffic_daily.c.business_date).label("observed_days"),
+    ).group_by(traffic_daily.c.hour).all()
+
+    sales_by_hour = {int(row.hour): row for row in sales_rows}
+    traffic_by_hour = {int(row.hour): row for row in traffic_rows}
+    return {
+        "store_id": store_id, "product_id": product_id, "period_days": days,
+        "period_start": start_date, "period_end": date.today(),
+        "hour_basis": "STORE_LOCAL_HOUR",
+        "hours": [{
+            "hour_of_day": hour,
+            "average_daily_units": float(sales_by_hour[hour].average_quantity) if hour in sales_by_hour else None,
+            "sales_observed_days": int(sales_by_hour[hour].observed_days) if hour in sales_by_hour else 0,
+            "average_customers": float(traffic_by_hour[hour].average_customers) if hour in traffic_by_hour else None,
+            "traffic_observed_days": int(traffic_by_hour[hour].observed_days) if hour in traffic_by_hour else 0,
+        } for hour in range(24)],
+        "missing_sales_hours": [hour for hour in range(24) if hour not in sales_by_hour],
+        "missing_traffic_hours": [hour for hour in range(24) if hour not in traffic_by_hour],
+        "forecast_generated": False, "simulation_only": True,
+    }
 
 
 @app.post("/api/v1/sales/import-csv", tags=["sales"])
