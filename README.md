@@ -562,3 +562,13 @@ O motor de matching OCR compara texto reconhecido com SKU, nome, marca e pistas 
 - Endpoint de cálculo: `POST /api/v1/shelf-images/{id}/ocr-matches`
 - Endpoint de consulta: `GET /api/v1/shelf-images/{id}/ocr-matches`
 - Migração: `0015_shelf_image_ocr_matches`
+
+
+## Fusão de evidência visual + OCR
+
+A API consolida por deteção o matching visual persistido e o matching textual da execução OCR concluída mais recente. Guarda os estados `CONSENSUS`, `VISUAL_ONLY`, `TEXT_ONLY`, `CONFLICT`, `AMBIGUOUS` e `UNKNOWN`, com proveniência das versões de modelo e scores originais.
+
+- `POST /api/v1/shelf-images/{image_id}/evidence-fusion` — gerar resultados consolidados (ADMIN/SUPERVISOR).
+- `GET /api/v1/shelf-images/{image_id}/evidence-fusion` — consultar histórico.
+
+A fusão não soma scores incompatíveis, não altera o SKU atribuído, o catálogo nem o stock. Mesmo `CONSENSUS` exige confirmação humana. Ver [documentação de fusão visual/OCR](docs/architecture/visual-ocr-evidence-fusion.md).
