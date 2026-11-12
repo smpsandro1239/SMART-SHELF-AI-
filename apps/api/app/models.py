@@ -310,3 +310,31 @@ class ShelfImageOCRMatch(Base):
     margin: Mapped[float | None] = mapped_column(Float, nullable=True)
     candidates: Mapped[list] = mapped_column(JSON, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+
+class ShelfImageFusedEvidence(Base):
+    """Immutable visual/OCR fusion suggestion for one detection and OCR run."""
+    __tablename__ = "shelf_image_fused_evidence"
+    __table_args__ = (
+        UniqueConstraint("ocr_run_id", "detection_id", name="uq_fused_evidence_run_detection"),
+        CheckConstraint("status IN ('CONSENSUS', 'VISUAL_ONLY', 'TEXT_ONLY', 'CONFLICT', 'AMBIGUOUS', 'UNKNOWN')", name="ck_fused_evidence_status"),
+        CheckConstraint("ocr_confidence IS NULL OR (ocr_confidence >= 0 AND ocr_confidence <= 1)", name="ck_fused_evidence_ocr_confidence"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    ocr_run_id: Mapped[int] = mapped_column(ForeignKey("shelf_image_ocr_runs.id", ondelete="CASCADE"), index=True, nullable=False)
+    detection_id: Mapped[int] = mapped_column(ForeignKey("shelf_image_detections.id", ondelete="CASCADE"), index=True, nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, index=True)
+    suggested_product_id: Mapped[int | None] = mapped_column(ForeignKey("products.id", ondelete="SET NULL"), nullable=True, index=True)
+    visual_product_id: Mapped[int | None] = mapped_column(ForeignKey("products.id", ondelete="SET NULL"), nullable=True)
+    text_product_id: Mapped[int | None] = mapped_column(ForeignKey("products.id", ondelete="SET NULL"), nullable=True)
+    visual_status: Mapped[str] = mapped_column(String(12), nullable=False)
+    text_status: Mapped[str] = mapped_column(String(12), nullable=False)
+    visual_similarity: Mapped[float | None] = mapped_column(Float, nullable=True)
+    text_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    ocr_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    visual_model_version: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    ocr_provider: Mapped[str] = mapped_column(String(80), nullable=False)
+    ocr_model_version: Mapped[str] = mapped_column(String(120), nullable=False)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
