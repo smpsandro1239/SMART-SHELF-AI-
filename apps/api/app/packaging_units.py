@@ -27,9 +27,8 @@ def calculate_replenishment_packs(
     required_base_units: Any,
     base_units_per_package: Any,
     allow_open_package: bool = False,
-    base_unit_replenishment_available: bool = False,
 ) -> dict[str, Any]:
-    """Calculate whole packs and optional loose base units without losing quantity."""
+    """Calculate sealed packs and, when allowed, one opened pack supplying loose base units."""
     try:
         required = _positive_decimal(required_base_units, "required_base_units")
         pack_size = _positive_decimal(base_units_per_package, "base_units_per_package")
@@ -38,24 +37,22 @@ def calculate_replenishment_packs(
 
     if not isinstance(allow_open_package, bool):
         raise ValueError("allow_open_package must be boolean")
-    if not isinstance(base_unit_replenishment_available, bool):
-        raise ValueError("base_unit_replenishment_available must be boolean")
-    if allow_open_package and not base_unit_replenishment_available:
-        raise ValueError("Opening a pack requires an active base-unit replenishment level")
-
     if allow_open_package:
         whole_packs = int((required / pack_size).to_integral_value(rounding=ROUND_FLOOR))
         loose_units = required - (pack_size * whole_packs)
+        opened_pack_count = 1 if loose_units > 0 else 0
         moved_base_units = required
     else:
         whole_packs = int((required / pack_size).to_integral_value(rounding=ROUND_CEILING))
         loose_units = Decimal("0")
+        opened_pack_count = 0
         moved_base_units = pack_size * whole_packs
 
     excess = moved_base_units - required
     return {
         "required_base_units": float(required),
         "package_count": whole_packs,
+        "opened_package_count": opened_pack_count,
         "loose_base_units": float(loose_units),
         "planned_base_units": float(moved_base_units),
         "excess_base_units": float(excess),
