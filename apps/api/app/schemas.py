@@ -432,3 +432,27 @@ class ShelfImageReviewQueueItem(BaseModel):
     ocr_model_version: str
     reason: str
     created_at: datetime
+
+
+SalesSource = Literal["POS", "ERP", "MANUAL", "IMPORT"]
+
+
+class DailySalesRecordCreate(BaseModel):
+    store_id: int
+    product_id: int
+    sales_date: date
+    quantity: float = Field(ge=0, allow_inf_nan=False)
+    source: SalesSource
+    external_reference: str = Field(min_length=1, max_length=120)
+
+
+class DailySalesRecordRead(BaseModel):
+    id: int
+    store_id: int
+    product_id: int
+    sales_date: date
+    quantity: float
+    source: SalesSource
+    external_reference: str
+    created_at: datetime
+    model_config = ConfigDict(from_attributes=True)
