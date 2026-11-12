@@ -1,0 +1,62 @@
+import os
+
+os.environ["APP_ENV"] = "test"
+os.environ["DATABASE_URL"] = "sqlite:///./test_unused.db"
+
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
+
+from app.database import Base, get_db
+from app import models  # noqa: F401
+from app.main import app
+
+TEST_ENGINE = create_engine(
+    "sqlite://",
+    connect_args={"check_same_thread": False},
+    poolclass=StaticPool,
+)
+TestingSession = sessionmaker(bind=TEST_ENGINE, autoflush=False, autocommit=False)
+Base.metadata.create_all(bind=TEST_ENGINE)
+
+
+def override_get_db():
+    db = TestingSession()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+app.dependency_overrides[get_db] = override_get_db
+
+
+def test_create_store_shelf_and_observation():
+    Base.metadata.drop_all(bind=TEST_ENGINE)
+    Base.metadata.create_all(bind=TEST_ENGINE)
+    with TestClient(app) as client:
+        store = client.post("/api/v1/stores", json={"code": "TEST-01", "name": "Loja de teste"})
+        assert store.status_code == 201
+        zone = client.post("/api/v1/zones", json={"store_id": store.json()["id"], "name": "Bebidas"})
+        assert zone.status_code == 201
+        shelf = client.post("/api/v1/shelves", json={"zone_id": zone.json()["id"], "code": "BEB-01"})
+        assert shelf.status_code == 201
+        observation = client.post(
+            "/api/v1/observations",
+            json={"shelf_id": shelf.json()["id"], "source": "simulation", "status": "LOW_STOCK", "confidence": 0.82},
+        )
+        assert observation.status_code == 201
+        assert observation.json()["status"] == "LOW_STOCK"
+        listed = client.get("/api/v1/observations", params={"shelf_id": shelf.json()["id"]})
+        assert listed.status_code == 200
+        assert len(listed.json()) == 1
+
+
+def test_observation_rejects_confidence_outside_range():
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/v1/observations",
+            json={"shelf_id": 1, "confidence": 1.5},
+        )
+        assert response.status_code == 422
