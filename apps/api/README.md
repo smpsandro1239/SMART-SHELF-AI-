@@ -508,6 +508,18 @@ Salvaguardas:
 
 A rota é consultiva e não substitui a validação humana nem a reconciliação com POS/WMS/ERP.
 
+### Proteções na criação de tarefas de reposição
+
+A criação de tarefas através de `POST /api/v1/tasks` e `POST /api/v1/tasks/from-recommendation` verifica se já existe uma tarefa ativa para a mesma combinação de loja, prateleira e produto (`PENDING`, `ASSIGNED` ou `IN_PROGRESS`). Em caso afirmativo, a API responde com HTTP 409 e o identificador/estado da tarefa existente, quando aplicável.
+
+Na criação a partir de uma recomendação:
+- A quantidade sugerida é utilizada quando está disponível e não foi indicada outra quantidade.
+- Se a recomendação não tiver uma quantidade medida fiável, a criação exige uma quantidade explicitamente confirmada.
+- A quantidade solicitada não pode exceder o stock disponível na retaguarda.
+- Se o inventário não estiver disponível ou não permitir validar a quantidade, a API não cria a tarefa.
+
+Estas verificações reduzem duplicações e sobre-alocação. A verificação de duplicados ao nível da aplicação não substitui uma restrição única transacional na base de dados; em cenários de concorrência simultânea, deve ser acrescentada uma migração com índice único parcial compatível com o motor de base de dados utilizado.
+
 ### Portefólio de risco de rutura por loja
 
 O endpoint `GET /api/v1/forecasting/stockout-risk/portfolio` agrega os produtos ativos associados às prateleiras de uma loja e ordena-os por gravidade do risco.
