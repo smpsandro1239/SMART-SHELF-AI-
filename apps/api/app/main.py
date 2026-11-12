@@ -24,6 +24,7 @@ from app.demand_forecasting import DemandForecastInput, forecast_demand
 from app.stockout_risk import StockoutRiskInput, assess_stockout_risk
 from app.replenishment_planning import build_replenishment_plan
 from app.replenishment_workload import summarize_workload
+from app.warehouse_slotting import recommend_warehouse_slotting
 from app.sku_review_evaluation import build_reviewed_prediction_report
 from app.sales_import import parse_daily_sales_csv
 from app.schemas import (
@@ -1433,6 +1434,76 @@ def list_daily_sales_records(
         models.DailySalesRecord.source == source,
     )
     return query.order_by(models.DailySalesRecord.sales_date.desc()).limit(days).all()
+
+
+
+
+
+@app.get("/api/v1/warehouse/slotting-recommendations", tags=["warehouse"])
+def get_warehouse_slotting_recommendations(
+    store_id: int,
+    source: SalesSource,
+    days: int = 28,
+    minimum_average_daily_sales: float = 1.0,
+    through_date: date | None = None,
+    request: Request = None,
+    db: Session = Depends(get_db),
+):
+    """Rank high-rotation products for a human-reviewed warehouse slotting decision."""
+    if days < 7 or days > 365:
+        raise HTTPException(status_code=422, detail="days must be between 7 and 365")
+    if (not math.isfinite(minimum_average_daily_sales)
+            or minimum_average_daily_sales < 0):
+        raise HTTPException(status_code=422, detail="minimum_average_daily_sales must be finite and non-negative")
+    _enforce_store_scope(_request_user(db, request), store_id)
+    if not db.get(models.Store, store_id):
+        raise HTTPException(status_code=404, detail="Store not found")
+
+    end_day = through_date or date.today()
+    start_day = end_day - timedelta(days=days - 1)
+    rows = (
+        db.query(
+            models.Product.id.label("product_id"),
+            models.Product.sku.label("sku"),
+            models.Product.name.label("product_name"),
+            func.coalesce(func.sum(models.DailySalesRecord.quantity), 0).label("total_quantity"),
+            func.count(func.distinct(models.DailySalesRecord.sales_date)).label("history_days"),
+        )
+        .join(models.DailySalesRecord, models.DailySalesRecord.product_id == models.Product.id)
+        .filter(
+            models.Product.is_active.is_(True),
+            models.DailySalesRecord.store_id == store_id,
+            models.DailySalesRecord.source == source,
+            models.DailySalesRecord.sales_date >= start_day,
+            models.DailySalesRecord.sales_date <= end_day,
+        )
+        .group_by(models.Product.id, models.Product.sku, models.Product.name)
+        .all()
+    )
+    result = recommend_warehouse_slotting(
+        [{
+            "product_id": row.product_id,
+            "sku": row.sku,
+            "product_name": row.product_name,
+            "total_quantity": float(row.total_quantity),
+            "history_days": int(row.history_days),
+            "expected_days": days,
+        } for row in rows],
+        minimum_average_daily_sales=minimum_average_daily_sales,
+    )
+    return {
+        "store_id": store_id,
+        "source": source,
+        "period_start": start_day,
+        "period_end": end_day,
+        "required_complete_days": days,
+        "minimum_average_daily_sales": minimum_average_daily_sales,
+        "analysed_products": result.analysed_products,
+        "excluded_incomplete_history": result.excluded_incomplete_history,
+        "products": list(result.products),
+        "read_only": True,
+        "policy": "Sugestão de slotting baseada em vendas diárias completas. Não escolhe uma localização física nem move stock; validar capacidade, dimensões, peso, segurança, temperatura e distância real.",
+    }
 
 
 @app.get("/api/v1/forecasting/demand", tags=["forecasting"])
