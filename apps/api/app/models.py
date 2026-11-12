@@ -41,11 +41,15 @@ class Shelf(Base):
 
 class Observation(Base):
     __tablename__ = "observations"
+    __table_args__ = (
+        CheckConstraint("observed_quantity IS NULL OR observed_quantity >= 0", name="ck_observation_quantity_nonnegative"),
+    )
     id: Mapped[int] = mapped_column(primary_key=True)
     shelf_id: Mapped[int] = mapped_column(ForeignKey("shelves.id", ondelete="CASCADE"), index=True)
     source: Mapped[str] = mapped_column(String(30), default="mobile")
     status: Mapped[str] = mapped_column(String(30), default="UNKNOWN", index=True)
     confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    observed_quantity: Mapped[float | None] = mapped_column(Numeric(12, 3), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
     model_version: Mapped[str | None] = mapped_column(String(100), nullable=True)
