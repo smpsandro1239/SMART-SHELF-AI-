@@ -147,8 +147,8 @@ def recommend_physical_slot(
         distance = loc.get("distance_to_picking_m")
         max_volume = loc.get("max_volume_cm3")
         max_weight = loc.get("max_weight_kg")
-        occupied_volume = loc.get("occupied_volume_cm3", 0)
-        occupied_weight = loc.get("occupied_weight_kg", 0)
+        occupied_volume = loc.get("occupied_volume_cm3")
+        occupied_weight = loc.get("occupied_weight_kg")
 
         if not loc.get("is_active", True):
             reason = "LOCATION_INACTIVE"
