@@ -53,7 +53,7 @@ Estados de recomendação disponíveis:
 - `LOW_CONFIDENCE`: observação sem confiança suficiente ou estado visual desconhecido.
 - `NO_ACTION`: a observação recente não indica baixa disponibilidade.
 
-A API não inventa uma quantidade exata a repor a partir dos rótulos visuais `LOW_STOCK` ou `EMPTY`. A quantidade sugerida permanece nula até existir uma regra quantitativa fiável.
+A API não inventa uma quantidade exata a repor a partir dos rótulos visuais `LOW_STOCK` ou `EMPTY`. A quantidade sugerida só é calculada quando existe uma contagem quantitativa observada e validada, respeitando o stock disponível na retaguarda.
 
 ## 4. Ciclo de vida operacional das tarefas
 
@@ -72,11 +72,25 @@ A API já suporta criação de tarefas, atribuição, início, conclusão e canc
 | Registo de observações e respetiva confiança | Implementado |
 | Histórico de snapshots de inventário | Implementado |
 | Cálculo de stock disponível (existente - reservado) | Implementado |
-| Recomendações com base em observação e inventário | Implementado |
+| Recomendações com base em observação e inventário | Implementado |\n| Plano de reposição agrupado por zona e exclusão de tarefas duplicadas ativas | Implementado na API |\n| Priorização opcional por risco de rutura calculado com vendas diárias e inventário recente | Implementado na API; depende de histórico completo |\n| Estimativa opcional de tempo decorrido por zona/prioridade, com amostra mínima | Implementado na API; requer tarefas concluídas |\n| Rotação de paletes e seleção consultiva de janelas horárias | Implementado como motor de decisão consultivo |
 | Tarefas, prioridade, atribuição e estados operacionais | Implementado na API |\n| Autenticação JWT e hash Argon2 | Implementado na API |\n| Perfis ADMIN, SUPERVISOR e EMPLOYEE | Implementado na primeira camada |\n| Associação de utilizadores e tarefas a lojas | Implementado no modelo/API |\n| Resumo operacional para dashboard | Endpoint inicial implementado |
 | Dashboard web e PWA móvel | Planeado |
 | Inferência de visão computacional | Planeado |
 | Integrações POS / ERP / WMS / robô | Dependentes de acesso e validação |
+
+## 5.1 Planeamento operacional e estimativas
+
+O endpoint `GET /api/v1/replenishment/plan` agrega recomendações por zona, remove combinações com tarefas ativas e pode ordenar o trabalho pelo risco de rutura. A avaliação de risco é opcional e exige histórico diário completo para o período escolhido e um snapshot de inventário recente; dados em falta permanecem `UNKNOWN`.
+
+O mesmo endpoint pode, separadamente, estimar o tempo decorrido das tarefas propostas a partir do histórico de tarefas concluídas na loja. As estimativas só são apresentadas quando existe uma amostra mínima e são identificadas como tempo decorrido, não como tempo de trabalho ativo. Ambas as funcionalidades são consultivas: não criam tarefas, não atribuem colaboradores e não movimentam stock.
+
+Exemplo de chamada com ambas as funcionalidades:
+
+```http
+GET /api/v1/replenishment/plan?store_id=1&include_stockout_risk=true&risk_days=28&risk_lead_time_days=3&include_effort_estimates=true&effort_history_days=90&effort_minimum_sample_size=5
+```
+
+Consultar [documentação detalhada da API](apps/api/README.md) para parâmetros, pressupostos e limitações.
 
 ## 6. Tecnologias
 
