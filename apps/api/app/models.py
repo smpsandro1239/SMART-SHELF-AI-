@@ -146,3 +146,21 @@ class User(Base):
     role: Mapped[str] = mapped_column(String(16), default="EMPLOYEE", nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
+class ShelfImage(Base):
+    """Stored shelf capture awaiting computer-vision analysis."""
+    __tablename__ = "shelf_images"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    shelf_id: Mapped[int] = mapped_column(ForeignKey("shelves.id", ondelete="CASCADE"), index=True)
+    uploaded_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    original_filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    storage_path: Mapped[str] = mapped_column(String(600), unique=True, nullable=False)
+    mime_type: Mapped[str] = mapped_column(String(40), nullable=False)
+    file_size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
+    sha256: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
+    analysis_status: Mapped[str] = mapped_column(String(20), default="PENDING", nullable=False, index=True)
+    model_version: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    captured_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
