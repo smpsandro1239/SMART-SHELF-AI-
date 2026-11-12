@@ -353,3 +353,34 @@ O repositório inclui ferramentas para validar COCO, auditar separação entre t
 - [Template de registo de aprovação](docs/computer-vision/dataset-release-template.json)
 
 O gate `python -m app.dataset_approval` exige autorizações e revisões humanas declaradas e volta a executar os controlos técnicos sobre manifesto e ficheiros COCO. Um resultado aprovado não autentica documentos legais nem substitui inspeção visual. Não existem fotografias reais aprovadas nem modelo treinado neste repositório.
+
+
+## 14. Revisão visual das anotações COCO
+
+![Fluxo da revisão visual COCO](docs/images/coco-visual-review.svg)
+
+Foi adicionada uma ferramenta local que gera uma galeria HTML offline com as imagens originais e as caixas delimitadoras/classes desenhadas por cima. Permite filtrar por classe, limitar a amostra e incluir imagens sem anotações. Não instala bibliotecas adicionais, não altera nem copia as fotografias e não envia dados para serviços externos.
+
+Exemplo a partir de `apps/api`:
+
+```bash
+python -m app.coco_review \
+  --annotations /dados/annotations/instances_train.json \
+  --image-root /dados/images/train \
+  --output /dados/review/train/index.html \
+  --include-unannotated
+```
+
+Para rever apenas produtos e limitar a amostra:
+
+```bash
+python -m app.coco_review \
+  --annotations /dados/annotations/instances_train.json \
+  --image-root /dados/images/train \
+  --output /dados/review/products/index.html \
+  --class-id 0 \
+  --limit 100
+```
+
+Abrir o ficheiro HTML gerado num navegador. O relatório referencia as imagens no diretório de origem; manter os caminhos e os ficheiros disponíveis enquanto a revisão decorre. O validador rejeita caminhos que escapem ao diretório de imagens e ficheiros em falta. A ferramenta facilita a inspeção, mas não decide se uma anotação está semanticamente correta nem aprova o dataset.
+
