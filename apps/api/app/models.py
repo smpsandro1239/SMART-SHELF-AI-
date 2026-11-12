@@ -181,12 +181,33 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
 
+class CaptureSession(Base):
+    """Operational capture batch used to keep related frames in one dataset split."""
+    __tablename__ = "capture_sessions"
+    __table_args__ = (
+        CheckConstraint("source_type IN ('fixed_camera', 'robot', 'mobile')", name="ck_capture_session_source"),
+        CheckConstraint("capture_mode IN ('single', 'burst', 'video_sample')", name="ck_capture_session_mode"),
+        CheckConstraint("ended_at IS NULL OR ended_at >= started_at", name="ck_capture_session_time_range"),
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    store_id: Mapped[int] = mapped_column(ForeignKey("stores.id", ondelete="CASCADE"), index=True, nullable=False)
+    shelf_id: Mapped[int] = mapped_column(ForeignKey("shelves.id", ondelete="CASCADE"), index=True, nullable=False)
+    source_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    source_device_id: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+    capture_mode: Mapped[str] = mapped_column(String(20), default="single", nullable=False)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+
 class ShelfImage(Base):
     """Stored shelf capture awaiting computer-vision analysis."""
     __tablename__ = "shelf_images"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     shelf_id: Mapped[int] = mapped_column(ForeignKey("shelves.id", ondelete="CASCADE"), index=True)
+    capture_session_id: Mapped[int | None] = mapped_column(ForeignKey("capture_sessions.id", ondelete="SET NULL"), nullable=True, index=True)
     uploaded_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     original_filename: Mapped[str] = mapped_column(String(255), nullable=False)
     storage_path: Mapped[str] = mapped_column(String(600), unique=True, nullable=False)
