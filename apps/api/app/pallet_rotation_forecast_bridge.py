@@ -61,12 +61,15 @@ def enrich_pallet_candidates_with_hourly_profiles(
             enriched.append(row)
             continue
 
+        traffic_values = [float(item["average_customers"]) for item in profile]
+        current_traffic = float(profile[current_hour]["average_customers"])
+        daily_hourly_average = sum(traffic_values) / len(traffic_values)
         row["traffic_level"] = (
-            "LOW" if decision.start_hour is not None
-            and decision.start_hour <= current_hour < decision.start_hour + duration_hours
-            else "HIGH" if decision.recommendation != "INSUFFICIENT_DATA"
-            else "UNKNOWN"
+            "LOW" if current_traffic <= daily_hourly_average
+            else "HIGH"
         )
+        row["current_hour_average_customers"] = current_traffic
+        row["daily_hourly_average_customers"] = round(daily_hourly_average, 3)
         row["forecast_consumption_until_low_traffic"] = (
             decision.projected_consumption_through_window
             if decision.recommendation != "INSUFFICIENT_DATA" else None
