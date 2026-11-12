@@ -225,3 +225,23 @@ O resultado `APPROVED` significa apenas que os campos declarados e os controlos 
 Para treino, é obrigatória a aprovação explícita `approved_for_training: true`. Para inferência operacional, usar `--mode inference`: além da aprovação para treino, exige aprovação operacional separada, identificação/licença do modelo, protocolo de avaliação e métricas medidas por classe (`precision`, `recall`, `ap50`). Não preencher métricas com estimativas ou valores de exemplo.
 
 A ferramenta não faz upload de imagens nem publica o registo privado. Manter dataset, manifesto e registos de autorização em armazenamento com acesso controlado; não colocar dados pessoais, contratos ou credenciais no GitHub.
+
+
+## 17. Revisão visual das caixas delimitadoras
+
+A ferramenta `app.coco_review` gera uma galeria HTML local para inspecionar as caixas e os nomes das classes sobre as fotografias originais. É recomendada depois da validação estrutural e antes do gate de aprovação.
+
+A partir de `apps/api`:
+
+```bash
+python -m app.coco_review \
+  --annotations /dados/annotations/instances_train.json \
+  --image-root /dados/images/train \
+  --output /dados/review/train/index.html \
+  --include-unannotated
+```
+
+Para filtrar classes, repetir `--class-id` (por exemplo, `--class-id 0 --class-id 2`). `--limit` permite rever uma amostra determinística na ordem do ficheiro COCO. Sem `--include-unannotated`, as imagens sem anotações correspondentes aos filtros são omitidas.
+
+O HTML é estático e funciona sem servidor ou dependências JavaScript. Mantém referências relativas às imagens de origem, pelo que os ficheiros têm de continuar acessíveis no caminho original. Não copia, modifica ou transmite fotografias. O gerador rejeita documentos COCO inválidos, ficheiros ausentes e caminhos que escapem à raiz indicada. A revisão visual continua a exigir uma pessoa: o programa não avalia se a caixa envolve o objeto correto, se a classe é semanticamente adequada ou se existe autorização para usar a imagem.
+
