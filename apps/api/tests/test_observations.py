@@ -199,3 +199,30 @@ def test_list_shelf_image_detections(tmp_path, monkeypatch):
         assert records[0]["model_version"] == "test-model-0.1"
         assert records[0]["x_min"] == 0.1
         assert records[0]["x_max"] == 0.6
+
+
+def test_detection_query_respects_store_scope(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    from app.config import settings
+    import app.main as main_module
+
+    monkeypatch.setattr(settings, "image_storage_path", str(tmp_path))
+    Base.metadata.drop_all(bind=TEST_ENGINE)
+    Base.metadata.create_all(bind=TEST_ENGINE)
+    with TestClient(app) as client:
+        store = client.post("/api/v1/stores", json={"code": "DET-02", "name": "Loja privada"})
+        zone = client.post("/api/v1/zones", json={"store_id": store.json()["id"], "name": "Frescos"})
+        shelf = client.post("/api/v1/shelves", json={"zone_id": zone.json()["id"], "code": "FR-02"})
+        uploaded = client.post(
+            "/api/v1/shelf-images",
+            data={"shelf_id": str(shelf.json()["id"])},
+            files={"image": ("shelf.png", b"\x89PNG\r\n\x1a\nvalid-signature", "image/png")},
+        )
+        assert uploaded.status_code == 201
+        monkeypatch.setattr(
+            main_module,
+            "_request_user",
+            lambda db, request: SimpleNamespace(id=99, role="SUPERVISOR", store_id=999),
+        )
+        response = client.get(f"/api/v1/shelf-images/{uploaded.json()['id']}/detections")
+        assert response.status_code == 403
