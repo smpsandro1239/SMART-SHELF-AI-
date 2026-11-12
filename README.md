@@ -335,6 +335,7 @@ Um administrador ou supervisor da loja pode colocar novamente uma captura no est
 Foi criada a especificação inicial de recolha e anotação, com quatro classes de deteção genéricas, regras de privacidade, controlo de qualidade, separação treino/validação/teste e métricas de avaliação. A estrutura segue COCO Object Detection, compatível com a preparação de dados documentada para RT-DETR. Foi também adicionado um validador de anotações para detetar IDs duplicados, referências inválidas, caixas fora dos limites e ficheiros em falta.
 
 - [Especificação do dataset](docs/computer-vision/dataset-specification.md)
+- [Auditoria de separação de datasets](docs/computer-vision/dataset-specification.md#12-auditor-separação-treino-validação-teste)
 - [Exemplo mínimo COCO JSON](docs/computer-vision/coco-example.json)
 - [Modelo de Dataset Card](docs/computer-vision/dataset-card-template.md)
 
