@@ -212,7 +212,7 @@ Consultar também os endpoints de catálogo, observações e inventário na docu
 
 ## 13. Estado do projeto
 
-O projeto está em desenvolvimento incremental. O backend inclui catálogo, inventário, recomendações, tarefas e uma primeira camada de autorização por loja. A aplicação web inicial está em `apps/web`. A API já recebe e armazena fotografias de prateleiras, com validação de formato, limite de tamanho, hash SHA-256 e estado de análise pendente. A deteção automática de produtos ainda não está implementada.
+O projeto está em desenvolvimento incremental. O backend inclui catálogo, inventário, recomendações, tarefas, autorização por loja e ingestão de fotografias. Existe um worker independente e um contrato de provider para inferência, com estados `PENDING`, `PROCESSING`, `COMPLETED` e `FAILED`. Não existe ainda um modelo real configurado ou treinado; os testes do worker usam um provider falso apenas para validar o fluxo.
 
 ## Licença
 
@@ -293,7 +293,7 @@ A API disponibiliza uma primeira etapa de ingestão de fotografias de prateleira
 - SHA-256 calculado para integridade e deduplicação futura.
 - Ficheiros guardados por ID da loja num volume Docker persistente `shelf_images`.
 - Supervisores e funcionários só podem carregar/consultar imagens da sua loja; a API verifica a associação da prateleira à loja.
-- O estado inicial é `PENDING`; não existe ainda análise automática nem deteção de produtos.
+- O estado inicial é `PENDING`; a análise só avança quando um provider real é configurado no worker.
 
 ### Exemplo de captura
 
@@ -309,9 +309,7 @@ Definir `IMAGE_STORAGE_PATH` para um volume persistente no ambiente de execuçã
 
 ## 17. Estrutura de resultados de visão computacional
 
-Foi adicionada a tabela `shelf_image_detections` para guardar resultados produzidos por um futuro modelo: etiqueta da classe, confiança, caixa delimitadora normalizada, associação opcional a um produto e versão do modelo. O endpoint `GET /api/v1/shelf-images/{image_id}/detections` consulta estes registos respeitando o isolamento por loja.
-
-**Limite atual:** esta entrega é apenas o contrato de persistência e consulta. Não existe ainda inferência YOLO/OpenCV, worker de processamento, nem deteções automáticas. Uma classe genérica detetada não equivale à identificação fiável de um SKU; isso exigirá dados anotados e validação do modelo.
+A tabela `shelf_image_detections` guarda resultados produzidos por um provider: etiqueta da classe, confiança, caixa delimitadora normalizada, associação opcional a um produto e versão do modelo. O endpoint `GET /api/v1/shelf-images/{image_id}/detections` consulta estes registos respeitando o isolamento por loja. O worker e o contrato de provider estão implementados; ainda não existe provider real nem modelo de inferência configurado.
 
 
 ## 18. Ciclo de processamento de visão computacional
@@ -330,3 +328,14 @@ A configuração `VISION_PROVIDER_FACTORY` aceita um caminho Python `modulo:fact
 ### Repetir uma análise falhada
 
 Um administrador ou supervisor da loja pode colocar novamente uma captura no estado `PENDING` através de `POST /api/v1/shelf-images/{image_id}/retry`. Apenas imagens no estado `FAILED` podem ser repetidas; o endpoint limpa os metadados da tentativa anterior e respeita o isolamento por loja. O worker só voltará a processar a imagem se existir um provider real configurado.
+
+
+## 19. Preparação do dataset de visão computacional
+
+Foi criada a especificação inicial de recolha e anotação, com quatro classes de deteção genéricas, regras de privacidade, controlo de qualidade, separação treino/validação/teste e métricas de avaliação. A estrutura segue COCO Object Detection, compatível com a preparação de dados documentada para RT-DETR.
+
+- [Especificação do dataset](docs/computer-vision/dataset-specification.md)
+- [Exemplo mínimo COCO JSON](docs/computer-vision/coco-example.json)
+- [Modelo de Dataset Card](docs/computer-vision/dataset-card-template.md)
+
+**Importante:** o exemplo JSON é ilustrativo, não contém imagens reais nem anotações de treino. Ainda não foi recolhido ou aprovado qualquer dataset. A identificação de SKU, ruturas e produtos deslocados exige contexto e validação adicionais.
