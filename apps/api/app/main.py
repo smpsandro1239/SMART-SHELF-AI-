@@ -105,7 +105,7 @@ async def require_api_authentication(request: Request, call_next):
                 and path.startswith("/api/v1/tasks/")
                 and path.endswith("/status")
             )
-            if not (allowed_employee_read or allowed_employee_task_update or allowed_employee_image_upload or allowed_employee_image_content or allowed_employee_image_detections or allowed_employee_detection_review_history):
+            if not (allowed_employee_read or allowed_employee_task_update or allowed_employee_image_upload or allowed_employee_image_content or allowed_employee_image_detections or allowed_employee_ocr_evidence or allowed_employee_detection_review_history):
                 return JSONResponse(status_code=403, content={"detail": "Employee access is limited to assigned tasks"})
         if user.role == "SUPERVISOR" and path.startswith("/api/v1/auth/users"):
             return JSONResponse(status_code=403, content={"detail": "Administrator role required"})
