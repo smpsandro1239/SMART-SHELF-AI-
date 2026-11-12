@@ -29,6 +29,7 @@ from app.warehouse_slotting import recommend_warehouse_slotting, recommend_physi
 from app.packaging_units import calculate_replenishment_packs
 from app.pallet_rotation import evaluate_pallet_rotation, PalletRotationInputError
 from app.pallet_portfolio import build_pallet_portfolio_plan, PalletPortfolioInputError
+from app.pallet_rotation_forecast_bridge import enrich_pallet_candidates_with_hourly_profiles
 from app.pallet_rotation_windows import recommend_low_traffic_window
 from app.hourly_patterns import build_weekday_hour_profile
 from app.hourly_demand_forecast import forecast_hourly_demand
@@ -2394,6 +2395,155 @@ def simulate_pallet_rotation(
         },
         "simulation_only": True,
         "backroom_capacity_source": "OPERATOR_CONFIRMED",
+    }
+
+
+@app.get("/api/v1/warehouse/pallet-rotation/portfolio-from-history", tags=["warehouse"])
+def get_pallet_rotation_portfolio_from_history(
+    store_id: int,
+    current_hour: int,
+    backroom_capacity_available: bool = False,
+    days: int = 28,
+    duration_hours: int = 1,
+    source: SalesSource = "POS",
+    minimum_observed_days: int = 7,
+    conventional_minutes: float = 24,
+    swap_minutes: float = 4,
+    transport_minutes: float = 3,
+    rebuild_minutes: float = 5,
+    limit: int = 100,
+    request: Request = None,
+    db: Session = Depends(get_db),
+):
+    """Build a read-only SKU-specific pallet portfolio from recorded hourly history."""
+    actor = _request_user(db, request)
+    _enforce_store_scope(actor, store_id)
+    if db.get(models.Store, store_id) is None:
+        raise HTTPException(status_code=404, detail="Store not found")
+    if isinstance(current_hour, bool) or not 0 <= current_hour <= 23:
+        raise HTTPException(status_code=422, detail="current_hour must be between 0 and 23")
+    if not 7 <= days <= 90:
+        raise HTTPException(status_code=422, detail="days must be between 7 and 90")
+    if not 1 <= duration_hours <= 4:
+        raise HTTPException(status_code=422, detail="duration_hours must be between 1 and 4")
+    if not 1 <= minimum_observed_days <= 90:
+        raise HTTPException(status_code=422, detail="minimum_observed_days must be between 1 and 90")
+    numeric_inputs = {
+        "conventional_minutes": conventional_minutes,
+        "swap_minutes": swap_minutes,
+        "transport_minutes": transport_minutes,
+        "rebuild_minutes": rebuild_minutes,
+    }
+    for field, value in numeric_inputs.items():
+        if not math.isfinite(value) or value < 0:
+            raise HTTPException(status_code=422, detail=f"{field} must be finite and non-negative")
+
+    try:
+        if isinstance(limit, bool) or not 1 <= limit <= 500:
+            raise PalletPortfolioInputError("limit must be between 1 and 500")
+        policies = db.query(models.PalletRotationPolicy).filter_by(
+            store_id=store_id, is_enabled=True
+        ).all()
+        policy_by_product = {item.product_id: item for item in policies}
+        if not policy_by_product:
+            return {
+                "store_id": store_id, "recommendations": [], "candidate_evidence": [],
+                "considered": 0, "excluded": 0, "candidate_pallets": 0,
+                "input_provenance": "HISTORICAL_HOURLY_SALES_AND_STORE_TRAFFIC",
+                "simulation_only": True, "automatic_stock_movement_allowed": False,
+            }
+
+        pallets = db.query(models.StorePallet).filter(
+            models.StorePallet.store_id == store_id,
+            models.StorePallet.product_id.in_(list(policy_by_product)),
+            models.StorePallet.status.in_(["ON_DISPLAY", "PARTIAL"]),
+            models.StorePallet.location_type == "SALES_FLOOR",
+        ).order_by(models.StorePallet.id).limit(5000).all()
+        active_levels = {
+            item.id: item
+            for item in db.query(models.ProductPackagingLevel).filter(
+                models.ProductPackagingLevel.id.in_([p.packaging_level_id for p in pallets] or [-1]),
+                models.ProductPackagingLevel.is_active.is_(True),
+                models.ProductPackagingLevel.package_type == "PALLET",
+            ).all()
+        }
+        product_ids = {p.product_id for p in pallets}
+        ready_pallets = db.query(models.StorePallet).filter(
+            models.StorePallet.store_id == store_id,
+            models.StorePallet.product_id.in_(list(product_ids) or [-1]),
+            models.StorePallet.status == "READY",
+            models.StorePallet.location_type.in_(["WAREHOUSE", "PREPARATION"]),
+            or_(models.StorePallet.expiry_date.is_(None), models.StorePallet.expiry_date >= date.today()),
+        ).all()
+        ready_keys = {
+            (p.product_id, p.packaging_level_id)
+            for p in ready_pallets
+            if p.packaging_level_id in active_levels
+            and float(p.base_quantity) == float(active_levels[p.packaging_level_id].base_units_per_package)
+        }
+
+        product_profiles = {}
+        profile_errors = {}
+        for product_id in product_ids:
+            try:
+                profile = get_pallet_rotation_hourly_profile(
+                    store_id=store_id, product_id=product_id, days=days,
+                    source=source, request=request, db=db,
+                )
+                product_profiles[product_id] = profile["hours"]
+            except (HTTPException, ValueError, TypeError) as exc:
+                profile_errors[product_id] = getattr(exc, "detail", str(exc))
+
+        candidates = []
+        for pallet in pallets:
+            level = active_levels.get(pallet.packaging_level_id)
+            policy = policy_by_product.get(pallet.product_id)
+            if level is None or policy is None:
+                continue
+            candidates.append({
+                "store_id": store_id,
+                "product_id": pallet.product_id,
+                "pallet_id": pallet.id,
+                "residual_base_units": float(pallet.base_quantity),
+                "pallet_capacity_base_units": float(level.base_units_per_package),
+                "threshold_ratio": float(policy.threshold_ratio),
+                "replacement_pallet_available": (pallet.product_id, pallet.packaging_level_id) in ready_keys,
+                "backroom_capacity_available": backroom_capacity_available,
+                "conventional_minutes": conventional_minutes,
+                "swap_minutes": swap_minutes,
+                "transport_minutes": transport_minutes,
+                "rebuild_minutes": rebuild_minutes,
+            })
+
+        enriched = enrich_pallet_candidates_with_hourly_profiles(
+            candidates, product_profiles, current_hour=current_hour,
+            duration_hours=duration_hours,
+            minimum_observed_days=minimum_observed_days,
+        )
+        planned_candidates = [
+            row for row in enriched["candidates"]
+            if row.get("forecast_consumption_until_low_traffic") is not None
+            and row.get("traffic_level") in {"HIGH", "LOW"}
+        ]
+        plan = build_pallet_portfolio_plan(planned_candidates, limit=limit)
+    except (PalletPortfolioInputError, TypeError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    return {
+        "store_id": store_id,
+        "current_hour": current_hour,
+        "period_days": days,
+        "source": source,
+        "minimum_observed_days": minimum_observed_days,
+        "recommendations": list(plan.recommendations),
+        "candidate_evidence": enriched["candidates"],
+        "considered": plan.considered,
+        "excluded": len(enriched["candidates"]) - len(planned_candidates) + plan.excluded,
+        "candidate_pallets": len(pallets),
+        "profiles_missing_or_invalid": profile_errors,
+        "input_provenance": "HISTORICAL_HOURLY_SALES_AND_STORE_TRAFFIC",
+        "simulation_only": True,
+        "automatic_stock_movement_allowed": False,
     }
 
 
