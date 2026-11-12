@@ -480,6 +480,34 @@ O módulo `app.stockout_risk` acrescenta uma classificação determinística de 
 
 A implementação inclui testes unitários para os diferentes níveis, histórico insuficiente, procura média nula e validação de entradas. Consultar [Avaliação explicável do risco de rutura](../../docs/architecture/stockout-risk-assessment.md). A integração com o endpoint de previsão e com o dashboard será feita numa fase posterior, após validação com dados reais.
 
+
+### Endpoint integrado de risco de rutura
+
+`GET /api/v1/forecasting/stockout-risk` combina a série diária completa de vendas com o snapshot de inventário mais recente da loja/produto e devolve a previsão e a banda de risco no mesmo resultado.
+
+Exemplo:
+
+```http
+GET /api/v1/forecasting/stockout-risk?store_id=1&product_id=42&source=POS&lead_time_days=3&days=28&max_inventory_age_minutes=240
+Authorization: Bearer <ACCESS_TOKEN>
+```
+
+Parâmetros:
+- `store_id`, `product_id`, `source` e `lead_time_days`: obrigatórios.
+- `days`: histórico diário consecutivo (7–365; predefinição 28).
+- `through_date`: último dia da janela, ISO `YYYY-MM-DD`.
+- `target_cover_days`: cobertura adicional usada na previsão (predefinição 7).
+- `max_inventory_age_minutes`: idade máxima aceite para o snapshot (1–10080; predefinição 240).
+
+Salvaguardas:
+- Se faltar um dia de vendas, responde `409 INCOMPLETE_DAILY_SALES_HISTORY`; dias confirmados sem vendas têm de ser enviados explicitamente com quantidade zero.
+- Se não existir snapshot, ou se o snapshot ultrapassar a idade máxima, devolve `risk_level: UNKNOWN` e indica `inventory_status: MISSING` ou `STALE`.
+- Só classifica o risco com um snapshot considerado recente.
+- Respeita o isolamento de loja já aplicado às restantes rotas.
+- Não cria tarefas, encomendas nem movimentos de inventário.
+
+A rota é consultiva e não substitui a validação humana nem a reconciliação com POS/WMS/ERP.
+
 ## Ingestão diária de vendas e previsão por loja/produto
 
 A previsão de procura pode agora consumir agregados diários importados de um POS/ERP, sem assumir que as observações visuais da prateleira representam vendas.
