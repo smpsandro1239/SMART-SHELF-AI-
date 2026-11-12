@@ -17,6 +17,8 @@ jobs:
     defaults:
       run:
         working-directory: apps/api
+    env:
+      PYTHONPATH: ${{ github.workspace }}/apps/api
     steps:
       - name: Checkout
         uses: actions/checkout@v4
