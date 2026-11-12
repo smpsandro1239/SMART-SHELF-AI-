@@ -627,3 +627,16 @@ O plano exclui tarefas já ativas para a mesma combinação prateleira/produto, 
 O endpoint `GET /api/v1/replenishment/workload?store_id=1` está disponível para administradores e supervisores. Apresenta tarefas ativas registadas por funcionário (atribuídas e em curso), tarefas ativas sem funcionário válido e duração média entre início e conclusão para tarefas concluídas com timestamps válidos.
 
 A duração média exclui registos incompletos, negativos e superiores a sete dias. O endpoint também apresenta médias por zona e prioridade, mas só publica uma média segmentada quando existem pelo menos cinco tarefas concluídas válidas nesse grupo; abaixo desse limiar devolve `INSUFFICIENT_SAMPLE` e não expõe uma média. São indicadores descritivos, não SLAs nem estimativas de produtividade individual. O endpoint não assume que um funcionário está de turno ou disponível, não calcula capacidade real e não atribui tarefas automaticamente. Funcionários não podem consultar a carga dos colegas.
+
+
+## Recomendações de localização de produtos no armazém
+
+Endpoint de consulta (read-only):
+
+    GET /api/v1/warehouse/slotting-recommendations?store_id=1&source=POS&days=28
+
+O motor identifica produtos de rotação elevada com base na média diária de vendas dos últimos dias indicados. Só inclui produtos com um registo diário explícito para todos os dias do período; dias sem vendas devem ser importados com quantidade zero. Produtos com histórico incompleto são excluídos e contabilizados separadamente.
+
+A recomendação `CONSIDER_NEAR_PICKING_AREA` é um sinal para revisão humana. O limiar combina um mínimo configurável (por omissão, uma unidade/dia) com o percentil 75 dos produtos analisáveis. Não é uma decisão automática de mudança de localização.
+
+**Limitação atual:** o modelo ainda não regista localizações/bin locations, coordenadas, distâncias, capacidades, dimensões, peso ou requisitos de conservação. Por isso, a API identifica candidatos a aproximar da zona de preparação, mas não escolhe uma posição concreta nem calcula poupanças de percurso. A mudança física exige validação operacional.
