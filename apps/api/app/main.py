@@ -29,6 +29,7 @@ from app.warehouse_slotting import recommend_warehouse_slotting, recommend_physi
 from app.packaging_units import calculate_replenishment_packs
 from app.pallet_rotation import evaluate_pallet_rotation, PalletRotationInputError
 from app.pallet_rotation_windows import recommend_low_traffic_window
+from app.hourly_patterns import build_weekday_hour_profile
 from app.sku_review_evaluation import build_reviewed_prediction_report
 from app.sales_import import parse_daily_sales_csv
 from app.sales_import_hourly import parse_hourly_sales_csv, parse_hourly_traffic_csv
@@ -1659,10 +1660,11 @@ def get_pallet_rotation_weekday_hourly_profile(
     store_id: int,
     product_id: int,
     days: int = 56,
+    source: SalesSource = "POS",
     request: Request = None,
     db: Session = Depends(get_db),
 ):
-    """Return separate weekday/hour averages; missing observations remain null."""
+    """Return separate weekday/hour averages for one source; missing observations remain null."""
     if not 14 <= days <= 180:
         raise HTTPException(status_code=422, detail="days must be between 14 and 180")
     actor = _request_user(db, request)
@@ -1679,13 +1681,14 @@ def get_pallet_rotation_weekday_hourly_profile(
         models.HourlySalesRecord.product_id == product_id,
         models.HourlySalesRecord.business_date >= start_date,
         models.HourlySalesRecord.business_date <= end_date,
+        models.HourlySalesRecord.source == source,
     ).all()
     traffic_rows = db.query(models.HourlyStoreTrafficRecord).filter(
         models.HourlyStoreTrafficRecord.store_id == store_id,
         models.HourlyStoreTrafficRecord.business_date >= start_date,
         models.HourlyStoreTrafficRecord.business_date <= end_date,
+        models.HourlyStoreTrafficRecord.source == source,
     ).all()
-    from app.hourly_patterns import build_weekday_hour_profile
     profile = build_weekday_hour_profile(sales_rows, traffic_rows)
     return {
         "store_id": store_id,
@@ -1694,6 +1697,7 @@ def get_pallet_rotation_weekday_hourly_profile(
         "period_start": start_date,
         "period_end": end_date,
         "weekday_basis": "ISO_WEEKDAY_MONDAY_ZERO",
+        "source": source,
         "hour_basis": "STORE_LOCAL_HOUR",
         "observed_profile": profile,
         "forecast_generated": False,
