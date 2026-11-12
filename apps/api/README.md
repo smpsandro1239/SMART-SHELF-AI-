@@ -856,3 +856,29 @@ O resultado é apenas uma recomendação. Não cria tarefas, não reserva palete
 não altera inventário e não regista movimentos. Os custos atuais comparam
 apenas mão de obra; equipamento, espaço, perdas e impacto no serviço ainda
 terão de ser medidos num piloto.
+
+
+## Registo e rastreabilidade de paletes
+
+A migração `0015_pallet_rotation_registry` cria a identidade de paletes físicas,
+políticas de rotação por loja/produto e histórico de eventos. Aplicar com:
+
+    docker compose exec api alembic upgrade head
+
+Consultar `docs/architecture/pallet-registry-and-traceability.md` para o modelo
+e exemplos completos. Endpoints principais:
+
+- `POST /api/v1/warehouse/pallets` — registar palete física e evento inicial.
+- `GET /api/v1/warehouse/pallets?store_id=1` — consultar paletes da loja.
+- `POST /api/v1/warehouse/pallet-rotation/policies` — criar política por produto/loja.
+- `GET /api/v1/warehouse/pallet-rotation/policies?store_id=1` — consultar políticas.
+- `PATCH /api/v1/warehouse/pallet-rotation/policies/{policy_id}` — alterar limiar ou ativação.
+- `GET /api/v1/warehouse/pallets/{pallet_id}/events?store_id=1` — consultar auditoria.
+
+A criação/alteração exige ADMIN ou SUPERVISOR e respeita o âmbito da loja.
+O registo usa o nível de embalagem PALLET ativo e guarda quantidade em unidade
+base, lote, validade e localização declarada. Não atualiza o inventário agregado,
+não executa movimentos e não confirma fisicamente a existência da palete.
+Os testes de validação dos schemas estão em
+`tests/test_pallet_registry_schemas.py`; devem ser executados com `pytest -q`
+a partir de `apps/api`.
