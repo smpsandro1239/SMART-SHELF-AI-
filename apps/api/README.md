@@ -433,3 +433,42 @@ Os endpoints `POST /api/v1/shelf-images/{image_id}/ocr-matches` e `POST /api/v1/
 
 
 A fila tem também o endpoint `GET /api/v1/shelf-image-review-queue/summary`, que devolve contagens pendentes por estado de fusão para alimentar dashboards de revisão. Ambos os endpoints são reservados a ADMIN/SUPERVISOR e limitados à loja do supervisor.
+
+
+## Previsão de procura e stock de segurança
+
+O módulo `app.demand_forecasting` disponibiliza uma política determinística e explicável para estimar procura diária, consumo durante o prazo de abastecimento, stock de segurança, ponto de encomenda e stock-alvo.
+
+A função recebe uma quantidade de vendas para **cada dia consecutivo**, incluindo dias sem vendas (quantidade zero). Não se devem enviar apenas dias em que existiram transações, porque isso sobrestimaria a procura média.
+
+Exemplo de utilização Python:
+
+    from app.demand_forecasting import DemandForecastInput, forecast_demand
+
+    result = forecast_demand(DemandForecastInput(
+        daily_sales=[4, 5, 3, 6, 4, 7, 5, 6, 4, 5, 8, 6, 5, 4],
+        lead_time_days=3,
+        target_cover_days=7,
+        service_factor=1.65,
+    ))
+
+    print(result.status)
+    print(result.reorder_point)
+    print(result.target_stock)
+
+A média diária é ponderada linearmente, dando maior peso aos dias recentes. O stock de segurança é calculado por:
+
+    stock_seguranca = fator_servico * desvio_padrao_diario * raiz(prazo_abastecimento)
+
+O ponto de encomenda corresponde à procura esperada durante o prazo de abastecimento acrescida do stock de segurança. O stock-alvo acrescenta os dias de cobertura configurados.
+
+Estados:
+- `FORECAST_READY`: histórico suficiente para calcular uma estimativa.
+- `INSUFFICIENT_HISTORY`: histórico insuficiente; não são inventadas quantidades.
+
+Limitações conhecidas: esta primeira versão não modela explicitamente sazonalidade semanal, feriados, campanhas promocionais, ruturas, devoluções ou produtos substitutos. O fator de serviço é um parâmetro operacional, não uma probabilidade calibrada. A previsão ainda não está ligada a dados reais de POS/ERP nem cria encomendas automaticamente.
+
+Executar os testes:
+
+    cd apps/api
+    pytest -q tests/test_demand_forecasting.py
