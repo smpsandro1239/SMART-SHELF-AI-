@@ -42,3 +42,6 @@ O endpoint `GET /api/v1/shelf-image-review-queue` agrega as deteções com fusã
 Cada item inclui a caixa normalizada da deteção, confiança do detector, estado de fusão, IDs dos candidatos, scores originais e proveniência OCR/visual. O endpoint não devolve o binário da imagem: a interface pode obtê-lo pelo endpoint autenticado de conteúdo da imagem.
 
 A decisão é registada no endpoint existente `POST /api/v1/shelf-image-detections/{detection_id}/reviews`. O histórico de revisão é append-only. A decisão humana não reescreve o resultado original do modelo nem movimenta stock.
+
+
+A fila ordena primeiro os conflitos, depois as ambiguidades, sugestões apenas textuais, casos desconhecidos e correspondências apenas visuais. O endpoint por imagem também aceita o filtro `status`, para facilitar a triagem e a depuração.
