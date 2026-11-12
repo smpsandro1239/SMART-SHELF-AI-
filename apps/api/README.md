@@ -1168,3 +1168,27 @@ A sequência de prateleiras continua a ser uma heurística por zona/código/posi
 não um percurso físico otimizado. Para ativar esta prioridade nos resultados
 de um endpoint, o respetivo adaptador deve fornecer explicitamente
 `stockout_risk_level`; a ausência de integração não é mascarada nem inferida.
+
+
+### Plano de reposição com avaliação integrada do risco de rutura
+
+O endpoint `GET /api/v1/replenishment/plan` pode agora enriquecer a fila de trabalho com risco de rutura calculado a partir do histórico diário e do snapshot de inventário já usado nas recomendações de prateleira.
+
+Exemplo, ativando explicitamente a avaliação:
+
+```http
+GET /api/v1/replenishment/plan?store_id=1&include_stockout_risk=true&risk_source=POS&risk_days=28&risk_lead_time_days=3&risk_max_inventory_age_minutes=240
+```
+
+Parâmetros:
+- `include_stockout_risk`: desativado por omissão, para preservar o comportamento atual.
+- `risk_source`: origem diária de vendas, por omissão `POS`.
+- `risk_days`: histórico consecutivo exigido, entre 7 e 365 dias.
+- `risk_lead_time_days`: prazo de abastecimento usado no cálculo, entre mais de 0 e 365 dias.
+- `risk_max_inventory_age_minutes`: idade máxima do snapshot, entre 1 e 10080 minutos.
+
+O adaptador `app/replenishment_risk_bridge.py` agrega vendas por produto/dia e exige um registo para cada dia do período. Um dia sem registo é desconhecido, não é convertido em zero. O snapshot tem de existir e estar dentro da idade máxima. Sem qualquer destas condições, o risco permanece `UNKNOWN` e a ordenação não o trata como risco baixo.
+
+Quando existe evidência suficiente, o motor usa a previsão diária ponderada, o prazo de abastecimento e o stock de segurança para classificar o risco. A resposta inclui a banda, cobertura em dias, stock projetado à receção, diferença para o stock de segurança, procura média e fundamento da avaliação. O planeador usa essa banda para ordenar os candidatos.
+
+A integração é consultiva e opcional: não cria tarefas, não reserva stock, não emite encomendas e não movimenta inventário. A prioridade de risco também não ultrapassa o controlo de segurança de criação de tarefas: continua a ser necessária uma recomendação quantificada e elegível. A classificação é uma heurística explicável, não uma probabilidade calibrada; deve ser validada com dados reais da loja antes de qualquer automatização.
