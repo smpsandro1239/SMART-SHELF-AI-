@@ -101,11 +101,12 @@ def build_replenishment_plan(
                 int(row.get("product_id") or 0),
             ),
         )
-        route_order_by_shelf: dict[int, int] = {}
+        route_order_by_shelf: dict[str, int] = {}
         for item in route_sorted_items:
             shelf_id = int(item.get("shelf_id") or 0)
-            if shelf_id not in route_order_by_shelf:
-                route_order_by_shelf[shelf_id] = len(route_order_by_shelf) + 1
+            route_key = str(item.get("shelf_code") or f"#{shelf_id}").casefold()
+            if route_key not in route_order_by_shelf:
+                route_order_by_shelf[route_key] = len(route_order_by_shelf) + 1
 
         # Present work by operational priority; route_order remains an independent shelf hint.
         ordered_items = sorted(
@@ -120,7 +121,8 @@ def build_replenishment_plan(
         )
         for item in ordered_items:
             shelf_id = int(item.get("shelf_id") or 0)
-            item["route_order"] = route_order_by_shelf[shelf_id]
+            route_key = str(item.get("shelf_code") or f"#{shelf_id}").casefold()
+            item["route_order"] = route_order_by_shelf[route_key]
             item["route_basis"] = "ZONE_THEN_SHELF_CODE_AND_POSITION"
             item["physical_route_optimized"] = False
         groups_list.append(PlannedZone(
