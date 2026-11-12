@@ -108,3 +108,34 @@ def test_zero_demand_backtest_does_not_divide_by_zero():
     )
     assert result["backtest"]["mae_units"] == 0
     assert result["backtest"]["wape"] is None
+
+
+@pytest.mark.parametrize("quantity", [True, False])
+def test_forecast_rejects_boolean_hourly_quantities(quantity):
+    rows = [SimpleNamespace(
+        business_date=date(2026, 11, 9), hour_of_day=8, quantity=quantity
+    )]
+    with pytest.raises(ValueError, match="not boolean"):
+        forecast_hourly_demand(
+            rows, forecast_start=date(2026, 11, 16), horizon_days=1
+        )
+
+
+def test_forecast_aggregates_multiple_records_for_same_business_hour():
+    day = date(2026, 11, 9)
+    rows = [
+        SimpleNamespace(business_date=day, hour_of_day=8, quantity=3),
+        SimpleNamespace(business_date=day, hour_of_day=8, quantity=4),
+    ]
+    history = []
+    for week in range(4):
+        observed_day = day - __import__("datetime").timedelta(days=7 * week)
+        history.append(SimpleNamespace(
+            business_date=observed_day, hour_of_day=8, quantity=7
+        ))
+    result = forecast_hourly_demand(
+        history, forecast_start=date(2026, 12, 7), horizon_days=1,
+        minimum_observed_days=4, max_seasonal_samples=4,
+    )
+    assert result["forecasts"][8]["observed_days"] == 4
+    assert result["forecasts"][8]["predicted_units"] == pytest.approx(7)
