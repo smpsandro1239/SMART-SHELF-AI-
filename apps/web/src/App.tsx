@@ -16,6 +16,7 @@ type Task = {
   assigned_to: string | null; assigned_user_id: number | null;
   requested_quantity: number | null; notes: string | null; created_at: string;
 };
+type ShelfImage = { id: number; shelf_id: number; original_filename: string; mime_type: string; file_size_bytes: number; sha256: string; analysis_status: string; captured_at: string; created_at: string };
 type Summary = {
   store_id: number | null; role: Role; active_tasks: number;
   shelves_requiring_attention: number;
@@ -32,6 +33,12 @@ export default function App() {
   const [storeFilter, setStoreFilter] = useState("");
   const [summary, setSummary] = useState<Summary | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [captures, setCaptures] = useState<ShelfImage[]>([]);
+  const [captureShelfId, setCaptureShelfId] = useState("");
+  const [captureFile, setCaptureFile] = useState<File | null>(null);
+  const [captureReset, setCaptureReset] = useState(0);
+  const [captureLoading, setCaptureLoading] = useState(false);
+  const [captureMessage, setCaptureMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
@@ -60,7 +67,7 @@ export default function App() {
     setLoading(true); setError("");
     try {
       const query = storeFilter.trim() ? `?store_id=${encodeURIComponent(storeFilter.trim())}` : "";
-      const [me, kpis, taskList] = await Promise.all([
+      const [me, kpis, taskList, captureList] = await Promise.all([
         request<User>("/api/v1/auth/me"),
         request<Summary>(`/api/v1/dashboard/summary${query}`),
         request<Task[]>("/api/v1/tasks?limit=100"),
@@ -95,6 +102,33 @@ export default function App() {
       });
       await refresh();
     } catch (err) { setError(err instanceof Error ? err.message : "Não foi possível atualizar a tarefa."); }
+  }
+
+ 
+  async function uploadCapture(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!captureShelfId.trim() || !captureFile) {
+      setCaptureMessage("Indica o ID da prateleira e seleciona uma fotografia.");
+      return;
+    }
+    setCaptureLoading(true); setCaptureMessage("");
+    try {
+      const form = new FormData();
+      form.append("shelf_id", captureShelfId.trim());
+      form.append("image", captureFile);
+      const response = await fetch(`${API_BASE}/api/v1/shelf-images`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: form,
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.detail || `Erro HTTP ${response.status}`);
+      setCaptureMessage(`Fotografia #${payload.id} recebida. Estado: ${payload.analysis_status}.`);
+      setCaptureFile(null); setCaptureReset(value => value + 1);
+      await refresh();
+    } catch (err) {
+      setCaptureMessage(err instanceof Error ? err.message : "Não foi possível enviar a fotografia.");
+    } finally { setCaptureLoading(false); }
   }
 
   const taskRows = useMemo(() => tasks.filter(t => !["CANCELLED"].includes(t.status)), [tasks]);
@@ -166,6 +200,24 @@ export default function App() {
               <StatusBar label="Em execução" value={summary.tasks.in_progress || 0} total={taskTotal} color="blue" />
               <StatusBar label="Concluídas" value={summary.tasks.completed || 0} total={taskTotal} color="green" />
               <div className="panel-note"><AlertTriangle size={16} /><span>{summary.observations.empty || 0} prateleiras sem stock e {summary.observations.low_stock || 0} com stock baixo, segundo as observações registadas.</span></div>
+            </article>
+          </section>
+          <section className="capture-grid">
+            <article className="panel capture-panel">
+              <div className="panel-heading"><div><p className="eyebrow">VISÃO COMPUTACIONAL</p><h2>Nova captura de prateleira</h2><p className="muted">Envia uma fotografia para registo e futura análise automática.</p></div><div className="capture-icon"><PackageSearch size={20} /></div></div>
+              <form className="capture-form" onSubmit={uploadCapture}>
+                <label>ID da prateleira<input type="number" min="1" value={captureShelfId} onChange={e => setCaptureShelfId(e.target.value)} placeholder="Ex.: 12" required /></label>
+                <label>Fotografia (JPEG, PNG ou WebP)<input key={captureReset} type="file" accept="image/jpeg,image/png,image/webp" onChange={e => setCaptureFile(e.target.files?.[0] || null)} required /></label>
+                <div className="capture-submit"><span>{captureFile ? captureFile.name : "Nenhum ficheiro selecionado"}</span><button className="row-action" disabled={captureLoading || !captureFile}>{captureLoading ? "A enviar…" : "Enviar fotografia"} <ArrowUpRight size={14} /></button></div>
+                {captureMessage && <p className="capture-feedback" role="status">{captureMessage}</p>}
+              </form>
+            </article>
+            <article className="panel capture-history">
+              <div className="panel-heading"><div><p className="eyebrow">REGISTO DE CAPTURAS</p><h2>Fotografias recentes</h2><p className="muted">As imagens ficam pendentes até existir um modelo de análise.</p></div><span className="subtle-pill">{captures.length} capturas</span></div>
+              <div className="capture-list">
+                {captures.length === 0 && <div className="empty-state"><PackageSearch size={25} /><strong>Sem fotografias registadas</strong><span>As próximas capturas serão apresentadas aqui.</span></div>}
+                {captures.map(item => <div className="capture-row" key={item.id}><div className="capture-thumb"><Boxes size={17} /></div><div className="capture-meta"><strong>Prateleira #{item.shelf_id} · {item.original_filename}</strong><span>{(item.file_size_bytes / 1024).toFixed(0)} KB · {new Date(item.created_at).toLocaleString("pt-PT")}</span></div><span className="task-status pending">{item.analysis_status}</span></div>)}
+              </div>
             </article>
           </section>
           <footer className="data-note"><ShieldCheck size={15} /> {summary.note} <span>·</span> {summary.role} {summary.store_id ? `· Loja #${summary.store_id}` : "· Visão global"}</footer>
