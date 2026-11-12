@@ -150,7 +150,10 @@ def rank_product_catalogue_candidates(
         brand = normalize_product_text(product.brand or "")
         unit = normalize_product_text(product.unit or "")
         searchable = " ".join(part for part in (name, brand, unit) if part)
-        name_score = _similarity(observed, searchable)
+        # Compare the observed label to the product name itself. Appending
+        # optional brand/unit metadata here would penalize a perfect name read
+        # whenever the OCR crop does not include those extra catalogue fields.
+        name_score = _similarity(observed, name)
         brand_score = _similarity(observed, brand) if brand else 0.0
         reasons: set[str] = set()
         score = 0.78 * name_score + 0.22 * brand_score
