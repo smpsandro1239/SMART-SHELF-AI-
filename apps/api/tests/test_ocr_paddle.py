@@ -84,3 +84,26 @@ def test_adapter_rejects_invalid_polygon(tmp_path):
 
     with pytest.raises(ValueError, match="no visible area"):
         PaddleOCRProvider(engine).recognize(image_path)
+
+
+def test_adapter_uses_rec_polys_aligned_with_text_not_unfiltered_dt_polys(tmp_path):
+    image_path = tmp_path / "shelf.jpg"
+    Image.new("RGB", (100, 100), "white").save(image_path)
+    engine = FakeEngine([{
+        "rec_texts": ["VALID TEXT"],
+        "rec_scores": [0.91],
+        "dt_polys": [
+            [[0, 0], [5, 0], [5, 5], [0, 5]],
+            [[10, 10], [80, 10], [80, 30], [10, 30]],
+        ],
+        "rec_polys": [
+            [[10, 10], [80, 10], [80, 30], [10, 30]],
+        ],
+    }])
+
+    regions = PaddleOCRProvider(engine).recognize(image_path)
+
+    assert len(regions) == 1
+    assert regions[0].text.text == "VALID TEXT"
+    assert regions[0].x_min == pytest.approx(0.1)
+    assert regions[0].x_max == pytest.approx(0.8)
