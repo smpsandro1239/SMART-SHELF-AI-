@@ -173,7 +173,7 @@ class WarehouseProductPlacement(Base):
 
 
 class ProductPackagingLevel(Base):
-    """A product pack size expressed directly in base selling units."""
+    """A logistics packaging level expressed in the product base unit, independent of sales unit."""
     __tablename__ = "product_packaging_levels"
     __table_args__ = (
         UniqueConstraint("product_id", "code", name="uq_product_packaging_product_code"),
