@@ -126,8 +126,9 @@ def evaluate_pallet_rotation(
     forecast = _decimal(forecast_consumption_until_low_traffic, "forecast_consumption_until_low_traffic")
 
     if forecast > residual:
-        return decision("WAIT_FOR_LOW_TRAFFIC", "RESIDUAL_CANNOT_COVER_DEMAND",
-                        "O stock residual não cobre a procura prevista até à próxima janela de baixa afluência.")
+        return decision("REPLENISH_CURRENT", "INTERIM_REPLENISHMENT_REQUIRED",
+                        "O stock residual não cobre a procura até à próxima janela de baixa afluência; "
+                        "é necessária reposição intermédia da palete atual para evitar rutura.")
 
     conventional_cost = conventional_minutes * hourly_cost / Decimal("60")
     total_swap_minutes = swap_minutes + travel_minutes + rebuild_minutes
