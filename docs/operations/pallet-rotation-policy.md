@@ -102,3 +102,15 @@ Os endpoints de simulação e planeamento existentes são:
 6. Só depois de aprovação explícita criar tarefa de execução; a confirmação da troca deve reconciliar as duas paletes e atualizar o inventário através de integração autorizada.
 
 A integração deve ter testes de contrato para: histórico incompleto, forecast sem cobertura, palete substituta parcial, substituta expirada, stock residual insuficiente até à janela, duas paletes do mesmo SKU, ausência de capacidade na retaguarda e dados alterados entre simulação e aprovação.
+
+
+## 10. Evidência horária por SKU — módulo de integração em preparação
+
+Foi acrescentado o módulo puro `apps/api/app/pallet_rotation_forecast_bridge.py`, com testes em `apps/api/tests/test_pallet_rotation_forecast_bridge.py`. O módulo recebe perfis históricos de 24 horas por produto e enriquece cada candidato com:
+- nível de afluência atual, comparando a média histórica da hora atual com a média horária diária;
+- consumo histórico estimado até à janela de baixa afluência;
+- hora recomendada para a janela;
+- cobertura mínima de vendas e tráfego;
+- motivo explícito quando o perfil falta ou é inválido.
+
+O módulo não consulta a base de dados e ainda não está ligado ao endpoint HTTP do portfolio. A integração seguinte deverá construir os perfis por produto a partir dos registos horários, chamar este módulo e só depois passar os candidatos válidos ao planeador. Candidatos sem evidência suficiente mantêm consumo como `null` e afluência como `UNKNOWN`; não se deve substituir a falta de dados por zero.
