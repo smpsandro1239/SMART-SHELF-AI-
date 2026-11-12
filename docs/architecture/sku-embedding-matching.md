@@ -64,6 +64,21 @@ O corpo de criação exige `product_id`, `embedding`, `model_version`, `image_sh
 
 A resposta não inclui o vetor. A aprovação é feita separadamente com `review_status` igual a `APPROVED` ou `REJECTED` e notas opcionais. Em ambiente autenticado, apenas `ADMIN` e `SUPERVISOR` podem aceder a estes endpoints; os supervisores ficam limitados aos exemplares associados à sua loja ou criados por si quando não existe captura associada.
 
-## Próxima integração
+## Revisão humana das deteções
 
-O serviço `app.product_embedding_service.build_approved_product_registry` já carrega apenas exemplares `APPROVED` com identidade de revisor ainda disponível e filtra pela versão exata do modelo. A dimensão é validada pelo motor ao construir/usar o registo. A fase seguinte deverá ligar este registo ao worker de inferência e à revisão de deteções. Não se deve preencher automaticamente `Observation.observed_quantity` até existir uma contagem validada por SKU e uma política explícita de agregação.
+O worker já usa `app.product_embedding_service.build_approved_product_registry` para carregar apenas exemplares `APPROVED`, com identidade de revisor ainda disponível e versão exata do modelo. O registo é reutilizado durante o processamento de cada imagem.
+
+Endpoints:
+- `POST /api/v1/shelf-image-detections/{detection_id}/reviews`
+- `GET /api/v1/shelf-image-detections/{detection_id}/reviews`
+
+Decisões suportadas:
+- `CONFIRMED`: confirma o SKU proposto; `selected_product_id` é opcional e, por omissão, usa o SKU da deteção.
+- `CORRECTED`: exige `selected_product_id` para selecionar outro SKU.
+- `REJECTED`: rejeita a associação e não aceita `selected_product_id`.
+
+Nas confirmações e correções, o produto tem de estar ativo e atribuído à prateleira da imagem. Os endpoints são restritos a administradores e supervisores, com validação do âmbito da loja.
+
+Cada decisão cria um registo em `detection_sku_reviews`, incluindo SKU original, SKU selecionado, revisor, data e notas. As decisões anteriores não são alteradas e a deteção original do modelo não é sobrescrita. A chave estrangeira do SKU selecionado impede a eliminação de produtos ainda referenciados no histórico.
+
+Esta revisão manual ainda não alimenta `Observation.observed_quantity`, não conta unidades automaticamente e não substitui uma avaliação de visão com imagens reais anotadas.
