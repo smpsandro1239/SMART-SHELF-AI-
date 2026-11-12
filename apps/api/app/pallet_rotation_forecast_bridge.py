@@ -61,6 +61,23 @@ def enrich_pallet_candidates_with_hourly_profiles(
             enriched.append(row)
             continue
 
+        row["planning_recommendation"] = decision.recommendation
+        row["planning_reason"] = decision.reason_code
+        row["recommended_window_start_hour"] = decision.start_hour
+        if decision.recommendation == "INSUFFICIENT_DATA":
+            row["traffic_level"] = "UNKNOWN"
+            row["forecast_consumption_until_low_traffic"] = None
+            row["current_hour_average_customers"] = None
+            row["daily_hourly_average_customers"] = None
+            row["planning_evidence"] = {
+                "observed_sales_days_min": decision.observed_sales_days_min,
+                "observed_traffic_days_min": decision.observed_traffic_days_min,
+                "historical_profile_only": True,
+            }
+            excluded += 1
+            enriched.append(row)
+            continue
+
         traffic_by_hour = {
             int(item["hour_of_day"]): float(item["average_customers"])
             for item in profile
@@ -76,10 +93,7 @@ def enrich_pallet_candidates_with_hourly_profiles(
         row["daily_hourly_average_customers"] = round(daily_hourly_average, 3)
         row["forecast_consumption_until_low_traffic"] = (
             decision.projected_consumption_through_window
-            if decision.recommendation != "INSUFFICIENT_DATA" else None
         )
-        row["recommended_window_start_hour"] = decision.start_hour
-        row["planning_reason"] = decision.reason_code
         row["planning_evidence"] = {
             "observed_sales_days_min": decision.observed_sales_days_min,
             "observed_traffic_days_min": decision.observed_traffic_days_min,
