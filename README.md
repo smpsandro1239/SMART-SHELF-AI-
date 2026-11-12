@@ -198,6 +198,8 @@ Consultar também os endpoints de catálogo, observações e inventário na docu
 - [Decisões de arquitetura](docs/architecture/decisions.md)
 - [Privacidade e segurança](docs/security/privacy.md)
 - [Documentação da API](apps/api/README.md)
+- [Contrato de correspondência de SKU por embeddings](docs/architecture/sku-embedding-matching.md)
+- [ADR-008 — correspondência conservadora de SKU](docs/architecture/adr-008-sku-embedding-matching.md)
 
 ## 12. Princípios de engenharia e segurança
 
@@ -212,7 +214,7 @@ Consultar também os endpoints de catálogo, observações e inventário na docu
 
 ## 13. Estado do projeto
 
-O projeto está em desenvolvimento incremental. O backend inclui catálogo, inventário, recomendações, tarefas, autorização por loja e ingestão de fotografias. Existe um worker independente e um contrato de provider para inferência, com estados `PENDING`, `PROCESSING`, `COMPLETED` e `FAILED`. Não existe ainda um modelo real configurado ou treinado; os testes do worker usam um provider falso apenas para validar o fluxo.
+O projeto está em desenvolvimento incremental. O backend inclui catálogo, inventário, recomendações, tarefas, autorização por loja e ingestão de fotografias. Existe um worker independente e um contrato de provider para inferência, com estados `PENDING`, `PROCESSING`, `COMPLETED` e `FAILED`. Não existe ainda um modelo real configurado ou treinado; os testes do worker usam um provider falso apenas para validar o fluxo. Existe também um registo experimental, em memória, para comparar embeddings de produtos com exemplares revistos; ainda não está ligado a um modelo real, não persiste vetores e não atualiza automaticamente o catálogo ou o stock.
 
 ## Licença
 
