@@ -504,6 +504,37 @@ class DailySalesRecordRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class HourlySalesRecordCreate(BaseModel):
+    store_id: int
+    product_id: int
+    business_date: date
+    hour_of_day: int = Field(ge=0, le=23)
+    quantity: float = Field(ge=0, le=1_000_000_000, allow_inf_nan=False)
+    source: SalesSource
+    external_reference: str = Field(min_length=1, max_length=120)
+
+
+class HourlySalesRecordRead(HourlySalesRecordCreate):
+    id: int
+    created_at: datetime
+    model_config = ConfigDict(from_attributes=True)
+
+
+class HourlyStoreTrafficRecordCreate(BaseModel):
+    store_id: int
+    business_date: date
+    hour_of_day: int = Field(ge=0, le=23)
+    customer_count: int = Field(ge=0, le=2_000_000)
+    source: SalesSource
+    external_reference: str = Field(min_length=1, max_length=120)
+
+
+class HourlyStoreTrafficRecordRead(HourlyStoreTrafficRecordCreate):
+    id: int
+    created_at: datetime
+    model_config = ConfigDict(from_attributes=True)
+
+
 WarehouseTemperature = Literal["AMBIENT", "CHILLED", "FROZEN"]
 
 
