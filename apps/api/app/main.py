@@ -79,15 +79,16 @@ async def require_api_authentication(request: Request, call_next):
         if user.role == "EMPLOYEE":
             allowed_employee_read = (
                 method == "GET"
-                and path in {"/api/v1/tasks", "/api/v1/auth/me", "/api/v1/dashboard/summary"}
+                and path in {"/api/v1/tasks", "/api/v1/auth/me", "/api/v1/dashboard/summary", "/api/v1/shelf-images"}
             )
             allowed_employee_image_upload = method == "POST" and path == "/api/v1/shelf-images"
+            allowed_employee_image_content = method == "GET" and path.startswith("/api/v1/shelf-images/") and path.endswith("/content")
             allowed_employee_task_update = (
                 method == "PATCH"
                 and path.startswith("/api/v1/tasks/")
                 and path.endswith("/status")
             )
-            if not (allowed_employee_read or allowed_employee_task_update or allowed_employee_image_upload):
+            if not (allowed_employee_read or allowed_employee_task_update or allowed_employee_image_upload or allowed_employee_image_content):
                 return JSONResponse(status_code=403, content={"detail": "Employee access is limited to assigned tasks"})
         if user.role == "SUPERVISOR" and path.startswith("/api/v1/auth/users"):
             return JSONResponse(status_code=403, content={"detail": "Administrator role required"})
@@ -219,9 +220,9 @@ def list_observations(
 
 @app.post("/api/v1/shelf-images", response_model=ShelfImageRead, status_code=201, tags=["computer-vision"])
 async def upload_shelf_image(
+    request: Request,
     shelf_id: int = Form(...),
     image: UploadFile = File(...),
-    request: Request = None,
     db: Session = Depends(get_db),
 ):
     """Store a validated shelf photograph; analysis is queued for a later CV stage."""
@@ -285,9 +286,9 @@ async def upload_shelf_image(
 
 @app.get("/api/v1/shelf-images", response_model=list[ShelfImageRead], tags=["computer-vision"])
 def list_shelf_images(
+    request: Request,
     shelf_id: int | None = None,
     limit: int = 100,
-    request: Request = None,
     db: Session = Depends(get_db),
 ):
     query = (
