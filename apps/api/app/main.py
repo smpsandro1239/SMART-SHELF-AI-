@@ -32,6 +32,7 @@ from app.schemas import (
     DetectionSkuReviewCreate, DetectionSkuReviewRead,
     ShelfImageOCRRunCreate, ShelfImageOCRRunRead, ShelfImageOCREvidenceRead,
     ShelfImageOCRMatchRead,
+    ShelfImageFusedEvidenceRead,
 )
 
 app = FastAPI(title=settings.app_name, version="0.2.0", description="Operational API for SMART SHELF AI.")
@@ -90,7 +91,7 @@ async def require_api_authentication(request: Request, call_next):
             or (
                 method == "POST"
                 and path.startswith("/api/v1/shelf-images/")
-                and (path.endswith("/ocr-runs") or path.endswith("/ocr-matches"))
+                and (path.endswith("/ocr-runs") or path.endswith("/ocr-matches") or path.endswith("/evidence-fusion"))
             )
         )
         if supervisor_or_admin and user.role not in {"ADMIN", "SUPERVISOR"}:
@@ -105,7 +106,7 @@ async def require_api_authentication(request: Request, call_next):
             allowed_employee_image_upload = method == "POST" and path == "/api/v1/shelf-images"
             allowed_employee_image_content = method == "GET" and path.startswith("/api/v1/shelf-images/") and path.endswith("/content")
             allowed_employee_image_detections = method == "GET" and path.startswith("/api/v1/shelf-images/") and path.endswith("/detections")
-            allowed_employee_ocr_evidence = method == "GET" and path.startswith("/api/v1/shelf-images/") and (path.endswith("/ocr-evidence") or path.endswith("/ocr-runs") or path.endswith("/ocr-matches"))
+            allowed_employee_ocr_evidence = method == "GET" and path.startswith("/api/v1/shelf-images/") and (path.endswith("/ocr-evidence") or path.endswith("/ocr-runs") or path.endswith("/ocr-matches") or path.endswith("/evidence-fusion"))
             allowed_employee_detection_review_history = method == "GET" and path.startswith("/api/v1/shelf-image-detections/") and path.endswith("/reviews")
             allowed_employee_task_update = (
                 method == "PATCH"
@@ -512,6 +513,126 @@ def list_shelf_image_ocr_matches(image_id: int, request: Request, limit: int = 5
         .join(models.ShelfImageOCRRun, models.ShelfImageOCRMatch.run_id == models.ShelfImageOCRRun.id)
         .filter(models.ShelfImageOCRRun.shelf_image_id == image_id)
         .order_by(models.ShelfImageOCRMatch.id.desc())
+        .limit(max(1, min(limit, 1000))).all()
+    )
+
+
+
+@app.post("/api/v1/shelf-images/{image_id}/evidence-fusion", response_model=list[ShelfImageFusedEvidenceRead], tags=["computer-vision"])
+def fuse_shelf_image_evidence(image_id: int, request: Request, db: Session = Depends(get_db)):
+    """Persist conservative visual/OCR fusion for the latest completed OCR run."""
+    from app.product_evidence_fusion import fuse_product_evidence
+    from app.product_matching import ProductCandidate, ProductMatch
+    from app.product_text import OCRText, TextCandidate, TextMatch
+
+    image_record = db.get(models.ShelfImage, image_id)
+    if image_record is None:
+        raise HTTPException(status_code=404, detail="Shelf image not found")
+    actor = _request_user(db, request)
+    _enforce_store_scope(actor, _shelf_image_store_id(db, image_id))
+
+    run = (
+        db.query(models.ShelfImageOCRRun)
+        .filter(models.ShelfImageOCRRun.shelf_image_id == image_id,
+                models.ShelfImageOCRRun.status == "COMPLETED")
+        .order_by(models.ShelfImageOCRRun.id.desc())
+        .first()
+    )
+    if run is None:
+        raise HTTPException(status_code=409, detail="No completed OCR run exists for this image")
+
+    existing = (
+        db.query(models.ShelfImageFusedEvidence)
+        .filter(models.ShelfImageFusedEvidence.ocr_run_id == run.id)
+        .order_by(models.ShelfImageFusedEvidence.detection_id.asc())
+        .all()
+    )
+    if existing:
+        return existing
+
+    text_rows = {
+        row.detection_id: row
+        for row in db.query(models.ShelfImageOCRMatch)
+        .filter(models.ShelfImageOCRMatch.run_id == run.id).all()
+    }
+    detections = (
+        db.query(models.ShelfImageDetection)
+        .filter(models.ShelfImageDetection.shelf_image_id == image_id)
+        .order_by(models.ShelfImageDetection.id.asc()).all()
+    )
+    results = []
+    for detection in detections:
+        text_row = text_rows.get(detection.id)
+        visual_status = detection.sku_match_status or "UNKNOWN"
+        visual = ProductMatch(
+            status=visual_status,
+            product_id=detection.product_id if visual_status == "MATCHED" else None,
+            similarity=detection.sku_similarity,
+            margin=detection.sku_match_margin,
+            candidates=(),
+        )
+        if text_row is None:
+            text = TextMatch("UNKNOWN", None, None, None, ())
+            ocr = None
+        else:
+            candidates = tuple(
+                TextCandidate(
+                    product_id=int(item["product_id"]),
+                    score=float(item["score"]),
+                    reasons=tuple(item.get("reasons", [])),
+                )
+                for item in (text_row.candidates or [])
+            )
+            text = TextMatch(
+                status=text_row.status,
+                product_id=text_row.suggested_product_id,
+                score=text_row.top_score,
+                margin=text_row.margin,
+                candidates=candidates,
+            )
+            ocr = OCRText(text=text_row.observed_text or "sem texto", confidence=text_row.ocr_confidence) if (text_row.observed_text or "").strip() else None
+            if ocr is None:
+                text = TextMatch("UNKNOWN", None, None, None, ())
+
+        fused = fuse_product_evidence(visual, text, ocr)
+        result = models.ShelfImageFusedEvidence(
+            ocr_run_id=run.id,
+            detection_id=detection.id,
+            status=fused.status,
+            suggested_product_id=fused.suggested_product_id,
+            visual_product_id=fused.visual_product_id,
+            text_product_id=fused.text_product_id,
+            visual_status=visual.status,
+            text_status=text.status,
+            visual_similarity=visual.similarity,
+            text_score=text.score,
+            ocr_confidence=fused.ocr_confidence,
+            visual_model_version=detection.embedding_model_version or detection.model_version,
+            ocr_provider=run.provider,
+            ocr_model_version=run.model_version,
+            reason=fused.reason,
+        )
+        db.add(result)
+        results.append(result)
+
+    db.commit()
+    for result in results:
+        db.refresh(result)
+    return results
+
+
+@app.get("/api/v1/shelf-images/{image_id}/evidence-fusion", response_model=list[ShelfImageFusedEvidenceRead], tags=["computer-vision"])
+def list_shelf_image_fused_evidence(image_id: int, request: Request, limit: int = 500, db: Session = Depends(get_db)):
+    """List persisted fused evidence without applying SKU or inventory changes."""
+    image_record = db.get(models.ShelfImage, image_id)
+    if image_record is None:
+        raise HTTPException(status_code=404, detail="Shelf image not found")
+    _enforce_store_scope(_request_user(db, request), _shelf_image_store_id(db, image_id))
+    return (
+        db.query(models.ShelfImageFusedEvidence)
+        .join(models.ShelfImageDetection, models.ShelfImageFusedEvidence.detection_id == models.ShelfImageDetection.id)
+        .filter(models.ShelfImageDetection.shelf_image_id == image_id)
+        .order_by(models.ShelfImageFusedEvidence.id.desc())
         .limit(max(1, min(limit, 1000))).all()
     )
 
