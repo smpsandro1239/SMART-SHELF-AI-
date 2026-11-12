@@ -112,3 +112,13 @@
 .plan-duration{background:#edf4ff;color:#4778b9}
 .plan-review{background:#f3f4f6;color:#68798a}
 @media(max-width:700px){.plan-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.plan-task{grid-template-columns:minmax(0,1fr) auto;gap:7px}.plan-duration,.plan-review{grid-row:2}.plan-task>div{grid-column:1/-1}.plan-risk{grid-column:1}.plan-duration{grid-column:2}.plan-review{grid-column:1/-1;justify-self:start}}
+
+
+/* Warehouse pick proposal */
+.warehouse-pick-summary{margin:16px 0;padding:13px;border:1px solid #e1eaf0;border-radius:10px;background:#fbfcfd}
+.warehouse-pick-summary .plan-metrics{margin:12px 0}
+.pick-stop{display:grid;grid-template-columns:minmax(120px,1fr) auto minmax(160px,2fr);gap:10px;align-items:center;padding:9px 0;border-top:1px solid #edf0f3;font-size:9px;color:#718092}
+.pick-stop>div strong,.pick-stop>div span{display:block}
+.pick-stop>div strong{font-size:10px;color:#35485b}
+.pick-stop>div span{margin-top:3px}
+@media(max-width:700px){.pick-stop{grid-template-columns:1fr auto}.pick-stop>span:last-child{grid-column:1/-1}}
