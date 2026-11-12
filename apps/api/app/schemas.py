@@ -502,3 +502,33 @@ class DailySalesRecordRead(BaseModel):
     external_reference: str
     created_at: datetime
     model_config = ConfigDict(from_attributes=True)
+
+
+WarehouseTemperature = Literal["AMBIENT", "CHILLED", "FROZEN"]
+
+
+class WarehouseLocationCreate(BaseModel):
+    store_id: int
+    code: str = Field(min_length=1, max_length=80)
+    aisle: str | None = Field(default=None, max_length=40)
+    rack: str | None = Field(default=None, max_length=40)
+    bin_code: str | None = Field(default=None, max_length=40)
+    distance_to_picking_m: float = Field(ge=0, le=100000)
+    max_volume_cm3: float = Field(gt=0, le=1_000_000_000)
+    max_weight_kg: float = Field(gt=0, le=1_000_000)
+    temperature_zone: WarehouseTemperature = "AMBIENT"
+
+
+class WarehouseProductProfileCreate(BaseModel):
+    product_id: int
+    unit_volume_cm3: float = Field(gt=0, le=1_000_000_000)
+    unit_weight_kg: float = Field(gt=0, le=1_000_000)
+    temperature_requirement: WarehouseTemperature = "AMBIENT"
+    is_fragile: bool = False
+    requires_segregation: bool = False
+
+
+class WarehousePlacementCreate(BaseModel):
+    location_id: int
+    product_id: int
+    quantity: float = Field(ge=0, le=1_000_000_000)
