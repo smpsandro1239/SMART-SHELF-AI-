@@ -29,3 +29,21 @@ python -m app.image_similarity_audit \
 A distância 0 indica o mesmo hash perceptual; valores pequenos indicam imagens estruturalmente semelhantes. O valor 6 é apenas um ponto de partida, não um limiar universal. Fotografias diferentes da mesma prateleira podem legitimamente ser semelhantes, pelo que os pares encontrados devem ser revistos e o limiar calibrado num conjunto representativo antes do gate de produção.
 
 Este método não deteta de forma fiável duplicados semânticos com grandes mudanças de perspetiva, iluminação ou composição. Não substitui SHA-256, agrupamento por sessão, revisão humana, direitos de utilização nem controlos de privacidade.
+
+
+## Relatórios de qualidade consumíveis por máquina
+
+Ambos os auditores escrevem agora `status` (`passed` ou `failed`) e a lista `errors` no JSON. A criação de uma release exige `status: passed` e `errors: []` nos dois relatórios; relatórios antigos sem estes campos devem ser regenerados.
+
+## Registo imutável de release
+
+`app.dataset_release` valida as entradas do manifest, exige os três splits, calcula uma fingerprint SHA-256 determinística e grava um JSON em `<registry>/releases/<fingerprint>.json`. O registo inclui contagens, hashes de proveniência e o equilíbrio de classes devolvido pela auditoria COCO. A operação é idempotente. Nesta fase o registo é local e não tem assinatura criptográfica, controlo de acesso, retenção remota ou promoção automática de modelos.
+
+```bash
+cd apps/api
+python -m app.dataset_release \
+  --manifest /data/metadata/image_manifest.csv \
+  --split-audit /data/reports/split-audit.json \
+  --visual-audit /data/reports/visual-similarity.json \
+  --registry /data/dataset-registry
+```
