@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="470" viewBox="0 0 1100 470" role="img" aria-labelledby="t d">
+<title id="t">Fluxo de autenticação e permissões</title><desc id="d">O utilizador autentica-se, recebe um token JWT, a API valida o token e consulta a conta e o perfil antes de autorizar a operação.</desc>
+<defs><marker id="a" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0 0 L0 6 L9 3 z" fill="#52708a"/></marker></defs>
+<rect width="1100" height="470" rx="24" fill="#f4f7fb"/>
+<g font-family="Arial,sans-serif" text-anchor="middle">
+<rect x="35" y="165" width="190" height="110" rx="16" fill="#dbeafe" stroke="#2563eb" stroke-width="2"/><text x="130" y="207" font-size="20" font-weight="bold" fill="#173b70">Utilizador</text><text x="130" y="238" font-size="15" fill="#173b70">Email + palavra-passe</text>
+<rect x="300" y="165" width="190" height="110" rx="16" fill="#e0e7ff" stroke="#4f46e5" stroke-width="2"/><text x="395" y="207" font-size="20" font-weight="bold" fill="#312e81">Login</text><text x="395" y="238" font-size="15" fill="#312e81">Hash Argon2</text>
+<rect x="565" y="165" width="190" height="110" rx="16" fill="#dcfce7" stroke="#16a34a" stroke-width="2"/><text x="660" y="207" font-size="20" font-weight="bold" fill="#14532d">Token JWT</text><text x="660" y="238" font-size="15" fill="#14532d">Acesso temporário</text>
+<rect x="830" y="165" width="230" height="110" rx="16" fill="#ffedd5" stroke="#ea580c" stroke-width="2"/><text x="945" y="207" font-size="20" font-weight="bold" fill="#7c2d12">API protegida</text><text x="945" y="238" font-size="15" fill="#7c2d12">Valida conta e perfil</text>
+<g stroke="#52708a" stroke-width="3" fill="none" marker-end="url(#a)"><path d="M225 220 H292"/><path d="M490 220 H557"/><path d="M755 220 H822"/></g>
+<rect x="325" y="335" width="450" height="85" rx="14" fill="#fff" stroke="#64748b" stroke-width="2"/><text x="550" y="370" font-size="18" font-weight="bold" fill="#1e293b">Perfis de acesso</text><text x="550" y="398" font-size="16" fill="#334155">ADMIN · SUPERVISOR · EMPLOYEE</text>
+<path d="M945 275 V315 H775" stroke="#52708a" stroke-width="3" fill="none" marker-end="url(#a)"/>
+</g></svg>
