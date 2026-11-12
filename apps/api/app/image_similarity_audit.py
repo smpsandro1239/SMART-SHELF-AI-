@@ -147,7 +147,7 @@ def main() -> int:
     if args.json_report:
         try:
             args.json_report.parent.mkdir(parents=True, exist_ok=True)
-            args.json_report.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\\n", encoding="utf-8")
+            args.json_report.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         except OSError as exc:
             print(f"ERROR: cannot write JSON report: {exc}")
             return 2
