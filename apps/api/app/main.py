@@ -26,6 +26,7 @@ from app.stockout_risk import StockoutRiskInput, assess_stockout_risk
 from app.replenishment_planning import build_replenishment_plan
 from app.replenishment_risk_bridge import enrich_replenishment_with_stockout_risk
 from app.replenishment_workload import summarize_workload
+from app.replenishment_effort import enrich_plan_with_effort_estimates
 from app.warehouse_slotting import recommend_warehouse_slotting, recommend_physical_slot
 from app.packaging_units import calculate_replenishment_packs
 from app.pallet_rotation import evaluate_pallet_rotation, PalletRotationInputError
@@ -3566,6 +3567,9 @@ def get_replenishment_plan(
     risk_days: int = 28,
     risk_lead_time_days: float = 3.0,
     risk_max_inventory_age_minutes: int = 240,
+    include_effort_estimates: bool = False,
+    effort_history_days: int = 90,
+    effort_minimum_sample_size: int = 5,
     request: Request = None,
     db: Session = Depends(get_db),
 ):
@@ -3574,6 +3578,11 @@ def get_replenishment_plan(
         raise HTTPException(status_code=422, detail="stale_after_minutes must be between 1 and 10080")
     if limit < 1 or limit > 500:
         raise HTTPException(status_code=422, detail="limit must be between 1 and 500")
+    if include_effort_estimates:
+        if isinstance(effort_history_days, bool) or not isinstance(effort_history_days, int) or not 7 <= effort_history_days <= 730:
+            raise HTTPException(status_code=422, detail="effort_history_days must be between 7 and 730")
+        if isinstance(effort_minimum_sample_size, bool) or not isinstance(effort_minimum_sample_size, int) or not 2 <= effort_minimum_sample_size <= 100:
+            raise HTTPException(status_code=422, detail="effort_minimum_sample_size must be between 2 and 100")
     if include_stockout_risk:
         if risk_days < 7 or risk_days > 365:
             raise HTTPException(status_code=422, detail="risk_days must be between 7 and 365")
@@ -3623,6 +3632,46 @@ def get_replenishment_plan(
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
 
+    effort_summary = {
+        "enabled": include_effort_estimates,
+        "history_days": effort_history_days if include_effort_estimates else None,
+        "minimum_sample_size": effort_minimum_sample_size if include_effort_estimates else None,
+        "metric": "ELAPSED_TIME_NOT_ACTIVE_LABOUR" if include_effort_estimates else None,
+    }
+    if include_effort_estimates and recommendations:
+        effort_now = models.utc_now()
+        effort_since = effort_now - timedelta(days=effort_history_days)
+        history_rows = db.query(
+            models.ReplenishmentTask, models.Zone.name,
+        ).join(
+            models.Shelf, models.ReplenishmentTask.shelf_id == models.Shelf.id,
+        ).join(
+            models.Zone, models.Shelf.zone_id == models.Zone.id,
+        ).filter(
+            models.ReplenishmentTask.store_id == store_id,
+            models.ReplenishmentTask.status == "COMPLETED",
+            models.ReplenishmentTask.started_at.isnot(None),
+            models.ReplenishmentTask.completed_at.isnot(None),
+            models.ReplenishmentTask.started_at >= effort_since,
+            models.ReplenishmentTask.completed_at <= effort_now,
+        ).all()
+        effort_history = [
+            {
+                "zone_name": zone_name,
+                "priority": task.priority,
+                "started_at": task.started_at,
+                "completed_at": task.completed_at,
+            }
+            for task, zone_name in history_rows
+        ]
+        effort_result = enrich_plan_with_effort_estimates(
+            recommendations,
+            effort_history,
+            minimum_sample_size=effort_minimum_sample_size,
+        )
+        recommendations = effort_result["recommendations"]
+        effort_summary.update(effort_result["summary"])
+
     active_tasks = db.query(models.ReplenishmentTask).filter(
         models.ReplenishmentTask.store_id == store_id,
         models.ReplenishmentTask.status.in_(("PENDING", "ASSIGNED", "IN_PROGRESS")),
@@ -3641,6 +3690,7 @@ def get_replenishment_plan(
         ],
         "excluded": plan.excluded,
         "risk_assessment": risk_assessment,
+        "effort_estimation": effort_summary,
         "policy": "Proposta de organização; não cria nem atribui tarefas e não substitui validação humana.",
         "automatic_stock_movement_allowed": False,
     }
