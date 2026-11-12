@@ -16,7 +16,7 @@ A consulta é apenas de leitura. Colaboradores não podem consultar o motor glob
 
 Para cada par produto/prateleira, a API reúne a observação mais recente da prateleira, o snapshot de inventário mais recente da loja/produto, tarefas ativas e vendas diárias dos últimos sete dias.
 
-Quando existem vendas registadas, a previsão baseline de 24 horas é a média aritmética das quantidades diárias registadas na janela de sete dias. É uma baseline deliberadamente simples: não ajusta sazonalidade, promoções, tráfego, feriados ou dias em falta. A resposta identifica explicitamente o método e a janela.
+Quando existem vendas registadas, a previsão baseline de 24 horas é a média aritmética das quantidades por dia com registos na janela de sete dias. Dias sem registos não são tratados como dias de venda zero. É uma baseline deliberadamente simples: não ajusta sazonalidade, promoções, tráfego ou feriados. A resposta identifica explicitamente o método e a janela.
 
 ## Segurança operacional
 
@@ -30,3 +30,9 @@ Quando existem vendas registadas, a previsão baseline de 24 horas é a média a
 ## Próxima integração
 
 A interface web pode consumir este endpoint para apresentar exceções e recomendações explicáveis. A criação de tarefa deve continuar a passar pelo fluxo existente de aprovação/validação e pelas verificações de duplicação e stock.
+
+
+## Cobertura estimada do inventário
+
+Quando existe previsão válida, o motor calcula as horas de cobertura estimada:
+`inventário disponível / procura média por hora`. Uma recomendação por risco de procura é emitida quando a cobertura fica abaixo ou igual ao limiar configurado (12 horas por omissão). Este indicador é uma estimativa, não uma garantia de disponibilidade física.
