@@ -181,3 +181,34 @@ class ReplenishmentTaskRead(BaseModel):
     started_at: datetime | None
     completed_at: datetime | None
     model_config = ConfigDict(from_attributes=True)
+
+
+UserRole = Literal["ADMIN", "SUPERVISOR", "EMPLOYEE"]
+
+
+class BootstrapAdminCreate(BaseModel):
+    email: str = Field(min_length=5, max_length=254)
+    full_name: str = Field(min_length=2, max_length=160)
+    password: str = Field(min_length=12, max_length=128)
+
+
+class LoginRequest(BaseModel):
+    email: str = Field(min_length=5, max_length=254)
+    password: str = Field(min_length=1, max_length=128)
+
+
+class UserRead(BaseModel):
+    id: int
+    email: str
+    full_name: str
+    role: UserRole
+    is_active: bool
+    created_at: datetime
+    model_config = ConfigDict(from_attributes=True)
+
+
+class TokenRead(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    expires_in: int
+    user: UserRead
