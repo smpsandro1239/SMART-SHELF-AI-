@@ -730,14 +730,21 @@ O resultado é uma proposta, não uma ordem de transferência. automatic_movemen
 A criação de localizações e de colocações é reservada a ADMIN/SUPERVISOR e respeita o isolamento por loja. A definição do perfil físico é reservada a ADMIN, porque esse perfil é partilhado no catálogo global; as posições e quantidades permanecem associadas à loja.
 
 
-## Unidades de medida e embalagens logísticas (UOM)
+## Unidades de medida, venda e embalagens logísticas (UOM)
 
-Cada produto tem uma unidade base (por exemplo, unidade, kg ou litro) e pode ter vários níveis logísticos configurados diretamente nessa unidade base. Os fatores não são inferidos pelo nome da embalagem.
+**A unidade de venda não é determinada pela embalagem logística.** Um produto pode chegar à loja numa palete, ser armazenado em caixas, ser reposto a partir de caixas abertas e continuar a ser vendido ao cliente à unidade.
 
-Exemplo ilustrativo para uma bebida:
-- UNIT: 1 garrafa.
-- CASE: 12 garrafas.
-- PALLET: 720 garrafas (60 caixas).
+O catálogo mantém uma unidade base por produto (por exemplo, garrafa, pacote, kg ou litro). As vendas, o stock disponível, as quantidades observadas na prateleira e as quantidades pedidas para reposição devem ser expressas nessa unidade base. Os níveis UNIT, CASE e PALLET representam apenas quantidades logísticas convertíveis para a unidade base.
+
+Exemplo ilustrativo para água:
+- Unidade base / venda: 1 garrafa.
+- CASE12: 12 garrafas por caixa.
+- PALLET720: 720 garrafas por palete (60 caixas).
+- Receção: 1 palete = 720 garrafas adicionadas ao stock da loja.
+- Reposição: para colocar 20 garrafas na prateleira, podem ser retiradas 1 caixa fechada (12) e 8 garrafas de uma segunda caixa aberta.
+- Venda: o cliente compra 1, 2 ou 3 garrafas; não compra necessariamente a caixa nem a palete.
+
+A mesma lógica aplica-se a arroz e açúcar: a palete e a caixa são unidades de movimentação/armazenamento; o pacote individual é a unidade vendida.
 
 Aplicar a migração:
 
@@ -764,8 +771,7 @@ Exemplo de configuração para o produto 42 (três pedidos separados):
   "code": "UNIT",
   "name": "Garrafa",
   "package_type": "UNIT",
-  "base_units_per_package": 1,
-  "is_replenishment_unit": true
+  "base_units_per_package": 1
 }
 ```
 
@@ -795,7 +801,7 @@ Exemplo de configuração para o produto 42 (três pedidos separados):
 }
 ```
 
-Cada nível declara quantas unidades base contém. UNIT tem obrigatoriamente fator 1; CASE e PALLET têm fator superior a 1. Só pode existir uma unidade de encomenda ativa e uma unidade de reposição ativa por produto. O código é único dentro de cada produto.
+UNIT tem obrigatoriamente fator 1; CASE e PALLET têm fator superior a 1. Os fatores são explícitos e relativos à unidade base. `is_ordering_unit` identifica um nível logístico usado para encomenda; não altera a unidade de venda. `is_replenishment_unit`, quando utilizado, identifica um nível preferencial de movimentação/reposição, não a unidade vendida ao cliente. A configuração atual destas flags é global por produto e ainda não permite políticas diferentes por loja.
 
 Consultar os níveis ativos:
 
@@ -804,22 +810,30 @@ GET /api/v1/warehouse/product-packaging?product_id=42
 Authorization: Bearer <ACCESS_TOKEN>
 ```
 
-### Calcular a quantidade de reposição
+### Calcular embalagens logísticas para uma quantidade de reposição
 
 ```http
 GET /api/v1/warehouse/replenishment-units?store_id=1&product_id=42&required_base_units=20&packaging_code=CASE12
 Authorization: Bearer <ACCESS_TOKEN>
 ```
 
-Sem abertura de caixas, 20 unidades necessárias são arredondadas para 2 caixas, ou seja, 24 unidades planeadas e 4 unidades excedentes.
+A quantidade pedida é sempre expressa em unidades base. Sem abertura de caixas, 20 garrafas necessárias são arredondadas para 2 caixas fechadas, ou seja, 24 garrafas movimentadas e 4 excedentes.
 
-Se a operação permitir abrir uma caixa, e existir uma unidade base configurada como unidade de reposição, pode pedir:
+Se a operação permitir abrir uma caixa:
 
 ```http
 GET /api/v1/warehouse/replenishment-units?store_id=1&product_id=42&required_base_units=20&packaging_code=CASE12&allow_open_package=true
 Authorization: Bearer <ACCESS_TOKEN>
 ```
 
-O resultado será 1 caixa mais 8 unidades soltas, totalizando exatamente 20 unidades. A API não executa movimentos nem altera inventário; apenas calcula a proposta.
+A proposta passa a ser:
+- 1 caixa fechada = 12 garrafas;
+- 1 caixa aberta = 8 garrafas retiradas individualmente;
+- total = 20 garrafas;
+- excedente = 0.
 
-**Regra de integridade:** todos os fatores de conversão são explícitos e relativos à unidade base do produto. O sistema não assume que todas as caixas ou paletes têm a mesma quantidade. O peso e volume de embalagem podem ser registados para planeamento logístico, mas ainda não são usados para substituir automaticamente o perfil dimensional do produto no motor de capacidade das localizações.
+O campo `package_count` conta as embalagens completas que permanecem fechadas; `opened_package_count` conta as embalagens que têm de ser abertas; `loose_base_units` conta as unidades base retiradas da embalagem aberta. Se forem necessárias apenas 8 garrafas, o resultado é 0 caixas fechadas, 1 caixa aberta e 8 unidades soltas.
+
+O cálculo é consultivo: não recebe mercadoria, não transfere stock, não cria tarefas e não altera inventário. A operação física deve ser registada por um fluxo transacional próprio.
+
+**Limitação importante:** esta configuração ainda não modela a cadeia completa de receção, armazenamento, picking e reposição por loja. A mesma palete pode ser a unidade de receção, a caixa a unidade de picking e a garrafa a unidade de venda. Essas funções devem ser configuradas separadamente por produto e, quando necessário, por loja; não devem ser deduzidas automaticamente do tipo de embalagem.
