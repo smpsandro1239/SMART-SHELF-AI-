@@ -23,7 +23,7 @@ def test_selects_low_traffic_window_with_sufficient_residual_cover():
     )
     assert result.recommendation == "WAIT_FOR_LOW_TRAFFIC"
     assert result.start_hour == 18
-    assert result.projected_consumption_until_window == 50
+    assert result.projected_consumption_through_window == 60
     assert result.automatic_stock_movement_allowed is False
 
 
