@@ -142,3 +142,33 @@ def test_pallet_lifecycle_update_requires_reason():
             expected_base_quantity=720,
             status="ON_DISPLAY",
         )
+
+
+def test_hourly_sales_schema_accepts_local_hour_and_zero_sales():
+    from app.schemas import HourlySalesRecordCreate
+    payload = HourlySalesRecordCreate(store_id=1, product_id=7, business_date="2026-11-10",
+        hour_of_day=8, quantity=0, source="POS", external_reference="POS-STORE1-20261110-08")
+    assert payload.hour_of_day == 8
+    assert payload.quantity == 0
+
+
+@pytest.mark.parametrize("hour", [-1, 24, 100])
+def test_hourly_sales_schema_rejects_invalid_hour(hour):
+    from app.schemas import HourlySalesRecordCreate
+    with pytest.raises(ValidationError):
+        HourlySalesRecordCreate(store_id=1, product_id=7, business_date="2026-11-10",
+            hour_of_day=hour, quantity=4, source="POS", external_reference="hour-test")
+
+
+def test_hourly_traffic_schema_accepts_zero_customer_count():
+    from app.schemas import HourlyStoreTrafficRecordCreate
+    payload = HourlyStoreTrafficRecordCreate(store_id=1, business_date="2026-11-10",
+        hour_of_day=0, customer_count=0, source="POS", external_reference="TRAFFIC-STORE1-20261110-00")
+    assert payload.customer_count == 0
+
+
+def test_hourly_traffic_schema_rejects_negative_customer_count():
+    from app.schemas import HourlyStoreTrafficRecordCreate
+    with pytest.raises(ValidationError):
+        HourlyStoreTrafficRecordCreate(store_id=1, business_date="2026-11-10",
+            hour_of_day=12, customer_count=-1, source="POS", external_reference="traffic-invalid")
