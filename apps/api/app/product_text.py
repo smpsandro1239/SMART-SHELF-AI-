@@ -70,6 +70,19 @@ def _similarity(observed: str, reference: str) -> float:
     return max(overlap, sequence)
 
 
+def _variant_markers(value: str) -> set[str]:
+    """Return meaningful product-variant phrases, not generic words like 'sem'."""
+    normalized = f" {normalize_product_text(value)} "
+    markers = (
+        "meio gordo", "sem lactose", "sem acucar", "sem gluten",
+        "zero", "light", "diet", "original", "integral", "magro", "gordo",
+    )
+    found = {marker for marker in markers if f" {marker} " in normalized}
+    if "meio gordo" in found:
+        found.discard("gordo")
+    return found
+
+
 def _rank(
     scored: dict[int, tuple[float, set[str]]],
     *,
@@ -180,10 +193,8 @@ def rank_product_catalogue_candidates(
 
         # Variant words and pack-size values are meaningful discriminators.
         reference_tokens = set((name + " " + brand + " " + unit).split())
-        variant_tokens = {"zero", "light", "diet", "original", "integral", "magro",
-                          "meio", "gordo", "sem", "acucar", "lactose", "sem_gluten"}
-        observed_variants = observed_tokens & variant_tokens
-        reference_variants = reference_tokens & variant_tokens
+        observed_variants = _variant_markers(observed)
+        reference_variants = _variant_markers(" ".join((name, brand, unit)))
         if observed_variants and reference_variants and observed_variants.isdisjoint(reference_variants):
             score -= 0.18
             reasons.add("variant_conflict")
