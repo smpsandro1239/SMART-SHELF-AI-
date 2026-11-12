@@ -27,6 +27,8 @@ def upgrade() -> None:
     )
     for column in ("store_id", "product_id", "business_date", "hour_of_day"):
         op.create_index(f"ix_hourly_sales_records_{column}", "hourly_sales_records", [column])
+    op.create_index("ix_hourly_sales_store_product_date_hour", "hourly_sales_records",
+                    ["store_id", "product_id", "business_date", "hour_of_day"])
 
     op.create_table(
         "hourly_store_traffic_records",
@@ -45,12 +47,16 @@ def upgrade() -> None:
     )
     for column in ("store_id", "business_date", "hour_of_day"):
         op.create_index(f"ix_hourly_store_traffic_records_{column}", "hourly_store_traffic_records", [column])
+    op.create_index("ix_hourly_traffic_store_date_hour", "hourly_store_traffic_records",
+                    ["store_id", "business_date", "hour_of_day"])
 
 
 def downgrade() -> None:
+    op.drop_index("ix_hourly_traffic_store_date_hour", table_name="hourly_store_traffic_records")
     for column in ("hour_of_day", "business_date", "store_id"):
         op.drop_index(f"ix_hourly_store_traffic_records_{column}", table_name="hourly_store_traffic_records")
     op.drop_table("hourly_store_traffic_records")
+    op.drop_index("ix_hourly_sales_store_product_date_hour", table_name="hourly_sales_records")
     for column in ("hour_of_day", "business_date", "product_id", "store_id"):
         op.drop_index(f"ix_hourly_sales_records_{column}", table_name="hourly_sales_records")
     op.drop_table("hourly_sales_records")
