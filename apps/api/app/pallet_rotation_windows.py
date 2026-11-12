@@ -40,9 +40,11 @@ def recommend_low_traffic_window(
         raise ValueError("duration_hours must be between 1 and 4")
     if isinstance(minimum_observed_days, bool) or not isinstance(minimum_observed_days, int) or not 1 <= minimum_observed_days <= 90:
         raise ValueError("minimum_observed_days must be between 1 and 90")
+    if isinstance(residual_base_units, bool):
+        raise ValueError("residual_base_units must be numeric, not boolean")
     try:
         residual = float(residual_base_units)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         raise ValueError("residual_base_units must be finite and non-negative")
     if residual < 0 or residual != residual or residual in (float("inf"), float("-inf")):
         raise ValueError("residual_base_units must be finite and non-negative")
@@ -71,8 +73,13 @@ def recommend_low_traffic_window(
         try:
             sales_number = float(sales_value)
             traffic_number = float(traffic_value)
-            sales_count = int(row.get("sales_observed_days"))
-            traffic_count = int(row.get("traffic_observed_days"))
+            sales_count_raw = row.get("sales_observed_days")
+            traffic_count_raw = row.get("traffic_observed_days")
+            if (isinstance(sales_count_raw, bool) or not isinstance(sales_count_raw, int)
+                    or isinstance(traffic_count_raw, bool) or not isinstance(traffic_count_raw, int)):
+                raise ValueError("hourly profile coverage counts must be integers")
+            sales_count = sales_count_raw
+            traffic_count = traffic_count_raw
         except (TypeError, ValueError, OverflowError):
             raise ValueError("hourly profile values and coverage counts must be numeric")
         if (isinstance(sales_value, bool) or isinstance(traffic_value, bool)
@@ -99,7 +106,7 @@ def recommend_low_traffic_window(
         for hour in consumption_hours:
             row = by_hour[hour]
             value = row.get("average_daily_units")
-            observed = int(row.get("sales_observed_days") or 0)
+            observed = row.get("sales_observed_days") or 0
             if value is None:
                 missing_sales = True
                 demand_values = []
@@ -115,7 +122,7 @@ def recommend_low_traffic_window(
         for hour in window_hours:
             row = by_hour[hour]
             value = row.get("average_customers")
-            observed = int(row.get("traffic_observed_days") or 0)
+            observed = row.get("traffic_observed_days") or 0
             if value is None:
                 missing_traffic = True
                 traffic_values = []
