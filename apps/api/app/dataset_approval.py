@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import json
 import math
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -16,7 +17,7 @@ from app.dataset_integrity import audit_manifest_against_coco, read_manifest
 from app.dataset_quality import analyze_dataset_quality
 
 SPLITS = ("train", "val", "test")
-SHA256_PATTERN = __import__("re").compile(r"^[0-9a-f]{64}$")
+SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 
 
 def _non_empty(value: Any) -> bool:
@@ -129,6 +130,7 @@ def validate_release_record(record: Any, mode: str = "training") -> list[str]:
             errors.append("approved_for_training must be true before operational inference")
         if record.get("approved_for_operational_inference") is not True:
             errors.append("approved_for_operational_inference must be explicitly true")
+        _approved_review(approvals.get("operational_inference"), "approvals.operational_inference", errors)
         model = record.get("model")
         if not isinstance(model, dict):
             errors.append("model: evaluation record is required for operational inference")
