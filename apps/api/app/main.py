@@ -2554,8 +2554,6 @@ def get_pallet_rotation_portfolio_from_history(
             } for hour in range(24)]
             for product_id in product_ids
         }
-        profile_errors = {}
-
         candidates = []
         for pallet in pallets:
             level = active_levels.get(pallet.packaging_level_id)
@@ -2612,7 +2610,6 @@ def get_pallet_rotation_portfolio_from_history(
         "excluded": len(insufficient_evidence) + plan.excluded,
         "candidate_pallets": len(pallets),
         "insufficient_evidence_count": len(insufficient_evidence),
-        "profiles_missing_or_invalid": profile_errors,
         "input_provenance": "HISTORICAL_HOURLY_SALES_AND_STORE_TRAFFIC",
         "simulation_only": True,
         "automatic_stock_movement_allowed": False,
