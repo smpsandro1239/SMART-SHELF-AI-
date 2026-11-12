@@ -25,10 +25,18 @@ services:
       IMAGE_STORAGE_PATH: /app/storage/shelf-images
       MAX_IMAGE_UPLOAD_BYTES: ${MAX_IMAGE_UPLOAD_BYTES:-10485760}
       VISION_PROVIDER_FACTORY: ${VISION_PROVIDER_FACTORY:-}
+      VISION_DETECTOR_MODEL_PATH: ${VISION_DETECTOR_MODEL_PATH:-/models/shelf-detector.onnx}
+      VISION_EMBEDDING_MODEL_PATH: ${VISION_EMBEDDING_MODEL_PATH:-}
+      VISION_MODEL_VERSION: ${VISION_MODEL_VERSION:-shelf-onnx-v1}
+      VISION_EMBEDDING_MODEL_VERSION: ${VISION_EMBEDDING_MODEL_VERSION:-shelf-embedding-v1}
+      VISION_INPUT_SIZE: ${VISION_INPUT_SIZE:-640}
+      VISION_CONFIDENCE_THRESHOLD: ${VISION_CONFIDENCE_THRESHOLD:-0.25}
+      VISION_MAX_DETECTIONS: ${VISION_MAX_DETECTIONS:-300}
     ports:
       - "${API_PORT:-8000}:8000"
     volumes:
       - shelf_images:/app/storage
+      - ${VISION_MODELS_DIR:-./models}:/models:ro
     depends_on:
       db:
         condition: service_healthy
