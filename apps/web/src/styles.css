@@ -71,3 +71,15 @@
 .review-queue-actions{display:flex;justify-content:flex-end;margin-top:9px}
 @media(max-width:900px){.review-queue-counts{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:600px){.review-queue-counts{grid-template-columns:repeat(2,minmax(0,1fr))}.review-queue-main{align-items:flex-start}.review-queue-row>p{font-size:9px}.review-queue-meta{display:grid;gap:5px}.review-queue-actions{justify-content:stretch}.review-queue-actions .row-action{width:100%;justify-content:center}}
+
+/* Human-reviewed model evaluation */
+.evaluation-panel{margin-top:18px}
+.evaluation-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px;margin:17px 0}
+.evaluation-metrics>div{display:grid;gap:7px;padding:13px;border:1px solid #e8edf2;border-radius:9px;background:#fafbfd}
+.evaluation-metrics span{font-size:9px;color:#8290a0}
+.evaluation-metrics strong{font:800 22px Manrope,sans-serif;color:#26384b}
+.evaluation-detail{display:flex;flex-wrap:wrap;gap:8px 18px;padding:12px 0;border-top:1px solid #edf0f3;font-size:9px;color:#8290a0}
+.evaluation-detail strong{color:#40536a}
+.evaluation-caveat{margin:10px 0 0;padding:10px 12px;border-left:2px solid #c9d4df;background:#f7f9fb;color:#7b8998;font-size:9px;line-height:1.5}
+@media(max-width:900px){.evaluation-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:520px){.evaluation-metrics{gap:7px}.evaluation-metrics>div{padding:10px}.evaluation-metrics strong{font-size:18px}.evaluation-detail{display:grid;grid-template-columns:1fr 1fr;gap:8px}}
