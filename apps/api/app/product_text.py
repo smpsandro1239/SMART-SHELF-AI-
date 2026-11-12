@@ -167,22 +167,16 @@ def rank_product_catalogue_candidates(
         # optional brand/unit metadata here would penalize a perfect name read
         # whenever the OCR crop does not include those extra catalogue fields.
         name_score = _similarity(observed, name)
-        brand_score = _similarity(observed, brand) if brand else 0.0
         reasons: set[str] = set()
-        # Brand and unit are optional catalogue metadata. If OCR did not
-        # capture the brand, do not lower an otherwise exact product-name
-        # match. Only blend brand similarity when brand text is actually
-        # present in the observed label.
+        # Brand is positive evidence only when the complete brand label is
+        # present. It must not reduce a strong name match, nor reward a
+        # partial brand token that could occur in unrelated packaging text.
         score = name_score
         brand_tokens = set(brand.split())
-        observed_brand_tokens = brand_tokens & observed_tokens
-        if brand and observed_brand_tokens:
-            score = 0.78 * name_score + 0.22 * brand_score
-            reasons.add("brand_similarity")
         if name_score:
             reasons.add("name_similarity")
         if brand and brand_tokens.issubset(observed_tokens):
-            score = min(1.0, score + 0.08)
+            score = min(1.0, score + 0.14)
             reasons.add("brand_tokens_present")
         if sku and sku in observed_tokens:
             score = 1.0
