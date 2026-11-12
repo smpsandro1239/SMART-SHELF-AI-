@@ -1,6 +1,6 @@
 from datetime import date, datetime, timezone
 
-from sqlalchemy import JSON, Date, DateTime, ForeignKey, String, Text, Float, Integer, Boolean, Numeric, UniqueConstraint, CheckConstraint
+from sqlalchemy import JSON, Date, DateTime, ForeignKey, String, Text, Float, Integer, Boolean, Numeric, UniqueConstraint, CheckConstraint, Index
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -206,6 +206,7 @@ class HourlySalesRecord(Base):
         CheckConstraint("quantity >= 0", name="ck_hourly_sales_quantity_nonnegative"),
         CheckConstraint("hour_of_day >= 0 AND hour_of_day <= 23", name="ck_hourly_sales_hour_range"),
         CheckConstraint("source IN ('POS', 'ERP', 'MANUAL', 'IMPORT')", name="ck_hourly_sales_source"),
+        Index("ix_hourly_sales_store_product_date_hour", "store_id", "product_id", "business_date", "hour_of_day"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -228,6 +229,7 @@ class HourlyStoreTrafficRecord(Base):
         CheckConstraint("customer_count >= 0", name="ck_hourly_traffic_count_nonnegative"),
         CheckConstraint("hour_of_day >= 0 AND hour_of_day <= 23", name="ck_hourly_traffic_hour_range"),
         CheckConstraint("source IN ('POS', 'ERP', 'MANUAL', 'IMPORT')", name="ck_hourly_traffic_source"),
+        Index("ix_hourly_traffic_store_date_hour", "store_id", "business_date", "hour_of_day"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
