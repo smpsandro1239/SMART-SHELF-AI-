@@ -112,3 +112,18 @@ python -m app.dataset_audit \
 O auditor valida cada split antes de o comparar, compara o mapeamento de classes e deteta nomes de ficheiros e hashes SHA-256 repetidos, tanto dentro de um split como entre splits. Para detetar sequências da mesma sessão, incluir `capture_group_id` em cada objeto de imagem COCO (ou `sequence_id`, como alternativa). Várias imagens do mesmo grupo são permitidas no mesmo split; o grupo não pode aparecer em splits diferentes. O relatório inclui imagens, anotações, imagens sem anotações e instâncias por classe.
 
 O auditor não consegue inferir que duas fotografias pertencem à mesma sessão se os metadados de agrupamento não forem fornecidos. O resultado deve ser complementado por uma revisão do manifesto e da proveniência.
+
+
+## 13. Gerar manifesto de imagens e hashes
+
+Para criar um CSV reproduzível com o caminho relativo, split, tamanho e SHA-256 de cada imagem, executar a partir de `apps/api`:
+
+```bash
+python -m app.dataset_manifest \
+  --train /dados/images/train \
+  --val /dados/images/val \
+  --test /dados/images/test \
+  --output /dados/metadata/image_manifest.csv
+```
+
+O gerador percorre os diretórios de forma determinística, suporta JPEG, PNG, WebP, BMP e TIFF e calcula SHA-256 em blocos para evitar carregar cada imagem inteira em memória. Não altera as imagens nem remove EXIF; a remoção de metadados pessoais continua a ser uma etapa de preparação separada. O manifesto também não consegue inferir sessões de captura ou autorizações: esses dados têm de ser registados a partir da recolha.
