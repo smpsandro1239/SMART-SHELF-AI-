@@ -245,3 +245,23 @@ python -m app.dataset_quality \\
 ```
 
 O relatório inclui distribuição de instâncias por classe, classes sem exemplos, imagens sem anotações e estatísticas de instâncias por imagem. As imagens sem anotações são avisos para revisão, não falhas automáticas. Para ativar critérios quantitativos explícitos, podem ser usados `--min-instances-per-class` e `--max-class-imbalance-ratio`; por omissão, o comando apenas reporta e não impõe limites arbitrários. Consultar `docs/computer-vision/dataset-specification.md` para a interpretação dos resultados.
+
+
+## Gate de aprovação do dataset
+
+A ferramenta `app.dataset_approval` verifica proveniência, autorização declarada, privacidade, revisões humanas, hash do manifesto e os controlos técnicos COCO/leakage/qualidade. Ver a secção 16 de `docs/computer-vision/dataset-specification.md` e o template `docs/computer-vision/dataset-release-template.json`.
+
+Exemplo a partir de `apps/api`:
+
+```bash
+python -m app.dataset_approval \\
+  --release-record /dados/private/dataset-release.json \\
+  --manifest /dados/metadata/image_manifest.csv \\
+  --train /dados/annotations/instances_train.json \\
+  --val /dados/annotations/instances_val.json \\
+  --test /dados/annotations/instances_test.json \\
+  --mode training \\
+  --json-report /dados/reports/release-gate.json
+```
+
+O gate não autentica revisores nem valida juridicamente autorizações; o resultado é uma verificação técnica e documental das declarações fornecidas.
