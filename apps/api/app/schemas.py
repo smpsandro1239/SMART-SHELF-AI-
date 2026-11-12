@@ -212,3 +212,9 @@ class TokenRead(BaseModel):
     token_type: str = "bearer"
     expires_in: int
     user: UserRead
+
+class UserCreate(BaseModel):
+    email: str = Field(min_length=5, max_length=254)
+    full_name: str = Field(min_length=2, max_length=160)
+    password: str = Field(min_length=12, max_length=128)
+    role: UserRole = "EMPLOYEE"
