@@ -104,3 +104,27 @@ class InventorySnapshot(Base):
     @property
     def available_quantity(self) -> float:
         return float(self.on_hand_quantity - self.reserved_quantity)
+
+
+class ReplenishmentTask(Base):
+    """Operational task for replenishing one product on one shelf."""
+    __tablename__ = "replenishment_tasks"
+    __table_args__ = (
+        CheckConstraint("priority IN ('LOW', 'NORMAL', 'HIGH', 'URGENT')", name="ck_task_priority"),
+        CheckConstraint("status IN ('PENDING', 'ASSIGNED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED')", name="ck_task_status"),
+        CheckConstraint("requested_quantity IS NULL OR requested_quantity > 0", name="ck_task_quantity_positive"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    store_id: Mapped[int] = mapped_column(ForeignKey("stores.id", ondelete="CASCADE"), index=True)
+    shelf_id: Mapped[int] = mapped_column(ForeignKey("shelves.id", ondelete="CASCADE"), index=True)
+    product_id: Mapped[int] = mapped_column(ForeignKey("products.id", ondelete="CASCADE"), index=True)
+    priority: Mapped[str] = mapped_column(String(12), default="NORMAL", nullable=False)
+    status: Mapped[str] = mapped_column(String(16), default="PENDING", index=True, nullable=False)
+    assigned_to: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+    requested_quantity: Mapped[float | None] = mapped_column(Numeric(12, 3), nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
