@@ -86,3 +86,22 @@ def test_forecast_uses_only_configured_recent_window():
     ))
 
     assert result.average_daily_demand == 1
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"recent_window_days": 2.5},
+        {"recent_window_days": True},
+        {"minimum_history_days": 3.5},
+        {"minimum_history_days": False},
+    ],
+)
+def test_forecast_requires_integer_history_window_parameters(overrides):
+    values = {
+        "daily_sales": [1, 2, 3, 4, 5, 6, 7],
+        "lead_time_days": 2,
+    }
+    values.update(overrides)
+    with pytest.raises(ValueError):
+        forecast_demand(DemandForecastInput(**values))
