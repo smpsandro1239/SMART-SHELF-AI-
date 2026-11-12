@@ -532,3 +532,12 @@ O módulo `app.product_evidence_fusion` combina candidatos de visão e texto sem
 - [Regras de fusão de evidências](docs/architecture/product-evidence-fusion.md)
 - [Implementação](apps/api/app/product_evidence_fusion.py)
 - [Testes](apps/api/tests/test_product_evidence_fusion.py)
+
+
+### Provider OCR PaddleOCR (opcional)
+
+Foi acrescentado um adaptador experimental PaddleOCR 3.x/PP-OCRv5 para português, com inferência CPU e caixas de texto normalizadas. A dependência está isolada em `apps/api/requirements-ocr.txt` e não é instalada pela API base. O adaptador ainda não está ligado ao worker e só foi preparado com testes simulados.
+
+- [Documentação do provider OCR](docs/architecture/paddleocr-provider.md)
+- [Adaptador PaddleOCR](apps/api/app/ocr_paddle.py)
+- [Dependências OCR opcionais](apps/api/requirements-ocr.txt)
