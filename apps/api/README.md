@@ -205,3 +205,10 @@ curl -X POST http://localhost:8000/api/v1/shelf-images \
 ```
 
 A resposta contém o ID da captura, tipo MIME, tamanho, SHA-256 e `analysis_status=PENDING`. A imagem pode ser listada em `GET /api/v1/shelf-images` e consultada em `GET /api/v1/shelf-images/{image_id}/content`. O armazenamento é persistido no volume Docker `shelf_images`; configurar `IMAGE_STORAGE_PATH` e `MAX_IMAGE_UPLOAD_BYTES` no ambiente. A validação atual confirma tipo declarado, assinatura inicial e tamanho, mas ainda não descodifica a imagem nem executa um modelo de visão computacional.
+
+
+## Resultados de visão computacional (estrutura inicial)
+
+Cada captura pode ter zero ou mais registos em `shelf_image_detections`. O endpoint `GET /api/v1/shelf-images/{image_id}/detections` devolve as deteções persistidas, limitadas ao âmbito da loja do utilizador. Cada registo contém classe/etiqueta, confiança entre 0 e 1, caixa delimitadora normalizada (coordenadas entre 0 e 1), produto associado opcional e versão do modelo.
+
+Esta estrutura não executa inferência nem cria deteções automaticamente. A ligação a um modelo real e a um worker de processamento continuam por implementar; não são gerados resultados artificiais.
