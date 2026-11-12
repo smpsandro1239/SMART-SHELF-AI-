@@ -147,6 +147,9 @@ def evaluate_shelf_decision(
             "type": "DEMAND_FORECAST", "predicted_units": forecast_quantity,
             "horizon_hours": forecast_hours, "generated_at": generated_at.isoformat(),
             "age_minutes": round(age, 2), "fresh": forecast_fresh,
+            "method": str(demand_forecast.get("method") or "UNSPECIFIED"),
+            "source_records": demand_forecast.get("source_records"),
+            "observed_sales_days": demand_forecast.get("observed_sales_days"),
         })
         if age < 0:
             warnings.append("A previsão de procura tem timestamp no futuro e foi ignorada.")
