@@ -98,3 +98,45 @@ def test_dataset_audit_reports_invalid_annotations():
         "test": coco_document("test/c.jpg", "session-c"),
     })
     assert any("train: annotation 1 bbox" in error for error in errors)
+
+
+def test_dataset_audit_detects_capture_group_key_leakage():
+    train = coco_document("train/a.jpg", None)
+    val = coco_document("val/b.jpg", None)
+    train["images"][0]["capture_group_key"] = "session:42"
+    val["images"][0]["capture_group_key"] = "session:42"
+    errors, report = audit_splits({
+        "train": train,
+        "val": val,
+        "test": coco_document("test/c.jpg", "session-c"),
+    })
+    assert any("capture group session:42 is split" in error for error in errors)
+    assert report["cross_split"]["unique_capture_groups"] == 2
+
+
+def test_dataset_audit_normalizes_capture_session_id_namespace():
+    train = coco_document("train/a.jpg", None)
+    val = coco_document("val/b.jpg", None)
+    train["images"][0]["capture_session_id"] = 17
+    val["images"][0]["capture_session_id"] = "17"
+    errors, _ = audit_splits({
+        "train": train,
+        "val": val,
+        "test": coco_document("test/c.jpg", "session-c"),
+    })
+    assert any("capture group session:17 is split" in error for error in errors)
+
+
+def test_dataset_audit_prefers_explicit_capture_group_over_sequence_id():
+    train = coco_document("train/a.jpg", "session-a")
+    val = coco_document("val/b.jpg", "session-b")
+    train["images"][0]["sequence_id"] = "shared-sequence"
+    val["images"][0]["sequence_id"] = "shared-sequence"
+    train["images"][0]["capture_group_key"] = "capture-a"
+    val["images"][0]["capture_group_key"] = "capture-b"
+    errors, _ = audit_splits({
+        "train": train,
+        "val": val,
+        "test": coco_document("test/c.jpg", "session-c"),
+    })
+    assert not any("shared-sequence" in error for error in errors)
