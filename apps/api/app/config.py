@@ -10,6 +10,8 @@ class Settings(BaseSettings):
     jwt_access_token_minutes: int = Field(default=30, ge=1, le=1440)
     bootstrap_admin_key: str = ""
     cors_allowed_origins: str = "http://localhost:5173"
+    image_storage_path: str = "/app/storage/shelf-images"
+    max_image_upload_bytes: int = Field(default=10485760, ge=1024, le=52428800)
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
