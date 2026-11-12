@@ -31,7 +31,9 @@ from app.warehouse_pick_planning import build_warehouse_pick_plan
 from app.warehouse_slotting import recommend_warehouse_slotting, recommend_physical_slot
 from app.packaging_units import calculate_replenishment_packs
 from app.pallet_rotation import evaluate_pallet_rotation, PalletRotationInputError
-from app.pallet_portfolio import build_pallet_portfolio_plan, PalletPortfolioInputError
+from app.pallet_portfolio import (
+    allocate_ready_replacements, build_pallet_portfolio_plan, PalletPortfolioInputError,
+)
 from app.pallet_rotation_forecast_bridge import enrich_pallet_candidates_with_hourly_profiles
 from app.pallet_rotation_windows import recommend_low_traffic_window
 from app.hourly_patterns import build_weekday_hour_profile
@@ -2487,12 +2489,20 @@ def get_pallet_rotation_portfolio_from_history(
             models.StorePallet.location_type.in_(["WAREHOUSE", "PREPARATION"]),
             or_(models.StorePallet.expiry_date.is_(None), models.StorePallet.expiry_date >= date.today()),
         ).all()
-        ready_keys = {
+        ready_keys = [
             (p.product_id, p.packaging_level_id)
             for p in ready_pallets
             if p.packaging_level_id in active_levels
             and float(p.base_quantity) == float(active_levels[p.packaging_level_id].base_units_per_package)
-        }
+        ]
+        candidate_pallets = [
+            p for p in pallets
+            if p.packaging_level_id in active_levels and p.product_id in policy_by_product
+        ]
+        replacement_flags = allocate_ready_replacements(
+            [(p.product_id, p.packaging_level_id) for p in candidate_pallets],
+            ready_keys,
+        )
 
         # Aggregate historical rows for all SKUs in a small fixed number of queries.
         history_start = date.today() - timedelta(days=days - 1)
@@ -2565,11 +2575,9 @@ def get_pallet_rotation_portfolio_from_history(
             for product_id in product_ids
         }
         candidates = []
-        for pallet in pallets:
-            level = active_levels.get(pallet.packaging_level_id)
-            policy = policy_by_product.get(pallet.product_id)
-            if level is None or policy is None:
-                continue
+        for pallet, replacement_available in zip(candidate_pallets, replacement_flags):
+            level = active_levels[pallet.packaging_level_id]
+            policy = policy_by_product[pallet.product_id]
             candidates.append({
                 "store_id": store_id,
                 "product_id": pallet.product_id,
@@ -2577,7 +2585,7 @@ def get_pallet_rotation_portfolio_from_history(
                 "residual_base_units": float(pallet.base_quantity),
                 "pallet_capacity_base_units": float(level.base_units_per_package),
                 "threshold_ratio": float(policy.threshold_ratio),
-                "replacement_pallet_available": (pallet.product_id, pallet.packaging_level_id) in ready_keys,
+                "replacement_pallet_available": replacement_available,
                 "backroom_capacity_available": backroom_capacity_available,
                 "conventional_minutes": conventional_minutes,
                 "swap_minutes": swap_minutes,
@@ -2709,19 +2717,25 @@ def get_pallet_rotation_portfolio(
             models.StorePallet.location_type.in_(["WAREHOUSE", "PREPARATION"]),
             or_(models.StorePallet.expiry_date.is_(None), models.StorePallet.expiry_date >= date.today()),
         ).all()
-        ready_keys = {
+        ready_keys = [
             (p.product_id, p.packaging_level_id)
             for p in ready_pallets
             if p.packaging_level_id in active_levels
             and float(p.base_quantity) == float(active_levels[p.packaging_level_id].base_units_per_package)
-        }
+        ]
+        candidate_pallets = [
+            p for p in pallets
+            if p.packaging_level_id in active_levels and p.product_id in policy_by_product
+        ]
+        replacement_flags = allocate_ready_replacements(
+            [(p.product_id, p.packaging_level_id) for p in candidate_pallets],
+            ready_keys,
+        )
 
         candidate_rows = []
-        for pallet in pallets:
-            level = active_levels.get(pallet.packaging_level_id)
-            policy = policy_by_product.get(pallet.product_id)
-            if level is None or policy is None:
-                continue
+        for pallet, replacement_available in zip(candidate_pallets, replacement_flags):
+            level = active_levels[pallet.packaging_level_id]
+            policy = policy_by_product[pallet.product_id]
             candidate_rows.append({
                 "store_id": store_id,
                 "product_id": pallet.product_id,
@@ -2730,7 +2744,7 @@ def get_pallet_rotation_portfolio(
                 "pallet_capacity_base_units": float(level.base_units_per_package),
                 "threshold_ratio": float(policy.threshold_ratio),
                 "traffic_level": traffic_level,
-                "replacement_pallet_available": (pallet.product_id, pallet.packaging_level_id) in ready_keys,
+                "replacement_pallet_available": replacement_available,
                 "backroom_capacity_available": backroom_capacity_available,
                 "forecast_consumption_until_low_traffic": forecast_consumption_until_low_traffic,
                 "conventional_minutes": conventional_minutes,
