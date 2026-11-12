@@ -629,7 +629,7 @@ def list_replenishment_recommendations(
 
 @app.post("/api/v1/tasks", response_model=ReplenishmentTaskRead, status_code=201, tags=["tasks"])
 def create_replenishment_task(payload: ReplenishmentTaskCreate, request: Request, db: Session = Depends(get_db)):
-    actor = db.get(models.User, getattr(request.state, "user_id", None))
+    actor = _request_user(db, request)
     if actor is not None and actor.role != "ADMIN" and actor.store_id != payload.store_id:
         raise HTTPException(status_code=403, detail="Access to this store is not allowed")
     if not db.get(models.Store, payload.store_id):
@@ -678,7 +678,7 @@ def create_task_from_recommendation(
     stale_after_minutes: int = 120,
     db: Session = Depends(get_db),
 ):
-    actor = db.get(models.User, getattr(request.state, "user_id", None))
+    actor = _request_user(db, request)
     if actor is not None and actor.role != "ADMIN" and actor.store_id != payload.store_id:
         raise HTTPException(status_code=403, detail="Access to this store is not allowed")
     recommendations = list_replenishment_recommendations(
@@ -739,7 +739,7 @@ def list_replenishment_tasks(
     db: Session = Depends(get_db),
 ):
     limit = max(1, min(limit, 500))
-    actor = db.get(models.User, getattr(request.state, "user_id", None))
+    actor = _request_user(db, request)
     query = db.query(models.ReplenishmentTask)
     if actor is not None and actor.role == "EMPLOYEE":
         query = query.filter(models.ReplenishmentTask.assigned_user_id == actor.id)
@@ -766,7 +766,7 @@ def update_replenishment_task_status(
     task = db.get(models.ReplenishmentTask, task_id)
     if task is None:
         raise HTTPException(status_code=404, detail="Task not found")
-    actor = db.get(models.User, getattr(request.state, "user_id", None))
+    actor = _request_user(db, request)
     if actor is not None and actor.role != "ADMIN" and task.store_id != actor.store_id:
         raise HTTPException(status_code=403, detail="Access to this task is not allowed")
     if actor is not None and actor.role == "EMPLOYEE":
