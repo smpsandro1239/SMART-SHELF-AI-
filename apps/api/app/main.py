@@ -26,6 +26,7 @@ from app.schemas import (
     BootstrapAdminCreate, LoginRequest, TokenRead, UserRead, UserCreate, ShelfImageRead,
     ShelfImageDetectionRead, ProductEmbeddingExemplarCreate,
     ProductEmbeddingExemplarReview, ProductEmbeddingExemplarRead,
+    DetectionSkuReviewCreate, DetectionSkuReviewRead,
 )
 
 app = FastAPI(title=settings.app_name, version="0.2.0", description="Operational API for SMART SHELF AI.")
@@ -80,6 +81,7 @@ async def require_api_authentication(request: Request, call_next):
         supervisor_or_admin = (
             path == "/api/v1/product-embedding-exemplars"
             or path.startswith("/api/v1/product-embedding-exemplars/")
+            or path.startswith("/api/v1/shelf-image-detections/")
         )
         if supervisor_or_admin and user.role not in {"ADMIN", "SUPERVISOR"}:
             return JSONResponse(status_code=403, content={"detail": "Supervisor role required"})
@@ -400,6 +402,86 @@ def list_shelf_image_detections(
         db.query(models.ShelfImageDetection)
         .filter(models.ShelfImageDetection.shelf_image_id == image_id)
         .order_by(models.ShelfImageDetection.id)
+        .limit(max(1, min(limit, 500)))
+        .all()
+    )
+
+
+@app.post(
+    "/api/v1/shelf-image-detections/{detection_id}/reviews",
+    response_model=DetectionSkuReviewRead,
+    status_code=201,
+    tags=["computer-vision"],
+)
+def create_detection_sku_review(
+    detection_id: int,
+    payload: DetectionSkuReviewCreate,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Append a human SKU decision without overwriting the model's original detection."""
+    detection = db.get(models.ShelfImageDetection, detection_id)
+    if detection is None:
+        raise HTTPException(status_code=404, detail="Detection not found")
+    image_record = db.get(models.ShelfImage, detection.shelf_image_id)
+    if image_record is None:
+        raise HTTPException(status_code=404, detail="Shelf image not found")
+    actor = _request_user(db, request)
+    _enforce_store_scope(actor, _shelf_image_store_id(db, image_record.id))
+
+    selected_product_id = payload.selected_product_id
+    if payload.decision == "CONFIRMED" and selected_product_id is None:
+        selected_product_id = detection.product_id
+    if payload.decision == "CORRECTED" and selected_product_id is None:
+        raise HTTPException(status_code=422, detail="selected_product_id is required for a correction")
+    if payload.decision == "REJECTED" and selected_product_id is not None:
+        raise HTTPException(status_code=422, detail="Rejected detections cannot select a product")
+    if payload.decision in {"CONFIRMED", "CORRECTED"}:
+        if selected_product_id is None:
+            raise HTTPException(status_code=422, detail="There is no proposed SKU to confirm")
+        product = db.get(models.Product, selected_product_id)
+        if product is None or not product.is_active:
+            raise HTTPException(status_code=422, detail="Selected product must exist and be active")
+        assigned = db.query(models.ShelfProduct.id).filter(
+            models.ShelfProduct.shelf_id == image_record.shelf_id,
+            models.ShelfProduct.product_id == selected_product_id,
+        ).first()
+        if assigned is None:
+            raise HTTPException(status_code=422, detail="Selected product is not assigned to the detected shelf")
+
+    review = models.DetectionSkuReview(
+        detection_id=detection.id,
+        previous_product_id=detection.product_id,
+        selected_product_id=selected_product_id,
+        decision=payload.decision,
+        reviewer_user_id=actor.id if actor else None,
+        notes=payload.notes,
+    )
+    db.add(review)
+    db.commit()
+    db.refresh(review)
+    return review
+
+
+@app.get(
+    "/api/v1/shelf-image-detections/{detection_id}/reviews",
+    response_model=list[DetectionSkuReviewRead],
+    tags=["computer-vision"],
+)
+def list_detection_sku_reviews(
+    detection_id: int,
+    request: Request,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+):
+    detection = db.get(models.ShelfImageDetection, detection_id)
+    if detection is None:
+        raise HTTPException(status_code=404, detail="Detection not found")
+    _enforce_store_scope(_request_user(db, request), _shelf_image_store_id(db, detection.shelf_image_id))
+    return (
+        db.query(models.DetectionSkuReview)
+        .filter(models.DetectionSkuReview.detection_id == detection_id)
+        .order_by(models.DetectionSkuReview.created_at, models.DetectionSkuReview.id)
         .limit(max(1, min(limit, 500)))
         .all()
     )
