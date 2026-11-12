@@ -23,6 +23,18 @@ FastAPI, PostgreSQL, Angular/TypeScript, OpenCV/PyTorch e Docker Compose. MQTT/R
 Não assumir ROS 2, SDK, acesso à navegação ou possibilidade de montagem. A decisão depende da marca/modelo, documentação e autorização do fabricante.
 
 ## ADR-005 — Licenciamento de modelos
-**Estado:** por avaliar.
+**Estado:** avaliação técnica iniciada; seleção final pendente.
 
-Antes de selecionar o modelo de visão, analisar licença, utilização comercial, redistribuição, inferência embebida e obrigações de disponibilização de código. Não assumir que um modelo é livre para integração proprietária.
+Antes de selecionar o modelo de visão, analisar a licença do código, dos pesos concretos e dos dados de treino, incluindo utilização comercial, redistribuição, inferência embebida e obrigações de disponibilização de código. Não assumir que um modelo é livre para integração proprietária.
+
+Avaliação documental em 12-11-2026:
+- **Ultralytics YOLO26:** a documentação oficial identifica YOLO26 como a família atualmente lançada e recomenda YOLO26/YOLO11 para workloads de produção. Contudo, a Ultralytics declara que o uso do seu código, modelos, pipelines ou modelos afinados exige AGPL-3.0 com disponibilização do projeto correspondente, ou uma licença Enterprise para manter o produto fechado. O repositório SMART SHELF AI não declara atualmente uma licença de projeto; por isso, não adicionar a dependência Ultralytics sem decisão explícita de licenciamento.
+- **RT-DETR oficial (lyuwenyu/RT-DETR):** o repositório oficial declara Apache-2.0 e disponibiliza implementações PyTorch/Paddle e checkpoints RT-DETR/RT-DETRv2. É um candidato inicial mais compatível com uma futura distribuição comercial fechada, sujeito à verificação da licença do checkpoint exato e dos respetivos avisos de terceiros.
+- **Limite funcional:** os pesos pré-treinados em COCO detetam classes genéricas, não identificam automaticamente SKUs específicos de uma loja. O reconhecimento de referências comerciais exige dataset próprio, anotação, treino/ajuste, validação por classe e avaliação em fotografias reais das prateleiras.
+
+Fontes consultadas:
+- [Ultralytics — documentação oficial](https://docs.ultralytics.com/)
+- [Ultralytics — licenciamento oficial](https://www.ultralytics.com/license)
+- [RT-DETR — repositório oficial e licença](https://github.com/lyuwenyu/RT-DETR)
+
+**Decisão provisória:** manter a interface `VisionProvider` agnóstica ao modelo. Avaliar RT-DETR PyTorch como primeira implementação experimental depois de confirmar hardware e dataset. Não descarregar pesos, instalar runtimes de ML ou ativar inferência em produção nesta fase.
