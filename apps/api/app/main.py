@@ -1,4 +1,4 @@
-from datetime import timedelta, timezone
+from datetime import date, timedelta, timezone
 from pathlib import Path
 from uuid import uuid4
 import hashlib
@@ -20,11 +20,12 @@ from app.product_text import (
     CatalogueProduct, normalize_product_text, rank_product_catalogue_candidates,
 )
 from app.replenishment_policy import ShelfRefillInput, suggest_shelf_refill
+from app.demand_forecasting import DemandForecastInput, forecast_demand
 from app.schemas import (
     ObservationCreate, ObservationRead, ShelfCreate, ShelfRead,
     StoreCreate, StoreRead, ZoneCreate, ZoneRead,
     ProductCreate, ProductRead, ShelfProductCreate, ShelfProductRead,
-    InventorySnapshotCreate, InventorySnapshotRead, ReplenishmentRecommendationRead,
+    InventorySnapshotCreate, InventorySnapshotRead, ReplenishmentRecommendationRead,\n    DailySalesRecordCreate, DailySalesRecordRead, SalesSource,
     ReplenishmentTaskCreate, ReplenishmentTaskStatusUpdate, ReplenishmentTaskRead,
     BootstrapAdminCreate, LoginRequest, TokenRead, UserRead, UserCreate, ShelfImageRead,
     ShelfImageDetectionRead, ProductEmbeddingExemplarCreate,
@@ -1116,6 +1117,135 @@ def list_shelf_products(
         query = query.filter(models.ShelfProduct.product_id == product_id)
     return query.order_by(models.ShelfProduct.shelf_id, models.ShelfProduct.position).all()
 
+
+
+@app.post(
+    "/api/v1/sales/daily",
+    response_model=DailySalesRecordRead,
+    status_code=201,
+    tags=["sales"],
+)
+def create_daily_sales_record(
+    payload: DailySalesRecordCreate,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Ingest one source-referenced daily product sales aggregate."""
+    actor = _request_user(db, request)
+    _enforce_store_scope(actor, payload.store_id)
+    if not db.get(models.Store, payload.store_id):
+        raise HTTPException(status_code=404, detail="Store not found")
+    product = db.get(models.Product, payload.product_id)
+    if product is None or not product.is_active:
+        raise HTTPException(status_code=404, detail="Active product not found")
+    item = models.DailySalesRecord(**payload.model_dump())
+    db.add(item)
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Daily sales external reference already exists") from exc
+    db.refresh(item)
+    return item
+
+
+@app.get("/api/v1/sales/daily", response_model=list[DailySalesRecordRead], tags=["sales"])
+def list_daily_sales_records(
+    store_id: int,
+    product_id: int,
+    source: SalesSource,
+    days: int = 28,
+    request: Request = None,
+    db: Session = Depends(get_db),
+):
+    if days < 1 or days > 365:
+        raise HTTPException(status_code=422, detail="days must be between 1 and 365")
+    _enforce_store_scope(_request_user(db, request), store_id)
+    query = db.query(models.DailySalesRecord).filter(
+        models.DailySalesRecord.store_id == store_id,
+        models.DailySalesRecord.product_id == product_id,
+        models.DailySalesRecord.source == source,
+    )
+    return query.order_by(models.DailySalesRecord.sales_date.desc()).limit(days).all()
+
+
+@app.get("/api/v1/forecasting/demand", tags=["forecasting"])
+def get_product_demand_forecast(
+    store_id: int,
+    product_id: int,
+    source: SalesSource,
+    lead_time_days: float,
+    target_cover_days: float = 7.0,
+    days: int = 28,
+    through_date: date | None = None,
+    request: Request = None,
+    db: Session = Depends(get_db),
+):
+    """Forecast demand only from complete, explicitly ingested daily source records."""
+    if days < 7 or days > 365:
+        raise HTTPException(status_code=422, detail="days must be between 7 and 365")
+    _enforce_store_scope(_request_user(db, request), store_id)
+    if not db.get(models.Store, store_id):
+        raise HTTPException(status_code=404, detail="Store not found")
+    product = db.get(models.Product, product_id)
+    if product is None:
+        raise HTTPException(status_code=404, detail="Product not found")
+    end_day = through_date or date.today()
+    start_day = end_day - timedelta(days=days - 1)
+    records = db.query(models.DailySalesRecord).filter(
+        models.DailySalesRecord.store_id == store_id,
+        models.DailySalesRecord.product_id == product_id,
+        models.DailySalesRecord.source == source,
+        models.DailySalesRecord.sales_date >= start_day,
+        models.DailySalesRecord.sales_date <= end_day,
+    ).all()
+    quantities_by_day = {}
+    for record in records:
+        quantities_by_day[record.sales_date] = quantities_by_day.get(record.sales_date, 0.0) + float(record.quantity)
+    missing_days = [
+        (start_day + timedelta(days=offset)).isoformat()
+        for offset in range(days)
+        if start_day + timedelta(days=offset) not in quantities_by_day
+    ]
+    if missing_days:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "INCOMPLETE_DAILY_SALES_HISTORY",
+                "message": "Forecast requires an explicit sales record for every calendar day; use quantity 0 for confirmed zero-sales days.",
+                "missing_days": missing_days,
+            },
+        )
+    try:
+        result = forecast_demand(DemandForecastInput(
+            daily_sales=[quantities_by_day[start_day + timedelta(days=offset)] for offset in range(days)],
+            lead_time_days=lead_time_days,
+            target_cover_days=target_cover_days,
+            recent_window_days=days,
+            minimum_history_days=7,
+        ))
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {
+        "store_id": store_id,
+        "product_id": product_id,
+        "product_name": product.name,
+        "source": source,
+        "period_start": start_day,
+        "period_end": end_day,
+        "forecast": {
+            "status": result.status,
+            "history_days": result.history_days,
+            "average_daily_demand": result.average_daily_demand,
+            "daily_demand_stddev": result.daily_demand_stddev,
+            "expected_lead_time_demand": result.expected_lead_time_demand,
+            "safety_stock": result.safety_stock,
+            "reorder_point": result.reorder_point,
+            "target_stock": result.target_stock,
+            "explanation": result.explanation,
+        },
+        "policy": "Advisory estimate only; no purchase order, inventory mutation or replenishment task is created.",
+    }
 
 
 @app.post("/api/v1/inventory/snapshots", response_model=InventorySnapshotRead, status_code=201, tags=["inventory"])
