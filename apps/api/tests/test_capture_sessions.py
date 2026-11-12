@@ -136,3 +136,47 @@ def test_upload_links_image_to_open_capture_session(tmp_path, monkeypatch):
         )
         assert rejected.status_code == 409
         assert rejected.json()["detail"] == "Capture session is closed"
+
+
+def test_reviewed_training_candidates_group_by_capture_session():
+    shelf_id, _ = seed_shelves()
+    db = Session()
+    store_id = db.query(models.Zone.store_id).join(models.Shelf, models.Shelf.zone_id == models.Zone.id).filter(models.Shelf.id == shelf_id).scalar()
+    session = models.CaptureSession(
+        store_id=store_id, shelf_id=shelf_id, source_type="mobile",
+        capture_mode="burst", started_at=models.utc_now(),
+    )
+    db.add(session)
+    db.flush()
+    product = models.Product(sku="CAP-SKU-1", name="Capture product", is_active=True)
+    db.add(product)
+    db.flush()
+    image = models.ShelfImage(
+        shelf_id=shelf_id, capture_session_id=session.id,
+        original_filename="frame.jpg", storage_path="/tmp/capture-session-frame.jpg",
+        mime_type="image/jpeg", file_size_bytes=100, sha256="f" * 64,
+    )
+    db.add(image)
+    db.flush()
+    detection = models.ShelfImageDetection(
+        shelf_image_id=image.id, product_id=product.id, label="product",
+        confidence=0.95, x_min=0.1, y_min=0.1, x_max=0.8, y_max=0.8,
+        model_version="detector-v1", sku_match_status="MATCHED",
+    )
+    db.add(detection)
+    db.flush()
+    db.add(models.DetectionSkuReview(
+        detection_id=detection.id, previous_product_id=product.id,
+        selected_product_id=product.id, decision="CONFIRMED",
+    ))
+    db.commit()
+    session_id = session.id
+    db.close()
+
+    with TestClient(app) as client:
+        response = client.get("/api/v1/training-candidates/reviewed")
+    assert response.status_code == 200
+    candidate = response.json()[0]
+    assert candidate["capture_session_id"] == session_id
+    assert candidate["capture_group_key"] == f"session:{session_id}"
+    assert "same capture session" in candidate["split_policy"]
