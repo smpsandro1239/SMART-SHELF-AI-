@@ -109,3 +109,27 @@ def test_insufficient_coverage_prevents_global_window_recommendation():
         residual_base_units=200, minimum_observed_days=7,
     )
     assert result.recommendation == "INSUFFICIENT_DATA"
+
+
+@pytest.mark.parametrize("field,value", [
+    ("sales_observed_days", True),
+    ("traffic_observed_days", False),
+    ("sales_observed_days", 7.5),
+    ("traffic_observed_days", "14"),
+])
+def test_rejects_non_integer_or_boolean_coverage_counts(field, value):
+    rows = profile()
+    rows[0][field] = value
+    with pytest.raises(ValueError, match="coverage counts must be integers"):
+        recommend_low_traffic_window(
+            rows, current_hour=8, duration_hours=1,
+            residual_base_units=200, minimum_observed_days=7,
+        )
+
+
+def test_rejects_boolean_residual_quantity():
+    with pytest.raises(ValueError, match="not boolean"):
+        recommend_low_traffic_window(
+            profile(), current_hour=8, duration_hours=1,
+            residual_base_units=True, minimum_observed_days=7,
+        )
