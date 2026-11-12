@@ -61,8 +61,12 @@ def enrich_pallet_candidates_with_hourly_profiles(
             enriched.append(row)
             continue
 
-        traffic_values = [float(item["average_customers"]) for item in profile]
-        current_traffic = float(profile[current_hour]["average_customers"])
+        traffic_by_hour = {
+            int(item["hour_of_day"]): float(item["average_customers"])
+            for item in profile
+        }
+        traffic_values = list(traffic_by_hour.values())
+        current_traffic = traffic_by_hour[current_hour]
         daily_hourly_average = sum(traffic_values) / len(traffic_values)
         row["traffic_level"] = (
             "LOW" if current_traffic <= daily_hourly_average
