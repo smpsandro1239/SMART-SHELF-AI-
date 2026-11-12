@@ -237,3 +237,18 @@ class ShelfImageRead(BaseModel):
     captured_at: datetime
     created_at: datetime
     model_config = ConfigDict(from_attributes=True)
+
+
+class ShelfImageDetectionRead(BaseModel):
+    id: int
+    shelf_image_id: int
+    product_id: int | None
+    label: str
+    confidence: float
+    x_min: float
+    y_min: float
+    x_max: float
+    y_max: float
+    model_version: str
+    created_at: datetime
+    model_config = ConfigDict(from_attributes=True)
