@@ -94,3 +94,31 @@ def test_predictions_for_class_without_ground_truth_are_reported_as_false_positi
     report = evaluate_detections(document, predictions)
     assert report["classes"]["1"]["ground_truth"] == 0
     assert report["classes"]["1"]["counts_at_iou_50"]["false_positives"] == 1
+
+
+
+def test_map_is_independent_of_operating_confidence_threshold():
+    predictions = [
+        {"image_id": 1, "category_id": 0, "bbox": [10, 10, 20, 20], "score": 0.9},
+        {"image_id": 2, "category_id": 0, "bbox": [50, 50, 20, 20], "score": 0.2},
+    ]
+    low_threshold = evaluate_detections(ground_truth(), predictions, confidence_threshold=0.1)
+    high_threshold = evaluate_detections(ground_truth(), predictions, confidence_threshold=0.8)
+    assert low_threshold["map_50"] == high_threshold["map_50"]
+    assert low_threshold["classes"]["0"]["recall_at_confidence"] == 1.0
+    assert high_threshold["classes"]["0"]["recall_at_confidence"] == 0.5
+
+
+def test_false_positives_in_categories_without_ground_truth_count_globally():
+    document = ground_truth()
+    document["annotations"] = [item for item in document["annotations"] if item["category_id"] == 0]
+    predictions = [
+        {"image_id": 1, "category_id": 1, "bbox": [60, 10, 10, 10], "score": 0.99}
+    ]
+    report = evaluate_detections(document, predictions)
+    assert report["counts_at_iou_50"]["false_positives"] == 1
+
+
+def test_iou_thresholds_must_include_point_fifty():
+    with pytest.raises(ValueError, match="include 0.50"):
+        evaluate_detections(ground_truth(), [], iou_thresholds=(0.75, 0.9))
