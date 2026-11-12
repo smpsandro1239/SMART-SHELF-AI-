@@ -114,6 +114,64 @@ class ShelfProduct(Base):
     product: Mapped[Product] = relationship(back_populates="shelf_links")
 
 
+class WarehouseLocation(Base):
+    """Physical warehouse bin with measurable capacity and picking distance."""
+    __tablename__ = "warehouse_locations"
+    __table_args__ = (
+        UniqueConstraint("store_id", "code", name="uq_warehouse_location_store_code"),
+        CheckConstraint("distance_to_picking_m >= 0", name="ck_warehouse_location_distance_nonnegative"),
+        CheckConstraint("max_volume_cm3 > 0", name="ck_warehouse_location_volume_positive"),
+        CheckConstraint("max_weight_kg > 0", name="ck_warehouse_location_weight_positive"),
+        CheckConstraint("temperature_zone IN ('AMBIENT', 'CHILLED', 'FROZEN')", name="ck_warehouse_location_temperature"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    store_id: Mapped[int] = mapped_column(ForeignKey("stores.id", ondelete="CASCADE"), index=True, nullable=False)
+    code: Mapped[str] = mapped_column(String(80), nullable=False)
+    aisle: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    rack: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    bin_code: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    distance_to_picking_m: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
+    max_volume_cm3: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False)
+    max_weight_kg: Mapped[float] = mapped_column(Numeric(12, 3), nullable=False)
+    temperature_zone: Mapped[str] = mapped_column(String(12), default="AMBIENT", nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
+
+class WarehouseProductProfile(Base):
+    """Physical and handling constraints required by a product."""
+    __tablename__ = "warehouse_product_profiles"
+    __table_args__ = (
+        UniqueConstraint("product_id", name="uq_warehouse_product_profile_product"),
+        CheckConstraint("unit_volume_cm3 > 0", name="ck_warehouse_product_volume_positive"),
+        CheckConstraint("unit_weight_kg > 0", name="ck_warehouse_product_weight_positive"),
+        CheckConstraint("temperature_requirement IN ('AMBIENT', 'CHILLED', 'FROZEN')", name="ck_warehouse_product_temperature"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    product_id: Mapped[int] = mapped_column(ForeignKey("products.id", ondelete="CASCADE"), nullable=False, index=True)
+    unit_volume_cm3: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
+    unit_weight_kg: Mapped[float] = mapped_column(Numeric(10, 3), nullable=False)
+    temperature_requirement: Mapped[str] = mapped_column(String(12), default="AMBIENT", nullable=False)
+    is_fragile: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    requires_segregation: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
+
+class WarehouseProductPlacement(Base):
+    """Current quantity of a product held in a warehouse location."""
+    __tablename__ = "warehouse_product_placements"
+    __table_args__ = (
+        UniqueConstraint("location_id", "product_id", name="uq_warehouse_placement_location_product"),
+        CheckConstraint("quantity >= 0", name="ck_warehouse_placement_quantity_nonnegative"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    location_id: Mapped[int] = mapped_column(ForeignKey("warehouse_locations.id", ondelete="CASCADE"), nullable=False, index=True)
+    product_id: Mapped[int] = mapped_column(ForeignKey("products.id", ondelete="CASCADE"), nullable=False, index=True)
+    quantity: Mapped[float] = mapped_column(Numeric(12, 3), default=0, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
+
 class InventorySnapshot(Base):
     """Immutable observation of backroom stock from an authoritative source."""
     __tablename__ = "inventory_snapshots"
