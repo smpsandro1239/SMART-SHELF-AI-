@@ -919,3 +919,23 @@ a capacidade física da retaguarda ainda não está integrada. A previsão de
 consumo e os tempos/custo são inputs fornecidos pelo chamador, não previsões
 geradas automaticamente. O endpoint é read-only: não reserva a substituta,
 não cria tarefas, não altera estados, eventos, stock ou localizações.
+
+
+### Recolha de vendas e afluência por hora
+
+A migração `0016_hourly_sales_traffic` cria duas fontes separadas:
+`hourly_sales_records` (quantidade vendida por produto/hora) e
+`hourly_store_traffic_records` (contagem de clientes por loja/hora).
+A hora é a hora local da loja, indicada pelo sistema de origem; não é convertida
+automaticamente a partir de UTC.
+
+- `POST /api/v1/sales/hourly` — registar vendas horárias por produto.
+- `POST /api/v1/sales/traffic/hourly` — registar contagem horária de clientes.
+- `GET /api/v1/warehouse/pallet-rotation/hourly-profile?store_id=1&product_id=42&days=28`
+  — obter perfil de 24 horas com médias diárias e cobertura observada.
+
+Os registos são imutáveis e deduplicados por referência externa. Zero é um valor
+válido e diferente de ausência de observação. O perfil devolve `null` e indica
+as horas em falta quando não há dados; não preenche lacunas com zeros nem gera
+uma previsão. O período aceite é de 7 a 90 dias. A API ainda não calcula
+janelas ótimas automaticamente; fornece a base empírica para essa fase.
