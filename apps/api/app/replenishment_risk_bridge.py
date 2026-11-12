@@ -25,8 +25,8 @@ def enrich_replenishment_with_stockout_risk(
     max_inventory_age_minutes: int = 240,
 ) -> list[dict[str, Any]]:
     """Return copied recommendations enriched with product-level risk evidence."""
-    if not isinstance(through_date, date):
-        raise ValueError("through_date must be a date")
+    if not isinstance(through_date, date) or isinstance(through_date, datetime):
+        raise ValueError("through_date must be a calendar date, not a datetime")
     if not isinstance(now, datetime):
         raise ValueError("now must be a datetime")
     if isinstance(days, bool) or not isinstance(days, int) or not 7 <= days <= 365:
@@ -90,7 +90,12 @@ def enrich_replenishment_with_stockout_risk(
             continue
 
         captured = captured_at if captured_at.tzinfo is not None else captured_at.replace(tzinfo=timezone.utc)
-        age_minutes = max(0.0, (current - captured).total_seconds() / 60.0)
+        age_minutes = (current - captured).total_seconds() / 60.0
+        if age_minutes < 0:
+            item["stockout_risk_basis"] = "FUTURE_INVENTORY"
+            item["stockout_explanation"] = "O snapshot de inventário tem uma data futura; verificar a sincronização dos relógios e atualizar o stock."
+            result.append(item)
+            continue
         item["stockout_inventory_age_minutes"] = round(age_minutes, 2)
         if age_minutes > max_inventory_age_minutes:
             item["stockout_risk_basis"] = "STALE_INVENTORY"
@@ -99,6 +104,8 @@ def enrich_replenishment_with_stockout_risk(
             continue
 
         try:
+            if isinstance(available, bool):
+                raise ValueError("inventory_available_quantity cannot be boolean")
             forecast = forecast_demand(DemandForecastInput(
                 daily_sales=[history[start_date + timedelta(days=offset)] for offset in range(days)],
                 lead_time_days=lead_time_days,
