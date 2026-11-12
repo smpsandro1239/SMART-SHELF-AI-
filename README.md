@@ -624,3 +624,18 @@ python -m app.dataset_release \
 ```
 
 Os registos ficam em `dataset-registry/releases/<fingerprint>.json`. Cada registo conserva o hash do manifest, contagens por split, hashes dos relatórios de qualidade e informação de equilíbrio de classes disponível no relatório COCO. A release não copia as imagens nem equivale a aprovação de um modelo; é um registo local, ainda sem assinatura criptográfica, controlo de acesso ou armazenamento remoto.
+
+
+A release também regista instâncias por classe e por split. Classes sem exemplos num dos conjuntos são apresentadas como avisos; é possível transformar esse requisito num gate bloqueante com `--min-class-instances N`. O número mínimo de imagens por split é configurável com `--min-images-per-split N` (por omissão, 1).
+
+Exemplo com pelo menos 20 imagens por split e 5 instâncias de cada classe em cada split:
+
+```bash
+python -m app.dataset_release \
+  --manifest /data/metadata/image_manifest.csv \
+  --split-audit /data/reports/split-audit.json \
+  --visual-audit /data/reports/visual-similarity.json \
+  --registry /data/dataset-registry \
+  --min-images-per-split 20 \
+  --min-class-instances 5
+```
