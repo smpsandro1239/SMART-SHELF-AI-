@@ -81,7 +81,7 @@ def recommend_low_traffic_window(
             sales_count = sales_count_raw
             traffic_count = traffic_count_raw
         except (TypeError, ValueError, OverflowError):
-            raise ValueError("hourly profile values and coverage counts must be numeric")
+            raise ValueError("hourly profile values must be numeric and coverage counts must be integers")
         if (isinstance(sales_value, bool) or isinstance(traffic_value, bool)
                 or not math.isfinite(sales_number) or sales_number < 0
                 or not math.isfinite(traffic_number) or traffic_number < 0
