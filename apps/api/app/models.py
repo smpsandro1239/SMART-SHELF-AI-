@@ -122,6 +122,7 @@ class ReplenishmentTask(Base):
     priority: Mapped[str] = mapped_column(String(12), default="NORMAL", nullable=False)
     status: Mapped[str] = mapped_column(String(16), default="PENDING", index=True, nullable=False)
     assigned_to: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+    assigned_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     requested_quantity: Mapped[float | None] = mapped_column(Numeric(12, 3), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
@@ -139,6 +140,7 @@ class User(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     email: Mapped[str] = mapped_column(String(254), unique=True, index=True, nullable=False)
+    store_id: Mapped[int | None] = mapped_column(ForeignKey("stores.id", ondelete="SET NULL"), nullable=True, index=True)
     full_name: Mapped[str] = mapped_column(String(160), nullable=False)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     role: Mapped[str] = mapped_column(String(16), default="EMPLOYEE", nullable=False)
