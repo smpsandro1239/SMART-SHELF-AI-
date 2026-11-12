@@ -45,3 +45,22 @@ def test_weekday_hour_profile_rejects_negative_values():
     sales = [SimpleNamespace(business_date=date(2026, 11, 2), hour_of_day=8, quantity=-1)]
     with pytest.raises(ValueError):
         build_weekday_hour_profile(sales, [])
+
+
+@pytest.mark.parametrize("quantity", [True, False])
+def test_weekday_hour_profile_rejects_boolean_sales_quantities(quantity):
+    sales = [SimpleNamespace(
+        business_date=date(2026, 11, 2), hour_of_day=8, quantity=quantity
+    )]
+    with pytest.raises(ValueError, match="not boolean"):
+        build_weekday_hour_profile(sales, [])
+
+
+@pytest.mark.parametrize("customer_count", [True, False, 1.5, "2"])
+def test_weekday_hour_profile_requires_integer_customer_counts(customer_count):
+    traffic = [SimpleNamespace(
+        business_date=date(2026, 11, 2), hour_of_day=8,
+        customer_count=customer_count,
+    )]
+    with pytest.raises(ValueError, match="must be an integer"):
+        build_weekday_hour_profile([], traffic)
