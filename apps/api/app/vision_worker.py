@@ -16,6 +16,8 @@ from app.database import SessionLocal
 from app import models
 from app.vision import VisionAnalysis, VisionProviderNotConfigured
 from app.product_embedding_service import build_approved_product_registry
+from app.product_ocr_association import associate_ocr_regions
+from app.product_text import normalize_product_text
 
 logger = logging.getLogger("smart_shelf.vision_worker")
 
@@ -34,6 +36,63 @@ def load_provider():
     if not callable(getattr(provider, "analyze", None)):
         raise TypeError("Vision provider must implement analyze(image_path)")
     return provider
+
+
+
+def load_ocr_provider():
+    """Load an optional OCR provider; vision processing remains independent."""
+    factory_path = settings.ocr_provider_factory.strip()
+    if not factory_path:
+        return None
+    module_name, separator, attribute = factory_path.partition(":")
+    if not separator or not module_name or not attribute:
+        raise ValueError("OCR_PROVIDER_FACTORY must use the format 'python.module:factory'")
+    factory = getattr(importlib.import_module(module_name), attribute)
+    provider = factory()
+    if not callable(getattr(provider, "recognize", None)):
+        raise TypeError("OCR provider must implement recognize(image_path)")
+    return provider
+
+
+def persist_ocr_evidence(db: Session, image_id: int, image_path: Path, detections, provider) -> None:
+    """Persist OCR regions with geometric detection associations, without SKU decisions."""
+    run = models.ShelfImageOCRRun(
+        shelf_image_id=image_id,
+        provider=settings.ocr_provider_name,
+        model_version=settings.ocr_model_version,
+        status="FAILED",
+    )
+    db.add(run)
+    db.flush()
+    try:
+        regions = tuple(provider.recognize(image_path))
+        associations = associate_ocr_regions(detections, regions)
+        assigned_detection_by_region = {}
+        for association in associations:
+            detection_id = detections[association.detection_index].id
+            for region in association.regions:
+                assigned_detection_by_region[id(region)] = detection_id
+        for region in regions:
+            normalized = normalize_product_text(region.text.text)
+            if not normalized:
+                continue
+            detection_id = assigned_detection_by_region.get(id(region))
+            db.add(models.ShelfImageOCREvidence(
+                run_id=run.id,
+                detection_id=detection_id,
+                text=region.text.text.strip(),
+                normalized_text=normalized[:1000],
+                confidence=region.text.confidence,
+                x_min=region.x_min,
+                y_min=region.y_min,
+                x_max=region.x_max,
+                y_max=region.y_max,
+                association_status="ASSIGNED" if detection_id is not None else "UNASSIGNED",
+            ))
+        run.status = "COMPLETED"
+    except Exception:
+        run.status = "FAILED"
+        logger.exception("Optional OCR processing failed for shelf image %s; visual results are retained", image_id)
 
 
 def resolve_sku_match(db: Session, detection, registry_cache=None):
@@ -57,7 +116,7 @@ def resolve_sku_match(db: Session, detection, registry_cache=None):
     return {"product_id": match.product_id if match.status == "MATCHED" else None, "status": match.status, "similarity": match.similarity, "margin": match.margin}
 
 
-def process_next_image(db: Session, provider) -> int | None:
+def process_next_image(db: Session, provider, ocr_provider=None) -> int | None:
     image = (
         db.query(models.ShelfImage)
         .filter(models.ShelfImage.analysis_status == "PENDING")
@@ -84,9 +143,10 @@ def process_next_image(db: Session, provider) -> int | None:
             detection.validate_box()
         db.query(models.ShelfImageDetection).filter_by(shelf_image_id=image_id).delete()
         registry_cache = {}
+        detection_rows = []
         for detection in result.detections:
             sku_match = resolve_sku_match(db, detection, registry_cache)
-            db.add(models.ShelfImageDetection(
+            row = models.ShelfImageDetection(
                 shelf_image_id=image_id,
                 product_id=sku_match["product_id"],
                 label=detection.label,
@@ -100,7 +160,12 @@ def process_next_image(db: Session, provider) -> int | None:
                 sku_match_status=sku_match["status"],
                 sku_similarity=sku_match["similarity"],
                 sku_match_margin=sku_match["margin"],
-            ))
+            )
+            db.add(row)
+            detection_rows.append(row)
+        db.flush()
+        if ocr_provider is not None:
+            persist_ocr_evidence(db, image_id, image_path, detection_rows, ocr_provider)
         image = db.get(models.ShelfImage, image_id)
         image.analysis_status = "COMPLETED"
         image.analysis_error = None
@@ -131,10 +196,18 @@ def main() -> int:
         logger.error("%s", exc)
         return 2
 
+    try:
+        ocr_provider = load_ocr_provider()
+        if ocr_provider is not None:
+            logger.info("Optional OCR provider enabled: %s", settings.ocr_provider_name)
+    except Exception:
+        logger.exception("Optional OCR provider could not be loaded; continuing with visual inference only")
+        ocr_provider = None
+
     while True:
         db = SessionLocal()
         try:
-            image_id = process_next_image(db, provider)
+            image_id = process_next_image(db, provider, ocr_provider=ocr_provider)
         finally:
             db.close()
         if image_id is None and args.once:
