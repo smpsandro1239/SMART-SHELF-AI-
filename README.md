@@ -421,3 +421,16 @@ python -m app.dataset_approval \
 
 O registo prova apenas que foram fornecidas decisões e identificadores de revisor; não autentica pessoas nem garante que a revisão foi competente. Os registos devem ficar em armazenamento privado, fora do Git.
 
+
+
+## 16. Engenharia reversa (REA) — arquitetura baseada no código
+
+Foi realizada uma análise estática do repositório para reconstruir os módulos existentes, modelo de dados, fluxos, fronteiras de segurança e lacunas. A análise distingue implementação, cobertura de testes, documentação e hipóteses de evolução.
+
+![Arquitetura atualmente implementada](docs/images/as-built-architecture.svg)
+
+- [Relatório REA — Engenharia reversa do projeto](docs/reverse-engineering/README.md)
+- [Arquitetura as-built / to-be](docs/architecture/overview.md)
+- [ADR-006 — stack realmente implementada](docs/architecture/adr-006-as-built-stack.md)
+
+**Nota:** o frontend existente é React/TypeScript/Vite, não Angular. O worker de visão está preparado, mas não existe provider real ativo nem modelo treinado. Os cenários apresentados no relatório REA são dados sintéticos de aceitação, não resultados medidos.
