@@ -93,3 +93,42 @@ def test_missing_cost_input_returns_insufficient_data():
 def test_invalid_inputs_raise(override):
     with pytest.raises(PalletRotationInputError):
         evaluate_pallet_rotation(**inputs(**override))
+
+
+def test_rotation_simulation_request_accepts_complete_operational_inputs():
+    from app.schemas import PalletRotationSimulationRequest
+
+    payload = PalletRotationSimulationRequest(
+        store_id=1,
+        pallet_id=15,
+        traffic_level="HIGH",
+        backroom_capacity_available=True,
+        conventional_replenishment_minutes=24,
+        pallet_swap_minutes=4,
+        transport_minutes=3,
+        pallet_rebuild_minutes=5,
+        labour_cost_per_hour=12,
+        forecast_consumption_until_low_traffic=180,
+    )
+    assert payload.pallet_id == 15
+    assert payload.traffic_level == "HIGH"
+
+
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), -1])
+def test_rotation_simulation_request_rejects_invalid_operational_values(value):
+    from pydantic import ValidationError
+    from app.schemas import PalletRotationSimulationRequest
+
+    with pytest.raises(ValidationError):
+        PalletRotationSimulationRequest(
+            store_id=1,
+            pallet_id=15,
+            traffic_level="HIGH",
+            backroom_capacity_available=True,
+            conventional_replenishment_minutes=value,
+            pallet_swap_minutes=4,
+            transport_minutes=3,
+            pallet_rebuild_minutes=5,
+            labour_cost_per_hour=12,
+            forecast_consumption_until_low_traffic=180,
+        )
