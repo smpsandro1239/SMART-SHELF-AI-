@@ -1,3 +1,7 @@
+# Revisão interna da arquitetura implementada (as-built)
+
+> Este documento é uma análise do próprio repositório SMART SHELF AI. **Não é a REA externa pedida para estudar projetos de terceiros.** Para a engenharia reversa comparativa de soluções existentes, consultar [REA externa — comparação de soluções](external-solutions.md).
+
 # REA — Engenharia reversa do SMART SHELF AI
 
 **Versão analisada:** branch `main`, commit `0019e5ef9ef07c74f9717f4144e38025647a03af`  
