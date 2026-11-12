@@ -145,3 +145,27 @@ def test_future_dated_inventory_and_forecast_are_not_used_for_quantity():
     assert result["status"] == "ACTION_RECOMMENDED"
     assert result["suggested_replenishment_quantity"] is None
     assert any("timestamp no futuro" in warning for warning in result["warnings"])
+
+
+def test_stock_coverage_threshold_prevents_early_replenishment_alert():
+    result = evaluate_shelf_decision(
+        now=NOW,
+        observation=None,
+        inventory={"available_quantity": 20, "recorded_at": NOW},
+        demand_forecast={"predicted_units": 10, "horizon_hours": 24, "generated_at": NOW},
+    )
+
+    assert result["status"] == "MONITOR"
+    assert result["inventory_coverage_hours"] == 48.0
+
+
+def test_stock_coverage_is_reported_and_triggers_when_below_policy():
+    result = evaluate_shelf_decision(
+        now=NOW,
+        observation=None,
+        inventory={"available_quantity": 4, "recorded_at": NOW},
+        demand_forecast={"predicted_units": 8, "horizon_hours": 12, "generated_at": NOW},
+    )
+
+    assert result["status"] == "ACTION_RECOMMENDED"
+    assert result["inventory_coverage_hours"] == 6.0
