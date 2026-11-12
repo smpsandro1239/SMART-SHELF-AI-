@@ -172,6 +172,31 @@ class WarehouseProductPlacement(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
 
+class ProductPackagingLevel(Base):
+    """A product pack size expressed directly in base selling units."""
+    __tablename__ = "product_packaging_levels"
+    __table_args__ = (
+        UniqueConstraint("product_id", "code", name="uq_product_packaging_product_code"),
+        CheckConstraint("base_units_per_package > 0", name="ck_packaging_base_units_positive"),
+        CheckConstraint("package_type IN ('UNIT', 'CASE', 'PALLET', 'OTHER')", name="ck_packaging_type"),
+        CheckConstraint("gross_weight_kg IS NULL OR gross_weight_kg > 0", name="ck_packaging_weight_positive"),
+        CheckConstraint("package_volume_cm3 IS NULL OR package_volume_cm3 > 0", name="ck_packaging_volume_positive"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    product_id: Mapped[int] = mapped_column(ForeignKey("products.id", ondelete="CASCADE"), nullable=False, index=True)
+    code: Mapped[str] = mapped_column(String(40), nullable=False)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    package_type: Mapped[str] = mapped_column(String(12), nullable=False)
+    base_units_per_package: Mapped[float] = mapped_column(Numeric(14, 3), nullable=False)
+    barcode: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    gross_weight_kg: Mapped[float | None] = mapped_column(Numeric(12, 3), nullable=True)
+    package_volume_cm3: Mapped[float | None] = mapped_column(Numeric(14, 2), nullable=True)
+    is_ordering_unit: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    is_replenishment_unit: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
+
 class InventorySnapshot(Base):
     """Immutable observation of backroom stock from an authoritative source."""
     __tablename__ = "inventory_snapshots"
