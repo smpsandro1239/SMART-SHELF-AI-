@@ -142,3 +142,12 @@ antes de classificar uma janela como a de menor afluência. Esta restrição é
 deliberadamente conservadora: sem cobertura global, o sistema não conhece
 alternativas potencialmente mais calmas. Valores negativos, não finitos ou
 ausência de observações não são convertidos em zeros.
+
+
+## Consulta dos registos de origem
+
+Os endpoints GET `/api/v1/sales/hourly` e
+`/api/v1/sales/traffic/hourly` permitem auditar as observações importadas,
+filtrando por loja e intervalo de datas; as vendas permitem ainda filtrar SKU.
+As respostas são limitadas a 1000 linhas por pedido e ordenadas por data/hora
+descendente. A consulta é read-only e respeita o âmbito de loja.
