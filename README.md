@@ -523,3 +523,12 @@ Foram adicionados módulos independentes para agrupar deteções em filas horizo
 - [Contrato e ranking de texto OCR](apps/api/app/product_text.py)
 
 A contagem de frentes representa apenas objetos detetados na face visível. Não estima unidades em profundidade nem substitui o inventário.
+
+
+### Fusão de evidências visuais e OCR
+
+O módulo `app.product_evidence_fusion` combina candidatos de visão e texto sem comparar diretamente os respetivos scores. A concordância gera `CONSENSUS`; divergências geram `CONFLICT`; sinais isolados mantêm a sugestão sujeita a revisão humana. A camada ainda não está integrada no worker.
+
+- [Regras de fusão de evidências](docs/architecture/product-evidence-fusion.md)
+- [Implementação](apps/api/app/product_evidence_fusion.py)
+- [Testes](apps/api/tests/test_product_evidence_fusion.py)
