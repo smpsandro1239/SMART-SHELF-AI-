@@ -136,15 +136,19 @@ def test_bridge_keeps_risk_unknown_when_inventory_snapshot_is_in_the_future():
     assert "data futura" in item["stockout_explanation"]
 
 
-def test_bridge_rejects_boolean_inventory_quantity_without_coercing_it():
+def test_bridge_keeps_risk_unknown_for_boolean_inventory_quantity():
     today = date(2026, 11, 12)
-    with pytest.raises(ValueError, match="cannot be boolean"):
-        enrich_replenishment_with_stockout_risk(
-            [_recommendation(inventory_available_quantity=True)],
-            _history(today),
-            through_date=today,
-            now=datetime(2026, 11, 12, 11, tzinfo=timezone.utc),
-        )
+    enriched = enrich_replenishment_with_stockout_risk(
+        [_recommendation(inventory_available_quantity=True)],
+        _history(today),
+        through_date=today,
+        now=datetime(2026, 11, 12, 11, tzinfo=timezone.utc),
+    )
+
+    item = enriched[0]
+    assert item["stockout_risk_level"] == "UNKNOWN"
+    assert item["stockout_risk_basis"] == "INVALID_INPUT"
+    assert "cannot be boolean" in item["stockout_explanation"]
 
 
 def test_bridge_rejects_datetime_as_through_date():
