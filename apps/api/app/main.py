@@ -2,14 +2,19 @@ from datetime import timezone
 
 from fastapi import Depends, FastAPI, HTTPException
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database import get_db
 from app import models
-from app.schemas import ObservationCreate, ObservationRead, ShelfCreate, ShelfRead, StoreCreate, StoreRead, ZoneCreate, ZoneRead
+from app.schemas import (
+    ObservationCreate, ObservationRead, ShelfCreate, ShelfRead,
+    StoreCreate, StoreRead, ZoneCreate, ZoneRead,
+    ProductCreate, ProductRead, ShelfProductCreate, ShelfProductRead,
+)
 
-app = FastAPI(title=settings.app_name, version="0.1.0", description="Initial operational API for SMART SHELF AI.")
+app = FastAPI(title=settings.app_name, version="0.2.0", description="Operational API for SMART SHELF AI.")
 
 
 @app.get("/health", tags=["system"])
@@ -92,3 +97,54 @@ def list_observations(shelf_id: int | None = None, limit: int = 100, db: Session
     if shelf_id is not None:
         query = query.filter(models.Observation.shelf_id == shelf_id)
     return query.order_by(models.Observation.observed_at.desc()).limit(limit).all()
+
+
+@app.post("/api/v1/products", response_model=ProductRead, status_code=201, tags=["products"])
+def create_product(payload: ProductCreate, db: Session = Depends(get_db)):
+    if db.query(models.Product).filter_by(sku=payload.sku).first():
+        raise HTTPException(status_code=409, detail="Product SKU already exists")
+    item = models.Product(**payload.model_dump())
+    db.add(item)
+    db.commit()
+    db.refresh(item)
+    return item
+
+
+@app.get("/api/v1/products", response_model=list[ProductRead], tags=["products"])
+def list_products(active_only: bool = True, limit: int = 100, db: Session = Depends(get_db)):
+    limit = max(1, min(limit, 500))
+    query = db.query(models.Product)
+    if active_only:
+        query = query.filter(models.Product.is_active.is_(True))
+    return query.order_by(models.Product.name).limit(limit).all()
+
+
+@app.post("/api/v1/shelf-products", response_model=ShelfProductRead, status_code=201, tags=["catalog"])
+def assign_product_to_shelf(payload: ShelfProductCreate, db: Session = Depends(get_db)):
+    if not db.get(models.Shelf, payload.shelf_id):
+        raise HTTPException(status_code=404, detail="Shelf not found")
+    if not db.get(models.Product, payload.product_id):
+        raise HTTPException(status_code=404, detail="Product not found")
+    if db.query(models.ShelfProduct).filter_by(
+        shelf_id=payload.shelf_id, product_id=payload.product_id
+    ).first():
+        raise HTTPException(status_code=409, detail="Product is already assigned to this shelf")
+    item = models.ShelfProduct(**payload.model_dump())
+    db.add(item)
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Shelf/product assignment conflicts with an existing record") from exc
+    db.refresh(item)
+    return item
+
+
+@app.get("/api/v1/shelf-products", response_model=list[ShelfProductRead], tags=["catalog"])
+def list_shelf_products(shelf_id: int | None = None, product_id: int | None = None, db: Session = Depends(get_db)):
+    query = db.query(models.ShelfProduct)
+    if shelf_id is not None:
+        query = query.filter(models.ShelfProduct.shelf_id == shelf_id)
+    if product_id is not None:
+        query = query.filter(models.ShelfProduct.product_id == product_id)
+    return query.order_by(models.ShelfProduct.shelf_id, models.ShelfProduct.position).all()
