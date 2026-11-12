@@ -28,6 +28,7 @@ from app.replenishment_workload import summarize_workload
 from app.warehouse_slotting import recommend_warehouse_slotting, recommend_physical_slot
 from app.packaging_units import calculate_replenishment_packs
 from app.pallet_rotation import evaluate_pallet_rotation, PalletRotationInputError
+from app.pallet_rotation_windows import recommend_low_traffic_window
 from app.sku_review_evaluation import build_reviewed_prediction_report
 from app.sales_import import parse_daily_sales_csv
 from app.schemas import (
@@ -1452,6 +1453,69 @@ def get_pallet_rotation_hourly_profile(
         "missing_sales_hours": [hour for hour in range(24) if hour not in sales_by_hour],
         "missing_traffic_hours": [hour for hour in range(24) if hour not in traffic_by_hour],
         "forecast_generated": False, "simulation_only": True,
+    }
+
+
+@app.get("/api/v1/warehouse/pallet-rotation/window-plan", tags=["warehouse"])
+def plan_pallet_rotation_window(
+    store_id: int,
+    product_id: int,
+    pallet_id: int,
+    current_hour: int,
+    residual_base_units: float,
+    duration_hours: int = 1,
+    days: int = 28,
+    minimum_observed_days: int = 7,
+    request: Request = None,
+    db: Session = Depends(get_db),
+):
+    """Suggest a low-traffic local-hour window from historical sales and traffic."""
+    actor = _request_user(db, request)
+    _enforce_store_scope(actor, store_id)
+    pallet = db.query(models.StorePallet).filter_by(
+        id=pallet_id, store_id=store_id, product_id=product_id
+    ).first()
+    if pallet is None:
+        raise HTTPException(status_code=404, detail="Pallet not found for this store and product")
+    if pallet.status not in {"ON_DISPLAY", "PARTIAL"} or pallet.location_type != "SALES_FLOOR":
+        raise HTTPException(status_code=422, detail="Only a pallet on the sales floor can be planned")
+    if float(pallet.base_quantity) != residual_base_units:
+        raise HTTPException(status_code=409, detail="Residual quantity differs from the current pallet record; refresh and retry")
+    try:
+        profile = get_pallet_rotation_hourly_profile(
+            store_id=store_id, product_id=product_id, days=days, request=request, db=db
+        )
+        decision = recommend_low_traffic_window(
+            profile["hours"],
+            current_hour=current_hour,
+            duration_hours=duration_hours,
+            residual_base_units=residual_base_units,
+            minimum_observed_days=minimum_observed_days,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {
+        "store_id": store_id,
+        "product_id": product_id,
+        "pallet_id": pallet_id,
+        "current_hour": current_hour,
+        "period_days": days,
+        "minimum_observed_days": minimum_observed_days,
+        "decision": {
+            "recommendation": decision.recommendation,
+            "reason_code": decision.reason_code,
+            "explanation": decision.explanation,
+            "start_hour": decision.start_hour,
+            "duration_hours": decision.duration_hours,
+            "projected_consumption_until_window": decision.projected_consumption_until_window,
+            "residual_after_consumption": decision.residual_after_consumption,
+            "expected_customers_during_window": decision.expected_customers_during_window,
+            "observed_sales_days_min": decision.observed_sales_days_min,
+            "observed_traffic_days_min": decision.observed_traffic_days_min,
+            "historical_profile_only": decision.historical_profile_only,
+            "automatic_stock_movement_allowed": False,
+        },
+        "simulation_only": True,
     }
 
 
