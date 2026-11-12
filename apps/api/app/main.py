@@ -1,4 +1,4 @@
-from datetime import timezone
+from datetime import timedelta, timezone
 
 from fastapi import Depends, FastAPI, HTTPException
 from sqlalchemy import text
@@ -11,7 +11,8 @@ from app import models
 from app.schemas import (
     ObservationCreate, ObservationRead, ShelfCreate, ShelfRead,
     StoreCreate, StoreRead, ZoneCreate, ZoneRead,
-    ProductCreate, ProductRead, ShelfProductCreate, ShelfProductRead,\n    InventorySnapshotCreate, InventorySnapshotRead,
+    ProductCreate, ProductRead, ShelfProductCreate, ShelfProductRead,
+    InventorySnapshotCreate, InventorySnapshotRead, ReplenishmentRecommendationRead,
 )
 
 app = FastAPI(title=settings.app_name, version="0.2.0", description="Operational API for SMART SHELF AI.")
@@ -202,3 +203,105 @@ def get_latest_inventory_snapshot(
     if item is None:
         raise HTTPException(status_code=404, detail="No inventory snapshot found for this store and product")
     return item
+
+
+
+@app.get(
+    "/api/v1/replenishment/recommendations",
+    response_model=list[ReplenishmentRecommendationRead],
+    tags=["replenishment"],
+)
+def list_replenishment_recommendations(
+    store_id: int,
+    product_id: int | None = None,
+    stale_after_minutes: int = 120,
+    db: Session = Depends(get_db),
+):
+    """Combine shelf observations with the latest backroom inventory snapshot.
+
+    A visual status is not a unit count, so this endpoint never invents an
+    exact replenishment quantity.
+    """
+    if stale_after_minutes < 1 or stale_after_minutes > 10080:
+        raise HTTPException(status_code=422, detail="stale_after_minutes must be between 1 and 10080")
+    if not db.get(models.Store, store_id):
+        raise HTTPException(status_code=404, detail="Store not found")
+
+    links = (
+        db.query(models.ShelfProduct)
+        .join(models.Shelf, models.ShelfProduct.shelf_id == models.Shelf.id)
+        .join(models.Zone, models.Shelf.zone_id == models.Zone.id)
+        .filter(models.Zone.store_id == store_id)
+    )
+    if product_id is not None:
+        links = links.filter(models.ShelfProduct.product_id == product_id)
+
+    now = models.utc_now()
+    recommendations = []
+    for link in links.order_by(models.ShelfProduct.shelf_id, models.ShelfProduct.product_id).all():
+        shelf = db.get(models.Shelf, link.shelf_id)
+        product = db.get(models.Product, link.product_id)
+        observation = (
+            db.query(models.Observation)
+            .filter(models.Observation.shelf_id == link.shelf_id)
+            .order_by(models.Observation.observed_at.desc(), models.Observation.id.desc())
+            .first()
+        )
+        inventory = (
+            db.query(models.InventorySnapshot)
+            .filter(
+                models.InventorySnapshot.store_id == store_id,
+                models.InventorySnapshot.product_id == link.product_id,
+            )
+            .order_by(models.InventorySnapshot.captured_at.desc(), models.InventorySnapshot.id.desc())
+            .first()
+        )
+
+        status = "NO_ACTION"
+        explanation = "A observação mais recente não indica baixa disponibilidade."
+        available = float(inventory.available_quantity) if inventory is not None else None
+
+        if observation is None:
+            status = "STALE_OBSERVATION"
+            explanation = "Ainda não existe observação registada para esta prateleira."
+        else:
+            observed_at = observation.observed_at
+            if observed_at.tzinfo is None:
+                observed_at = observed_at.replace(tzinfo=timezone.utc)
+            if now - observed_at > timedelta(minutes=stale_after_minutes):
+                status = "STALE_OBSERVATION"
+                explanation = "A observação é demasiado antiga para suportar uma tarefa de reposição."
+            elif observation.status in ("LOW_STOCK", "EMPTY"):
+                if observation.confidence is not None and observation.confidence < 0.6:
+                    status = "LOW_CONFIDENCE"
+                    explanation = "A deteção tem confiança inferior a 0,60; requer confirmação humana."
+                elif inventory is None:
+                    status = "INVENTORY_UNKNOWN"
+                    explanation = "Não existe snapshot de inventário; verificar stock antes de repor."
+                elif available <= 0:
+                    status = "BACKROOM_OUT_OF_STOCK"
+                    explanation = "A prateleira necessita de atenção, mas o stock disponível na retaguarda é zero."
+                else:
+                    status = "NEEDS_REPLENISHMENT"
+                    explanation = "A prateleira apresenta baixa disponibilidade e existe stock na retaguarda."
+            elif observation.status == "UNKNOWN":
+                status = "LOW_CONFIDENCE"
+                explanation = "O estado visual é desconhecido e deve ser confirmado."
+
+        recommendations.append({
+            "store_id": store_id,
+            "shelf_id": shelf.id,
+            "shelf_code": shelf.code,
+            "product_id": product.id,
+            "product_name": product.name,
+            "sku": product.sku,
+            "observation_status": observation.status if observation else None,
+            "observation_confidence": observation.confidence if observation else None,
+            "observed_at": observation.observed_at if observation else None,
+            "inventory_available_quantity": available,
+            "inventory_captured_at": inventory.captured_at if inventory else None,
+            "recommendation_status": status,
+            "suggested_quantity": None,
+            "explanation": explanation,
+        })
+    return recommendations
