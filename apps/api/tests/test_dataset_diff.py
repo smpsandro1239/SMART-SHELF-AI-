@@ -115,7 +115,7 @@ def test_split_move_is_reported_separately():
 
 
 def test_invalid_documents_block_comparison():
-    bad = {"images": [], "annotations": [], "categories": []}
+    bad = {\n        "images": [{"id": 1, "file_name": "bad.jpg", "width": 0, "height": 100}],\n        "annotations": [],\n        "categories": [{"id": 0, "name": "product"}],\n    }
 
     report, errors = compare_dataset_versions(rows("a" * 64), rows("a" * 64), release(bad), release(coco()))
 
