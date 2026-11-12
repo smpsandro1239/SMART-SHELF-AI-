@@ -434,3 +434,23 @@ Foi realizada uma análise estática do repositório para reconstruir os módulo
 - [ADR-006 — stack realmente implementada](docs/architecture/adr-006-as-built-stack.md)
 
 **Nota:** o frontend existente é React/TypeScript/Vite, não Angular. O worker de visão está preparado, mas não existe provider real ativo nem modelo treinado. Os cenários apresentados no relatório REA são dados sintéticos de aceitação, não resultados medidos.
+
+
+### Comparar duas versões do dataset
+
+A ferramenta `app.dataset_diff` identifica alterações entre releases com manifesto e COCO:
+
+```bash
+python -m app.dataset_diff \
+  --old-manifest /dados/releases/v1/image_manifest.csv \
+  --new-manifest /dados/releases/v2/image_manifest.csv \
+  --old-train /dados/releases/v1/instances_train.json \
+  --new-train /dados/releases/v2/instances_train.json \
+  --old-val /dados/releases/v1/instances_val.json \
+  --new-val /dados/releases/v2/instances_val.json \
+  --old-test /dados/releases/v1/instances_test.json \
+  --new-test /dados/releases/v2/instances_test.json \
+  --json-report /dados/reports/v1-v2-diff.json
+```
+
+O relatório distingue imagens novas, removidas, modificadas, renomeadas e movidas entre splits, e compara alterações de anotações. A deteção de renomeações/movimentos depende de hashes únicos. A comparação é de metadados e anotações; não valida qualidade semântica nem substitui revisão humana.
