@@ -45,8 +45,8 @@ def enrich_replenishment_with_stockout_risk(
         quantity = record.quantity
         if isinstance(product_id, bool) or not isinstance(product_id, int):
             raise ValueError("product_id in sales history must be an integer")
-        if not isinstance(sales_date, date):
-            raise ValueError("sales_date in history must be a date")
+        if not isinstance(sales_date, date) or isinstance(sales_date, datetime):
+            raise ValueError("sales_date in history must be a calendar date, not a datetime")
         if sales_date < start_date or sales_date > through_date:
             continue
         if isinstance(quantity, bool):
