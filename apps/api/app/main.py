@@ -1651,7 +1651,7 @@ def calculate_replenishment_units(
     request: Request = None,
     db: Session = Depends(get_db),
 ):
-    """Convert a shelf refill quantity into logistics packs and base units."""
+    """Calculate logistics packs needed to move base selling units; this does not define the sales unit."""
     _enforce_store_scope(_request_user(db, request), store_id)
     if db.get(models.Store, store_id) is None:
         raise HTTPException(status_code=404, detail="Store not found")
@@ -1663,16 +1663,11 @@ def calculate_replenishment_units(
     ).first()
     if level is None:
         raise HTTPException(status_code=404, detail="Active packaging level not found")
-    base_level = db.query(models.ProductPackagingLevel).filter_by(
-        product_id=product_id, package_type="UNIT", base_units_per_package=1,
-        is_replenishment_unit=True, is_active=True,
-    ).first()
     try:
         result = calculate_replenishment_packs(
             required_base_units=required_base_units,
             base_units_per_package=level.base_units_per_package,
             allow_open_package=allow_open_package,
-            base_unit_replenishment_available=base_level is not None,
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
