@@ -1623,6 +1623,210 @@ def get_product_stockout_risk(
     }
 
 
+@app.get("/api/v1/forecasting/stockout-risk/portfolio", tags=["forecasting"])
+def get_store_stockout_risk_portfolio(
+    store_id: int,
+    source: SalesSource,
+    lead_time_days: float,
+    target_cover_days: float = 7.0,
+    days: int = 28,
+    through_date: date | None = None,
+    max_inventory_age_minutes: int = 240,
+    limit: int = 100,
+    request: Request = None,
+    db: Session = Depends(get_db),
+):
+    """Return a bounded, read-only risk portfolio for products assigned to store shelves."""
+    if days < 7 or days > 365:
+        raise HTTPException(status_code=422, detail="days must be between 7 and 365")
+    if max_inventory_age_minutes < 1 or max_inventory_age_minutes > 10080:
+        raise HTTPException(status_code=422, detail="max_inventory_age_minutes must be between 1 and 10080")
+    if limit < 1 or limit > 200:
+        raise HTTPException(status_code=422, detail="limit must be between 1 and 200")
+
+    _enforce_store_scope(_request_user(db, request), store_id)
+    if not db.get(models.Store, store_id):
+        raise HTTPException(status_code=404, detail="Store not found")
+
+    product_query = (
+        db.query(models.Product)
+        .join(models.ShelfProduct, models.ShelfProduct.product_id == models.Product.id)
+        .join(models.Shelf, models.Shelf.id == models.ShelfProduct.shelf_id)
+        .join(models.Zone, models.Zone.id == models.Shelf.zone_id)
+        .filter(models.Zone.store_id == store_id, models.Product.is_active.is_(True))
+        .distinct()
+        .order_by(models.Product.name.asc(), models.Product.id.asc())
+    )
+    total_products = product_query.count()
+    products = product_query.limit(limit).all()
+
+    end_day = through_date or date.today()
+    start_day = end_day - timedelta(days=days - 1)
+    now = models.utc_now()
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=timezone.utc)
+
+    severity_order = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "UNKNOWN": 3, "LOW": 4}
+    items = []
+    for product in products:
+        records = db.query(models.DailySalesRecord).filter(
+            models.DailySalesRecord.store_id == store_id,
+            models.DailySalesRecord.product_id == product.id,
+            models.DailySalesRecord.source == source,
+            models.DailySalesRecord.sales_date >= start_day,
+            models.DailySalesRecord.sales_date <= end_day,
+        ).all()
+        by_day = {}
+        for record in records:
+            by_day[record.sales_date] = by_day.get(record.sales_date, 0.0) + float(record.quantity)
+        missing_days = [
+            (start_day + timedelta(days=i)).isoformat()
+            for i in range(days) if start_day + timedelta(days=i) not in by_day
+        ]
+
+        snapshot = db.query(models.InventorySnapshot).filter(
+            models.InventorySnapshot.store_id == store_id,
+            models.InventorySnapshot.product_id == product.id,
+        ).order_by(
+            models.InventorySnapshot.captured_at.desc(),
+            models.InventorySnapshot.id.desc(),
+        ).first()
+
+        inventory = None
+        inventory_status = "MISSING"
+        risk = {
+            "status": "RISK_UNKNOWN",
+            "risk_level": "UNKNOWN",
+            "days_of_cover": None,
+            "projected_stock_at_receipt": None,
+            "safety_stock_gap": None,
+            "requires_action": True,
+            "explanation": "Não existe snapshot de inventário para este produto.",
+        }
+        forecast_data = None
+        forecast_status = "INSUFFICIENT_HISTORY"
+        reason = "INCOMPLETE_SALES_HISTORY" if missing_days else None
+
+        if snapshot is not None:
+            captured = snapshot.captured_at
+            if captured.tzinfo is None:
+                captured = captured.replace(tzinfo=timezone.utc)
+            age = max(0.0, (now - captured).total_seconds() / 60)
+            inventory = {
+                "snapshot_id": snapshot.id,
+                "source": snapshot.source,
+                "available_quantity": float(snapshot.available_quantity),
+                "captured_at": snapshot.captured_at,
+                "age_minutes": round(age, 2),
+            }
+            if age > max_inventory_age_minutes:
+                inventory_status = "STALE"
+                reason = "STALE_INVENTORY"
+                risk["explanation"] = "O snapshot de inventário está desatualizado."
+            else:
+                inventory_status = "FRESH"
+
+        if not missing_days:
+            try:
+                forecast = forecast_demand(DemandForecastInput(
+                    daily_sales=[by_day[start_day + timedelta(days=i)] for i in range(days)],
+                    lead_time_days=lead_time_days,
+                    target_cover_days=target_cover_days,
+                    recent_window_days=days,
+                    minimum_history_days=7,
+                ))
+                forecast_status = forecast.status
+                forecast_data = {
+                    "average_daily_demand": forecast.average_daily_demand,
+                    "expected_lead_time_demand": forecast.expected_lead_time_demand,
+                    "safety_stock": forecast.safety_stock,
+                    "reorder_point": forecast.reorder_point,
+                    "target_stock": forecast.target_stock,
+                }
+                if inventory_status == "FRESH":
+                    assessed = assess_stockout_risk(StockoutRiskInput(
+                        available_quantity=float(snapshot.available_quantity),
+                        average_daily_demand=forecast.average_daily_demand,
+                        lead_time_days=lead_time_days,
+                        safety_stock=forecast.safety_stock,
+                        forecast_status=forecast.status,
+                    ))
+                    risk = {
+                        "status": assessed.status,
+                        "risk_level": assessed.risk_level,
+                        "days_of_cover": assessed.days_of_cover,
+                        "projected_stock_at_receipt": assessed.projected_stock_at_receipt,
+                        "safety_stock_gap": assessed.safety_stock_gap,
+                        "requires_action": assessed.requires_action,
+                        "explanation": assessed.explanation,
+                    }
+                    reason = None
+            except ValueError as exc:
+                raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+        open_task_count = db.query(func.count(models.ReplenishmentTask.id)).filter(
+            models.ReplenishmentTask.store_id == store_id,
+            models.ReplenishmentTask.product_id == product.id,
+            models.ReplenishmentTask.status.in_(["PENDING", "ASSIGNED", "IN_PROGRESS"]),
+        ).scalar() or 0
+
+        shelf_links = (
+            db.query(models.ShelfProduct, models.Shelf, models.Zone)
+            .join(models.Shelf, models.Shelf.id == models.ShelfProduct.shelf_id)
+            .join(models.Zone, models.Zone.id == models.Shelf.zone_id)
+            .filter(models.ShelfProduct.product_id == product.id, models.Zone.store_id == store_id)
+            .all()
+        )
+        items.append({
+            "product_id": product.id,
+            "sku": product.sku,
+            "product_name": product.name,
+            "brand": product.brand,
+            "shelf_count": len(shelf_links),
+            "shelves": [
+                {
+                    "shelf_id": shelf.id,
+                    "shelf_code": shelf.code,
+                    "zone_id": zone.id,
+                    "zone_name": zone.name,
+                    "target_quantity": link.target_quantity,
+                    "min_display_quantity": link.min_display_quantity,
+                }
+                for link, shelf, zone in shelf_links
+            ],
+            "inventory_status": inventory_status,
+            "inventory": inventory,
+            "forecast_status": forecast_status,
+            "forecast": forecast_data,
+            "missing_sales_days": missing_days,
+            "reason": reason,
+            "risk": risk,
+            "open_task_count": int(open_task_count),
+        })
+
+    items.sort(key=lambda item: (
+        severity_order.get(item["risk"]["risk_level"], 3),
+        -(item["risk"]["safety_stock_gap"] or 0),
+        item["product_name"].casefold(),
+    ))
+    counts = {level: 0 for level in severity_order}
+    for item in items:
+        counts[item["risk"]["risk_level"]] += 1
+
+    return {
+        "store_id": store_id,
+        "source": source,
+        "period_start": start_day,
+        "period_end": end_day,
+        "total_products": total_products,
+        "returned_products": len(items),
+        "limit": limit,
+        "risk_counts": counts,
+        "items": items,
+        "policy": "Read-only portfolio. No replenishment task, purchase order or inventory movement is created.",
+    }
+
+
 @app.post("/api/v1/inventory/snapshots", response_model=InventorySnapshotRead, status_code=201, tags=["inventory"])
 def create_inventory_snapshot(payload: InventorySnapshotCreate, request: Request, db: Session = Depends(get_db)):
     _enforce_store_scope(_request_user(db, request), payload.store_id)
