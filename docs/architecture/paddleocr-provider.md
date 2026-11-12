@@ -47,3 +47,6 @@ ambientes.
 Ligar este provider por configuração opcional ao worker, preservar as regiões
 OCR por deteção de produto e executar um benchmark com fotografias reais
 autorizadas, incluindo texto pequeno, reflexos, curvatura e variantes.
+
+
+A associação por produto está documentada em [OCR e associação a deteções](ocr-detection-association.md). O adaptador usa `rec_polys`, alinhado com `rec_texts` e `rec_scores`; não deve usar `dt_polys` para esse alinhamento, pois pode conter caixas não reconhecidas.
