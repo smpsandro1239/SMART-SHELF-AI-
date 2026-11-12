@@ -1654,6 +1654,53 @@ def get_pallet_rotation_hourly_profile(
     }
 
 
+@app.get("/api/v1/warehouse/pallet-rotation/weekday-hourly-profile", tags=["warehouse"])
+def get_pallet_rotation_weekday_hourly_profile(
+    store_id: int,
+    product_id: int,
+    days: int = 56,
+    request: Request = None,
+    db: Session = Depends(get_db),
+):
+    """Return separate weekday/hour averages; missing observations remain null."""
+    if not 14 <= days <= 180:
+        raise HTTPException(status_code=422, detail="days must be between 14 and 180")
+    actor = _request_user(db, request)
+    _enforce_store_scope(actor, store_id)
+    if db.get(models.Store, store_id) is None:
+        raise HTTPException(status_code=404, detail="Store not found")
+    product = db.get(models.Product, product_id)
+    if product is None or not product.is_active:
+        raise HTTPException(status_code=404, detail="Active product not found")
+    end_date = date.today()
+    start_date = end_date - timedelta(days=days - 1)
+    sales_rows = db.query(models.HourlySalesRecord).filter(
+        models.HourlySalesRecord.store_id == store_id,
+        models.HourlySalesRecord.product_id == product_id,
+        models.HourlySalesRecord.business_date >= start_date,
+        models.HourlySalesRecord.business_date <= end_date,
+    ).all()
+    traffic_rows = db.query(models.HourlyStoreTrafficRecord).filter(
+        models.HourlyStoreTrafficRecord.store_id == store_id,
+        models.HourlyStoreTrafficRecord.business_date >= start_date,
+        models.HourlyStoreTrafficRecord.business_date <= end_date,
+    ).all()
+    from app.hourly_patterns import build_weekday_hour_profile
+    profile = build_weekday_hour_profile(sales_rows, traffic_rows)
+    return {
+        "store_id": store_id,
+        "product_id": product_id,
+        "period_days": days,
+        "period_start": start_date,
+        "period_end": end_date,
+        "weekday_basis": "ISO_WEEKDAY_MONDAY_ZERO",
+        "hour_basis": "STORE_LOCAL_HOUR",
+        "observed_profile": profile,
+        "forecast_generated": False,
+        "simulation_only": True,
+    }
+
+
 @app.get("/api/v1/warehouse/pallet-rotation/window-plan", tags=["warehouse"])
 def plan_pallet_rotation_window(
     store_id: int,
@@ -1710,7 +1757,7 @@ def plan_pallet_rotation_window(
             "explanation": decision.explanation,
             "start_hour": decision.start_hour,
             "duration_hours": decision.duration_hours,
-            "projected_consumption_through_window": decision.projected_consumption_until_window,
+            "projected_consumption_through_window": decision.projected_consumption_through_window,
             "residual_after_consumption": decision.residual_after_consumption,
             "expected_customers_during_window": decision.expected_customers_during_window,
             "observed_sales_days_min": decision.observed_sales_days_min,
