@@ -54,3 +54,112 @@ def test_absolute_minimum_prevents_high_label_for_slow_storewide_sales():
 def test_rejects_invalid_minimum_average_daily_sales(threshold):
     with pytest.raises(ValueError):
         recommend_warehouse_slotting([], minimum_average_daily_sales=threshold)
+
+
+from app.warehouse_slotting import recommend_physical_slot
+
+
+def profile(**overrides):
+    value = {
+        "unit_volume_cm3": 100,
+        "unit_weight_kg": 0.5,
+        "temperature_requirement": "AMBIENT",
+        "is_fragile": False,
+        "requires_segregation": False,
+    }
+    value.update(overrides)
+    return value
+
+
+def location(code, distance, **overrides):
+    value = {
+        "location_id": 1,
+        "code": code,
+        "distance_to_picking_m": distance,
+        "max_volume_cm3": 10000,
+        "max_weight_kg": 100,
+        "occupied_volume_cm3": 0,
+        "occupied_weight_kg": 0,
+        "temperature_zone": "AMBIENT",
+        "is_active": True,
+        "other_product_count": 0,
+    }
+    value.update(overrides)
+    return value
+
+
+def test_physical_slotting_prefers_nearest_feasible_location():
+    result = recommend_physical_slot(
+        product_id=7,
+        required_quantity=10,
+        product_profile=profile(),
+        locations=[location("B-02", 18), location("A-01", 4)],
+    )
+
+    assert result.status == "CANDIDATES_FOUND"
+    assert result.candidates[0]["location_code"] == "A-01"
+    assert result.candidates[0]["required_volume_cm3"] == 1000
+    assert result.candidates[0]["automatic_movement_allowed"] is False
+
+
+def test_physical_slotting_rejects_temperature_mismatch():
+    result = recommend_physical_slot(
+        product_id=7,
+        required_quantity=2,
+        product_profile=profile(temperature_requirement="FROZEN"),
+        locations=[location("AMBIENT-01", 2)],
+    )
+
+    assert result.status == "NO_COMPATIBLE_LOCATION"
+    assert result.rejected_locations[0]["reason"] == "TEMPERATURE_INCOMPATIBLE"
+
+
+def test_physical_slotting_rejects_insufficient_volume_and_weight():
+    result = recommend_physical_slot(
+        product_id=7,
+        required_quantity=10,
+        product_profile=profile(),
+        locations=[
+            location("SMALL-V", 1, max_volume_cm3=500),
+            location("SMALL-W", 2, max_weight_kg=2),
+        ],
+    )
+
+    assert result.status == "NO_COMPATIBLE_LOCATION"
+    assert {item["reason"] for item in result.rejected_locations} == {
+        "INSUFFICIENT_VOLUME_CAPACITY", "INSUFFICIENT_WEIGHT_CAPACITY"
+    }
+
+
+def test_segregation_requirement_rejects_mixed_sku_location():
+    result = recommend_physical_slot(
+        product_id=7,
+        required_quantity=1,
+        product_profile=profile(requires_segregation=True),
+        locations=[location("MIXED", 1, other_product_count=2)],
+    )
+
+    assert result.rejected_locations[0]["reason"] == "SEGREGATION_REQUIRED"
+
+
+def test_missing_profile_does_not_guess_a_location():
+    result = recommend_physical_slot(
+        product_id=7,
+        required_quantity=1,
+        product_profile=None,
+        locations=[location("A-01", 1)],
+    )
+
+    assert result.status == "PRODUCT_PROFILE_REQUIRED"
+    assert result.candidates == ()
+
+
+@pytest.mark.parametrize("quantity", [0, -1, float("nan"), True])
+def test_physical_slotting_rejects_invalid_required_quantity(quantity):
+    with pytest.raises(ValueError):
+        recommend_physical_slot(
+            product_id=7,
+            required_quantity=quantity,
+            product_profile=profile(),
+            locations=[],
+        )
