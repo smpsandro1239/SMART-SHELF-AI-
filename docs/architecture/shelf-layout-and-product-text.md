@@ -40,3 +40,8 @@ A etapa seguinte é acrescentar um provider OCR real, preservar as caixas
 normalizadas dos textos reconhecidos e combinar evidências visuais/textuais
 numa camada de decisão calibrada com imagens reais. O worker atual não chama
 estes módulos automaticamente.
+
+
+## Fusão de evidências
+
+A combinação de resultados visuais e OCR está especificada em [Fusão de evidências para identificação de SKU](product-evidence-fusion.md). A camada devolve sugestões conservadoras e não altera os registos persistidos.
