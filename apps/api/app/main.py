@@ -1482,6 +1482,11 @@ def plan_pallet_rotation_window(
         raise HTTPException(status_code=422, detail="Only a pallet on the sales floor can be planned")
     if float(pallet.base_quantity) != residual_base_units:
         raise HTTPException(status_code=409, detail="Residual quantity differs from the current pallet record; refresh and retry")
+    active_policy = db.query(models.PalletRotationPolicy).filter_by(
+        store_id=store_id, product_id=product_id, is_enabled=True
+    ).first()
+    if active_policy is None:
+        raise HTTPException(status_code=422, detail="Product has no active pallet rotation policy")
     try:
         profile = get_pallet_rotation_hourly_profile(
             store_id=store_id, product_id=product_id, days=days, request=request, db=db
@@ -1508,7 +1513,7 @@ def plan_pallet_rotation_window(
             "explanation": decision.explanation,
             "start_hour": decision.start_hour,
             "duration_hours": decision.duration_hours,
-            "projected_consumption_until_window": decision.projected_consumption_until_window,
+            "projected_consumption_through_window": decision.projected_consumption_until_window,
             "residual_after_consumption": decision.residual_after_consumption,
             "expected_customers_during_window": decision.expected_customers_during_window,
             "observed_sales_days_min": decision.observed_sales_days_min,
