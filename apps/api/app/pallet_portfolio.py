@@ -64,7 +64,6 @@ def build_pallet_portfolio_plan(
                 raise PalletPortfolioInputError("pallet_id must be a positive integer")
             if pallet_id in seen:
                 raise PalletPortfolioInputError("pallet_id must be unique")
-            seen.add(pallet_id)
 
             store_id = row.get("store_id")
             product_id = row.get("product_id")
@@ -91,6 +90,9 @@ def build_pallet_portfolio_plan(
             if not isinstance(replacement, bool) or not isinstance(backroom, bool):
                 raise PalletPortfolioInputError("replacement and backroom flags must be boolean")
 
+            # Reserve the identifier only after the candidate has passed validation.
+            # An invalid row must not suppress a later valid row with the same ID.
+            seen.add(pallet_id)
             ratio = residual / capacity
             total_swap = swap + transport + rebuild
             saved = conventional - total_swap
