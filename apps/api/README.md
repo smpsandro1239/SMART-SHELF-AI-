@@ -962,3 +962,20 @@ devolve `REPLENISH_CURRENT`.
 A hora atual é fornecida pelo chamador na hora local da loja. O cálculo usa
 médias históricas, não uma previsão probabilística nem dados em tempo real.
 Não agenda, reserva nem executa movimentos.
+
+
+### Importação horária em lote
+
+Dois endpoints JSON em lote permitem importar até 500 observações por pedido:
+
+- `POST /api/v1/sales/hourly/batch`
+- `POST /api/v1/sales/traffic/hourly/batch`
+
+Cada lote pertence a uma única loja, rejeita chaves externas repetidas e é
+transacional: um conflito com registos já existentes rejeita o lote inteiro.
+A importação de vendas valida também todos os produtos como ativos. Requer
+ADMIN/SUPERVISOR e respeita o âmbito de loja do utilizador.
+
+O planeador exige agora cobertura mínima de vendas e tráfego em todas as 24
+horas antes de classificar uma janela como a de menor afluência. Uma lacuna
+horária não permite recomendar uma janela como se fosse a melhor.
