@@ -58,3 +58,30 @@ class ObservationRead(BaseModel):
     observed_at: datetime
     model_version: str | None
     model_config = ConfigDict(from_attributes=True)
+
+
+class ProductCreate(BaseModel):
+    sku: str = Field(min_length=1, max_length=80)
+    name: str = Field(min_length=1, max_length=200)
+    brand: str | None = Field(default=None, max_length=120)
+    unit: str = Field(default="un", min_length=1, max_length=30)
+    is_active: bool = True
+
+
+class ProductRead(ProductCreate):
+    id: int
+    created_at: datetime
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ShelfProductCreate(BaseModel):
+    shelf_id: int
+    product_id: int
+    target_quantity: int = Field(default=1, gt=0)
+    min_display_quantity: int = Field(default=0, ge=0)
+    position: str | None = Field(default=None, max_length=80)
+
+
+class ShelfProductRead(ShelfProductCreate):
+    id: int
+    model_config = ConfigDict(from_attributes=True)
