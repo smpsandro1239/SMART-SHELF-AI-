@@ -1032,3 +1032,20 @@ Os endpoints `hourly-profile` e `window-plan` aceitam `source`
 dados importados como `IMPORT`, indicar explicitamente
 `source=IMPORT`; não se somam automaticamente fontes potencialmente
 sobrepostas.
+
+
+## Previsão horária de procura — baseline sazonal
+
+Consultar a previsão para um produto e loja:
+
+    curl "http://localhost:8000/api/v1/forecasting/hourly-demand?store_id=1&product_id=1&horizon_days=7&history_days=180&minimum_observed_days=4&source=POS"
+
+O baseline usa as últimas observações disponíveis para o mesmo dia da semana
+e hora, com ponderação decrescente para observações mais antigas. Por defeito,
+exige quatro dias observados por combinação dia-da-semana/hora. Valores sem
+amostra suficiente são devolvidos como `null`, nunca como zero.
+
+A resposta identifica a versão do baseline, a confiança baseada no número de
+amostras e métricas de backtesting rolling-origin (MAE e WAPE). É um modelo
+estatístico sazonal, não um modelo de machine learning treinado. É read-only
+e não cria tarefas nem movimentos de stock.
