@@ -37,6 +37,22 @@ def test_dataset_audit_accepts_disjoint_splits_and_reports_counts():
     assert report["cross_split"]["unique_capture_groups"] == 3
 
 
+def test_dataset_audit_allows_multiple_images_from_same_group_in_one_split():
+    train = coco_document("train/a.jpg", "session-a")
+    second = coco_document("train/b.jpg", "session-a")
+    second["images"][0]["id"] = 2
+    second["annotations"][0]["image_id"] = 2
+    second["annotations"][0]["id"] = 2
+    train["images"].extend(second["images"])
+    train["annotations"].extend(second["annotations"])
+    errors, _ = audit_splits({
+        "train": train,
+        "val": coco_document("val/b.jpg", "session-b"),
+        "test": coco_document("test/c.jpg", "session-c"),
+    })
+    assert errors == []
+
+
 def test_dataset_audit_detects_duplicate_file_names():
     errors, _ = audit_splits({
         "train": coco_document("same.jpg", "session-a"),
@@ -46,7 +62,7 @@ def test_dataset_audit_detects_duplicate_file_names():
     assert any("file_name appears in both" in error for error in errors)
 
 
-def test_dataset_audit_detects_capture_group_leakage():
+def test_dataset_audit_detects_capture_group_leakage_between_splits():
     errors, _ = audit_splits({
         "train": coco_document("train/a.jpg", "same-session"),
         "val": coco_document("val/b.jpg", "same-session"),
@@ -71,3 +87,14 @@ def test_dataset_audit_requires_identical_class_mapping():
         "test": coco_document("test/c.jpg", "session-c", category_name="product"),
     })
     assert any("category IDs/names differ" in error for error in errors)
+
+
+def test_dataset_audit_reports_invalid_annotations():
+    broken = coco_document("train/a.jpg", "session-a")
+    broken["annotations"][0]["bbox"] = [1, 2, 0, 4]
+    errors, _ = audit_splits({
+        "train": broken,
+        "val": coco_document("val/b.jpg", "session-b"),
+        "test": coco_document("test/c.jpg", "session-c"),
+    })
+    assert any("train: annotation 1 bbox" in error for error in errors)
