@@ -84,3 +84,44 @@ def test_plan_is_deterministic_and_read_only():
     assert [item["pallet_id"] for item in result.recommendations] == [2, 3]
     assert source[0]["pallet_id"] == 3
     assert result.automatic_stock_movement_allowed is False
+
+
+def test_exactly_half_a_pallet_is_eligible_for_portfolio_swap():
+    result = build_pallet_portfolio_plan([
+        candidate(residual_base_units=360, forecast_consumption_until_low_traffic=120)
+    ])
+    item = result.recommendations[0]
+    assert item["residual_ratio"] == 0.5
+    assert item["action"] == "SWAP_PALLET"
+
+
+def test_more_than_half_a_pallet_remaining_is_not_swapped():
+    result = build_pallet_portfolio_plan([
+        candidate(residual_base_units=361, forecast_consumption_until_low_traffic=120)
+    ])
+    item = result.recommendations[0]
+    assert item["action"] == "REPLENISH_CURRENT"
+    assert item["reason_code"] == "RESIDUAL_ABOVE_THRESHOLD"
+
+
+@pytest.mark.parametrize("override", [
+    {"threshold_ratio": 1.01},
+    {"threshold_ratio": -0.01},
+    {"residual_base_units": True},
+    {"pallet_capacity_base_units": float("inf")},
+])
+def test_portfolio_rejects_invalid_threshold_and_quantity_values(override):
+    result = build_pallet_portfolio_plan([candidate(**override)])
+    assert result.considered == 0
+    assert result.excluded == 1
+
+
+def test_partial_pallet_is_never_treated_as_ready_replacement_by_planner():
+    # Readiness is an explicit upstream boolean: a PARTIAL pallet must be
+    # mapped to replacement_pallet_available=False by the API candidate builder.
+    result = build_pallet_portfolio_plan([
+        candidate(replacement_pallet_available=False)
+    ])
+    item = result.recommendations[0]
+    assert item["action"] == "PREPARE_REPLACEMENT"
+    assert item["automatic_stock_movement_allowed"] is False
