@@ -12,7 +12,7 @@ from app.schemas import (
     ObservationCreate, ObservationRead, ShelfCreate, ShelfRead,
     StoreCreate, StoreRead, ZoneCreate, ZoneRead,
     ProductCreate, ProductRead, ShelfProductCreate, ShelfProductRead,
-    InventorySnapshotCreate, InventorySnapshotRead, ReplenishmentRecommendationRead,
+    InventorySnapshotCreate, InventorySnapshotRead, ReplenishmentRecommendationRead,\n    ReplenishmentTaskCreate, ReplenishmentTaskStatusUpdate, ReplenishmentTaskRead,
 )
 
 app = FastAPI(title=settings.app_name, version="0.2.0", description="Operational API for SMART SHELF AI.")
@@ -305,3 +305,95 @@ def list_replenishment_recommendations(
             "explanation": explanation,
         })
     return recommendations
+
+
+
+@app.post("/api/v1/tasks", response_model=ReplenishmentTaskRead, status_code=201, tags=["tasks"])
+def create_replenishment_task(payload: ReplenishmentTaskCreate, db: Session = Depends(get_db)):
+    if not db.get(models.Store, payload.store_id):
+        raise HTTPException(status_code=404, detail="Store not found")
+    shelf = (
+        db.query(models.Shelf)
+        .join(models.Zone, models.Shelf.zone_id == models.Zone.id)
+        .filter(models.Shelf.id == payload.shelf_id, models.Zone.store_id == payload.store_id)
+        .first()
+    )
+    if shelf is None:
+        raise HTTPException(status_code=404, detail="Shelf not found in this store")
+    if not db.get(models.Product, payload.product_id):
+        raise HTTPException(status_code=404, detail="Product not found")
+    assignment = db.query(models.ShelfProduct).filter_by(
+        shelf_id=payload.shelf_id, product_id=payload.product_id
+    ).first()
+    if assignment is None:
+        raise HTTPException(status_code=409, detail="Product is not assigned to this shelf")
+    data = payload.model_dump()
+    data["status"] = "ASSIGNED" if data["assigned_to"] else "PENDING"
+    item = models.ReplenishmentTask(**data)
+    db.add(item)
+    db.commit()
+    db.refresh(item)
+    return item
+
+
+@app.get("/api/v1/tasks", response_model=list[ReplenishmentTaskRead], tags=["tasks"])
+def list_replenishment_tasks(
+    store_id: int | None = None,
+    status: str | None = None,
+    assigned_to: str | None = None,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+):
+    limit = max(1, min(limit, 500))
+    query = db.query(models.ReplenishmentTask)
+    if store_id is not None:
+        query = query.filter(models.ReplenishmentTask.store_id == store_id)
+    if status is not None:
+        if status not in {"PENDING", "ASSIGNED", "IN_PROGRESS", "COMPLETED", "CANCELLED"}:
+            raise HTTPException(status_code=422, detail="Invalid task status")
+        query = query.filter(models.ReplenishmentTask.status == status)
+    if assigned_to is not None:
+        query = query.filter(models.ReplenishmentTask.assigned_to == assigned_to)
+    return query.order_by(models.ReplenishmentTask.created_at.desc(), models.ReplenishmentTask.id.desc()).limit(limit).all()
+
+
+@app.patch("/api/v1/tasks/{task_id}/status", response_model=ReplenishmentTaskRead, tags=["tasks"])
+def update_replenishment_task_status(
+    task_id: int,
+    payload: ReplenishmentTaskStatusUpdate,
+    db: Session = Depends(get_db),
+):
+    task = db.get(models.ReplenishmentTask, task_id)
+    if task is None:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    allowed = {
+        "PENDING": {"ASSIGNED", "CANCELLED"},
+        "ASSIGNED": {"IN_PROGRESS", "CANCELLED"},
+        "IN_PROGRESS": {"COMPLETED", "CANCELLED"},
+        "COMPLETED": set(),
+        "CANCELLED": set(),
+    }
+    if payload.status not in allowed[task.status]:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Transition from {task.status} to {payload.status} is not allowed",
+        )
+    if payload.status == "ASSIGNED":
+        assignee = payload.assigned_to or task.assigned_to
+        if not assignee:
+            raise HTTPException(status_code=422, detail="assigned_to is required to assign a task")
+        task.assigned_to = assignee
+    elif payload.assigned_to is not None:
+        raise HTTPException(status_code=422, detail="assigned_to can only be set when assigning a task")
+
+    now = models.utc_now()
+    task.status = payload.status
+    task.updated_at = now
+    if payload.status == "IN_PROGRESS":
+        task.started_at = now
+    elif payload.status == "COMPLETED":
+        task.completed_at = now
+    db.commit()
+    db.refresh(task)
+    return task
