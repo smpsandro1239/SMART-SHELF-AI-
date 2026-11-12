@@ -160,6 +160,8 @@ def main() -> int:
             return 2
 
     errors, report = audit_splits(documents)
+    report["errors"] = errors
+    report["status"] = "failed" if errors else "passed"
     print(json.dumps(report, ensure_ascii=False, indent=2))
     if args.json_report:
         try:
