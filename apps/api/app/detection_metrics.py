@@ -68,7 +68,7 @@ def _evaluate_class(
 ) -> dict[str, Any]:
     total_gt = sum(len(items) for items in ground_truth.values())
     ordered = sorted(
-        (item for item in predictions if item["score"] >= confidence_threshold),
+        predictions,
         key=lambda item: (-item["score"], item["image_id"], item["_index"]),
     )
     matched: dict[int, set[int]] = {}
@@ -90,19 +90,23 @@ def _evaluate_class(
         else:
             true_positives.append(0)
             false_positives.append(1)
-    tp, fp = sum(true_positives), sum(false_positives)
-    fn = total_gt - tp
+
+    # AP uses the full ranked prediction list; confidence threshold must not
+    # change mAP. Precision/recall below use only the selected operating point.
+    selected_count = sum(item["score"] >= confidence_threshold for item in ordered)
+    selected_tp = sum(true_positives[:selected_count])
+    selected_fp = sum(false_positives[:selected_count])
+    selected_fn = total_gt - selected_tp
     return {
         "ground_truth": total_gt,
-        "predictions_at_confidence": len(ordered),
-        "true_positives": tp,
-        "false_positives": fp,
-        "false_negatives": fn,
-        "precision": tp / (tp + fp) if tp + fp else 0.0,
-        "recall": tp / total_gt if total_gt else 0.0,
+        "predictions_at_confidence": selected_count,
+        "true_positives": selected_tp,
+        "false_positives": selected_fp,
+        "false_negatives": selected_fn,
+        "precision": selected_tp / (selected_tp + selected_fp) if selected_tp + selected_fp else 0.0,
+        "recall": selected_tp / total_gt if total_gt else 0.0,
         "ap_101": _average_precision(true_positives, false_positives, total_gt),
     }
-
 
 def evaluate_detections(
     ground_truth: Any,
@@ -123,6 +127,8 @@ def evaluate_detections(
         raise ValueError("IoU thresholds must be finite numbers in (0, 1]")
     if len(set(iou_thresholds)) != len(iou_thresholds):
         raise ValueError("IoU thresholds must be unique")
+    if 0.5 not in iou_thresholds:
+        raise ValueError("iou_thresholds must include 0.50 for precision/recall reporting")
     if not isinstance(predictions, list):
         raise ValueError("predictions must be a COCO results array")
 
@@ -199,9 +205,11 @@ def evaluate_detections(
         raise ValueError("Ground truth contains no non-crowd instances in any category")
     map50 = sum(item["ap_by_iou"].get("0.5", next(iter(item["ap_by_iou"].values()))) for item in valid_classes) / len(valid_classes)
     map5095 = sum(item["map_50_95"] for item in valid_classes) / len(valid_classes)
-    total_tp = sum(item["counts_at_iou_50"]["true_positives"] for item in valid_classes)
-    total_fp = sum(item["counts_at_iou_50"]["false_positives"] for item in valid_classes)
-    total_fn = sum(item["counts_at_iou_50"]["false_negatives"] for item in valid_classes)
+    # Include false positives from classes absent in ground truth in micro metrics.
+    all_class_reports = list(class_reports.values())
+    total_tp = sum(item["counts_at_iou_50"]["true_positives"] for item in all_class_reports)
+    total_fp = sum(item["counts_at_iou_50"]["false_positives"] for item in all_class_reports)
+    total_fn = sum(item["counts_at_iou_50"]["false_negatives"] for item in all_class_reports)
     return {
         "evaluator": "smart-shelf-ai-ap101-v1",
         "confidence_threshold": confidence_threshold,
