@@ -612,3 +612,62 @@ def create_user(payload: UserCreate, db: Session = Depends(get_db)):
 @app.get("/api/v1/auth/users", response_model=list[UserRead], tags=["authentication"])
 def list_users(limit: int = 100, db: Session = Depends(get_db)):
     return db.query(models.User).order_by(models.User.id).limit(max(1, min(limit, 500))).all()
+
+
+@app.get("/api/v1/dashboard/summary", tags=["dashboard"])
+def dashboard_summary(
+    request: Request,
+    store_id: int | None = None,
+    db: Session = Depends(get_db),
+):
+    """Return operational KPIs scoped to the authenticated user's store."""
+    user = db.get(models.User, request.state.user_id)
+    if user is None or not user.is_active:
+        raise HTTPException(status_code=401, detail="Authenticated user not found")
+    if user.role == "ADMIN":
+        if store_id is None:
+            task_query = db.query(models.ReplenishmentTask)
+            observation_query = (
+                db.query(models.Observation)
+                .join(models.Shelf, models.Observation.shelf_id == models.Shelf.id)
+                .join(models.Zone, models.Shelf.zone_id == models.Zone.id)
+            )
+        else:
+            task_query = db.query(models.ReplenishmentTask).filter(models.ReplenishmentTask.store_id == store_id)
+            observation_query = (
+                db.query(models.Observation)
+                .join(models.Shelf, models.Observation.shelf_id == models.Shelf.id)
+                .join(models.Zone, models.Shelf.zone_id == models.Zone.id)
+                .filter(models.Zone.store_id == store_id)
+            )
+    else:
+        if user.store_id is None:
+            raise HTTPException(status_code=403, detail="User is not associated with a store")
+        if store_id is not None and store_id != user.store_id:
+            raise HTTPException(status_code=403, detail="Access to this store is not allowed")
+        task_query = db.query(models.ReplenishmentTask).filter(models.ReplenishmentTask.store_id == user.store_id)
+        observation_query = (
+            db.query(models.Observation)
+            .join(models.Shelf, models.Observation.shelf_id == models.Shelf.id)
+            .join(models.Zone, models.Shelf.zone_id == models.Zone.id)
+            .filter(models.Zone.store_id == user.store_id)
+        )
+    if user.role == "EMPLOYEE":
+        task_query = task_query.filter(models.ReplenishmentTask.assigned_user_id == user.id)
+    task_counts = {
+        status.lower(): task_query.filter(models.ReplenishmentTask.status == status).count()
+        for status in ("PENDING", "ASSIGNED", "IN_PROGRESS", "COMPLETED", "CANCELLED")
+    }
+    observation_counts = {
+        status.lower(): observation_query.filter(models.Observation.status == status).count()
+        for status in ("LOW_STOCK", "EMPTY", "UNKNOWN", "OCCLUDED")
+    }
+    return {
+        "store_id": user.store_id if user.role != "ADMIN" else store_id,
+        "role": user.role,
+        "tasks": task_counts,
+        "observations": observation_counts,
+        "active_tasks": task_counts["pending"] + task_counts["assigned"] + task_counts["in_progress"],
+        "shelves_requiring_attention": observation_counts["low_stock"] + observation_counts["empty"],
+        "note": "Counts are based on recorded observations; they are not a live computer-vision feed.",
+    }
