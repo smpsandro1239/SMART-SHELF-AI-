@@ -92,21 +92,34 @@ def build_replenishment_plan(
     ):
         # No shelf coordinates or aisle graph exist yet. Use a stable, transparent
         # shelf-code/position ordering and label it as a suggested sequence only.
-        ordered_items = sorted(
+        route_sorted_items = sorted(
             zone_items,
             key=lambda row: (
                 str(row.get("shelf_code") or "").casefold(),
                 str(row.get("position") or "").casefold(),
-                row["priority_rank"],
                 int(row.get("shelf_id") or 0),
                 int(row.get("product_id") or 0),
             ),
         )
         route_order_by_shelf: dict[int, int] = {}
-        for item in ordered_items:
+        for item in route_sorted_items:
             shelf_id = int(item.get("shelf_id") or 0)
             if shelf_id not in route_order_by_shelf:
                 route_order_by_shelf[shelf_id] = len(route_order_by_shelf) + 1
+
+        # Present work by operational priority; route_order remains an independent shelf hint.
+        ordered_items = sorted(
+            zone_items,
+            key=lambda row: (
+                row["priority_rank"],
+                str(row.get("shelf_code") or "").casefold(),
+                str(row.get("position") or "").casefold(),
+                int(row.get("shelf_id") or 0),
+                int(row.get("product_id") or 0),
+            ),
+        )
+        for item in ordered_items:
+            shelf_id = int(item.get("shelf_id") or 0)
             item["route_order"] = route_order_by_shelf[shelf_id]
             item["route_basis"] = "ZONE_THEN_SHELF_CODE_AND_POSITION"
             item["physical_route_optimized"] = False
