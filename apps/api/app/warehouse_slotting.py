@@ -6,8 +6,18 @@ locations, travel distances, dimensions and handling constraints are not yet mod
 from __future__ import annotations
 
 from dataclasses import dataclass
+from decimal import Decimal
 from typing import Any, Iterable, Mapping
 import math
+
+
+def _finite_number(value: Any) -> bool:
+    """Accept Python and SQLAlchemy numeric values, but never booleans."""
+    return (
+        not isinstance(value, bool)
+        and isinstance(value, (int, float, Decimal))
+        and math.isfinite(float(value))
+    )
 
 
 @dataclass(frozen=True)
@@ -28,10 +38,7 @@ def recommend_warehouse_slotting(
     the 75th percentile of complete-history products. It is a review signal,
     not an automatic relocation decision.
     """
-    if (isinstance(minimum_average_daily_sales, bool)
-            or not isinstance(minimum_average_daily_sales, (int, float))
-            or not math.isfinite(float(minimum_average_daily_sales))
-            or minimum_average_daily_sales < 0):
+    if not _finite_number(minimum_average_daily_sales) or float(minimum_average_daily_sales) < 0:
         raise ValueError("minimum_average_daily_sales must be finite and non-negative")
 
     complete: list[dict[str, Any]] = []
@@ -46,8 +53,7 @@ def recommend_warehouse_slotting(
             excluded += 1
             continue
         quantity = row.get("total_quantity")
-        if (isinstance(quantity, bool) or not isinstance(quantity, (int, float))
-                or not math.isfinite(float(quantity)) or quantity < 0):
+        if not _finite_number(quantity) or float(quantity) < 0:
             excluded += 1
             continue
         average = float(quantity) / expected
@@ -112,17 +118,13 @@ def recommend_physical_slot(
     """
     if isinstance(product_id, bool) or not isinstance(product_id, int) or product_id <= 0:
         raise ValueError("product_id must be a positive integer")
-    if (isinstance(required_quantity, bool)
-            or not isinstance(required_quantity, (int, float))
-            or not math.isfinite(float(required_quantity))
-            or required_quantity <= 0):
+    if not _finite_number(required_quantity) or float(required_quantity) <= 0:
         raise ValueError("required_quantity must be finite and positive")
     if not product_profile:
         return PhysicalSlottingResult("PRODUCT_PROFILE_REQUIRED", product_id, (), ())
 
     def positive_number(value: Any) -> bool:
-        return (not isinstance(value, bool) and isinstance(value, (int, float))
-                and math.isfinite(float(value)) and value > 0)
+        return _finite_number(value) and float(value) > 0
 
     unit_volume = product_profile.get("unit_volume_cm3")
     unit_weight = product_profile.get("unit_weight_kg")
@@ -154,15 +156,12 @@ def recommend_physical_slot(
             reason = "TEMPERATURE_INCOMPATIBLE"
         elif not positive_number(max_volume) or not positive_number(max_weight):
             reason = "INVALID_LOCATION_CAPACITY"
-        elif (isinstance(distance, bool) or not isinstance(distance, (int, float))
-              or not math.isfinite(float(distance)) or distance < 0):
+        elif not _finite_number(distance) or float(distance) < 0:
             reason = "INVALID_PICKING_DISTANCE"
         elif occupied_volume is None or occupied_weight is None:
             reason = "UNKNOWN_CURRENT_OCCUPANCY"
-        elif (isinstance(occupied_volume, bool) or not isinstance(occupied_volume, (int, float))
-              or not math.isfinite(float(occupied_volume)) or occupied_volume < 0
-              or isinstance(occupied_weight, bool) or not isinstance(occupied_weight, (int, float))
-              or not math.isfinite(float(occupied_weight)) or occupied_weight < 0):
+        elif (not _finite_number(occupied_volume) or float(occupied_volume) < 0
+              or not _finite_number(occupied_weight) or float(occupied_weight) < 0):
             reason = "INVALID_CURRENT_OCCUPANCY"
         elif required_volume > float(max_volume) - float(occupied_volume):
             reason = "INSUFFICIENT_VOLUME_CAPACITY"
