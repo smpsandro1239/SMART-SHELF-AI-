@@ -150,8 +150,7 @@ h1 {{ margin: 0 0 .4rem; font-size: 1.5rem; }}
 </head>
 <body>
 <h1>{title}</h1>
-<p class="summary">{len(selected)} imagem(ns) · {total_boxes} caixa(s) apresentada(s). "
-"Relatório local; as imagens originais não foram copiadas nem alteradas.</p>
+<p class="summary">{len(selected)} imagem(ns) · {total_boxes} caixa(s) apresentada(s). Relatório local; as imagens originais não foram copiadas nem alteradas.</p>
 <main class="gallery">{''.join(cards)}</main>
 </body>
 </html>
