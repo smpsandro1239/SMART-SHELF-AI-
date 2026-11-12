@@ -7,7 +7,7 @@
 ![Base de dados](https://img.shields.io/badge/Base%20de%20dados-PostgreSQL-4169E1)
 ![Execução](https://img.shields.io/badge/ambiente-Docker-2496ED)
 
-> **Transparência:** o backend inicial de lojas, zonas, prateleiras, catálogo, observações, snapshots de inventário e recomendações está implementado no repositório. A gestão básica de tarefas já foi acrescentada à API. Dashboard, PWA, inferência visual e integrações externas continuam em desenvolvimento. Os diagramas mostram a arquitetura pretendida e não significam que todos os módulos estejam já operacionais.
+> **Transparência:** o backend inclui lojas, zonas, prateleiras, catálogo, observações, inventário, recomendações, tarefas e a primeira camada de autenticação/gestão de utilizadores. Existe agora um endpoint de resumo operacional para alimentar um dashboard; a interface gráfica do dashboard, a PWA, a inferência visual e as integrações externas continuam em desenvolvimento. Os mockups são ilustrativos e não representam dados reais.
 
 ## 1. O que é o SMART SHELF AI?
 
@@ -26,6 +26,14 @@ O princípio central é **não confundir uma estimativa visual com stock contabi
 ![Arquitetura de referência do SMART SHELF AI](docs/images/architecture.svg)
 
 A arquitetura separa recolha de dados, processamento, serviços centrais e experiência operacional. Os módulos Edge AI, dashboard, PWA, robô e integrações serão ligados de forma incremental e apenas depois de validados.
+
+## Pré-visualização do dashboard operacional
+
+A imagem seguinte é um **mockup de interface**, para mostrar como os indicadores poderão ser organizados. Os números são fictícios e não provêm da API.
+
+![Conceito de dashboard operacional](docs/images/operations-dashboard.svg)
+
+O endpoint inicial de resumo está disponível em `GET /api/v1/dashboard/summary`. A interface web ainda não foi construída.
 
 ## 3. Como funciona uma recomendação?
 
@@ -65,7 +73,7 @@ A API já suporta criação de tarefas, atribuição, início, conclusão e canc
 | Histórico de snapshots de inventário | Implementado |
 | Cálculo de stock disponível (existente - reservado) | Implementado |
 | Recomendações com base em observação e inventário | Implementado |
-| Tarefas, prioridade, atribuição e estados operacionais | Implementado na API |
+| Tarefas, prioridade, atribuição e estados operacionais | Implementado na API |\n| Autenticação JWT e hash Argon2 | Implementado na API |\n| Perfis ADMIN, SUPERVISOR e EMPLOYEE | Implementado na primeira camada |\n| Associação de utilizadores e tarefas a lojas | Implementado no modelo/API |\n| Resumo operacional para dashboard | Endpoint inicial implementado |
 | Dashboard web e PWA móvel | Planeado |
 | Inferência de visão computacional | Planeado |
 | Integrações POS / ERP / WMS / robô | Dependentes de acesso e validação |
@@ -166,7 +174,7 @@ Consultar tarefas e filtrar por loja, estado ou responsável: `GET /api/v1/tasks
 
 Atualizar o estado: `PATCH /api/v1/tasks/{task_id}/status`. Estados permitidos: `PENDING → ASSIGNED → IN_PROGRESS → COMPLETED`; também é possível cancelar tarefas não concluídas. A atribuição requer o campo `assigned_to`.
 
-A API valida que a prateleira pertence à loja e que o produto está associado à prateleira. Também existe `POST /api/v1/tasks/from-recommendation`: só cria uma tarefa quando a recomendação atual é `NEEDS_REPLENISHMENT` e não existe outra tarefa ativa para a mesma prateleira/produto. O identificador do responsável é, nesta fase, um texto operacional; autenticação e gestão de contas de funcionários ainda não estão implementadas.
+A API valida que a prateleira pertence à loja e que o produto está associado à prateleira. Também existe `POST /api/v1/tasks/from-recommendation`: só cria uma tarefa quando a recomendação atual é `NEEDS_REPLENISHMENT` e não existe outra tarefa ativa para a mesma prateleira/produto. O campo textual `assigned_to` mantém-se por compatibilidade, mas as tarefas podem também ser associadas a `assigned_user_id`. O utilizador atribuído tem de estar ativo e pertencer à mesma loja.
 
 ## 10. Endpoint de recomendações
 
@@ -204,7 +212,7 @@ Consultar também os endpoints de catálogo, observações e inventário na docu
 
 ## 13. Estado do projeto
 
-O projeto está em desenvolvimento incremental. O backend já inclui catálogo, inventário, recomendações e ciclo básico de tarefas. O próximo passo é reforçar a geração de tarefas a partir de recomendações, adicionar autenticação e construir a interface operacional. A visão computacional e as integrações serão introduzidas depois de existir um fluxo operacional consistente e testável.
+O projeto está em desenvolvimento incremental. O backend já inclui catálogo, inventário, recomendações e ciclo básico de tarefas. O próximo passo é reforçar a autorização por loja em todos os recursos e construir a interface operacional. A visão computacional e as integrações serão introduzidas depois de existir um fluxo operacional consistente e testável.
 
 ## Licença
 
@@ -218,3 +226,12 @@ A API inclui início controlado do primeiro administrador, login com palavra-pas
 ![Fluxo de autenticação e permissões](docs/images/authentication-flow.svg)
 
 Perfis disponíveis: `ADMIN`, `SUPERVISOR` e `EMPLOYEE`. As regras atuais são uma primeira camada de autorização; o isolamento por loja e a associação de tarefas a contas individuais são etapas seguintes. O campo legado `assigned_to` continua a ser texto e não equivale a uma identidade autenticada.
+
+
+## 14. Autenticação e dashboard
+
+![Fluxo de autenticação com âmbito por loja](docs/images/authentication-flow.svg)
+
+A API suporta criação controlada do primeiro administrador, login, tokens JWT, consulta do utilizador autenticado e gestão de contas por administrador. As palavras-passe são guardadas com hash Argon2. Os utilizadores supervisores e funcionários têm de estar associados a uma loja. As tarefas podem ser atribuídas a uma conta dessa mesma loja.
+
+O endpoint `GET /api/v1/dashboard/summary` devolve contagens de tarefas e observações para alimentar a futura interface. Os funcionários recebem apenas as contagens das tarefas que lhes foram atribuídas; supervisores ficam limitados à sua loja. O isolamento completo de todos os endpoints de catálogo/inventário continua a ser trabalho necessário antes de produção.
