@@ -135,3 +135,49 @@ Antes de ativar movimentos operacionais, será necessário criar transições de
 estado validadas, bloqueio concorrente/idempotência, confirmação por scan,
 controlo de lote/validade, validação de localização e reconciliação com stock
 agregado.
+
+
+## Atualizar o ciclo de vida de uma palete
+
+`POST /api/v1/warehouse/pallets/{pallet_id}/events` regista uma alteração supervisionada
+de estado, quantidade ou localização. Requer ADMIN/SUPERVISOR e respeita o
+âmbito da loja.
+
+O pedido tem de incluir `expected_status` e `expected_base_quantity`
+com os valores atualmente lidos. Se outra operação já tiver alterado a palete,
+a API devolve HTTP 409 para evitar que um operador grave uma decisão baseada
+num estado desatualizado. Em PostgreSQL, a linha é também bloqueada durante a
+transação (`SELECT FOR UPDATE`).
+
+Exemplo de passagem para exposição:
+
+```http
+POST /api/v1/warehouse/pallets/15/events
+```
+
+```json
+{
+  "expected_status": "READY",
+  "expected_base_quantity": 720,
+  "status": "ON_DISPLAY",
+  "location_type": "SALES_FLOOR",
+  "location_code": "CORREDOR-03",
+  "reason": "Palete colocada na exposição após confirmação visual"
+}
+```
+
+Transições permitidas nesta fase:
+- READY -> ON_DISPLAY ou QUARANTINED
+- ON_DISPLAY -> PARTIAL, RETURNED ou QUARANTINED
+- PARTIAL -> RETURNED, REBUILDING, ON_DISPLAY ou QUARANTINED
+- RETURNED -> REBUILDING ou QUARANTINED
+- REBUILDING -> READY ou QUARANTINED
+- EMPTY -> QUARANTINED
+- QUARANTINED é terminal
+
+A quantidade continua expressa na unidade base e tem de respeitar a capacidade
+da embalagem PALLET. EMPTY exige zero; os restantes estados exigem quantidade
+positiva. A API grava o evento e o estado atual na mesma transação. Não altera
+InventorySnapshot, posições de armazém nem stock agregado. A alteração de lote/
+validade e a recomposição com mistura de lotes continuam bloqueadas até existir
+um fluxo FEFO/FIFO e rastreabilidade próprio.
