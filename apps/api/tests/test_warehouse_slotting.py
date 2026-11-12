@@ -163,3 +163,15 @@ def test_physical_slotting_rejects_invalid_required_quantity(quantity):
             product_profile=profile(),
             locations=[],
         )
+
+
+def test_physical_slotting_rejects_unknown_current_occupancy():
+    result = recommend_physical_slot(
+        product_id=7,
+        required_quantity=1,
+        product_profile=profile(),
+        locations=[location("UNKNOWN-OCCUPANCY", 1, occupied_volume_cm3=None, occupied_weight_kg=None)],
+    )
+
+    assert result.status == "NO_COMPATIBLE_LOCATION"
+    assert result.rejected_locations[0]["reason"] == "UNKNOWN_CURRENT_OCCUPANCY"
