@@ -409,3 +409,12 @@ curl -X PATCH http://localhost:8000/api/v1/product-embedding-exemplars/1/review 
 ```
 
 Se for fornecido `shelf_image_id`, o SHA-256 enviado tem de coincidir com a captura guardada. Os endpoints de leitura não devolvem o vetor. A aprovação regista revisor e data, e não pode ser repetida para o mesmo exemplar. Os vetores estão guardados como JSON relacional; ainda não existe pgvector nem índice de pesquisa vetorial. O serviço interno `app.product_embedding_service.build_approved_product_registry` já consegue carregar apenas exemplares aprovados, revistos e da versão de modelo pedida para o motor experimental; a integração automática com o worker de inferência continua pendente.
+
+
+## Correspondência SKU no worker (experimental)
+
+O contrato do provider aceita `embedding` e `embedding_model_version` opcionais por deteção. O worker compara o vetor apenas com exemplares `APPROVED`, revistos por um utilizador ainda existente e pertencentes à versão exata do modelo de embeddings. O produto só é associado quando o motor devolve `MATCHED`; `AMBIGUOUS`, `UNKNOWN`, ausência de vetor, dimensão incompatível ou registo de referência vazio deixam `product_id` nulo.
+
+A versão do detector (`model_version`) e a versão do modelo de embeddings (`embedding_model_version`) são distintas. A tabela `shelf_image_detections` guarda estado, similaridade, margem e versão de embeddings para auditoria. Os thresholds não estão calibrados e a integração não deve alimentar contagens de stock sem validação humana.
+
+Aplicar a migração `0012_detection_sku_matching` antes de executar o worker atualizado.
