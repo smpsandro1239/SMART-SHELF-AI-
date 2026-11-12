@@ -15,6 +15,7 @@ from typing import Any
 from app.dataset_audit import audit_splits
 from app.dataset_integrity import audit_manifest_against_coco, read_manifest
 from app.dataset_quality import analyze_dataset_quality
+from app.dataset_review import sha256_file, validate_visual_review_record
 
 SPLITS = ("train", "val", "test")
 SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
@@ -166,10 +167,18 @@ def run_release_gate(
     split_paths: dict[str, Path],
     *,
     mode: str = "training",
+    review_paths: dict[str, Path] | None = None,
+    require_visual_review: bool = False,
 ) -> tuple[list[str], dict[str, Any]]:
     """Run metadata checks plus COCO, split, manifest and quality audits."""
     errors = validate_release_record(record, mode)
     report: dict[str, Any] = {"mode": mode, "status": "BLOCKED", "checks": {}}
+    if require_visual_review and (
+        review_paths is None or any(split not in review_paths for split in SPLITS)
+    ):
+        errors.append("visual review records are required for train, val and test")
+    if review_paths is not None and any(split not in review_paths for split in SPLITS):
+        errors.append("when supplied, visual review records must include train, val and test")
     if errors:
         report["checks"]["release_record"] = {"passed": False, "errors": errors}
         return errors, report
@@ -232,6 +241,33 @@ def run_release_gate(
             "report": quality_report,
         }
 
+        if review_paths is not None:
+            review_errors: list[str] = []
+            review_details: dict[str, Any] = {}
+            for split in SPLITS:
+                try:
+                    review_record = json.loads(review_paths[split].read_text(encoding="utf-8"))
+                    coco_digest = sha256_file(split_paths[split])
+                    split_errors, split_report = validate_visual_review_record(
+                        review_record, documents[split], split, coco_digest
+                    )
+                except (OSError, json.JSONDecodeError) as exc:
+                    split_errors = [f"cannot read {split} visual review record: {exc}"]
+                    split_report = {"status": "BLOCKED", "split": split}
+                review_errors.extend(f"{split}: {error}" for error in split_errors)
+                review_details[split] = split_report
+            errors.extend(review_errors)
+            report["checks"]["visual_review"] = {
+                "passed": not review_errors,
+                "errors": review_errors,
+                "splits": review_details,
+            }
+    elif require_visual_review:
+        report["checks"]["visual_review"] = {
+            "passed": False,
+            "errors": ["visual review could not run because one or more COCO splits are unavailable"],
+        }
+
     report["status"] = "APPROVED" if not errors else "BLOCKED"
     report["errors"] = errors
     return errors, report
@@ -247,8 +283,17 @@ def main() -> int:
     parser.add_argument("--val", required=True, type=Path, help="COCO validation annotations")
     parser.add_argument("--test", required=True, type=Path, help="COCO test annotations")
     parser.add_argument("--mode", choices=("training", "inference"), default="training")
+    parser.add_argument("--require-visual-review", action="store_true", help="Require approved per-image reviews for all three splits")
+    parser.add_argument("--review-train", type=Path, help="Human review ledger for train split")
+    parser.add_argument("--review-val", type=Path, help="Human review ledger for val split")
+    parser.add_argument("--review-test", type=Path, help="Human review ledger for test split")
     parser.add_argument("--json-report", type=Path, help="Optional JSON gate report")
     args = parser.parse_args()
+    review_args = (args.review_train, args.review_val, args.review_test)
+    if any(review_args) and not all(review_args):
+        parser.error("provide all of --review-train, --review-val and --review-test")
+    if args.require_visual_review and not all(review_args):
+        parser.error("--require-visual-review requires all three review record paths")
 
     try:
         record = json.loads(args.release_record.read_text(encoding="utf-8"))
@@ -261,6 +306,11 @@ def main() -> int:
         args.manifest,
         {"train": args.train, "val": args.val, "test": args.test},
         mode=args.mode,
+        review_paths=(
+            {"train": args.review_train, "val": args.review_val, "test": args.review_test}
+            if all(review_args) else None
+        ),
+        require_visual_review=args.require_visual_review,
     )
     print(json.dumps(report, ensure_ascii=False, indent=2))
     if args.json_report:
