@@ -6,6 +6,7 @@ It is not a demand forecast and never performs stock movements.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import math
 from typing import Any, Mapping, Sequence
 
 
@@ -56,6 +57,33 @@ def recommend_low_traffic_window(
         by_hour[hour] = row
     if len(by_hour) != 24:
         raise ValueError("hourly_profile must contain each hour exactly once")
+
+    # Require full-day coverage before claiming a globally optimal low-traffic window.
+    for row in by_hour.values():
+        sales_value = row.get("average_daily_units")
+        traffic_value = row.get("average_customers")
+        if sales_value is None or traffic_value is None:
+            return LowTrafficWindowDecision(
+                "INSUFFICIENT_DATA", "HOURLY_PROFILE_INCOMPLETE",
+                "O perfil não cobre todas as horas; não é possível afirmar qual é a janela de menor afluência.",
+                None, duration_hours, None, None, None, 0, 0,
+            )
+        try:
+            sales_number = float(sales_value)
+            traffic_number = float(traffic_value)
+            sales_count = int(row.get("sales_observed_days"))
+            traffic_count = int(row.get("traffic_observed_days"))
+        except (TypeError, ValueError, OverflowError):
+            raise ValueError("hourly profile values and coverage counts must be numeric")
+        if (isinstance(sales_value, bool) or isinstance(traffic_value, bool)
+                or not math.isfinite(sales_number) or sales_number < 0
+                or not math.isfinite(traffic_number) or traffic_number < 0
+                or sales_count < minimum_observed_days or traffic_count < minimum_observed_days):
+            return LowTrafficWindowDecision(
+                "INSUFFICIENT_DATA", "HOURLY_PROFILE_INCOMPLETE",
+                "Existem horas com valores inválidos ou cobertura histórica abaixo do mínimo exigido.",
+                None, duration_hours, None, None, None, 0, 0,
+            )
 
     candidates = []
     missing_sales = False
