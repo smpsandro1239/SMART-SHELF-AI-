@@ -97,3 +97,24 @@ Consultar o último snapshot:
     curl "http://localhost:8000/api/v1/inventory/latest?store_id=1&product_id=1"
 
 Fontes aceites: ERP, WMS, POS, MANUAL e IMPORT. A referência externa é opcional, mas quando fornecida não pode repetir-se para a mesma loja, produto e origem. A API mantém os snapshots anteriores para auditoria; a integração real com sistemas ERP/WMS ainda não está implementada.
+
+
+## Recomendações de reposição
+
+Consultar o estado operacional de todos os produtos associados a prateleiras de uma loja:
+
+    curl "http://localhost:8000/api/v1/replenishment/recommendations?store_id=1"
+
+Filtrar por produto e definir a validade máxima da observação (em minutos):
+
+    curl "http://localhost:8000/api/v1/replenishment/recommendations?store_id=1&product_id=1&stale_after_minutes=120"
+
+Estados possíveis:
+- `NEEDS_REPLENISHMENT`: observação recente de baixa disponibilidade e stock positivo na retaguarda.
+- `BACKROOM_OUT_OF_STOCK`: a prateleira requer atenção, mas não existe stock disponível na retaguarda.
+- `INVENTORY_UNKNOWN`: falta um snapshot de inventário.
+- `STALE_OBSERVATION`: falta uma observação ou esta ultrapassou o limite de validade.
+- `LOW_CONFIDENCE`: a deteção requer confirmação humana.
+- `NO_ACTION`: a observação recente não indica baixa disponibilidade.
+
+A API não calcula uma quantidade exata de reposição a partir de rótulos visuais como `LOW_STOCK` ou `EMPTY`. Para isso será necessária uma contagem quantitativa validada ou uma regra operacional adicional.
