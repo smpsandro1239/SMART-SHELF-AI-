@@ -222,3 +222,24 @@ def test_task_rejects_employee_from_another_store():
             "assigned_user_id": employee_id,
         })
         assert response.status_code == 422
+
+
+def test_task_from_measured_recommendation_uses_suggested_refill_quantity():
+    with TestClient(app) as client:
+        store_id, shelf_id, product_id = create_task_context(client)
+        observation = client.post("/api/v1/observations", json={
+            "shelf_id": shelf_id, "source": "simulation", "status": "LOW_STOCK",
+            "confidence": 0.95, "observed_quantity": 1,
+        })
+        assert observation.status_code == 201
+        inventory = client.post("/api/v1/inventory/snapshots", json={
+            "store_id": store_id, "product_id": product_id,
+            "on_hand_quantity": 8, "reserved_quantity": 0, "source": "WMS",
+        })
+        assert inventory.status_code == 201
+
+        created = client.post("/api/v1/tasks/from-recommendation", json={
+            "store_id": store_id, "shelf_id": shelf_id, "product_id": product_id,
+        })
+        assert created.status_code == 201
+        assert created.json()["requested_quantity"] == 8
