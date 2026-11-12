@@ -466,4 +466,4 @@ A REA externa compara soluções públicas de monitorização de prateleiras e p
 - [ADR-007 — separação entre refill e reaprovisionamento](docs/architecture/adr-007-replenishment-policies.md)
 - [Motor de políticas determinísticas](apps/api/app/replenishment_policy.py)
 
-A primeira versão do motor já calcula separadamente o refill da prateleira e a proposta de reaprovisionamento do stock, com limites de confiança, frescura, stock disponível, ponto de encomenda, nível máximo e múltiplos de embalagem. Ainda não cria movimentos nem encomendas.
+A política de refill já está ligada às recomendações: quando existe quantidade observada, confiança, frescura e inventário válidos, calcula uma quantidade limitada pelo stock disponível e pode preencher automaticamente a quantidade da tarefa sugerida. A política de compra/transferência está implementada como cálculo isolado; ainda não cria movimentos nem encomendas. A ligação à visão automática depende de um provider real que reconheça SKU e produza contagens fiáveis.
