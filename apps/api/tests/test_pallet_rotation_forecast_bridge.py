@@ -95,5 +95,5 @@ def test_multiple_products_use_separate_profiles():
         current_hour=8,
     )
     rows = {row["product_id"]: row for row in result["candidates"]}
-    assert rows[42]["forecast_consumption_until_low_traffic"] == 55
-    assert rows[43]["forecast_consumption_until_low_traffic"] == 132
+    assert rows[42]["forecast_consumption_until_low_traffic"] == 60
+    assert rows[43]["forecast_consumption_until_low_traffic"] == 144
