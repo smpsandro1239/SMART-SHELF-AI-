@@ -94,7 +94,7 @@ python -m app.coco_dataset --annotations /caminho/annotations/instances_train.js
 python -m app.coco_dataset --annotations /caminho/annotations/instances_train.json --image-root /caminho/images/train --check-files
 ```
 
-O validador verifica IDs duplicados, referências a imagens/categorias inexistentes, dimensões, caixas fora da imagem, áreas inválidas e, opcionalmente, existência dos ficheiros e tentativas de escapar ao diretório de imagens. Não substitui revisão visual das anotações nem valida o conteúdo real das imagens.
+O validador verifica a estrutura JSON, tipos e IDs duplicados, referências a imagens/categorias inexistentes, dimensões, valores numéricos não finitos, caixas fora da imagem, áreas inválidas e, opcionalmente, existência dos ficheiros e tentativas de escapar ao diretório de imagens. Não substitui revisão visual das anotações nem valida o conteúdo real das imagens.
 
 
 ## 12. Auditor separação treino/validação/teste
@@ -109,6 +109,6 @@ python -m app.dataset_audit \
   --json-report /dados/reports/dataset-audit.json
 ```
 
-O auditor compara o mapeamento de classes e deteta nomes de ficheiros, hashes SHA-256 e grupos de captura repetidos entre conjuntos. Para detetar sequências da mesma sessão, incluir `capture_group_id` em cada objeto de imagem COCO (ou `sequence_id`, como alternativa). O relatório inclui imagens, anotações, imagens sem anotações e instâncias por classe.
+O auditor valida cada split antes de o comparar, compara o mapeamento de classes e deteta nomes de ficheiros e hashes SHA-256 repetidos, tanto dentro de um split como entre splits. Para detetar sequências da mesma sessão, incluir `capture_group_id` em cada objeto de imagem COCO (ou `sequence_id`, como alternativa). Várias imagens do mesmo grupo são permitidas no mesmo split; o grupo não pode aparecer em splits diferentes. O relatório inclui imagens, anotações, imagens sem anotações e instâncias por classe.
 
 O auditor não consegue inferir que duas fotografias pertencem à mesma sessão se os metadados de agrupamento não forem fornecidos. O resultado deve ser complementado por uma revisão do manifesto e da proveniência.
