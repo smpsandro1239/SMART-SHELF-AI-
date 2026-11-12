@@ -105,3 +105,75 @@ def test_duplicate_external_reference_is_rejected():
         }
         assert client.post("/api/v1/inventory/snapshots", json=payload).status_code == 201
         assert client.post("/api/v1/inventory/snapshots", json=payload).status_code == 409
+
+
+def test_replenishment_recommendation_uses_observation_and_backroom_stock():
+    with TestClient(app) as client:
+        store_id, product_id = create_store_and_product(client)
+        zone = client.post("/api/v1/zones", json={
+            "store_id": store_id, "name": "Bebidas",
+        })
+        shelf = client.post("/api/v1/shelves", json={
+            "zone_id": zone.json()["id"], "code": "BEB-01",
+        })
+        shelf_id = shelf.json()["id"]
+
+        assignment = client.post("/api/v1/shelf-products", json={
+            "shelf_id": shelf_id, "product_id": product_id,
+            "target_quantity": 12, "min_display_quantity": 4,
+        })
+        assert assignment.status_code == 201
+
+        observation = client.post("/api/v1/observations", json={
+            "shelf_id": shelf_id, "source": "simulation",
+            "status": "LOW_STOCK", "confidence": 0.91,
+        })
+        assert observation.status_code == 201
+
+        inventory = client.post("/api/v1/inventory/snapshots", json={
+            "store_id": store_id, "product_id": product_id,
+            "on_hand_quantity": 25, "reserved_quantity": 5,
+            "source": "ERP",
+        })
+        assert inventory.status_code == 201
+
+        response = client.get(
+            "/api/v1/replenishment/recommendations",
+            params={"store_id": store_id},
+        )
+        assert response.status_code == 200
+        recommendation = response.json()[0]
+        assert recommendation["recommendation_status"] == "NEEDS_REPLENISHMENT"
+        assert recommendation["inventory_available_quantity"] == 20
+        assert recommendation["suggested_quantity"] is None
+
+
+def test_replenishment_does_not_recommend_when_backroom_is_empty():
+    with TestClient(app) as client:
+        store_id, product_id = create_store_and_product(client)
+        zone = client.post("/api/v1/zones", json={
+            "store_id": store_id, "name": "Mercearia",
+        })
+        shelf = client.post("/api/v1/shelves", json={
+            "zone_id": zone.json()["id"], "code": "MER-01",
+        })
+        shelf_id = shelf.json()["id"]
+        client.post("/api/v1/shelf-products", json={
+            "shelf_id": shelf_id, "product_id": product_id,
+            "target_quantity": 10, "min_display_quantity": 2,
+        })
+        client.post("/api/v1/observations", json={
+            "shelf_id": shelf_id, "status": "EMPTY", "confidence": 0.95,
+        })
+        client.post("/api/v1/inventory/snapshots", json={
+            "store_id": store_id, "product_id": product_id,
+            "on_hand_quantity": 0, "reserved_quantity": 0,
+            "source": "WMS",
+        })
+
+        response = client.get(
+            "/api/v1/replenishment/recommendations",
+            params={"store_id": store_id},
+        )
+        assert response.status_code == 200
+        assert response.json()[0]["recommendation_status"] == "BACKROOM_OUT_OF_STOCK"
