@@ -212,6 +212,14 @@ Consultar também os endpoints de catálogo, observações e inventário na docu
 - Validar alterações com testes automatizados antes de as considerar prontas.
 - Distinguir sempre funcionalidades implementadas, planeadas e ainda não testadas.
 
+## Reconhecimento de SKU (camada experimental)
+
+![Fluxo conservador de correspondência de SKU](docs/images/sku-matching-flow.svg)
+
+Foi adicionada uma camada independente de comparação de embeddings com exemplares de produtos revistos. O mecanismo devolve `MATCHED`, `AMBIGUOUS` ou `UNKNOWN`, exige proveniência dos exemplares e abstém quando a evidência é insuficiente. Esta camada ainda não está ligada a um modelo real nem a uma base vetorial persistente; os thresholds carecem de calibração com imagens autorizadas.
+
+Detalhes técnicos: [contrato de correspondência de SKU](docs/architecture/sku-embedding-matching.md) e [ADR-008](docs/architecture/adr-008-sku-embedding-matching.md).
+
 ## 13. Estado do projeto
 
 O projeto está em desenvolvimento incremental. O backend inclui catálogo, inventário, recomendações, tarefas, autorização por loja e ingestão de fotografias. Existe um worker independente e um contrato de provider para inferência, com estados `PENDING`, `PROCESSING`, `COMPLETED` e `FAILED`. Não existe ainda um modelo real configurado ou treinado; os testes do worker usam um provider falso apenas para validar o fluxo. Existe também um registo experimental, em memória, para comparar embeddings de produtos com exemplares revistos; ainda não está ligado a um modelo real, não persiste vetores e não atualiza automaticamente o catálogo ou o stock.
