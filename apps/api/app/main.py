@@ -1820,10 +1820,10 @@ def record_pallet_lifecycle_update(
 
     allowed_transitions = {
         "READY": {"ON_DISPLAY", "QUARANTINED"},
-        "ON_DISPLAY": {"PARTIAL", "RETURNED", "QUARANTINED"},
-        "PARTIAL": {"RETURNED", "REBUILDING", "ON_DISPLAY", "QUARANTINED"},
-        "RETURNED": {"REBUILDING", "QUARANTINED"},
-        "REBUILDING": {"READY", "QUARANTINED"},
+        "ON_DISPLAY": {"PARTIAL", "RETURNED", "EMPTY", "QUARANTINED"},
+        "PARTIAL": {"RETURNED", "REBUILDING", "ON_DISPLAY", "EMPTY", "QUARANTINED"},
+        "RETURNED": {"REBUILDING", "EMPTY", "QUARANTINED"},
+        "REBUILDING": {"READY", "EMPTY", "QUARANTINED"},
         "EMPTY": {"QUARANTINED"},
         "QUARANTINED": set(),
     }
