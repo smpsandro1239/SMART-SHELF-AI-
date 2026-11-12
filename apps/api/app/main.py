@@ -507,7 +507,10 @@ def list_product_embedding_exemplars(
             models.Shelf.zone_id == models.Zone.id,
             isouter=True,
         ).filter(
-            (models.ProductEmbeddingExemplar.shelf_image_id.is_(None))
+            (
+                models.ProductEmbeddingExemplar.shelf_image_id.is_(None)
+                & (models.ProductEmbeddingExemplar.created_by_user_id == actor.id)
+            )
             | (models.Zone.store_id == actor.store_id)
         )
     return query.order_by(models.ProductEmbeddingExemplar.created_at.desc()).limit(max(1, min(limit, 500))).all()
@@ -531,6 +534,8 @@ def review_product_embedding_exemplar(
     actor = _request_user(db, request)
     if item.shelf_image_id is not None:
         _enforce_store_scope(actor, _shelf_image_store_id(db, item.shelf_image_id))
+    elif actor is not None and actor.role != "ADMIN" and item.created_by_user_id != actor.id:
+        raise HTTPException(status_code=403, detail="Access to this exemplar is not allowed")
     if item.review_status != "PENDING":
         raise HTTPException(status_code=409, detail="Only pending exemplars can be reviewed")
     item.review_status = payload.review_status
