@@ -203,3 +203,35 @@ def test_worker_ocr_persists_assigned_and_unassigned_regions_without_stock_mutat
     assert evidence[1].detection_id is None
     assert evidence[1].association_status == "UNASSIGNED"
     assert db.query(models.InventorySnapshot).count() == 0
+
+
+def test_optional_ocr_failure_is_recorded_without_raising_or_mutating_inventory(db, tmp_path):
+    from app.vision_worker import persist_ocr_evidence
+
+    store = models.Store(code="OCR-FAIL", name="OCR Failure")
+    db.add(store)
+    db.flush()
+    zone = models.Zone(store_id=store.id, name="Zona")
+    db.add(zone)
+    db.flush()
+    shelf = models.Shelf(zone_id=zone.id, code="OCR-FAIL-01")
+    db.add(shelf)
+    db.flush()
+    image = models.ShelfImage(
+        shelf_id=shelf.id, original_filename="failed.jpg",
+        storage_path=str(tmp_path / "failed.jpg"), mime_type="image/jpeg",
+        file_size_bytes=10, sha256="f" * 64, analysis_status="COMPLETED",
+        model_version="detector-v1",
+    )
+    db.add(image)
+    db.flush()
+
+    class BrokenOCR:
+        def recognize(self, path):
+            raise RuntimeError("simulated OCR runtime failure")
+
+    persist_ocr_evidence(db, image.id, tmp_path / "failed.jpg", [], BrokenOCR())
+    db.flush()
+    run = db.query(models.ShelfImageOCRRun).filter_by(shelf_image_id=image.id).one()
+    assert run.status == "FAILED"
+    assert db.query(models.InventorySnapshot).count() == 0
