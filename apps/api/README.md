@@ -8,12 +8,12 @@ A partir da raiz do repositório:
     cp .env.example .env
     docker compose up --build
 
-A API ficará disponível em:
+O serviço da API executa as migrações Alembic antes de iniciar o servidor. A API ficará disponível em:
 - Health: http://localhost:8000/health
 - Readiness (inclui ligação à base de dados): http://localhost:8000/health/ready
 - OpenAPI: http://localhost:8000/docs
 
-No ambiente local development, a API cria as tabelas iniciais automaticamente para facilitar o arranque. Para gerir o schema através de migrações Alembic, dentro do contentor da API executar:
+Para aplicar manualmente as migrações depois de alterações ao schema:
 
     docker compose exec api alembic upgrade head
 
@@ -30,7 +30,19 @@ Criar uma loja:
       -H "Content-Type: application/json" \
       -d '{"code":"PILOT-001","name":"Loja Piloto (dados de teste)"}'
 
-Criar zona e prateleira usando os IDs devolvidos, e depois registar uma observação:
+Criar uma zona usando o ID da loja devolvido:
+
+    curl -X POST http://localhost:8000/api/v1/zones \
+      -H "Content-Type: application/json" \
+      -d '{"store_id":1,"name":"Bebidas"}'
+
+Criar uma prateleira usando o ID da zona devolvido:
+
+    curl -X POST http://localhost:8000/api/v1/shelves \
+      -H "Content-Type: application/json" \
+      -d '{"zone_id":1,"code":"BEB-01"}'
+
+Registar uma observação fictícia:
 
     curl -X POST http://localhost:8000/api/v1/observations \
       -H "Content-Type: application/json" \
@@ -38,4 +50,4 @@ Criar zona e prateleira usando os IDs devolvidos, e depois registar uma observa�
 
 ## Nota de estado
 
-Este é um esqueleto inicial de desenvolvimento. A criação automática de tabelas está limitada ao ambiente development; em produção, usar migrações, autenticação, autorização e políticas de segurança. As observações de exemplo são dados fictícios, não deteções de visão computacional.
+Esta é a primeira base de desenvolvimento, ainda não validada por execução neste ambiente. As observações de exemplo são dados fictícios, não deteções de visão computacional. Antes de produção, faltam autenticação, autorização, hardening, observabilidade e validação operacional.
