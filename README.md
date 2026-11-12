@@ -340,3 +340,14 @@ Foi criada a especificação inicial de recolha e anotação, com quatro classes
 - [Modelo de Dataset Card](docs/computer-vision/dataset-card-template.md)
 
 **Importante:** o exemplo JSON é ilustrativo, não contém imagens reais nem anotações de treino. Ainda não foi recolhido ou aprovado qualquer dataset. A identificação de SKU, ruturas e produtos deslocados exige contexto e validação adicionais.
+
+
+## 13. Preparação e aprovação do dataset de visão
+
+O repositório inclui ferramentas para validar COCO, auditar separação entre treino/validação/teste, criar e cruzar manifestos SHA-256, analisar equilíbrio de classes e executar um gate de aprovação de uma versão do dataset.
+
+- [Especificação do dataset e comandos](docs/computer-vision/dataset-specification.md)
+- [Dataset Card](docs/computer-vision/dataset-card-template.md)
+- [Template de registo de aprovação](docs/computer-vision/dataset-release-template.json)
+
+O gate `python -m app.dataset_approval` exige autorizações e revisões humanas declaradas e volta a executar os controlos técnicos sobre manifesto e ficheiros COCO. Um resultado aprovado não autentica documentos legais nem substitui inspeção visual. Não existem fotografias reais aprovadas nem modelo treinado neste repositório.
