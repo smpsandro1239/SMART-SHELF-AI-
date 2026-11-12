@@ -2484,17 +2484,77 @@ def get_pallet_rotation_portfolio_from_history(
             and float(p.base_quantity) == float(active_levels[p.packaging_level_id].base_units_per_package)
         }
 
-        product_profiles = {}
+        # Aggregate historical rows for all SKUs in a small fixed number of queries.
+        history_start = date.today() - timedelta(days=days - 1)
+        sales_daily = db.query(
+            models.HourlySalesRecord.product_id.label("product_id"),
+            models.HourlySalesRecord.business_date.label("business_date"),
+            models.HourlySalesRecord.hour_of_day.label("hour"),
+            func.sum(models.HourlySalesRecord.quantity).label("quantity"),
+        ).filter(
+            models.HourlySalesRecord.store_id == store_id,
+            models.HourlySalesRecord.product_id.in_(list(product_ids) or [-1]),
+            models.HourlySalesRecord.business_date >= history_start,
+            models.HourlySalesRecord.business_date <= date.today(),
+            models.HourlySalesRecord.source == source,
+        ).group_by(
+            models.HourlySalesRecord.product_id,
+            models.HourlySalesRecord.business_date,
+            models.HourlySalesRecord.hour_of_day,
+        ).subquery()
+        sales_rows = db.query(
+            sales_daily.c.product_id,
+            sales_daily.c.hour,
+            func.avg(sales_daily.c.quantity).label("average_quantity"),
+            func.count(sales_daily.c.business_date).label("observed_days"),
+        ).group_by(sales_daily.c.product_id, sales_daily.c.hour).all()
+
+        traffic_daily = db.query(
+            models.HourlyStoreTrafficRecord.business_date.label("business_date"),
+            models.HourlyStoreTrafficRecord.hour_of_day.label("hour"),
+            func.sum(models.HourlyStoreTrafficRecord.customer_count).label("customers"),
+        ).filter(
+            models.HourlyStoreTrafficRecord.store_id == store_id,
+            models.HourlyStoreTrafficRecord.business_date >= history_start,
+            models.HourlyStoreTrafficRecord.business_date <= date.today(),
+            models.HourlyStoreTrafficRecord.source == source,
+        ).group_by(
+            models.HourlyStoreTrafficRecord.business_date,
+            models.HourlyStoreTrafficRecord.hour_of_day,
+        ).subquery()
+        traffic_rows = db.query(
+            traffic_daily.c.hour,
+            func.avg(traffic_daily.c.customers).label("average_customers"),
+            func.count(traffic_daily.c.business_date).label("observed_days"),
+        ).group_by(traffic_daily.c.hour).all()
+
+        sales_by_product_hour = {
+            (int(row.product_id), int(row.hour)): row for row in sales_rows
+        }
+        traffic_by_hour = {int(row.hour): row for row in traffic_rows}
+        product_profiles = {
+            product_id: [{
+                "hour_of_day": hour,
+                "average_daily_units": (
+                    float(sales_by_product_hour[(product_id, hour)].average_quantity)
+                    if (product_id, hour) in sales_by_product_hour else None
+                ),
+                "sales_observed_days": (
+                    int(sales_by_product_hour[(product_id, hour)].observed_days)
+                    if (product_id, hour) in sales_by_product_hour else 0
+                ),
+                "average_customers": (
+                    float(traffic_by_hour[hour].average_customers)
+                    if hour in traffic_by_hour else None
+                ),
+                "traffic_observed_days": (
+                    int(traffic_by_hour[hour].observed_days)
+                    if hour in traffic_by_hour else 0
+                ),
+            } for hour in range(24)]
+            for product_id in product_ids
+        }
         profile_errors = {}
-        for product_id in product_ids:
-            try:
-                profile = get_pallet_rotation_hourly_profile(
-                    store_id=store_id, product_id=product_id, days=days,
-                    source=source, request=request, db=db,
-                )
-                product_profiles[product_id] = profile["hours"]
-            except (HTTPException, ValueError, TypeError) as exc:
-                profile_errors[product_id] = getattr(exc, "detail", str(exc))
 
         candidates = []
         for pallet in pallets:
