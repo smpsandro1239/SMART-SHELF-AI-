@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 import pytest
 
 from app.warehouse_pick_planning import build_warehouse_pick_plan
@@ -117,3 +119,12 @@ def test_pick_plan_groups_items_by_location_and_sequences_stops():
     assert len(result["stops"][0]["items"]) == 2
     assert result["stops"][0]["sequence"] == 1
     assert result["physical_route_optimized"] is False
+
+
+def test_pick_plan_accepts_decimal_quantities_returned_by_sqlalchemy_numeric():
+    result = build_warehouse_pick_plan(
+        [candidate(quantity=Decimal("4.500"))],
+        [placement(1, 1, Decimal("5.250"), Decimal("2.00"))],
+    )
+    assert result["products"][0]["status"] == "READY_FOR_REVIEW"
+    assert result["allocations"][0]["proposed_pick_quantity"] == 4.5
