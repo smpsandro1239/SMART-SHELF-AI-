@@ -16,6 +16,8 @@ def build_weekday_hour_profile(sales_records: Iterable[Any], traffic_records: It
     for row in sales_records:
         business_date = row.business_date
         hour = row.hour_of_day
+        if isinstance(row.quantity, bool):
+            raise ValueError("Hourly sales quantity must be numeric, not boolean")
         quantity = float(row.quantity)
         if not isinstance(business_date, date) or isinstance(hour, bool) or not isinstance(hour, int) or not 0 <= hour <= 23:
             raise ValueError("Invalid hourly sales record date or hour")
@@ -26,7 +28,9 @@ def build_weekday_hour_profile(sales_records: Iterable[Any], traffic_records: It
     for row in traffic_records:
         business_date = row.business_date
         hour = row.hour_of_day
-        count = int(row.customer_count)
+        count = row.customer_count
+        if isinstance(count, bool) or not isinstance(count, int):
+            raise ValueError("Customer count must be an integer")
         if not isinstance(business_date, date) or isinstance(hour, bool) or not isinstance(hour, int) or not 0 <= hour <= 23:
             raise ValueError("Invalid hourly traffic record date or hour")
         if count < 0:
