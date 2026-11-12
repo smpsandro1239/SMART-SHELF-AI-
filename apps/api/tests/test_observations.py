@@ -60,3 +60,69 @@ def test_observation_rejects_confidence_outside_range():
             json={"shelf_id": 1, "confidence": 1.5},
         )
         assert response.status_code == 422
+
+
+def test_upload_and_retrieve_shelf_image(tmp_path, monkeypatch):
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "image_storage_path", str(tmp_path))
+    Base.metadata.drop_all(bind=TEST_ENGINE)
+    Base.metadata.create_all(bind=TEST_ENGINE)
+    image_bytes = b"\\x89PNG\\r\\n\\x1a\\n" + b"test-image-payload"
+
+    with TestClient(app) as client:
+        store = client.post("/api/v1/stores", json={"code": "IMG-01", "name": "Loja imagem"})
+        zone = client.post("/api/v1/zones", json={"store_id": store.json()["id"], "name": "Frescos"})
+        shelf = client.post("/api/v1/shelves", json={"zone_id": zone.json()["id"], "code": "FR-01"})
+        uploaded = client.post(
+            "/api/v1/shelf-images",
+            data={"shelf_id": str(shelf.json()["id"])},
+            files={"image": ("shelf.png", image_bytes, "image/png")},
+        )
+        assert uploaded.status_code == 201
+        record = uploaded.json()
+        assert record["analysis_status"] == "PENDING"
+        assert record["mime_type"] == "image/png"
+        assert record["file_size_bytes"] == len(image_bytes)
+        assert len(record["sha256"]) == 64
+
+        listed = client.get("/api/v1/shelf-images", params={"shelf_id": shelf.json()["id"]})
+        assert listed.status_code == 200
+        assert len(listed.json()) == 1
+
+        content = client.get(f"/api/v1/shelf-images/{record['id']}/content")
+        assert content.status_code == 200
+        assert content.content == image_bytes
+
+
+def test_upload_rejects_mismatched_image_signature(tmp_path, monkeypatch):
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "image_storage_path", str(tmp_path))
+    Base.metadata.drop_all(bind=TEST_ENGINE)
+    Base.metadata.create_all(bind=TEST_ENGINE)
+    with TestClient(app) as client:
+        store = client.post("/api/v1/stores", json={"code": "IMG-02", "name": "Loja imagem 2"})
+        zone = client.post("/api/v1/zones", json={"store_id": store.json()["id"], "name": "Bebidas"})
+        shelf = client.post("/api/v1/shelves", json={"zone_id": zone.json()["id"], "code": "BE-01"})
+        response = client.post(
+            "/api/v1/shelf-images",
+            data={"shelf_id": str(shelf.json()["id"])},
+            files={"image": ("not-image.png", b"not a real PNG", "image/png")},
+        )
+        assert response.status_code == 415
+
+
+def test_upload_rejects_unsupported_media_type():
+    Base.metadata.drop_all(bind=TEST_ENGINE)
+    Base.metadata.create_all(bind=TEST_ENGINE)
+    with TestClient(app) as client:
+        store = client.post("/api/v1/stores", json={"code": "IMG-03", "name": "Loja imagem 3"})
+        zone = client.post("/api/v1/zones", json={"store_id": store.json()["id"], "name": "Laticínios"})
+        shelf = client.post("/api/v1/shelves", json={"zone_id": zone.json()["id"], "code": "LA-01"})
+        response = client.post(
+            "/api/v1/shelf-images",
+            data={"shelf_id": str(shelf.json()["id"])},
+            files={"image": ("capture.gif", b"GIF89a", "image/gif")},
+        )
+        assert response.status_code == 415
