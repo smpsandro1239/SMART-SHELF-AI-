@@ -312,3 +312,16 @@ Definir `IMAGE_STORAGE_PATH` para um volume persistente no ambiente de execuçã
 Foi adicionada a tabela `shelf_image_detections` para guardar resultados produzidos por um futuro modelo: etiqueta da classe, confiança, caixa delimitadora normalizada, associação opcional a um produto e versão do modelo. O endpoint `GET /api/v1/shelf-images/{image_id}/detections` consulta estes registos respeitando o isolamento por loja.
 
 **Limite atual:** esta entrega é apenas o contrato de persistência e consulta. Não existe ainda inferência YOLO/OpenCV, worker de processamento, nem deteções automáticas. Uma classe genérica detetada não equivale à identificação fiável de um SKU; isso exigirá dados anotados e validação do modelo.
+
+
+## 18. Ciclo de processamento de visão computacional
+
+As capturas suportam agora os estados `PENDING`, `PROCESSING`, `COMPLETED` e `FAILED`, com timestamps de processamento e registo de erro técnico sanitizado. Foi criada uma interface de provider independente do modelo e um worker separado da API HTTP.
+
+O worker pode ser executado com:
+
+```bash
+docker compose exec api python -m app.vision_worker --once
+```
+
+A configuração `VISION_PROVIDER_FACTORY` aceita um caminho Python `modulo:factory`. Sem provider configurado, o worker termina sem alterar as capturas pendentes. Não está incluído nem treinado qualquer modelo YOLO nesta entrega. Os testes utilizam um provider falso apenas para validar o contrato do worker; esses resultados não são dados de produção.
