@@ -76,6 +76,46 @@ class ProductRead(ProductCreate):
     model_config = ConfigDict(from_attributes=True)
 
 
+
+class ProductEmbeddingExemplarCreate(BaseModel):
+    product_id: int
+    shelf_image_id: int | None = None
+    embedding: list[float] = Field(min_length=1, max_length=4096)
+    model_version: str = Field(min_length=1, max_length=100)
+    image_sha256: str = Field(pattern=r"^[0-9a-fA-F]{64}$")
+    licence: str = Field(min_length=1, max_length=250)
+
+    @model_validator(mode="after")
+    def embedding_must_be_valid(self):
+        import math
+        if any(not math.isfinite(value) for value in self.embedding):
+            raise ValueError("embedding values must be finite")
+        if not any(value != 0 for value in self.embedding):
+            raise ValueError("embedding cannot be a zero vector")
+        return self
+
+
+class ProductEmbeddingExemplarReview(BaseModel):
+    review_status: Literal["APPROVED", "REJECTED"]
+    review_notes: str | None = Field(default=None, max_length=2000)
+
+
+class ProductEmbeddingExemplarRead(BaseModel):
+    id: int
+    product_id: int
+    shelf_image_id: int | None
+    embedding_dimension: int
+    model_version: str
+    image_sha256: str
+    licence: str
+    review_status: Literal["PENDING", "APPROVED", "REJECTED"]
+    created_by_user_id: int | None
+    reviewed_by_user_id: int | None
+    reviewed_at: datetime | None
+    review_notes: str | None
+    created_at: datetime
+    model_config = ConfigDict(from_attributes=True)
+
 class ShelfProductCreate(BaseModel):
     shelf_id: int
     product_id: int
