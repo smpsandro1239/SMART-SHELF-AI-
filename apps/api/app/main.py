@@ -21,6 +21,7 @@ from app.product_text import (
 )
 from app.replenishment_policy import ShelfRefillInput, suggest_shelf_refill
 from app.demand_forecasting import DemandForecastInput, forecast_demand
+from app.sku_review_evaluation import build_reviewed_prediction_report
 from app.sales_import import parse_daily_sales_csv
 from app.schemas import (
     ObservationCreate, ObservationRead, ShelfCreate, ShelfRead,
@@ -92,7 +93,7 @@ async def require_api_authentication(request: Request, call_next):
             (method == "POST" and path in {"/api/v1/sales/daily", "/api/v1/sales/import-csv"})
             or path == "/api/v1/product-embedding-exemplars"
             or path.startswith("/api/v1/product-embedding-exemplars/")
-            or (method == "GET" and path in {"/api/v1/shelf-image-review-queue", "/api/v1/shelf-image-review-queue/summary"})
+            or (method == "GET" and path in {"/api/v1/shelf-image-review-queue", "/api/v1/shelf-image-review-queue/summary", "/api/v1/sku-evaluation/reviewed"})
             or (method == "POST" and path.startswith("/api/v1/shelf-image-detections/"))
             or (
                 method == "POST"
@@ -661,6 +662,35 @@ def get_shelf_image_review_queue_summary(
         query = query.filter(models.Zone.store_id == actor.store_id)
     counts = dict(query.group_by(models.ShelfImageFusedEvidence.status).all())
     return {status: int(counts.get(status, 0)) for status in statuses}
+
+
+@app.get("/api/v1/sku-evaluation/reviewed", tags=["computer-vision"])
+def get_reviewed_sku_evaluation(
+    request: Request,
+    store_id: int | None = None,
+    model_version: str | None = None,
+    db: Session = Depends(get_db),
+):
+    """Evaluate historical SKU suggestions against human review decisions."""
+    actor = _request_user(db, request)
+    if actor is None and settings.app_env != "test":
+        raise HTTPException(status_code=401, detail="Authenticated user required")
+    if actor is not None:
+        if actor.role not in {"ADMIN", "SUPERVISOR"}:
+            raise HTTPException(status_code=403, detail="Supervisor role required")
+        if actor.role != "ADMIN":
+            if actor.store_id is None:
+                raise HTTPException(status_code=403, detail="User is not associated with a store")
+            if store_id is not None and store_id != actor.store_id:
+                raise HTTPException(status_code=403, detail="Access to this store is not allowed")
+            store_id = actor.store_id
+    if model_version is not None and not model_version.strip():
+        raise HTTPException(status_code=422, detail="model_version cannot be empty")
+    return build_reviewed_prediction_report(
+        db,
+        store_id=store_id,
+        model_version=model_version.strip() if model_version else None,
+    )
 
 
 @app.get(
