@@ -1049,3 +1049,14 @@ A resposta identifica a versão do baseline, a confiança baseada no número de
 amostras e métricas de backtesting rolling-origin (MAE e WAPE). É um modelo
 estatístico sazonal, não um modelo de machine learning treinado. É read-only
 e não cria tarefas nem movimentos de stock.
+
+
+## Deteção histórica de picos de afluência
+
+    curl "http://localhost:8000/api/v1/forecasting/traffic-peaks?store_id=1&days=56&minimum_observed_days=4&minimum_baseline_hours=6&peak_ratio=1.5&source=POS"
+
+Um pico é uma combinação dia-da-semana/hora cuja média observada excede
+o limiar configurado face à média das horas observadas desse mesmo dia.
+A classificação exige cobertura mínima para a célula e para a linha de base.
+Horas ausentes não são tratadas como zero. É classificação histórica, não
+previsão de tráfego.
