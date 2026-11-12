@@ -66,4 +66,4 @@ A resposta não inclui o vetor. A aprovação é feita separadamente com `review
 
 ## Próxima integração
 
-A fase seguinte deverá carregar apenas exemplares aprovados para o motor de correspondência, garantir que a versão/dimensão do embedding coincide e ligar o resultado à revisão de deteções. Não se deve preencher automaticamente `Observation.observed_quantity` até existir uma contagem validada por SKU e uma política explícita de agregação.
+O serviço `app.product_embedding_service.build_approved_product_registry` já carrega apenas exemplares `APPROVED` com identidade de revisor ainda disponível e filtra pela versão exata do modelo. A dimensão é validada pelo motor ao construir/usar o registo. A fase seguinte deverá ligar este registo ao worker de inferência e à revisão de deteções. Não se deve preencher automaticamente `Observation.observed_quantity` até existir uma contagem validada por SKU e uma política explícita de agregação.
