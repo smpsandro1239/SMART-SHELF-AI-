@@ -59,7 +59,7 @@ export default function App() {
 
   const logout = useCallback(() => {
     sessionStorage.removeItem("smart-shelf-token");
-    setToken(""); setUser(null); setSummary(null); setTasks([]);
+    setToken(""); setUser(null); setSummary(null); setTasks([]); setCaptures([]);
   }, []);
 
   const refresh = useCallback(async () => {
