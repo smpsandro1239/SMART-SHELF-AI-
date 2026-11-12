@@ -50,3 +50,8 @@ autorizadas, incluindo texto pequeno, reflexos, curvatura e variantes.
 
 
 A associação por produto está documentada em [OCR e associação a deteções](ocr-detection-association.md). O adaptador usa `rec_polys`, alinhado com `rec_texts` e `rec_scores`; não deve usar `dt_polys` para esse alinhamento, pois pode conter caixas não reconhecidas.
+
+
+## Integração opcional no worker
+
+O worker aceita `OCR_PROVIDER_FACTORY=app.ocr_paddle:create_provider`. Depois de persistir as deteções visuais, executa `recognize(image_path)`, associa regiões por cobertura geométrica e grava `ShelfImageOCREvidence`. Regiões sem associação suficiente permanecem `UNASSIGNED`. O OCR é independente: uma falha cria uma execução `FAILED`, é registada no log e não invalida a análise visual. O matching de catálogo e a fusão continuam a ser passos explícitos posteriores.
