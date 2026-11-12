@@ -88,7 +88,7 @@ async def require_api_authentication(request: Request, call_next):
         supervisor_or_admin = (
             path == "/api/v1/product-embedding-exemplars"
             or path.startswith("/api/v1/product-embedding-exemplars/")
-            or (method == "GET" and path == "/api/v1/shelf-image-review-queue")
+            or (method == "GET" and path in {"/api/v1/shelf-image-review-queue", "/api/v1/shelf-image-review-queue/summary"})
             or (method == "POST" and path.startswith("/api/v1/shelf-image-detections/"))
             or (
                 method == "POST"
@@ -622,6 +622,41 @@ def fuse_shelf_image_evidence(image_id: int, request: Request, db: Session = Dep
         db.refresh(result)
     return results
 
+
+
+@app.get(
+    "/api/v1/shelf-image-review-queue/summary",
+    response_model=dict[str, int],
+    tags=["computer-vision"],
+)
+def get_shelf_image_review_queue_summary(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Count pending human reviews by fusion state, scoped to the actor's store."""
+    statuses = ("CONSENSUS", "VISUAL_ONLY", "TEXT_ONLY", "CONFLICT", "AMBIGUOUS", "UNKNOWN")
+    actor = _request_user(db, request)
+    latest_review_at = (
+        db.query(func.max(models.DetectionSkuReview.created_at))
+        .filter(models.DetectionSkuReview.detection_id == models.ShelfImageDetection.id)
+        .correlate(models.ShelfImageDetection)
+        .scalar_subquery()
+    )
+    query = (
+        db.query(models.ShelfImageFusedEvidence.status, func.count(models.ShelfImageFusedEvidence.id))
+        .join(models.ShelfImageDetection, models.ShelfImageFusedEvidence.detection_id == models.ShelfImageDetection.id)
+        .join(models.ShelfImage, models.ShelfImageDetection.shelf_image_id == models.ShelfImage.id)
+        .join(models.Shelf, models.ShelfImage.shelf_id == models.Shelf.id)
+        .join(models.Zone, models.Shelf.zone_id == models.Zone.id)
+        .filter(or_(
+            latest_review_at.is_(None),
+            latest_review_at < models.ShelfImageFusedEvidence.created_at,
+        ))
+    )
+    if actor is not None and actor.role != "ADMIN":
+        query = query.filter(models.Zone.store_id == actor.store_id)
+    counts = dict(query.group_by(models.ShelfImageFusedEvidence.status).all())
+    return {status: int(counts.get(status, 0)) for status in statuses}
 
 
 @app.get(
