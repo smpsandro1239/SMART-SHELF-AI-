@@ -169,3 +169,30 @@ def test_stock_coverage_is_reported_and_triggers_when_below_policy():
 
     assert result["status"] == "ACTION_RECOMMENDED"
     assert result["inventory_coverage_hours"] == 6.0
+
+
+def test_stale_empty_observation_does_not_escalate_forecast_risk_to_high():
+    result = evaluate_shelf_decision(
+        now=NOW,
+        observation={
+            "status": "EMPTY",
+            "observed_at": NOW - timedelta(hours=8),
+            "confidence": 0.99,
+        },
+        inventory={"available_quantity": 2, "recorded_at": NOW},
+        demand_forecast={"predicted_units": 8, "horizon_hours": 12, "generated_at": NOW},
+    )
+
+    assert result["status"] == "ACTION_RECOMMENDED"
+    assert result["priority"] == "NORMAL"
+
+
+def test_fresh_high_confidence_empty_observation_gets_high_priority():
+    result = evaluate_shelf_decision(
+        now=NOW,
+        observation={"status": "EMPTY", "observed_at": NOW, "confidence": 0.99},
+        inventory=None,
+    )
+
+    assert result["status"] == "ACTION_RECOMMENDED"
+    assert result["priority"] == "HIGH"
