@@ -71,8 +71,9 @@ export default function App() {
         request<User>("/api/v1/auth/me"),
         request<Summary>(`/api/v1/dashboard/summary${query}`),
         request<Task[]>("/api/v1/tasks?limit=100"),
+        request<ShelfImage[]>("/api/v1/shelf-images?limit=30"),
       ]);
-      setUser(me); setSummary(kpis); setTasks(taskList); setLastUpdated(new Date());
+      setUser(me); setSummary(kpis); setTasks(taskList); setCaptures(captureList); setLastUpdated(new Date());
     } catch (err) {
       const message = err instanceof Error ? err.message : "Não foi possível carregar os dados.";
       setError(message);
