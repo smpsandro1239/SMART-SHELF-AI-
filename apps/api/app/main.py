@@ -23,6 +23,7 @@ from app.schemas import (
     InventorySnapshotCreate, InventorySnapshotRead, ReplenishmentRecommendationRead,
     ReplenishmentTaskCreate, ReplenishmentTaskStatusUpdate, ReplenishmentTaskRead,
     BootstrapAdminCreate, LoginRequest, TokenRead, UserRead, UserCreate, ShelfImageRead,
+    ShelfImageDetectionRead,
 )
 
 app = FastAPI(title=settings.app_name, version="0.2.0", description="Operational API for SMART SHELF AI.")
@@ -322,6 +323,39 @@ def get_shelf_image_content(image_id: int, request: Request, db: Session = Depen
     if not path.is_file():
         raise HTTPException(status_code=404, detail="Stored image file is unavailable")
     return FileResponse(path, media_type=item.mime_type, filename=item.original_filename, content_disposition_type="inline")
+
+
+@app.get(
+    "/api/v1/shelf-images/{image_id}/detections",
+    response_model=list[ShelfImageDetectionRead],
+    tags=["computer-vision"],
+)
+def list_shelf_image_detections(
+    image_id: int,
+    request: Request,
+    limit: int = 200,
+    db: Session = Depends(get_db),
+):
+    """Return persisted model detections for an image, scoped to the user's store."""
+    image_record = (
+        db.query(models.ShelfImage)
+        .join(models.Shelf, models.ShelfImage.shelf_id == models.Shelf.id)
+        .join(models.Zone, models.Shelf.zone_id == models.Zone.id)
+        .filter(models.ShelfImage.id == image_id)
+        .first()
+    )
+    if image_record is None:
+        raise HTTPException(status_code=404, detail="Shelf image not found")
+    actor = _request_user(db, request)
+    if actor is not None and actor.role != "ADMIN" and image_record.shelf.zone.store_id != actor.store_id:
+        raise HTTPException(status_code=403, detail="Access to this image is not allowed")
+    return (
+        db.query(models.ShelfImageDetection)
+        .filter(models.ShelfImageDetection.shelf_image_id == image_id)
+        .order_by(models.ShelfImageDetection.id)
+        .limit(max(1, min(limit, 500)))
+        .all()
+    )
 
 
 @app.post("/api/v1/products", response_model=ProductRead, status_code=201, tags=["products"])
