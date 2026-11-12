@@ -1,0 +1,46 @@
+{
+  "dataset": {
+    "name": "",
+    "version": "",
+    "created_at": "",
+    "responsible": "",
+    "manifest_sha256": "",
+    "storage_location": ""
+  },
+  "purpose": {
+    "task": "",
+    "allowed_uses": [],
+    "excluded_uses": []
+  },
+  "provenance": {
+    "source_organizations": "",
+    "collection_authorized": false,
+    "usage_rights": "",
+    "dataset_license": "",
+    "annotation_tool": ""
+  },
+  "privacy": {
+    "exif_gps_removed": false,
+    "personal_data_reviewed": false,
+    "retention_and_access": "",
+    "incident_review": ""
+  },
+  "quality": {
+    "annotation_protocol": "",
+    "second_annotator_review_percent": 0,
+    "quality_review_summary": ""
+  },
+  "approvals": {
+    "technical": {
+      "reviewer": "",
+      "reviewed_at": "",
+      "approved": false
+    },
+    "privacy_legal": {
+      "reviewer": "",
+      "reviewed_at": "",
+      "approved": false
+    }
+  },
+  "approved_for_training": false
+}
