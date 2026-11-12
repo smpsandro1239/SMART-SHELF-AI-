@@ -1394,6 +1394,63 @@ def create_hourly_store_traffic_record(payload: HourlyStoreTrafficRecordCreate, 
 
 
 
+@app.get("/api/v1/sales/hourly", response_model=list[HourlySalesRecordRead], tags=["sales"])
+def list_hourly_sales_records(
+    store_id: int,
+    product_id: int | None = None,
+    start_date: date | None = None,
+    end_date: date | None = None,
+    limit: int = 500,
+    request: Request = None,
+    db: Session = Depends(get_db),
+):
+    if not 1 <= limit <= 1000:
+        raise HTTPException(status_code=422, detail="limit must be between 1 and 1000")
+    if start_date and end_date and start_date > end_date:
+        raise HTTPException(status_code=422, detail="start_date must not be after end_date")
+    _enforce_store_scope(_request_user(db, request), store_id)
+    query = db.query(models.HourlySalesRecord).filter(models.HourlySalesRecord.store_id == store_id)
+    if product_id is not None:
+        query = query.filter(models.HourlySalesRecord.product_id == product_id)
+    if start_date is not None:
+        query = query.filter(models.HourlySalesRecord.business_date >= start_date)
+    if end_date is not None:
+        query = query.filter(models.HourlySalesRecord.business_date <= end_date)
+    return query.order_by(
+        models.HourlySalesRecord.business_date.desc(),
+        models.HourlySalesRecord.hour_of_day.desc(),
+        models.HourlySalesRecord.id.desc(),
+    ).limit(limit).all()
+
+
+@app.get("/api/v1/sales/traffic/hourly", response_model=list[HourlyStoreTrafficRecordRead], tags=["sales"])
+def list_hourly_store_traffic_records(
+    store_id: int,
+    start_date: date | None = None,
+    end_date: date | None = None,
+    limit: int = 500,
+    request: Request = None,
+    db: Session = Depends(get_db),
+):
+    if not 1 <= limit <= 1000:
+        raise HTTPException(status_code=422, detail="limit must be between 1 and 1000")
+    if start_date and end_date and start_date > end_date:
+        raise HTTPException(status_code=422, detail="start_date must not be after end_date")
+    _enforce_store_scope(_request_user(db, request), store_id)
+    query = db.query(models.HourlyStoreTrafficRecord).filter(
+        models.HourlyStoreTrafficRecord.store_id == store_id
+    )
+    if start_date is not None:
+        query = query.filter(models.HourlyStoreTrafficRecord.business_date >= start_date)
+    if end_date is not None:
+        query = query.filter(models.HourlyStoreTrafficRecord.business_date <= end_date)
+    return query.order_by(
+        models.HourlyStoreTrafficRecord.business_date.desc(),
+        models.HourlyStoreTrafficRecord.hour_of_day.desc(),
+        models.HourlyStoreTrafficRecord.id.desc(),
+    ).limit(limit).all()
+
+
 @app.post("/api/v1/sales/hourly/batch", status_code=201, tags=["sales"])
 def create_hourly_sales_batch(payload: HourlySalesBatchCreate, request: Request, db: Session = Depends(get_db)):
     actor = _request_user(db, request)
