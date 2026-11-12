@@ -238,8 +238,8 @@ async def upload_shelf_image(
         raise HTTPException(status_code=403, detail="Access to this shelf is not allowed")
 
     allowed_types = {
-        "image/jpeg": (".jpg", lambda data: data.startswith(b"\\xff\\xd8\\xff")),
-        "image/png": (".png", lambda data: data.startswith(b"\\x89PNG\\r\\n\\x1a\\n")),
+        "image/jpeg": (".jpg", lambda data: data.startswith(b"\xff\xd8\xff")),
+        "image/png": (".png", lambda data: data.startswith(b"\x89PNG\r\n\x1a\n")),
         "image/webp": (".webp", lambda data: len(data) >= 12 and data[:4] == b"RIFF" and data[8:12] == b"WEBP"),
     }
     mime_type = (image.content_type or "").lower()
