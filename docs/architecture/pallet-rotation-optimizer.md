@@ -114,3 +114,17 @@ A hora atual é a hora local da loja e é fornecida explicitamente pelo chamador
 O algoritmo é determinístico e heurístico: não prevê vendas futuras, não usa
 tráfego em tempo real e não agenda tarefas. O resultado é consultivo e não
 executa qualquer movimento.
+
+
+## Dados horários e desempenho de consulta
+
+As tabelas `hourly_sales_records` e `hourly_store_traffic_records` têm
+índices compostos orientados às consultas por loja, produto (quando aplicável),
+data e hora. A recolha separa vendas por SKU da contagem global de clientes da
+loja, evitando replicar o tráfego por produto.
+
+Os registos horários usam a data e hora local de negócio fornecidas pelo POS.
+O projeto ainda não guarda um identificador de fuso horário por loja; a
+integração deve normalizar os dados de origem e respeitar alterações de hora
+legal antes de importar. Os valores zero devem ser enviados explicitamente;
+ausência de registo permanece desconhecida.
