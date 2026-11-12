@@ -472,3 +472,42 @@ Executar os testes:
 
     cd apps/api
     pytest -q tests/test_demand_forecasting.py
+
+
+## Ingestão diária de vendas e previsão por loja/produto
+
+A previsão de procura pode agora consumir agregados diários importados de um POS/ERP, sem assumir que as observações visuais da prateleira representam vendas.
+
+### Registar um dia de vendas
+
+`POST /api/v1/sales/daily` (ADMIN ou SUPERVISOR):
+
+```json
+{
+  "store_id": 1,
+  "product_id": 42,
+  "sales_date": "2026-11-12",
+  "quantity": 18,
+  "source": "POS",
+  "external_reference": "POS-STORE-01-20261112-42"
+}
+```
+
+Cada registo representa a quantidade total vendida desse produto nessa loja e nesse dia, para a origem identificada. A referência externa é obrigatória e protege contra reenvios duplicados. As origens aceites são `POS`, `ERP`, `MANUAL` e `IMPORT`.
+
+Um dia sem vendas tem de ser enviado explicitamente com `quantity: 0`. A API não converte dias sem registo em dias sem vendas.
+
+### Consultar a previsão
+
+`GET /api/v1/forecasting/demand?store_id=1&product_id=42&source=POS&lead_time_days=3&days=28`
+
+Parâmetros:
+- `store_id`, `product_id` e `source`: identificam a série de vendas a utilizar.
+- `lead_time_days`: prazo de reposição em dias.
+- `target_cover_days`: cobertura adicional pretendida (predefinição: 7).
+- `days`: número de dias consecutivos a analisar (7–365; predefinição: 28).
+- `through_date`: último dia do período, no formato ISO `YYYY-MM-DD` (predefinição: data atual do servidor).
+
+A API devolve `409 INCOMPLETE_DAILY_SALES_HISTORY` se faltar qualquer dia do período. Isto evita tratar falhas de sincronização do POS como procura igual a zero. Os registos de fontes diferentes não são somados: a origem tem de ser escolhida explicitamente.
+
+A previsão é consultiva. Não cria encomendas, não altera inventário e não cria tarefas de reposição. A integração real com um fornecedor POS/ERP, incluindo autenticação, sincronização incremental e reconciliação de vendas, continua a ser uma etapa separada.
