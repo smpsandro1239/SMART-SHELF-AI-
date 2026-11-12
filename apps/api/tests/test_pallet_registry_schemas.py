@@ -78,3 +78,18 @@ def test_rotation_policy_can_be_disabled_without_changing_threshold():
 def test_rotation_policy_update_rejects_explicit_null_values(payload):
     with pytest.raises(ValidationError):
         PalletRotationPolicyUpdate(**payload)
+
+
+def test_empty_pallet_requires_zero_quantity():
+    payload = StorePalletCreate(**pallet_payload(status="EMPTY", base_quantity=0))
+    assert payload.status == "EMPTY"
+
+
+def test_nonempty_pallet_requires_positive_quantity():
+    with pytest.raises(ValidationError):
+        StorePalletCreate(**pallet_payload(status="READY", base_quantity=0))
+
+
+def test_display_pallet_requires_sales_floor_location():
+    with pytest.raises(ValidationError):
+        StorePalletCreate(**pallet_payload(status="ON_DISPLAY", location_type="WAREHOUSE"))
