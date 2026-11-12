@@ -302,3 +302,21 @@ class ShelfImageDetectionRead(BaseModel):
     sku_match_margin: float | None
     created_at: datetime
     model_config = ConfigDict(from_attributes=True)
+
+
+class DetectionSkuReviewCreate(BaseModel):
+    decision: Literal["CONFIRMED", "CORRECTED", "REJECTED"]
+    selected_product_id: int | None = None
+    notes: str | None = Field(default=None, max_length=2000)
+
+
+class DetectionSkuReviewRead(BaseModel):
+    id: int
+    detection_id: int
+    previous_product_id: int | None
+    selected_product_id: int | None
+    decision: Literal["CONFIRMED", "CORRECTED", "REJECTED"]
+    reviewer_user_id: int | None
+    notes: str | None
+    created_at: datetime
+    model_config = ConfigDict(from_attributes=True)
