@@ -153,3 +153,11 @@ def test_forecast_equal_to_residual_does_not_trigger_interim_replenishment():
         candidate(residual_base_units=300, forecast_consumption_until_low_traffic=300)
     ])
     assert result.recommendations[0]["action"] == "SWAP_PALLET"
+
+
+@pytest.mark.parametrize("malformed", [None, "not-a-candidate", 42, []])
+def test_non_mapping_candidates_are_excluded_without_crashing(malformed):
+    result = build_pallet_portfolio_plan([malformed, candidate(11)])
+    assert result.considered == 1
+    assert result.excluded == 1
+    assert [item["pallet_id"] for item in result.recommendations] == [11]
