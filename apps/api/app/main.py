@@ -1,19 +1,24 @@
 from datetime import timedelta, timezone
 
-from fastapi import Depends, FastAPI, HTTPException, Request\nfrom fastapi.responses import JSONResponse
+from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session\nfrom sqlalchemy import func\nfrom jwt import InvalidTokenError
+from sqlalchemy.orm import Session
+from sqlalchemy import func
+from jwt import InvalidTokenError
 
 from app.config import settings
 from app.database import get_db, SessionLocal
-from app import models\nfrom app.security import hash_password, verify_password, create_access_token, decode_access_token
+from app import models
+from app.security import hash_password, verify_password, create_access_token, decode_access_token
 from app.schemas import (
     ObservationCreate, ObservationRead, ShelfCreate, ShelfRead,
     StoreCreate, StoreRead, ZoneCreate, ZoneRead,
     ProductCreate, ProductRead, ShelfProductCreate, ShelfProductRead,
     InventorySnapshotCreate, InventorySnapshotRead, ReplenishmentRecommendationRead,
-    ReplenishmentTaskCreate, ReplenishmentTaskStatusUpdate, ReplenishmentTaskRead,\n    BootstrapAdminCreate, LoginRequest, TokenRead, UserRead,
+    ReplenishmentTaskCreate, ReplenishmentTaskStatusUpdate, ReplenishmentTaskRead,
+    BootstrapAdminCreate, LoginRequest, TokenRead, UserRead,
 )
 
 app = FastAPI(title=settings.app_name, version="0.2.0", description="Operational API for SMART SHELF AI.")
@@ -52,7 +57,8 @@ async def require_api_authentication(request: Request, call_next):
     return await call_next(request)
 
 
-\n@app.get("/health", tags=["system"])
+
+@app.get("/health", tags=["system"])
 def health():
     return {"status": "ok", "service": "smart-shelf-ai-api", "environment": settings.app_env}
 
