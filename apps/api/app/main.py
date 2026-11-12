@@ -38,6 +38,7 @@ from app.schemas import (
     InventorySnapshotCreate, InventorySnapshotRead, ReplenishmentRecommendationRead,
     DailySalesRecordCreate, DailySalesRecordRead, SalesSource,
     HourlySalesRecordCreate, HourlySalesRecordRead, HourlyStoreTrafficRecordCreate, HourlyStoreTrafficRecordRead,
+    HourlySalesBatchCreate, HourlyStoreTrafficBatchCreate,
     ReplenishmentTaskCreate, ReplenishmentTaskStatusUpdate, ReplenishmentTaskRead,
     BootstrapAdminCreate, LoginRequest, TokenRead, UserRead, UserCreate, ShelfImageRead,
     ShelfImageDetectionRead, ProductEmbeddingExemplarCreate,
@@ -103,7 +104,7 @@ async def require_api_authentication(request: Request, call_next):
             })
         )
         supervisor_or_admin = (
-            (method == "POST" and (path in {"/api/v1/sales/daily", "/api/v1/sales/import-csv", "/api/v1/warehouse/locations", "/api/v1/warehouse/placements", "/api/v1/warehouse/pallets", "/api/v1/warehouse/pallet-rotation/policies", "/api/v1/warehouse/pallet-rotation/simulate", "/api/v1/sales/hourly", "/api/v1/sales/traffic/hourly"} or (path.startswith("/api/v1/warehouse/pallets/") and path.endswith("/events"))))
+            (method == "POST" and (path in {"/api/v1/sales/daily", "/api/v1/sales/import-csv", "/api/v1/warehouse/locations", "/api/v1/warehouse/placements", "/api/v1/warehouse/pallets", "/api/v1/warehouse/pallet-rotation/policies", "/api/v1/warehouse/pallet-rotation/simulate", "/api/v1/sales/hourly", "/api/v1/sales/traffic/hourly", "/api/v1/sales/hourly/batch", "/api/v1/sales/traffic/hourly/batch"} or (path.startswith("/api/v1/warehouse/pallets/") and path.endswith("/events"))))
             or (method == "PATCH" and path.startswith("/api/v1/warehouse/pallet-rotation/policies/"))
             or path == "/api/v1/product-embedding-exemplars"
             or path.startswith("/api/v1/product-embedding-exemplars/")
@@ -1390,6 +1391,50 @@ def create_hourly_store_traffic_record(payload: HourlyStoreTrafficRecordCreate, 
         raise HTTPException(status_code=409, detail="Hourly traffic external reference already exists") from exc
     db.refresh(item)
     return item
+
+
+
+@app.post("/api/v1/sales/hourly/batch", status_code=201, tags=["sales"])
+def create_hourly_sales_batch(payload: HourlySalesBatchCreate, request: Request, db: Session = Depends(get_db)):
+    actor = _request_user(db, request)
+    store_id = payload.records[0].store_id
+    _enforce_store_scope(actor, store_id)
+    if db.get(models.Store, store_id) is None:
+        raise HTTPException(status_code=404, detail="Store not found")
+    product_ids = {row.product_id for row in payload.records}
+    active_ids = {
+        item.id for item in db.query(models.Product).filter(
+            models.Product.id.in_(product_ids), models.Product.is_active.is_(True)
+        ).all()
+    }
+    missing = sorted(product_ids - active_ids)
+    if missing:
+        raise HTTPException(status_code=422, detail={"code": "UNKNOWN_OR_INACTIVE_PRODUCTS", "product_ids": missing})
+    items = [models.HourlySalesRecord(**row.model_dump()) for row in payload.records]
+    db.add_all(items)
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Batch conflicts with previously imported hourly sales; no rows were saved") from exc
+    return {"status": "IMPORTED", "store_id": store_id, "rows_imported": len(items), "atomic": True}
+
+
+@app.post("/api/v1/sales/traffic/hourly/batch", status_code=201, tags=["sales"])
+def create_hourly_traffic_batch(payload: HourlyStoreTrafficBatchCreate, request: Request, db: Session = Depends(get_db)):
+    actor = _request_user(db, request)
+    store_id = payload.records[0].store_id
+    _enforce_store_scope(actor, store_id)
+    if db.get(models.Store, store_id) is None:
+        raise HTTPException(status_code=404, detail="Store not found")
+    items = [models.HourlyStoreTrafficRecord(**row.model_dump()) for row in payload.records]
+    db.add_all(items)
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Batch conflicts with previously imported hourly traffic; no rows were saved") from exc
+    return {"status": "IMPORTED", "store_id": store_id, "rows_imported": len(items), "atomic": True}
 
 
 @app.get("/api/v1/warehouse/pallet-rotation/hourly-profile", tags=["warehouse"])
