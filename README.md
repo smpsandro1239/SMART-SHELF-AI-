@@ -33,7 +33,7 @@ A imagem seguinte é um **mockup de interface**, para mostrar como os indicadore
 
 ![Conceito de dashboard operacional](docs/images/operations-dashboard.svg)
 
-O endpoint inicial de resumo está disponível em `GET /api/v1/dashboard/summary`. A primeira interface web está disponível em `apps/web` e já consome os endpoints de autenticação, resumo e tarefas. A interface continua em fase inicial e será expandida com gestão de catálogo, observações e filtros.
+O endpoint inicial de resumo está disponível em `GET /api/v1/dashboard/summary`. A primeira interface web está disponível em `apps/web` e já consome os endpoints de autenticação, resumo e tarefas. A interface web está em fase inicial e inclui também um painel de planeamento assistido de reposição para administradores e supervisores, com consulta do risco de rutura e estimativas históricas de esforço. Continua a faltar gestão completa de catálogo, observações e filtros operacionais.
 
 ## 3. Como funciona uma recomendação?
 
