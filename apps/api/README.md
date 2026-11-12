@@ -882,3 +882,40 @@ não executa movimentos e não confirma fisicamente a existência da palete. As 
 Os testes de validação dos schemas estão em
 `tests/test_pallet_registry_schemas.py`; devem ser executados com `pytest -q`
 a partir de `apps/api`.
+
+
+### Simular a troca de uma palete registada
+
+Endpoint consultivo, reservado a ADMIN/SUPERVISOR:
+
+```http
+POST /api/v1/warehouse/pallet-rotation/simulate
+```
+
+Exemplo de pedido:
+
+```json
+{
+  "store_id": 1,
+  "pallet_id": 15,
+  "traffic_level": "HIGH",
+  "backroom_capacity_available": true,
+  "conventional_replenishment_minutes": 24,
+  "pallet_swap_minutes": 4,
+  "transport_minutes": 3,
+  "pallet_rebuild_minutes": 5,
+  "labour_cost_per_hour": 12,
+  "forecast_consumption_until_low_traffic": 180
+}
+```
+
+A API consulta a palete em exposição, a política ativa do produto e uma
+palete substituta READY, completa, não expirada e da mesma referência de
+embalagem PALLET. A substituta é ordenada por validade (FEFO) e antiguidade.
+O resultado inclui a recomendação e os custos laborais estimados.
+
+`backroom_capacity_available` tem de ser confirmado pelo operador:
+a capacidade física da retaguarda ainda não está integrada. A previsão de
+consumo e os tempos/custo são inputs fornecidos pelo chamador, não previsões
+geradas automaticamente. O endpoint é read-only: não reserva a substituta,
+não cria tarefas, não altera estados, eventos, stock ou localizações.
