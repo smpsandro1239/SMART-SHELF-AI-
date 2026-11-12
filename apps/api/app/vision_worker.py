@@ -55,44 +55,51 @@ def load_ocr_provider():
 
 
 def persist_ocr_evidence(db: Session, image_id: int, image_path: Path, detections, provider) -> None:
-    """Persist OCR regions with geometric detection associations, without SKU decisions."""
-    run = models.ShelfImageOCRRun(
-        shelf_image_id=image_id,
-        provider=settings.ocr_provider_name,
-        model_version=settings.ocr_model_version,
-        status="FAILED",
-    )
-    db.add(run)
-    db.flush()
+    """Persist OCR regions in an isolated savepoint; OCR failures never discard vision."""
     try:
-        regions = tuple(provider.recognize(image_path))
-        associations = associate_ocr_regions(detections, regions)
-        assigned_detection_by_region = {}
-        for association in associations:
-            detection_id = detections[association.detection_index].id
-            for region in association.regions:
-                assigned_detection_by_region[id(region)] = detection_id
-        for region in regions:
-            normalized = normalize_product_text(region.text.text)
-            if not normalized:
-                continue
-            detection_id = assigned_detection_by_region.get(id(region))
-            db.add(models.ShelfImageOCREvidence(
-                run_id=run.id,
-                detection_id=detection_id,
-                text=region.text.text.strip(),
-                normalized_text=normalized[:1000],
-                confidence=region.text.confidence,
-                x_min=region.x_min,
-                y_min=region.y_min,
-                x_max=region.x_max,
-                y_max=region.y_max,
-                association_status="ASSIGNED" if detection_id is not None else "UNASSIGNED",
-            ))
-        run.status = "COMPLETED"
+        with db.begin_nested():
+            run = models.ShelfImageOCRRun(
+                shelf_image_id=image_id,
+                provider=settings.ocr_provider_name,
+                model_version=settings.ocr_model_version,
+                status="COMPLETED",
+            )
+            db.add(run)
+            db.flush()
+            regions = tuple(provider.recognize(image_path))
+            associations = associate_ocr_regions(detections, regions)
+            assigned_detection_by_region = {}
+            for association in associations:
+                detection_id = detections[association.detection_index].id
+                for region in association.regions:
+                    assigned_detection_by_region[id(region)] = detection_id
+            for region in regions:
+                normalized = normalize_product_text(region.text.text)
+                if not normalized:
+                    continue
+                detection_id = assigned_detection_by_region.get(id(region))
+                db.add(models.ShelfImageOCREvidence(
+                    run_id=run.id,
+                    detection_id=detection_id,
+                    text=region.text.text.strip(),
+                    normalized_text=normalized[:1000],
+                    confidence=region.text.confidence,
+                    x_min=region.x_min,
+                    y_min=region.y_min,
+                    x_max=region.x_max,
+                    y_max=region.y_max,
+                    association_status="ASSIGNED" if detection_id is not None else "UNASSIGNED",
+                ))
+            db.flush()
     except Exception:
-        run.status = "FAILED"
         logger.exception("Optional OCR processing failed for shelf image %s; visual results are retained", image_id)
+        db.add(models.ShelfImageOCRRun(
+            shelf_image_id=image_id,
+            provider=settings.ocr_provider_name,
+            model_version=settings.ocr_model_version,
+            status="FAILED",
+        ))
+        db.flush()
 
 
 def resolve_sku_match(db: Session, detection, registry_cache=None):
