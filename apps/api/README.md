@@ -727,4 +727,4 @@ A quantidade pedida representa unidades adicionais à ocupação já registada. 
 
 O resultado é uma proposta, não uma ordem de transferência. automatic_movement_allowed permanece false. A fragilidade é sinalizada para revisão de manuseamento, mas ainda não existe uma certificação de compatibilidade de materiais nem um modelo de risco de empilhamento. Também não existe otimização de percurso por grafo, apenas distância linear registada à zona de preparação.
 
-Os endpoints de configuração são reservados a ADMIN/SUPERVISOR e respeitam o isolamento por loja. O perfil físico do produto é partilhado no catálogo global; as posições e quantidades permanecem associadas à loja.
+A criação de localizações e de colocações é reservada a ADMIN/SUPERVISOR e respeita o isolamento por loja. A definição do perfil físico é reservada a ADMIN, porque esse perfil é partilhado no catálogo global; as posições e quantidades permanecem associadas à loja.
