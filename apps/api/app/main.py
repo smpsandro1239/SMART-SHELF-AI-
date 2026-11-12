@@ -104,6 +104,16 @@ def _request_user(db: Session, request: Request | None):
     return db.get(models.User, user_id) if user_id is not None else None
 
 
+def _shelf_image_store_id(db: Session, image_id: int) -> int | None:
+    return (
+        db.query(models.Zone.store_id)
+        .join(models.Shelf, models.Shelf.zone_id == models.Zone.id)
+        .join(models.ShelfImage, models.ShelfImage.shelf_id == models.Shelf.id)
+        .filter(models.ShelfImage.id == image_id)
+        .scalar()
+    )
+
+
 def _enforce_store_scope(actor: models.User | None, store_id: int) -> None:
     if actor is not None and actor.role != "ADMIN" and actor.store_id != store_id:
         raise HTTPException(status_code=403, detail="Access to this store is not allowed")
@@ -318,8 +328,7 @@ def get_shelf_image_content(image_id: int, request: Request, db: Session = Depen
     if item is None:
         raise HTTPException(status_code=404, detail="Shelf image not found")
     actor = _request_user(db, request)
-    if actor is not None and actor.role != "ADMIN" and item.shelf.zone.store_id != actor.store_id:
-        raise HTTPException(status_code=403, detail="Access to this image is not allowed")
+    _enforce_store_scope(actor, _shelf_image_store_id(db, image_id))
     path = Path(item.storage_path)
     if not path.is_file():
         raise HTTPException(status_code=404, detail="Stored image file is unavailable")
@@ -348,8 +357,7 @@ def list_shelf_image_detections(
     if image_record is None:
         raise HTTPException(status_code=404, detail="Shelf image not found")
     actor = _request_user(db, request)
-    if actor is not None and actor.role != "ADMIN" and image_record.shelf.zone.store_id != actor.store_id:
-        raise HTTPException(status_code=403, detail="Access to this image is not allowed")
+    _enforce_store_scope(actor, _shelf_image_store_id(db, image_id))
     return (
         db.query(models.ShelfImageDetection)
         .filter(models.ShelfImageDetection.shelf_image_id == image_id)
