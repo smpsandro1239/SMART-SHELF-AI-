@@ -265,3 +265,24 @@ python -m app.dataset_approval \\
 ```
 
 O gate não autentica revisores nem valida juridicamente autorizações; o resultado é uma verificação técnica e documental das declarações fornecidas.
+
+
+## Galeria local para revisão visual COCO
+
+Gerar uma página HTML offline com as caixas delimitadoras sobre as imagens originais:
+
+```bash
+python -m app.coco_review \
+  --annotations /dados/annotations/instances_train.json \
+  --image-root /dados/images/train \
+  --output /dados/review/train/index.html \
+  --include-unannotated
+```
+
+Opções:
+- `--class-id 0`: filtra por ID de classe; pode repetir a opção para várias classes.
+- `--limit 100`: limita a quantidade de imagens, preservando a ordem do COCO.
+- `--include-unannotated`: inclui imagens sem anotações correspondentes aos filtros.
+
+Abrir o HTML localmente num navegador. A página referencia as imagens na pasta indicada por `--image-root`; não as copia, modifica nem envia. A ferramenta valida o documento COCO, verifica a existência das imagens e bloqueia caminhos absolutos/traversal. É uma ajuda de revisão humana, não um mecanismo de aprovação semântica.
+
