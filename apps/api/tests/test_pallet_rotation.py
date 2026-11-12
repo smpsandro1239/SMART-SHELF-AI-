@@ -132,3 +132,33 @@ def test_rotation_simulation_request_rejects_invalid_operational_values(value):
             labour_cost_per_hour=12,
             forecast_consumption_until_low_traffic=180,
         )
+
+
+def test_exactly_half_a_pallet_remaining_is_the_default_swap_boundary():
+    result = evaluate_pallet_rotation(**inputs(residual_base_units=360))
+    assert result.residual_ratio == pytest.approx(0.5)
+    assert result.recommendation == "SWAP_PALLET"
+
+
+def test_more_than_half_a_pallet_sold_does_not_trigger_swap_early():
+    result = evaluate_pallet_rotation(**inputs(residual_base_units=361))
+    assert result.residual_ratio > 0.5
+    assert result.recommendation == "REPLENISH_CURRENT"
+
+
+def test_store_can_configure_a_lower_remaining_quantity_threshold():
+    result = evaluate_pallet_rotation(**inputs(
+        residual_base_units=180,
+        threshold_ratio=0.25,
+    ))
+    assert result.residual_ratio == pytest.approx(0.25)
+    assert result.recommendation == "SWAP_PALLET"
+
+
+def test_half_pallet_boundary_still_requires_a_ready_replacement():
+    result = evaluate_pallet_rotation(**inputs(
+        residual_base_units=360,
+        replacement_pallet_available=False,
+    ))
+    assert result.recommendation == "REPLENISH_CURRENT"
+    assert result.reason_code == "NO_READY_REPLACEMENT"
