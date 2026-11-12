@@ -873,12 +873,12 @@ e exemplos completos. Endpoints principais:
 - `POST /api/v1/warehouse/pallet-rotation/policies` — criar política por produto/loja.
 - `GET /api/v1/warehouse/pallet-rotation/policies?store_id=1` — consultar políticas.
 - `PATCH /api/v1/warehouse/pallet-rotation/policies/{policy_id}` — alterar limiar ou ativação.
-- `GET /api/v1/warehouse/pallets/{pallet_id}/events?store_id=1` — consultar auditoria.
+- `GET /api/v1/warehouse/pallets/{pallet_id}/events?store_id=1` — consultar auditoria.\n- `POST /api/v1/warehouse/pallets/{pallet_id}/events` — registar alteração supervisionada de estado, quantidade ou localização, com controlo otimista de concorrência.
 
 A criação/alteração exige ADMIN ou SUPERVISOR e respeita o âmbito da loja.
 O registo usa o nível de embalagem PALLET ativo e guarda quantidade em unidade
 base, lote, validade e localização declarada. Não atualiza o inventário agregado,
-não executa movimentos e não confirma fisicamente a existência da palete.
+não executa movimentos e não confirma fisicamente a existência da palete. As alterações posteriores exigem ADMIN/SUPERVISOR, estado e quantidade esperados, motivo e transições permitidas; geram evento auditável na mesma transação, sem atualizar stock agregado.
 Os testes de validação dos schemas estão em
 `tests/test_pallet_registry_schemas.py`; devem ser executados com `pytest -q`
 a partir de `apps/api`.
