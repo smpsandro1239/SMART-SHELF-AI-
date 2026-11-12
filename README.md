@@ -644,3 +644,19 @@ python -m app.dataset_release \
 ## Política de rotação por palete
 
 A troca de uma palete parcial por uma palete completa é avaliada com limiar configurável (por defeito, quando restam 50% ou menos), procura prevista até à janela de baixa afluência, disponibilidade de uma palete pronta, capacidade de retaguarda e comparação de custo de mão de obra. A recomendação é consultiva e nunca movimenta stock automaticamente. Ver [Política operacional — troca de paletes e meias-paletes](docs/operations/pallet-rotation-policy.md).
+
+
+## 13. Rotação inteligente de paletes
+
+![Fluxo de decisão para troca de paletes](docs/images/pallet-portfolio-decision.svg)
+
+O módulo de portefólio agrega as paletes em exposição por loja e ordena as ações por prioridade operacional. A regra de referência considera elegível para avaliação de troca uma palete com **50% ou menos da capacidade residual**, desde que a procura prevista até à próxima janela de baixa afluência seja coberta, exista uma palete completa pronta, haja capacidade segura para receber a palete parcial e a troca seja operacionalmente vantajosa.
+
+A palete parcial regressa à retaguarda para recomposição e reutilização, preservando lote, validade, quantidade e histórico. O portefólio é consultivo: não reserva paletes, não cria tarefas e não movimenta stock.
+
+- Endpoint: `GET /api/v1/warehouse/pallet-rotation/portfolio`
+- Parâmetros operacionais: afluência, consumo previsto, capacidade de retaguarda e tempos de operação.
+- As entradas atuais de tráfego, procura e capacidade são fornecidas pelo operador; não são integrações automáticas.
+- `automatic_stock_movement_allowed` permanece sempre `false`.
+
+Consultar [a política operacional e o contrato do endpoint](docs/operations/pallet-portfolio-operations.md) e [a política de troca de paletes](docs/operations/pallet-rotation-policy.md).
