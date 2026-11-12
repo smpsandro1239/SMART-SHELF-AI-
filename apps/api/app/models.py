@@ -227,3 +227,22 @@ class ShelfImageDetection(Base):
     sku_similarity: Mapped[float | None] = mapped_column(Float, nullable=True)
     sku_match_margin: Mapped[float | None] = mapped_column(Float, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
+class DetectionSkuReview(Base):
+    """Append-only human decision about the SKU assigned to a detection."""
+    __tablename__ = "detection_sku_reviews"
+    __table_args__ = (
+        CheckConstraint("decision IN ('CONFIRMED', 'CORRECTED', 'REJECTED')", name="ck_detection_sku_review_decision"),
+        CheckConstraint("(decision = 'REJECTED' AND selected_product_id IS NULL) OR (decision IN ('CONFIRMED', 'CORRECTED') AND selected_product_id IS NOT NULL)", name="ck_detection_sku_review_selected_product"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    detection_id: Mapped[int] = mapped_column(ForeignKey("shelf_image_detections.id", ondelete="CASCADE"), index=True, nullable=False)
+    previous_product_id: Mapped[int | None] = mapped_column(ForeignKey("products.id", ondelete="SET NULL"), nullable=True)
+    selected_product_id: Mapped[int | None] = mapped_column(ForeignKey("products.id", ondelete="SET NULL"), nullable=True, index=True)
+    decision: Mapped[str] = mapped_column(String(12), nullable=False, index=True)
+    reviewer_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+
