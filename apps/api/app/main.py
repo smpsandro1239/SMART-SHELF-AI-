@@ -84,7 +84,11 @@ async def require_api_authentication(request: Request, call_next):
             path == "/api/v1/product-embedding-exemplars"
             or path.startswith("/api/v1/product-embedding-exemplars/")
             or (method == "POST" and path.startswith("/api/v1/shelf-image-detections/"))
-            or (method == "POST" and path.startswith("/api/v1/shelf-images/") and (path.endswith("/ocr-runs") or path.endswith("/ocr-matches"))))
+            or (
+                method == "POST"
+                and path.startswith("/api/v1/shelf-images/")
+                and (path.endswith("/ocr-runs") or path.endswith("/ocr-matches"))
+            )
         )
         if supervisor_or_admin and user.role not in {"ADMIN", "SUPERVISOR"}:
             return JSONResponse(status_code=403, content={"detail": "Supervisor role required"})
