@@ -6,7 +6,7 @@ import hashlib
 from fastapi import Depends, FastAPI, HTTPException, Request, UploadFile, File, Form
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import text, case
+from sqlalchemy import text, case, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from sqlalchemy import func
@@ -647,10 +647,17 @@ def list_shelf_image_review_queue(
         .join(models.ShelfImage, models.ShelfImageDetection.shelf_image_id == models.ShelfImage.id)
         .join(models.Shelf, models.ShelfImage.shelf_id == models.Shelf.id)
         .join(models.Zone, models.Shelf.zone_id == models.Zone.id)
-        .filter(~db.query(models.DetectionSkuReview.id).filter(
-            models.DetectionSkuReview.detection_id == models.ShelfImageDetection.id
-        ).exists())
     )
+    latest_review_at = (
+        db.query(func.max(models.DetectionSkuReview.created_at))
+        .filter(models.DetectionSkuReview.detection_id == models.ShelfImageDetection.id)
+        .correlate(models.ShelfImageDetection)
+        .scalar_subquery()
+    )
+    query = query.filter(or_(
+        latest_review_at.is_(None),
+        latest_review_at < models.ShelfImageFusedEvidence.created_at,
+    ))
     if actor is not None and actor.role != "ADMIN":
         query = query.filter(models.Zone.store_id == actor.store_id)
     if status is not None:
