@@ -41,7 +41,8 @@ def test_release_is_created_with_deterministic_fingerprint_and_quality_metadata(
     assert release["image_count"] == 3
     assert release["images_by_split"] == {"test": 1, "train": 1, "val": 1}
     assert release["quality_gates"]["split_integrity"]["status"] == "passed"
-    assert release["class_balance"]["train"]["classes"]["1"]["instances"] == 4
+    assert release["class_balance"]["by_split"]["train"]["classes"]["1"]["instances"] == 4
+    assert release["class_balance"]["instances_by_class_and_split"]["1"]["train"] == 4
     assert (tmp_path / "registry" / "releases" / f"{release['fingerprint']}.json").is_file()
 
 
@@ -88,3 +89,39 @@ def test_manifest_requires_all_three_splits(tmp_path):
         writer.writerow({"split": "train", "file_name": "a.jpg", "size_bytes": 1, "sha256": "a" * 64})
     with pytest.raises(ValueError, match="missing split"):
         load_manifest(path)
+
+
+
+def test_release_reports_classes_missing_from_a_split(tmp_path):
+    manifest, split, visual = setup_release_inputs(tmp_path)
+    write_report(split, splits={
+        "train": {"classes": {"1": {"name": "soda", "instances": 10}}},
+        "val": {"classes": {"1": {"name": "soda", "instances": 2}}},
+        "test": {"classes": {"1": {"name": "soda", "instances": 0}}},
+    })
+    release, _ = create_release(manifest, split, visual, tmp_path / "registry")
+    assert "class 1 has no annotated instances in test" in release["class_balance"]["warnings"]
+    assert release["class_balance"]["instances_by_class_and_split"]["1"]["val"] == 2
+
+
+def test_release_can_enforce_minimum_class_instances_per_split(tmp_path):
+    manifest, split, visual = setup_release_inputs(tmp_path)
+    write_report(split, splits={
+        "train": {"classes": {"1": {"instances": 10}}},
+        "val": {"classes": {"1": {"instances": 2}}},
+        "test": {"classes": {"1": {"instances": 1}}},
+    })
+    with pytest.raises(ValueError, match="minimum is 3"):
+        create_release(
+            manifest, split, visual, tmp_path / "registry",
+            min_class_instances=3,
+        )
+
+
+def test_release_can_enforce_minimum_images_per_split(tmp_path):
+    manifest, split, visual = setup_release_inputs(tmp_path)
+    with pytest.raises(ValueError, match="minimum is 2"):
+        create_release(
+            manifest, split, visual, tmp_path / "registry",
+            min_images_per_split=2,
+        )
