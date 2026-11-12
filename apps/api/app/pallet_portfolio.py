@@ -58,6 +58,9 @@ def build_pallet_portfolio_plan(
     excluded = 0
 
     for row in rows:
+        if not isinstance(row, Mapping):
+            excluded += 1
+            continue
         try:
             pallet_id = row.get("pallet_id")
             if isinstance(pallet_id, bool) or not isinstance(pallet_id, int) or pallet_id <= 0:
