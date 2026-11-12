@@ -157,6 +157,7 @@ class ReplenishmentTaskCreate(BaseModel):
     product_id: int
     priority: TaskPriority = "NORMAL"
     assigned_to: str | None = Field(default=None, min_length=1, max_length=120)
+    assigned_user_id: int | None = None
     requested_quantity: float | None = Field(default=None, gt=0)
     notes: str | None = Field(default=None, max_length=2000)
 
