@@ -157,8 +157,12 @@ def recommend_physical_slot(
         elif (isinstance(distance, bool) or not isinstance(distance, (int, float))
               or not math.isfinite(float(distance)) or distance < 0):
             reason = "INVALID_PICKING_DISTANCE"
-        elif (not isinstance(occupied_volume, (int, float)) or occupied_volume < 0
-              or not isinstance(occupied_weight, (int, float)) or occupied_weight < 0):
+        elif occupied_volume is None or occupied_weight is None:
+            reason = "UNKNOWN_CURRENT_OCCUPANCY"
+        elif (isinstance(occupied_volume, bool) or not isinstance(occupied_volume, (int, float))
+              or not math.isfinite(float(occupied_volume)) or occupied_volume < 0
+              or isinstance(occupied_weight, bool) or not isinstance(occupied_weight, (int, float))
+              or not math.isfinite(float(occupied_weight)) or occupied_weight < 0):
             reason = "INVALID_CURRENT_OCCUPANCY"
         elif required_volume > float(max_volume) - float(occupied_volume):
             reason = "INSUFFICIENT_VOLUME_CAPACITY"
