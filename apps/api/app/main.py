@@ -92,6 +92,15 @@ async def require_api_authentication(request: Request, call_next):
     return await call_next(request)
 
 
+def _request_user(db: Session, request: Request | None):
+    user_id = getattr(getattr(request, "state", None), "user_id", None)
+    return db.get(models.User, user_id) if user_id is not None else None
+
+
+def _enforce_store_scope(actor: models.User | None, store_id: int) -> None:
+    if actor is not None and actor.role != "ADMIN" and actor.store_id != store_id:
+        raise HTTPException(status_code=403, detail="Access to this store is not allowed")
+
 
 @app.get("/health", tags=["system"])
 def health():
@@ -119,8 +128,12 @@ def create_store(payload: StoreCreate, db: Session = Depends(get_db)):
 
 
 @app.get("/api/v1/stores", response_model=list[StoreRead], tags=["stores"])
-def list_stores(db: Session = Depends(get_db)):
-    return db.query(models.Store).order_by(models.Store.id).all()
+def list_stores(request: Request, db: Session = Depends(get_db)):
+    query = db.query(models.Store)
+    actor = _request_user(db, request)
+    if actor is not None and actor.role != "ADMIN":
+        query = query.filter(models.Store.id == actor.store_id)
+    return query.order_by(models.Store.id).all()
 
 
 @app.post("/api/v1/zones", response_model=ZoneRead, status_code=201, tags=["zones"])
@@ -146,14 +159,27 @@ def create_shelf(payload: ShelfCreate, db: Session = Depends(get_db)):
 
 
 @app.get("/api/v1/shelves", response_model=list[ShelfRead], tags=["shelves"])
-def list_shelves(db: Session = Depends(get_db)):
-    return db.query(models.Shelf).order_by(models.Shelf.id).all()
+def list_shelves(request: Request, db: Session = Depends(get_db)):
+    query = db.query(models.Shelf).join(models.Zone, models.Shelf.zone_id == models.Zone.id)
+    actor = _request_user(db, request)
+    if actor is not None and actor.role != "ADMIN":
+        query = query.filter(models.Zone.store_id == actor.store_id)
+    return query.order_by(models.Shelf.id).all()
 
 
 @app.post("/api/v1/observations", response_model=ObservationRead, status_code=201, tags=["observations"])
-def create_observation(payload: ObservationCreate, db: Session = Depends(get_db)):
-    if not db.get(models.Shelf, payload.shelf_id):
+def create_observation(payload: ObservationCreate, request: Request, db: Session = Depends(get_db)):
+    shelf_scope = (
+        db.query(models.Shelf)
+        .join(models.Zone, models.Shelf.zone_id == models.Zone.id)
+        .filter(models.Shelf.id == payload.shelf_id)
+        .first()
+    )
+    if shelf_scope is None:
         raise HTTPException(status_code=404, detail="Shelf not found")
+    actor = _request_user(db, request)
+    if actor is not None and actor.role != "ADMIN" and shelf_scope.zone.store_id != actor.store_id:
+        raise HTTPException(status_code=403, detail="Access to this shelf is not allowed")
     data = payload.model_dump()
     if data["observed_at"] is None:
         data["observed_at"] = models.utc_now()
@@ -167,9 +193,21 @@ def create_observation(payload: ObservationCreate, db: Session = Depends(get_db)
 
 
 @app.get("/api/v1/observations", response_model=list[ObservationRead], tags=["observations"])
-def list_observations(shelf_id: int | None = None, limit: int = 100, db: Session = Depends(get_db)):
+def list_observations(
+    shelf_id: int | None = None,
+    limit: int = 100,
+    request: Request = None,
+    db: Session = Depends(get_db),
+):
     limit = max(1, min(limit, 500))
-    query = db.query(models.Observation)
+    query = (
+        db.query(models.Observation)
+        .join(models.Shelf, models.Observation.shelf_id == models.Shelf.id)
+        .join(models.Zone, models.Shelf.zone_id == models.Zone.id)
+    )
+    actor = _request_user(db, request)
+    if actor is not None and actor.role != "ADMIN":
+        query = query.filter(models.Zone.store_id == actor.store_id)
     if shelf_id is not None:
         query = query.filter(models.Observation.shelf_id == shelf_id)
     return query.order_by(models.Observation.observed_at.desc()).limit(limit).all()
@@ -217,8 +255,20 @@ def assign_product_to_shelf(payload: ShelfProductCreate, db: Session = Depends(g
 
 
 @app.get("/api/v1/shelf-products", response_model=list[ShelfProductRead], tags=["catalog"])
-def list_shelf_products(shelf_id: int | None = None, product_id: int | None = None, db: Session = Depends(get_db)):
-    query = db.query(models.ShelfProduct)
+def list_shelf_products(
+    shelf_id: int | None = None,
+    product_id: int | None = None,
+    request: Request = None,
+    db: Session = Depends(get_db),
+):
+    query = (
+        db.query(models.ShelfProduct)
+        .join(models.Shelf, models.ShelfProduct.shelf_id == models.Shelf.id)
+        .join(models.Zone, models.Shelf.zone_id == models.Zone.id)
+    )
+    actor = _request_user(db, request)
+    if actor is not None and actor.role != "ADMIN":
+        query = query.filter(models.Zone.store_id == actor.store_id)
     if shelf_id is not None:
         query = query.filter(models.ShelfProduct.shelf_id == shelf_id)
     if product_id is not None:
@@ -228,7 +278,8 @@ def list_shelf_products(shelf_id: int | None = None, product_id: int | None = No
 
 
 @app.post("/api/v1/inventory/snapshots", response_model=InventorySnapshotRead, status_code=201, tags=["inventory"])
-def create_inventory_snapshot(payload: InventorySnapshotCreate, db: Session = Depends(get_db)):
+def create_inventory_snapshot(payload: InventorySnapshotCreate, request: Request, db: Session = Depends(get_db)):
+    _enforce_store_scope(_request_user(db, request), payload.store_id)
     if not db.get(models.Store, payload.store_id):
         raise HTTPException(status_code=404, detail="Store not found")
     if not db.get(models.Product, payload.product_id):
@@ -254,10 +305,15 @@ def list_inventory_snapshots(
     store_id: int | None = None,
     product_id: int | None = None,
     limit: int = 100,
+    request: Request = None,
     db: Session = Depends(get_db),
 ):
     limit = max(1, min(limit, 500))
     query = db.query(models.InventorySnapshot)
+    actor = _request_user(db, request)
+    if actor is not None and actor.role != "ADMIN":
+        _enforce_store_scope(actor, store_id if store_id is not None else actor.store_id)
+        query = query.filter(models.InventorySnapshot.store_id == actor.store_id)
     if store_id is not None:
         query = query.filter(models.InventorySnapshot.store_id == store_id)
     if product_id is not None:
@@ -269,8 +325,10 @@ def list_inventory_snapshots(
 def get_latest_inventory_snapshot(
     store_id: int,
     product_id: int,
+    request: Request,
     db: Session = Depends(get_db),
 ):
+    _enforce_store_scope(_request_user(db, request), store_id)
     item = db.query(models.InventorySnapshot).filter(
         models.InventorySnapshot.store_id == store_id,
         models.InventorySnapshot.product_id == product_id,
@@ -300,6 +358,7 @@ def list_replenishment_recommendations(
     """
     if stale_after_minutes < 1 or stale_after_minutes > 10080:
         raise HTTPException(status_code=422, detail="stale_after_minutes must be between 1 and 10080")
+    _enforce_store_scope(_request_user(db, request), store_id)
     if not db.get(models.Store, store_id):
         raise HTTPException(status_code=404, detail="Store not found")
 
