@@ -23,6 +23,7 @@ from app.replenishment_policy import ShelfRefillInput, suggest_shelf_refill
 from app.demand_forecasting import DemandForecastInput, forecast_demand
 from app.stockout_risk import StockoutRiskInput, assess_stockout_risk
 from app.replenishment_planning import build_replenishment_plan
+from app.replenishment_workload import summarize_workload
 from app.sku_review_evaluation import build_reviewed_prediction_report
 from app.sales_import import parse_daily_sales_csv
 from app.schemas import (
@@ -2216,6 +2217,47 @@ def list_replenishment_tasks(
     if assigned_to is not None:
         query = query.filter(models.ReplenishmentTask.assigned_to == assigned_to)
     return query.order_by(models.ReplenishmentTask.created_at.desc(), models.ReplenishmentTask.id.desc()).limit(limit).all()
+
+
+@app.get("/api/v1/replenishment/workload", tags=["replenishment"])
+def get_replenishment_workload(
+    store_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Return workload indicators for supervisors; never auto-assign tasks."""
+    actor = _request_user(db, request)
+    if actor is not None and actor.role == "EMPLOYEE":
+        raise HTTPException(status_code=403, detail="Only administrators and supervisors can view team workload")
+    _enforce_store_scope(actor, store_id)
+    if not db.get(models.Store, store_id):
+        raise HTTPException(status_code=404, detail="Store not found")
+
+    users = db.query(models.User).filter(
+        models.User.store_id == store_id,
+        models.User.role == "EMPLOYEE",
+        models.User.is_active.is_(True),
+    ).order_by(models.User.full_name.asc(), models.User.id.asc()).all()
+    tasks = db.query(models.ReplenishmentTask).filter(
+        models.ReplenishmentTask.store_id == store_id,
+    ).all()
+    summary = summarize_workload(
+        [{"id": user.id, "name": user.full_name} for user in users],
+        [{
+            "id": task.id, "assigned_user_id": task.assigned_user_id,
+            "status": task.status, "started_at": task.started_at,
+            "completed_at": task.completed_at,
+        } for task in tasks],
+    )
+    return {
+        "store_id": store_id,
+        "generated_at": models.utc_now(),
+        "employees": list(summary.employees),
+        "unassigned_active_tasks": summary.unassigned_active_tasks,
+        "completed_tasks_with_duration": summary.completed_tasks_with_duration,
+        "average_completion_minutes": summary.average_completion_minutes,
+        "policy": "Indicadores históricos e de carga registada; não representam disponibilidade, turno ou capacidade real.",
+    }
 
 
 @app.patch("/api/v1/tasks/{task_id}/status", response_model=ReplenishmentTaskRead, tags=["tasks"])
