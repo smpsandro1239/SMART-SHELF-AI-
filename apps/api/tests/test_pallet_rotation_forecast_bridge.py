@@ -36,7 +36,7 @@ def test_enriches_each_product_with_its_own_hourly_profile():
         minimum_observed_days=7,
     )
     row = result["candidates"][0]
-    assert row["traffic_level"] == "HIGH"
+    assert row["traffic_level"] == "LOW"
     assert row["recommended_window_start_hour"] == 18
     assert row["forecast_consumption_until_low_traffic"] == 60
     assert row["planning_reason"] == "LOWEST_OBSERVED_TRAFFIC_WINDOW"
@@ -97,3 +97,14 @@ def test_multiple_products_use_separate_profiles():
     rows = {row["product_id"]: row for row in result["candidates"]}
     assert rows[42]["forecast_consumption_until_low_traffic"] == 60
     assert rows[43]["forecast_consumption_until_low_traffic"] == 144
+
+
+def test_current_traffic_is_high_when_current_hour_exceeds_daily_hourly_average():
+    result = enrich_pallet_candidates_with_hourly_profiles(
+        [candidate()],
+        {42: profile()},
+        current_hour=12,
+    )
+    row = result["candidates"][0]
+    assert row["traffic_level"] == "HIGH"
+    assert row["current_hour_average_customers"] == 100
