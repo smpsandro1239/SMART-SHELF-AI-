@@ -989,3 +989,31 @@ horária não permite recomendar uma janela como se fosse a melhor.
 Os endpoints permitem consultar os registos de origem por loja, período e,
 no caso das vendas, produto. O limite é de 1 a 1000 registos por pedido.
 Ambos respeitam o âmbito de loja do utilizador e não alteram dados.
+
+
+### Importação horária por CSV
+
+Endpoints ADMIN/SUPERVISOR, via `multipart/form-data`, até 5 MB e 5000 linhas:
+
+- `POST /api/v1/sales/hourly/import-csv`
+- `POST /api/v1/sales/traffic/hourly/import-csv`
+
+Campos: `store_id`, `source` (POS, ERP, MANUAL ou IMPORT) e `file`.
+
+Vendas:
+```csv
+product_id,business_date,hour_of_day,quantity,external_reference
+42,2026-11-12,8,3,POS-42-20261112-08
+42,2026-11-12,9,0,POS-42-20261112-09
+```
+
+Afluência:
+```csv
+business_date,hour_of_day,customer_count,external_reference
+2026-11-12,8,120,TRAFFIC-20261112-08
+2026-11-12,9,0,TRAFFIC-20261112-09
+```
+
+Datas ISO, horas 0–23, quantidades e contagens não negativas e referências
+externas únicas são obrigatórias. A importação valida tudo antes de gravar e é
+atómica. Os zeros são preservados; horas sem registo não são criadas.
