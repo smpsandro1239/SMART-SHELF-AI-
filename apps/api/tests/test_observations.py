@@ -151,3 +151,51 @@ def test_supervisor_cannot_upload_image_to_another_store(tmp_path, monkeypatch):
             files={"image": ("capture.png", b"\x89PNG\r\n\x1a\nvalid-signature", "image/png")},
         )
         assert response.status_code == 403
+
+
+def test_list_shelf_image_detections(tmp_path, monkeypatch):
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "image_storage_path", str(tmp_path))
+    Base.metadata.drop_all(bind=TEST_ENGINE)
+    Base.metadata.create_all(bind=TEST_ENGINE)
+    image_bytes = b"\x89PNG\r\n\x1a\n" + b"test-image-payload"
+
+    with TestClient(app) as client:
+        store = client.post("/api/v1/stores", json={"code": "DET-01", "name": "Loja deteções"})
+        zone = client.post("/api/v1/zones", json={"store_id": store.json()["id"], "name": "Bebidas"})
+        shelf = client.post("/api/v1/shelves", json={"zone_id": zone.json()["id"], "code": "DET-01"})
+        uploaded = client.post(
+            "/api/v1/shelf-images",
+            data={"shelf_id": str(shelf.json()["id"])},
+            files={"image": ("shelf.png", image_bytes, "image/png")},
+        )
+        assert uploaded.status_code == 201
+        image_id = uploaded.json()["id"]
+
+        db = TestingSession()
+        try:
+            detection = models.ShelfImageDetection(
+                shelf_image_id=image_id,
+                label="bottle",
+                confidence=0.94,
+                x_min=0.1,
+                y_min=0.2,
+                x_max=0.6,
+                y_max=0.9,
+                model_version="test-model-0.1",
+            )
+            db.add(detection)
+            db.commit()
+        finally:
+            db.close()
+
+        response = client.get(f"/api/v1/shelf-images/{image_id}/detections")
+        assert response.status_code == 200
+        records = response.json()
+        assert len(records) == 1
+        assert records[0]["label"] == "bottle"
+        assert records[0]["confidence"] == 0.94
+        assert records[0]["model_version"] == "test-model-0.1"
+        assert records[0]["x_min"] == 0.1
+        assert records[0]["x_max"] == 0.6
