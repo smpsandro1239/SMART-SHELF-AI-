@@ -149,3 +149,12 @@ Transições suportadas:
 As transições inválidas são rejeitadas com HTTP 409. A API regista as datas de início e conclusão. O identificador do funcionário é texto nesta fase; autenticação e gestão de utilizadores serão desenvolvidas numa etapa própria.
 
 A criação valida a loja, a pertença da prateleira à loja e a associação do produto à prateleira. A quantidade pedida é opcional e tem de ser positiva. A tarefa não é criada automaticamente a partir da recomendação nesta primeira versão.
+
+
+Criar uma tarefa diretamente a partir de uma recomendação confirmada:
+
+    curl -X POST "http://localhost:8000/api/v1/tasks/from-recommendation?stale_after_minutes=120" \
+      -H "Content-Type: application/json" \
+      -d '{"store_id":1,"shelf_id":1,"product_id":1,"priority":"HIGH","requested_quantity":8}'
+
+Este endpoint só cria a tarefa quando a recomendação atual é `NEEDS_REPLENISHMENT`. Rejeita observações antigas, baixa confiança, inventário desconhecido ou stock indisponível. Também impede a criação de uma segunda tarefa ativa para a mesma combinação loja/prateleira/produto.
