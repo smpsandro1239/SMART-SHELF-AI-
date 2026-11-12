@@ -16,7 +16,7 @@ class LowTrafficWindowDecision:
     explanation: str
     start_hour: int | None
     duration_hours: int
-    projected_consumption_until_window: float | None
+    projected_consumption_through_window: float | None
     residual_after_consumption: float | None
     expected_customers_during_window: float | None
     observed_sales_days_min: int
@@ -62,7 +62,7 @@ def recommend_low_traffic_window(
     missing_traffic = False
     insufficient_coverage = False
     for offset in range(1, 25):
-        consumption_hours = [(current_hour + step) % 24 for step in range(offset)]
+        consumption_hours = [(current_hour + step) % 24 for step in range(offset + duration_hours)]
         window_hours = [(current_hour + offset + step) % 24 for step in range(duration_hours)]
         demand_values = []
         traffic_values = []
