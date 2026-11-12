@@ -1143,3 +1143,6 @@ Parâmetros principais:
 O resultado inclui `recommendations`, `candidate_evidence`, contagem de candidatos excluídos e eventuais erros de perfil por produto. Perfis incompletos ficam em `UNKNOWN`/sem previsão e não entram no ranking operacional. A evidência histórica é específica por SKU; a capacidade da retaguarda continua a ser confirmada pelo operador.
 
 Este endpoint é apenas consultivo: não reserva paletes, não cria tarefas e não movimenta stock. O forecast é um baseline histórico, não uma previsão em tempo real nem uma integração com POS/WMS.
+
+
+A resposta separa também `interim_replenishment_required`: paletes cujo residual não cobre o consumo histórico até qualquer janela operacional elegível. Estes casos não são descartados como simples falta de dados; são apresentados como necessidade de intervenção intermédia. `insufficient_evidence_count` contabiliza candidatos que não podem ser avaliados por falta de cobertura.
