@@ -40,7 +40,13 @@
       "reviewer": "",
       "reviewed_at": "",
       "approved": false
+    },
+    "operational_inference": {
+      "reviewer": "",
+      "reviewed_at": "",
+      "approved": false
     }
   },
-  "approved_for_training": false
+  "approved_for_training": false,
+  "approved_for_operational_inference": false
 }
