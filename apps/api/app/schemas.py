@@ -369,3 +369,18 @@ class ShelfImageOCREvidenceRead(BaseModel):
     association_status: Literal["ASSIGNED", "UNASSIGNED"]
     created_at: datetime
     model_config = ConfigDict(from_attributes=True)
+
+
+class ShelfImageOCRMatchRead(BaseModel):
+    id: int
+    run_id: int
+    detection_id: int
+    suggested_product_id: int | None
+    observed_text: str
+    ocr_confidence: float
+    status: Literal["SUGGESTED", "AMBIGUOUS", "UNKNOWN"]
+    top_score: float | None
+    margin: float | None
+    candidates: list[dict]
+    created_at: datetime
+    model_config = ConfigDict(from_attributes=True)
