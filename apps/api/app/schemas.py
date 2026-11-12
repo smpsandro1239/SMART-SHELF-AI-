@@ -384,3 +384,24 @@ class ShelfImageOCRMatchRead(BaseModel):
     candidates: list[dict]
     created_at: datetime
     model_config = ConfigDict(from_attributes=True)
+
+
+class ShelfImageFusedEvidenceRead(BaseModel):
+    id: int
+    ocr_run_id: int
+    detection_id: int
+    status: Literal["CONSENSUS", "VISUAL_ONLY", "TEXT_ONLY", "CONFLICT", "AMBIGUOUS", "UNKNOWN"]
+    suggested_product_id: int | None
+    visual_product_id: int | None
+    text_product_id: int | None
+    visual_status: str
+    text_status: str
+    visual_similarity: float | None
+    text_score: float | None
+    ocr_confidence: float | None
+    visual_model_version: str | None
+    ocr_provider: str
+    ocr_model_version: str
+    reason: str
+    created_at: datetime
+    model_config = ConfigDict(from_attributes=True)
