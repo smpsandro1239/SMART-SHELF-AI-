@@ -2422,6 +2422,16 @@ def get_pallet_rotation_portfolio(
         raise HTTPException(status_code=404, detail="Store not found")
     if traffic_level not in {"HIGH", "LOW", "UNKNOWN"}:
         raise HTTPException(status_code=422, detail="traffic_level must be HIGH, LOW or UNKNOWN")
+    numeric_inputs = {
+        "forecast_consumption_until_low_traffic": forecast_consumption_until_low_traffic,
+        "conventional_minutes": conventional_minutes,
+        "swap_minutes": swap_minutes,
+        "transport_minutes": transport_minutes,
+        "rebuild_minutes": rebuild_minutes,
+    }
+    for field, value in numeric_inputs.items():
+        if not math.isfinite(value) or value < 0:
+            raise HTTPException(status_code=422, detail=f"{field} must be finite and non-negative")
     try:
         plan_limit = int(limit)
         candidates_limit = max(1, min(plan_limit, 500))
