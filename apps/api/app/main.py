@@ -21,6 +21,7 @@ from app.product_text import (
 )
 from app.replenishment_policy import ShelfRefillInput, suggest_shelf_refill
 from app.demand_forecasting import DemandForecastInput, forecast_demand
+from app.stockout_risk import StockoutRiskInput, assess_stockout_risk
 from app.sku_review_evaluation import build_reviewed_prediction_report
 from app.sales_import import parse_daily_sales_csv
 from app.schemas import (
@@ -1508,6 +1509,117 @@ def get_product_demand_forecast(
             "explanation": result.explanation,
         },
         "policy": "Advisory estimate only; no purchase order, inventory mutation or replenishment task is created.",
+    }
+
+
+
+@app.get("/api/v1/forecasting/stockout-risk", tags=["forecasting"])
+def get_product_stockout_risk(
+    store_id: int, product_id: int, source: SalesSource, lead_time_days: float,
+    target_cover_days: float = 7.0, days: int = 28,
+    through_date: date | None = None, max_inventory_age_minutes: int = 240,
+    request: Request = None, db: Session = Depends(get_db),
+):
+    """Combine complete daily sales history with a fresh inventory snapshot."""
+    if days < 7 or days > 365:
+        raise HTTPException(status_code=422, detail="days must be between 7 and 365")
+    if max_inventory_age_minutes < 1 or max_inventory_age_minutes > 10080:
+        raise HTTPException(status_code=422, detail="max_inventory_age_minutes must be between 1 and 10080")
+    _enforce_store_scope(_request_user(db, request), store_id)
+    if not db.get(models.Store, store_id):
+        raise HTTPException(status_code=404, detail="Store not found")
+    product = db.get(models.Product, product_id)
+    if product is None:
+        raise HTTPException(status_code=404, detail="Product not found")
+    end_day = through_date or date.today()
+    start_day = end_day - timedelta(days=days - 1)
+    records = db.query(models.DailySalesRecord).filter(
+        models.DailySalesRecord.store_id == store_id,
+        models.DailySalesRecord.product_id == product_id,
+        models.DailySalesRecord.source == source,
+        models.DailySalesRecord.sales_date >= start_day,
+        models.DailySalesRecord.sales_date <= end_day,
+    ).all()
+    by_day = {}
+    for record in records:
+        by_day[record.sales_date] = by_day.get(record.sales_date, 0.0) + float(record.quantity)
+    missing = [(start_day + timedelta(days=i)).isoformat()
+               for i in range(days) if start_day + timedelta(days=i) not in by_day]
+    if missing:
+        raise HTTPException(status_code=409, detail={
+            "code": "INCOMPLETE_DAILY_SALES_HISTORY",
+            "message": "Risk assessment requires an explicit sales record for every day; use quantity 0 for confirmed zero-sales days.",
+            "missing_days": missing,
+        })
+    try:
+        forecast = forecast_demand(DemandForecastInput(
+            daily_sales=[by_day[start_day + timedelta(days=i)] for i in range(days)],
+            lead_time_days=lead_time_days, target_cover_days=target_cover_days,
+            recent_window_days=days, minimum_history_days=7,
+        ))
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    snapshot = db.query(models.InventorySnapshot).filter(
+        models.InventorySnapshot.store_id == store_id,
+        models.InventorySnapshot.product_id == product_id,
+    ).order_by(models.InventorySnapshot.captured_at.desc(), models.InventorySnapshot.id.desc()).first()
+    if snapshot is None:
+        return {
+            "store_id": store_id, "product_id": product_id, "product_name": product.name,
+            "source": source, "period_start": start_day, "period_end": end_day,
+            "forecast_status": forecast.status, "inventory_status": "MISSING",
+            "risk": {"status": "RISK_UNKNOWN", "risk_level": "UNKNOWN",
+                     "days_of_cover": None, "projected_stock_at_receipt": None,
+                     "safety_stock_gap": None, "requires_action": True,
+                     "explanation": "Não existe snapshot de inventário; atualizar o stock antes de classificar o risco."},
+            "policy": "Advisory only; no task, purchase order or inventory movement is created.",
+        }
+    captured = snapshot.captured_at
+    if captured.tzinfo is None:
+        captured = captured.replace(tzinfo=timezone.utc)
+    now = models.utc_now()
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=timezone.utc)
+    age = max(0.0, (now - captured).total_seconds() / 60)
+    inventory = {"snapshot_id": snapshot.id, "source": snapshot.source,
+                 "available_quantity": float(snapshot.available_quantity),
+                 "captured_at": snapshot.captured_at, "age_minutes": round(age, 2)}
+    if age > max_inventory_age_minutes:
+        return {
+            "store_id": store_id, "product_id": product_id, "product_name": product.name,
+            "source": source, "period_start": start_day, "period_end": end_day,
+            "forecast_status": forecast.status, "inventory_status": "STALE",
+            "inventory": inventory,
+            "risk": {"status": "RISK_UNKNOWN", "risk_level": "UNKNOWN",
+                     "days_of_cover": None, "projected_stock_at_receipt": None,
+                     "safety_stock_gap": None, "requires_action": True,
+                     "explanation": "O snapshot de inventário está desatualizado; atualizar o stock antes de classificar o risco."},
+            "policy": "Advisory only; no task, purchase order or inventory movement is created.",
+        }
+    risk = assess_stockout_risk(StockoutRiskInput(
+        available_quantity=float(snapshot.available_quantity),
+        average_daily_demand=forecast.average_daily_demand,
+        lead_time_days=lead_time_days, safety_stock=forecast.safety_stock,
+        forecast_status=forecast.status,
+    ))
+    return {
+        "store_id": store_id, "product_id": product_id, "product_name": product.name,
+        "source": source, "period_start": start_day, "period_end": end_day,
+        "forecast_status": forecast.status, "inventory_status": "FRESH",
+        "inventory": inventory,
+        "forecast": {"average_daily_demand": forecast.average_daily_demand,
+                     "daily_demand_stddev": forecast.daily_demand_stddev,
+                     "expected_lead_time_demand": forecast.expected_lead_time_demand,
+                     "safety_stock": forecast.safety_stock,
+                     "reorder_point": forecast.reorder_point,
+                     "target_stock": forecast.target_stock},
+        "risk": {"status": risk.status, "risk_level": risk.risk_level,
+                 "days_of_cover": risk.days_of_cover,
+                 "projected_stock_at_receipt": risk.projected_stock_at_receipt,
+                 "safety_stock_gap": risk.safety_stock_gap,
+                 "requires_action": risk.requires_action,
+                 "explanation": risk.explanation},
+        "policy": "Advisory only; no task, purchase order or inventory movement is created.",
     }
 
 
