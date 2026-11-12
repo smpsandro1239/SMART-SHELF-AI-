@@ -9,7 +9,7 @@ import argparse
 import html
 import json
 import os
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Any
 from urllib.parse import quote
 
@@ -26,8 +26,9 @@ def _safe_image_path(image_root: Path, file_name: Any) -> Path:
     if not isinstance(file_name, str) or not file_name.strip() or "\x00" in file_name:
         raise ValueError("image file_name must be a non-empty string")
     relative = Path(file_name)
-    if relative.is_absolute():
-        raise ValueError(f"absolute image path is not allowed: {file_name}")
+    windows_path = PureWindowsPath(file_name)
+    if relative.is_absolute() or windows_path.is_absolute() or windows_path.drive or "\\" in file_name:
+        raise ValueError(f"absolute or non-portable image path is not allowed: {file_name}")
     root = image_root.resolve()
     candidate = (root / relative).resolve()
     if candidate == root or root not in candidate.parents:
@@ -80,7 +81,9 @@ def build_review_html(
     errors = validate_coco_document(document)
     if errors:
         raise ValueError("invalid COCO document: " + "; ".join(errors[:10]))
-    if limit is not None and (isinstance(limit, bool) or limit < 1):
+    if limit is not None and (
+        isinstance(limit, bool) or not isinstance(limit, int) or limit < 1
+    ):
         raise ValueError("limit must be a positive integer")
 
     categories = {item["id"]: item["name"] for item in document["categories"]}
