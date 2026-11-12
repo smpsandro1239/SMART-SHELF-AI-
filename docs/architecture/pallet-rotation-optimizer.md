@@ -161,3 +161,9 @@ datas ISO, horas 0–23, valores não negativos e referências externas únicas.
 A persistência só começa após validação completa e é atómica. Os zeros são
 preservados como observações explícitas; não são fabricadas linhas para horas
 ausentes.
+
+
+O perfil por dia da semana seleciona uma única origem (`source`, por
+predefinição `POS`) para não somar contagens possivelmente sobrepostas entre
+POS, ERP e sensores. A comparação de fontes deve ser feita em pedidos
+separados.
