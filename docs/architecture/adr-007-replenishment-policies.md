@@ -17,16 +17,16 @@ O SMART SHELF AI mantém dois cálculos independentes:
 - `suggest_shelf_refill`: calcula a diferença entre quantidade observada na prateleira e o alvo, limita a quantidade sugerida ao stock disponível na retaguarda e bloqueia sugestões quando a observação é antiga, pouco fiável ou o inventário é desconhecido.
 - `suggest_purchase_reorder`: calcula stock projetado à data de receção (`on_hand + incoming - reserved - demand_until_receipt`), compara-o com o ponto de encomenda e propõe quantidade até ao nível máximo, respeitando quantidade mínima e múltiplos de embalagem.
 
-Ambos são cálculos determinísticos e não executam movimentos de stock nem criam encomendas. A revisão humana continua obrigatória no fluxo inicial.
+A política de refill já é consumida pelo endpoint de recomendações quando a observação contém `observed_quantity`; a criação de tarefa pode herdar a quantidade sugerida. A política de compra/transferência permanece isolada. Nenhum cálculo executa movimentos de stock nem cria encomendas. A revisão humana continua obrigatória no fluxo inicial.
 
 ## Consequências
 
 - Não confundir deteção visual de espaço vazio com rutura no armazém.
 - Não calcular uma encomenda a fornecedor apenas com fotografia da prateleira.
-- A integração futura deve fornecer stock, reservas, entradas, consumo previsto, lead time, unidade de medida, MOQ e múltiplo.
+- A integração futura de compra deve fornecer stock, reservas, entradas, consumo previsto, lead time, unidade de medida, MOQ e múltiplo. A integração de visão deve fornecer quantidade observada por SKU, confiança, timestamp e versão do modelo.
 - O modelo visual deve devolver quantidade observada por SKU apenas quando a identidade estiver suficientemente confirmada; caso contrário, manter UNKNOWN.
 - A política de visão deverá usar persistência temporal e deduplicação para reduzir alertas transitórios.
-- Os cálculos estão isolados em `apps/api/app/replenishment_policy.py` para permitir testes sem base de dados e futura integração por serviço.
+- Os cálculos de domínio estão em `apps/api/app/replenishment_policy.py`; o cálculo de refill está ligado ao endpoint de recomendações, enquanto o cálculo de compra continua isolado.
 
 ## Referências
 
