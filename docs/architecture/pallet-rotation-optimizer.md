@@ -191,3 +191,13 @@ com MAE e WAPE quando há pontos suficientes. Este componente é uma referência
 estatística transparente, não uma alegação de IA treinada nem uma previsão
 validada em produção. Não altera inventário, não cria tarefas e não executa
 movimentos físicos.
+
+
+## Deteção de picos históricos de afluência
+
+O módulo `app/traffic_peak_detection.py` compara cada combinação de dia da
+semana/hora com a média das horas observadas desse mesmo dia. Uma célula só é
+classificada quando cumpre a cobertura mínima e existe número suficiente de
+horas para formar a linha de base. Zeros explícitos são preservados e horas
+ausentes não são imputadas. O resultado é histórico, não previsão de tráfego,
+e não desencadeia qualquer movimento ou tarefa.
