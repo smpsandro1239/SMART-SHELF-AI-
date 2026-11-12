@@ -197,6 +197,49 @@ class ProductPackagingLevel(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
 
+class HourlySalesRecord(Base):
+    """Immutable product sales aggregate for one local store-hour."""
+    __tablename__ = "hourly_sales_records"
+    __table_args__ = (
+        UniqueConstraint("store_id", "product_id", "business_date", "hour_of_day", "source", "external_reference",
+                         name="uq_hourly_sales_external_reference"),
+        CheckConstraint("quantity >= 0", name="ck_hourly_sales_quantity_nonnegative"),
+        CheckConstraint("hour_of_day >= 0 AND hour_of_day <= 23", name="ck_hourly_sales_hour_range"),
+        CheckConstraint("source IN ('POS', 'ERP', 'MANUAL', 'IMPORT')", name="ck_hourly_sales_source"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    store_id: Mapped[int] = mapped_column(ForeignKey("stores.id", ondelete="CASCADE"), nullable=False, index=True)
+    product_id: Mapped[int] = mapped_column(ForeignKey("products.id", ondelete="CASCADE"), nullable=False, index=True)
+    business_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    hour_of_day: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    quantity: Mapped[float] = mapped_column(Numeric(12, 3), nullable=False)
+    source: Mapped[str] = mapped_column(String(20), nullable=False)
+    external_reference: Mapped[str] = mapped_column(String(120), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+
+class HourlyStoreTrafficRecord(Base):
+    """Immutable store customer-count aggregate for one local store-hour."""
+    __tablename__ = "hourly_store_traffic_records"
+    __table_args__ = (
+        UniqueConstraint("store_id", "business_date", "hour_of_day", "source", "external_reference",
+                         name="uq_hourly_traffic_external_reference"),
+        CheckConstraint("customer_count >= 0", name="ck_hourly_traffic_count_nonnegative"),
+        CheckConstraint("hour_of_day >= 0 AND hour_of_day <= 23", name="ck_hourly_traffic_hour_range"),
+        CheckConstraint("source IN ('POS', 'ERP', 'MANUAL', 'IMPORT')", name="ck_hourly_traffic_source"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    store_id: Mapped[int] = mapped_column(ForeignKey("stores.id", ondelete="CASCADE"), nullable=False, index=True)
+    business_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    hour_of_day: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    customer_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    source: Mapped[str] = mapped_column(String(20), nullable=False)
+    external_reference: Mapped[str] = mapped_column(String(120), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+
 class StorePallet(Base):
     """Identity and current operational state of one physical pallet."""
     __tablename__ = "store_pallets"
