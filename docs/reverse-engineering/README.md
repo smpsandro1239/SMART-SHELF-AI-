@@ -212,3 +212,13 @@ Um resultado só deve ser declarado como alcançado quando existir:
 - limitações e falhas conhecidas.
 
 **Conclusão:** a base de software e de governação de dados já é substancial. O maior risco não é a ausência de mais funcionalidades isoladas, mas sim a distância entre a estrutura preparada e a validação com dados, dispositivos e processos reais. O desenvolvimento deve agora reduzir essa distância com evidência verificável.
+
+
+## 11. Evidência de CI desta revisão
+
+A execução GitHub Actions **API CI** para o commit `739c071c32e29f41b7583aafd0e03756203f9614` terminou com sucesso: **99 testes aprovados e 1 aviso** (DeprecationWarning de compatibilidade Starlette/AnyIO). O aviso não representa falha da suíte.
+
+- [Execução CI 43169645230](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/43169645230)
+- Commit testado: `739c071c32e29f41b7583aafd0e03756203f9614`
+
+A execução confirma os testes automatizados da API nesse commit. Não confirma migrações numa base de dados PostgreSQL externa, integração de dispositivos, desempenho de visão computacional ou aceitação por utilizadores de loja.
