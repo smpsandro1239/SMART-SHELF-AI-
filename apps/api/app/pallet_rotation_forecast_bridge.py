@@ -24,6 +24,8 @@ def enrich_pallet_candidates_with_hourly_profiles(
     keyed by product_id and must contain the full 24-hour historical profile.
     Incomplete evidence is preserved as UNKNOWN/None; it is never treated as 0.
     """
+    if not isinstance(profiles_by_product, Mapping):
+        raise ValueError("profiles_by_product must be a mapping")
     if isinstance(current_hour, bool) or not isinstance(current_hour, int) or not 0 <= current_hour <= 23:
         raise ValueError("current_hour must be between 0 and 23")
     if isinstance(duration_hours, bool) or not isinstance(duration_hours, int) or not 1 <= duration_hours <= 4:
