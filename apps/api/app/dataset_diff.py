@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from app.coco_dataset import validate_coco_document
-from app.dataset_integrity import SPLITS, read_manifest
+from app.dataset_integrity import SPLITS, audit_manifest_against_coco, read_manifest
 
 
 def _file_sha256(path: Path) -> str:
@@ -140,6 +140,17 @@ def compare_dataset_versions(
                 errors.append(f"{label} manifest contains invalid split or file_name")
             if not row.get("sha256") or not row.get("size_bytes"):
                 errors.append(f"{label} manifest contains missing hash or size")
+    if errors:
+        return None, errors
+
+    errors.extend(
+        f"old release: {item}"
+        for item in audit_manifest_against_coco(old_manifest_rows, old_documents)
+    )
+    errors.extend(
+        f"new release: {item}"
+        for item in audit_manifest_against_coco(new_manifest_rows, new_documents)
+    )
     if errors:
         return None, errors
 
