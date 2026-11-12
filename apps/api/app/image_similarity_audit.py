@@ -143,6 +143,8 @@ def main() -> int:
         {split: getattr(args, split) for split in SPLITS},
         max_distance=args.max_distance,
     )
+    report["errors"] = errors
+    report["status"] = "failed" if errors else "passed"
     print(json.dumps(report, ensure_ascii=False, indent=2))
     if args.json_report:
         try:
