@@ -31,6 +31,7 @@ from app.pallet_rotation import evaluate_pallet_rotation, PalletRotationInputErr
 from app.pallet_rotation_windows import recommend_low_traffic_window
 from app.hourly_patterns import build_weekday_hour_profile
 from app.hourly_demand_forecast import forecast_hourly_demand
+from app.traffic_peak_detection import detect_weekday_hour_traffic_peaks
 from app.sku_review_evaluation import build_reviewed_prediction_report
 from app.sales_import import parse_daily_sales_csv
 from app.sales_import_hourly import parse_hourly_sales_csv, parse_hourly_traffic_csv
@@ -1655,6 +1656,40 @@ def get_pallet_rotation_hourly_profile(
         "missing_sales_hours": [hour for hour in range(24) if hour not in sales_by_hour],
         "missing_traffic_hours": [hour for hour in range(24) if hour not in traffic_by_hour],
         "forecast_generated": False, "simulation_only": True,
+    }
+
+
+@app.get("/api/v1/forecasting/traffic-peaks", tags=["forecasting"])
+def get_store_traffic_peaks(
+    store_id: int, days: int = 56, minimum_observed_days: int = 4,
+    minimum_baseline_hours: int = 6, peak_ratio: float = 1.5,
+    source: SalesSource = "POS", request: Request = None,
+    db: Session = Depends(get_db),
+):
+    """Classify historical high-traffic weekday/hour cells; read-only."""
+    if not 14 <= days <= 180:
+        raise HTTPException(status_code=422, detail="days must be between 14 and 180")
+    actor = _request_user(db, request)
+    _enforce_store_scope(actor, store_id)
+    if db.get(models.Store, store_id) is None:
+        raise HTTPException(status_code=404, detail="Store not found")
+    start_date = date.today() - timedelta(days=days - 1)
+    records = db.query(models.HourlyStoreTrafficRecord).filter(
+        models.HourlyStoreTrafficRecord.store_id == store_id,
+        models.HourlyStoreTrafficRecord.source == source,
+        models.HourlyStoreTrafficRecord.business_date >= start_date,
+        models.HourlyStoreTrafficRecord.business_date <= date.today(),
+    ).all()
+    try:
+        result = detect_weekday_hour_traffic_peaks(
+            records, minimum_observed_days=minimum_observed_days,
+            minimum_baseline_hours=minimum_baseline_hours, peak_ratio=peak_ratio,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {
+        "store_id": store_id, "source": source, "period_days": days,
+        "period_start": start_date, "period_end": date.today(), **result,
     }
 
 
