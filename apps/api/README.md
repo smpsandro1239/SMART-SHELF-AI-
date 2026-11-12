@@ -846,8 +846,9 @@ e os limites encontram-se em
 `docs/architecture/pallet-rotation-optimizer.md`. A análise REA de projetos
 externos está em `docs/research/existing-applications-pallet-rotation.md`.
 
-Esta fase disponibiliza a lógica pura de decisão e os respetivos testes
-unitários. Ainda não existe endpoint nem persistência de paletes individuais.
+Esta fase disponibiliza o motor puro de decisão, o registo persistente de paletes,
+a simulação ligada à base de dados e o endpoint de planeamento por janelas horárias.
+As operações continuam consultivas e não executam movimentos físicos.
 A função recebe quantidades na unidade base, classe de afluência, disponibilidade
 de palete de substituição e capacidade de retaguarda, tempos operacionais,
 custo laboral e consumo previsto até à próxima janela de baixa afluência.
@@ -873,7 +874,8 @@ e exemplos completos. Endpoints principais:
 - `POST /api/v1/warehouse/pallet-rotation/policies` — criar política por produto/loja.
 - `GET /api/v1/warehouse/pallet-rotation/policies?store_id=1` — consultar políticas.
 - `PATCH /api/v1/warehouse/pallet-rotation/policies/{policy_id}` — alterar limiar ou ativação.
-- `GET /api/v1/warehouse/pallets/{pallet_id}/events?store_id=1` — consultar auditoria.\n- `POST /api/v1/warehouse/pallets/{pallet_id}/events` — registar alteração supervisionada de estado, quantidade ou localização, com controlo otimista de concorrência.
+- `GET /api/v1/warehouse/pallets/{pallet_id}/events?store_id=1` — consultar auditoria.
+- `POST /api/v1/warehouse/pallets/{pallet_id}/events` — registar alteração supervisionada de estado, quantidade ou localização, com controlo otimista de concorrência.
 
 A criação/alteração exige ADMIN ou SUPERVISOR e respeita o âmbito da loja.
 O registo usa o nível de embalagem PALLET ativo e guarda quantidade em unidade
