@@ -13,6 +13,9 @@ class Settings(BaseSettings):
     image_storage_path: str = "./storage/shelf-images"
     max_image_upload_bytes: int = Field(default=10485760, ge=1024, le=52428800)
     vision_provider_factory: str = ""
+    ocr_provider_factory: str = ""
+    ocr_provider_name: str = "paddleocr"
+    ocr_model_version: str = "PP-OCRv5-pt"
     product_matching_min_similarity: float = Field(default=0.90, ge=0.0, le=1.0)
     product_matching_min_margin: float = Field(default=0.05, ge=0.0, le=2.0)
 
