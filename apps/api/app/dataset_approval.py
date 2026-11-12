@@ -317,7 +317,7 @@ def main() -> int:
         try:
             args.json_report.parent.mkdir(parents=True, exist_ok=True)
             args.json_report.write_text(
-                json.dumps(report, ensure_ascii=False, indent=2) + "\\n",
+                json.dumps(report, ensure_ascii=False, indent=2) + "\n",
                 encoding="utf-8",
             )
         except OSError as exc:
