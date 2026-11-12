@@ -16,8 +16,10 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
+from app.coco_dataset import validate_coco_document
 
-def audit_splits(splits: dict[str, dict[str, Any]]) -> tuple[list[str], dict[str, Any]]:
+
+def audit_splits(splits: dict[str, Any]) -> tuple[list[str], dict[str, Any]]:
     errors: list[str] = []
     report: dict[str, Any] = {"splits": {}, "cross_split": {}}
     canonical_categories: dict[int, str] | None = None
@@ -26,18 +28,24 @@ def audit_splits(splits: dict[str, dict[str, Any]]) -> tuple[list[str], dict[str
     seen_groups: dict[str, str] = {}
 
     for split_name, document in splits.items():
+        validation_errors = validate_coco_document(document)
+        errors.extend(f"{split_name}: {error}" for error in validation_errors)
+        if not isinstance(document, dict):
+            continue
+
         images = document.get("images", [])
         annotations = document.get("annotations", [])
         categories = document.get("categories", [])
         if not all(isinstance(value, list) for value in (images, annotations, categories)):
-            errors.append(f"{split_name}: COCO document must contain images, annotations and categories arrays")
             continue
 
-        current_categories = {
-            item.get("id"): item.get("name")
-            for item in categories
-            if isinstance(item, dict) and isinstance(item.get("id"), int) and isinstance(item.get("name"), str)
-        }
+        current_categories: dict[int, str] = {}
+        for item in categories:
+            if isinstance(item, dict):
+                category_id, name = item.get("id"), item.get("name")
+                if isinstance(category_id, int) and not isinstance(category_id, bool) and isinstance(name, str):
+                    current_categories[category_id] = name
+
         if canonical_categories is None:
             canonical_categories = current_categories
         elif current_categories != canonical_categories:
@@ -45,7 +53,7 @@ def audit_splits(splits: dict[str, dict[str, Any]]) -> tuple[list[str], dict[str
 
         image_ids = {
             item.get("id") for item in images
-            if isinstance(item, dict) and isinstance(item.get("id"), int)
+            if isinstance(item, dict) and isinstance(item.get("id"), int) and not isinstance(item.get("id"), bool)
         }
         counts: Counter[int] = Counter()
         annotated_image_ids: set[int] = set()
@@ -53,10 +61,10 @@ def audit_splits(splits: dict[str, dict[str, Any]]) -> tuple[list[str], dict[str
             if not isinstance(annotation, dict):
                 continue
             category_id = annotation.get("category_id")
-            if isinstance(category_id, int):
+            if isinstance(category_id, int) and not isinstance(category_id, bool):
                 counts[category_id] += 1
             image_id = annotation.get("image_id")
-            if isinstance(image_id, int):
+            if isinstance(image_id, int) and not isinstance(image_id, bool):
                 annotated_image_ids.add(image_id)
 
         report["splits"][split_name] = {
@@ -72,12 +80,18 @@ def audit_splits(splits: dict[str, dict[str, Any]]) -> tuple[list[str], dict[str
             },
         }
 
+        local_files: set[str] = set()
+        local_hashes: set[str] = set()
         for image in images:
             if not isinstance(image, dict):
                 continue
+
             file_name = image.get("file_name")
             if isinstance(file_name, str) and file_name:
-                if file_name in seen_files:
+                if file_name in local_files:
+                    errors.append(f"{split_name}: duplicate file_name within split: {file_name}")
+                local_files.add(file_name)
+                if file_name in seen_files and seen_files[file_name] != split_name:
                     errors.append(
                         f"image file_name appears in both {seen_files[file_name]} and {split_name}: {file_name}"
                     )
@@ -86,7 +100,10 @@ def audit_splits(splits: dict[str, dict[str, Any]]) -> tuple[list[str], dict[str
 
             content_hash = image.get("sha256")
             if isinstance(content_hash, str) and content_hash:
-                if content_hash in seen_hashes:
+                if content_hash in local_hashes:
+                    errors.append(f"{split_name}: duplicate sha256 within split: {content_hash}")
+                local_hashes.add(content_hash)
+                if content_hash in seen_hashes and seen_hashes[content_hash] != split_name:
                     errors.append(
                         f"image sha256 appears in both {seen_hashes[content_hash]} and {split_name}"
                     )
@@ -95,13 +112,15 @@ def audit_splits(splits: dict[str, dict[str, Any]]) -> tuple[list[str], dict[str
 
             group_id = image.get("capture_group_id", image.get("sequence_id"))
             if isinstance(group_id, (str, int)) and not isinstance(group_id, bool):
-                group_key = str(group_id)
-                if group_key in seen_groups:
-                    errors.append(
-                        f"capture group {group_key} is split between {seen_groups[group_key]} and {split_name}"
-                    )
-                else:
-                    seen_groups[group_key] = split_name
+                group_key = str(group_id).strip()
+                if group_key:
+                    previous_split = seen_groups.get(group_key)
+                    if previous_split is not None and previous_split != split_name:
+                        errors.append(
+                            f"capture group {group_key} is split between {previous_split} and {split_name}"
+                        )
+                    else:
+                        seen_groups[group_key] = split_name
 
     report["cross_split"] = {
         "unique_file_names": len(seen_files),
@@ -119,7 +138,7 @@ def main() -> int:
     parser.add_argument("--json-report", type=Path, help="Optional path to write the audit report as JSON")
     args = parser.parse_args()
 
-    documents: dict[str, dict[str, Any]] = {}
+    documents: dict[str, Any] = {}
     for split_name in ("train", "val", "test"):
         path = getattr(args, split_name)
         try:
@@ -131,8 +150,15 @@ def main() -> int:
     errors, report = audit_splits(documents)
     print(json.dumps(report, ensure_ascii=False, indent=2))
     if args.json_report:
-        args.json_report.parent.mkdir(parents=True, exist_ok=True)
-        args.json_report.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        try:
+            args.json_report.parent.mkdir(parents=True, exist_ok=True)
+            args.json_report.write_text(
+                json.dumps(report, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
+        except OSError as exc:
+            print(f"ERROR: cannot write JSON report: {exc}")
+            return 2
     if errors:
         for error in errors:
             print(f"ERROR: {error}")
