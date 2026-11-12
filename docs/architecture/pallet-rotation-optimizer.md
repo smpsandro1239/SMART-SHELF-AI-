@@ -70,3 +70,30 @@ bebidas e papel. Comparar reposição convencional e troca em janelas de tráfeg
 equivalentes. Medir duração das tarefas, deslocação, recomposição, ocupação da
 retaguarda, disponibilidade, ruturas e incidentes. Expandir apenas quando o
 custo total e o nível de serviço melhorarem.
+
+
+## Integração consultiva com paletes registadas
+
+`POST /api/v1/warehouse/pallet-rotation/simulate` liga o motor às
+paletes físicas e à política ativa por loja/produto. A simulação só aceita
+paletes `ON_DISPLAY` ou `PARTIAL` localizadas em
+`SALES_FLOOR`.
+
+A palete substituta tem de ser do mesmo produto e nível PALLET, estar em
+`READY` numa localização `WAREHOUSE` ou
+`PREPARATION`, ter quantidade igual à capacidade integral e não
+estar expirada. Quando existem várias, a seleção dá prioridade à validade
+mais próxima (FEFO), depois à data de registo. A substituição pode ter outro
+lote: as duas paletes permanecem unidades rastreáveis separadas; não se permite
+misturar lotes.
+
+O pedido fornece afluência, previsão de consumo até à próxima janela baixa,
+tempos e custo laboral. Não são inferidos a partir de vendas diárias. A
+capacidade da retaguarda é também uma confirmação explícita do operador,
+porque ainda não existe modelo físico integrado para a validar.
+
+A resposta identifica a palete de exposição, a substituta candidata, a
+política e a decisão do motor. A operação é estritamente read-only: não reserva
+a palete candidata, não cria tarefa, não muda estado nem regista movimento.
+Apenas uma futura operação de execução, com confirmação por scan e controlo
+transacional, poderá fazê-lo.
