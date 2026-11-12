@@ -372,8 +372,8 @@ def list_replenishment_recommendations(
 
 @app.post("/api/v1/tasks", response_model=ReplenishmentTaskRead, status_code=201, tags=["tasks"])
 def create_replenishment_task(payload: ReplenishmentTaskCreate, request: Request, db: Session = Depends(get_db)):
-    actor = db.get(models.User, request.state.user_id)
-    if actor.role != "ADMIN" and actor.store_id != payload.store_id:
+    actor = db.get(models.User, getattr(request.state, "user_id", None))
+    if actor is not None and actor.role != "ADMIN" and actor.store_id != payload.store_id:
         raise HTTPException(status_code=403, detail="Access to this store is not allowed")
     if not db.get(models.Store, payload.store_id):
         raise HTTPException(status_code=404, detail="Store not found")
@@ -481,11 +481,11 @@ def list_replenishment_tasks(
     db: Session = Depends(get_db),
 ):
     limit = max(1, min(limit, 500))
-    actor = db.get(models.User, request.state.user_id)
+    actor = db.get(models.User, getattr(request.state, "user_id", None))
     query = db.query(models.ReplenishmentTask)
-    if actor.role == "EMPLOYEE":
+    if actor is not None and actor.role == "EMPLOYEE":
         query = query.filter(models.ReplenishmentTask.assigned_user_id == actor.id)
-    elif actor.role != "ADMIN":
+    elif actor is not None and actor.role != "ADMIN":
         query = query.filter(models.ReplenishmentTask.store_id == actor.store_id)
     if store_id is not None:
         query = query.filter(models.ReplenishmentTask.store_id == store_id)
@@ -508,8 +508,8 @@ def update_replenishment_task_status(
     task = db.get(models.ReplenishmentTask, task_id)
     if task is None:
         raise HTTPException(status_code=404, detail="Task not found")
-    actor = db.get(models.User, request.state.user_id)
-    if actor.role != "ADMIN" and task.store_id != actor.store_id:
+    actor = db.get(models.User, getattr(request.state, "user_id", None))
+    if actor is not None and actor.role != "ADMIN" and task.store_id != actor.store_id:
         raise HTTPException(status_code=403, detail="Access to this task is not allowed")
 
     allowed = {
