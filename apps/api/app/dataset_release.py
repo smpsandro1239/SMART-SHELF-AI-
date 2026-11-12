@@ -84,12 +84,60 @@ def create_release(
     split_audit_path: Path,
     visual_audit_path: Path,
     registry_dir: Path,
+    *,
+    min_images_per_split: int = 1,
+    min_class_instances: int = 0,
 ) -> tuple[dict[str, Any], bool]:
     rows = load_manifest(manifest_path)
     split_report, split_report_hash = _load_passed_report(split_audit_path, "split audit")
     visual_report, visual_report_hash = _load_passed_report(visual_audit_path, "visual similarity audit")
 
+    if min_images_per_split < 1:
+        raise ValueError("min_images_per_split must be at least 1")
+    if min_class_instances < 0:
+        raise ValueError("min_class_instances cannot be negative")
+
     counts = Counter(row["split"] for row in rows)
+    for split in sorted(REQUIRED_SPLITS):
+        if counts.get(split, 0) < min_images_per_split:
+            raise ValueError(
+                f"{split} contains {counts.get(split, 0)} image(s); "
+                f"minimum is {min_images_per_split}"
+            )
+
+    split_summaries = split_report.get("splits", {})
+    if not isinstance(split_summaries, dict):
+        raise ValueError("split audit report has invalid class-balance data")
+    category_ids = sorted({
+        category_id
+        for summary in split_summaries.values()
+        if isinstance(summary, dict) and isinstance(summary.get("classes"), dict)
+        for category_id in summary["classes"]
+    })
+    class_instance_counts: dict[str, dict[str, int]] = {}
+    class_balance_warnings: list[str] = []
+    for category_id in category_ids:
+        per_split: dict[str, int] = {}
+        category_name = str(category_id)
+        for split in sorted(REQUIRED_SPLITS):
+            summary = split_summaries.get(split, {})
+            classes = summary.get("classes", {}) if isinstance(summary, dict) else {}
+            details = classes.get(category_id, {}) if isinstance(classes, dict) else {}
+            instances = details.get("instances", 0) if isinstance(details, dict) else 0
+            if isinstance(instances, bool) or not isinstance(instances, int) or instances < 0:
+                raise ValueError(f"invalid instance count for class {category_id} in {split}")
+            per_split[split] = instances
+            if instances < min_class_instances:
+                raise ValueError(
+                    f"class {category_id} has {instances} instance(s) in {split}; "
+                    f"minimum is {min_class_instances}"
+                )
+            if instances == 0:
+                class_balance_warnings.append(
+                    f"class {category_id} has no annotated instances in {split}"
+                )
+        class_instance_counts[category_name] = per_split
+
     canonical = json.dumps(rows, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     fingerprint = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
     release = {
@@ -114,7 +162,12 @@ def create_release(
                 "images_scanned": visual_report.get("images_scanned"),
             },
         },
-        "class_balance": split_report.get("splits", {}),
+        "class_balance": {
+            "by_split": split_summaries,
+            "instances_by_class_and_split": class_instance_counts,
+            "warnings": class_balance_warnings,
+            "minimum_instances_per_class_per_split": min_class_instances,
+        },
     }
 
     releases_dir = registry_dir / "releases"
@@ -140,10 +193,14 @@ def main() -> int:
     parser.add_argument("--split-audit", required=True, type=Path)
     parser.add_argument("--visual-audit", required=True, type=Path)
     parser.add_argument("--registry", required=True, type=Path)
+    parser.add_argument("--min-images-per-split", type=int, default=1)
+    parser.add_argument("--min-class-instances", type=int, default=0)
     args = parser.parse_args()
     try:
         release, created = create_release(
-            args.manifest, args.split_audit, args.visual_audit, args.registry
+            args.manifest, args.split_audit, args.visual_audit, args.registry,
+            min_images_per_split=args.min_images_per_split,
+            min_class_instances=args.min_class_instances,
         )
     except (OSError, ValueError, RuntimeError) as exc:
         print(f"ERROR: dataset release rejected: {exc}")
