@@ -181,7 +181,7 @@ Os tokens de acesso expiram ao fim do período configurado em `JWT_ACCESS_TOKEN_
 
 ## Dashboard operacional
 
-`GET /api/v1/dashboard/summary` devolve contagens de tarefas por estado e observações que requerem atenção. Os administradores podem filtrar por `store_id`; supervisores ficam limitados à loja da sua conta; funcionários veem apenas as tarefas que lhes foram atribuídas. Este endpoint fornece dados agregados para a futura interface, ainda não incluída no repositório.
+`GET /api/v1/dashboard/summary` devolve contagens de tarefas por estado e observações que requerem atenção. Os administradores podem filtrar por `store_id`; supervisores ficam limitados à loja da sua conta; funcionários veem apenas as tarefas que lhes foram atribuídas e podem iniciar/concluir essas tarefas, sem alterar a atribuição nem cancelar tarefas. Este endpoint fornece dados agregados para a futura interface, ainda não incluída no repositório.
 
 ## Atribuição de tarefas a utilizadores
 
