@@ -193,7 +193,7 @@ def test_replenishment_plan_adds_elapsed_effort_estimates_from_completed_history
                     store_id=store_id,
                     shelf_id=shelf.id,
                     product_id=product_id,
-                    priority="HIGH",
+                    priority="NORMAL",
                     status="COMPLETED",
                     started_at=started,
                     completed_at=started + timedelta(minutes=10 + index),
