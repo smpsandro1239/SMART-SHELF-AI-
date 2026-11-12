@@ -1079,3 +1079,44 @@ A resposta inclui:
 Horas sem cobertura suficiente devolvem `predicted_units=null`; não são convertidas em vendas zero. Um zero só é preservado quando existe um registo explícito de zero vendas. O endpoint é apenas de leitura e não altera stock, não cria tarefas e não executa movimentos de paletes.
 
 **Limite importante:** trata-se de um baseline sazonal transparente, não de um modelo de machine learning treinado nem de uma previsão validada em produção. Antes de usar os resultados para decisões operacionais, comparar o backtest com períodos representativos e verificar a qualidade/completude dos dados POS.
+
+
+## Rotação de paletes e janelas operacionais
+
+A política de troca de paletes está documentada em `docs/operations/pallet-rotation-policy.md`. O limiar predefinido é 50% de quantidade **residual** da palete, configurável por loja/produto. Atingir o limiar não movimenta stock nem cria automaticamente uma tarefa.
+
+Simular a troca de uma palete em exposição:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/warehouse/pallet-rotation/simulate \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "store_id": 1,
+    "pallet_id": 15,
+    "traffic_level": "HIGH",
+    "backroom_capacity_available": true,
+    "conventional_replenishment_minutes": 24,
+    "pallet_swap_minutes": 4,
+    "transport_minutes": 3,
+    "pallet_rebuild_minutes": 5,
+    "labour_cost_per_hour": 12,
+    "forecast_consumption_until_low_traffic": 180
+  }'
+```
+
+O endpoint consulta a palete atual, a política ativa e uma palete substituta completa em estado `READY`. Os tempos, custo horário, nível de afluência, consumo até à próxima janela e confirmação de capacidade da retaguarda são inputs explícitos da simulação.
+
+Consultar o portfolio de paletes da loja:
+
+```bash
+curl "http://localhost:8000/api/v1/warehouse/pallet-rotation/portfolio?store_id=1&traffic_level=HIGH&forecast_consumption_until_low_traffic=180&backroom_capacity_available=true"
+```
+
+**Limitação importante:** nesta versão, os parâmetros de afluência, consumo e capacidade são fornecidos pelo operador e aplicados às paletes consideradas. O portfolio é read-only e não substitui uma avaliação individual com dados reais por SKU. Consultar os endpoints de perfil horário, janela de baixa afluência e previsão:
+
+- `GET /api/v1/warehouse/pallet-rotation/weekday-hourly-profile?store_id=1&product_id=1`
+- `GET /api/v1/warehouse/pallet-rotation/window-plan?store_id=1&product_id=1&pallet_id=15&current_hour=10&residual_base_units=360`
+- `GET /api/v1/forecasting/hourly-demand?store_id=1&product_id=1&horizon_days=7`
+
+O baseline horário requer histórico suficiente por dia da semana/hora. Valores em falta permanecem desconhecidos; não são convertidos em zero. Os endpoints são de consulta/simulação e declaram `automatic_stock_movement_allowed=false`.
