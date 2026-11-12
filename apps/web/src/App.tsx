@@ -17,6 +17,7 @@ type Task = {
   requested_quantity: number | null; notes: string | null; created_at: string;
 };
 type ShelfImage = { id: number; shelf_id: number; original_filename: string; mime_type: string; file_size_bytes: number; sha256: string; analysis_status: string; captured_at: string; created_at: string };
+type ShelfImageDetection = { id: number; shelf_image_id: number; product_id: number | null; label: string; confidence: number; x_min: number; y_min: number; x_max: number; y_max: number; model_version: string; created_at: string };
 type Summary = {
   store_id: number | null; role: Role; active_tasks: number;
   shelves_requiring_attention: number;
@@ -34,6 +35,9 @@ export default function App() {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [captures, setCaptures] = useState<ShelfImage[]>([]);
+  const [imageDetections, setImageDetections] = useState<Record<number, ShelfImageDetection[]>>({});
+  const [expandedDetectionImage, setExpandedDetectionImage] = useState<number | null>(null);
+  const [detectionLoading, setDetectionLoading] = useState<number | null>(null);
   const [captureShelfId, setCaptureShelfId] = useState("");
   const [captureFile, setCaptureFile] = useState<File | null>(null);
   const [captureReset, setCaptureReset] = useState(0);
@@ -59,7 +63,7 @@ export default function App() {
 
   const logout = useCallback(() => {
     sessionStorage.removeItem("smart-shelf-token");
-    setToken(""); setUser(null); setSummary(null); setTasks([]); setCaptures([]);
+    setToken(""); setUser(null); setSummary(null); setTasks([]); setCaptures([]); setImageDetections({}); setExpandedDetectionImage(null);
   }, []);
 
   const refresh = useCallback(async () => {
@@ -130,6 +134,26 @@ export default function App() {
     } catch (err) {
       setCaptureMessage(err instanceof Error ? err.message : "Não foi possível enviar a fotografia.");
     } finally { setCaptureLoading(false); }
+  }
+
+
+  async function toggleImageDetections(item: ShelfImage) {
+    if (expandedDetectionImage === item.id) {
+      setExpandedDetectionImage(null);
+      return;
+    }
+    setExpandedDetectionImage(item.id);
+    if (imageDetections[item.id]) return;
+    setDetectionLoading(item.id);
+    try {
+      const result = await request<ShelfImageDetection[]>(`/api/v1/shelf-images/${item.id}/detections`);
+      setImageDetections(current => ({ ...current, [item.id]: result }));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Não foi possível consultar as deteções.");
+      setExpandedDetectionImage(null);
+    } finally {
+      setDetectionLoading(null);
+    }
   }
 
   const taskRows = useMemo(() => tasks.filter(t => !["CANCELLED"].includes(t.status)), [tasks]);
@@ -217,7 +241,13 @@ export default function App() {
               <div className="panel-heading"><div><p className="eyebrow">REGISTO DE CAPTURAS</p><h2>Fotografias recentes</h2><p className="muted">As imagens ficam pendentes até existir um modelo de análise.</p></div><span className="subtle-pill">{captures.length} capturas</span></div>
               <div className="capture-list">
                 {captures.length === 0 && <div className="empty-state"><PackageSearch size={25} /><strong>Sem fotografias registadas</strong><span>As próximas capturas serão apresentadas aqui.</span></div>}
-                {captures.map(item => <div className="capture-row" key={item.id}><div className="capture-thumb"><Boxes size={17} /></div><div className="capture-meta"><strong>Prateleira #{item.shelf_id} · {item.original_filename}</strong><span>{(item.file_size_bytes / 1024).toFixed(0)} KB · {new Date(item.created_at).toLocaleString("pt-PT")}</span></div><span className="task-status pending">{item.analysis_status}</span></div>)}
+                {captures.map(item => <div className="capture-item" key={item.id}>
+                  <div className="capture-row"><div className="capture-thumb"><Boxes size={17} /></div><div className="capture-meta"><strong>Prateleira #{item.shelf_id} · {item.original_filename}</strong><span>{(item.file_size_bytes / 1024).toFixed(0)} KB · {new Date(item.created_at).toLocaleString("pt-PT")}</span></div><span className="task-status pending">{item.analysis_status}</span><button className="row-action detection-toggle" onClick={() => void toggleImageDetections(item)}>{detectionLoading === item.id ? "A consultar…" : expandedDetectionImage === item.id ? "Fechar" : "Deteções"}</button></div>
+                  {expandedDetectionImage === item.id && <div className="detection-list">
+                    {!imageDetections[item.id]?.length && <p className="detection-empty">Ainda não existem deteções guardadas para esta fotografia. A análise automática ainda não está ativa.</p>}
+                    {imageDetections[item.id]?.map(detection => <div className="detection-row" key={detection.id}><strong>{detection.label}</strong><span>{(detection.confidence * 100).toFixed(1)}% confiança</span><span>Caixa: {(detection.x_min * 100).toFixed(1)}%, {(detection.y_min * 100).toFixed(1)}% – {(detection.x_max * 100).toFixed(1)}%, {(detection.y_max * 100).toFixed(1)}%</span><small>Modelo {detection.model_version}{detection.product_id ? ` · Produto #${detection.product_id}` : ""}</small></div>)}
+                  </div>}
+                </div>)}
               </div>
             </article>
           </section>
