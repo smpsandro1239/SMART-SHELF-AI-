@@ -572,3 +572,8 @@ A API consolida por deteção o matching visual persistido e o matching textual 
 - `GET /api/v1/shelf-images/{image_id}/evidence-fusion` — consultar histórico.
 
 A fusão não soma scores incompatíveis, não altera o SKU atribuído, o catálogo nem o stock. Mesmo `CONSENSUS` exige confirmação humana. Ver [documentação de fusão visual/OCR](docs/architecture/visual-ocr-evidence-fusion.md).
+
+
+## Fluxo operacional visão + OCR + revisão
+
+Consultar [Fluxo operacional de visão, OCR e revisão humana](docs/architecture/vision-ocr-review-workflow.md) para a configuração opcional do PaddleOCR, a sequência de endpoints e os critérios de validação antes de um piloto.
