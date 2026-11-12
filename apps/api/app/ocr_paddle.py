@@ -112,6 +112,10 @@ class PaddleOCRProvider:
             # rec_polys is filtered in lockstep with rec_texts/rec_scores.
             # dt_polys contains all detected text boxes and may have a different length.
             polygon_values = result.get("rec_polys")
+            if polygon_values is None:
+                # Older PaddleOCR outputs may expose only dt_polys; accept it
+                # only when it aligns one-to-one with recognized text and scores.
+                polygon_values = result.get("dt_polys")
             polygons = self._as_sequence(polygon_values)
             if not (len(texts) == len(scores) == len(polygons)):
                 raise ValueError("PaddleOCR texts, scores and polygons have inconsistent lengths")
