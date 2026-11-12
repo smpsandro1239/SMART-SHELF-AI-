@@ -33,6 +33,17 @@ type ReviewQueueItem = {
   reason: string; created_at: string;
 };
 type ReviewQueueSummary = Record<ReviewQueueItem["status"], number>;
+type ReviewEvaluationReport = {
+  sample_count: number; known_ground_truth_count: number; unknown_ground_truth_count: number;
+  predicted_sku_count: number; correct_matches: number; incorrect_known_matches: number;
+  missed_known_products: number; false_accepts_on_rejected_detections: number;
+  correct_abstentions: number; accuracy_including_abstentions: number | null;
+  precision_when_sku_predicted: number | null; known_product_coverage: number | null;
+  known_product_correct_coverage: number | null; unknown_rejection_rate: number | null;
+  unknown_false_accept_rate: number | null; fusion_status_breakdown: Record<string, number>;
+  human_decision_breakdown: Record<string, number>;
+  reviewed_detections_without_matching_fusion: number; model_version_filter: string | null;
+};
 type Summary = {
   store_id: number | null; role: Role; active_tasks: number;
   shelves_requiring_attention: number;
@@ -55,6 +66,7 @@ export default function App() {
   const [detectionReviews, setDetectionReviews] = useState<Record<number, DetectionSkuReview[]>>({});
   const [reviewQueue, setReviewQueue] = useState<ReviewQueueItem[]>([]);
   const [reviewQueueSummary, setReviewQueueSummary] = useState<ReviewQueueSummary | null>(null);
+  const [reviewEvaluation, setReviewEvaluation] = useState<ReviewEvaluationReport | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
   const [shelfProducts, setShelfProducts] = useState<Record<number, number[]>>({});
   const [reviewProductSelection, setReviewProductSelection] = useState<Record<number, string>>({});
@@ -106,20 +118,24 @@ export default function App() {
       setUser(me); setSummary(kpis); setTasks(taskList); setCaptures(captureList); setLastUpdated(new Date());
       if (me.role === "ADMIN" || me.role === "SUPERVISOR") {
         try {
-          const [queue, queueSummary] = await Promise.all([
+          const [queue, queueSummary, evaluation] = await Promise.all([
             request<ReviewQueueItem[]>("/api/v1/shelf-image-review-queue?limit=50"),
             request<ReviewQueueSummary>("/api/v1/shelf-image-review-queue/summary"),
+            request<ReviewEvaluationReport>("/api/v1/sku-evaluation/reviewed"),
           ]);
           setReviewQueue(queue);
           setReviewQueueSummary(queueSummary);
+          setReviewEvaluation(evaluation);
         } catch (queueError) {
           setReviewQueue([]);
           setReviewQueueSummary(null);
+          setReviewEvaluation(null);
           setError(queueError instanceof Error ? queueError.message : "Não foi possível carregar a fila de revisão.");
         }
       } else {
         setReviewQueue([]);
         setReviewQueueSummary(null);
+        setReviewEvaluation(null);
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Não foi possível carregar os dados.";
@@ -441,6 +457,27 @@ export default function App() {
                 <div className="review-queue-actions"><button className="row-action" onClick={() => openQueueImage(item)}>Abrir fotografia e rever <ArrowUpRight size={14} /></button></div>
               </article>)}
             </div>
+          </section>}
+          {(user?.role === "ADMIN" || user?.role === "SUPERVISOR") && reviewEvaluation && <section className="panel evaluation-panel">
+            <div className="panel-heading">
+              <div><p className="eyebrow">QUALIDADE DO MODELO</p><h2>Resultados das revisões humanas</h2><p className="muted">Compara as últimas sugestões com as decisões dos operadores.</p></div>
+              <span className="subtle-pill">{reviewEvaluation.sample_count} casos avaliados</span>
+            </div>
+            {reviewEvaluation.sample_count === 0 ? <div className="empty-state"><ShieldCheck size={25} /><strong>Ainda não existem casos avaliáveis</strong><span>As métricas surgem depois de existirem deteções com fusão e decisão humana.</span></div> : <>
+              <div className="evaluation-metrics">
+                <div><span>Precisão nas propostas</span><strong>{reviewEvaluation.precision_when_sku_predicted == null ? "—" : `${(reviewEvaluation.precision_when_sku_predicted * 100).toFixed(1)}%`}</strong></div>
+                <div><span>Cobertura SKU conhecido</span><strong>{reviewEvaluation.known_product_coverage == null ? "—" : `${(reviewEvaluation.known_product_coverage * 100).toFixed(1)}%`}</strong></div>
+                <div><span>Falsos positivos rejeitados</span><strong>{reviewEvaluation.false_accepts_on_rejected_detections}</strong></div>
+                <div><span>Abstenções corretas</span><strong>{reviewEvaluation.correct_abstentions}</strong></div>
+              </div>
+              <div className="evaluation-detail">
+                <span>Acertos: <strong>{reviewEvaluation.correct_matches}</strong></span>
+                <span>SKU incorretos: <strong>{reviewEvaluation.incorrect_known_matches}</strong></span>
+                <span>SKU não identificados: <strong>{reviewEvaluation.missed_known_products}</strong></span>
+                <span>Sem fusão: <strong>{reviewEvaluation.reviewed_detections_without_matching_fusion}</strong></span>
+              </div>
+            </>}
+            <p className="evaluation-caveat">Amostra limitada às deteções revistas; não representa um teste independente nem uma estimativa estatística de precisão em produção.</p>
           </section>}
           <footer className="data-note"><ShieldCheck size={15} /> {summary.note} <span>·</span> {summary.role} {summary.store_id ? `· Loja #${summary.store_id}` : "· Visão global"}</footer>
         </>}
