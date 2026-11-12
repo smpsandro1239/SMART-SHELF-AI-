@@ -72,4 +72,5 @@ O planeador de paletes ignora candidatos que não sejam objetos de mapeamento e 
 - Historical portfolio query parameters (`current_hour`, `days`, `duration_hours`, `minimum_observed_days`, and `limit`) must be actual integers within their documented ranges; booleans and fractional values are rejected.
 - Cost/time inputs and operator-supplied demand values must be finite, non-negative numeric values. Boolean values are rejected explicitly instead of being interpreted as 0 or 1.
 - The operator-input portfolio endpoint no longer truncates fractional limits with `int(limit)`; the requested limit must already be an integer.
+- A physically ready replacement pallet is allocated to at most one display-pallet candidate per planning run. Multiple display pallets cannot all inherit readiness from the same warehouse pallet; allocation follows the stable pallet-ID order returned by the database query and is covered by regression tests.
 - Invalid input is rejected with HTTP 422 before portfolio database work proceeds. Both portfolio endpoints remain read-only.
