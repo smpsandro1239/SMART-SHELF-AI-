@@ -13,6 +13,15 @@ A API ficará disponível em:
 - Readiness (inclui ligação à base de dados): http://localhost:8000/health/ready
 - OpenAPI: http://localhost:8000/docs
 
+No ambiente local development, a API cria as tabelas iniciais automaticamente para facilitar o arranque. Para gerir o schema através de migrações Alembic, dentro do contentor da API executar:
+
+    docker compose exec api alembic upgrade head
+
+Para executar os testes localmente a partir de apps/api:
+
+    pip install -r requirements.txt
+    pytest -q
+
 ## Primeiro fluxo de teste
 
 Criar uma loja:
@@ -29,4 +38,4 @@ Criar zona e prateleira usando os IDs devolvidos, e depois registar uma observa�
 
 ## Nota de estado
 
-Este é um esqueleto inicial de desenvolvimento. O schema automático está limitado ao ambiente development; antes de produção, configurar Alembic, autenticação, autorização, migrações e políticas de segurança. As observações de exemplo são dados fictícios, não deteções de visão computacional.
+Este é um esqueleto inicial de desenvolvimento. A criação automática de tabelas está limitada ao ambiente development; em produção, usar migrações, autenticação, autorização e políticas de segurança. As observações de exemplo são dados fictícios, não deteções de visão computacional.
