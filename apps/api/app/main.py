@@ -1,4 +1,4 @@
-from datetime import date, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 import math
 from pathlib import Path
 from uuid import uuid4
@@ -16,6 +16,7 @@ from jwt import InvalidTokenError
 from app.config import settings
 from app.database import get_db, SessionLocal
 from app import models
+from app.operational_decision_engine import evaluate_shelf_decision
 from app.security import hash_password, verify_password, create_access_token, decode_access_token
 from app.product_text import (
     CatalogueProduct, normalize_product_text, rank_product_catalogue_candidates,
@@ -3947,6 +3948,166 @@ def list_replenishment_tasks(
     if assigned_to is not None:
         query = query.filter(models.ReplenishmentTask.assigned_to == assigned_to)
     return query.order_by(models.ReplenishmentTask.created_at.desc(), models.ReplenishmentTask.id.desc()).limit(limit).all()
+
+
+@app.get("/api/v1/operational-decisions", tags=["operations"])
+def operational_decisions(
+    request: Request,
+    store_id: int | None = None,
+    shelf_id: int | None = None,
+    product_id: int | None = None,
+    limit: int = 250,
+    db: Session = Depends(get_db),
+):
+    """Evaluate product/shelf availability using recent recorded evidence.
+
+    This endpoint is read-only: it does not create tasks or change inventory.
+    """
+    actor = _request_user(db, request)
+    if actor is not None and actor.role == "EMPLOYEE":
+        raise HTTPException(status_code=403, detail="Supervisor role required")
+    if actor is not None and actor.role != "ADMIN":
+        if actor.store_id is None:
+            raise HTTPException(status_code=403, detail="User is not associated with a store")
+        if store_id is not None and store_id != actor.store_id:
+            raise HTTPException(status_code=403, detail="Access to this store is not allowed")
+        store_id = actor.store_id
+    if store_id is not None and db.get(models.Store, store_id) is None:
+        raise HTTPException(status_code=404, detail="Store not found")
+
+    limit = max(1, min(limit, 500))
+    links_query = (
+        db.query(models.ShelfProduct, models.Shelf, models.Zone, models.Product)
+        .join(models.Shelf, models.ShelfProduct.shelf_id == models.Shelf.id)
+        .join(models.Zone, models.Shelf.zone_id == models.Zone.id)
+        .join(models.Product, models.ShelfProduct.product_id == models.Product.id)
+        .filter(models.Product.is_active.is_(True))
+    )
+    if store_id is not None:
+        links_query = links_query.filter(models.Zone.store_id == store_id)
+    if shelf_id is not None:
+        links_query = links_query.filter(models.Shelf.id == shelf_id)
+    if product_id is not None:
+        links_query = links_query.filter(models.Product.id == product_id)
+    links = links_query.order_by(models.Zone.store_id, models.Shelf.id, models.Product.id).limit(limit).all()
+
+    now = models.utc_now()
+    today = now.date()
+    sales_start = today - timedelta(days=6)
+    decisions = []
+    for link, shelf, zone, product in links:
+        observation = (
+            db.query(models.Observation)
+            .filter(models.Observation.shelf_id == shelf.id)
+            .order_by(models.Observation.observed_at.desc(), models.Observation.id.desc())
+            .first()
+        )
+        snapshot = (
+            db.query(models.InventorySnapshot)
+            .filter(
+                models.InventorySnapshot.store_id == zone.store_id,
+                models.InventorySnapshot.product_id == product.id,
+            )
+            .order_by(models.InventorySnapshot.captured_at.desc(), models.InventorySnapshot.id.desc())
+            .first()
+        )
+        sales_rows = (
+            db.query(models.DailySalesRecord)
+            .filter(
+                models.DailySalesRecord.store_id == zone.store_id,
+                models.DailySalesRecord.product_id == product.id,
+                models.DailySalesRecord.sales_date >= sales_start,
+                models.DailySalesRecord.sales_date <= today,
+            )
+            .all()
+        )
+        active_tasks = (
+            db.query(models.ReplenishmentTask)
+            .filter(
+                models.ReplenishmentTask.store_id == zone.store_id,
+                models.ReplenishmentTask.shelf_id == shelf.id,
+                models.ReplenishmentTask.product_id == product.id,
+                models.ReplenishmentTask.status.in_(("PENDING", "ASSIGNED", "IN_PROGRESS")),
+            )
+            .order_by(models.ReplenishmentTask.created_at.desc())
+            .all()
+        )
+
+        def aware(value):
+            if value is None:
+                return None
+            return value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)
+
+        observation_input = None
+        if observation is not None:
+            observation_input = {
+                "status": observation.status,
+                "observed_at": aware(observation.observed_at),
+                "confidence": observation.confidence,
+                "source": observation.source,
+            }
+        inventory_input = None
+        if snapshot is not None:
+            inventory_input = {
+                "available_quantity": snapshot.available_quantity,
+                "recorded_at": aware(snapshot.captured_at),
+            }
+        forecast_input = None
+        if sales_rows:
+            total_sold = sum(float(row.quantity) for row in sales_rows)
+            forecast_input = {
+                "predicted_units": total_sold / 7.0,
+                "horizon_hours": 24,
+                "generated_at": aware(now),
+                "method": "SEVEN_DAY_DAILY_AVERAGE",
+                "source_records": len(sales_rows),
+                "sales_window_start": sales_start.isoformat(),
+                "sales_window_end": today.isoformat(),
+            }
+        try:
+            result = evaluate_shelf_decision(
+                now=aware(now),
+                observation=observation_input,
+                inventory=inventory_input,
+                demand_forecast=forecast_input,
+                active_tasks=[{"id": task.id, "status": task.status} for task in active_tasks],
+            )
+        except ValueError as exc:
+            result = {
+                "status": "INSUFFICIENT_EVIDENCE",
+                "priority": "NONE",
+                "reason": "A evidência registada não passou a validação do motor de decisão.",
+                "suggested_replenishment_quantity": None,
+                "automatic_stock_movement_allowed": False,
+                "requires_human_approval": False,
+                "evidence": [],
+                "warnings": [str(exc)],
+                "evaluated_at": aware(now).isoformat(),
+            }
+        decisions.append({
+            "store_id": zone.store_id,
+            "zone_name": zone.name,
+            "shelf_id": shelf.id,
+            "shelf_code": shelf.code,
+            "product_id": product.id,
+            "product_sku": product.sku,
+            "product_name": product.name,
+            "decision": result,
+        })
+
+    counts = {}
+    for item in decisions:
+        key = item["decision"]["status"]
+        counts[key] = counts.get(key, 0) + 1
+    return {
+        "generated_at": aware(now).isoformat(),
+        "store_id": store_id,
+        "count": len(decisions),
+        "status_counts": counts,
+        "forecast_policy": "Média diária simples dos últimos sete dias de vendas registadas; não ajusta promoções, sazonalidade, tráfego ou dias sem registo.",
+        "decisions": decisions,
+        "side_effects": {"tasks_created": 0, "inventory_changed": False},
+    }
 
 
 @app.get("/api/v1/replenishment/workload", tags=["replenishment"])
