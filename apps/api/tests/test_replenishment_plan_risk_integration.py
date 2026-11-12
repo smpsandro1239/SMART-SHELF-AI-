@@ -1,5 +1,5 @@
 import os
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 os.environ["APP_ENV"] = "test"
 os.environ["DATABASE_URL"] = "sqlite:///./test_unused.db"
@@ -167,3 +167,64 @@ def test_replenishment_plan_keeps_unknown_risk_when_sales_history_is_incomplete(
         assert item["stockout_risk_level"] == "UNKNOWN"
         assert item["stockout_risk_basis"] == "INSUFFICIENT_EVIDENCE"
         assert item["stockout_missing_sales_days"] == 1
+
+
+def test_replenishment_plan_adds_elapsed_effort_estimates_from_completed_history():
+    with TestClient(app) as client:
+        store = client.post("/api/v1/stores", json={
+            "code": "EFFORT-PLAN-01", "name": "Loja estimativa esforço",
+        })
+        assert store.status_code == 201
+        store_id = store.json()["id"]
+        zone = client.post("/api/v1/zones", json={
+            "store_id": store_id, "name": "Bebidas",
+        }).json()
+        product_id = _create_candidate(
+            client, store_id, "EFFORT-SHELF", "EFFORT-SKU",
+            "Produto para estimativa", 20, zone_id=zone["id"],
+        )
+
+        with TestingSession() as db:
+            shelf = db.query(models.Shelf).filter_by(code="EFFORT-SHELF").one()
+            now = datetime.now(timezone.utc)
+            for index in range(5):
+                started = now - timedelta(days=index + 1)
+                db.add(models.ReplenishmentTask(
+                    store_id=store_id,
+                    shelf_id=shelf.id,
+                    product_id=product_id,
+                    priority="HIGH",
+                    status="COMPLETED",
+                    started_at=started,
+                    completed_at=started + timedelta(minutes=10 + index),
+                ))
+            db.commit()
+
+        response = client.get("/api/v1/replenishment/plan", params={
+            "store_id": store_id,
+            "include_effort_estimates": "true",
+            "effort_history_days": 90,
+            "effort_minimum_sample_size": 5,
+        })
+        assert response.status_code == 200, response.text
+        payload = response.json()
+        assert payload["effort_estimation"]["enabled"] is True
+        assert payload["effort_estimation"]["historical_valid_samples"] == 5
+        assert payload["effort_estimation"]["estimated_candidates"] == 1
+        item = payload["groups"][0]["tasks"][0]
+        assert item["estimated_elapsed_minutes"] == 12
+        assert item["effort_estimate_basis"] == "ZONE_AND_PRIORITY_HISTORY"
+        assert item["effort_metric"] == "ELAPSED_TIME_NOT_ACTIVE_LABOUR"
+
+
+def test_replenishment_plan_validates_effort_estimate_parameters():
+    with TestClient(app) as client:
+        store = client.post("/api/v1/stores", json={
+            "code": "EFFORT-PLAN-02", "name": "Loja parâmetros esforço",
+        })
+        response = client.get("/api/v1/replenishment/plan", params={
+            "store_id": store.json()["id"],
+            "include_effort_estimates": "true",
+            "effort_minimum_sample_size": 1,
+        })
+        assert response.status_code == 422
