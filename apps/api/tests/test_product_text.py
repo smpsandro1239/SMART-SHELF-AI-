@@ -79,3 +79,36 @@ def test_catalogue_brand_is_used_as_positive_evidence_when_ocr_captures_it():
     assert result.status == "SUGGESTED"
     assert result.product_id == 1
     assert "brand_tokens_present" in result.candidates[0].reasons
+
+
+
+def test_catalogue_matching_distinguishes_compound_free_from_variants():
+    from app.product_text import CatalogueProduct, rank_product_catalogue_candidates
+
+    result = rank_product_catalogue_candidates(
+        "Leite sem lactose 1 L",
+        [
+            CatalogueProduct(1, "LEITE-SEM-LACTOSE", "Leite sem lactose 1 L", "Marca A", "1 L"),
+            CatalogueProduct(2, "LEITE-SEM-GLUTEN", "Leite sem glúten 1 L", "Marca A", "1 L"),
+        ],
+    )
+
+    assert result.status == "SUGGESTED"
+    assert result.product_id == 1
+    assert "variant_conflict" in result.candidates[1].reasons
+
+
+def test_catalogue_matching_distinguishes_meio_gordo_from_gordo():
+    from app.product_text import CatalogueProduct, rank_product_catalogue_candidates
+
+    result = rank_product_catalogue_candidates(
+        "Leite meio-gordo 1 L",
+        [
+            CatalogueProduct(1, "LEITE-MEIO-GORDO", "Leite meio-gordo 1 L", "Marca A", "1 L"),
+            CatalogueProduct(2, "LEITE-GORDO", "Leite gordo 1 L", "Marca A", "1 L"),
+        ],
+    )
+
+    assert result.status == "SUGGESTED"
+    assert result.product_id == 1
+    assert "variant_conflict" in result.candidates[1].reasons
