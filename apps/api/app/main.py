@@ -35,8 +35,6 @@ async def require_api_authentication(request: Request, call_next):
         return await call_next(request)
     if not request.url.path.startswith("/api/v1/") or request.url.path in PUBLIC_API_PATHS:
         return await call_next(request)
-    role = request.headers.get("X-Role")  # ignored; role is always read from the database token subject
-    del role
     authorization = request.headers.get("Authorization", "")
     scheme, _, token = authorization.partition(" ")
     if scheme.lower() != "bearer" or not token:
@@ -67,10 +65,18 @@ async def require_api_authentication(request: Request, call_next):
         )
         if admin_only and user.role != "ADMIN":
             return JSONResponse(status_code=403, content={"detail": "Administrator role required"})
-        if user.role == "EMPLOYEE" and not (
-            method == "GET" and (path == "/api/v1/tasks" or path == "/api/v1/auth/me" or path == "/api/v1/dashboard/summary")
-        ):
-            return JSONResponse(status_code=403, content={"detail": "Employee role has read-only task access"})
+        if user.role == "EMPLOYEE":
+            allowed_employee_read = (
+                method == "GET"
+                and path in {"/api/v1/tasks", "/api/v1/auth/me", "/api/v1/dashboard/summary"}
+            )
+            allowed_employee_task_update = (
+                method == "PATCH"
+                and path.startswith("/api/v1/tasks/")
+                and path.endswith("/status")
+            )
+            if not (allowed_employee_read or allowed_employee_task_update):
+                return JSONResponse(status_code=403, content={"detail": "Employee access is limited to assigned tasks"})
         if user.role == "SUPERVISOR" and path.startswith("/api/v1/auth/users"):
             return JSONResponse(status_code=403, content={"detail": "Administrator role required"})
     finally:
@@ -512,6 +518,13 @@ def update_replenishment_task_status(
     actor = db.get(models.User, getattr(request.state, "user_id", None))
     if actor is not None and actor.role != "ADMIN" and task.store_id != actor.store_id:
         raise HTTPException(status_code=403, detail="Access to this task is not allowed")
+    if actor is not None and actor.role == "EMPLOYEE":
+        if task.assigned_user_id != actor.id:
+            raise HTTPException(status_code=403, detail="Employees can only update tasks assigned to them")
+        if payload.status not in {"IN_PROGRESS", "COMPLETED"}:
+            raise HTTPException(status_code=403, detail="Employees cannot assign or cancel tasks")
+        if payload.assigned_to is not None or payload.assigned_user_id is not None:
+            raise HTTPException(status_code=403, detail="Employees cannot change task assignees")
 
     allowed = {
         "PENDING": {"ASSIGNED", "CANCELLED"},
