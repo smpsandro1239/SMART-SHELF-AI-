@@ -78,3 +78,27 @@ Os testes de fronteira validam o limiar exato de 50%, a configuração de outro 
 2. Expor no dashboard a explicação, limiar, quantidade residual, recursos em falta e custo comparado.
 3. Acrescentar um fluxo explícito de aprovação e execução, com operador responsável e confirmação das duas paletes.
 4. Validar o processo em ambiente de teste com produtos e embalagens reais antes de qualquer piloto em loja.
+
+
+## API e integração atualmente disponível
+
+Os endpoints de simulação e planeamento existentes são:
+
+- `POST /api/v1/warehouse/pallet-rotation/simulate`: avalia uma palete individual, consulta uma palete substituta completa em estado READY e devolve a decisão sem movimentar stock.
+- `GET /api/v1/warehouse/pallet-rotation/portfolio`: ordena várias paletes de uma loja.
+- `GET /api/v1/warehouse/pallet-rotation/weekday-hourly-profile`: devolve médias históricas por dia da semana/hora, separando vendas e tráfego.
+- `GET /api/v1/warehouse/pallet-rotation/window-plan`: sugere uma janela de baixa afluência a partir do histórico e verifica se a quantidade residual cobre o consumo até essa janela.
+- `GET /api/v1/forecasting/hourly-demand`: calcula um baseline sazonal de procura por dia da semana e hora, com backtest rolling-origin.
+
+**Limitação atual a resolver:** o endpoint de portfolio recebe um único nível de afluência, consumo previsto até à janela e confirmação de capacidade da retaguarda como parâmetros fornecidos pelo operador; aplica esses valores a todas as paletes candidatas da loja. Não é ainda uma decisão autónoma, individualizada por SKU e palete. O forecast horário também é um endpoint separado e não alimenta automaticamente o portfolio nem o simulador individual.
+
+### Próxima integração técnica
+
+1. Obter, para cada palete candidata, a política ativa, embalagem, quantidade residual e palete substituta elegível.
+2. Construir a procura horária específica da loja/SKU e escolher a janela com o histórico de tráfego da loja.
+3. Calcular o consumo esperado desde o instante atual até à janela selecionada, exigindo cobertura histórica suficiente e mantendo valores em falta como desconhecidos.
+4. Executar a avaliação económica por palete, usando tempos e custos específicos por operação/loja quando existirem; não reutilizar silenciosamente um custo global como se fosse medido por SKU.
+5. Devolver uma decisão individual, proveniência dos dados, confiança/cobertura, razões de exclusão e campos que exigem confirmação humana.
+6. Só depois de aprovação explícita criar tarefa de execução; a confirmação da troca deve reconciliar as duas paletes e atualizar o inventário através de integração autorizada.
+
+A integração deve ter testes de contrato para: histórico incompleto, forecast sem cobertura, palete substituta parcial, substituta expirada, stock residual insuficiente até à janela, duas paletes do mesmo SKU, ausência de capacidade na retaguarda e dados alterados entre simulação e aprovação.
