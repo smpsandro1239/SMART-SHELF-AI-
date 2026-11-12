@@ -114,3 +114,24 @@ Foi acrescentado o módulo puro `apps/api/app/pallet_rotation_forecast_bridge.py
 - motivo explícito quando o perfil falta ou é inválido.
 
 O módulo não consulta a base de dados e ainda não está ligado ao endpoint HTTP do portfolio. A integração seguinte deverá construir os perfis por produto a partir dos registos horários, chamar este módulo e só depois passar os candidatos válidos ao planeador. Candidatos sem evidência suficiente mantêm consumo como `null` e afluência como `UNKNOWN`; não se deve substituir a falta de dados por zero.
+
+
+## 11. Portfolio baseado em histórico — endpoint integrado
+
+Foi acrescentado `GET /api/v1/warehouse/pallet-rotation/portfolio-from-history`. Este endpoint:
+- recolhe paletes em exposição e políticas ativas da loja;
+- identifica paletes completas elegíveis na retaguarda;
+- obtém um perfil horário de vendas por SKU e tráfego da loja;
+- enriquece cada palete com o consumo histórico até à janela operacional;
+- exclui do ranking os candidatos sem cobertura horária suficiente;
+- devolve recomendações e evidência por palete, sem movimentar stock.
+
+A hora atual da loja (`current_hour`) é fornecida pelo chamador. A disponibilidade de capacidade na retaguarda continua a exigir confirmação explícita. O endpoint é consultivo e não cria tarefas nem reserva paletes.
+
+Exemplo de chamada:
+
+```bash
+curl "http://localhost:8000/api/v1/warehouse/pallet-rotation/portfolio-from-history?store_id=1&current_hour=10&days=28&duration_hours=1&source=POS&minimum_observed_days=7&backroom_capacity_available=true"
+```
+
+A integração utiliza dados históricos por SKU, não um único valor de consumo partilhado por todos os produtos. Continua a ser necessário validar a resposta com testes de integração e dados de piloto antes de uso operacional.
