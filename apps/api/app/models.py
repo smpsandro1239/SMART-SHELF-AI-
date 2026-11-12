@@ -164,3 +164,26 @@ class ShelfImage(Base):
     model_version: Mapped[str | None] = mapped_column(String(100), nullable=True)
     captured_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
+class ShelfImageDetection(Base):
+    """A single object detection produced by a computer-vision model."""
+    __tablename__ = "shelf_image_detections"
+    __table_args__ = (
+        CheckConstraint("confidence >= 0 AND confidence <= 1", name="ck_detection_confidence_range"),
+        CheckConstraint("x_min >= 0 AND x_min <= 1 AND y_min >= 0 AND y_min <= 1", name="ck_detection_bbox_min_range"),
+        CheckConstraint("x_max >= 0 AND x_max <= 1 AND y_max >= 0 AND y_max <= 1", name="ck_detection_bbox_max_range"),
+        CheckConstraint("x_min < x_max AND y_min < y_max", name="ck_detection_bbox_order"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    shelf_image_id: Mapped[int] = mapped_column(ForeignKey("shelf_images.id", ondelete="CASCADE"), index=True)
+    product_id: Mapped[int | None] = mapped_column(ForeignKey("products.id", ondelete="SET NULL"), nullable=True, index=True)
+    label: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
+    confidence: Mapped[float] = mapped_column(Float, nullable=False)
+    x_min: Mapped[float] = mapped_column(Float, nullable=False)
+    y_min: Mapped[float] = mapped_column(Float, nullable=False)
+    x_max: Mapped[float] = mapped_column(Float, nullable=False)
+    y_max: Mapped[float] = mapped_column(Float, nullable=False)
+    model_version: Mapped[str] = mapped_column(String(100), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
