@@ -37,7 +37,7 @@ from app.schemas import (
     ShelfImageOCRRunCreate, ShelfImageOCRRunRead, ShelfImageOCREvidenceRead,
     ShelfImageOCRMatchRead,
     ShelfImageFusedEvidenceRead,
-    ShelfImageReviewQueueItem, ShelfImageTrainingCandidateRead,
+    ShelfImageReviewQueueItem, ShelfImageTrainingCandidateRead, CaptureSessionCreate, CaptureSessionRead,
 )
 
 app = FastAPI(title=settings.app_name, version="0.2.0", description="Operational API for SMART SHELF AI.")
@@ -261,10 +261,64 @@ def list_observations(
     return query.order_by(models.Observation.observed_at.desc()).limit(limit).all()
 
 
+@app.post("/api/v1/capture-sessions", response_model=CaptureSessionRead, status_code=201, tags=["computer-vision"])
+def create_capture_session(payload: CaptureSessionCreate, request: Request, db: Session = Depends(get_db)):
+    actor = _request_user(db, request)
+    shelf = db.query(models.Shelf).join(models.Zone, models.Shelf.zone_id == models.Zone.id).filter(models.Shelf.id == payload.shelf_id).first()
+    if shelf is None:
+        raise HTTPException(status_code=404, detail="Shelf not found")
+    store_id = shelf.zone.store_id
+    _enforce_store_scope(actor, store_id)
+    if actor is not None and actor.role == "EMPLOYEE":
+        raise HTTPException(status_code=403, detail="Supervisor role required to create capture sessions")
+    started_at = payload.started_at or models.utc_now()
+    if started_at.tzinfo is None:
+        raise HTTPException(status_code=422, detail="started_at must include a timezone")
+    item = models.CaptureSession(
+        store_id=store_id, shelf_id=shelf.id, source_type=payload.source_type,
+        source_device_id=payload.source_device_id, capture_mode=payload.capture_mode,
+        started_at=started_at, created_by_user_id=actor.id if actor else None,
+    )
+    db.add(item)
+    db.commit()
+    db.refresh(item)
+    return item
+
+
+@app.get("/api/v1/capture-sessions", response_model=list[CaptureSessionRead], tags=["computer-vision"])
+def list_capture_sessions(request: Request, shelf_id: int | None = None, include_closed: bool = True, limit: int = 100, db: Session = Depends(get_db)):
+    actor = _request_user(db, request)
+    query = db.query(models.CaptureSession)
+    if actor is not None and actor.role != "ADMIN":
+        query = query.filter(models.CaptureSession.store_id == actor.store_id)
+    if shelf_id is not None:
+        query = query.filter(models.CaptureSession.shelf_id == shelf_id)
+    if not include_closed:
+        query = query.filter(models.CaptureSession.ended_at.is_(None))
+    return query.order_by(models.CaptureSession.started_at.desc()).limit(max(1, min(limit, 500))).all()
+
+
+@app.post("/api/v1/capture-sessions/{session_id}/close", response_model=CaptureSessionRead, tags=["computer-vision"])
+def close_capture_session(session_id: int, request: Request, db: Session = Depends(get_db)):
+    actor = _request_user(db, request)
+    item = db.get(models.CaptureSession, session_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="Capture session not found")
+    _enforce_store_scope(actor, item.store_id)
+    if actor is not None and actor.role == "EMPLOYEE":
+        raise HTTPException(status_code=403, detail="Supervisor role required to close capture sessions")
+    if item.ended_at is None:
+        item.ended_at = models.utc_now()
+        db.commit()
+        db.refresh(item)
+    return item
+
+
 @app.post("/api/v1/shelf-images", response_model=ShelfImageRead, status_code=201, tags=["computer-vision"])
 async def upload_shelf_image(
     request: Request,
     shelf_id: int = Form(...),
+    capture_session_id: int | None = Form(default=None),
     image: UploadFile = File(...),
     db: Session = Depends(get_db),
 ):
@@ -280,6 +334,16 @@ async def upload_shelf_image(
     actor = _request_user(db, request)
     if actor is not None and actor.role != "ADMIN" and shelf.zone.store_id != actor.store_id:
         raise HTTPException(status_code=403, detail="Access to this shelf is not allowed")
+
+    capture_session = None
+    if capture_session_id is not None:
+        capture_session = db.get(models.CaptureSession, capture_session_id)
+        if capture_session is None:
+            raise HTTPException(status_code=404, detail="Capture session not found")
+        if capture_session.shelf_id != shelf.id or capture_session.store_id != shelf.zone.store_id:
+            raise HTTPException(status_code=422, detail="Capture session does not belong to this shelf")
+        if capture_session.ended_at is not None:
+            raise HTTPException(status_code=409, detail="Capture session is closed")
 
     allowed_types = {
         "image/jpeg": (".jpg", lambda data: data.startswith(b"\xff\xd8\xff")),
@@ -307,6 +371,7 @@ async def upload_shelf_image(
     captured_at = models.utc_now()
     record = models.ShelfImage(
         shelf_id=shelf.id,
+        capture_session_id=capture_session.id if capture_session else None,
         uploaded_by=actor.id if actor else None,
         original_filename=(Path(image.filename or "capture").name[:255]),
         storage_path=str(destination),
@@ -852,7 +917,8 @@ def list_reviewed_training_candidates(
             "reviewed_at": review.created_at,
             "image_sha256": image.sha256,
             "captured_at": image.captured_at,
-            "capture_group_key": f"image:{image.sha256}",
+            "capture_group_key": f"session:{image.capture_session_id}" if image.capture_session_id is not None else f"image:{image.sha256}",
+            "capture_session_id": image.capture_session_id,
             "bbox": {
                 "x_min": detection.x_min,
                 "y_min": detection.y_min,
@@ -862,7 +928,7 @@ def list_reviewed_training_candidates(
             "detector_model_version": detection.model_version,
             "embedding_model_version": detection.embedding_model_version,
             "dataset_status": "CANDIDATE",
-            "split_policy": "Keep all crops from the same source image in one split; session metadata is not yet available.",
+            "split_policy": "Keep all crops from the same capture session in one split; legacy images without a session are grouped by SHA-256.",
             "requires_exemplar_approval": True,
         })
     return candidates
