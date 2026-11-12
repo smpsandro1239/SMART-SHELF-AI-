@@ -511,3 +511,21 @@ Parâmetros:
 A API devolve `409 INCOMPLETE_DAILY_SALES_HISTORY` se faltar qualquer dia do período. Isto evita tratar falhas de sincronização do POS como procura igual a zero. Os registos de fontes diferentes não são somados: a origem tem de ser escolhida explicitamente.
 
 A previsão é consultiva. Não cria encomendas, não altera inventário e não cria tarefas de reposição. A integração real com um fornecedor POS/ERP, incluindo autenticação, sincronização incremental e reconciliação de vendas, continua a ser uma etapa separada.
+
+
+### Importar um ficheiro CSV
+
+`POST /api/v1/sales/import-csv` (ADMIN ou SUPERVISOR), como `multipart/form-data`:
+- `store_id`: identificador da loja.
+- `source`: `POS`, `ERP`, `MANUAL` ou `IMPORT` (predefinição: `IMPORT`).
+- `file`: ficheiro `.csv` em UTF-8, até 5 MB.
+
+Cabeçalho obrigatório:
+
+```csv
+product_id,sales_date,quantity,external_reference
+42,2026-11-12,18,POS-STORE-01-20261112-42
+42,2026-11-13,0,POS-STORE-01-20261113-42
+```
+
+O importador aceita até 5 000 linhas, datas ISO `YYYY-MM-DD`, quantidades não negativas com até três casas decimais e referências externas únicas no ficheiro. Valida todos os produtos antes de gravar. A operação é atómica: se uma referência já existir na base de dados, ou se alguma linha for inválida, não é gravada nenhuma linha. Dias sem vendas devem ser incluídos com quantidade zero.
