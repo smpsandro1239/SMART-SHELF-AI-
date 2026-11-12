@@ -1,7 +1,10 @@
 from datetime import timedelta, timezone
+from pathlib import Path
+from uuid import uuid4
+import hashlib
 
-from fastapi import Depends, FastAPI, HTTPException, Request
-from fastapi.responses import JSONResponse
+from fastapi import Depends, FastAPI, HTTPException, Request, UploadFile, File, Form
+from fastapi.responses import JSONResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
@@ -19,7 +22,7 @@ from app.schemas import (
     ProductCreate, ProductRead, ShelfProductCreate, ShelfProductRead,
     InventorySnapshotCreate, InventorySnapshotRead, ReplenishmentRecommendationRead,
     ReplenishmentTaskCreate, ReplenishmentTaskStatusUpdate, ReplenishmentTaskRead,
-    BootstrapAdminCreate, LoginRequest, TokenRead, UserRead, UserCreate,
+    BootstrapAdminCreate, LoginRequest, TokenRead, UserRead, UserCreate, ShelfImageRead,
 )
 
 app = FastAPI(title=settings.app_name, version="0.2.0", description="Operational API for SMART SHELF AI.")
@@ -78,12 +81,13 @@ async def require_api_authentication(request: Request, call_next):
                 method == "GET"
                 and path in {"/api/v1/tasks", "/api/v1/auth/me", "/api/v1/dashboard/summary"}
             )
+            allowed_employee_image_upload = method == "POST" and path == "/api/v1/shelf-images"
             allowed_employee_task_update = (
                 method == "PATCH"
                 and path.startswith("/api/v1/tasks/")
                 and path.endswith("/status")
             )
-            if not (allowed_employee_read or allowed_employee_task_update):
+            if not (allowed_employee_read or allowed_employee_task_update or allowed_employee_image_upload):
                 return JSONResponse(status_code=403, content={"detail": "Employee access is limited to assigned tasks"})
         if user.role == "SUPERVISOR" and path.startswith("/api/v1/auth/users"):
             return JSONResponse(status_code=403, content={"detail": "Administrator role required"})
@@ -211,6 +215,112 @@ def list_observations(
     if shelf_id is not None:
         query = query.filter(models.Observation.shelf_id == shelf_id)
     return query.order_by(models.Observation.observed_at.desc()).limit(limit).all()
+
+
+@app.post("/api/v1/shelf-images", response_model=ShelfImageRead, status_code=201, tags=["computer-vision"])
+async def upload_shelf_image(
+    shelf_id: int = Form(...),
+    image: UploadFile = File(...),
+    request: Request = None,
+    db: Session = Depends(get_db),
+):
+    """Store a validated shelf photograph; analysis is queued for a later CV stage."""
+    shelf = (
+        db.query(models.Shelf)
+        .join(models.Zone, models.Shelf.zone_id == models.Zone.id)
+        .filter(models.Shelf.id == shelf_id)
+        .first()
+    )
+    if shelf is None:
+        raise HTTPException(status_code=404, detail="Shelf not found")
+    actor = _request_user(db, request)
+    if actor is not None and actor.role != "ADMIN" and shelf.zone.store_id != actor.store_id:
+        raise HTTPException(status_code=403, detail="Access to this shelf is not allowed")
+
+    allowed_types = {
+        "image/jpeg": (".jpg", lambda data: data.startswith(b"\\xff\\xd8\\xff")),
+        "image/png": (".png", lambda data: data.startswith(b"\\x89PNG\\r\\n\\x1a\\n")),
+        "image/webp": (".webp", lambda data: len(data) >= 12 and data[:4] == b"RIFF" and data[8:12] == b"WEBP"),
+    }
+    mime_type = (image.content_type or "").lower()
+    if mime_type not in allowed_types:
+        raise HTTPException(status_code=415, detail="Only JPEG, PNG and WebP images are accepted")
+
+    content = await image.read(settings.max_image_upload_bytes + 1)
+    if not content:
+        raise HTTPException(status_code=422, detail="Uploaded image is empty")
+    if len(content) > settings.max_image_upload_bytes:
+        raise HTTPException(status_code=413, detail="Image exceeds the configured upload size limit")
+    extension, signature_check = allowed_types[mime_type]
+    if not signature_check(content):
+        raise HTTPException(status_code=415, detail="Image content does not match its declared format")
+
+    image_id = uuid4().hex
+    directory = Path(settings.image_storage_path) / str(shelf.zone.store_id)
+    directory.mkdir(parents=True, exist_ok=True)
+    destination = directory / f"{image_id}{extension}"
+    destination.write_bytes(content)
+    captured_at = models.utc_now()
+    record = models.ShelfImage(
+        shelf_id=shelf.id,
+        uploaded_by=actor.id if actor else None,
+        original_filename=(Path(image.filename or "capture").name[:255]),
+        storage_path=str(destination),
+        mime_type=mime_type,
+        file_size_bytes=len(content),
+        sha256=hashlib.sha256(content).hexdigest(),
+        analysis_status="PENDING",
+        captured_at=captured_at,
+    )
+    try:
+        db.add(record)
+        db.commit()
+        db.refresh(record)
+    except Exception:
+        db.rollback()
+        destination.unlink(missing_ok=True)
+        raise
+    return record
+
+
+@app.get("/api/v1/shelf-images", response_model=list[ShelfImageRead], tags=["computer-vision"])
+def list_shelf_images(
+    shelf_id: int | None = None,
+    limit: int = 100,
+    request: Request = None,
+    db: Session = Depends(get_db),
+):
+    query = (
+        db.query(models.ShelfImage)
+        .join(models.Shelf, models.ShelfImage.shelf_id == models.Shelf.id)
+        .join(models.Zone, models.Shelf.zone_id == models.Zone.id)
+    )
+    actor = _request_user(db, request)
+    if actor is not None and actor.role != "ADMIN":
+        query = query.filter(models.Zone.store_id == actor.store_id)
+    if shelf_id is not None:
+        query = query.filter(models.ShelfImage.shelf_id == shelf_id)
+    return query.order_by(models.ShelfImage.created_at.desc()).limit(max(1, min(limit, 500))).all()
+
+
+@app.get("/api/v1/shelf-images/{image_id}/content", tags=["computer-vision"])
+def get_shelf_image_content(image_id: int, request: Request, db: Session = Depends(get_db)):
+    item = (
+        db.query(models.ShelfImage)
+        .join(models.Shelf, models.ShelfImage.shelf_id == models.Shelf.id)
+        .join(models.Zone, models.Shelf.zone_id == models.Zone.id)
+        .filter(models.ShelfImage.id == image_id)
+        .first()
+    )
+    if item is None:
+        raise HTTPException(status_code=404, detail="Shelf image not found")
+    actor = _request_user(db, request)
+    if actor is not None and actor.role != "ADMIN" and item.shelf.zone.store_id != actor.store_id:
+        raise HTTPException(status_code=403, detail="Access to this image is not allowed")
+    path = Path(item.storage_path)
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="Stored image file is unavailable")
+    return FileResponse(path, media_type=item.mime_type, filename=item.original_filename, content_disposition_type="inline")
 
 
 @app.post("/api/v1/products", response_model=ProductRead, status_code=201, tags=["products"])
