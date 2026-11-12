@@ -103,6 +103,95 @@ Uma deteção de espaço vazio não prova, isoladamente, que o produto está em 
 
 **Avaliação:** referência de ideias de separação de componentes, não de implementação de produção. Não copiar backend, configuração de segurança nem afirmações de produção.
 
+
+
+### 2.4 Jackson Marcus — ShelfSight (OpenCV clássico)
+
+- Repositório: https://github.com/jackson-marcus/Shelf-Sight
+- Estado observado: repositório público recente; sem licença reconhecida pela API GitHub e sem ficheiro LICENSE identificado na árvore consultada, apesar de o README mostrar um badge MIT.
+- Método: OpenCV clássico, sem modelo treinado; projeção de saturação HSV para segmentar filas, máscaras por bandas de cor, morfologia e contornos para identificar facings, spans vazios para gaps e comparação da ordem de marcas com o planograma.
+- Testes: gerador de prateleiras sintéticas com ground truth e testes de filas, contagem, share-of-shelf, gaps e compliance.
+
+**O que vale a pena aproveitar:**
+- Pipeline explicável com artefactos intermédios visíveis.
+- Métricas de share-of-shelf e compliance por fila.
+- Baseline barato para validar geometria, visualizações e contratos da API.
+- Testes determinísticos com cenas sintéticas controladas.
+
+**Limitações:**
+- A identificação depende de cor configurada por marca, não de SKU; embalagens com cores semelhantes ou iluminação diferente colidem.
+- O próprio projeto documenta sombras que podem ser interpretadas como gaps e falhas com alterações de iluminação, perspetiva e filas.
+- A avaliação descrita é sintética; não prova generalização para fotografias reais.
+- A divergência entre o badge MIT e a ausência de uma licença reconhecida/ficheiro LICENSE deve ser resolvida antes de reutilizar código.
+
+**Avaliação:** bom baseline explicável e gerador de testes; não substituirá um detector robusto nem reconhecimento SKU.
+
+### 2.5 swd07 — Retail Shelf Detection (case study de operação)
+
+- Repositório: https://github.com/swd07/retail-shelf-detection
+- Estado observado: repositório técnico de case study; não inclui o sistema completo de produção. Não foi encontrada licença declarada.
+- O autor descreve uma implementação de merchandising com captura Android offline-first, fila local Room, sincronização WorkManager, ingestão autenticada, armazenamento de objetos, fila PostgreSQL e workers assíncronos.
+- Pipeline descrito: GroundingDINO → OCR/VLM → embeddings de texto/Qdrant → reranking por atributos → DINOv2 → ArcFace → fusão determinística → guardrails → SKU/brand/UNKNOWN.
+- O autor reporta rollout e métricas operacionais, mas esses números não foram verificados independentemente nesta análise.
+
+**Práticas particularmente valiosas:**
+- A captura deve continuar a funcionar sem rede; upload e inferência são etapas separadas.
+- Jobs precisam de persistência, retries e recuperação após interrupções.
+- Um LLM pode extrair evidência textual, mas não deve decidir sozinho o SKU final.
+- A camada final combina sinais independentes e pode abster-se com `UNKNOWN`.
+- Mudanças de modelo passam primeiro por shadow mode, com critérios de promoção definidos antes da avaliação.
+- A avaliação deve usar splits agrupados por imagem/sessão e métricas de cobertura/abstenção, não apenas precisão nos casos fáceis.
+- A própria documentação descreve um caso em que evidência suficiente para marca não era suficiente para escolher entre SKUs irmãos; a decisão segura foi manter apenas a marca.
+
+**Limitações:**
+- O repositório é sobretudo um case study e contém exemplos demonstrativos sintéticos; não disponibiliza o backend, modelos, dataset ou infraestruturas de produção descritos.
+- Métricas e escala de rollout são declarações do autor.
+- Não há licença pública identificada para reutilizar código.
+
+**Avaliação:** referência muito forte de arquitetura operacional, captura offline, governança de modelos, abstention e rollout controlado. Aproveitar os padrões, não assumir que temos acesso à implementação comercial.
+
+### 2.6 Sanket758 — SKU Vision Pipeline
+
+- Repositório: https://github.com/Sanket758/sku-vision-pipeline
+- Estado observado: tese/projeto académico, 6 commits na consulta, 3 stars, licença MIT no código.
+- Objetivo: reconhecimento fino de SKU com YOLO para localização, embeddings DINOv3/MobileNetV2, registry de exemplares, agrupamento espacial e revisão visual humana.
+- O README reporta 93,7% Top-1 em 148 SKUs e 96,0% em 5-way 1-shot; são resultados reportados pelo autor, não reproduzidos pelo SMART SHELF AI.
+- O dataset de supermercado não está incluído no repositório. Os pesos DINOv3 são gated e o projeto indica necessidade de acordo de investigação para os obter.
+
+**O que vale a pena aproveitar:**
+- Registry de SKU com múltiplos exemplares e embeddings, em vez de um classificador fechado com retreino para cada SKU novo.
+- Matching híbrido DINOv3 + MobileNetV2 e comparação entre arquiteturas.
+- Agrupamento espacial de caixas em filas.
+- Sessões persistentes de anotação/revisão e exportação para formatos de treino.
+- Separação explícita entre deteção, matching, review e export.
+
+**Limitações:**
+- Dataset próprio não está disponível para reprodução pública.
+- DINOv3 gated exige validar os termos de acesso e uso; licença MIT do código não cobre pesos gated nem imagens de supermercado.
+- Escala de 148 SKUs é pequena face a um catálogo de supermercado completo.
+- Os resultados académicos não provam robustez em lojas, câmaras e embalagens diferentes.
+
+**Avaliação:** referência útil para a futura camada de reconhecimento SKU e gestão do catálogo de exemplares. Antes de selecionar DINOv3, comparar custo, latência, licenças e desempenho com alternativas abertas e dados autorizados.
+
+### 2.7 AnKu-02 — MAiRA Shelf Replenishment (robótica)
+
+- Repositório: https://github.com/AnKu-02/Maira-shelf-replenishment
+- Estado observado: versão pública de portefólio, sem licença identificada; inclui um script de execução e demonstração, mas não o dataset, endpoints de inferência ou serviços internos proprietários.
+- Hardware e software descritos: robô colaborativo NEURA MAiRA, câmara RGB-D Intel RealSense, ROS, pinça OnRobot RG6, YOLO, Segment Anything e OpenCV.
+- Pipeline: deteção → segmentação → projeção 3D com profundidade → estimativa de orientação PCA → planeamento de grasp → movimento collision-aware → pick-and-place.
+
+**O que vale a pena aproveitar conceptualmente:**
+- Separar a decisão de reposição do movimento físico.
+- Exigir geometria 3D, pose, estratégia de grasp e validação de segurança antes de permitir manipulação.
+- Registar o resultado físico e confirmar a posição final por nova perceção.
+
+**Limitações:**
+- Dependência de hardware, gripper, frames ROS e pontos de calibração específicos.
+- Código público incompleto e sem licença identificada.
+- Não é um módulo que se possa ligar a qualquer robô; requer compatibilidade e validação de segurança do fabricante.
+
+**Avaliação:** referência para uma fase futura de robótica. O SMART SHELF AI deve primeiro criar tarefas e APIs de execução independentes do fabricante; só depois estudar adaptadores de robôs concretos.
+
 ## 3. Plataformas de inventário e reposição
 
 ### 3.1 Odoo — Reordering Rules
