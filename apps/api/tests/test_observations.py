@@ -68,7 +68,7 @@ def test_upload_and_retrieve_shelf_image(tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "image_storage_path", str(tmp_path))
     Base.metadata.drop_all(bind=TEST_ENGINE)
     Base.metadata.create_all(bind=TEST_ENGINE)
-    image_bytes = b"\\x89PNG\\r\\n\\x1a\\n" + b"test-image-payload"
+    image_bytes = b"\x89PNG\r\n\x1a\n" + b"test-image-payload"
 
     with TestClient(app) as client:
         store = client.post("/api/v1/stores", json={"code": "IMG-01", "name": "Loja imagem"})
