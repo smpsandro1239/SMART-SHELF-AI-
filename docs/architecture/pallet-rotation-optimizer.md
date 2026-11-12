@@ -176,3 +176,18 @@ O perfil de 24 horas e o planeador de janela também filtram por uma única
 origem (`source`, predefinição `POS`). O mesmo valor é aplicado a vendas e
 afluência para impedir que contagens duplicadas entre origens sejam somadas.
 Registos importados com origem `IMPORT` requerem `source=IMPORT`.
+
+
+## Baseline de previsão horária
+
+O endpoint `GET /api/v1/forecasting/hourly-demand` produz um baseline sazonal
+por dia da semana e hora. Agrega registos por data/hora, utiliza as últimas
+observações do mesmo dia da semana e aplica pesos decrescentes à antiguidade.
+O número mínimo de observações é configurável; sem cobertura suficiente,
+`predicted_units` permanece `null`.
+
+A resposta inclui uma versão explícita do método e backtesting rolling-origin
+com MAE e WAPE quando há pontos suficientes. Este componente é uma referência
+estatística transparente, não uma alegação de IA treinada nem uma previsão
+validada em produção. Não altera inventário, não cria tarefas e não executa
+movimentos físicos.
