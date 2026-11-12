@@ -77,3 +77,21 @@ Implementação publicada no backend e testes automatizados adicionados em `apps
 ## Limites
 
 Esta alteração não deve iniciar treino automático, copiar fotografias para terceiros, aprovar exemplares SKU nem alterar inventário. A utilização de imagens continua dependente de autorização, direitos, retenção e revisão de privacidade.
+
+
+## Auditor de splits ligado ao contrato da API
+
+O auditor `app.dataset_audit` reconhece, por ordem de precedência, `capture_group_id`, `capture_group_key`, `capture_session_id` e `sequence_id`. O identificador de base de dados é normalizado para `session:<id>`, alinhando a validação COCO com os candidatos devolvidos por `GET /api/v1/training-candidates/reviewed`. O SHA-256 continua a ser verificado independentemente como segunda barreira contra duplicados exatos.
+
+Execução:
+
+```bash
+cd apps/api
+python -m app.dataset_audit \
+  --train /data/annotations/instances_train.json \
+  --val /data/annotations/instances_val.json \
+  --test /data/annotations/instances_test.json \
+  --json-report /data/reports/split-audit.json
+```
+
+Os testes incluem agora fuga entre splits através de `capture_group_key` e `capture_session_id`, além do identificador canónico COCO.
