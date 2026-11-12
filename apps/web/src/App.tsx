@@ -72,6 +72,7 @@ type OperationalDecision = {
   priority: "NONE" | "NORMAL" | "HIGH" | string;
   reason: string;
   suggested_replenishment_quantity: number | null;
+  inventory_coverage_hours?: number | null;
   requires_human_approval: boolean;
   automatic_stock_movement_allowed: boolean;
   warnings: string[];
@@ -489,7 +490,7 @@ export default function App() {
                   <div className="decision-meta">
                     <span>Prioridade: <strong>{item.decision.priority}</strong></span>
                     <span>Quantidade sugerida: <strong>{item.decision.suggested_replenishment_quantity == null ? "Não calculada" : item.decision.suggested_replenishment_quantity}</strong></span>
-                    <span>Fontes: <strong>{item.decision.evidence.length}</strong></span>
+                    <span>Cobertura estimada: <strong>{item.decision.inventory_coverage_hours == null ? "—" : `${item.decision.inventory_coverage_hours.toFixed(1)} h`}</strong></span><span>Fontes: <strong>{item.decision.evidence.length}</strong></span>
                   </div>
                   {item.decision.warnings.length > 0 && <ul className="decision-warnings">{item.decision.warnings.map((warning, index) => <li key={index}>{warning}</li>)}</ul>}
                 </article>)}
