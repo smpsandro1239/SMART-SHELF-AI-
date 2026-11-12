@@ -83,7 +83,7 @@ def validate_visual_review_record(
     document_errors = validate_coco_document(document)
     if document_errors:
         return ["invalid COCO document: " + "; ".join(document_errors[:10])], report
-    if record.get("schema_version") != 1:
+    if type(record.get("schema_version")) is not int or record.get("schema_version") != 1:
         errors.append("schema_version must be 1")
     if record.get("split") != split:
         errors.append("review split does not match requested split")
@@ -121,7 +121,7 @@ def validate_visual_review_record(
         if item.get("annotations_sha256") != expected_annotation_hash:
             errors.append(f"{label}: annotations changed since review for image {image_id}")
         decision = item.get("decision")
-        if decision not in DECISIONS:
+        if not isinstance(decision, str) or decision not in DECISIONS:
             errors.append(f"{label}.decision must be APPROVED, NEEDS_CORRECTION or REJECTED")
         elif decision == "APPROVED":
             approved += 1
@@ -131,7 +131,7 @@ def validate_visual_review_record(
             errors.append(f"{label}.reviewer is required")
         reviewed_at = item.get("reviewed_at")
         try:
-            if not isinstance(reviewed_at, str) or not reviewed_at.strip():
+            if not isinstance(reviewed_at, str) or "T" not in reviewed_at or not reviewed_at.strip():
                 raise ValueError
             datetime.fromisoformat(reviewed_at.replace("Z", "+00:00"))
         except ValueError:
