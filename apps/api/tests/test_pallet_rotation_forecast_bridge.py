@@ -167,3 +167,22 @@ def test_malformed_candidate_is_reported_without_stopping_enrichment(malformed):
     assert result["candidates"][0]["planning_reason"] == "INVALID_CANDIDATE"
     assert result["candidates"][0]["traffic_level"] == "UNKNOWN"
     assert result["candidates"][1]["planning_recommendation"] == "WAIT_FOR_LOW_TRAFFIC"
+
+
+def test_invalid_window_parameters_are_rejected_even_without_candidates():
+    with pytest.raises(ValueError, match="current_hour"):
+        enrich_pallet_candidates_with_hourly_profiles(
+            [], {}, current_hour=24,
+        )
+
+
+def test_non_mapping_profile_row_becomes_unknown_instead_of_crashing():
+    rows = profile()
+    rows[4] = None
+    result = enrich_pallet_candidates_with_hourly_profiles(
+        [candidate()], {42: rows}, current_hour=8,
+    )
+    row = result["candidates"][0]
+    assert row["traffic_level"] == "UNKNOWN"
+    assert row["forecast_consumption_until_low_traffic"] is None
+    assert row["planning_reason"] == "HOURLY_PROFILE_INVALID"
