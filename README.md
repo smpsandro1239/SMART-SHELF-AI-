@@ -639,3 +639,8 @@ python -m app.dataset_release \
   --min-images-per-split 20 \
   --min-class-instances 5
 ```
+
+
+## Política de rotação por palete
+
+A troca de uma palete parcial por uma palete completa é avaliada com limiar configurável (por defeito, quando restam 50% ou menos), procura prevista até à janela de baixa afluência, disponibilidade de uma palete pronta, capacidade de retaguarda e comparação de custo de mão de obra. A recomendação é consultiva e nunca movimenta stock automaticamente. Ver [Política operacional — troca de paletes e meias-paletes](docs/operations/pallet-rotation-policy.md).
