@@ -84,7 +84,7 @@ def seed_reviewed_detections():
         ),
     ])
     db.commit()
-    result = {"eligible_id": eligible.id, "excluded_id": excluded.id, "product_id": product.id}
+    result = {"eligible_id": eligible.id, "excluded_id": excluded.id, "product_id": product.id, "image_id": image.id}
     db.close()
     return result
 
@@ -135,5 +135,21 @@ def test_candidate_is_not_repeated_when_image_is_already_an_exemplar():
 
     with TestClient(app) as client:
         response = client.get("/api/v1/training-candidates/reviewed")
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+
+def test_restricted_image_is_not_exposed_as_training_candidate():
+    data = seed_reviewed_detections()
+    db = Session()
+    image = db.get(models.ShelfImage, data["image_id"])
+    image.retention_status = "RESTRICTED"
+    db.commit()
+    db.close()
+
+    with TestClient(app) as client:
+        response = client.get("/api/v1/training-candidates/reviewed")
+
     assert response.status_code == 200
     assert response.json() == []
