@@ -203,6 +203,22 @@ def _shelf_image_store_id(db: Session, image_id: int) -> int | None:
     )
 
 
+def _resolve_shelf_image_storage_path(storage_path: str, store_id: int) -> Path:
+    """Resolve an image path and ensure it remains inside its configured store directory."""
+    root = Path(settings.image_storage_path).resolve()
+    store_root = (root / str(store_id)).resolve()
+    try:
+        store_root.relative_to(root)
+        candidate = Path(storage_path)
+        resolved = candidate.resolve()
+        resolved.relative_to(store_root)
+    except (OSError, RuntimeError, ValueError):
+        raise HTTPException(status_code=404, detail="Stored image file is unavailable")
+    if candidate.is_symlink() or not resolved.is_file():
+        raise HTTPException(status_code=404, detail="Stored image file is unavailable")
+    return resolved
+
+
 def _enforce_store_scope(actor: models.User | None, store_id: int) -> None:
     if actor is not None and actor.role != "ADMIN" and actor.store_id != store_id:
         raise HTTPException(status_code=403, detail="Access to this store is not allowed")
@@ -571,9 +587,10 @@ def get_shelf_image_content(image_id: int, request: Request, db: Session = Depen
         raise HTTPException(status_code=404, detail="Shelf image not found")
     actor = _request_user(db, request)
     _enforce_store_scope(actor, _shelf_image_store_id(db, image_id))
-    path = Path(item.storage_path)
-    if not path.is_file():
-        raise HTTPException(status_code=404, detail="Stored image file is unavailable")
+    store_id = _shelf_image_store_id(db, image_id)
+    if store_id is None:
+        raise HTTPException(status_code=404, detail="Shelf image not found")
+    path = _resolve_shelf_image_storage_path(item.storage_path, store_id)
     return FileResponse(path, media_type=item.mime_type, filename=item.original_filename, content_disposition_type="inline")
 
 
