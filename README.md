@@ -55,6 +55,7 @@ Esta é a fonte de verdade para manter o SMART SHELF AI focado. Deve ser revista
 - [ ] Evoluir a previsão por SKU/loja, dia da semana e hora, sazonalidade, promoções, feriados e tráfego; manter método, janela e proveniência explícitos.
 - [ ] Definir critérios de frescura, completude e qualidade dos dados de vendas/inventário; dados ausentes nunca devem ser convertidos em zero.
 - [ ] Consolidar prioridades e sequência de trabalho por loja, zona, corredor e localização; não apresentar heurísticas como rotas ótimas.
+- [ ] Implementar consenso temporal de observações e deduplicação de alertas por loja/prateleira/SKU, guardando primeira/última ocorrência, número de confirmações e resolução humana; evitar alertas transitórios por um único frame.
 - [ ] Avaliar previsões e recomendações contra resultados reais: precisão, falsos positivos, ruturas não detetadas e quantidades propostas versus executadas.
 - [ ] Permitir políticas configuráveis por loja/secção/produto, com simulação e aprovação antes de ativação.
 
@@ -64,6 +65,7 @@ Esta é a fonte de verdade para manter o SMART SHELF AI focado. Deve ser revista
 - [ ] Completar filtros por loja, secção/zona, corredor, estado, prioridade, responsável e período.
 - [ ] Mostrar frescura/qualidade dos dados, origem, confiança, explicação e motivo de abstinência em cada decisão.
 - [ ] Completar a gestão de utilizadores, atribuições, exceções e consulta da auditoria na interface.
+- [ ] Acrescentar métricas de disponibilidade na prateleira (OSA), duração de rutura, tempo entre alerta e resolução, reincidência e qualidade das recomendações, sempre com denominadores e período explícitos.
 - [ ] Implementar confirmação e reconciliação de execução na interface, sem alterações silenciosas ao stock.
 - [ ] Avaliar e implementar PWA móvel, incluindo conectividade limitada e sincronização.
 
@@ -75,6 +77,7 @@ Esta é a fonte de verdade para manter o SMART SHELF AI focado. Deve ser revista
 - [ ] Calibrar thresholds e medir precisão, recall, falsos matches, cobertura e rejeição de produtos desconhecidos.
 - [ ] Integrar provider real no worker e validar ponta a ponta com imagens autorizadas. Manter inferência real desativada por omissão até validação.
 - [ ] Validar contagem de frentes/unidades e o efeito de oclusões; a face visível não permite inferir stock em profundidade.
+- [ ] Criar modelo geométrico/planograma por segmento ou célula da prateleira, com alinhamento de imagem, localização esperada do SKU e deteção de produto deslocado/posição vazia.
 
 #### P2 — Integrações, Edge e automação física
 
@@ -84,6 +87,13 @@ Esta é a fonte de verdade para manter o SMART SHELF AI focado. Deve ser revista
 - [ ] Validar câmaras, permissões, posicionamento e cobertura numa loja piloto.
 - [ ] Validar fabricante, modelo, SDK/API e limites de segurança antes de qualquer integração de robô.
 - [ ] Não permitir escrita automática em ERP/POS nem movimento autónomo de robôs sem autorização formal, testes e aprovação humana.
+- [ ] Avaliar como extensão opcional a verificação de etiquetas de preço e execução de promoções, separada do MVP de disponibilidade e reposição.
+
+#### P2 — Capacidades adicionais validadas pela REA externa
+
+- [ ] Construir mapa digital da loja com zonas, corredores, prateleiras, segmentos e coordenadas suficientes para orientar picking e futuros dispositivos móveis.
+- [ ] Completar visibilidade de top stock/retaguarda por localização, para que a tarefa de picking indique onde procurar e quanto existe, sem assumir stock não contado.
+- [ ] Criar visão multi-loja/regional para comparar disponibilidade, ruturas, produtividade operacional e qualidade dos dados sem expor informação entre lojas.
 
 #### P2 — Piloto e preparação para produção
 
@@ -96,13 +106,15 @@ Esta é a fonte de verdade para manter o SMART SHELF AI focado. Deve ser revista
 
 ### Próxima sequência de desenvolvimento
 
-1. **Concorrência:** validar criação simultânea de tarefas duplicadas em PostgreSQL e tornar a proteção atómica.
+1. **Concorrência:** validar a nova constraint parcial e os fluxos de conflito; depois executar testes concorrentes em PostgreSQL real.
 2. **Reconciliação de stock:** implementar movimentos imutáveis para quantidades efetivamente repostas, com aprovação e auditoria.
 3. **Qualidade dos dados:** explicitar frescura/completude e separar os diferentes estados de stock.
-4. **Previsão:** evoluir a baseline e criar avaliação retrospetiva antes de usar previsões em decisões reais.
-5. **Dashboard:** completar filtros, explicações, auditoria e reconciliação.
-6. **Visão real:** ativar apenas após dataset autorizado, modelo licenciado e avaliação mensurável.
-7. **Piloto:** modo sombra e piloto supervisionado antes de integrações físicas ou escala.
+4. **Consenso temporal:** deduplicar alertas por SKU/localização e exigir persistência de evidência antes de criar ocorrências.
+5. **Previsão:** evoluir a baseline e criar avaliação retrospetiva antes de usar previsões em decisões reais.
+6. **Planograma e localização:** associar deteções a células/segmentos e medir disponibilidade visual.
+7. **Dashboard:** completar filtros, explicações, auditoria, OSA e reconciliação.
+8. **Visão real:** ativar apenas após dataset autorizado, modelo licenciado e avaliação mensurável.
+9. **Piloto:** modo sombra e piloto supervisionado antes de integrações físicas ou escala.
 
 ### Regras de manutenção deste TODO
 
@@ -114,7 +126,8 @@ Esta é a fonte de verdade para manter o SMART SHELF AI focado. Deve ser revista
 - Registar bloqueios e dependências externas e nunca declarar piloto, integração, modelo real ou produção concluídos sem evidência operacional.
 
 **Última revisão do roadmap:** 2026-11-13.  
-**Última etapa concluída:** auditoria universal de criação de tarefas (`CREATED`), commit técnico `5304ac54f448e119e69f25a151ff3e4213c2af84`.
+**Última etapa concluída:** auditoria universal de criação de tarefas (`CREATED`), commit técnico `5304ac54f448e119e69f25a151ff3e4213c2af84`.  
+**REA externa:** consultar [comparação de soluções](docs/reverse-engineering/external-solutions.md) e [revisão de visão computacional](docs/architecture/retail-vision-rea.md); as referências comerciais e académicas orientam o roadmap, mas as suas métricas não são assumidas como resultados do nosso sistema.
 
 
 ## 1. O que é o SMART SHELF AI?
