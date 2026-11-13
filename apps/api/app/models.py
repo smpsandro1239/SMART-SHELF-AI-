@@ -468,6 +468,12 @@ class CaptureSession(Base):
 class ShelfImage(Base):
     """Stored shelf capture awaiting computer-vision analysis."""
     __tablename__ = "shelf_images"
+    __table_args__ = (
+        CheckConstraint(
+            "retention_status IN ('ACTIVE', 'RESTRICTED', 'PENDING_PURGE', 'PURGED')",
+            name="ck_shelf_images_retention_status",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     shelf_id: Mapped[int] = mapped_column(ForeignKey("shelves.id", ondelete="CASCADE"), index=True)
@@ -485,6 +491,16 @@ class ShelfImage(Base):
     model_version: Mapped[str | None] = mapped_column(String(100), nullable=True)
     captured_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    retention_status: Mapped[str] = mapped_column(String(20), default="ACTIVE", nullable=False, index=True)
+    retention_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    retention_requested_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    retention_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    legal_hold: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    purge_not_before: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    purged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    retention_policy_version: Mapped[str | None] = mapped_column(String(40), nullable=True)
 
 
 class ShelfImageDetection(Base):
