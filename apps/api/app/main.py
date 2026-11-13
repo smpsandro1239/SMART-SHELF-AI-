@@ -3885,7 +3885,7 @@ def create_replenishment_task(payload: ReplenishmentTaskCreate, request: Request
     db.add(item)
     db.flush()
     _record_task_event(db, item, "CREATED", actor, to_status=item.status,
-                       reason="Tarefa criada manualmente.")
+                       reason="Tarefa criada através do fluxo operacional.")
     db.commit()
     db.refresh(item)
     return item
