@@ -1,6 +1,6 @@
 # ADR-008 — Reconciliação auditável da reposição com inventário
 
-**Estado:** aceite como desenho; implementação pendente  
+**Estado:** implementação inicial publicada; endurecimento e validação operacional pendentes  
 **Data:** 13-11-2026
 
 ## Contexto
@@ -54,4 +54,28 @@ A tabela não substitui os snapshots. É o registo de transferência que explica
 - Snapshot anterior permanece inalterado; novo snapshot reflete a quantidade abatida.
 - A cronologia da tarefa mostra a reconciliação e permite identificar quem a aprovou.
 - Falhas em qualquer escrita deixam movimento, snapshot e auditoria sem alterações parciais.
+
+
+
+## Implementação inicial publicada
+
+A primeira implementação está na branch `main` (commit `d602c9427eea47f70a0a5fba3b3d12f0cd689db9`), com testes API aprovados no commit de correção `d3db736d83945028198c54941f4081148474877a`.
+
+- Endpoint: `POST /api/v1/tasks/{task_id}/reconcile-inventory`.
+- Apenas utilizadores autenticados com papel `ADMIN` ou `SUPERVISOR`; o supervisor fica limitado à sua loja.
+- Exige tarefa `COMPLETED`, quantidade efetiva positiva e motivo da aprovação.
+- Rejeita snapshots posteriores à conclusão, ausência de snapshot, evidência com mais de 240 minutos e stock disponível insuficiente.
+- Bloqueia a criação concorrente de snapshots/reconciliações através de bloqueio da linha do produto em PostgreSQL.
+- Cria um movimento `BACKROOM_TO_SHELF` único por tarefa e um novo snapshot `MANUAL` com referência `TASK-RECONCILIATION-{task_id}`.
+- Mantém o snapshot de origem intacto e regista `INVENTORY_RECONCILED` na cronologia da tarefa.
+- Movimento, snapshot resultante e evento são gravados na mesma transação.
+- A migração `0021_inventory_reconciliation` instala restrições de unicidade e triggers append-only para impedir `UPDATE` e `DELETE` em `inventory_movements`.
+
+## Validação ainda necessária
+
+- Testar duas aprovações simultâneas da mesma tarefa em PostgreSQL 16: exatamente uma resposta 201, uma 409 e um movimento/snapshot/evento.
+- Testar falhas entre a criação do snapshot, movimento e evento, confirmando rollback integral.
+- Exercitar os triggers append-only com tentativas reais de `UPDATE` e `DELETE` no CI PostgreSQL.
+- Tornar a janela de frescura configurável por loja/fonte; os 240 minutos atuais são um limite inicial conservador, não uma política final.
+- Validar a reconciliação com operadores e fontes reais antes de a usar como saldo operacional ou integração ERP/WMS.
 

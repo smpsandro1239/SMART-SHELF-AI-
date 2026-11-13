@@ -4,7 +4,11 @@ from threading import Barrier
 from uuid import uuid4
 
 from fastapi.testclient import TestClient
+from sqlalchemy import text
+from sqlalchemy.exc import DBAPIError
 
+from app import main as main_module, models
+from app.database import SessionLocal
 from app.main import app
 
 
@@ -268,10 +272,166 @@ def main() -> None:
             expected_event_types=("CREATED", "APPROVED"),
         )
 
+
+        # Validate approved reconciliation under PostgreSQL row-level locking.
+        reconciliation_product = client.post(
+            "/api/v1/products",
+            json={"sku": f"CI-RECON-{suffix}", "name": "CI reconciliation product"},
+        )
+        assert reconciliation_product.status_code == 201, reconciliation_product.text
+        reconciliation_product_id = reconciliation_product.json()["id"]
+        reconciliation_assignment = client.post(
+            "/api/v1/shelf-products",
+            json={
+                "shelf_id": shelf_id,
+                "product_id": reconciliation_product_id,
+                "target_quantity": 10,
+                "min_display_quantity": 2,
+            },
+        )
+        assert reconciliation_assignment.status_code == 201, reconciliation_assignment.text
+        source_snapshot = client.post(
+            "/api/v1/inventory/snapshots",
+            json={
+                "store_id": store_id,
+                "product_id": reconciliation_product_id,
+                "on_hand_quantity": 10,
+                "reserved_quantity": 1,
+                "source": "WMS",
+                "external_reference": f"CI-RECON-SOURCE-{suffix}",
+            },
+        )
+        assert source_snapshot.status_code == 201, source_snapshot.text
+
+        reconciliation_task = client.post(
+            "/api/v1/tasks",
+            json={
+                "store_id": store_id,
+                "shelf_id": shelf_id,
+                "product_id": reconciliation_product_id,
+                "requested_quantity": 2,
+            },
+        )
+        assert reconciliation_task.status_code == 201, reconciliation_task.text
+        reconciliation_task_id = reconciliation_task.json()["id"]
+        assigned = client.patch(
+            f"/api/v1/tasks/{reconciliation_task_id}/status",
+            json={"status": "ASSIGNED", "assigned_to": "CI reconciliation operator"},
+        )
+        assert assigned.status_code == 200, assigned.text
+        started = client.patch(
+            f"/api/v1/tasks/{reconciliation_task_id}/status",
+            json={"status": "IN_PROGRESS"},
+        )
+        assert started.status_code == 200, started.text
+        completed = client.patch(
+            f"/api/v1/tasks/{reconciliation_task_id}/status",
+            json={"status": "COMPLETED", "actual_quantity": 2},
+        )
+        assert completed.status_code == 200, completed.text
+
+        actor_db = SessionLocal()
+        try:
+            actor = models.User(
+                email=f"ci-reconciliation-{suffix}@example.test",
+                store_id=store_id,
+                full_name="CI Reconciliation Supervisor",
+                password_hash="ci-only-not-used",
+                role="SUPERVISOR",
+                is_active=True,
+            )
+            actor_db.add(actor)
+            actor_db.commit()
+            actor_db.refresh(actor)
+        finally:
+            actor_db.close()
+
+        original_request_user = main_module._request_user
+        main_module._request_user = lambda db, request: actor
+        try:
+            reconciliation_barrier = Barrier(2)
+
+            def reconcile_task():
+                reconciliation_barrier.wait(timeout=10)
+                return client.post(
+                    f"/api/v1/tasks/{reconciliation_task_id}/reconcile-inventory",
+                    json={"reason": "CI supervisor confirmed physical refill."},
+                )
+
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                reconciliation_responses = list(
+                    executor.map(lambda _: reconcile_task(), range(2))
+                )
+        finally:
+            main_module._request_user = original_request_user
+
+        reconciliation_created = [
+            response for response in reconciliation_responses
+            if response.status_code == 201
+        ]
+        reconciliation_conflicts = [
+            response for response in reconciliation_responses
+            if response.status_code == 409
+        ]
+        assert len(reconciliation_created) == 1, [
+            response.text for response in reconciliation_responses
+        ]
+        assert len(reconciliation_conflicts) == 1, [
+            response.text for response in reconciliation_responses
+        ]
+        assert (
+            reconciliation_conflicts[0].json()["detail"]["code"]
+            == "INVENTORY_ALREADY_RECONCILED"
+        )
+        movement_id = reconciliation_created[0].json()["id"]
+        result_snapshot_id = reconciliation_created[0].json()["result_snapshot_id"]
+
+        inventory_history = client.get(
+            "/api/v1/inventory/snapshots",
+            params={"store_id": store_id, "product_id": reconciliation_product_id},
+        )
+        assert inventory_history.status_code == 200, inventory_history.text
+        history_by_id = {item["id"]: item for item in inventory_history.json()}
+        original_snapshot_id = source_snapshot.json()["id"]
+        assert history_by_id[original_snapshot_id]["on_hand_quantity"] == 10
+        assert history_by_id[result_snapshot_id]["on_hand_quantity"] == 8
+        assert history_by_id[result_snapshot_id]["reserved_quantity"] == 1
+
+        reconciliation_events = client.get(
+            f"/api/v1/tasks/{reconciliation_task_id}/events"
+        )
+        assert reconciliation_events.status_code == 200, reconciliation_events.text
+        assert [
+            event["event_type"] for event in reconciliation_events.json()
+        ].count("INVENTORY_RECONCILED") == 1
+
+        # The PostgreSQL migration installs database-level append-only triggers.
+        audit_db = SessionLocal()
+        try:
+            for statement in (
+                "UPDATE inventory_movements SET reason = 'tampered' WHERE id = :movement_id",
+                "DELETE FROM inventory_movements WHERE id = :movement_id",
+            ):
+                try:
+                    audit_db.execute(text(statement), {"movement_id": movement_id})
+                    audit_db.commit()
+                except DBAPIError:
+                    audit_db.rollback()
+                else:
+                    raise AssertionError("inventory_movements accepted an UPDATE or DELETE")
+            assert (
+                audit_db.query(models.InventoryMovement)
+                .filter(models.InventoryMovement.id == movement_id)
+                .count()
+                == 1
+            )
+        finally:
+            audit_db.close()
+
         print(
             "PostgreSQL concurrent task creation: PASS "
-            "(manual, recommendation and approved operational-decision paths "
-            "each return one 201 and one 409; terminal task releases the unique slot)"
+            "(three task-creation paths and approved reconciliation each return one 201 and one 409; "
+            "audit is unique, snapshots are immutable and inventory movements reject UPDATE/DELETE)"
         )
 
 
