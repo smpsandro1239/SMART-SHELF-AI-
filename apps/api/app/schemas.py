@@ -40,6 +40,7 @@ class ShelfRead(ShelfCreate):
 
 class ObservationCreate(BaseModel):
     shelf_id: int
+    product_id: int | None = None
     source: ObservationSource = "mobile"
     status: ObservationStatus = "UNKNOWN"
     confidence: float | None = Field(default=None, ge=0, le=1)
@@ -52,6 +53,7 @@ class ObservationCreate(BaseModel):
 class ObservationRead(BaseModel):
     id: int
     shelf_id: int
+    product_id: int | None
     source: str
     status: str
     confidence: float | None

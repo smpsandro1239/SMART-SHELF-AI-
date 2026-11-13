@@ -379,6 +379,22 @@ def create_observation(payload: ObservationCreate, request: Request, db: Session
     actor = _request_user(db, request)
     if actor is not None and actor.role != "ADMIN" and shelf_scope.zone.store_id != actor.store_id:
         raise HTTPException(status_code=403, detail="Access to this shelf is not allowed")
+    if payload.product_id is not None:
+        shelf_product = (
+            db.query(models.ShelfProduct)
+            .join(models.Product, models.ShelfProduct.product_id == models.Product.id)
+            .filter(
+                models.ShelfProduct.shelf_id == payload.shelf_id,
+                models.ShelfProduct.product_id == payload.product_id,
+                models.Product.is_active.is_(True),
+            )
+            .first()
+        )
+        if shelf_product is None:
+            raise HTTPException(
+                status_code=422,
+                detail="Product must be active and explicitly assigned to this shelf",
+            )
     data = payload.model_dump()
     if data["observed_at"] is None:
         data["observed_at"] = models.utc_now()
@@ -415,6 +431,7 @@ def list_observations(
 @app.get("/api/v1/shelves/{shelf_id}/observation-consensus", tags=["observations"])
 def get_shelf_observation_consensus(
     shelf_id: int,
+    product_id: int | None = None,
     window_minutes: int = 15,
     minimum_confirmations: int = 3,
     minimum_interval_seconds: int = 10,
@@ -433,9 +450,32 @@ def get_shelf_observation_consensus(
         raise HTTPException(status_code=404, detail="Shelf not found")
     actor = _request_user(db, request)
     _enforce_store_scope(actor, shelf.zone.store_id)
+    if product_id is not None:
+        shelf_product = (
+            db.query(models.ShelfProduct)
+            .join(models.Product, models.ShelfProduct.product_id == models.Product.id)
+            .filter(
+                models.ShelfProduct.shelf_id == shelf_id,
+                models.ShelfProduct.product_id == product_id,
+                models.Product.is_active.is_(True),
+            )
+            .first()
+        )
+        if shelf_product is None:
+            raise HTTPException(
+                status_code=422,
+                detail="Product must be active and explicitly assigned to this shelf",
+            )
+        observation_scope = models.Observation.product_id == product_id
+    else:
+        # Keep legacy shelf-only evidence separate from SKU-attributed evidence.
+        observation_scope = models.Observation.product_id.is_(None)
     observations = (
         db.query(models.Observation)
-        .filter(models.Observation.shelf_id == shelf_id)
+        .filter(
+            models.Observation.shelf_id == shelf_id,
+            observation_scope,
+        )
         .order_by(models.Observation.observed_at.desc(), models.Observation.id.desc())
         .limit(500)
         .all()
@@ -468,8 +508,9 @@ def get_shelf_observation_consensus(
         "shelf_code": shelf.code,
         "evaluated_observations": len(observations),
         "consensus": result,
-        "scope": "SHELF",
-        "sku_attribution_available": False,
+        "product_id": product_id,
+        "scope": "SHELF_SKU" if product_id is not None else "SHELF",
+        "sku_attribution_available": product_id is not None,
     }
 
 

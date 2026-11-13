@@ -449,3 +449,110 @@ def test_shelf_observation_consensus_endpoint_enforces_store_scope(monkeypatch):
         monkeypatch.setattr(main_module, "_request_user", lambda db, request: SimpleNamespace(id=91, role="SUPERVISOR", store_id=999))
         response = client.get(f"/api/v1/shelves/{shelf.json()['id']}/observation-consensus")
         assert response.status_code == 403
+
+
+
+def test_observation_product_must_be_assigned_to_shelf():
+    Base.metadata.drop_all(bind=TEST_ENGINE)
+    Base.metadata.create_all(bind=TEST_ENGINE)
+    with TestClient(app) as client:
+        store = client.post("/api/v1/stores", json={"code": "OBS-SKU-01", "name": "Loja SKU"})
+        zone = client.post("/api/v1/zones", json={"store_id": store.json()["id"], "name": "Bebidas"})
+        shelf = client.post("/api/v1/shelves", json={"zone_id": zone.json()["id"], "code": "SKU-01"})
+        product = client.post("/api/v1/products", json={"sku": "SKU-OBS-01", "name": "Produto de teste"})
+        assert product.status_code == 201
+
+        rejected = client.post(
+            "/api/v1/observations",
+            json={
+                "shelf_id": shelf.json()["id"],
+                "product_id": product.json()["id"],
+                "source": "simulation",
+                "status": "LOW_STOCK",
+                "confidence": 0.9,
+            },
+        )
+        assert rejected.status_code == 422
+
+        assigned = client.post(
+            "/api/v1/shelf-products",
+            json={"shelf_id": shelf.json()["id"], "product_id": product.json()["id"]},
+        )
+        assert assigned.status_code == 201
+
+        accepted = client.post(
+            "/api/v1/observations",
+            json={
+                "shelf_id": shelf.json()["id"],
+                "product_id": product.json()["id"],
+                "source": "simulation",
+                "status": "LOW_STOCK",
+                "confidence": 0.9,
+            },
+        )
+        assert accepted.status_code == 201
+        assert accepted.json()["product_id"] == product.json()["id"]
+
+
+def test_observation_consensus_is_isolated_per_sku_and_legacy_evidence():
+    from datetime import datetime, timedelta, timezone
+
+    Base.metadata.drop_all(bind=TEST_ENGINE)
+    Base.metadata.create_all(bind=TEST_ENGINE)
+    with TestClient(app) as client:
+        store = client.post("/api/v1/stores", json={"code": "OBS-SKU-02", "name": "Loja consenso SKU"})
+        zone = client.post("/api/v1/zones", json={"store_id": store.json()["id"], "name": "Frescos"})
+        shelf = client.post("/api/v1/shelves", json={"zone_id": zone.json()["id"], "name": "Prateleira"})
+        shelf_id = shelf.json()["id"]
+        product_a = client.post("/api/v1/products", json={"sku": "SKU-CONS-A", "name": "Produto A"}).json()
+        product_b = client.post("/api/v1/products", json={"sku": "SKU-CONS-B", "name": "Produto B"}).json()
+        for product in (product_a, product_b):
+            assigned = client.post(
+                "/api/v1/shelf-products",
+                json={"shelf_id": shelf_id, "product_id": product["id"]},
+            )
+            assert assigned.status_code == 201
+
+        now = datetime.now(timezone.utc)
+        for product, status in ((product_a, "LOW_STOCK"), (product_b, "EMPTY")):
+            for seconds_ago in (40, 20):
+                observed_at = (now - timedelta(seconds=seconds_ago)).isoformat()
+                response = client.post(
+                    "/api/v1/observations",
+                    json={
+                        "shelf_id": shelf_id,
+                        "product_id": product["id"],
+                        "source": "simulation",
+                        "status": status,
+                        "confidence": 0.95,
+                        "observed_at": observed_at,
+                    },
+                )
+                assert response.status_code == 201
+
+        common = {
+            "minimum_confirmations": 2,
+            "minimum_interval_seconds": 5,
+            "minimum_confidence": 0.6,
+        }
+        consensus_a = client.get(
+            f"/api/v1/shelves/{shelf_id}/observation-consensus",
+            params={**common, "product_id": product_a["id"]},
+        )
+        consensus_b = client.get(
+            f"/api/v1/shelves/{shelf_id}/observation-consensus",
+            params={**common, "product_id": product_b["id"]},
+        )
+        legacy = client.get(
+            f"/api/v1/shelves/{shelf_id}/observation-consensus",
+            params=common,
+        )
+
+        assert consensus_a.status_code == consensus_b.status_code == legacy.status_code == 200
+        assert consensus_a.json()["scope"] == "SHELF_SKU"
+        assert consensus_a.json()["sku_attribution_available"] is True
+        assert consensus_a.json()["consensus"]["consensus_observation_status"] == "LOW_STOCK"
+        assert consensus_b.json()["consensus"]["consensus_observation_status"] == "EMPTY"
+        assert legacy.json()["scope"] == "SHELF"
+        assert legacy.json()["sku_attribution_available"] is False
+        assert legacy.json()["consensus"]["status"] == "NO_CONSENSUS"

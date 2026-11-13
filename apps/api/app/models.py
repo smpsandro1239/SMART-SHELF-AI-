@@ -46,6 +46,7 @@ class Observation(Base):
     )
     id: Mapped[int] = mapped_column(primary_key=True)
     shelf_id: Mapped[int] = mapped_column(ForeignKey("shelves.id", ondelete="CASCADE"), index=True)
+    product_id: Mapped[int | None] = mapped_column(ForeignKey("products.id", ondelete="SET NULL"), nullable=True, index=True)
     source: Mapped[str] = mapped_column(String(30), default="mobile")
     status: Mapped[str] = mapped_column(String(30), default="UNKNOWN", index=True)
     confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
@@ -54,6 +55,7 @@ class Observation(Base):
     observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
     model_version: Mapped[str | None] = mapped_column(String(100), nullable=True)
     shelf: Mapped[Shelf] = relationship(back_populates="observations")
+    product: Mapped["Product | None"] = relationship(back_populates="observations")
 
 
 class Product(Base):
@@ -66,6 +68,7 @@ class Product(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     shelf_links: Mapped[list["ShelfProduct"]] = relationship(back_populates="product", cascade="all, delete-orphan")
+    observations: Mapped[list["Observation"]] = relationship(back_populates="product")
 
 
 

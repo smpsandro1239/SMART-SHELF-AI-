@@ -32,11 +32,11 @@ result = evaluate_observation_consensus(
 Os valores por omissão são parâmetros iniciais conservadores, não thresholds calibrados. Antes da integração no motor/API, é necessário validar a janela, intervalo e confiança com imagens reais autorizadas, associar a evidência à identidade do SKU e implementar persistência/idempotência do alerta. O módulo não está ainda ligado ao worker nem às decisões operacionais.
 
 
-## Integração HTTP inicial (âmbito de prateleira)
+## Integração HTTP — âmbito de prateleira e SKU
 
 O endpoint autenticado `GET /api/v1/shelves/{shelf_id}/observation-consensus` expõe a avaliação de observações repetidas para uma prateleira e respeita o isolamento por loja. Aceita `window_minutes`, `minimum_confirmations`, `minimum_interval_seconds` e `minimum_confidence`. Observações sem confiança são tratadas como evidência não elegível.
 
-**Limite semântico:** o modelo `Observation` referencia apenas `shelf_id`, não um SKU. A API declara `scope: SHELF` e `sku_attribution_available: false`; não replica incorretamente uma observação por todos os produtos da prateleira. A persistência/idempotência de alertas, resolução humana, associação explícita a SKU, integração do worker e calibração com imagens reais continuam pendentes. O endpoint não cria tarefas nem movimenta inventário.
+**Atribuição explícita:** `Observation.product_id` é opcional para preservar registos legados. Quando fornecido, a API exige que o produto esteja ativo e associado explicitamente à prateleira através de `ShelfProduct`; caso contrário responde HTTP 422. A migração `0026_observation_product_attribution` acrescenta a FK anulável com `ON DELETE SET NULL`. O endpoint aceita `product_id` e avalia apenas esse SKU (`scope: SHELF_SKU`, `sku_attribution_available: true`). Sem `product_id`, avalia exclusivamente observações legadas sem SKU, evitando misturar produtos diferentes. O isolamento por loja continua a ser aplicado antes da avaliação. A persistência/idempotência de alertas, resolução humana, integração do worker e calibração com imagens reais continuam pendentes. O endpoint não cria tarefas nem movimenta inventário.
 
 
 A consulta limita o custo de leitura às 500 observações mais recentes por prateleira. A seleção é feita em ordem descendente e os registos são reordenados cronologicamente antes da avaliação; desta forma, o limite não pode ocultar evidência recente atrás de um histórico antigo. A regressão correspondente semeia mais de 500 observações antigas e confirma que as três confirmações recentes continuam a ser avaliadas.
