@@ -10,10 +10,16 @@ on:
     paths:
       - 'apps/api/**'
       - '.github/workflows/api-ci.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: api-ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     services:
       postgres:
         image: postgres:16
@@ -49,7 +55,7 @@ jobs:
           DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/smart_shelf_ci
           APP_ENV: test
         run: alembic upgrade head
-      - name: Verify PostgreSQL active-task uniqueness
+      - name: Verify PostgreSQL task lifecycle, concurrency and reconciliation
         env:
           DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/smart_shelf_ci
           APP_ENV: test
