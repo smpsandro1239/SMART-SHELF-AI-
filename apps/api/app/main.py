@@ -52,7 +52,7 @@ from app.schemas import (
     DailySalesRecordCreate, DailySalesRecordRead, SalesSource,
     HourlySalesRecordCreate, HourlySalesRecordRead, HourlyStoreTrafficRecordCreate, HourlyStoreTrafficRecordRead,
     HourlySalesBatchCreate, HourlyStoreTrafficBatchCreate,
-    ReplenishmentTaskCreate, ReplenishmentTaskStatusUpdate, ReplenishmentTaskRead,
+    ReplenishmentTaskCreate, ReplenishmentTaskStatusUpdate, ReplenishmentTaskRead, ReplenishmentTaskEventRead,
     BootstrapAdminCreate, LoginRequest, TokenRead, UserRead, UserCreate, ShelfImageRead,
     ShelfImageDetectionRead, ProductEmbeddingExemplarCreate,
     ProductEmbeddingExemplarReview, ProductEmbeddingExemplarRead,
@@ -213,6 +213,14 @@ def _lock_store_for_task_creation(db: Session, store_id: int) -> None:
     )
     if store is None:
         raise HTTPException(status_code=404, detail="Store not found")
+
+
+def _record_task_event(db: Session, task: models.ReplenishmentTask, event_type: str, actor: models.User | None, *, from_status: str | None = None, to_status: str | None = None, actual_quantity: float | None = None, reason: str | None = None) -> None:
+    db.add(models.ReplenishmentTaskEvent(
+        task_id=task.id, event_type=event_type, from_status=from_status,
+        to_status=to_status, actor_user_id=actor.id if actor is not None else None,
+        actual_quantity=actual_quantity, reason=reason, created_at=models.utc_now(),
+    ))
 
 
 @app.get("/health", tags=["system"])
@@ -4360,7 +4368,7 @@ def update_replenishment_task_status(
     request: Request,
     db: Session = Depends(get_db),
 ):
-    task = db.get(models.ReplenishmentTask, task_id)
+    task = db.query(models.ReplenishmentTask).filter(models.ReplenishmentTask.id == task_id).with_for_update().first()
     if task is None:
         raise HTTPException(status_code=404, detail="Task not found")
     actor = _request_user(db, request)
@@ -4382,10 +4390,23 @@ def update_replenishment_task_status(
         "CANCELLED": set(),
     }
     if payload.status not in allowed[task.status]:
-        raise HTTPException(
-            status_code=409,
-            detail=f"Transition from {task.status} to {payload.status} is not allowed",
-        )
+        raise HTTPException(status_code=409, detail=f"Transition from {task.status} to {payload.status} is not allowed")
+
+    if payload.status == "COMPLETED":
+        if payload.actual_quantity is None:
+            raise HTTPException(status_code=422, detail={"code": "ACTUAL_QUANTITY_REQUIRED", "message": "Indique a quantidade efetivamente reposta."})
+        if task.requested_quantity is not None and payload.actual_quantity > float(task.requested_quantity):
+            raise HTTPException(status_code=409, detail={"code": "ACTUAL_QUANTITY_EXCEEDS_REQUESTED", "requested_quantity": float(task.requested_quantity)})
+        if task.requested_quantity is not None and payload.actual_quantity < float(task.requested_quantity) and not payload.exception_reason:
+            raise HTTPException(status_code=422, detail={"code": "PARTIAL_COMPLETION_REASON_REQUIRED", "message": "Explique a diferença entre a quantidade pedida e a quantidade reposta."})
+    elif payload.status == "CANCELLED":
+        if not payload.exception_reason:
+            raise HTTPException(status_code=422, detail={"code": "CANCELLATION_REASON_REQUIRED", "message": "Indique o motivo do cancelamento."})
+        if payload.actual_quantity is not None:
+            raise HTTPException(status_code=422, detail="Actual quantity is only valid when completing a task")
+    elif payload.actual_quantity is not None or payload.exception_reason is not None:
+        raise HTTPException(status_code=422, detail="Quantity and exception reason are only valid for completion or cancellation")
+
     if payload.status == "ASSIGNED":
         assignee = payload.assigned_to or task.assigned_to
         if payload.assigned_user_id is not None:
@@ -4400,6 +4421,7 @@ def update_replenishment_task_status(
     elif payload.assigned_to is not None or payload.assigned_user_id is not None:
         raise HTTPException(status_code=422, detail="Assignee can only be set when assigning a task")
 
+    previous_status = task.status
     now = models.utc_now()
     task.status = payload.status
     task.updated_at = now
@@ -4407,9 +4429,35 @@ def update_replenishment_task_status(
         task.started_at = now
     elif payload.status == "COMPLETED":
         task.completed_at = now
+        task.actual_quantity = payload.actual_quantity
+        task.exception_reason = payload.exception_reason
+    elif payload.status == "CANCELLED":
+        task.exception_reason = payload.exception_reason
+
+    _record_task_event(
+        db, task, "STATUS_CHANGED", actor, from_status=previous_status,
+        to_status=payload.status, actual_quantity=payload.actual_quantity,
+        reason=payload.exception_reason,
+    )
     db.commit()
     db.refresh(task)
     return task
+
+
+@app.get("/api/v1/tasks/{task_id}/events", response_model=list[ReplenishmentTaskEventRead], tags=["tasks"])
+def list_replenishment_task_events(task_id: int, request: Request, db: Session = Depends(get_db)):
+    task = db.get(models.ReplenishmentTask, task_id)
+    if task is None:
+        raise HTTPException(status_code=404, detail="Task not found")
+    actor = _request_user(db, request)
+    if actor is not None and actor.role != "ADMIN" and task.store_id != actor.store_id:
+        raise HTTPException(status_code=403, detail="Access to this task is not allowed")
+    return (
+        db.query(models.ReplenishmentTaskEvent)
+        .filter(models.ReplenishmentTaskEvent.task_id == task_id)
+        .order_by(models.ReplenishmentTaskEvent.created_at.asc(), models.ReplenishmentTaskEvent.id.asc())
+        .all()
+    )
 
 
 @app.post("/api/v1/auth/bootstrap", response_model=TokenRead, status_code=201, tags=["authentication"])
@@ -4677,6 +4725,12 @@ def create_task_from_operational_decision(
         notes=notes,
     )
     db.add(task)
+    db.flush()
+    _record_task_event(
+        db, task, "APPROVED", actor, to_status=task.status,
+        actual_quantity=requested,
+        reason=f"Proposta operacional aprovada; quantidade sugerida={suggested}.",
+    )
     db.commit()
     db.refresh(task)
     return task
