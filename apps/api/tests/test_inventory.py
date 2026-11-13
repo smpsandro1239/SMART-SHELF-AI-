@@ -401,7 +401,6 @@ def test_reconciliation_rejects_insufficient_available_backroom_stock(monkeypatc
         response = client.post(
             f"/api/v1/tasks/{task_id}/reconcile-inventory",
             json={"reason": "Stock disponível insuficiente"},
-            headers=_supervisor_headers(store_id),
         )
         assert response.status_code == 409
         assert response.json()["detail"]["code"] == "INSUFFICIENT_BACKROOM_STOCK"
