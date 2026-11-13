@@ -357,6 +357,28 @@ class ReplenishmentTask(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    actual_quantity: Mapped[float | None] = mapped_column(Numeric(12, 3), nullable=True)
+    exception_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class ReplenishmentTaskEvent(Base):
+    """Append-only audit record for task approvals and lifecycle transitions."""
+    __tablename__ = "replenishment_task_events"
+    __table_args__ = (
+        CheckConstraint("event_type IN ('APPROVED', 'STATUS_CHANGED')", name="ck_task_event_type"),
+        CheckConstraint("actual_quantity IS NULL OR actual_quantity > 0", name="ck_task_event_actual_quantity_positive"),
+        Index("ix_task_events_task_created", "task_id", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    task_id: Mapped[int] = mapped_column(ForeignKey("replenishment_tasks.id", ondelete="CASCADE"), nullable=False, index=True)
+    event_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    from_status: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    to_status: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    actor_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    actual_quantity: Mapped[float | None] = mapped_column(Numeric(12, 3), nullable=True)
+    reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False, index=True)
 
 
 class User(Base):
