@@ -112,6 +112,12 @@ def test_database_unique_index_blocks_duplicate_active_tasks():
         })
         assert created.status_code == 201
 
+        duplicate_response = client.post("/api/v1/tasks", json={
+            "store_id": store_id, "shelf_id": shelf_id, "product_id": product_id,
+        })
+        assert duplicate_response.status_code == 409
+        assert duplicate_response.json()["detail"]["code"] == "ACTIVE_TASK_EXISTS"
+
         db = TestingSession()
         try:
             duplicate = models.ReplenishmentTask(
