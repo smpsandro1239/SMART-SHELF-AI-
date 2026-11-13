@@ -16,6 +16,19 @@ type Task = {
   assigned_to: string | null; assigned_user_id: number | null;
   requested_quantity: number | null; actual_quantity?: number | null; exception_reason?: string | null; notes: string | null; created_at: string;
 };
+type TaskEvent = {
+  id: number; task_id: number;
+  event_type: "CREATED" | "APPROVED" | "STATUS_CHANGED" | "INVENTORY_RECONCILED";
+  from_status: TaskStatus | null; to_status: TaskStatus | null;
+  actor_user_id: number | null; actual_quantity: number | null;
+  reason: string | null; created_at: string;
+};
+type InventoryMovement = {
+  id: number; task_id: number; store_id: number; product_id: number;
+  movement_type: "BACKROOM_TO_SHELF"; quantity: number;
+  source_snapshot_id: number; result_snapshot_id: number;
+  actor_user_id: number; reason: string; created_at: string;
+};
 type ShelfImage = { id: number; shelf_id: number; original_filename: string; mime_type: string; file_size_bytes: number; sha256: string; analysis_status: "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED"; analysis_error: string | null; analysis_started_at: string | null; analysis_completed_at: string | null; captured_at: string; created_at: string };
 type ShelfImageDetection = { id: number; shelf_image_id: number; product_id: number | null; label: string; confidence: number; x_min: number; y_min: number; x_max: number; y_max: number; model_version: string; sku_match_status?: "MATCHED" | "AMBIGUOUS" | "UNKNOWN" | null; sku_similarity?: number | null; sku_match_margin?: number | null; created_at: string };
 type Product = { id: number; sku: string; name: string; is_active: boolean };
@@ -127,6 +140,10 @@ export default function App() {
   const [decisionLoading, setDecisionLoading] = useState(false);
   const [approvalLoadingKey, setApprovalLoadingKey] = useState<string | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [taskEvents, setTaskEvents] = useState<Record<number, TaskEvent[]>>({});
+  const [taskEventsLoading, setTaskEventsLoading] = useState<number | null>(null);
+  const [taskReconcileLoading, setTaskReconcileLoading] = useState<number | null>(null);
+  const [taskReconcileMessages, setTaskReconcileMessages] = useState<Record<number, string>>({});
   const [captures, setCaptures] = useState<ShelfImage[]>([]);
   const [imageDetections, setImageDetections] = useState<Record<number, ShelfImageDetection[]>>({});
   const [imageUrls, setImageUrls] = useState<Record<number, string>>({});
@@ -172,7 +189,7 @@ export default function App() {
     sessionStorage.removeItem("smart-shelf-token");
     Object.values(imageUrls).forEach(url => URL.revokeObjectURL(url));
     setImageUrls({});
-    setToken(""); setUser(null); setSummary(null); setOperationalDecisions(null); setTasks([]); setCaptures([]); setImageDetections({}); setDetectionReviews({}); setExpandedDetectionImage(null);
+    setToken(""); setUser(null); setSummary(null); setOperationalDecisions(null); setTasks([]); setTaskEvents({}); setTaskReconcileMessages({}); setCaptures([]); setImageDetections({}); setDetectionReviews({}); setExpandedDetectionImage(null);
   }, [imageUrls]);
 
   const refresh = useCallback(async () => {
@@ -268,6 +285,44 @@ export default function App() {
       });
       await refresh();
     } catch (err) { setError(err instanceof Error ? err.message : "Não foi possível atualizar a tarefa."); }
+  }
+
+  async function loadTaskEvents(taskId: number) {
+    setTaskEventsLoading(taskId);
+    setError("");
+    try {
+      const events = await request<TaskEvent[]>(`/api/v1/tasks/${taskId}/events`);
+      setTaskEvents(current => ({ ...current, [taskId]: events }));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Não foi possível consultar a cronologia da tarefa.");
+    } finally {
+      setTaskEventsLoading(current => current === taskId ? null : current);
+    }
+  }
+
+  async function reconcileTask(task: Task, reason: string) {
+    setTaskReconcileLoading(task.id);
+    setTaskReconcileMessages(current => ({ ...current, [task.id]: "" }));
+    setError("");
+    try {
+      const movement = await request<InventoryMovement>(`/api/v1/tasks/${task.id}/reconcile-inventory`, {
+        method: "POST",
+        body: JSON.stringify({ reason: reason.trim() }),
+      });
+      setTaskReconcileMessages(current => ({
+        ...current,
+        [task.id]: `Reconciliação #${movement.id} registada: ${movement.quantity} unidades. Snapshot resultante #${movement.result_snapshot_id}.`,
+      }));
+      await loadTaskEvents(task.id);
+      await refresh();
+    } catch (err) {
+      setTaskReconcileMessages(current => ({
+        ...current,
+        [task.id]: err instanceof Error ? err.message : "Não foi possível reconciliar o inventário.",
+      }));
+    } finally {
+      setTaskReconcileLoading(current => current === task.id ? null : current);
+    }
   }
 
  
@@ -527,7 +582,22 @@ export default function App() {
               <div className="panel-heading"><div><p className="eyebrow">EXECUÇÃO</p><h2>Tarefas de reposição</h2><p className="muted">Acompanhamento das intervenções registadas na API.</p></div><span className="subtle-pill">{taskRows.length} registos</span></div>
               <div className="task-list">
                 {taskRows.length === 0 && <div className="empty-state"><PackageSearch size={28} /><strong>Sem tarefas registadas</strong><span>Quando forem criadas tarefas, aparecerão aqui.</span></div>}
-                {taskRows.map(task => <TaskRow key={task.id} task={task} canAssign={user?.role === "ADMIN" || user?.role === "SUPERVISOR"} canProgress={user?.role === "EMPLOYEE" ? task.assigned_user_id === user.id : user?.role === "ADMIN" || user?.role === "SUPERVISOR"} canCancel={user?.role === "ADMIN" || user?.role === "SUPERVISOR"} onUpdate={updateTask} />)}
+                {taskRows.map(task => <TaskRow
+                  key={task.id}
+                  task={task}
+                  canAssign={user?.role === "ADMIN" || user?.role === "SUPERVISOR"}
+                  canProgress={user?.role === "EMPLOYEE" ? task.assigned_user_id === user.id : user?.role === "ADMIN" || user?.role === "SUPERVISOR"}
+                  canCancel={user?.role === "ADMIN" || user?.role === "SUPERVISOR"}
+                  canAudit={user?.role === "ADMIN" || user?.role === "SUPERVISOR"}
+                  canReconcile={user?.role === "ADMIN" || user?.role === "SUPERVISOR"}
+                  events={taskEvents[task.id] || null}
+                  eventsLoading={taskEventsLoading === task.id}
+                  reconcileLoading={taskReconcileLoading === task.id}
+                  reconcileMessage={taskReconcileMessages[task.id] || ""}
+                  onLoadEvents={loadTaskEvents}
+                  onReconcile={reconcileTask}
+                  onUpdate={updateTask}
+                />)}
               </div>
             </article>
             <article className="panel status-panel">
@@ -758,18 +828,34 @@ export default function App() {
 function Metric({ icon, label, value, tone, detail }: { icon: ReactNode; label: string; value: number; tone: string; detail: string }) {
   return <article className="metric-card"><div className={`metric-icon ${tone}`}>{icon}</div><p>{label}</p><strong>{value.toLocaleString("pt-PT")}</strong><span>{detail}</span></article>;
 }
-function TaskRow({ task, canAssign, canProgress, canCancel, onUpdate }: { task: Task; canAssign: boolean; canProgress: boolean; canCancel: boolean; onUpdate: (task: Task, status: "ASSIGNED" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED", assignedUserId?: number, completion?: { actual_quantity: number; exception_reason?: string }, cancellationReason?: string) => void }) {
+function TaskRow({
+  task, canAssign, canProgress, canCancel, canAudit, canReconcile,
+  events, eventsLoading, reconcileLoading, reconcileMessage,
+  onLoadEvents, onReconcile, onUpdate,
+}: {
+  task: Task; canAssign: boolean; canProgress: boolean; canCancel: boolean;
+  canAudit: boolean; canReconcile: boolean; events: TaskEvent[] | null;
+  eventsLoading: boolean; reconcileLoading: boolean; reconcileMessage: string;
+  onLoadEvents: (taskId: number) => void;
+  onReconcile: (task: Task, reason: string) => void;
+  onUpdate: (task: Task, status: "ASSIGNED" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED", assignedUserId?: number, completion?: { actual_quantity: number; exception_reason?: string }, cancellationReason?: string) => void;
+}) {
   const [assigneeId, setAssigneeId] = useState("");
   const [actualQuantity, setActualQuantity] = useState(task.requested_quantity?.toString() || "");
   const [exceptionReason, setExceptionReason] = useState("");
   const [cancellationReason, setCancellationReason] = useState("");
+  const [reconciliationReason, setReconciliationReason] = useState("");
+  const [showEvents, setShowEvents] = useState(false);
   const next = task.status === "ASSIGNED" ? "IN_PROGRESS" : task.status === "IN_PROGRESS" ? "COMPLETED" : null;
   const actual = Number(actualQuantity);
   const isValidCompletion = Number.isFinite(actual) && actual > 0
     && (task.requested_quantity == null || actual <= task.requested_quantity)
     && (task.requested_quantity == null || actual >= task.requested_quantity || exceptionReason.trim().length >= 3);
   const canCancelTask = canCancel && ["PENDING", "ASSIGNED", "IN_PROGRESS"].includes(task.status);
-  return <div className="task-row">
+  const alreadyReconciled = events?.some(event => event.event_type === "INVENTORY_RECONCILED") ?? false;
+  const canReconcileTask = canReconcile && task.status === "COMPLETED"
+    && task.actual_quantity != null && task.actual_quantity > 0 && !alreadyReconciled;
+  return <div className="task-row task-row-expanded">
     <div className="task-symbol"><ArrowDownToLine size={18} /></div>
     <div className="task-info">
       <strong>Reposição · Prateleira #{task.shelf_id}</strong>
@@ -787,19 +873,38 @@ function TaskRow({ task, canAssign, canProgress, canCancel, onUpdate }: { task: 
     </div>}
     {canProgress && next === "IN_PROGRESS" && <button className="row-action" onClick={() => onUpdate(task, "IN_PROGRESS")}>Iniciar <ArrowUpRight size={14} /></button>}
     {canCancelTask && <div className="assign-control task-cancel">
-      <input
-        aria-label={"Motivo do cancelamento da tarefa " + task.id}
-        placeholder="Motivo do cancelamento"
-        value={cancellationReason}
-        onChange={event => setCancellationReason(event.target.value)}
-      />
-      <button
-        className="row-action"
-        disabled={cancellationReason.trim().length < 3}
-        onClick={() => onUpdate(task, "CANCELLED", undefined, undefined, cancellationReason.trim())}
-      >
-        Cancelar
+      <input aria-label={"Motivo do cancelamento da tarefa " + task.id} placeholder="Motivo do cancelamento" value={cancellationReason} onChange={event => setCancellationReason(event.target.value)} />
+      <button className="row-action" disabled={cancellationReason.trim().length < 3} onClick={() => onUpdate(task, "CANCELLED", undefined, undefined, cancellationReason.trim())}>Cancelar</button>
+    </div>}
+    {canAudit && <div className="task-audit-controls">
+      <button className="row-action secondary-action" onClick={() => {
+        const nextOpen = !showEvents;
+        setShowEvents(nextOpen);
+        if (nextOpen && events === null) onLoadEvents(task.id);
+      }}>
+        <History size={13} /> {showEvents ? "Ocultar cronologia" : "Ver cronologia"}
       </button>
+    </div>}
+    {canReconcileTask && <div className="assign-control task-reconcile">
+      <input aria-label={"Motivo da reconciliação da tarefa " + task.id} placeholder="Motivo da reconciliação" value={reconciliationReason} onChange={event => setReconciliationReason(event.target.value)} />
+      <button className="row-action" disabled={reconciliationReason.trim().length < 3 || reconcileLoading} onClick={() => onReconcile(task, reconciliationReason.trim())}>
+        {reconcileLoading ? "A reconciliar…" : "Confirmar stock"}
+      </button>
+    </div>}
+    {reconcileMessage && <small className="task-reconcile-message" role="status">{reconcileMessage}</small>}
+    {showEvents && <div className="task-event-timeline">
+      <strong>Cronologia auditável</strong>
+      {eventsLoading && <span>A carregar eventos…</span>}
+      {!eventsLoading && events === null && <span>A cronologia ainda não foi carregada.</span>}
+      {!eventsLoading && events?.length === 0 && <span>Sem eventos registados.</span>}
+      {!eventsLoading && events && events.length > 0 && <ol>
+        {events.map(event => <li key={event.id}>
+          <span className="task-event-heading">{event.event_type.replaceAll("_", " ")} · {new Date(event.created_at).toLocaleString("pt-PT")}</span>
+          <span>{event.from_status ? `${event.from_status} → ${event.to_status}` : event.to_status || "Evento registado"} · Ator #{event.actor_user_id ?? "sistema"}</span>
+          {event.actual_quantity != null && <span>Quantidade: {event.actual_quantity}</span>}
+          {event.reason && <span>Motivo: {event.reason}</span>}
+        </li>)}
+      </ol>}
     </div>}
   </div>;
 }
