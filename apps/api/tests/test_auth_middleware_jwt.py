@@ -1,4 +1,5 @@
 import pytest
+import re
 from datetime import datetime, timedelta, timezone
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -1039,3 +1040,29 @@ def test_employee_jwt_cannot_reassign_task_while_starting_it(auth_client):
         headers=bearer(ids["employee_a"], "EMPLOYEE"),
     )
     assert response.status_code == 403
+
+
+
+def test_every_versioned_api_route_requires_bearer_except_public_auth_routes(auth_client):
+    client, _, _ = auth_client
+    public_paths = {"/api/v1/auth/bootstrap", "/api/v1/auth/login"}
+    checked = set()
+
+    for route in main_module.app.routes:
+        path_template = getattr(route, "path", "")
+        methods = getattr(route, "methods", None) or set()
+        if not path_template.startswith("/api/v1/"):
+            continue
+        path = re.sub(r"\{[^}]+\}", "1", path_template)
+        for method in sorted(methods - {"HEAD", "OPTIONS"}):
+            key = (method, path_template)
+            if key in checked or path_template in public_paths:
+                continue
+            checked.add(key)
+            response = client.request(method, path)
+            assert response.status_code == 401, (
+                f"{method} {path_template} must require Bearer authentication; "
+                f"received HTTP {response.status_code}"
+            )
+
+    assert checked, "The test must inspect at least one protected versioned API route"

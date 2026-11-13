@@ -98,3 +98,8 @@ A auditoria multi-loja permanece aberta até estes critérios serem verificados.
 A cobertura de autorização inclui agora a fronteira entre execução operacional e integridade da reposição. Um EMPLOYEE só pode iniciar/concluir a tarefa que lhe está atribuída; não pode reatribuir a tarefa. Ao concluir, a API rejeita quantidade superior à pedida (409), exige motivo para conclusão parcial (422) e persiste quantidade efetiva e motivo na cronologia. O teste confirma que um SUPERVISOR da mesma loja consegue consultar o evento e verificar os valores auditados.
 
 Validação do estado anterior: API CI `43455507948` e Quality Gates `43455507915`, commit `8cb99a2`. Ambos os workflows passaram; API CI executou migrações e smoke tests PostgreSQL 16 e concluiu com 719 testes aprovados. A nova cobertura de conclusão JWT passou no API CI `43456168143` e no Quality Gates `43456168129`, no commit `9c06708`; a suite API terminou com 721 testes aprovados e o build web/compilação Python também passaram.
+
+
+## Gate de cobertura global de autenticação das rotas
+
+O teste `test_every_versioned_api_route_requires_bearer_except_public_auth_routes` percorre dinamicamente as rotas `/api/v1/` registadas na aplicação FastAPI, substitui parâmetros de caminho por valores de teste e invoca cada método sem credenciais. Todas as rotas protegidas têm de responder HTTP 401 antes de validação de payload ou execução do handler. Apenas `/api/v1/auth/bootstrap` e `/api/v1/auth/login` são excluídas, por serem os endpoints públicos definidos no middleware. Este gate deteta novas rotas versionadas que escapem inadvertidamente à autenticação; não substitui os testes de autorização por perfil nem os testes de isolamento de recursos.
