@@ -39,4 +39,6 @@ A regressão foi validada na suite completa de API e no smoke PostgreSQL 16 do A
 
 - A API regista a quantidade efetivamente reposta, mas a reconciliação contabilística continua a ser uma operação distinta, aprovada por ADMIN/SUPERVISOR.
 - A conclusão da tarefa não altera automaticamente o inventário.
-- A interface web ainda precisa de apresentar os campos de quantidade real e motivo com validação equivalente antes de enviar a transição.
+- A interface web já permite ao ADMIN/SUPERVISOR cancelar tarefas pendentes, atribuídas ou em execução com motivo obrigatório; o botão só é ativado com três caracteres úteis.
+- A interface apresenta a quantidade efetivamente reposta e o motivo de exceção nas tarefas concluídas/canceladas.
+- A consulta completa da cronologia de eventos e a reconciliação de inventário continuam pendentes na interface.
