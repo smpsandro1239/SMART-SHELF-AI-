@@ -1,4 +1,6 @@
 import os
+from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 
 os.environ["APP_ENV"] = "test"
 os.environ["DATABASE_URL"] = "sqlite:///./test_unused.db"
@@ -603,9 +605,9 @@ def _setup_alert_fixture():
 
 
 def test_observation_alert_is_idempotent_and_human_resolvable(monkeypatch):
+    import app.main as main_module
     (store_id, shelf_id, product_id), actor = _setup_alert_fixture()
     monkeypatch.setattr(main_module, "_request_user", lambda db, request: actor)
-    import app.main as main_module
     with TestClient(app) as client:
         params = {
             "product_id": product_id,
