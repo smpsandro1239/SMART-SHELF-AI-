@@ -771,7 +771,12 @@ function TaskRow({ task, canAssign, canProgress, canCancel, onUpdate }: { task: 
   const canCancelTask = canCancel && ["PENDING", "ASSIGNED", "IN_PROGRESS"].includes(task.status);
   return <div className="task-row">
     <div className="task-symbol"><ArrowDownToLine size={18} /></div>
-    <div className="task-info"><strong>Reposição · Prateleira #{task.shelf_id}</strong><span>Produto #{task.product_id} · {task.assigned_to || "Por atribuir"} · #{task.id}</span></div>
+    <div className="task-info">
+      <strong>Reposição · Prateleira #{task.shelf_id}</strong>
+      <span>Produto #{task.product_id} · {task.assigned_to || "Por atribuir"} · #{task.id}</span>
+      {task.status === "COMPLETED" && task.actual_quantity != null && <small className="task-outcome">Quantidade reposta: {task.actual_quantity}{task.exception_reason ? ` · ${task.exception_reason}` : ""}</small>}
+      {task.status === "CANCELLED" && task.exception_reason && <small className="task-outcome">Cancelada: {task.exception_reason}</small>}
+    </div>
     <span className={"priority " + task.priority.toLowerCase()}>{task.priority}</span>
     <span className={"task-status " + task.status.toLowerCase()}>{task.status.replace("_", " ")}</span>
     {canAssign && task.status === "PENDING" && <div className="assign-control"><input aria-label={"ID do funcionário para a tarefa " + task.id} inputMode="numeric" placeholder="ID funcionário" value={assigneeId} onChange={e => setAssigneeId(e.target.value)} /><button className="row-action" disabled={!/^\d+$/.test(assigneeId) || Number(assigneeId) < 1} onClick={() => onUpdate(task, "ASSIGNED", Number(assigneeId))}>Atribuir</button></div>}
