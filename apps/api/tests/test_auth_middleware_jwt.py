@@ -37,6 +37,11 @@ def auth_client(monkeypatch):
                 password_hash=hash_password("test-password"), role="SUPERVISOR",
                 store_id=store_a.id, is_active=True,
             ),
+            "supervisor_a_peer": User(
+                email="supervisor-a-peer@example.test", full_name="Supervisor A Peer",
+                password_hash=hash_password("test-password"), role="SUPERVISOR",
+                store_id=store_a.id, is_active=True,
+            ),
             "employee_a": User(
                 email="employee-a@example.test", full_name="Employee A",
                 password_hash=hash_password("test-password"), role="EMPLOYEE",
@@ -122,7 +127,27 @@ def auth_client(monkeypatch):
             review_status="PENDING",
             created_by_user_id=users["supervisor_a"].id,
         )
-        db.add(embedding_exemplar_a)
+        embedding_exemplar_admin = models.ProductEmbeddingExemplar(
+            product_id=product.id,
+            embedding=[0.5, 0.75, 0.25],
+            embedding_dimension=3,
+            model_version="auth-embedding-admin-v1",
+            image_sha256="b" * 64,
+            licence="store-owned-reference-image",
+            review_status="PENDING",
+            created_by_user_id=users["supervisor_a"].id,
+        )
+        detection_a = models.ShelfImageDetection(
+            shelf_image_id=image_a.id, product_id=product.id, label="produto",
+            confidence=0.95, x_min=0.1, y_min=0.1, x_max=0.5, y_max=0.5,
+            model_version="auth-detector-v1",
+        )
+        detection_b = models.ShelfImageDetection(
+            shelf_image_id=image_b.id, product_id=product.id, label="produto",
+            confidence=0.95, x_min=0.1, y_min=0.1, x_max=0.5, y_max=0.5,
+            model_version="auth-detector-v1",
+        )
+        db.add_all([embedding_exemplar_a, embedding_exemplar_admin, detection_a, detection_b])
         db.flush()
         db.add(models.ShelfImageRetentionEvent(
             shelf_image_id=image_b.id, event_type="RESTRICTED",
@@ -163,6 +188,9 @@ def auth_client(monkeypatch):
         ids["image_a"] = image_a.id
         ids["image_b"] = image_b.id
         ids["embedding_exemplar_a"] = embedding_exemplar_a.id
+        ids["embedding_exemplar_admin"] = embedding_exemplar_admin.id
+        ids["detection_a"] = detection_a.id
+        ids["detection_b"] = detection_b.id
         ids["observation_a"] = observation_a.id
         ids["observation_b"] = observation_b.id
         ids["capture_session_a"] = capture_session_a.id
@@ -752,10 +780,62 @@ def test_supervisor_cannot_self_review_embedding_exemplar_with_real_jwt(auth_cli
     )
     assert self_review.status_code == 403
 
-    admin_review = client.patch(
+    peer_review = client.patch(
         path,
+        json={"review_status": "APPROVED", "review_notes": "Revisão por segundo supervisor"},
+        headers=bearer(ids["supervisor_a_peer"], "SUPERVISOR"),
+    )
+    assert peer_review.status_code == 200
+    assert peer_review.json()["review_status"] == "APPROVED"
+
+    admin_path = f"/api/v1/product-embedding-exemplars/{ids['embedding_exemplar_admin']}/review"
+    admin_review = client.patch(
+        admin_path,
         json={"review_status": "APPROVED", "review_notes": "Revisão administrativa independente"},
         headers=bearer(ids["admin"], "ADMIN"),
     )
     assert admin_review.status_code == 200
     assert admin_review.json()["review_status"] == "APPROVED"
+
+
+def test_supervisor_jwt_cannot_access_foreign_ocr_or_retry_restricted_image(auth_client):
+    client, ids, _ = auth_client
+    headers = bearer(ids["supervisor_a"], "SUPERVISOR")
+    foreign_image = ids["image_b"]
+    ocr_payload = {"provider": "test-provider", "model_version": "test-v1", "regions": []}
+
+    ocr_runs = client.get(f"/api/v1/shelf-images/{foreign_image}/ocr-runs", headers=headers)
+    ocr_create = client.post(
+        f"/api/v1/shelf-images/{foreign_image}/ocr-runs",
+        json=ocr_payload,
+        headers=headers,
+    )
+    retry = client.post(f"/api/v1/shelf-images/{foreign_image}/retry", headers=headers)
+    review = client.post(
+        f"/api/v1/shelf-image-detections/{ids['detection_b']}/reviews",
+        json={"decision": "REJECTED", "selected_product_id": None},
+        headers=headers,
+    )
+
+    assert ocr_runs.status_code == 403
+    assert ocr_create.status_code == 403
+    assert retry.status_code == 403
+    assert review.status_code == 403
+
+
+def test_employee_jwt_cannot_start_ocr_or_submit_human_sku_reviews(auth_client):
+    client, ids, _ = auth_client
+    headers = bearer(ids["employee_a"], "EMPLOYEE")
+    ocr_create = client.post(
+        f"/api/v1/shelf-images/{ids['image_a']}/ocr-runs",
+        json={"provider": "test-provider", "model_version": "test-v1", "regions": []},
+        headers=headers,
+    )
+    review = client.post(
+        f"/api/v1/shelf-image-detections/{ids['detection_a']}/reviews",
+        json={"decision": "REJECTED", "selected_product_id": None},
+        headers=headers,
+    )
+
+    assert ocr_create.status_code == 403
+    assert review.status_code == 403
