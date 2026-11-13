@@ -676,13 +676,22 @@ def test_legal_hold_requires_admin_and_records_append_only_events(monkeypatch):
         with TestingSession() as db:
             admin = db.get(models.User, admin_id)
             monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: admin)
+            blank_reason = client.post(
+                f"/api/v1/shelf-images/{image_id}/retention/legal-hold/apply",
+                json={"reason": "   "},
+            )
+            assert blank_reason.status_code == 422
+
             applied = client.post(
                 f"/api/v1/shelf-images/{image_id}/retention/legal-hold/apply",
-                json={"reason": "Preservar evidência para análise jurídica"},
+                json={"reason": "  Preservar evidência para análise jurídica  "},
             )
             assert applied.status_code == 200
             assert applied.json()["legal_hold"] is True
             assert applied.json()["retention_status"] == "ACTIVE"
+            assert applied.json()["retention_reason"] is None
+            events_after_apply = client.get(f"/api/v1/shelf-images/{image_id}/retention/events")
+            assert events_after_apply.json()[0]["reason"] == "Preservar evidência para análise jurídica"
 
             repeated = client.post(
                 f"/api/v1/shelf-images/{image_id}/retention/legal-hold/apply",
