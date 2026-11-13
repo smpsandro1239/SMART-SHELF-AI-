@@ -1131,6 +1131,7 @@ def list_reviewed_training_candidates(
         .join(models.Shelf, models.ShelfImage.shelf_id == models.Shelf.id)
         .join(models.Zone, models.Shelf.zone_id == models.Zone.id)
         .join(models.Product, models.DetectionSkuReview.selected_product_id == models.Product.id)
+        .filter(models.ShelfImage.retention_status == "ACTIVE")
         .filter(
             models.DetectionSkuReview.id == latest_review_id,
             models.DetectionSkuReview.decision.in_(("CONFIRMED", "CORRECTED")),
