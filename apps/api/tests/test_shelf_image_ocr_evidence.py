@@ -342,22 +342,31 @@ def test_image_content_endpoint_enforces_store_scope_and_file_availability(monke
 
     own_image_id, _ = create_image_with_detection()
     foreign_image_id, _ = create_image_with_detection()
-    own_file = tmp_path / "own-image.jpg"
-    foreign_file = tmp_path / "foreign-image.jpg"
-    own_file.write_bytes(b"own-image-content")
-    foreign_file.write_bytes(b"foreign-image-content")
 
     db = TestingSession()
     own_image = db.get(models.ShelfImage, own_image_id)
     foreign_image = db.get(models.ShelfImage, foreign_image_id)
-    own_image.storage_path = str(own_file)
-    foreign_image.storage_path = str(foreign_file)
     own_shelf = db.get(models.Shelf, own_image.shelf_id)
     own_zone = db.get(models.Zone, own_shelf.zone_id)
-    db.commit()
+    foreign_shelf = db.get(models.Shelf, foreign_image.shelf_id)
+    foreign_zone = db.get(models.Zone, foreign_shelf.zone_id)
     own_store_id = own_zone.store_id
+    foreign_store_id = foreign_zone.store_id
+    storage_root = tmp_path / "storage"
+    own_dir = storage_root / str(own_store_id)
+    foreign_dir = storage_root / str(foreign_store_id)
+    own_dir.mkdir(parents=True)
+    foreign_dir.mkdir(parents=True)
+    own_file = own_dir / "own-image.jpg"
+    foreign_file = foreign_dir / "foreign-image.jpg"
+    own_file.write_bytes(b"own-image-content")
+    foreign_file.write_bytes(b"foreign-image-content")
+    own_image.storage_path = str(own_file)
+    foreign_image.storage_path = str(foreign_file)
+    db.commit()
     db.close()
 
+    monkeypatch.setattr(main_module.settings, "image_storage_path", str(storage_root))
     supervisor = SimpleNamespace(role="SUPERVISOR", store_id=own_store_id)
     monkeypatch.setattr(main_module, "_request_user", lambda db, request: supervisor)
 
@@ -374,7 +383,7 @@ def test_image_content_endpoint_enforces_store_scope_and_file_availability(monke
 
         db = TestingSession()
         own_image = db.get(models.ShelfImage, own_image_id)
-        own_image.storage_path = str(tmp_path / "deleted-file.jpg")
+        own_image.storage_path = str(own_dir / "deleted-file.jpg")
         db.commit()
         db.close()
 
