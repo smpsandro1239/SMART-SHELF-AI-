@@ -148,8 +148,8 @@ def process_next_image(db: Session, provider, ocr_provider=None) -> int | None:
             raise FileNotFoundError("Stored shelf image is unavailable")
         result = VisionAnalysis.model_validate(provider.analyze(image_path))
 
-        /* Linearize retention against derived processing: if restriction committed
-           while inference was running, do not start OCR or persist any detections. */
+        # Linearize retention against derived processing: if restriction committed
+        # while inference was running, do not start OCR or persist any detections.
         image = (
             db.query(models.ShelfImage)
             .filter(models.ShelfImage.id == image_id)
