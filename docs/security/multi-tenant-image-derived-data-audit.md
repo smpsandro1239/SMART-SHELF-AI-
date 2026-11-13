@@ -38,6 +38,16 @@ O ficheiro `apps/api/tests/test_training_candidates.py` inclui agora testes de i
 
 Os testes usam um ator de teste injetado no helper de resolução de utilizador. O middleware de autenticação é deliberadamente ignorado em `APP_ENV=test`; estes testes validam a autorização dentro dos handlers e não substituem testes HTTP com JWT real em ambiente de integração.
 
+## Cobertura JWT dos caminhos OCR e revisão humana
+
+Foram adicionados testes com tokens reais para confirmar:
+- SUPERVISOR não consulta nem cria OCR para imagem de outra loja;
+- SUPERVISOR não repete a análise nem revê deteções de imagem estrangeira;
+- a imagem estrangeira de teste está em retenção RESTRICTED, e a resposta esperada é 403 por isolamento, não 410 por retenção;
+- EMPLOYEE não inicia OCR nem cria decisões de revisão SKU.
+
+Esta cobertura é complementar aos testes de handlers e não fecha a auditoria global: ainda é necessário rever todos os métodos/rotas, caminhos administrativos e execução indireta dos workers, bem como validar em PostgreSQL 16.
+
 ## Separação de funções na aprovação de exemplares
 
 A revisão de embeddings passou a impedir a autoaprovação por SUPERVISOR. O criador recebe HTTP 403 ao tentar aprovar/rejeitar o próprio exemplar; um segundo SUPERVISOR da mesma loja pode rever e ADMIN mantém a capacidade de revisão. A regra é verificada por teste de regressão no handler. Esta salvaguarda reduz o risco de um único utilizador introduzir uma referência e torná-la elegível para matching sem revisão independente.
