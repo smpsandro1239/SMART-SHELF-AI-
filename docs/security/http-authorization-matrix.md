@@ -146,3 +146,7 @@ O teste `test_supervisor_jwt_cannot_access_foreign_warehouse_resources` usa JWT 
 ## Validação CI — isolamento de armazém por loja
 
 O commit `4b0a023ca7996864c4dfc40dc3703a067785bc4f` passou no API CI `43468474493` e Quality Gates `43468474322`. A suite terminou com **746 testes aprovados e 1 ignorado**; migrações e smoke tests PostgreSQL 16, compilação Python e build TypeScript/Vite passaram. O novo teste JWT de SUPERVISOR acrescenta sete verificações cross-store no armazém. O fixture HTTP continua a usar SQLite; não se declara validação PostgreSQL individual desses sete handlers.
+
+## Cobertura JWT — isolamento de inventário e localizações de armazém
+
+O teste `test_supervisor_jwt_cannot_read_or_write_foreign_inventory_and_placement_resources` acrescenta sete pedidos autenticados por JWT real de SUPERVISOR da loja A para recursos da loja B: listagem e leitura do último snapshot, criação de snapshot, consulta e atualização de política de frescura, criação de colocação numa localização estrangeira e recomendações de slotting. Todos exigem HTTP 403. A localização estrangeira é criada no fixture e os payloads de escrita são estruturalmente válidos, para que a resposta demonstre o controlo de âmbito no handler. O teste usa SQLite isolado; a validação PostgreSQL individual destes endpoints permanece pendente.

@@ -73,6 +73,18 @@ def auth_client(monkeypatch):
         zone_b = models.Zone(store_id=store_b.id, name="Zona B")
         db.add_all([product, zone_a, zone_b])
         db.flush()
+        warehouse_location_b = models.WarehouseLocation(
+            store_id=store_b.id,
+            code="B-WAREHOUSE-01",
+            aisle="B",
+            rack="01",
+            bin_code="01",
+            distance_to_picking_m=12,
+            max_volume_cm3=100000,
+            max_weight_kg=100,
+        )
+        db.add(warehouse_location_b)
+        db.flush()
         shelf_a_assigned = models.Shelf(zone_id=zone_a.id, code="A-ASSIGNED")
         shelf_a_unassigned = models.Shelf(zone_id=zone_a.id, code="A-UNASSIGNED")
         shelf_a_peer = models.Shelf(zone_id=zone_a.id, code="A-PEER")
@@ -203,6 +215,7 @@ def auth_client(monkeypatch):
         ids["shelf_b"] = shelf_b.id
         store_ids = {"a": store_a.id, "b": store_b.id}
         ids["product"] = product.id
+        ids["warehouse_location_b"] = warehouse_location_b.id
 
     def override_get_db():
         db = session_factory()
@@ -1255,6 +1268,72 @@ def test_supervisor_jwt_cannot_access_foreign_warehouse_resources(auth_client):
                 "labour_cost_per_hour": 12,
                 "forecast_consumption_until_low_traffic": 0,
             },
+            headers=headers,
+        ),
+    }
+
+    for resource, response in requests.items():
+        assert response.status_code == 403, (
+            f"SUPERVISOR must not access foreign {resource}; "
+            f"received HTTP {response.status_code}: {response.text}"
+        )
+
+
+    
+def test_supervisor_jwt_cannot_read_or_write_foreign_inventory_and_placement_resources(auth_client):
+    client, ids, store_ids = auth_client
+    headers = bearer(ids["supervisor_a"], "SUPERVISOR")
+    foreign_store_id = store_ids["b"]
+
+    requests = {
+        "inventory snapshot list": client.get(
+            "/api/v1/inventory/snapshots",
+            params={"store_id": foreign_store_id},
+            headers=headers,
+        ),
+        "latest inventory snapshot": client.get(
+            "/api/v1/inventory/latest",
+            params={"store_id": foreign_store_id, "product_id": ids["product"]},
+            headers=headers,
+        ),
+        "inventory snapshot creation": client.post(
+            "/api/v1/inventory/snapshots",
+            json={
+                "store_id": foreign_store_id,
+                "product_id": ids["product"],
+                "on_hand_quantity": 24,
+                "reserved_quantity": 2,
+                "source": "MANUAL",
+                "external_reference": "AUTH-FOREIGN-SNAPSHOT",
+            },
+            headers=headers,
+        ),
+        "inventory freshness policy list": client.get(
+            "/api/v1/inventory/freshness-policies",
+            params={"store_id": foreign_store_id},
+            headers=headers,
+        ),
+        "inventory freshness policy upsert": client.post(
+            "/api/v1/inventory/freshness-policies",
+            json={
+                "store_id": foreign_store_id,
+                "source": "MANUAL",
+                "max_age_minutes": 60,
+            },
+            headers=headers,
+        ),
+        "warehouse placement creation": client.post(
+            "/api/v1/warehouse/placements",
+            json={
+                "location_id": ids["warehouse_location_b"],
+                "product_id": ids["product"],
+                "quantity": 5,
+            },
+            headers=headers,
+        ),
+        "warehouse slotting recommendations": client.get(
+            "/api/v1/warehouse/slotting-recommendations",
+            params={"store_id": foreign_store_id, "source": "POS"},
             headers=headers,
         ),
     }

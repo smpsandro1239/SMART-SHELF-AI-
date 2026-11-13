@@ -80,3 +80,7 @@ Foi acrescentado um teste de integração HTTP com JWT real de SUPERVISOR da loj
 ## Validação CI da cobertura JWT de armazém
 
 A cobertura JWT de isolamento multi-loja para localizações, paletes e políticas/simulação de rotação foi validada no commit `4b0a023ca7996864c4dfc40dc3703a067785bc4f`: API CI `43468474493` e Quality Gates `43468474322` passaram, com **746 testes aprovados e 1 ignorado**. Os sete pedidos HTTP usam SQLite no fixture de autenticação; o smoke PostgreSQL valida outros fluxos operacionais, não estes sete endpoints individualmente. A auditoria multi-loja permanece parcial.
+
+## Cobertura JWT — inventário e operações de armazém
+
+A cobertura cross-store por JWT foi estendida a snapshots de inventário (listagem, último snapshot e criação), políticas de frescura (consulta e upsert), colocações em localizações e recomendações de slotting. O supervisor da loja A tenta aceder a recursos explicitamente associados à loja B e todos os sete pedidos devem receber 403. O fixture contém uma localização real da loja B para evitar validar apenas identificadores inexistentes. O teste HTTP usa SQLite; a validação PostgreSQL destes handlers, em particular a persistência e concorrência, continua separada.
