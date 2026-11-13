@@ -483,3 +483,52 @@ def test_supervisor_can_restrict_image_in_own_store_with_audit_event(auth_client
     )
     assert history.status_code == 200
     assert history.json()[-1]["event_type"] == "RESTRICTED"
+
+
+def test_supervisor_dashboard_summary_is_limited_to_own_store(auth_client):
+    client, ids, store_ids = auth_client
+
+    own_store = client.get(
+        f"/api/v1/dashboard/summary?store_id={store_ids['a']}",
+        headers=bearer(ids["supervisor_a"], "SUPERVISOR"),
+    )
+    foreign_store = client.get(
+        f"/api/v1/dashboard/summary?store_id={store_ids['b']}",
+        headers=bearer(ids["supervisor_a"], "SUPERVISOR"),
+    )
+
+    assert own_store.status_code == 200
+    assert own_store.json()["store_id"] == store_ids["a"]
+    assert foreign_store.status_code == 403
+
+
+def test_supervisor_operational_decisions_are_limited_to_own_store(auth_client):
+    client, ids, store_ids = auth_client
+    headers = bearer(ids["supervisor_a"], "SUPERVISOR")
+
+    own_store = client.get("/api/v1/operational-decisions", headers=headers)
+    foreign_store = client.get(
+        f"/api/v1/operational-decisions?store_id={store_ids['b']}",
+        headers=headers,
+    )
+
+    assert own_store.status_code == 200
+    assert all(
+        item["store_id"] == store_ids["a"]
+        for item in own_store.json()["decisions"]
+    )
+    assert foreign_store.status_code == 403
+
+
+def test_employee_cannot_access_team_analytics_or_operational_decisions(auth_client):
+    client, ids, store_ids = auth_client
+    headers = bearer(ids["employee_a"], "EMPLOYEE")
+
+    decisions = client.get("/api/v1/operational-decisions", headers=headers)
+    workload = client.get(
+        f"/api/v1/replenishment/workload?store_id={store_ids['a']}",
+        headers=headers,
+    )
+
+    assert decisions.status_code == 403
+    assert workload.status_code == 403
