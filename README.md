@@ -61,7 +61,7 @@ A auditoria das operações de imagem está parcialmente concluída. As leituras
 - [ ] Definir critérios de frescura, completude e qualidade dos dados de vendas/inventário; dados ausentes nunca devem ser convertidos em zero.
 - [ ] Consolidar prioridades e sequência de trabalho por loja, zona, corredor e localização; não apresentar heurísticas como rotas ótimas.
 - [ ] Implementar consenso temporal de observações e deduplicação de alertas por loja/prateleira/SKU, guardando primeira/última ocorrência, número de confirmações e resolução humana; evitar alertas transitórios por um único frame.
-- [ ] Avaliar previsões e recomendações contra resultados reais: precisão, falsos positivos, ruturas não detetadas e quantidades propostas versus executadas.
+- [ ] Avaliar previsões e recomendações contra resultados reais: precisão, falsos positivos, ruturas não detetadas e quantidades propostas versus executadas. Foi acrescentado o módulo offline `app.forecast_evaluation` com MAE, RMSE, WAPE, bias, MAPE (excluindo procura real zero) e segmentação por loja/SKU; documentação em [Avaliação retrospetiva de previsões](docs/architecture/forecast-evaluation.md). A integração com dados reais, backtesting fora da amostra e thresholds de aceitação continuam pendentes; a nova suite aguarda CI.
 - [ ] Permitir políticas configuráveis por loja/secção/produto, com simulação e aprovação antes de ativação.
 
 #### P1 — Dashboard e experiência operacional
@@ -131,7 +131,7 @@ A auditoria das operações de imagem está parcialmente concluída. As leituras
 - Marcar como concluído apenas o que está implementado e validado; manter explícito o que é experimental, simulado, depende de terceiros ou não foi testado.
 - Registar bloqueios e dependências externas e nunca declarar piloto, integração, modelo real ou produção concluídos sem evidência operacional.
 
-**Última revisão do roadmap:** 2026-11-13. As imagens não ativas são bloqueadas nas leituras e análises; a evidência derivada é excluída de revisão, avaliação, treino e matching por embeddings. O legal hold está implementado com operações ADMIN-only e eventos append-only. A política formal de retenção e a purga física continuam deliberadamente pendentes até aprovação organizacional/jurídica e implementação de um worker seguro, incluindo tratamento de evidência derivada, backups, caches e falhas de filesystem.
+**Última revisão do roadmap:** 2026-11-13. Nesta ronda foi acrescentada uma primeira ferramenta offline de avaliação de previsões (MAE/RMSE/WAPE/bias/MAPE), com testes unitários e documentação; integração com vendas reais e validação CI ainda pendentes. As imagens não ativas são bloqueadas nas leituras e análises; a evidência derivada é excluída de revisão, avaliação, treino e matching por embeddings. O legal hold está implementado com operações ADMIN-only e eventos append-only. A política formal de retenção e a purga física continuam deliberadamente pendentes até aprovação organizacional/jurídica e implementação de um worker seguro, incluindo tratamento de evidência derivada, backups, caches e falhas de filesystem.
 **Última validação confirmada:** API CI run `43406526808` passou no commit `c841935`, incluindo migrações PostgreSQL 16, smoke de ciclo de vida/concorrência/reconciliação e suite pytest completa. Quality Gates run `43406526859` passou com TypeScript, build de produção, compilação Python e suite API. O teste de retenção dos embeddings passou no API CI `43405896953`; o teste de exclusão da fila de revisão e dos respetivos contadores passou agora em ambos os workflows. Os cenários de rollback/frescura/concorrência estão cobertos pelo smoke PostgreSQL `43401542425`.
 **REA externa:** consultar [comparação de soluções](docs/reverse-engineering/external-solutions.md) e [revisão de visão computacional](docs/architecture/retail-vision-rea.md); as referências comerciais e académicas orientam o roadmap, mas as suas métricas não são assumidas como resultados do nosso sistema.
 
@@ -219,6 +219,10 @@ A API já suporta criação de tarefas, atribuição, início, conclusão e canc
 O planeamento de reposição pode acrescentar uma proposta de picking por SKU e localização física. O motor respeita o perfil térmico do produto, consolida linhas na mesma localização e assinala stock parcial, ausência de localização compatível ou perfil em falta. A sequência usa a distância registada ao ponto de picking e a localização física como heurística; não é apresentada como rota otimizada porque ainda não existe um grafo de corredores.
 
 As quantidades são propostas a partir das colocações registadas. Não são reservas e não garantem que o stock continue disponível no momento da recolha. A funcionalidade não movimenta inventário nem cria tarefas de armazém.
+
+## Avaliação offline das previsões
+
+O módulo `app.forecast_evaluation` calcula MAE, RMSE, WAPE, bias e MAPE a partir de pares alinhados de quantidades reais e previstas, com resultados segmentados por loja e SKU. Períodos sem observação devem ser omitidos e nunca convertidos em zero. A ferramenta é offline e não altera inventário. Ver [documentação e contrato](docs/architecture/forecast-evaluation.md).
 
 ## 5.1 Planeamento operacional e estimativas
 
