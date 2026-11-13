@@ -48,7 +48,7 @@ Esta é a fonte de verdade para manter o SMART SHELF AI focado. Deve ser revista
 - [ ] Testar a cronologia completa criação → aprovação/atribuição → início → conclusão/cancelamento e garantir ausência de eventos duplicados.
 - [ ] Implementar a reconciliação de stock definida em [ADR-008](docs/architecture/adr-008-inventory-reconciliation.md): movimento imutável, aprovação, idempotência e novo snapshot; nunca alterar snapshots históricos.
 - [x] Validar em PostgreSQL 16 a cadeia completa de migrações, o índice único parcial e duas criações manuais simultâneas através da API (uma resposta 201 e outra 409); confirmar que uma tarefa concluída liberta a combinação loja/prateleira/produto.
-- [ ] Validar no CI PostgreSQL 16 o smoke test concorrente nos três caminhos de criação (manual, recomendação e decisão operacional aprovada); o script foi ampliado e a resposta de conflito da rota de recomendação foi normalizada, mas a execução final desta revisão ainda está pendente.
+- [ ] Validar no CI PostgreSQL 16 o smoke test concorrente nos três caminhos de criação (manual, recomendação e decisão operacional aprovada), incluindo exatamente um evento `CREATED` por tarefa vencedora; o teste de auditoria foi acrescentado, mas a execução final desta revisão ainda está pendente.
 - [ ] Rever autorização e isolamento multi-loja em todos os endpoints, incluindo imagens, OCR, embeddings, catálogo, auditoria e operações administrativas.
 - [ ] Definir retenção, proteção, acesso e eliminação de imagens e dados de auditoria; completar hardening de uploads e armazenamento.
 
@@ -129,7 +129,7 @@ Esta é a fonte de verdade para manter o SMART SHELF AI focado. Deve ser revista
 - Registar bloqueios e dependências externas e nunca declarar piloto, integração, modelo real ou produção concluídos sem evidência operacional.
 
 **Última revisão do roadmap:** 2026-11-13.  
-**Última etapa concluída:** validação PostgreSQL 16 da migração `0020`, índice parcial e concorrência na criação manual. O smoke test foi alargado aos três caminhos de criação; a rota por recomendação passou a devolver o mesmo erro estruturado `ACTIVE_TASK_EXISTS` e ganhou teste de regressão. A validação PostgreSQL 16 desta extensão continua pendente no CI (`7196f8e0aef6ab0d07c4a4f971deea3928daacd9`).  
+**Última etapa concluída:** validação PostgreSQL 16 da migração `0020`, índice parcial e concorrência na criação manual. O smoke test cobre os três caminhos de criação e verifica um único evento inicial `CREATED` por tarefa vencedora; a rota por recomendação normaliza o conflito `ACTIVE_TASK_EXISTS`. A validação PostgreSQL 16 desta extensão continua pendente no CI.  
 **REA externa:** consultar [comparação de soluções](docs/reverse-engineering/external-solutions.md) e [revisão de visão computacional](docs/architecture/retail-vision-rea.md); as referências comerciais e académicas orientam o roadmap, mas as suas métricas não são assumidas como resultados do nosso sistema.
 
 

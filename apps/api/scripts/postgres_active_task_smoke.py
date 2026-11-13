@@ -8,6 +8,18 @@ from fastapi.testclient import TestClient
 from app.main import app
 
 
+def assert_single_created_event(client: TestClient, task_id: int) -> None:
+    """Ensure one successful creation produces exactly one initial audit event."""
+    response = client.get(f"/api/v1/tasks/{task_id}/events")
+    assert response.status_code == 200, response.text
+    events = response.json()
+    assert len(events) == 1, events
+    assert events[0]["task_id"] == task_id
+    assert events[0]["event_type"] == "CREATED"
+    assert events[0]["from_status"] is None
+    assert events[0]["to_status"] == "PENDING"
+
+
 def main() -> None:
     suffix = uuid4().hex[:12]
     with TestClient(app) as client:
@@ -68,6 +80,7 @@ def main() -> None:
         assert conflicts[0].json()["detail"]["code"] == "ACTIVE_TASK_EXISTS"
 
         task_id = created[0].json()["id"]
+        assert_single_created_event(client, task_id)
         assigned = client.patch(
             f"/api/v1/tasks/{task_id}/status",
             json={"status": "ASSIGNED", "assigned_to": "CI operator"},
@@ -86,6 +99,7 @@ def main() -> None:
 
         replacement = client.post("/api/v1/tasks", json=payload)
         assert replacement.status_code == 201, replacement.text
+        assert_single_created_event(client, replacement.json()["id"])
 
         # Exercise the validated-recommendation creation path against the same
         # PostgreSQL unique index, using a distinct SKU on the existing shelf.
@@ -166,6 +180,7 @@ def main() -> None:
             recommendation_conflicts[0].json()["detail"]["code"]
             == "ACTIVE_TASK_EXISTS"
         )
+        assert_single_created_event(client, recommendation_created[0].json()["id"])
 
         # Exercise explicit approval through the operational-decision path.
         decision_product = client.post(
@@ -241,6 +256,7 @@ def main() -> None:
             response.text for response in decision_responses
         ]
         assert decision_conflicts[0].json()["detail"]["code"] == "ACTIVE_TASK_EXISTS"
+        assert_single_created_event(client, decision_created[0].json()["id"])
 
         print(
             "PostgreSQL concurrent task creation: PASS "
