@@ -1152,3 +1152,36 @@ def test_employee_jwt_cannot_read_foreign_image_derived_data_or_content(auth_cli
             f"received HTTP {response.status_code}: {response.text}"
         )
 
+@pytest.mark.parametrize(
+    "method,path",
+    [
+        ("POST", "/api/v1/sales/daily"),
+        ("POST", "/api/v1/sales/import-csv"),
+        ("POST", "/api/v1/sales/hourly"),
+        ("POST", "/api/v1/sales/traffic/hourly"),
+        ("POST", "/api/v1/sales/hourly/import-csv"),
+        ("POST", "/api/v1/sales/traffic/hourly/import-csv"),
+        ("POST", "/api/v1/warehouse/locations"),
+        ("POST", "/api/v1/warehouse/placements"),
+        ("POST", "/api/v1/warehouse/pallets"),
+        ("POST", "/api/v1/warehouse/pallet-rotation/policies"),
+        ("PATCH", "/api/v1/warehouse/pallet-rotation/policies/999999"),
+        ("POST", "/api/v1/warehouse/pallet-rotation/simulate"),
+        ("POST", "/api/v1/warehouse/pallets/999999/events"),
+    ],
+)
+def test_employee_cannot_use_supervisor_managed_write_endpoints(
+    auth_client, method, path
+):
+    client, ids, _ = auth_client
+    response = client.request(
+        method,
+        path,
+        json={},
+        headers=bearer(ids["employee_a"], "EMPLOYEE"),
+    )
+
+    assert response.status_code == 403, (
+        f"EMPLOYEE must not invoke supervisor-managed endpoint {method} {path}; "
+        f"received HTTP {response.status_code}: {response.text}"
+    )

@@ -68,3 +68,7 @@ A tarefa só pode ser marcada como concluída quando a matriz de rotas estiver c
 ## Cobertura JWT adicional — leituras derivadas por EMPLOYEE
 
 Foi acrescentado um teste HTTP com JWT real de EMPLOYEE da loja A para tentar ler recursos associados a uma imagem RESTRICTED da loja B. O teste exige 403 em conteúdo binário, deteções, OCR evidence/runs/matches, fusão de evidência e histórico de revisão da deteção. Isto fecha uma lacuna na cobertura HTTP dos caminhos de leitura que o middleware permite a EMPLOYEE para imagens da própria loja; o handler continua responsável por validar o âmbito da loja e o estado de retenção.
+
+## Cobertura adicional de operações de armazém e importação
+
+A matriz JWT cobre agora 13 caminhos de escrita reservados a SUPERVISOR/ADMIN que ainda não tinham uma verificação parametrizada explícita para EMPLOYEE: vendas diárias e CSV, vendas/tráfego horários e CSV, localizações, colocações, paletes, políticas e simulações de rotação e eventos de paletes. O teste verifica a rejeição 403 antes do handler. A validação por loja para SUPERVISOR continua a ser uma dimensão separada e não fica fechada por este teste.
