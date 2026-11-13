@@ -502,7 +502,7 @@ def test_observation_consensus_is_isolated_per_sku_and_legacy_evidence():
     with TestClient(app) as client:
         store = client.post("/api/v1/stores", json={"code": "OBS-SKU-02", "name": "Loja consenso SKU"})
         zone = client.post("/api/v1/zones", json={"store_id": store.json()["id"], "name": "Frescos"})
-        shelf = client.post("/api/v1/shelves", json={"zone_id": zone.json()["id"], "name": "Prateleira"})
+        shelf = client.post("/api/v1/shelves", json={"zone_id": zone.json()["id"], "code": "SKU-CONS-01"})
         shelf_id = shelf.json()["id"]
         product_a = client.post("/api/v1/products", json={"sku": "SKU-CONS-A", "name": "Produto A"}).json()
         product_b = client.post("/api/v1/products", json={"sku": "SKU-CONS-B", "name": "Produto B"}).json()
