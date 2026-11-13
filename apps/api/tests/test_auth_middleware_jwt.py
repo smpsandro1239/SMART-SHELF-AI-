@@ -974,3 +974,68 @@ def test_observation_alert_jwt_roles_and_store_scope(auth_client):
     )
     assert foreign_admin_events.status_code == 200
     assert [event["event_type"] for event in foreign_admin_events.json()] == ["CREATED"]
+
+
+
+def test_employee_jwt_completion_requires_valid_quantity_and_partial_reason(auth_client):
+    client, ids, _ = auth_client
+    headers = bearer(ids["employee_a"], "EMPLOYEE")
+    task_id = ids["task_a_assigned"]
+    path = f"/api/v1/tasks/{task_id}/status"
+
+    started = client.patch(path, json={"status": "IN_PROGRESS"}, headers=headers)
+    assert started.status_code == 200, started.text
+
+    excessive = client.patch(
+        path,
+        json={"status": "COMPLETED", "actual_quantity": 6},
+        headers=headers,
+    )
+    assert excessive.status_code == 409
+    assert excessive.json()["detail"]["code"] == "ACTUAL_QUANTITY_EXCEEDS_REQUESTED"
+
+    missing_partial_reason = client.patch(
+        path,
+        json={"status": "COMPLETED", "actual_quantity": 3},
+        headers=headers,
+    )
+    assert missing_partial_reason.status_code == 422
+    assert missing_partial_reason.json()["detail"]["code"] == "PARTIAL_COMPLETION_REASON_REQUIRED"
+
+    completed = client.patch(
+        path,
+        json={
+            "status": "COMPLETED",
+            "actual_quantity": 3,
+            "exception_reason": "Faltaram duas unidades na retaguarda",
+        },
+        headers=headers,
+    )
+    assert completed.status_code == 200, completed.text
+    assert completed.json()["status"] == "COMPLETED"
+    assert completed.json()["actual_quantity"] == 3
+    assert completed.json()["exception_reason"] == "Faltaram duas unidades na retaguarda"
+
+    supervisor_events = client.get(
+        f"/api/v1/tasks/{task_id}/events",
+        headers=bearer(ids["supervisor_a"], "SUPERVISOR"),
+    )
+    assert supervisor_events.status_code == 200
+    assert [event["event_type"] for event in supervisor_events.json()] == [
+        "CREATED", "STATUS_CHANGED", "STATUS_CHANGED"
+    ]
+    assert supervisor_events.json()[-1]["actual_quantity"] == 3
+    assert supervisor_events.json()[-1]["reason"] == "Faltaram duas unidades na retaguarda"
+
+
+def test_employee_jwt_cannot_reassign_task_while_starting_it(auth_client):
+    client, ids, _ = auth_client
+    response = client.patch(
+        f"/api/v1/tasks/{ids['task_a_assigned']}/status",
+        json={
+            "status": "IN_PROGRESS",
+            "assigned_user_id": ids["employee_a_peer"],
+        },
+        headers=bearer(ids["employee_a"], "EMPLOYEE"),
+    )
+    assert response.status_code == 403

@@ -55,6 +55,7 @@ O ficheiro `apps/api/tests/test_auth_middleware_jwt.py` cobre:
 - início de tarefa atribuída permitido, mas tentativa de iniciar tarefa sem atribuição ou atribuída a outro funcionário da mesma loja rejeitada (403);
 - cancelamento de tarefa por EMPLOYEE rejeitado (403);
 - histórico de eventos reservado a ADMIN/SUPERVISOR: EMPLOYEE recebe 403 mesmo para tarefa própria, e SUPERVISOR só consulta eventos da sua loja;
+- conclusão de tarefa atribuída por EMPLOYEE: a quantidade efetiva não pode exceder a pedida; conclusão parcial exige motivo; a quantidade e o motivo ficam registados no evento; EMPLOYEE não pode alterar a atribuição;
 - tentativa de consulta e cancelamento de tarefa de outra loja por SUPERVISOR rejeitada (403).
 - SUPERVISOR não cria tarefas de outra loja através dos fluxos manual, recomendação ou decisão operacional aprovada (403);
 - EMPLOYEE não cria tarefas a partir de decisões operacionais (403);
@@ -83,10 +84,17 @@ A criação de um exemplar e a sua aprovação são operações distintas. Um ut
 
 ## Limitações e próximos critérios de fecho
 
-- Expandir os testes JWT para cada método e rota administrativa, incluindo operações de retenção/legal hold, upload e leitura binária, OCR, embeddings e caminhos indiretos do worker. A cobertura de alertas foi ampliada para testar também PATCH e consulta de eventos em alerta estrangeiro (403), além de ACKNOWLEDGED e sequência de auditoria na própria loja; aguarda CI. A cobertura das três vias de criação de tarefas, reconciliação, dashboard, decisões operacionais, analytics, observações, sessões de captura, lotes de vendas/tráfego e fronteiras OCR/embeddings está incluída na suite anteriormente aprovada. A cobertura por endpoint continua incompleta e deve ser fechada de forma sistemática.
-- Manter cobertura JWT de atribuição e transições de tarefas; acrescentar ainda casos de conclusão parcial, alteração de quantidades e tentativas de atualização de tarefa atribuída a outro utilizador.
+- Expandir os testes JWT para cada método e rota administrativa, incluindo operações de retenção/legal hold, upload e leitura binária, OCR, embeddings e caminhos indiretos do worker. A cobertura de alertas foi ampliada para testar também PATCH e consulta de eventos em alerta estrangeiro (403), além de ACKNOWLEDGED e sequência de auditoria na própria loja; passou no API CI `43455507948` e Quality Gates `43455507915` (commit `8cb99a2`). A cobertura das três vias de criação de tarefas, reconciliação, dashboard, decisões operacionais, analytics, observações, sessões de captura, lotes de vendas/tráfego e fronteiras OCR/embeddings está incluída na suite anteriormente aprovada. A cobertura por endpoint continua incompleta e deve ser fechada de forma sistemática.
+- Manter cobertura JWT de atribuição e transições de tarefas; os testes agora cobrem conclusão parcial, rejeição de quantidade acima do pedido, persistência da quantidade/motivo na auditoria e bloqueio de alteração de atribuição por EMPLOYEE. Continuar a cobrir transições e tarefas atribuídas a outro utilizador.
 - Continuar a executar os testes de autorização HTTP e os smoke tests de integridade em CI com PostgreSQL 16; os testes JWT HTTP focados continuam a usar SQLite isolado, pelo que não devem ser descritos como cobertura PostgreSQL por endpoint.
 - Confirmar a política de acesso dos endpoints administrativos e a autorização no próprio worker antes de fechar a auditoria.
 - Manter a purga física desativada até existir política formal de retenção e validação operacional.
 
 A auditoria multi-loja permanece aberta até estes critérios serem verificados. Não se deve interpretar a presença deste documento ou a passagem dos testes focados como certificação de segurança global.
+
+
+## Cobertura JWT — conclusão de tarefas e integridade da quantidade
+
+A cobertura de autorização inclui agora a fronteira entre execução operacional e integridade da reposição. Um EMPLOYEE só pode iniciar/concluir a tarefa que lhe está atribuída; não pode reatribuir a tarefa. Ao concluir, a API rejeita quantidade superior à pedida (409), exige motivo para conclusão parcial (422) e persiste quantidade efetiva e motivo na cronologia. O teste confirma que um SUPERVISOR da mesma loja consegue consultar o evento e verificar os valores auditados.
+
+Validação do estado anterior: API CI `43455507948` e Quality Gates `43455507915`, commit `8cb99a2`. Ambos os workflows passaram; API CI executou migrações e smoke tests PostgreSQL 16 e concluiu com 719 testes aprovados. A nova cobertura de conclusão JWT adicionada neste commit aguarda a execução dos workflows seguintes.
