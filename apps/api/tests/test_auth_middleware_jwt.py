@@ -78,6 +78,25 @@ def auth_client(monkeypatch):
             models.ShelfProduct(shelf_id=shelf_a_peer.id, product_id=product.id, target_quantity=10, min_display_quantity=2),
             models.ShelfProduct(shelf_id=shelf_b.id, product_id=product.id, target_quantity=10, min_display_quantity=2),
         ])
+        image_a = models.ShelfImage(
+            shelf_id=shelf_a_assigned.id, original_filename="auth-a.jpg",
+            storage_path=f"/tmp/{store_a.id}/auth-a.jpg", mime_type="image/jpeg",
+            file_size_bytes=10, sha256="d" * 64, analysis_status="PENDING",
+            retention_status="ACTIVE",
+        )
+        image_b = models.ShelfImage(
+            shelf_id=shelf_b.id, original_filename="auth-b.jpg",
+            storage_path=f"/tmp/{store_b.id}/auth-b.jpg", mime_type="image/jpeg",
+            file_size_bytes=10, sha256="e" * 64, analysis_status="PENDING",
+            retention_status="RESTRICTED",
+        )
+        db.add_all([image_a, image_b])
+        db.flush()
+        db.add(models.ShelfImageRetentionEvent(
+            shelf_image_id=image_b.id, event_type="RESTRICTED",
+            from_status="ACTIVE", to_status="RESTRICTED",
+            reason="Pedido de privacidade",
+        ))
         task_a_assigned = models.ReplenishmentTask(
             store_id=store_a.id, shelf_id=shelf_a_assigned.id, product_id=product.id,
             status="ASSIGNED", assigned_to=users["employee_a"].full_name,
@@ -109,6 +128,8 @@ def auth_client(monkeypatch):
         ids["task_a_unassigned"] = task_a_unassigned.id
         ids["task_a_peer"] = task_a_peer.id
         ids["task_b_assigned"] = task_b_assigned.id
+        ids["image_a"] = image_a.id
+        ids["image_b"] = image_b.id
         store_ids = {"a": store_a.id, "b": store_b.id}
 
     def override_get_db():
@@ -388,3 +409,77 @@ def test_supervisor_cannot_reconcile_task_from_another_store(auth_client):
     )
 
     assert response.status_code == 403
+
+
+def test_employee_cannot_read_or_mutate_shelf_image_retention(auth_client):
+    client, ids, _ = auth_client
+    headers = bearer(ids["employee_a"], "EMPLOYEE")
+
+    history = client.get(
+        f"/api/v1/shelf-images/{ids['image_a']}/retention/events",
+        headers=headers,
+    )
+    restrict = client.post(
+        f"/api/v1/shelf-images/{ids['image_a']}/retention/restrict",
+        json={"reason": "Pedido do utilizador"},
+        headers=headers,
+    )
+
+    assert history.status_code == 403
+    assert restrict.status_code == 403
+
+
+def test_supervisor_cannot_apply_or_release_legal_hold(auth_client):
+    client, ids, _ = auth_client
+    headers = bearer(ids["supervisor_a"], "SUPERVISOR")
+
+    apply = client.post(
+        f"/api/v1/shelf-images/{ids['image_a']}/retention/legal-hold/apply",
+        json={"reason": "Investigação formal"},
+        headers=headers,
+    )
+    release = client.post(
+        f"/api/v1/shelf-images/{ids['image_a']}/retention/legal-hold/release",
+        json={"reason": "Investigação concluída"},
+        headers=headers,
+    )
+
+    assert apply.status_code == 403
+    assert release.status_code == 403
+
+
+def test_supervisor_cannot_access_foreign_store_retention_history_or_restrict_image(auth_client):
+    client, ids, _ = auth_client
+    headers = bearer(ids["supervisor_a"], "SUPERVISOR")
+
+    history = client.get(
+        f"/api/v1/shelf-images/{ids['image_b']}/retention/events",
+        headers=headers,
+    )
+    restrict = client.post(
+        f"/api/v1/shelf-images/{ids['image_b']}/retention/restrict",
+        json={"reason": "Pedido do utilizador"},
+        headers=headers,
+    )
+
+    assert history.status_code == 403
+    assert restrict.status_code == 403
+
+
+def test_supervisor_can_restrict_image_in_own_store_with_audit_event(auth_client):
+    client, ids, _ = auth_client
+
+    response = client.post(
+        f"/api/v1/shelf-images/{ids['image_a']}/retention/restrict",
+        json={"reason": "Pedido do utilizador"},
+        headers=bearer(ids["supervisor_a"], "SUPERVISOR"),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["retention_status"] == "RESTRICTED"
+    history = client.get(
+        f"/api/v1/shelf-images/{ids['image_a']}/retention/events",
+        headers=bearer(ids["supervisor_a"], "SUPERVISOR"),
+    )
+    assert history.status_code == 200
+    assert history.json()[-1]["event_type"] == "RESTRICTED"
