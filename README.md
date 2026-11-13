@@ -48,7 +48,7 @@ Esta é a fonte de verdade para manter o SMART SHELF AI focado. Deve ser revista
 - [ ] Testar a cronologia completa criação → aprovação/atribuição → início → conclusão/cancelamento e garantir ausência de eventos duplicados.
 - [ ] Implementar a reconciliação de stock definida em [ADR-008](docs/architecture/adr-008-inventory-reconciliation.md): movimento imutável, aprovação, idempotência e novo snapshot; nunca alterar snapshots históricos.
 - [x] Validar em PostgreSQL 16 a cadeia completa de migrações, o índice único parcial e duas criações manuais simultâneas através da API (uma resposta 201 e outra 409); confirmar que uma tarefa concluída liberta a combinação loja/prateleira/produto.
-- [ ] Alargar os testes concorrentes PostgreSQL aos fluxos de criação por recomendação e decisão operacional; o smoke test atual cobre a criação manual.
+- [ ] Validar no CI PostgreSQL 16 a extensão do smoke test concorrente aos três caminhos de criação (manual, recomendação e decisão operacional aprovada); o script foi ampliado, mas a execução desta revisão ainda está pendente.
 - [ ] Rever autorização e isolamento multi-loja em todos os endpoints, incluindo imagens, OCR, embeddings, catálogo, auditoria e operações administrativas.
 - [ ] Definir retenção, proteção, acesso e eliminação de imagens e dados de auditoria; completar hardening de uploads e armazenamento.
 
@@ -109,7 +109,7 @@ Esta é a fonte de verdade para manter o SMART SHELF AI focado. Deve ser revista
 
 ### Próxima sequência de desenvolvimento
 
-1. **Concorrência PostgreSQL:** alargar o smoke test concorrente aos caminhos de criação por recomendação e decisão operacional; a corrida manual já foi validada em PostgreSQL 16.
+1. **Concorrência PostgreSQL:** concluir a validação CI do smoke test alargado aos caminhos manual, recomendação e decisão operacional aprovada; corrigir eventuais falhas antes de marcar como concluído.
 2. **Reconciliação de stock:** implementar movimentos imutáveis para quantidades efetivamente repostas, com aprovação e auditoria.
 3. **Qualidade dos dados:** explicitar frescura/completude e separar os diferentes estados de stock.
 4. **Consenso temporal:** deduplicar alertas por SKU/localização e exigir persistência de evidência antes de criar ocorrências.
@@ -129,7 +129,7 @@ Esta é a fonte de verdade para manter o SMART SHELF AI focado. Deve ser revista
 - Registar bloqueios e dependências externas e nunca declarar piloto, integração, modelo real ou produção concluídos sem evidência operacional.
 
 **Última revisão do roadmap:** 2026-11-13.  
-**Última etapa concluída:** validação PostgreSQL 16 da migração `0020`, índice parcial e concorrência na criação manual; implementação técnica `a8e657b5b72ebd5b701c27b2cdbf5b4041696e57`.  
+**Última etapa concluída:** validação PostgreSQL 16 da migração `0020`, índice parcial e concorrência na criação manual; smoke test agora alargado aos três caminhos de criação, com CI ainda em execução (`5f4a37648527e833ef90351e3db06f361a729928`).  
 **REA externa:** consultar [comparação de soluções](docs/reverse-engineering/external-solutions.md) e [revisão de visão computacional](docs/architecture/retail-vision-rea.md); as referências comerciais e académicas orientam o roadmap, mas as suas métricas não são assumidas como resultados do nosso sistema.
 
 
