@@ -89,6 +89,8 @@ def test_observation_alert_is_idempotent_and_human_resolvable(monkeypatch):
         assert first.status_code == second.status_code == 200
         assert first.json()["id"] == second.json()["id"]
         assert first.json()["status"] == "OPEN"
+        repeated_events = client.get(f"/api/v1/observation-alerts/{first.json()['id']}/events")
+        assert [event["event_type"] for event in repeated_events.json()] == ["CREATED"]
 
         listed = client.get("/api/v1/observation-alerts", params={"status": "OPEN"})
         assert listed.status_code == 200

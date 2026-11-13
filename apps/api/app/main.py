@@ -535,8 +535,11 @@ def evaluate_and_persist_observation_alert(
                 db, alert, "CREATED", actor, to_status="OPEN", evidence=evidence,
             )
     if not created_new:
+        previous_last_seen = alert.last_seen_at
+        if previous_last_seen.tzinfo is None:
+            previous_last_seen = previous_last_seen.replace(tzinfo=timezone.utc)
         previous = {
-            "last_seen_at": alert.last_seen_at,
+            "last_seen_at": previous_last_seen,
             "confirmation_count": alert.confirmation_count,
             "average_confidence": alert.average_confidence,
             "sources": list(alert.sources or []),
