@@ -124,6 +124,53 @@ def resolve_sku_match(db: Session, detection, registry_cache=None):
     return {"product_id": match.product_id if match.status == "MATCHED" else None, "status": match.status, "similarity": match.similarity, "margin": match.margin}
 
 
+def _resolve_worker_image_path(db: Session, image: models.ShelfImage) -> Path:
+    """Resolve a queued image only inside its owning store directory; reject symlinks."""
+    store_id = (
+        db.query(models.Zone.store_id)
+        .join(models.Shelf, models.Shelf.zone_id == models.Zone.id)
+        .join(models.ShelfImage, models.ShelfImage.shelf_id == models.Shelf.id)
+        .filter(models.ShelfImage.id == image.id)
+        .scalar()
+    )
+    if store_id is None:
+        raise FileNotFoundError("Shelf image has no owning store")
+
+    root = Path(settings.image_storage_path)
+    if not root.is_absolute():
+        root = Path.cwd() / root
+    root = Path(__import__("os").path.abspath(root))
+    store_root = root / str(store_id)
+    candidate = Path(image.storage_path)
+    if not candidate.is_absolute():
+        candidate = Path.cwd() / candidate
+    candidate = Path(__import__("os").path.abspath(candidate))
+
+    try:
+        relative_path = candidate.relative_to(store_root)
+        store_root_resolved = store_root.resolve(strict=True)
+        store_root_resolved.relative_to(root.resolve(strict=True))
+    except (OSError, RuntimeError, ValueError) as exc:
+        raise FileNotFoundError("Stored image is outside its owning store directory") from exc
+
+    cursor = store_root
+    if cursor.is_symlink():
+        raise FileNotFoundError("Store image directory cannot be a symlink")
+    for part in relative_path.parts:
+        cursor = cursor / part
+        if cursor.is_symlink():
+            raise FileNotFoundError("Stored image path cannot contain symlinks")
+
+    try:
+        resolved = candidate.resolve(strict=True)
+        resolved.relative_to(store_root_resolved)
+    except (OSError, RuntimeError, ValueError) as exc:
+        raise FileNotFoundError("Stored image path is unavailable or outside its store") from exc
+    if not resolved.is_file():
+        raise FileNotFoundError("Stored shelf image is not a regular file")
+    return resolved
+
+
 def process_next_image(db: Session, provider, ocr_provider=None) -> int | None:
     image = (
         db.query(models.ShelfImage)
@@ -136,7 +183,6 @@ def process_next_image(db: Session, provider, ocr_provider=None) -> int | None:
         return None
 
     image_id = image.id
-    image_path = Path(image.storage_path)
     image.analysis_status = "PROCESSING"
     image.analysis_error = None
     image.analysis_started_at = models.utc_now()
@@ -144,8 +190,7 @@ def process_next_image(db: Session, provider, ocr_provider=None) -> int | None:
     db.commit()
 
     try:
-        if not image_path.is_file():
-            raise FileNotFoundError("Stored shelf image is unavailable")
+        image_path = _resolve_worker_image_path(db, image)
         result = VisionAnalysis.model_validate(provider.analyze(image_path))
 
         # Linearize retention against derived processing: if restriction committed
