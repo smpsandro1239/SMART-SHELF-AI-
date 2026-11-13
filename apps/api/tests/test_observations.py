@@ -562,53 +562,60 @@ def test_observation_consensus_is_isolated_per_sku_and_legacy_evidence():
 
 
 
-def _setup_alert_fixture():
+def _setup_alert_fixture(client):
     Base.metadata.drop_all(bind=TEST_ENGINE)
     Base.metadata.create_all(bind=TEST_ENGINE)
+    store = client.post("/api/v1/stores", json={"code": "ALERT-STORE", "name": "Loja alertas"})
+    assert store.status_code == 201, store.text
+    zone = client.post("/api/v1/zones", json={"store_id": store.json()["id"], "name": "Bebidas"})
+    assert zone.status_code == 201, zone.text
+    shelf = client.post("/api/v1/shelves", json={"zone_id": zone.json()["id"], "code": "ALERT-SHELF"})
+    assert shelf.status_code == 201, shelf.text
+    product = client.post("/api/v1/products", json={"sku": "ALERT-SKU", "name": "Produto alerta"})
+    assert product.status_code == 201, product.text
+    assignment = client.post(
+        "/api/v1/shelf-products",
+        json={"shelf_id": shelf.json()["id"], "product_id": product.json()["id"]},
+    )
+    assert assignment.status_code == 201, assignment.text
+    now = datetime.now(timezone.utc)
+    for seconds_ago in (60, 40, 20):
+        observation = client.post(
+            "/api/v1/observations",
+            json={
+                "shelf_id": shelf.json()["id"],
+                "product_id": product.json()["id"],
+                "source": "simulation",
+                "status": "LOW_STOCK",
+                "confidence": 0.95,
+                "observed_at": (now - timedelta(seconds=seconds_ago)).isoformat(),
+            },
+        )
+        assert observation.status_code == 201, observation.text
+
     db = TestingSession()
-    store = models.Store(code="ALERT-STORE", name="Loja alertas")
-    db.add(store)
-    db.flush()
-    zone = models.Zone(store_id=store.id, name="Bebidas")
-    db.add(zone)
-    db.flush()
-    shelf = models.Shelf(zone_id=zone.id, code="ALERT-SHELF")
-    db.add(shelf)
-    product = models.Product(sku="ALERT-SKU", name="Produto alerta")
-    db.add(product)
     user = models.User(
         email="supervisor-alert@example.test",
-        store_id=store.id,
+        store_id=store.json()["id"],
         full_name="Supervisor Alertas",
         password_hash="test-hash",
         role="SUPERVISOR",
         is_active=True,
     )
     db.add(user)
-    db.flush()
-    db.add(models.ShelfProduct(shelf_id=shelf.id, product_id=product.id))
-    now = datetime.now(timezone.utc)
-    for seconds_ago in (60, 40, 20):
-        db.add(models.Observation(
-            shelf_id=shelf.id,
-            product_id=product.id,
-            source="simulation",
-            status="LOW_STOCK",
-            confidence=0.95,
-            observed_at=now - timedelta(seconds=seconds_ago),
-        ))
     db.commit()
-    result = SimpleNamespace(id=user.id, role=user.role, store_id=store.id)
-    ids = (store.id, shelf.id, product.id)
+    actor = SimpleNamespace(id=user.id, role=user.role, store_id=user.store_id)
+    ids = (store.json()["id"], shelf.json()["id"], product.json()["id"])
     db.close()
-    return ids, result
+    return ids, actor
 
 
 def test_observation_alert_is_idempotent_and_human_resolvable(monkeypatch):
     import app.main as main_module
-    (store_id, shelf_id, product_id), actor = _setup_alert_fixture()
-    monkeypatch.setattr(main_module, "_request_user", lambda db, request: actor)
+
     with TestClient(app) as client:
+        (store_id, shelf_id, product_id), actor = _setup_alert_fixture(client)
+        monkeypatch.setattr(main_module, "_request_user", lambda db, request: actor)
         params = {
             "product_id": product_id,
             "minimum_confirmations": 3,
@@ -616,11 +623,14 @@ def test_observation_alert_is_idempotent_and_human_resolvable(monkeypatch):
             "minimum_confidence": 0.6,
         }
         first = client.post(f"/api/v1/shelves/{shelf_id}/observation-alerts/evaluate", params=params)
+        assert first.status_code == 200, first.text
         second = client.post(f"/api/v1/shelves/{shelf_id}/observation-alerts/evaluate", params=params)
-        assert first.status_code == second.status_code == 200
+        assert second.status_code == 200, second.text
         assert first.json()["id"] == second.json()["id"]
         assert first.json()["status"] == "OPEN"
+
         repeated_events = client.get(f"/api/v1/observation-alerts/{first.json()['id']}/events")
+        assert repeated_events.status_code == 200
         assert [event["event_type"] for event in repeated_events.json()] == ["CREATED"]
 
         listed = client.get("/api/v1/observation-alerts", params={"status": "OPEN"})
@@ -655,18 +665,20 @@ def test_observation_alert_is_idempotent_and_human_resolvable(monkeypatch):
         ]
 
         reopened = client.post(f"/api/v1/shelves/{shelf_id}/observation-alerts/evaluate", params=params)
-        assert reopened.status_code == 200
+        assert reopened.status_code == 200, reopened.text
         assert reopened.json()["id"] != first.json()["id"]
         assert reopened.json()["status"] == "OPEN"
 
 
 def test_observation_alerts_are_store_scoped(monkeypatch):
-    (store_id, shelf_id, product_id), actor = _setup_alert_fixture()
     import app.main as main_module
-    monkeypatch.setattr(main_module, "_request_user", lambda db, request: SimpleNamespace(
-        id=actor.id, role="SUPERVISOR", store_id=store_id + 999
-    ))
+
     with TestClient(app) as client:
+        (store_id, shelf_id, product_id), actor = _setup_alert_fixture(client)
+        foreign_actor = SimpleNamespace(
+            id=actor.id, role="SUPERVISOR", store_id=store_id + 999
+        )
+        monkeypatch.setattr(main_module, "_request_user", lambda db, request: foreign_actor)
         response = client.get("/api/v1/observation-alerts")
         assert response.status_code == 200
         assert response.json() == []
