@@ -903,3 +903,79 @@ def test_cross_store_supervisor_cannot_mutate_foreign_shelf_image(monkeypatch):
             models.DetectionSkuReview.detection_id == foreign_detection_id
         ).count() == 0
 
+def test_restricted_image_is_removed_from_review_queue_and_summary(monkeypatch):
+    image_id, detection_id = create_image_with_detection()
+    with TestingSession() as db:
+        image = db.get(models.ShelfImage, image_id)
+        shelf = db.get(models.Shelf, image.shelf_id)
+        zone = db.get(models.Zone, shelf.zone_id)
+        supervisor = models.User(
+            email="supervisor-retention-queue@test.local",
+            full_name="Supervisor Retention Queue",
+            password_hash="test-hash",
+            role="SUPERVISOR",
+            store_id=zone.store_id,
+            is_active=True,
+        )
+        db.add(supervisor)
+        run = models.ShelfImageOCRRun(
+            shelf_image_id=image_id,
+            provider="mock-ocr",
+            model_version="mock-v1",
+            status="COMPLETED",
+        )
+        db.add(run)
+        db.flush()
+        db.add(models.ShelfImageFusedEvidence(
+            ocr_run_id=run.id,
+            detection_id=detection_id,
+            status="CONFLICT",
+            suggested_product_id=None,
+            visual_product_id=None,
+            text_product_id=None,
+            visual_status="MATCHED",
+            text_status="SUGGESTED",
+            visual_similarity=0.9,
+            text_score=0.91,
+            ocr_confidence=0.95,
+            visual_model_version="visual-v1",
+            ocr_provider="mock-ocr",
+            ocr_model_version="mock-v1",
+            reason="restricted queue regression",
+        ))
+        db.commit()
+        supervisor_id = supervisor.id
+
+    monkeypatch.setattr(main_module, "SessionLocal", TestingSession)
+    token, _ = create_access_token(user_id=supervisor_id, role="SUPERVISOR")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    with TestClient(app) as client:
+        before_summary = client.get(
+            "/api/v1/shelf-image-review-queue/summary",
+            headers=headers,
+        )
+        before_queue = client.get("/api/v1/shelf-image-review-queue", headers=headers)
+        assert before_summary.status_code == 200
+        assert before_summary.json()["CONFLICT"] == 1
+        assert before_queue.status_code == 200
+        assert [item["detection_id"] for item in before_queue.json()] == [detection_id]
+
+        restricted = client.post(
+            f"/api/v1/shelf-images/{image_id}/retention/restrict",
+            headers=headers,
+            json={"reason": "Imagem retirada da fila por retenção"},
+        )
+        assert restricted.status_code == 200
+        assert restricted.json()["retention_status"] == "RESTRICTED"
+
+        after_summary = client.get(
+            "/api/v1/shelf-image-review-queue/summary",
+            headers=headers,
+        )
+        after_queue = client.get("/api/v1/shelf-image-review-queue", headers=headers)
+        assert after_summary.status_code == 200
+        assert after_summary.json()["CONFLICT"] == 0
+        assert after_queue.status_code == 200
+        assert after_queue.json() == []
+
