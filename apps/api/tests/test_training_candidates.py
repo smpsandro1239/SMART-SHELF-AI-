@@ -4,6 +4,7 @@ os.environ["APP_ENV"] = "test"
 os.environ["DATABASE_URL"] = "sqlite:///./test_unused.db"
 
 import pytest
+from types import SimpleNamespace
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -84,7 +85,7 @@ def seed_reviewed_detections():
         ),
     ])
     db.commit()
-    result = {"eligible_id": eligible.id, "excluded_id": excluded.id, "product_id": product.id, "image_id": image.id}
+    result = {"eligible_id": eligible.id, "excluded_id": excluded.id, "product_id": product.id, "image_id": image.id, "store_id": store.id}
     db.close()
     return result
 
@@ -153,3 +154,93 @@ def test_restricted_image_is_not_exposed_as_training_candidate():
 
     assert response.status_code == 200
     assert response.json() == []
+
+
+
+def test_training_candidates_are_scoped_to_supervisors_store(monkeypatch):
+    data = seed_reviewed_detections()
+    db = Session()
+    foreign_store = models.Store(code="TRAIN-FOREIGN", name="Foreign store")
+    db.add(foreign_store)
+    db.commit()
+    foreign_store_id = foreign_store.id
+    db.close()
+
+    from app import main as main_module
+    monkeypatch.setattr(
+        main_module,
+        "_request_user",
+        lambda _db, _request: SimpleNamespace(
+            id=9001, role="SUPERVISOR", store_id=foreign_store_id
+        ),
+    )
+
+    with TestClient(app) as client:
+        response = client.get("/api/v1/training-candidates/reviewed")
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_training_candidates_remain_visible_to_their_own_store_supervisor(monkeypatch):
+    data = seed_reviewed_detections()
+
+    from app import main as main_module
+    monkeypatch.setattr(
+        main_module,
+        "_request_user",
+        lambda _db, _request: SimpleNamespace(
+            id=9002, role="SUPERVISOR", store_id=data["store_id"]
+        ),
+    )
+
+    with TestClient(app) as client:
+        response = client.get("/api/v1/training-candidates/reviewed")
+
+    assert response.status_code == 200
+    assert [row["detection_id"] for row in response.json()] == [data["eligible_id"]]
+
+
+def test_reviewed_sku_evaluation_rejects_foreign_store_filter(monkeypatch):
+    data = seed_reviewed_detections()
+    db = Session()
+    foreign_store = models.Store(code="EVAL-FOREIGN", name="Foreign evaluation store")
+    db.add(foreign_store)
+    db.commit()
+    foreign_store_id = foreign_store.id
+    db.close()
+
+    from app import main as main_module
+    monkeypatch.setattr(
+        main_module,
+        "_request_user",
+        lambda _db, _request: SimpleNamespace(
+            id=9003, role="SUPERVISOR", store_id=data["store_id"]
+        ),
+    )
+
+    with TestClient(app) as client:
+        response = client.get(
+            f"/api/v1/sku-evaluation/reviewed?store_id={foreign_store_id}"
+        )
+
+    assert response.status_code == 403
+
+
+def test_reviewed_sku_evaluation_defaults_to_supervisors_store(monkeypatch):
+    data = seed_reviewed_detections()
+
+    from app import main as main_module
+    monkeypatch.setattr(
+        main_module,
+        "_request_user",
+        lambda _db, _request: SimpleNamespace(
+            id=9004, role="SUPERVISOR", store_id=data["store_id"]
+        ),
+    )
+
+    with TestClient(app) as client:
+        response = client.get("/api/v1/sku-evaluation/reviewed")
+
+    assert response.status_code == 200
+    assert response.json()["store_id"] == data["store_id"]
