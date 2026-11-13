@@ -1,6 +1,6 @@
 from datetime import date, datetime, timezone
 
-from sqlalchemy import JSON, Date, DateTime, ForeignKey, String, Text, Float, Integer, Boolean, Numeric, UniqueConstraint, CheckConstraint, Index
+from sqlalchemy import JSON, Date, DateTime, ForeignKey, String, Text, Float, Integer, Boolean, Numeric, UniqueConstraint, CheckConstraint, Index, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -341,6 +341,13 @@ class ReplenishmentTask(Base):
         CheckConstraint("priority IN ('LOW', 'NORMAL', 'HIGH', 'URGENT')", name="ck_task_priority"),
         CheckConstraint("status IN ('PENDING', 'ASSIGNED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED')", name="ck_task_status"),
         CheckConstraint("requested_quantity IS NULL OR requested_quantity > 0", name="ck_task_quantity_positive"),
+        Index(
+            "uq_active_task_store_shelf_product",
+            "store_id", "shelf_id", "product_id",
+            unique=True,
+            postgresql_where=text("status IN ('PENDING', 'ASSIGNED', 'IN_PROGRESS')"),
+            sqlite_where=text("status IN ('PENDING', 'ASSIGNED', 'IN_PROGRESS')"),
+        ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
