@@ -402,7 +402,6 @@ def list_observations(
         db.query(models.Observation)
         .join(models.Shelf, models.Observation.shelf_id == models.Shelf.id)
         .join(models.Zone, models.Shelf.zone_id == models.Zone.id)
-        .filter(models.ShelfImage.retention_status == "ACTIVE")
     )
     actor = _request_user(db, request)
     if actor is not None and actor.role != "ADMIN":
