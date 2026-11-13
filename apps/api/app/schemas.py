@@ -356,6 +356,14 @@ class ShelfImageRead(BaseModel):
     model_version: str | None
     captured_at: datetime
     created_at: datetime
+    retention_status: Literal["ACTIVE", "RESTRICTED", "PENDING_PURGE", "PURGED"] = "ACTIVE"
+    retention_requested_at: datetime | None = None
+    retention_requested_by_user_id: int | None = None
+    retention_reason: str | None = None
+    legal_hold: bool = False
+    purge_not_before: datetime | None = None
+    purged_at: datetime | None = None
+    retention_policy_version: str | None = None
     model_config = ConfigDict(from_attributes=True)
 
 
