@@ -33,6 +33,7 @@ O ficheiro `apps/api/tests/test_training_candidates.py` inclui agora testes de i
 - supervisor de outra loja não receber candidatos de treino;
 - supervisor da loja de origem continuar a receber os seus candidatos;
 - supervisor não conseguir consultar a avaliação SKU de uma loja estrangeira;
+- supervisor não conseguir carregar imagens para prateleiras de outra loja, sem criar registo nem ficheiro;
 - avaliação SKU sem filtro explícito usar automaticamente a loja do supervisor.
 
 Os testes usam um ator de teste injetado no helper de resolução de utilizador. O middleware de autenticação é deliberadamente ignorado em `APP_ENV=test`; estes testes validam a autorização dentro dos handlers e não substituem testes HTTP com JWT real em ambiente de integração.
