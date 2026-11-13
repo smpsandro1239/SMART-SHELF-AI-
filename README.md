@@ -27,7 +27,7 @@ Esta é a fonte de verdade para manter o SMART SHELF AI focado. Deve ser revista
 - [x] API de decisões operacionais com filtros, prioridades, cobertura estimada, resumo por zona e evidências.
 - [x] Aprovação humana de reposição com revalidação da evidência, limite de quantidade, verificação de stock e validação de atribuição.
 - [x] Ciclo de vida de tarefas na API: criação, atribuição, início, conclusão e cancelamento, com validação de transições e permissões.
-- [x] Índice único parcial na base de dados para impedir mais de uma tarefa ativa por loja/prateleira/produto; tarefas concluídas/canceladas libertam a combinação. Testado no SQLite de CI; concorrência PostgreSQL ainda por validar.
+- [x] Índice único parcial na base de dados para impedir mais de uma tarefa ativa por loja/prateleira/produto; tarefas concluídas/canceladas libertam a combinação. Validado em PostgreSQL 16 com duas criações manuais simultâneas através da API (uma HTTP 201 e outra HTTP 409).
 - [x] Registo de quantidade efetivamente reposta; conclusão parcial e cancelamento exigem motivo.
 - [x] Auditoria estruturada de criação (`CREATED`), aprovação (`APPROVED`) e transições (`STATUS_CHANGED`), com ator, estado inicial/final, timestamp, quantidade/motivo quando aplicável e consulta cronológica. Os três caminhos de criação de tarefas são abrangidos.
 - [x] Autenticação JWT, hash Argon2 e perfis ADMIN, SUPERVISOR e EMPLOYEE, com isolamento por loja nas áreas implementadas.
@@ -109,7 +109,7 @@ Esta é a fonte de verdade para manter o SMART SHELF AI focado. Deve ser revista
 
 ### Próxima sequência de desenvolvimento
 
-1. **Concorrência PostgreSQL:** validar em PostgreSQL real o locking, o índice parcial, a migração `0020` e a resposta HTTP 409 em corridas simultâneas.
+1. **Concorrência PostgreSQL:** alargar o smoke test concorrente aos caminhos de criação por recomendação e decisão operacional; a corrida manual já foi validada em PostgreSQL 16.
 2. **Reconciliação de stock:** implementar movimentos imutáveis para quantidades efetivamente repostas, com aprovação e auditoria.
 3. **Qualidade dos dados:** explicitar frescura/completude e separar os diferentes estados de stock.
 4. **Consenso temporal:** deduplicar alertas por SKU/localização e exigir persistência de evidência antes de criar ocorrências.
