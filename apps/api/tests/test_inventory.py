@@ -417,3 +417,58 @@ def test_reconciliation_requires_authenticated_approver(monkeypatch):
             json={"reason": "Sem utilizador autenticado"},
         )
         assert response.status_code == 401
+
+
+
+def test_inventory_history_and_latest_enforce_store_scope_for_supervisor(monkeypatch):
+    with TestClient(app) as client:
+        own_store_id, own_product_id = create_store_and_product(client)
+        foreign_store = client.post("/api/v1/stores", json={
+            "code": "INV-FOREIGN", "name": "Loja externa",
+        })
+        assert foreign_store.status_code == 201
+        foreign_store_id = foreign_store.json()["id"]
+        foreign_product = client.post("/api/v1/products", json={
+            "sku": "INV-FOREIGN-SKU", "name": "Produto externo",
+        })
+        foreign_product_id = foreign_product.json()["id"]
+
+        own_snapshot = client.post("/api/v1/inventory/snapshots", json={
+            "store_id": own_store_id, "product_id": own_product_id,
+            "on_hand_quantity": 12, "reserved_quantity": 2, "source": "ERP",
+        })
+        foreign_snapshot = client.post("/api/v1/inventory/snapshots", json={
+            "store_id": foreign_store_id, "product_id": foreign_product_id,
+            "on_hand_quantity": 30, "reserved_quantity": 5, "source": "WMS",
+        })
+        assert own_snapshot.status_code == 201
+        assert foreign_snapshot.status_code == 201
+
+        actor = _supervisor_actor(own_store_id)
+        monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: actor)
+
+        own_history = client.get("/api/v1/inventory/snapshots", params={
+            "store_id": own_store_id, "product_id": own_product_id,
+        })
+        assert own_history.status_code == 200
+        assert [item["id"] for item in own_history.json()] == [own_snapshot.json()["id"]]
+
+        foreign_history = client.get("/api/v1/inventory/snapshots", params={
+            "store_id": foreign_store_id, "product_id": foreign_product_id,
+        })
+        assert foreign_history.status_code == 403
+
+        own_latest = client.get("/api/v1/inventory/latest", params={
+            "store_id": own_store_id, "product_id": own_product_id,
+        })
+        assert own_latest.status_code == 200
+        assert own_latest.json()["id"] == own_snapshot.json()["id"]
+
+        foreign_latest = client.get("/api/v1/inventory/latest", params={
+            "store_id": foreign_store_id, "product_id": foreign_product_id,
+        })
+        assert foreign_latest.status_code == 403
+
+        implicit_store_history = client.get("/api/v1/inventory/snapshots")
+        assert implicit_store_history.status_code == 200
+        assert all(item["store_id"] == own_store_id for item in implicit_store_history.json())
