@@ -71,6 +71,10 @@ O ficheiro `apps/api/tests/test_auth_middleware_jwt.py` cobre:
 
 Os testes usam tokens criados pelo próprio módulo de segurança e o middleware HTTP real. Não substituem ainda uma suite completa de testes por endpoint nem a execução integral contra PostgreSQL.
 
+## Cobertura JWT adicional — OCR e revisão humana
+
+O teste `test_supervisor_jwt_cannot_access_foreign_ocr_or_retry_restricted_image` confirma que SUPERVISOR não consulta nem cria execuções OCR, não repete a análise e não revê deteções de imagens de outra loja. O fixture usa uma imagem estrangeira em estado RESTRICTED para confirmar que o âmbito da loja é verificado antes do estado de retenção (403, não 410). O teste `test_employee_jwt_cannot_start_ocr_or_submit_human_sku_reviews` confirma que EMPLOYEE não inicia OCR nem submete decisões humanas de SKU (403). A revisão de embeddings com JWT real confirma ainda autoaprovação bloqueada, aprovação por segundo SUPERVISOR da mesma loja e revisão por ADMIN.
+
 ## Separação de funções na curadoria de embeddings
 
 A criação de um exemplar e a sua aprovação são operações distintas. Um utilizador SUPERVISOR não pode rever o próprio exemplar (HTTP 403); um segundo SUPERVISOR da mesma loja pode rever, e ADMIN mantém capacidade de supervisão global. Esta regra evita que uma única identidade introduza e aprove a mesma referência usada pelo matching SKU.
