@@ -379,3 +379,71 @@ def test_task_cancellation_requires_reason_and_is_audited():
         assert events.status_code == 200
         assert events.json()[-1]["event_type"] == "STATUS_CHANGED"
         assert events.json()[-1]["reason"] == "Produto descontinuado"
+
+
+def test_task_cancellation_lifecycle_has_exactly_one_event_per_transition():
+    with TestClient(app) as client:
+        store_id, shelf_id, product_id = create_task_context(client)
+        created = client.post("/api/v1/tasks", json={
+            "store_id": store_id, "shelf_id": shelf_id, "product_id": product_id,
+        })
+        assert created.status_code == 201
+        task_id = created.json()["id"]
+
+        assigned = client.patch(f"/api/v1/tasks/{task_id}/status", json={
+            "status": "ASSIGNED", "assigned_to": "operador-01",
+        })
+        assert assigned.status_code == 200
+        cancelled = client.patch(f"/api/v1/tasks/{task_id}/status", json={
+            "status": "CANCELLED", "exception_reason": "Reposição já não necessária",
+        })
+        assert cancelled.status_code == 200
+
+        duplicate_cancel = client.patch(f"/api/v1/tasks/{task_id}/status", json={
+            "status": "CANCELLED", "exception_reason": "Pedido repetido",
+        })
+        assert duplicate_cancel.status_code == 409
+
+        events = client.get(f"/api/v1/tasks/{task_id}/events")
+        assert events.status_code == 200
+        audit = events.json()
+        assert [event["event_type"] for event in audit] == [
+            "CREATED", "STATUS_CHANGED", "STATUS_CHANGED",
+        ]
+        assert [(event["from_status"], event["to_status"]) for event in audit] == [
+            (None, "PENDING"), ("PENDING", "ASSIGNED"), ("ASSIGNED", "CANCELLED"),
+        ]
+        assert audit[-1]["reason"] == "Reposição já não necessária"
+        assert len({event["id"] for event in audit}) == len(audit)
+
+
+def test_task_status_and_audit_event_roll_back_together_when_audit_fails(monkeypatch):
+    from app import main as main_module
+
+    with TestClient(app) as client:
+        store_id, shelf_id, product_id = create_task_context(client)
+        created = client.post("/api/v1/tasks", json={
+            "store_id": store_id, "shelf_id": shelf_id, "product_id": product_id,
+        })
+        assert created.status_code == 201
+        task_id = created.json()["id"]
+
+        def fail_audit(*args, **kwargs):
+            raise RuntimeError("forced task audit failure")
+
+        monkeypatch.setattr(main_module, "_record_task_event", fail_audit)
+        with TestClient(app, raise_server_exceptions=False) as failing_client:
+            response = failing_client.patch(
+                f"/api/v1/tasks/{task_id}/status",
+                json={"status": "CANCELLED", "exception_reason": "Teste de rollback"},
+            )
+        assert response.status_code == 500
+
+        monkeypatch.undo()
+        task_after_failure = client.get("/api/v1/tasks")
+        assert task_after_failure.status_code == 200
+        task = next(item for item in task_after_failure.json() if item["id"] == task_id)
+        assert task["status"] == "PENDING"
+        events = client.get(f"/api/v1/tasks/{task_id}/events")
+        assert events.status_code == 200
+        assert [event["event_type"] for event in events.json()] == ["CREATED"]
