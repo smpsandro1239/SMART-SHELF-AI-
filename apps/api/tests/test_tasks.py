@@ -428,8 +428,12 @@ def test_task_status_and_audit_event_roll_back_together_when_audit_fails(monkeyp
         assert created.status_code == 201
         task_id = created.json()["id"]
 
-        def fail_audit(*args, **kwargs):
-            raise RuntimeError("forced task audit failure")
+        original_record_task_event = main_module._record_task_event
+
+        def fail_audit(db, task, event_type, actor, **kwargs):
+            original_record_task_event(db, task, event_type, actor, **kwargs)
+            db.flush()
+            raise RuntimeError("forced task audit failure after flush")
 
         monkeypatch.setattr(main_module, "_record_task_event", fail_audit)
         with TestClient(app, raise_server_exceptions=False) as failing_client:
