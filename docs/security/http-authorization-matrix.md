@@ -98,6 +98,18 @@ O workflow Quality Gates [43476652815](https://github.com/smpsandro1239/SMART-SH
 
 Esta validação fecha os sete cenários cobertos pelo smoke test, mas não fecha a auditoria multi-loja global: os restantes endpoints e caminhos indiretos continuam sujeitos a revisão específica.
 
+## Cobertura JWT adicional — vendas, previsões e analytics de armazém
+
+Foi acrescentado o teste `test_supervisor_jwt_cannot_read_foreign_sales_forecasts_or_warehouse_analytics` em `apps/api/tests/test_auth_middleware_jwt.py`. Um SUPERVISOR autenticado da loja A tenta consultar recursos explicitamente filtrados para a loja B. Os 18 pedidos seguintes têm de receber HTTP 403 antes de qualquer resultado de negócio:
+
+- histórico de vendas horárias, tráfego horário e vendas diárias;
+- picos de tráfego, previsão de procura horária/diária, risco de rutura e portefólio de risco;
+- perfis horários e por dia/hora da rotação de paletes, plano de janela e portefólios de paletes;
+- eventos do ciclo de vida de paletes, cálculo de unidades de reposição e slotting físico;
+- recomendações e plano de reposição.
+
+Esta cobertura complementa os testes anteriores de snapshots, políticas de frescura, localizações, paletes, políticas de rotação e slotting consultivo. O novo teste usa JWT real e handlers HTTP; a sua validação em PostgreSQL continua separada da suite SQLite de integração.
+
 ## Limitações e próximos critérios de fecho
 
 - Expandir os testes JWT para cada método e rota administrativa, incluindo operações de retenção/legal hold, upload e leitura binária, OCR, embeddings e caminhos indiretos do worker. A cobertura de alertas foi ampliada para testar também PATCH e consulta de eventos em alerta estrangeiro (403), além de ACKNOWLEDGED e sequência de auditoria na própria loja; passou no API CI `43455507948` e Quality Gates `43455507915` (commit `8cb99a2`). A cobertura das três vias de criação de tarefas, reconciliação, dashboard, decisões operacionais, analytics, observações, sessões de captura, lotes de vendas/tráfego e fronteiras OCR/embeddings está incluída na suite anteriormente aprovada. A cobertura por endpoint continua incompleta e deve ser fechada de forma sistemática.
