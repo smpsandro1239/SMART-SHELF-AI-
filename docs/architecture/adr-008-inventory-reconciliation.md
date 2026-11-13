@@ -1,6 +1,6 @@
 # ADR-008 — Reconciliação auditável da reposição com inventário
 
-**Estado:** implementação inicial publicada; concorrência e imutabilidade validadas em PostgreSQL 16; rollback transacional e política de frescura configurável pendentes  
+**Estado:** implementação inicial publicada; política de frescura configurável por loja/fonte implementada; rollback transacional e validação CI dos novos cenários pendentes  
 **Data:** 13-11-2026
 
 ## Contexto
@@ -44,7 +44,7 @@ A tabela não substitui os snapshots. É o registo de transferência que explica
 - A reconciliação do stock de retaguarda não cria, por si só, uma contagem exata do stock de exposição. A quantidade na prateleira continua a exigir observação/contagem própria.
 - `WarehouseProductPlacement` representa localizações de armazém e não deve ser tratado automaticamente como saldo total de retaguarda.
 - Integrações ERP/WMS devem consumir o movimento com chave idempotente e devolver confirmação externa; não se deve escrever diretamente no ERP sem contrato e autorização.
-- A política de frescura deve ser configurável por loja/fonte e validada com o processo real de inventário.
+- A política de frescura é configurável por loja/fonte através de `POST /api/v1/inventory/freshness-policies` e consultável por `GET /api/v1/inventory/freshness-policies?store_id={id}`. Sem configuração explícita, mantém-se o fallback de 240 minutos. A janela deve ser validada com o processo real de inventário.
 
 ## Critérios de aceitação
 
@@ -64,7 +64,7 @@ A primeira implementação está na branch `main` (commit `d602c9427eea47f70a0a5
 - Endpoint: `POST /api/v1/tasks/{task_id}/reconcile-inventory`.
 - Apenas utilizadores autenticados com papel `ADMIN` ou `SUPERVISOR`; o supervisor fica limitado à sua loja.
 - Exige tarefa `COMPLETED`, quantidade efetiva positiva e motivo da aprovação.
-- Rejeita snapshots posteriores à conclusão, ausência de snapshot, evidência com mais de 240 minutos e stock disponível insuficiente.
+- Rejeita snapshots posteriores à conclusão, ausência de snapshot, evidência fora da janela configurada para a loja/fonte (fallback de 240 minutos) e stock disponível insuficiente.
 - Bloqueia a criação concorrente de snapshots/reconciliações através de bloqueio da linha do produto em PostgreSQL.
 - Cria um movimento `BACKROOM_TO_SHELF` único por tarefa e um novo snapshot `MANUAL` com referência `TASK-RECONCILIATION-{task_id}`.
 - Mantém o snapshot de origem intacto e regista `INVENTORY_RECONCILED` na cronologia da tarefa.
@@ -76,6 +76,6 @@ A primeira implementação está na branch `main` (commit `d602c9427eea47f70a0a5
 - [x] Testar duas aprovações simultâneas da mesma tarefa em PostgreSQL 16: exatamente uma resposta 201, uma 409 e um movimento/snapshot/evento.
 - [ ] Confirmar no CI PostgreSQL 16 o cenário de falha entre a criação do snapshot, movimento e evento, confirmando rollback integral. O teste com falha forçada na auditoria e asserções de ausência de movimento/evento e preservação dos snapshots foi acrescentado ao smoke test no commit `057268d232c53284059d384d61859fa92ec46fb8`, mas ainda não há evidência de execução bem-sucedida.
 - [x] Exercitar os triggers append-only com tentativas reais de `UPDATE` e `DELETE` no CI PostgreSQL.
-- Tornar a janela de frescura configurável por loja/fonte; os 240 minutos atuais são um limite inicial conservador, não uma política final.
+- [x] Tornar a janela de frescura configurável por loja/fonte, mantendo 240 minutos como fallback e limitando configurações entre 1 e 10080 minutos.
 - Validar a reconciliação com operadores e fontes reais antes de a usar como saldo operacional ou integração ERP/WMS.
 
