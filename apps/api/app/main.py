@@ -4050,14 +4050,70 @@ def operational_decisions(
         # separate from shelf quantity: using it as shelf inventory would
         # distort display coverage and replenishment quantities.
         backroom_inventory = None
+        backroom_available_for_refill = None
         if snapshot is not None:
+            snapshot_at = aware(snapshot.captured_at)
+            snapshot_age_minutes = max(0.0, (aware(now) - snapshot_at).total_seconds() / 60)
+            snapshot_is_fresh = snapshot_age_minutes <= 240
             backroom_inventory = {
                 "on_hand_quantity": float(snapshot.on_hand_quantity),
                 "reserved_quantity": float(snapshot.reserved_quantity),
                 "available_quantity": float(snapshot.available_quantity),
                 "source": snapshot.source,
-                "captured_at": aware(snapshot.captured_at).isoformat(),
+                "captured_at": snapshot_at.isoformat(),
+                "age_minutes": round(snapshot_age_minutes, 1),
+                "is_fresh": snapshot_is_fresh,
             }
+            if snapshot_is_fresh:
+                backroom_available_for_refill = float(snapshot.available_quantity)
+
+        # A quantity suggestion requires a measured shelf count, a fresh and
+        # sufficiently confident visual observation, and fresh backroom stock.
+        # Status-only detections never become invented unit counts.
+        replenishment_assessment = None
+        if observation is not None and observation.status in ("LOW_STOCK", "EMPTY"):
+            observation_at = aware(observation.observed_at)
+            observation_age_minutes = max(0.0, (aware(now) - observation_at).total_seconds() / 60)
+            if observation.observed_quantity is not None:
+                try:
+                    refill = suggest_shelf_refill(ShelfRefillInput(
+                        shelf_quantity=float(observation.observed_quantity),
+                        target_quantity=float(link.target_quantity),
+                        min_display_quantity=float(link.min_display_quantity),
+                        backroom_available_quantity=backroom_available_for_refill,
+                        observation_confidence=observation.confidence,
+                        observation_age_minutes=observation_age_minutes,
+                        max_observation_age_minutes=120,
+                    ))
+                    replenishment_assessment = {
+                        "status": refill.status,
+                        "suggested_quantity": refill.suggested_quantity,
+                        "shelf_gap_quantity": refill.shelf_gap_quantity,
+                        "remaining_gap_quantity": refill.remaining_gap_quantity,
+                        "requires_human_review": refill.requires_human_review,
+                        "explanation": refill.explanation,
+                        "observation_age_minutes": round(observation_age_minutes, 1),
+                        "inventory_freshness_required": True,
+                    }
+                except ValueError as exc:
+                    replenishment_assessment = {
+                        "status": "INVALID_EVIDENCE",
+                        "suggested_quantity": None,
+                        "shelf_gap_quantity": None,
+                        "remaining_gap_quantity": None,
+                        "requires_human_review": True,
+                        "explanation": "Os dados de reposição não passaram a validação.",
+                        "warnings": [str(exc)],
+                    }
+            else:
+                replenishment_assessment = {
+                    "status": "QUANTITY_NOT_MEASURED",
+                    "suggested_quantity": None,
+                    "shelf_gap_quantity": None,
+                    "remaining_gap_quantity": None,
+                    "requires_human_review": True,
+                    "explanation": "Existe uma deteção visual, mas não uma contagem física validada da quantidade na prateleira.",
+                }
         inventory_input = None
         forecast_input = None
         if sales_rows:
@@ -4100,6 +4156,7 @@ def operational_decisions(
             ]))
         decisions.append({
             "backroom_inventory": backroom_inventory,
+            "replenishment_assessment": replenishment_assessment,
             "store_id": zone.store_id,
             "zone_name": zone.name,
             "shelf_id": shelf.id,
