@@ -397,7 +397,7 @@ def test_shelf_observation_consensus_endpoint_requires_persistent_evidence():
         now = datetime.now(timezone.utc)
         for seconds_ago in (30, 15, 0):
             created = client.post("/api/v1/observations", json={
-                "shelf_id": shelf.json()["id"], "source": "camera", "status": "LOW_STOCK",
+                "shelf_id": shelf.json()["id"], "source": "fixed_camera", "status": "LOW_STOCK",
                 "confidence": 0.91, "observed_at": (now - timedelta(seconds=seconds_ago)).isoformat(),
             })
             assert created.status_code == 201
