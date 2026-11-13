@@ -507,7 +507,7 @@ class ShelfImageRetentionEvent(Base):
     """Append-only audit trail for shelf-image retention state changes."""
     __tablename__ = "shelf_image_retention_events"
     __table_args__ = (
-        CheckConstraint("event_type IN ('RESTRICTED', 'RESTORED')", name="ck_shelf_image_retention_event_type"),
+        CheckConstraint("event_type IN ('RESTRICTED', 'RESTORED', 'LEGAL_HOLD_APPLIED', 'LEGAL_HOLD_RELEASED')", name="ck_shelf_image_retention_event_type"),
         Index("ix_shelf_image_retention_events_image_created", "shelf_image_id", "created_at"),
     )
 
