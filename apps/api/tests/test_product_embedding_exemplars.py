@@ -12,6 +12,7 @@ from sqlalchemy.pool import StaticPool
 from app.database import Base, get_db
 from app import models  # noqa: F401
 from app.main import app
+from app import main as main_module
 
 TEST_ENGINE = create_engine(
     "sqlite://",
@@ -247,3 +248,89 @@ def test_matching_registry_does_not_load_pending_or_other_model_exemplars():
 
         assert result.status == "UNKNOWN"
         db.close()
+
+
+
+def test_embedding_exemplars_are_scoped_to_source_image_store(monkeypatch):
+    with TestClient(app) as client:
+        product_id = create_product(client)
+
+        def create_source_image(code, digest):
+            store = client.post("/api/v1/stores", json={
+                "code": code, "name": f"Loja {code}",
+            }).json()
+            zone = client.post("/api/v1/zones", json={
+                "store_id": store["id"], "name": "Zona",
+            }).json()
+            shelf = client.post("/api/v1/shelves", json={
+                "zone_id": zone["id"], "code": "S-01",
+            }).json()
+            db = TestingSession()
+            image = models.ShelfImage(
+                shelf_id=shelf["id"],
+                original_filename=f"{code}.jpg",
+                storage_path=f"/tmp/{code}.jpg",
+                mime_type="image/jpeg",
+                file_size_bytes=10,
+                sha256=digest,
+            )
+            db.add(image)
+            db.commit()
+            db.refresh(image)
+            result = (image.id, store["id"])
+            db.close()
+            return result
+
+        own_digest = "e" * 64
+        foreign_digest = "f" * 64
+        own_image_id, own_store_id = create_source_image("EMB-OWN", own_digest)
+        foreign_image_id, _ = create_source_image("EMB-FOREIGN", foreign_digest)
+
+        own_created = client.post(
+            "/api/v1/product-embedding-exemplars",
+            json=exemplar_payload(
+                product_id, shelf_image_id=own_image_id, image_sha256=own_digest,
+            ),
+        )
+        foreign_created = client.post(
+            "/api/v1/product-embedding-exemplars",
+            json=exemplar_payload(
+                product_id, shelf_image_id=foreign_image_id, image_sha256=foreign_digest,
+            ),
+        )
+        assert own_created.status_code == 201
+        assert foreign_created.status_code == 201
+
+        with TestingSession() as db:
+            actor = models.User(
+                email="embedding-scope-supervisor@example.test",
+                full_name="Supervisor embeddings",
+                password_hash="test-only-not-used",
+                role="SUPERVISOR",
+                store_id=own_store_id,
+                is_active=True,
+            )
+            db.add(actor)
+            db.commit()
+            db.refresh(actor)
+            actor_id = actor.id
+
+        with TestingSession() as db:
+            actor = db.get(models.User, actor_id)
+            monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: actor)
+
+            listed = client.get("/api/v1/product-embedding-exemplars")
+            assert listed.status_code == 200
+            assert [item["id"] for item in listed.json()] == [own_created.json()["id"]]
+
+            foreign_review = client.patch(
+                f"/api/v1/product-embedding-exemplars/{foreign_created.json()['id']}/review",
+                json={"review_status": "REJECTED", "review_notes": "Tentativa cross-store"},
+            )
+            assert foreign_review.status_code == 403
+
+            own_review = client.patch(
+                f"/api/v1/product-embedding-exemplars/{own_created.json()['id']}/review",
+                json={"review_status": "APPROVED", "review_notes": "Origem verificada"},
+            )
+            assert own_review.status_code == 200
