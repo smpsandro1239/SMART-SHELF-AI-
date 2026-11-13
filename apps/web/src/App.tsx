@@ -246,11 +246,25 @@ export default function App() {
     finally { setLoading(false); }
   }
 
-  async function updateTask(task: Task, status: "ASSIGNED" | "IN_PROGRESS" | "COMPLETED", assignedUserId?: number, completion?: { actual_quantity: number; exception_reason?: string }) {
+  async function updateTask(
+    task: Task,
+    status: "ASSIGNED" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED",
+    assignedUserId?: number,
+    completion?: { actual_quantity: number; exception_reason?: string },
+    cancellationReason?: string,
+  ) {
     setError("");
     try {
       await request<Task>(`/api/v1/tasks/${task.id}/status`, {
-        method: "PATCH", body: JSON.stringify({ status, ...(assignedUserId ? { assigned_user_id: assignedUserId } : {}), ...(completion || {}) }),
+        method: "PATCH",
+        body: JSON.stringify({
+          status,
+          ...(assignedUserId !== undefined ? { assigned_user_id: assignedUserId } : {}),
+          ...(completion || {}),
+          ...(status === "CANCELLED" && cancellationReason
+            ? { exception_reason: cancellationReason.trim() }
+            : {}),
+        }),
       });
       await refresh();
     } catch (err) { setError(err instanceof Error ? err.message : "Não foi possível atualizar a tarefa."); }
@@ -513,7 +527,7 @@ export default function App() {
               <div className="panel-heading"><div><p className="eyebrow">EXECUÇÃO</p><h2>Tarefas de reposição</h2><p className="muted">Acompanhamento das intervenções registadas na API.</p></div><span className="subtle-pill">{taskRows.length} registos</span></div>
               <div className="task-list">
                 {taskRows.length === 0 && <div className="empty-state"><PackageSearch size={28} /><strong>Sem tarefas registadas</strong><span>Quando forem criadas tarefas, aparecerão aqui.</span></div>}
-                {taskRows.map(task => <TaskRow key={task.id} task={task} canAssign={user?.role === "ADMIN" || user?.role === "SUPERVISOR"} canProgress={user?.role === "EMPLOYEE" ? task.assigned_user_id === user.id : user?.role === "ADMIN" || user?.role === "SUPERVISOR"} onUpdate={updateTask} />)}
+                {taskRows.map(task => <TaskRow key={task.id} task={task} canAssign={user?.role === "ADMIN" || user?.role === "SUPERVISOR"} canProgress={user?.role === "EMPLOYEE" ? task.assigned_user_id === user.id : user?.role === "ADMIN" || user?.role === "SUPERVISOR"} canCancel={user?.role === "ADMIN" || user?.role === "SUPERVISOR"} onUpdate={updateTask} />)}
               </div>
             </article>
             <article className="panel status-panel">
@@ -744,15 +758,17 @@ export default function App() {
 function Metric({ icon, label, value, tone, detail }: { icon: ReactNode; label: string; value: number; tone: string; detail: string }) {
   return <article className="metric-card"><div className={`metric-icon ${tone}`}>{icon}</div><p>{label}</p><strong>{value.toLocaleString("pt-PT")}</strong><span>{detail}</span></article>;
 }
-function TaskRow({ task, canAssign, canProgress, onUpdate }: { task: Task; canAssign: boolean; canProgress: boolean; onUpdate: (task: Task, status: "ASSIGNED" | "IN_PROGRESS" | "COMPLETED", assignedUserId?: number, completion?: { actual_quantity: number; exception_reason?: string }) => void }) {
+function TaskRow({ task, canAssign, canProgress, canCancel, onUpdate }: { task: Task; canAssign: boolean; canProgress: boolean; canCancel: boolean; onUpdate: (task: Task, status: "ASSIGNED" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED", assignedUserId?: number, completion?: { actual_quantity: number; exception_reason?: string }, cancellationReason?: string) => void }) {
   const [assigneeId, setAssigneeId] = useState("");
   const [actualQuantity, setActualQuantity] = useState(task.requested_quantity?.toString() || "");
   const [exceptionReason, setExceptionReason] = useState("");
+  const [cancellationReason, setCancellationReason] = useState("");
   const next = task.status === "ASSIGNED" ? "IN_PROGRESS" : task.status === "IN_PROGRESS" ? "COMPLETED" : null;
   const actual = Number(actualQuantity);
   const isValidCompletion = Number.isFinite(actual) && actual > 0
     && (task.requested_quantity == null || actual <= task.requested_quantity)
     && (task.requested_quantity == null || actual >= task.requested_quantity || exceptionReason.trim().length >= 3);
+  const canCancelTask = canCancel && ["PENDING", "ASSIGNED", "IN_PROGRESS"].includes(task.status);
   return <div className="task-row">
     <div className="task-symbol"><ArrowDownToLine size={18} /></div>
     <div className="task-info"><strong>Reposição · Prateleira #{task.shelf_id}</strong><span>Produto #{task.product_id} · {task.assigned_to || "Por atribuir"} · #{task.id}</span></div>
@@ -765,6 +781,21 @@ function TaskRow({ task, canAssign, canProgress, onUpdate }: { task: Task; canAs
       <button className="row-action" disabled={!isValidCompletion} onClick={() => onUpdate(task, "COMPLETED", undefined, { actual_quantity: actual, ...(exceptionReason.trim() ? { exception_reason: exceptionReason.trim() } : {}) })}>Concluir <ArrowUpRight size={14} /></button>
     </div>}
     {canProgress && next === "IN_PROGRESS" && <button className="row-action" onClick={() => onUpdate(task, "IN_PROGRESS")}>Iniciar <ArrowUpRight size={14} /></button>}
+    {canCancelTask && <div className="assign-control task-cancel">
+      <input
+        aria-label={"Motivo do cancelamento da tarefa " + task.id}
+        placeholder="Motivo do cancelamento"
+        value={cancellationReason}
+        onChange={event => setCancellationReason(event.target.value)}
+      />
+      <button
+        className="row-action"
+        disabled={cancellationReason.trim().length < 3}
+        onClick={() => onUpdate(task, "CANCELLED", undefined, undefined, cancellationReason.trim())}
+      >
+        Cancelar
+      </button>
+    </div>}
   </div>;
 }
 function StatusBar({ label, value, total, color }: { label: string; value: number; total: number; color: string }) {
