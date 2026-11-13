@@ -201,7 +201,7 @@ class ReplenishmentTaskCreate(BaseModel):
     priority: TaskPriority = "NORMAL"
     assigned_to: str | None = Field(default=None, min_length=1, max_length=120)
     assigned_user_id: int | None = None
-    requested_quantity: float | None = Field(default=None, gt=0)
+    requested_quantity: float | None = Field(default=None, gt=0, allow_inf_nan=False)
     notes: str | None = Field(default=None, max_length=2000)
 
 
