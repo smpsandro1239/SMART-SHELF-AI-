@@ -657,6 +657,58 @@ def main() -> None:
         finally:
             rollback_db.close()
 
+        # Verify the retention-event check constraint accepts legal-hold events
+        # and that the database-level append-only trigger protects them.
+        retention_db = SessionLocal()
+        try:
+            retention_image = models.ShelfImage(
+                shelf_id=shelf_id,
+                original_filename="retention-smoke.jpg",
+                storage_path=f"/tmp/retention-smoke-{suffix}.jpg",
+                mime_type="image/jpeg",
+                file_size_bytes=1,
+                sha256="b" * 64,
+                analysis_status="PENDING",
+                legal_hold=True,
+            )
+            retention_db.add(retention_image)
+            retention_db.flush()
+            retention_events = [
+                models.ShelfImageRetentionEvent(
+                    shelf_image_id=retention_image.id,
+                    event_type=event_type,
+                    from_status="ACTIVE",
+                    to_status="ACTIVE",
+                    actor_user_id=None,
+                    reason="PostgreSQL legal-hold audit smoke",
+                )
+                for event_type in ("LEGAL_HOLD_APPLIED", "LEGAL_HOLD_RELEASED")
+            ]
+            retention_db.add_all(retention_events)
+            retention_db.commit()
+            retention_event_id = retention_events[0].id
+
+            for statement in (
+                "UPDATE shelf_image_retention_events SET reason = 'tampered' WHERE id = :event_id",
+                "DELETE FROM shelf_image_retention_events WHERE id = :event_id",
+            ):
+                try:
+                    retention_db.execute(text(statement), {"event_id": retention_event_id})
+                    retention_db.commit()
+                except DBAPIError:
+                    retention_db.rollback()
+                else:
+                    raise AssertionError("shelf_image_retention_events accepted an UPDATE or DELETE")
+
+            assert (
+                retention_db.query(models.ShelfImageRetentionEvent)
+                .filter(models.ShelfImageRetentionEvent.shelf_image_id == retention_image.id)
+                .count()
+                == 2
+            )
+        finally:
+            retention_db.close()
+
         print(
             "PostgreSQL concurrent task creation: PASS "
             "(three task-creation paths and approved reconciliation each return one 201 and one 409; "
