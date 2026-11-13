@@ -75,7 +75,7 @@ A transição deve ser explícita, auditada, idempotente e autorizada. A purga n
 1. [x] Adicionar estados, timestamps e metadados de retenção (`0023_shelf_image_retention_metadata`).
 2. [x] Implementar restrição/restauro, eventos append-only, bloqueio dos endpoints de imagem e exclusão do worker (`0024_shelf_image_retention_events` e commits associados).
 2.a. [x] Revalidar retenção após inferência e antes de OCR/persistência derivada; a regressão de corrida foi validada em API CI e Quality Gates em 2026-11-13.
-3. [ ] Rever cobertura dos endpoints de imagem e garantir que filas, métricas agregadas e operações indiretas não expõem dados restritos.
+3. [ ] Rever cobertura dos endpoints de imagem e garantir que filas, métricas agregadas e operações indiretas não expõem dados restritos. O worker agora valida o caminho físico contra o diretório da loja e rejeita caminhos externos/symlinks antes da inferência; teste de regressão adicionado, CI pendente.
 4. [x] Adicionar gestão de legal hold: aplicação/libertação ADMIN-only, motivo obrigatório, bloqueio de hold em imagens purgadas e eventos append-only; não altera visibilidade nem elimina dados.
 5. [ ] Adicionar pedido de purga com política configurável, proteção de caminhos e tratamento de falhas — apenas após aprovação formal da política.
 6. [ ] Definir tratamento de evidência derivada e anonimização/minimização dos metadados após validação jurídica.
