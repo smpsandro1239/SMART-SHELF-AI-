@@ -519,7 +519,7 @@ async def upload_shelf_image(
         shelf_id=shelf.id,
         capture_session_id=capture_session.id if capture_session else None,
         uploaded_by=actor.id if actor else None,
-        original_filename=(Path((image.filename or "capture").replace("\\\\", "/")).name[:255]),
+        original_filename=(Path((image.filename or "capture").replace("\\", "/")).name[:255]),
         storage_path=str(destination),
         mime_type=mime_type,
         file_size_bytes=len(content),
