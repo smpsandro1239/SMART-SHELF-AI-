@@ -195,3 +195,17 @@ def test_database_report_can_filter_by_embedding_model_version(db):
 
     assert report["sample_count"] == 0
     assert report["model_version_filter"] == "other-model"
+
+
+
+def test_database_report_excludes_restricted_images(db):
+    session, store_id, _, _ = db
+    image = session.query(models.ShelfImage).one()
+    image.retention_status = "RESTRICTED"
+    session.flush()
+
+    report = build_reviewed_prediction_report(session, store_id=store_id)
+
+    assert report["sample_count"] == 0
+    assert report["latest_review_count"] == 0
+    assert report["reviewed_detections_without_matching_fusion"] == 0
