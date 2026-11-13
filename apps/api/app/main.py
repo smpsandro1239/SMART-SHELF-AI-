@@ -3968,6 +3968,11 @@ def create_task_from_recommendation(
     data["status"] = "ASSIGNED" if (data["assigned_to"] or assigned_user_id) else "PENDING"
     item = models.ReplenishmentTask(**data)
     db.add(item)
+    db.flush()
+    _record_task_event(
+        db, item, "CREATED", actor, to_status=item.status,
+        reason="Tarefa criada através do fluxo de recomendação validada.",
+    )
     db.commit()
     db.refresh(item)
     return item
