@@ -649,6 +649,13 @@ def test_task_event_and_transition_endpoints_reject_cross_store_access(monkeypat
         foreign_product = client.post("/api/v1/products", json={
             "sku": "TASK-FOREIGN-SKU", "name": "Produto externo",
         })
+        foreign_link = client.post("/api/v1/shelf-products", json={
+            "shelf_id": foreign_shelf.json()["id"],
+            "product_id": foreign_product.json()["id"],
+            "target_quantity": 10,
+            "min_display_quantity": 2,
+        })
+        assert foreign_link.status_code == 201
         foreign_task = client.post("/api/v1/tasks", json={
             "store_id": foreign_store_id,
             "shelf_id": foreign_shelf.json()["id"],
