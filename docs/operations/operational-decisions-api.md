@@ -70,3 +70,12 @@ A quantidade proposta é limitada simultaneamente pela diferença entre a quanti
 O snapshot de retaguarda tem de ter no máximo 240 minutos e não pode ter data futura. Snapshots antigos ou futuros são apresentados como evidência não atualizada e não podem suportar uma quantidade. Observações futuras também são rejeitadas. Quando a observação não inclui uma contagem física, o estado é `QUANTITY_NOT_MEASURED` e a quantidade sugerida permanece nula.
 
 A proposta não cria tarefas, não reserva stock e não movimenta produtos. A validação humana continua obrigatória antes de qualquer execução.
+
+
+## Criação de tarefa após aprovação humana
+
+O endpoint `POST /api/v1/tasks/from-operational-decision?approved=true` permite converter uma proposta quantitativa válida numa tarefa de reposição. A aprovação é explícita e obrigatória; sem o parâmetro afirmativo, a API responde `HUMAN_APPROVAL_REQUIRED`.
+
+Antes de criar a tarefa, a API reavalia a observação e o snapshot atuais. Só aceita o estado `NEEDS_REPLENISHMENT`, exige stock de retaguarda atualizado, limita a quantidade solicitada à proposta e ao stock disponível, valida o utilizador atribuído e rejeita tarefas ativas duplicadas. Se a evidência tiver mudado desde a visualização do dashboard, a operação é recusada.
+
+A criação regista nas notas da tarefa que houve aprovação manual e as quantidades proposta e aprovada. A operação cria apenas uma tarefa: não reserva inventário, não altera stock e não envia comandos a equipamentos. O dashboard disponibiliza a ação apenas para ADMIN e SUPERVISOR, com confirmação explícita antes do pedido.
