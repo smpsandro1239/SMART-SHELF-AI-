@@ -1066,3 +1066,46 @@ def test_every_versioned_api_route_requires_bearer_except_public_auth_routes(aut
             )
 
     assert checked, "The test must inspect at least one protected versioned API route"
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/api/v1/auth/users",
+        "/api/v1/stores",
+        "/api/v1/zones",
+        "/api/v1/shelves",
+        "/api/v1/products",
+        "/api/v1/shelf-products",
+        "/api/v1/warehouse/product-profiles",
+        "/api/v1/warehouse/product-packaging",
+    ],
+)
+def test_admin_only_creation_routes_reject_non_admin_roles_before_handler(
+    auth_client, path
+):
+    client, ids, _ = auth_client
+
+    for user_key, role in (
+        ("supervisor_a", "SUPERVISOR"),
+        ("employee_a", "EMPLOYEE"),
+    ):
+        response = client.post(
+            path,
+            json={},
+            headers=bearer(ids[user_key], role),
+        )
+        assert response.status_code == 403, (
+            f"{role} must not invoke admin-only endpoint {path}; "
+            f"received HTTP {response.status_code}"
+        )
+
+    admin_response = client.post(
+        path,
+        json={},
+        headers=bearer(ids["admin"], "ADMIN"),
+    )
+    assert admin_response.status_code == 422, (
+        f"ADMIN must pass the role gate for {path}; "
+        "the empty payload should be rejected by request validation"
+    )
+

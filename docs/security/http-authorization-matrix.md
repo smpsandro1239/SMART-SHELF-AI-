@@ -108,3 +108,15 @@ O teste `test_every_versioned_api_route_requires_bearer_except_public_auth_route
 ## Estado de validação da autenticação global
 
 O teste dinâmico de inventário das rotas protegidas passou no API CI `43456601696` e no Quality Gates `43456602071`, commit `4559365`. A suite de API, a compilação Python e o build de produção TypeScript/Vite passaram. Este gate cobre a ausência de credenciais; a autorização por perfil, o isolamento de loja e a propriedade de cada recurso continuam a ser verificados por testes específicos e permanecem sujeitos a auditoria contínua.
+
+
+## Cobertura JWT — fronteira de criação administrativa
+
+O teste parametrizado `test_admin_only_creation_routes_reject_non_admin_roles_before_handler` cobre por HTTP, com JWT real, os oito endpoints de criação protegidos pela regra ADMIN-only:
+
+- `POST /api/v1/auth/users`;
+- `POST /api/v1/stores`, `/api/v1/zones` e `/api/v1/shelves`;
+- `POST /api/v1/products` e `/api/v1/shelf-products`;
+- `POST /api/v1/warehouse/product-profiles` e `/api/v1/warehouse/product-packaging`.
+
+Para cada endpoint, SUPERVISOR e EMPLOYEE têm de receber HTTP 403 antes de entrar no handler. ADMIN tem de ultrapassar o gate de perfil; é enviado um payload vazio e espera-se HTTP 422 da validação de entrada, evitando criar recursos de teste. Esta cobertura verifica a fronteira do middleware e não substitui testes de validação de dados ou isolamento de loja dentro dos handlers.
