@@ -33,7 +33,7 @@ A suite `apps/api/tests/test_tasks.py` cobre:
 - quantidade efetiva obrigatória e limite máximo igual à quantidade pedida;
 - rollback conjunto de estado e evento quando a escrita da auditoria falha.
 
-A validação CI PostgreSQL 16 continua a ser necessária para a confirmação final desta nova regressão; os testes rápidos de API usam SQLite isolado e não substituem o smoke test PostgreSQL.
+A regressão foi validada na suite completa de API e no smoke PostgreSQL 16 do API CI run `43411545120`; os testes de regressão de motivos são executados na suite API, enquanto o smoke PostgreSQL confirma a cadeia operacional e as invariantes de concorrência.
 
 ## Limites conhecidos
 
