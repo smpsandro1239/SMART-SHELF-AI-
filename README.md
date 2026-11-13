@@ -45,7 +45,7 @@ Esta é a fonte de verdade para manter o SMART SHELF AI focado. Deve ser revista
 
 #### P0 — Integridade e fiabilidade operacional
 
-- [ ] Confirmar no CI PostgreSQL 16 a cronologia completa criação → atribuição → início → conclusão/cancelamento e a concorrência de transições, garantindo ausência de eventos duplicados. Foram acrescentados testes de cancelamento, rollback da alteração de estado quando a auditoria falha e duas atribuições simultâneas (uma 200 e uma 409); aguarda execução CI.
+- [ ] Confirmar no CI PostgreSQL 16 a cronologia completa criação → atribuição → início → conclusão/cancelamento e a concorrência de transições, garantindo ausência de eventos duplicados. O smoke test `apps/api/scripts/postgres_active_task_smoke.py` já cobre cancelamento, rejeição de transição repetida, rollback após falha de auditoria já submetida a flush, duas atribuições simultâneas (uma 200 e uma 409) e cronologia sem eventos duplicados. A validação CI deste conjunto continua pendente de confirmação.
 - [ ] Completar a reconciliação ADR-008: confirmar no CI PostgreSQL 16 o cenário de rollback integral em falhas entre snapshot, movimento e auditoria. A janela de frescura por loja/fonte foi implementada com fallback de 240 minutos e limites de 1–10080 minutos; os testes API cobrem configuração, rejeição por idade, limites, autorização, isolamento e atualização. O smoke test PostgreSQL cobre criação e consulta da política (commit `2d8c376`); estes cenários ainda aguardam execução CI. A falha forçada de auditoria e asserções de rollback foram acrescentadas ao smoke test no commit `057268d`; a execução bem-sucedida ainda não foi confirmada.
 - [x] Validar em PostgreSQL 16 a cadeia completa de migrações, o índice único parcial e duas criações manuais simultâneas através da API (uma resposta 201 e outra 409); confirmar que uma tarefa concluída liberta a combinação loja/prateleira/produto.
 - [x] Validar no CI PostgreSQL 16 o smoke test concorrente nos três caminhos de criação (manual, recomendação e decisão operacional aprovada), incluindo a sequência de auditoria esperada por tarefa vencedora (`CREATED`, e `APPROVED` quando aplicável).
@@ -110,15 +110,15 @@ Esta é a fonte de verdade para manter o SMART SHELF AI focado. Deve ser revista
 ### Próxima sequência de desenvolvimento
 
 1. [x] **Concorrência PostgreSQL na criação:** smoke test dos caminhos manual, recomendação e decisão operacional aprovada validado no CI PostgreSQL 16, incluindo a sequência de auditoria esperada.
-2. **Auditoria do ciclo de vida:** validar no CI a cronologia, rollback e concorrência das transições; testes adicionados nos commits `4877386` e `9445c99`, ainda sem confirmação da execução CI.
+2. **Auditoria do ciclo de vida:** validar no CI PostgreSQL 16 a cronologia, rollback e concorrência das transições; testes acrescentados nos commits `4877386` e `9445c99`. O workflow `.github/workflows/api-ci.yml` passou a suportar execução manual (`workflow_dispatch`) e identifica explicitamente o smoke test de ciclo de vida/concorrrência/reconciliação; aguarda confirmação do resultado CI.
 3. **Reconciliação de stock:** confirmar no CI PostgreSQL 16 o rollback integral e os testes de frescura; depois preparar o fluxo de confirmação na interface.
-3. **Qualidade dos dados:** explicitar frescura/completude e separar os diferentes estados de stock.
-4. **Consenso temporal:** deduplicar alertas por SKU/localização e exigir persistência de evidência antes de criar ocorrências.
-5. **Previsão:** evoluir a baseline e criar avaliação retrospetiva antes de usar previsões em decisões reais.
-6. **Planograma e localização:** associar deteções a células/segmentos e medir disponibilidade visual.
-7. **Dashboard:** completar filtros, explicações, auditoria, OSA e reconciliação.
-8. **Visão real:** ativar apenas após dataset autorizado, modelo licenciado e avaliação mensurável.
-9. **Piloto:** modo sombra e piloto supervisionado antes de integrações físicas ou escala.
+4. **Qualidade dos dados:** explicitar frescura/completude e separar os diferentes estados de stock.
+5. **Consenso temporal:** deduplicar alertas por SKU/localização e exigir persistência de evidência antes de criar ocorrências.
+6. **Previsão:** evoluir a baseline e criar avaliação retrospetiva antes de usar previsões em decisões reais.
+7. **Planograma e localização:** associar deteções a células/segmentos e medir disponibilidade visual.
+8. **Dashboard:** completar filtros, explicações, auditoria, OSA e reconciliação.
+9. **Visão real:** ativar apenas após dataset autorizado, modelo licenciado e avaliação mensurável.
+10. **Piloto:** modo sombra e piloto supervisionado antes de integrações físicas ou escala.
 
 ### Regras de manutenção deste TODO
 
@@ -129,7 +129,7 @@ Esta é a fonte de verdade para manter o SMART SHELF AI focado. Deve ser revista
 - Marcar como concluído apenas o que está implementado e validado; manter explícito o que é experimental, simulado, depende de terceiros ou não foi testado.
 - Registar bloqueios e dependências externas e nunca declarar piloto, integração, modelo real ou produção concluídos sem evidência operacional.
 
-**Última revisão do roadmap:** 2026-11-13.  
+**Última revisão do roadmap:** 2026-11-13. O workflow de API foi atualizado no commit `b6a5646` para permitir execução manual, cancelar execuções obsoletas da mesma branch e explicitar no log a validação PostgreSQL do ciclo de vida, concorrência e reconciliação; a execução CI deste commit ainda deve ser confirmada.  
 **Última validação confirmada:** CI do commit `a07c070f531ece7c346e0803141e0d192c339ec2` passou nos testes/compilação da API, build Web, migrações PostgreSQL 16 e suite completa. O smoke test PostgreSQL validou os três caminhos concorrentes de criação de tarefas, duas aprovações simultâneas da mesma reconciliação (uma 201 e uma 409), snapshot histórico intacto e triggers que bloqueiam UPDATE/DELETE dos movimentos. **Testes acrescentados posteriormente, ainda sem validação CI confirmada:** `057268d` acrescentou o rollback integral da reconciliação; `4877386` acrescentou testes de cancelamento, transições repetidas e rollback de estado/auditoria após flush; `9445c99` acrescentou concorrência de atribuição em PostgreSQL e verificação da cronologia completa. Continua pendente confirmar a execução destes cenários no CI; a frescura configurável por loja/fonte foi implementada nesta ronda, mas ainda aguarda validação CI.  
 **REA externa:** consultar [comparação de soluções](docs/reverse-engineering/external-solutions.md) e [revisão de visão computacional](docs/architecture/retail-vision-rea.md); as referências comerciais e académicas orientam o roadmap, mas as suas métricas não são assumidas como resultados do nosso sistema.
 
