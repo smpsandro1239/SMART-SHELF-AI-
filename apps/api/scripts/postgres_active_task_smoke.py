@@ -478,6 +478,27 @@ def main() -> None:
         original_request_user = main_module._request_user
         main_module._request_user = lambda db, request: actor
         try:
+            freshness_policy = client.post(
+                "/api/v1/inventory/freshness-policies",
+                json={
+                    "store_id": store_id,
+                    "source": "WMS",
+                    "max_age_minutes": 360,
+                },
+            )
+            assert freshness_policy.status_code == 200, freshness_policy.text
+            assert freshness_policy.json()["max_age_minutes"] == 360
+
+            listed_policies = client.get(
+                "/api/v1/inventory/freshness-policies",
+                params={"store_id": store_id},
+            )
+            assert listed_policies.status_code == 200, listed_policies.text
+            assert any(
+                item["source"] == "WMS" and item["max_age_minutes"] == 360
+                for item in listed_policies.json()
+            )
+
             reconciliation_barrier = Barrier(2)
 
             def reconcile_task():
