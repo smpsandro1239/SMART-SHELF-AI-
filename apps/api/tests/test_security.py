@@ -53,3 +53,33 @@ def test_store_scope_allows_supervisor_access_to_own_store():
 
     supervisor = SimpleNamespace(role="SUPERVISOR", store_id=12)
     _enforce_store_scope(supervisor, 12)
+
+
+def test_store_scope_rejects_employee_access_to_another_store():
+    from types import SimpleNamespace
+    from fastapi import HTTPException
+    from app.main import _enforce_store_scope
+
+    employee = SimpleNamespace(role="EMPLOYEE", store_id=12)
+    with pytest.raises(HTTPException) as error:
+        _enforce_store_scope(employee, 13)
+    assert error.value.status_code == 403
+
+
+def test_store_scope_rejects_non_admin_without_store_assignment():
+    from types import SimpleNamespace
+    from fastapi import HTTPException
+    from app.main import _enforce_store_scope
+
+    supervisor = SimpleNamespace(role="SUPERVISOR", store_id=None)
+    with pytest.raises(HTTPException) as error:
+        _enforce_store_scope(supervisor, 13)
+    assert error.value.status_code == 403
+
+
+def test_store_scope_allows_employee_access_to_own_store():
+    from types import SimpleNamespace
+    from app.main import _enforce_store_scope
+
+    employee = SimpleNamespace(role="EMPLOYEE", store_id=12)
+    _enforce_store_scope(employee, 12)
