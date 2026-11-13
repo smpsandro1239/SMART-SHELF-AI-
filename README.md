@@ -18,6 +18,7 @@ Esta é a fonte de verdade para manter o SMART SHELF AI focado. Deve ser revista
 ### Concluído — implementado
 
 - [x] Base técnica: FastAPI, SQLAlchemy, Pydantic, PostgreSQL, Alembic, Docker Compose e CI GitHub Actions.
+- [x] Atualização das GitHub Actions para releases compatíveis com Node.js 24 (`checkout@v7`, `setup-python@v7`, `setup-node@v7`), removendo a dependência das versões antigas que originavam avisos de runtime obsoleto. API CI `43426152337` passou com 691 testes e PostgreSQL 16; Web CI `43426185383` passou com Node.js 22.
 - [x] Modelo de lojas, zonas, prateleiras, catálogo de produtos e associação SKU–prateleira.
 - [x] Inventário por snapshots históricos, origem e timestamp; cálculo de stock disponível após reservas.
 - [x] Observações de prateleira com estado, confiança, timestamp e proveniência.
