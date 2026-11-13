@@ -76,7 +76,7 @@ def test_upload_and_retrieve_shelf_image(tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "image_storage_path", str(tmp_path))
     Base.metadata.drop_all(bind=TEST_ENGINE)
     Base.metadata.create_all(bind=TEST_ENGINE)
-    image_bytes = b"\x89PNG\r\n\x1a\n" + b"test-image-payload"
+    image_bytes = _valid_image_bytes()
 
     with TestClient(app) as client:
         store = client.post("/api/v1/stores", json={"code": "IMG-01", "name": "Loja imagem"})
@@ -156,7 +156,7 @@ def test_supervisor_cannot_upload_image_to_another_store(tmp_path, monkeypatch):
         response = client.post(
             "/api/v1/shelf-images",
             data={"shelf_id": str(shelf.json()["id"])},
-            files={"image": ("capture.png", b"\x89PNG\r\n\x1a\nvalid-signature", "image/png")},
+            files={"image": ("capture.png", _valid_image_bytes(), "image/png")},
         )
         assert response.status_code == 403
 
@@ -167,7 +167,7 @@ def test_list_shelf_image_detections(tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "image_storage_path", str(tmp_path))
     Base.metadata.drop_all(bind=TEST_ENGINE)
     Base.metadata.create_all(bind=TEST_ENGINE)
-    image_bytes = b"\x89PNG\r\n\x1a\n" + b"test-image-payload"
+    image_bytes = _valid_image_bytes()
 
     with TestClient(app) as client:
         store = client.post("/api/v1/stores", json={"code": "DET-01", "name": "Loja deteções"})
@@ -224,7 +224,7 @@ def test_detection_query_respects_store_scope(tmp_path, monkeypatch):
         uploaded = client.post(
             "/api/v1/shelf-images",
             data={"shelf_id": str(shelf.json()["id"])},
-            files={"image": ("shelf.png", b"\x89PNG\r\n\x1a\nvalid-signature", "image/png")},
+            files={"image": ("shelf.png", _valid_image_bytes(), "image/png")},
         )
         assert uploaded.status_code == 201
         monkeypatch.setattr(
@@ -267,7 +267,7 @@ def test_vision_worker_persists_provider_detections(tmp_path, monkeypatch):
         uploaded = client.post(
             "/api/v1/shelf-images",
             data={"shelf_id": str(shelf.json()["id"])},
-            files={"image": ("worker.png", b"\x89PNG\r\n\x1a\nworker-test", "image/png")},
+            files={"image": ("worker.png", _valid_image_bytes(), "image/png")},
         )
         assert uploaded.status_code == 201
         image_id = uploaded.json()["id"]
@@ -308,7 +308,7 @@ def test_vision_worker_marks_provider_errors_as_failed(tmp_path, monkeypatch):
         uploaded = client.post(
             "/api/v1/shelf-images",
             data={"shelf_id": str(shelf.json()["id"])},
-            files={"image": ("worker.png", b"\x89PNG\r\n\x1a\nworker-test", "image/png")},
+            files={"image": ("worker.png", _valid_image_bytes(), "image/png")},
         )
         assert uploaded.status_code == 201
         image_id = uploaded.json()["id"]
@@ -344,7 +344,7 @@ def test_failed_image_analysis_can_be_retried_by_store_supervisor(tmp_path, monk
         uploaded = client.post(
             "/api/v1/shelf-images",
             data={"shelf_id": str(shelf.json()["id"])},
-            files={"image": ("retry.png", b"\x89PNG\r\n\x1a\nretry-test", "image/png")},
+            files={"image": ("retry.png", _valid_image_bytes(), "image/png")},
         )
         assert uploaded.status_code == 201
         image_id = uploaded.json()["id"]
