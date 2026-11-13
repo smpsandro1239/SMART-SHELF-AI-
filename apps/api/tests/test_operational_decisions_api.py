@@ -308,6 +308,11 @@ def test_operational_decision_task_requires_explicit_approval_and_revalidates_ev
         assert task["requested_quantity"] == 5
         assert task["status"] == "PENDING"
         assert "Aprovado manualmente" in task["notes"]
+        audit = client.get(f"/api/v1/tasks/{task['id']}/events")
+        assert audit.status_code == 200
+        assert len(audit.json()) == 1
+        assert audit.json()[0]["event_type"] == "APPROVED"
+        assert audit.json()[0]["actual_quantity"] == 5
 
         duplicate = client.post(
             "/api/v1/tasks/from-operational-decision?approved=true", json=payload,
