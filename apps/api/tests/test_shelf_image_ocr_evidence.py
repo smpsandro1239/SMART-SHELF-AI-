@@ -540,3 +540,25 @@ def test_shelf_image_content_rejects_paths_outside_store_and_symlinks(monkeypatc
     with TestClient(app) as client:
         symlink = client.get(f"/api/v1/shelf-images/{image_id}/content")
         assert symlink.status_code == 404
+
+
+
+def test_shelf_image_retention_metadata_defaults_to_active_and_is_exposed():
+    image_id, _ = create_image_with_detection()
+
+    db = TestingSession()
+    image = db.get(models.ShelfImage, image_id)
+    assert image.retention_status == "ACTIVE"
+    assert image.legal_hold is False
+    assert image.retention_requested_at is None
+    assert image.purge_not_before is None
+    assert image.purged_at is None
+    db.close()
+
+    with TestClient(app) as client:
+        response = client.get("/api/v1/shelf-images")
+    assert response.status_code == 200
+    record = next(item for item in response.json() if item["id"] == image_id)
+    assert record["retention_status"] == "ACTIVE"
+    assert record["legal_hold"] is False
+    assert record["retention_policy_version"] is None
