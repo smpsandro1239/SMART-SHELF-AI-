@@ -243,3 +243,16 @@ def test_task_from_measured_recommendation_uses_suggested_refill_quantity():
         })
         assert created.status_code == 201
         assert created.json()["requested_quantity"] == 8
+
+
+@pytest.mark.parametrize("invalid_quantity", [float("nan"), float("inf"), float("-inf")])
+def test_task_rejects_non_finite_requested_quantities(invalid_quantity):
+    with TestClient(app) as client:
+        store_id, shelf_id, product_id = create_task_context(client)
+        response = client.post("/api/v1/tasks", json={
+            "store_id": store_id,
+            "shelf_id": shelf_id,
+            "product_id": product_id,
+            "requested_quantity": invalid_quantity,
+        })
+        assert response.status_code == 422
