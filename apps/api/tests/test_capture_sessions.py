@@ -8,6 +8,8 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
+from io import BytesIO
+from PIL import Image
 
 from app.database import Base, get_db
 from app import models
@@ -16,6 +18,12 @@ from app import main as main_module
 
 ENGINE = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
 Session = sessionmaker(bind=ENGINE, autoflush=False, autocommit=False)
+
+
+def _valid_image_bytes(image_format="JPEG"):
+    buffer = BytesIO()
+    Image.new("RGB", (2, 2), color=(20, 80, 140)).save(buffer, format=image_format)
+    return buffer.getvalue()
 
 
 def override_get_db():
