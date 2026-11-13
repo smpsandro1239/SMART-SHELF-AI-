@@ -79,9 +79,17 @@ def test_task_lifecycle_pending_assignment_start_and_completion():
         assert started.status_code == 200
         assert started.json()["started_at"] is not None
 
-        completed = client.patch(f"/api/v1/tasks/{task_id}/status", json={"status": "COMPLETED"})
+        completed = client.patch(f"/api/v1/tasks/{task_id}/status", json={
+            "status": "COMPLETED", "actual_quantity": 8,
+        })
         assert completed.status_code == 200
         assert completed.json()["completed_at"] is not None
+        assert completed.json()["actual_quantity"] == 8
+
+        events = client.get(f"/api/v1/tasks/{task_id}/events")
+        assert events.status_code == 200
+        assert [event["to_status"] for event in events.json()] == ["ASSIGNED", "IN_PROGRESS", "COMPLETED"]
+        assert events.json()[-1]["actual_quantity"] == 8
 
 
 def test_task_rejects_invalid_transition_and_unlinked_product():
@@ -268,3 +276,59 @@ def test_task_rejects_non_finite_requested_quantities(invalid_quantity):
             or __import__("math").isfinite(error["input"])
             for error in errors
         )
+
+
+def test_task_completion_requires_actual_quantity_and_reason_for_partial_refill():
+    with TestClient(app) as client:
+        store_id, shelf_id, product_id = create_task_context(client)
+        created = client.post("/api/v1/tasks", json={
+            "store_id": store_id, "shelf_id": shelf_id, "product_id": product_id,
+            "requested_quantity": 8,
+        })
+        task_id = created.json()["id"]
+        client.patch(f"/api/v1/tasks/{task_id}/status", json={"status": "ASSIGNED", "assigned_to": "ana"})
+        client.patch(f"/api/v1/tasks/{task_id}/status", json={"status": "IN_PROGRESS"})
+
+        missing_quantity = client.patch(f"/api/v1/tasks/{task_id}/status", json={"status": "COMPLETED"})
+        assert missing_quantity.status_code == 422
+        assert missing_quantity.json()["detail"]["code"] == "ACTUAL_QUANTITY_REQUIRED"
+
+        missing_reason = client.patch(f"/api/v1/tasks/{task_id}/status", json={
+            "status": "COMPLETED", "actual_quantity": 5,
+        })
+        assert missing_reason.status_code == 422
+        assert missing_reason.json()["detail"]["code"] == "PARTIAL_COMPLETION_REASON_REQUIRED"
+
+        completed = client.patch(f"/api/v1/tasks/{task_id}/status", json={
+            "status": "COMPLETED", "actual_quantity": 5,
+            "exception_reason": "Stock insuficiente na retaguarda",
+        })
+        assert completed.status_code == 200
+        assert completed.json()["actual_quantity"] == 5
+        assert completed.json()["exception_reason"] == "Stock insuficiente na retaguarda"
+        events = client.get(f"/api/v1/tasks/{task_id}/events")
+        assert events.status_code == 200
+        assert events.json()[-1]["reason"] == "Stock insuficiente na retaguarda"
+
+
+def test_task_cancellation_requires_reason_and_is_audited():
+    with TestClient(app) as client:
+        store_id, shelf_id, product_id = create_task_context(client)
+        created = client.post("/api/v1/tasks", json={
+            "store_id": store_id, "shelf_id": shelf_id, "product_id": product_id,
+        })
+        task_id = created.json()["id"]
+
+        missing_reason = client.patch(f"/api/v1/tasks/{task_id}/status", json={"status": "CANCELLED"})
+        assert missing_reason.status_code == 422
+        assert missing_reason.json()["detail"]["code"] == "CANCELLATION_REASON_REQUIRED"
+
+        cancelled = client.patch(f"/api/v1/tasks/{task_id}/status", json={
+            "status": "CANCELLED", "exception_reason": "Produto descontinuado",
+        })
+        assert cancelled.status_code == 200
+        assert cancelled.json()["status"] == "CANCELLED"
+        events = client.get(f"/api/v1/tasks/{task_id}/events")
+        assert events.status_code == 200
+        assert events.json()[-1]["event_type"] == "STATUS_CHANGED"
+        assert events.json()[-1]["reason"] == "Produto descontinuado"
