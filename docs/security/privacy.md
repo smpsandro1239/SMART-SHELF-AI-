@@ -27,6 +27,7 @@ A utilização de videovigilância existente para uma finalidade adicional exige
 - Auditoria de operações sensíveis.
 - Atualizações e inventário de dispositivos.
 - Validação de payloads e limites de upload.
+- Resolver caminhos de imagens dentro da raiz de armazenamento e do diretório da loja; rejeitar referências fora desse âmbito e ficheiros simbólicos.
 - Backups testados e política de recuperação.
 - Dependências e licenças verificadas.
 
