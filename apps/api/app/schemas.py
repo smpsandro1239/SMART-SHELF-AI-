@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 ObservationStatus = Literal["NORMAL", "LOW_STOCK", "EMPTY", "MISPLACED", "DAMAGED", "UNKNOWN", "OCCLUDED"]
 ObservationSource = Literal["fixed_camera", "robot", "mobile", "simulation"]
@@ -369,6 +369,14 @@ class ShelfImageRead(BaseModel):
 
 class ShelfImageRetentionRequest(BaseModel):
     reason: str = Field(min_length=3, max_length=2000)
+
+    @field_validator("reason")
+    @classmethod
+    def normalize_reason(cls, value: str) -> str:
+        normalized = value.strip()
+        if len(normalized) < 3:
+            raise ValueError("A retention reason must contain at least 3 non-whitespace characters")
+        return normalized
 
 
 class ShelfImageRetentionEventRead(BaseModel):
