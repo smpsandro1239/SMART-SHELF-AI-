@@ -138,3 +138,7 @@ Esta cobertura complementa os testes de SUPERVISOR em OCR/retry e os testes de i
 ## Cobertura JWT — operações de escrita reservadas a SUPERVISOR/ADMIN
 
 O teste parametrizado `test_employee_cannot_use_supervisor_managed_write_endpoints` acrescenta 13 verificações HTTP com JWT real de EMPLOYEE para operações de importação/registo de vendas e tráfego, gestão de localizações/colocações/paletes, políticas e simulações de rotação e eventos de paletes. Todos os pedidos têm de receber HTTP 403 no middleware, antes de validação do payload ou execução do handler. A cobertura complementa os testes existentes para lotes horários, alertas, decisões operacionais, embeddings e criação ADMIN-only. Não substitui a validação de âmbito por loja efetuada nos handlers para SUPERVISOR.
+
+## Cobertura JWT — isolamento multi-loja nas operações de armazém
+
+O teste `test_supervisor_jwt_cannot_access_foreign_warehouse_resources` usa JWT real de SUPERVISOR da loja A e tenta consultar localizações, paletes e políticas de rotação da loja B, bem como criar uma localização, registar uma palete, criar uma política e simular rotação na loja B. Os sete pedidos têm de receber HTTP 403. Os pedidos de escrita usam payloads estruturalmente válidos para garantir que a rejeição decorre do âmbito da loja, antes de validações de entidades ou persistência. Esta cobertura valida os handlers de âmbito explícito para estes recursos; não certifica todos os endpoints de armazém nem substitui a auditoria por rota.

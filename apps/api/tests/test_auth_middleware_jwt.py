@@ -1185,3 +1185,82 @@ def test_employee_cannot_use_supervisor_managed_write_endpoints(
         f"EMPLOYEE must not invoke supervisor-managed endpoint {method} {path}; "
         f"received HTTP {response.status_code}: {response.text}"
     )
+
+def test_supervisor_jwt_cannot_access_foreign_warehouse_resources(auth_client):
+    client, ids, store_ids = auth_client
+    headers = bearer(ids["supervisor_a"], "SUPERVISOR")
+    foreign_store_id = store_ids["b"]
+
+    requests = {
+        "warehouse locations": client.get(
+            "/api/v1/warehouse/locations",
+            params={"store_id": foreign_store_id},
+            headers=headers,
+        ),
+        "registered pallets": client.get(
+            "/api/v1/warehouse/pallets",
+            params={"store_id": foreign_store_id},
+            headers=headers,
+        ),
+        "pallet rotation policies": client.get(
+            "/api/v1/warehouse/pallet-rotation/policies",
+            params={"store_id": foreign_store_id},
+            headers=headers,
+        ),
+        "warehouse location creation": client.post(
+            "/api/v1/warehouse/locations",
+            json={
+                "store_id": foreign_store_id,
+                "code": "FOREIGN-LOCATION",
+                "distance_to_picking_m": 12,
+                "max_volume_cm3": 100000,
+                "max_weight_kg": 100,
+            },
+            headers=headers,
+        ),
+        "pallet registration": client.post(
+            "/api/v1/warehouse/pallets",
+            json={
+                "store_id": foreign_store_id,
+                "product_id": ids["product"],
+                "packaging_level_id": 999999,
+                "pallet_code": "FOREIGN-PALLET",
+                "base_quantity": 10,
+                "status": "READY",
+                "location_type": "WAREHOUSE",
+            },
+            headers=headers,
+        ),
+        "pallet rotation policy creation": client.post(
+            "/api/v1/warehouse/pallet-rotation/policies",
+            json={
+                "store_id": foreign_store_id,
+                "product_id": ids["product"],
+                "threshold_ratio": 0.5,
+                "is_enabled": True,
+            },
+            headers=headers,
+        ),
+        "pallet rotation simulation": client.post(
+            "/api/v1/warehouse/pallet-rotation/simulate",
+            json={
+                "store_id": foreign_store_id,
+                "pallet_id": 999999,
+                "traffic_level": "UNKNOWN",
+                "backroom_capacity_available": True,
+                "conventional_replenishment_minutes": 10,
+                "pallet_swap_minutes": 8,
+                "transport_minutes": 2,
+                "pallet_rebuild_minutes": 5,
+                "labour_cost_per_hour": 12,
+                "forecast_consumption_until_low_traffic": 0,
+            },
+            headers=headers,
+        ),
+    }
+
+    for resource, response in requests.items():
+        assert response.status_code == 403, (
+            f"SUPERVISOR must not access foreign {resource}; "
+            f"received HTTP {response.status_code}: {response.text}"
+        )

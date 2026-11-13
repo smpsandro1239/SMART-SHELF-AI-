@@ -72,3 +72,7 @@ Foi acrescentado um teste HTTP com JWT real de EMPLOYEE da loja A para tentar le
 ## Cobertura adicional de operações de armazém e importação
 
 A matriz JWT cobre agora 13 caminhos de escrita reservados a SUPERVISOR/ADMIN que ainda não tinham uma verificação parametrizada explícita para EMPLOYEE: vendas diárias e CSV, vendas/tráfego horários e CSV, localizações, colocações, paletes, políticas e simulações de rotação e eventos de paletes. O teste verifica a rejeição 403 antes do handler. A validação por loja para SUPERVISOR continua a ser uma dimensão separada e não fica fechada por este teste.
+
+## Cobertura JWT — isolamento de armazém por loja
+
+Foi acrescentado um teste de integração HTTP com JWT real de SUPERVISOR da loja A. A cobertura tenta ler localizações, paletes e políticas de rotação da loja B e tenta criar localização, palete, política de rotação e simulação na loja B. Os sete pedidos devem ser rejeitados com HTTP 403 antes de qualquer leitura ou escrita do recurso estrangeiro. Os payloads de criação são válidos ao nível do esquema, evitando falsos positivos causados por erros de validação. A cobertura usa SQLite isolado no fixture JWT; a validação PostgreSQL de todos estes endpoints continua pendente.
