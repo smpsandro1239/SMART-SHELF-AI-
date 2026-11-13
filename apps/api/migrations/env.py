@@ -34,6 +34,20 @@ def run_migrations_online() -> None:
         poolclass=pool.NullPool,
     )
     with connectable.connect() as connection:
+        # Some historical revision identifiers exceed Alembic's default
+        # VARCHAR(32). Create a wider version table for fresh databases and
+        # widen existing PostgreSQL installations before Alembic writes to it.
+        connection.exec_driver_sql(
+            "CREATE TABLE IF NOT EXISTS alembic_version "
+            "(version_num VARCHAR(128) NOT NULL PRIMARY KEY)"
+        )
+        if connection.dialect.name == "postgresql":
+            connection.exec_driver_sql(
+                "ALTER TABLE alembic_version "
+                "ALTER COLUMN version_num TYPE VARCHAR(128)"
+            )
+        connection.commit()
+
         context.configure(connection=connection, target_metadata=target_metadata, compare_type=True)
         with context.begin_transaction():
             context.run_migrations()
