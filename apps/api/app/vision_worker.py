@@ -6,6 +6,7 @@ No provider is enabled by default; pending images remain untouched.
 import argparse
 import importlib
 import logging
+import os
 import time
 from pathlib import Path
 
@@ -139,12 +140,12 @@ def _resolve_worker_image_path(db: Session, image: models.ShelfImage) -> Path:
     root = Path(settings.image_storage_path)
     if not root.is_absolute():
         root = Path.cwd() / root
-    root = Path(__import__("os").path.abspath(root))
+    root = Path(os.path.abspath(root))
     store_root = root / str(store_id)
     candidate = Path(image.storage_path)
     if not candidate.is_absolute():
         candidate = Path.cwd() / candidate
-    candidate = Path(__import__("os").path.abspath(candidate))
+    candidate = Path(os.path.abspath(candidate))
 
     try:
         relative_path = candidate.relative_to(store_root)
