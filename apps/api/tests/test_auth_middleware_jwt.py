@@ -1,4 +1,5 @@
 import pytest
+from datetime import datetime, timedelta, timezone
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -841,3 +842,100 @@ def test_employee_jwt_cannot_start_ocr_or_submit_human_sku_reviews(auth_client):
 
     assert ocr_create.status_code == 403
     assert review.status_code == 403
+
+
+
+def test_observation_alert_jwt_roles_and_store_scope(auth_client):
+    client, ids, store_ids = auth_client
+
+    # Seed confirmed SKU-attributed evidence in both stores using the fixture DB.
+    with main_module.SessionLocal() as db:
+        now = datetime.now(timezone.utc)
+        for shelf_id in (ids["shelf_a_assigned"], ids["shelf_b"]):
+            db.add_all([
+                models.Observation(
+                    shelf_id=shelf_id,
+                    product_id=ids["product"],
+                    source="simulation",
+                    status="LOW_STOCK",
+                    confidence=0.95,
+                    observed_at=now - timedelta(seconds=seconds_ago),
+                )
+                for seconds_ago in (60, 40, 20)
+            ])
+        db.commit()
+
+    params_a = {
+        "product_id": ids["product"],
+        "minimum_confirmations": 3,
+        "minimum_interval_seconds": 10,
+        "minimum_confidence": 0.6,
+    }
+    params_b = dict(params_a)
+
+    own_alert = client.post(
+        f"/api/v1/shelves/{ids['shelf_a_assigned']}/observation-alerts/evaluate",
+        params=params_a,
+        headers=bearer(ids["supervisor_a"], "SUPERVISOR"),
+    )
+    assert own_alert.status_code == 200, own_alert.text
+    assert own_alert.json()["store_id"] == store_ids["a"]
+
+    foreign_evaluation = client.post(
+        f"/api/v1/shelves/{ids['shelf_b']}/observation-alerts/evaluate",
+        params=params_b,
+        headers=bearer(ids["supervisor_a"], "SUPERVISOR"),
+    )
+    assert foreign_evaluation.status_code == 403
+
+    foreign_alert = client.post(
+        f"/api/v1/shelves/{ids['shelf_b']}/observation-alerts/evaluate",
+        params=params_b,
+        headers=bearer(ids["admin"], "ADMIN"),
+    )
+    assert foreign_alert.status_code == 200, foreign_alert.text
+    assert foreign_alert.json()["store_id"] == store_ids["b"]
+
+    supervisor_list = client.get(
+        "/api/v1/observation-alerts",
+        headers=bearer(ids["supervisor_a"], "SUPERVISOR"),
+    )
+    admin_list = client.get(
+        "/api/v1/observation-alerts",
+        headers=bearer(ids["admin"], "ADMIN"),
+    )
+    assert supervisor_list.status_code == 200
+    assert [alert["store_id"] for alert in supervisor_list.json()] == [store_ids["a"]]
+    assert admin_list.status_code == 200
+    assert {alert["store_id"] for alert in admin_list.json()} == {
+        store_ids["a"], store_ids["b"]
+    }
+
+    alert_id = own_alert.json()["id"]
+    employee_headers = bearer(ids["employee_a"], "EMPLOYEE")
+    employee_list = client.get("/api/v1/observation-alerts", headers=employee_headers)
+    employee_evaluate = client.post(
+        f"/api/v1/shelves/{ids['shelf_a_assigned']}/observation-alerts/evaluate",
+        params=params_a,
+        headers=employee_headers,
+    )
+    employee_update = client.patch(
+        f"/api/v1/observation-alerts/{alert_id}",
+        json={"status": "ACKNOWLEDGED"},
+        headers=employee_headers,
+    )
+    employee_events = client.get(
+        f"/api/v1/observation-alerts/{alert_id}/events",
+        headers=employee_headers,
+    )
+    assert employee_list.status_code == 403
+    assert employee_evaluate.status_code == 403
+    assert employee_update.status_code == 403
+    assert employee_events.status_code == 403
+
+    peer_events = client.get(
+        f"/api/v1/observation-alerts/{alert_id}/events",
+        headers=bearer(ids["supervisor_a_peer"], "SUPERVISOR"),
+    )
+    assert peer_events.status_code == 200
+    assert [event["event_type"] for event in peer_events.json()] == ["CREATED"]
