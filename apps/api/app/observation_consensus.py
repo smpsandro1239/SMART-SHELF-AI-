@@ -55,7 +55,7 @@ def evaluate_observation_consensus(
     for name, value, minimum, maximum in (
         ("window_minutes", window_minutes, 1, 1440),
         ("minimum_confirmations", minimum_confirmations, 2, 100),
-        ("minimum_interval_seconds", minimum_interval_seconds, 0, 3600),
+        ("minimum_interval_seconds", minimum_interval_seconds, 1, 3600),
     ):
         if isinstance(value, bool) or not isinstance(value, int) or not minimum <= value <= maximum:
             raise ValueError(f"{name} must be an integer between {minimum} and {maximum}")
