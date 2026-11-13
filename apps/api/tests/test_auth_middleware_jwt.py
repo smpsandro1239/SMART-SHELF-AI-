@@ -157,6 +157,7 @@ def auth_client(monkeypatch):
         ids["shelf_a_assigned"] = shelf_a_assigned.id
         ids["shelf_b"] = shelf_b.id
         store_ids = {"a": store_a.id, "b": store_b.id}
+        ids["product"] = product.id
 
     def override_get_db():
         db = session_factory()
@@ -619,3 +620,104 @@ def test_employee_cannot_create_or_close_capture_sessions(auth_client):
 
     assert create.status_code == 403
     assert close.status_code == 403
+
+
+
+def test_supervisor_cannot_submit_mixed_store_hourly_sales_batch(auth_client):
+    client, ids, store_ids = auth_client
+    payload = {
+        "records": [
+            {
+                "store_id": store_ids["a"],
+                "product_id": ids["product"],
+                "business_date": "2026-11-13",
+                "hour_of_day": 9,
+                "quantity": 4,
+                "source": "POS",
+                "external_reference": "AUTH-SALES-A",
+            },
+            {
+                "store_id": store_ids["b"],
+                "product_id": ids["product"],
+                "business_date": "2026-11-13",
+                "hour_of_day": 10,
+                "quantity": 7,
+                "source": "POS",
+                "external_reference": "AUTH-SALES-B",
+            },
+        ]
+    }
+
+    response = client.post(
+        "/api/v1/sales/hourly/batch",
+        json=payload,
+        headers=bearer(ids["supervisor_a"], "SUPERVISOR"),
+    )
+
+    assert response.status_code == 422
+    assert "exactly one store" in response.text
+
+
+def test_supervisor_cannot_submit_mixed_store_hourly_traffic_batch(auth_client):
+    client, ids, store_ids = auth_client
+    payload = {
+        "records": [
+            {
+                "store_id": store_ids["a"],
+                "business_date": "2026-11-13",
+                "hour_of_day": 9,
+                "customer_count": 12,
+                "source": "POS",
+                "external_reference": "AUTH-TRAFFIC-A",
+            },
+            {
+                "store_id": store_ids["b"],
+                "business_date": "2026-11-13",
+                "hour_of_day": 10,
+                "customer_count": 18,
+                "source": "POS",
+                "external_reference": "AUTH-TRAFFIC-B",
+            },
+        ]
+    }
+
+    response = client.post(
+        "/api/v1/sales/traffic/hourly/batch",
+        json=payload,
+        headers=bearer(ids["supervisor_a"], "SUPERVISOR"),
+    )
+
+    assert response.status_code == 422
+    assert "exactly one store" in response.text
+
+
+def test_employee_cannot_import_hourly_sales_or_traffic_batches(auth_client):
+    client, ids, store_ids = auth_client
+    headers = bearer(ids["employee_a"], "EMPLOYEE")
+    sales_payload = {
+        "records": [{
+            "store_id": store_ids["a"],
+            "product_id": ids["product"],
+            "business_date": "2026-11-13",
+            "hour_of_day": 9,
+            "quantity": 4,
+            "source": "POS",
+            "external_reference": "EMPLOYEE-SALES",
+        }]
+    }
+    traffic_payload = {
+        "records": [{
+            "store_id": store_ids["a"],
+            "business_date": "2026-11-13",
+            "hour_of_day": 9,
+            "customer_count": 12,
+            "source": "POS",
+            "external_reference": "EMPLOYEE-TRAFFIC",
+        }]
+    }
+
+    sales = client.post("/api/v1/sales/hourly/batch", json=sales_payload, headers=headers)
+    traffic = client.post("/api/v1/sales/traffic/hourly/batch", json=traffic_payload, headers=headers)
+
+    assert sales.status_code == 403
+    assert traffic.status_code == 403
