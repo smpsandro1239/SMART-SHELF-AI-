@@ -78,11 +78,19 @@ type OperationalDecision = {
   warnings: string[];
   evidence: { type: string; status?: string; confidence?: number | null; available_quantity?: number; predicted_units?: number; fresh?: boolean; source?: string }[];
 };
+type ReplenishmentAssessment = {
+  status: string; suggested_quantity: number | null;
+  shelf_gap_quantity: number | null; remaining_gap_quantity: number | null;
+  requires_human_review: boolean; explanation: string;
+  observation_age_minutes?: number; inventory_freshness_required?: boolean;
+};
 type OperationalDecisionRow = {
   store_id: number; zone_name: string; shelf_id: number; shelf_code: string;
   product_id: number; product_sku: string; product_name: string;
   backroom_inventory?: { on_hand_quantity: number; reserved_quantity: number;
-    available_quantity: number; source: string; captured_at: string } | null;
+    available_quantity: number; source: string; captured_at: string;
+    age_minutes: number; is_fresh: boolean } | null;
+  replenishment_assessment?: ReplenishmentAssessment | null;
   decision: OperationalDecision;
 };
 type OperationalZoneSummary = {
@@ -523,7 +531,17 @@ export default function App() {
                     <span>Cobertura estimada: <strong>{item.decision.inventory_coverage_hours == null ? "—" : `${item.decision.inventory_coverage_hours.toFixed(1)} h`}</strong></span><span>Fontes: <strong>{item.decision.evidence.length}</strong></span>
                     {item.backroom_inventory && <span>Retaguarda disponível: <strong>{item.backroom_inventory.available_quantity}</strong></span>}
                   </div>
-                  {item.backroom_inventory && <p className="decision-method">Stock de retaguarda: {item.backroom_inventory.on_hand_quantity} em mão · {item.backroom_inventory.reserved_quantity} reservado · {item.backroom_inventory.available_quantity} disponível. Não representa a quantidade física na prateleira.</p>}
+                  {item.backroom_inventory && <p className="decision-method">Stock de retaguarda: {item.backroom_inventory.on_hand_quantity} em mão · {item.backroom_inventory.reserved_quantity} reservado · {item.backroom_inventory.available_quantity} disponível · {item.backroom_inventory.is_fresh ? "atualizado" : "desatualizado"} ({item.backroom_inventory.age_minutes} min). Não representa a quantidade física na prateleira.</p>}
+                  {item.replenishment_assessment && <div className="decision-assessment">
+                    <strong>Proposta de reposição: {item.replenishment_assessment.status}</strong>
+                    <p>{item.replenishment_assessment.explanation}</p>
+                    <div className="decision-meta">
+                      <span>Quantidade sugerida: <strong>{item.replenishment_assessment.suggested_quantity == null ? "Não calculada" : item.replenishment_assessment.suggested_quantity}</strong></span>
+                      <span>Diferença até ao alvo: <strong>{item.replenishment_assessment.shelf_gap_quantity == null ? "—" : item.replenishment_assessment.shelf_gap_quantity}</strong></span>
+                      <span>Por cobrir: <strong>{item.replenishment_assessment.remaining_gap_quantity == null ? "—" : item.replenishment_assessment.remaining_gap_quantity}</strong></span>
+                    </div>
+                    {item.replenishment_assessment.requires_human_review && <p className="decision-method">Requer validação humana antes de criar uma tarefa ou movimentar stock.</p>}
+                  </div>}
                   {item.decision.warnings.length > 0 && <ul className="decision-warnings">{item.decision.warnings.map((warning, index) => <li key={index}>{warning}</li>)}</ul>}
                 </article>)}
               </div>
