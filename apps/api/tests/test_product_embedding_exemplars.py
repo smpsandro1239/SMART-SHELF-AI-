@@ -310,13 +310,19 @@ def test_embedding_exemplars_are_scoped_to_source_image_store(monkeypatch):
                 store_id=own_store_id,
                 is_active=True,
             )
-            db.add(actor)
+            peer_reviewer = models.User(
+                email="embedding-peer-reviewer@example.test",
+                full_name="Revisor independente",
+                password_hash="test-only-not-used",
+                role="SUPERVISOR",
+                store_id=own_store_id,
+                is_active=True,
+            )
+            db.add_all([actor, peer_reviewer])
             db.commit()
             db.refresh(actor)
-            actor_id = actor.id
+            db.refresh(peer_reviewer)
 
-        with TestingSession() as db:
-            actor = db.get(models.User, actor_id)
             monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: actor)
 
             listed = client.get("/api/v1/product-embedding-exemplars")
@@ -329,11 +335,19 @@ def test_embedding_exemplars_are_scoped_to_source_image_store(monkeypatch):
             )
             assert foreign_review.status_code == 403
 
-            own_review = client.patch(
+            self_review = client.patch(
                 f"/api/v1/product-embedding-exemplars/{own_created.json()['id']}/review",
-                json={"review_status": "APPROVED", "review_notes": "Origem verificada"},
+                json={"review_status": "APPROVED", "review_notes": "Tentativa de autoaprovação"},
             )
-            assert own_review.status_code == 200
+            assert self_review.status_code == 403
+
+            monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: peer_reviewer)
+            peer_review = client.patch(
+                f"/api/v1/product-embedding-exemplars/{own_created.json()['id']}/review",
+                json={"review_status": "APPROVED", "review_notes": "Origem verificada por revisor independente"},
+            )
+            assert peer_review.status_code == 200
+            assert peer_review.json()["review_status"] == "APPROVED"
 
 def test_restricted_source_image_blocks_embedding_exemplar_access_and_matching(monkeypatch):
     from app.product_embedding_service import build_approved_product_registry
