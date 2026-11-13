@@ -82,6 +82,22 @@ O teste `test_supervisor_jwt_cannot_access_foreign_ocr_or_retry_restricted_image
 
 A criação de um exemplar e a sua aprovação são operações distintas. Um utilizador SUPERVISOR não pode rever o próprio exemplar (HTTP 403); um segundo SUPERVISOR da mesma loja pode rever, e ADMIN mantém capacidade de supervisão global. Esta regra evita que uma única identidade introduza e aprove a mesma referência usada pelo matching SKU.
 
+## Validação PostgreSQL — inventário e armazém
+
+O smoke test `apps/api/scripts/postgres_inventory_authorization_smoke.py` foi integrado no API CI e executado com PostgreSQL 16 no run [43476618313](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/43476618313). O job concluiu com sucesso os seguintes passos:
+
+- Migrações Alembic até `head`;
+- smoke test PostgreSQL do ciclo de vida/concorrência/reconciliação de tarefas;
+- smoke test PostgreSQL de concorrência e auditoria imutável dos alertas;
+- sete pedidos JWT cross-store para inventário/armazém, todos recusados com HTTP 403;
+- verificação de que as escritas recusadas não persistem snapshots, políticas de frescura ou colocações;
+- operações de criação de snapshot e política de frescura pelo SUPERVISOR na sua própria loja;
+- suite completa de testes API.
+
+O workflow Quality Gates [43476652815](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/43476652815) também terminou com sucesso, incluindo compilação Python, testes API e build de produção web.
+
+Esta validação fecha os sete cenários cobertos pelo smoke test, mas não fecha a auditoria multi-loja global: os restantes endpoints e caminhos indiretos continuam sujeitos a revisão específica.
+
 ## Limitações e próximos critérios de fecho
 
 - Expandir os testes JWT para cada método e rota administrativa, incluindo operações de retenção/legal hold, upload e leitura binária, OCR, embeddings e caminhos indiretos do worker. A cobertura de alertas foi ampliada para testar também PATCH e consulta de eventos em alerta estrangeiro (403), além de ACKNOWLEDGED e sequência de auditoria na própria loja; passou no API CI `43455507948` e Quality Gates `43455507915` (commit `8cb99a2`). A cobertura das três vias de criação de tarefas, reconciliação, dashboard, decisões operacionais, analytics, observações, sessões de captura, lotes de vendas/tráfego e fronteiras OCR/embeddings está incluída na suite anteriormente aprovada. A cobertura por endpoint continua incompleta e deve ser fechada de forma sistemática.
