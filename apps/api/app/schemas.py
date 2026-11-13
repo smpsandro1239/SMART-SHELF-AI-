@@ -374,7 +374,7 @@ class ShelfImageRetentionRequest(BaseModel):
 class ShelfImageRetentionEventRead(BaseModel):
     id: int
     shelf_image_id: int
-    event_type: Literal["RESTRICTED", "RESTORED"]
+    event_type: Literal["RESTRICTED", "RESTORED", "LEGAL_HOLD_APPLIED", "LEGAL_HOLD_RELEASED"]
     from_status: str
     to_status: str
     actor_user_id: int | None
