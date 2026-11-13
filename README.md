@@ -38,6 +38,7 @@ Esta é a fonte de verdade para manter o SMART SHELF AI focado. Deve ser revista
 - [x] Componentes experimentais de visão/SKU/OCR: provider ONNX CPU-first, embeddings, matching conservador, layout de prateleira, OCR opcional, associação e fusão de evidências, com testes e documentação.
 - [x] Políticas consultivas de refill, picking e rotação de paletes, sem movimentos automáticos de stock.
 - [x] Documentação de arquitetura, segurança, piloto, decisões técnicas e limitações.
+- [x] REA externa atualizada: comparação de projetos públicos de visão/retalho e plataformas comerciais Simbe, Focal Systems e Pensa; decisões e lacunas convertidas em tarefas do roadmap, sem copiar código ou assumir métricas comerciais como resultados próprios.
 
 ### Em falta — necessário antes de um piloto operacional
 
