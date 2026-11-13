@@ -713,3 +713,44 @@ def test_legal_hold_requires_admin_and_records_append_only_events(monkeypatch):
             ]
             assert all(event["from_status"] == "ACTIVE" and event["to_status"] == "ACTIVE"
                        for event in events.json())
+
+
+
+def test_cross_store_restricted_image_returns_forbidden_before_retention_state(monkeypatch):
+    own_image_id, _ = create_image_with_detection()
+    foreign_image_id, foreign_detection_id = create_image_with_detection()
+    with TestingSession() as db:
+        own_image = db.get(models.ShelfImage, own_image_id)
+        own_shelf = db.get(models.Shelf, own_image.shelf_id)
+        own_zone = db.get(models.Zone, own_shelf.zone_id)
+        actor = models.User(
+            email="retention-scope-supervisor@example.test",
+            full_name="Store Supervisor",
+            password_hash="test-only-not-used",
+            role="SUPERVISOR",
+            store_id=own_zone.store_id,
+            is_active=True,
+        )
+        foreign_image = db.get(models.ShelfImage, foreign_image_id)
+        foreign_image.retention_status = "RESTRICTED"
+        db.add(actor)
+        db.commit()
+        db.refresh(actor)
+        actor_id = actor.id
+
+    with TestingSession() as db:
+        actor = db.get(models.User, actor_id)
+        monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: actor)
+        with TestClient(app) as client:
+            paths = [
+                f"/api/v1/shelf-images/{foreign_image_id}/content",
+                f"/api/v1/shelf-images/{foreign_image_id}/detections",
+                f"/api/v1/shelf-images/{foreign_image_id}/ocr-runs",
+                f"/api/v1/shelf-images/{foreign_image_id}/ocr-evidence",
+                f"/api/v1/shelf-images/{foreign_image_id}/ocr-matches",
+                f"/api/v1/shelf-images/{foreign_image_id}/evidence-fusion",
+                f"/api/v1/shelf-image-detections/{foreign_detection_id}/reviews",
+            ]
+            for path in paths:
+                response = client.get(path)
+                assert response.status_code == 403, (path, response.status_code, response.text)
