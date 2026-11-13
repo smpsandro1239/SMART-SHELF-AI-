@@ -323,6 +323,10 @@ def test_embedding_exemplars_are_scoped_to_source_image_store(monkeypatch):
             db.refresh(actor)
             db.refresh(peer_reviewer)
 
+            created_exemplar = db.get(models.ProductEmbeddingExemplar, own_created.json()["id"])
+            created_exemplar.created_by_user_id = actor.id
+            db.commit()
+
             monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: actor)
 
             listed = client.get("/api/v1/product-embedding-exemplars")
