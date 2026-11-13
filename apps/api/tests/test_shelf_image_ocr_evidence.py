@@ -410,7 +410,7 @@ def test_shelf_image_upload_decodes_content_and_sanitizes_filename(monkeypatch, 
         uploaded = client.post(
             "/api/v1/shelf-images",
             data={"shelf_id": str(shelf_id)},
-            files={"image": ("..\\\\..\\\\outside.png", valid_png, "image/png")},
+            files={"image": ("..\\..\\outside.png", valid_png, "image/png")},
         )
         assert uploaded.status_code == 201
         record = uploaded.json()
@@ -430,7 +430,7 @@ def test_shelf_image_upload_decodes_content_and_sanitizes_filename(monkeypatch, 
         spoofed = client.post(
             "/api/v1/shelf-images",
             data={"shelf_id": str(shelf_id)},
-            files={"image": ("spoof.png", b"\\x89PNG\\r\\n\\x1a\\nnot-a-real-png", "image/png")},
+            files={"image": ("spoof.png", b"\x89PNG\r\n\x1a\nnot-a-real-png", "image/png")},
         )
         assert spoofed.status_code == 415
 
