@@ -4054,7 +4054,7 @@ def operational_decisions(
         if snapshot is not None:
             snapshot_at = aware(snapshot.captured_at)
             snapshot_age_minutes = max(0.0, (aware(now) - snapshot_at).total_seconds() / 60)
-            snapshot_is_fresh = snapshot_age_minutes <= 240
+            snapshot_is_fresh = snapshot_at <= aware(now) and snapshot_age_minutes <= 240
             backroom_inventory = {
                 "on_hand_quantity": float(snapshot.on_hand_quantity),
                 "reserved_quantity": float(snapshot.reserved_quantity),
@@ -4074,7 +4074,16 @@ def operational_decisions(
         if observation is not None and observation.status in ("LOW_STOCK", "EMPTY"):
             observation_at = aware(observation.observed_at)
             observation_age_minutes = max(0.0, (aware(now) - observation_at).total_seconds() / 60)
-            if observation.observed_quantity is not None:
+            if observation_at > aware(now):
+                replenishment_assessment = {
+                    "status": "FUTURE_OBSERVATION",
+                    "suggested_quantity": None,
+                    "shelf_gap_quantity": None,
+                    "remaining_gap_quantity": None,
+                    "requires_human_review": True,
+                    "explanation": "A observação tem uma data futura e não pode suportar uma proposta de reposição.",
+                }
+            elif observation.observed_quantity is not None:
                 try:
                     refill = suggest_shelf_refill(ShelfRefillInput(
                         shelf_quantity=float(observation.observed_quantity),
