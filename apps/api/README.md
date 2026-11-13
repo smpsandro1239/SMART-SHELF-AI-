@@ -540,7 +540,7 @@ Na criação a partir de uma recomendação:
 - A quantidade solicitada não pode exceder o stock disponível na retaguarda.
 - Se o inventário não estiver disponível ou não permitir validar a quantidade, a API não cria a tarefa.
 
-Estas verificações reduzem duplicações e sobre-alocação. A verificação de duplicados ao nível da aplicação não substitui uma restrição única transacional na base de dados; em cenários de concorrência simultânea, deve ser acrescentada uma migração com índice único parcial compatível com o motor de base de dados utilizado.
+Estas verificações reduzem duplicações e sobre-alocação. A proteção inclui um índice único parcial na base de dados, definido na migração `0020_active_task_unique_index`, e bloqueio da linha da loja em PostgreSQL. A API converte a violação concorrente do índice em HTTP 409 (`ACTIVE_TASK_EXISTS`). O workflow `API CI` aplica todas as migrações num PostgreSQL 16 efémero e executa `scripts/postgres_active_task_smoke.py`, que dispara duas criações simultâneas através da API, exige uma resposta 201 e outra 409 e confirma que uma tarefa terminal liberta a combinação.
 
 ### Portefólio de risco de rutura por loja
 
