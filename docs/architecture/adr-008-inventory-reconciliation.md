@@ -44,7 +44,7 @@ A tabela não substitui os snapshots. É o registo de transferência que explica
 - A reconciliação do stock de retaguarda não cria, por si só, uma contagem exata do stock de exposição. A quantidade na prateleira continua a exigir observação/contagem própria.
 - `WarehouseProductPlacement` representa localizações de armazém e não deve ser tratado automaticamente como saldo total de retaguarda.
 - Integrações ERP/WMS devem consumir o movimento com chave idempotente e devolver confirmação externa; não se deve escrever diretamente no ERP sem contrato e autorização.
-- A política de frescura é configurável por loja/fonte através de `POST /api/v1/inventory/freshness-policies` e consultável por `GET /api/v1/inventory/freshness-policies?store_id={id}`. Sem configuração explícita, mantém-se o fallback de 240 minutos. A janela deve ser validada com o processo real de inventário.
+- A política de frescura é configurável por loja/fonte através de `POST /api/v1/inventory/freshness-policies` e consultável por `GET /api/v1/inventory/freshness-policies?store_id={id}`. Sem configuração explícita, mantém-se o fallback de 240 minutos. A janela deve ser validada com o processo real de inventário. O smoke test PostgreSQL também cria e consulta uma política WMS (commit `2d8c376`); a execução deste novo cenário ainda aguarda CI.
 
 ## Critérios de aceitação
 
