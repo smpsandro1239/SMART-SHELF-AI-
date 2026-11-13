@@ -38,6 +38,10 @@ O ficheiro `apps/api/tests/test_training_candidates.py` inclui agora testes de i
 
 Os testes usam um ator de teste injetado no helper de resolução de utilizador. O middleware de autenticação é deliberadamente ignorado em `APP_ENV=test`; estes testes validam a autorização dentro dos handlers e não substituem testes HTTP com JWT real em ambiente de integração.
 
+## Separação de funções na aprovação de exemplares
+
+A revisão de embeddings passou a impedir a autoaprovação por SUPERVISOR. O criador recebe HTTP 403 ao tentar aprovar/rejeitar o próprio exemplar; um segundo SUPERVISOR da mesma loja pode rever e ADMIN mantém a capacidade de revisão. A regra é verificada por teste de regressão no handler. Esta salvaguarda reduz o risco de um único utilizador introduzir uma referência e torná-la elegível para matching sem revisão independente.
+
 ## Decisões e limitações
 
 - Não foi alterada a política do catálogo global.
