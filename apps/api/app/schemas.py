@@ -162,6 +162,21 @@ class InventorySnapshotRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class InventoryFreshnessPolicyUpsert(BaseModel):
+    store_id: int
+    source: InventorySource
+    max_age_minutes: int = Field(ge=1, le=10080)
+
+
+class InventoryFreshnessPolicyRead(BaseModel):
+    id: int
+    store_id: int
+    source: InventorySource
+    max_age_minutes: int
+    updated_at: datetime
+    model_config = ConfigDict(from_attributes=True)
+
+
 class InventoryReconciliationCreate(BaseModel):
     reason: str = Field(min_length=3, max_length=1000)
 
