@@ -35,6 +35,7 @@ Este documento regista a política de autorização aplicada pelo middleware HTT
 | EMPLOYEE: listagem/upload de imagens e conteúdo/deteções/evidência associada (GET/POST conforme rota) | — | — | Permitido |
 | EMPLOYEE: histórico de revisão da deteção (GET) | — | — | Permitido |
 | EMPLOYEE: atualização de estado de tarefa (PATCH `/status`) | — | — | Permitido, sujeito ao handler e atribuição |
+| Consulta de histórico de eventos de tarefa (GET `/api/v1/tasks/{id}/events`) | Permitido, sujeito ao âmbito | Permitido, sujeito ao âmbito da loja | Negado pelo middleware |
 
 **Importante:** a tabela representa as decisões do middleware, não garante por si só acesso ao recurso. ADMIN também pode ser limitado por validações de negócio; SUPERVISOR e EMPLOYEE têm de respeitar o `store_id` e as regras de atribuição implementadas nos handlers. O catálogo de produtos é global por decisão arquitetural; associações SKU–prateleira e dados derivados de imagens mantêm âmbito por loja.
 
@@ -48,14 +49,19 @@ O ficheiro `apps/api/tests/test_auth_middleware_jwt.py` cobre:
 - bloqueio de criação de loja para EMPLOYEE, mesmo com claim ADMIN;
 - acesso ADMIN à listagem de utilizadores;
 - rejeição de token válido associado a utilizador inativo;
-- listagem de lojas por SUPERVISOR limitada à loja atribuída na base de dados.
+- listagem de lojas por SUPERVISOR limitada à loja atribuída na base de dados;
+- listagem de tarefas de EMPLOYEE limitada às tarefas atribuídas ao próprio utilizador;
+- início de tarefa atribuída permitido, mas tentativa de iniciar tarefa sem atribuição ou atribuída a outro funcionário da mesma loja rejeitada (403);
+- cancelamento de tarefa por EMPLOYEE rejeitado (403);
+- histórico de eventos reservado a ADMIN/SUPERVISOR: EMPLOYEE recebe 403 mesmo para tarefa própria, e SUPERVISOR só consulta eventos da sua loja;
+- tentativa de consulta e cancelamento de tarefa de outra loja por SUPERVISOR rejeitada (403).
 
 Os testes usam tokens criados pelo próprio módulo de segurança e o middleware HTTP real. Não substituem ainda uma suite completa de testes por endpoint nem a execução integral contra PostgreSQL.
 
 ## Limitações e próximos critérios de fecho
 
 - Expandir os testes JWT para cada método e rota administrativa, incluindo operações de retenção/legal hold, upload e leitura binária, OCR, embeddings e caminhos indiretos do worker.
-- Validar atribuição de tarefas de EMPLOYEE com JWT real, incluindo tentativa de alterar tarefa não atribuída e tarefa de outra loja.
+- Manter cobertura JWT de atribuição e transições de tarefas; acrescentar ainda casos de conclusão parcial, alteração de quantidades e tentativas de atualização de tarefa atribuída a outro utilizador.
 - Executar a matriz contra PostgreSQL 16 no CI; SQLite serve apenas para testes HTTP rápidos.
 - Confirmar a política de acesso dos endpoints administrativos e a autorização no próprio worker antes de fechar a auditoria.
 - Manter a purga física desativada até existir política formal de retenção e validação operacional.
