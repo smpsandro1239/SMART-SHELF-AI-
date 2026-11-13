@@ -367,6 +367,22 @@ class ShelfImageRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class ShelfImageRetentionRequest(BaseModel):
+    reason: str = Field(min_length=3, max_length=2000)
+
+
+class ShelfImageRetentionEventRead(BaseModel):
+    id: int
+    shelf_image_id: int
+    event_type: Literal["RESTRICTED", "RESTORED"]
+    from_status: str
+    to_status: str
+    actor_user_id: int | None
+    reason: str
+    created_at: datetime
+    model_config = ConfigDict(from_attributes=True)
+
+
 class ShelfImageDetectionRead(BaseModel):
     id: int
     shelf_image_id: int
