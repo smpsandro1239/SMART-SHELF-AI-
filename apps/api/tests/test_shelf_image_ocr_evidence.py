@@ -474,3 +474,60 @@ def test_shelf_image_upload_rejects_payload_over_configured_limit(monkeypatch, t
         )
     assert response.status_code == 413
     assert not list(tmp_path.rglob("*"))
+
+
+def test_shelf_image_content_rejects_paths_outside_store_and_symlinks(monkeypatch, tmp_path):
+    db = TestingSession()
+    store = models.Store(code="IMAGE-PATH-GUARD", name="Loja path guard")
+    db.add(store)
+    db.flush()
+    zone = models.Zone(store_id=store.id, name="Zona path guard")
+    db.add(zone)
+    db.flush()
+    shelf = models.Shelf(zone_id=zone.id, code="PATH-01")
+    db.add(shelf)
+    db.flush()
+    image = models.ShelfImage(
+        shelf_id=shelf.id,
+        original_filename="private.jpg",
+        storage_path=str(tmp_path / "outside.jpg"),
+        mime_type="image/jpeg",
+        file_size_bytes=10,
+        sha256="b" * 64,
+        analysis_status="COMPLETED",
+    )
+    db.add(image)
+    db.commit()
+    image_id, store_id = image.id, store.id
+    db.close()
+
+    storage_root = tmp_path / "storage"
+    store_dir = storage_root / str(store_id)
+    store_dir.mkdir(parents=True)
+    outside_file = tmp_path / "outside.jpg"
+    outside_file.write_bytes(b"outside-data")
+    linked_file = store_dir / "linked.jpg"
+    try:
+        linked_file.symlink_to(outside_file)
+    except (OSError, NotImplementedError):
+        pytest.skip("Symlinks are not supported by this test environment")
+
+    monkeypatch.setattr(main_module.settings, "image_storage_path", str(storage_root))
+    supervisor = type("Supervisor", (), {"role": "SUPERVISOR", "store_id": store_id})()
+    monkeypatch.setattr(main_module, "_request_user", lambda db, request: supervisor)
+
+    db = TestingSession()
+    db.get(models.ShelfImage, image_id).storage_path = str(outside_file)
+    db.commit()
+    db.close()
+    with TestClient(app) as client:
+        traversal = client.get(f"/api/v1/shelf-images/{image_id}/content")
+        assert traversal.status_code == 404
+
+    db = TestingSession()
+    db.get(models.ShelfImage, image_id).storage_path = str(linked_file)
+    db.commit()
+    db.close()
+    with TestClient(app) as client:
+        symlink = client.get(f"/api/v1/shelf-images/{image_id}/content")
+        assert symlink.status_code == 404
