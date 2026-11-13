@@ -62,7 +62,13 @@ def auth_client(monkeypatch):
     previous_override = main_module.app.dependency_overrides.get(get_db)
     main_module.app.dependency_overrides[get_db] = override_get_db
     monkeypatch.setattr(main_module, "SessionLocal", session_factory)
-    monkeypatch.setattr(main_module.settings, "app_env", "production")
+    /* Use a module-local settings copy: mutating the shared Settings singleton
+       would switch APP_ENV for every other test using the global FastAPI app. */
+    monkeypatch.setattr(
+        main_module,
+        "settings",
+        main_module.settings.model_copy(update={"app_env": "production"}),
+    )
 
     with TestClient(main_module.app) as client:
         yield client, ids, store_ids
