@@ -83,9 +83,19 @@ type OperationalDecisionRow = {
   product_id: number; product_sku: string; product_name: string;
   decision: OperationalDecision;
 };
+type OperationalZoneSummary = {
+  store_id: number; zone_name: string; items_evaluated: number;
+  action_recommended: number; high_priority: number;
+  already_in_progress: number; insufficient_evidence: number; monitor: number;
+  lowest_coverage_hours: number | null;
+  urgent_items: { product_id: number; product_name: string; product_sku: string;
+    shelf_id: number; shelf_code: string; priority: string; reason: string;
+    inventory_coverage_hours: number | null }[];
+};
 type OperationalDecisionResponse = {
   generated_at: string; count: number; status_counts: Record<string, number>;
   priority_counts?: Record<string, number>;
+  zone_summaries?: OperationalZoneSummary[];
   forecast_policy: string; decisions: OperationalDecisionRow[];
 };
 type Summary = {
@@ -483,6 +493,22 @@ export default function App() {
                 <div><span>Já em execução</span><strong>{operationalDecisions.status_counts.ALREADY_IN_PROGRESS || 0}</strong></div>
               </div>
               <p className="decision-method">{operationalDecisions.forecast_policy}</p>
+              {(operationalDecisions.zone_summaries ?? []).length > 0 && <div className="decision-zone-grid">
+                {(operationalDecisions.zone_summaries ?? []).map(zone => <article className="decision-zone-card" key={`${zone.store_id}-${zone.zone_name}`}>
+                  <div className="decision-zone-heading"><strong>{zone.zone_name}</strong><span>{zone.items_evaluated} referências</span></div>
+                  <div className="decision-zone-metrics">
+                    <span><strong>{zone.high_priority}</strong> prioridade alta</span>
+                    <span><strong>{zone.action_recommended}</strong> ações</span>
+                    <span><strong>{zone.already_in_progress}</strong> em execução</span>
+                    <span><strong>{zone.insufficient_evidence}</strong> sem evidência</span>
+                  </div>
+                  {zone.lowest_coverage_hours != null && <p className="decision-method">Menor cobertura estimada: <strong>{zone.lowest_coverage_hours.toFixed(1)} h</strong></p>}
+                  {zone.urgent_items.map(item => <div className="decision-zone-item" key={`${item.shelf_id}-${item.product_id}`}>
+                    <span><strong>{item.product_name}</strong><small>{item.product_sku} · {item.shelf_code}</small></span>
+                    <b>{item.priority === "HIGH" ? "ALTA" : "NORMAL"}</b>
+                  </div>)}
+                </article>)}
+              </div>}
               <div className="decision-list">
                 {operationalDecisions.decisions.length === 0 && <div className="empty-state"><ShieldCheck size={24} /><strong>Sem produtos associados a prateleiras</strong><span>Quando existirem associações e evidência registada, o motor apresentará as decisões aqui.</span></div>}
                 {operationalDecisions.decisions.map(item => <article className="decision-row" key={`${item.shelf_id}-${item.product_id}`}>
