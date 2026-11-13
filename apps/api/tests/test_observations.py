@@ -385,7 +385,7 @@ def test_failed_image_analysis_can_be_retried_by_store_supervisor(tmp_path, monk
         assert forbidden.status_code == 403
 
 
-def test_shelf_observation_consensus_endpoint_requires_persistent_evidence():
+def test_shelf_observation_consensus_endpoint_uses_newest_observations():
     from datetime import datetime, timedelta, timezone
 
     Base.metadata.drop_all(bind=TEST_ENGINE)
@@ -395,15 +395,38 @@ def test_shelf_observation_consensus_endpoint_requires_persistent_evidence():
         zone = client.post("/api/v1/zones", json={"store_id": store.json()["id"], "name": "Bebidas"})
         shelf = client.post("/api/v1/shelves", json={"zone_id": zone.json()["id"], "code": "CONS-01"})
         now = datetime.now(timezone.utc)
-        for seconds_ago in (30, 15, 0):
-            created = client.post("/api/v1/observations", json={
-                "shelf_id": shelf.json()["id"], "source": "fixed_camera", "status": "LOW_STOCK",
-                "confidence": 0.91, "observed_at": (now - timedelta(seconds=seconds_ago)).isoformat(),
-            })
-            assert created.status_code == 201
+
+        # More than 500 old records must not hide the latest confirmations.
+        db = TestingSession()
+        try:
+            db.add_all([
+                models.Observation(
+                    shelf_id=shelf.json()["id"],
+                    source="fixed_camera",
+                    status="LOW_STOCK",
+                    confidence=0.95,
+                    observed_at=now - timedelta(days=2, seconds=index),
+                )
+                for index in range(500)
+            ])
+            db.add_all([
+                models.Observation(
+                    shelf_id=shelf.json()["id"],
+                    source="fixed_camera",
+                    status="LOW_STOCK",
+                    confidence=0.91,
+                    observed_at=now - timedelta(seconds=seconds_ago),
+                )
+                for seconds_ago in (30, 15, 0)
+            ])
+            db.commit()
+        finally:
+            db.close()
+
         response = client.get(f"/api/v1/shelves/{shelf.json()['id']}/observation-consensus")
         assert response.status_code == 200
         body = response.json()
+        assert body["evaluated_observations"] == 500
         assert body["consensus"]["status"] == "CONFIRMED"
         assert body["consensus"]["consensus_observation_status"] == "LOW_STOCK"
         assert body["consensus"]["confirmations"] == 3
@@ -412,7 +435,6 @@ def test_shelf_observation_consensus_endpoint_requires_persistent_evidence():
         assert body["consensus"]["automatic_stock_movement_allowed"] is False
         assert body["scope"] == "SHELF"
         assert body["sku_attribution_available"] is False
-
 
 def test_shelf_observation_consensus_endpoint_enforces_store_scope(monkeypatch):
     from types import SimpleNamespace

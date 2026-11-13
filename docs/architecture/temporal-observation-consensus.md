@@ -37,3 +37,6 @@ Os valores por omissão são parâmetros iniciais conservadores, não thresholds
 O endpoint autenticado `GET /api/v1/shelves/{shelf_id}/observation-consensus` expõe a avaliação de observações repetidas para uma prateleira e respeita o isolamento por loja. Aceita `window_minutes`, `minimum_confirmations`, `minimum_interval_seconds` e `minimum_confidence`. Observações sem confiança são tratadas como evidência não elegível.
 
 **Limite semântico:** o modelo `Observation` referencia apenas `shelf_id`, não um SKU. A API declara `scope: SHELF` e `sku_attribution_available: false`; não replica incorretamente uma observação por todos os produtos da prateleira. A persistência/idempotência de alertas, resolução humana, associação explícita a SKU, integração do worker e calibração com imagens reais continuam pendentes. O endpoint não cria tarefas nem movimenta inventário.
+
+
+A consulta limita o custo de leitura às 500 observações mais recentes por prateleira. A seleção é feita em ordem descendente e os registos são reordenados cronologicamente antes da avaliação; desta forma, o limite não pode ocultar evidência recente atrás de um histórico antigo. A regressão correspondente semeia mais de 500 observações antigas e confirma que as três confirmações recentes continuam a ser avaliadas.

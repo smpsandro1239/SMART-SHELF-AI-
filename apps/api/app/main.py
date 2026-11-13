@@ -436,10 +436,13 @@ def get_shelf_observation_consensus(
     observations = (
         db.query(models.Observation)
         .filter(models.Observation.shelf_id == shelf_id)
-        .order_by(models.Observation.observed_at.asc(), models.Observation.id.asc())
+        .order_by(models.Observation.observed_at.desc(), models.Observation.id.desc())
         .limit(500)
         .all()
     )
+    # The cap must retain the newest evidence; restore ascending order for
+    # deterministic temporal evaluation after selecting the recent window.
+    observations.reverse()
     try:
         result = evaluate_observation_consensus(
             [
