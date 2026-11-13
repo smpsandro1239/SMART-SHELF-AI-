@@ -192,6 +192,35 @@ Uma deteção de espaço vazio não prova, isoladamente, que o produto está em 
 
 **Avaliação:** referência para uma fase futura de robótica. O SMART SHELF AI deve primeiro criar tarefas e APIs de execução independentes do fabricante; só depois estudar adaptadores de robôs concretos.
 
+## 2.8 Plataformas comerciais de store intelligence
+
+Além dos repositórios públicos, foram consultadas páginas oficiais de fornecedores comerciais. Estas referências ajudam a validar o âmbito funcional de uma plataforma de loja, mas as métricas comerciais são declarações dos fornecedores e não resultados reproduzidos pelo SMART SHELF AI.
+
+### Simbe Robotics — Tally / Store Intelligence
+
+- Fonte oficial: https://www.simberobotics.com/store-intelligence/tally
+- Capacidades descritas: robô móvel de auditoria de prateleiras, visão computacional, sensores de profundidade, deteção de ruturas/baixa disponibilidade/deslocações, análise de etiquetas de preço, RFID opcional e listas de tarefas priorizadas para colaboradores.
+- Implicações: manter captura multimodal (câmara fixa, robô e telemóvel), identidade da localização, mapas de loja, sincronização Edge/Cloud, gestão de tarefas e telemetria do dispositivo.
+- Limites: a página comercial não revela todos os contratos de integração nem os modelos. Não assumir compatibilidade com o robô disponível na loja.
+
+### Focal Systems — Shelf Cameras / Action Tool
+
+- Fontes oficiais: https://focal.systems/shelf-cameras/ e https://focal.systems/inventory/
+- Capacidades descritas: câmaras fixas de monitorização contínua, identificação de OOS/low stock e problemas de planograma, top stock e retaguarda, localização do inventário, listas de picking/reabastecimento, ajustes de inventário confirmados e dashboards de impacto operacional.
+- Implicações: tratar retaguarda e top stock como localizações distintas; ligar deteção a tarefas, picking e reconciliação; medir tempo de rutura, tarefas concluídas, disponibilidade e precisão de inventário.
+- Limites: percentagens de precisão, reduções de stock e resultados apresentados são afirmações do fornecedor; não são metas validadas para o nosso contexto.
+
+### Pensa Systems — Vision AI for Retail
+
+- Fontes oficiais: https://pensasystems.com/ e https://pensasystems.com/wp-content/uploads/2025/01/pensa-sell-sheet-retailer-portfolio.pdf
+- Capacidades descritas: digitalização visual da disponibilidade e localização física do inventário, análise de execução na loja e informação para planeamento central.
+- Implicações: o dashboard deve servir a execução local e a gestão multi-loja, com métricas comparáveis por loja/secção/SKU e proveniência das observações.
+- Limites: os materiais públicos consultados são comerciais e não expõem detalhe técnico suficiente para reproduzir o sistema.
+
+### Síntese das referências comerciais
+
+As referências reforçam que o produto não deve parar na deteção visual. O ciclo de valor completo é: **capturar → localizar → identificar → cruzar com inventário/vendas → priorizar → executar → confirmar → medir**. Para o SMART SHELF AI, acrescentar explicitamente ao roadmap: (1) planograma e localização por célula/segmento; (2) consenso temporal e deduplicação de alertas; (3) stock em retaguarda/top stock e picking por localização; (4) métricas de disponibilidade e tempo de rutura; (5) gestão multi-loja e dashboards de impacto. Preço/promoção/etiquetas devem ser uma extensão opcional, não bloquear o MVP de reposição.
+
 ## 3. Plataformas de inventário e reposição
 
 ### 3.1 Odoo — Reordering Rules
