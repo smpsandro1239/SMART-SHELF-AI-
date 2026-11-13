@@ -979,3 +979,45 @@ def test_restricted_image_is_removed_from_review_queue_and_summary(monkeypatch):
         assert after_queue.status_code == 200
         assert after_queue.json() == []
 
+
+
+
+def test_supervisor_cannot_upload_image_to_foreign_store_shelf(monkeypatch, tmp_path):
+    from io import BytesIO
+    from types import SimpleNamespace
+    from PIL import Image
+
+    own_image_id, _ = create_image_with_detection()
+    foreign_image_id, _ = create_image_with_detection()
+
+    with TestingSession() as db:
+        own_image = db.get(models.ShelfImage, own_image_id)
+        own_shelf = db.get(models.Shelf, own_image.shelf_id)
+        own_zone = db.get(models.Zone, own_shelf.zone_id)
+        foreign_image = db.get(models.ShelfImage, foreign_image_id)
+        foreign_shelf_id = foreign_image.shelf_id
+        actor = SimpleNamespace(
+            id=777,
+            role="SUPERVISOR",
+            store_id=own_zone.store_id,
+        )
+
+    monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: actor)
+    monkeypatch.setattr(main_module.settings, "image_storage_path", str(tmp_path))
+
+    image_bytes = BytesIO()
+    Image.new("RGB", (8, 8), (20, 40, 60)).save(image_bytes, format="PNG")
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/v1/shelf-images",
+            data={"shelf_id": str(foreign_shelf_id)},
+            files={"image": ("foreign.png", image_bytes.getvalue(), "image/png")},
+        )
+
+    assert response.status_code == 403
+    assert not list(tmp_path.rglob("*"))
+    with TestingSession() as db:
+        assert db.query(models.ShelfImage).filter(
+            models.ShelfImage.shelf_id == foreign_shelf_id
+        ).count() == 1
