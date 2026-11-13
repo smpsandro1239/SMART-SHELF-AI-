@@ -28,7 +28,7 @@ Esta é a fonte de verdade para manter o SMART SHELF AI focado. Deve ser revista
 - [x] Aprovação humana de reposição com revalidação da evidência, limite de quantidade, verificação de stock e validação de atribuição.
 - [x] Ciclo de vida de tarefas na API: criação, atribuição, início, conclusão e cancelamento, com validação de transições e permissões.
 - [x] Registo de quantidade efetivamente reposta; conclusão parcial e cancelamento exigem motivo.
-- [x] Auditoria estruturada de aprovações e transições de estado, com ator, timestamp e consulta cronológica. **Ainda falta o evento universal CREATED.**
+- [x] Auditoria estruturada de criação (`CREATED`), aprovação (`APPROVED`) e transições (`STATUS_CHANGED`), com ator, estado inicial/final, timestamp, quantidade/motivo quando aplicável e consulta cronológica. Os três caminhos de criação de tarefas são abrangidos.
 - [x] Autenticação JWT, hash Argon2 e perfis ADMIN, SUPERVISOR e EMPLOYEE, com isolamento por loja nas áreas implementadas.
 - [x] Dashboard web inicial em React/TypeScript/Vite: autenticação, resumo, tarefas e captura/histórico de imagens; inclui consulta de decisões e planeamento conforme os módulos disponíveis.
 - [x] Ingestão de imagens com validação, armazenamento persistente, SHA-256 e controlo de acesso por loja.
@@ -42,7 +42,6 @@ Esta é a fonte de verdade para manter o SMART SHELF AI focado. Deve ser revista
 
 #### P0 — Integridade e fiabilidade operacional
 
-- [ ] Registar evento de auditoria `CREATED` em **todas** as rotas de criação de tarefas: manual, recomendação e decisão operacional.
 - [ ] Testar a cronologia completa criação → aprovação/atribuição → início → conclusão/cancelamento e garantir ausência de eventos duplicados.
 - [ ] Implementar reconciliação da quantidade efetivamente reposta com o inventário através de movimentos/ajustes imutáveis, com origem, ator, motivo e aprovação. Não alterar snapshots históricos.
 - [ ] Tornar atómica a proteção contra tarefas duplicadas criadas em simultâneo; validar com testes concorrentes em PostgreSQL.
@@ -97,14 +96,13 @@ Esta é a fonte de verdade para manter o SMART SHELF AI focado. Deve ser revista
 
 ### Próxima sequência de desenvolvimento
 
-1. **Auditoria universal de tarefas:** adicionar `CREATED` a todos os caminhos de criação e testar a cronologia completa.
-2. **Concorrência:** validar criação simultânea de tarefas duplicadas em PostgreSQL e tornar a proteção atómica.
-3. **Reconciliação de stock:** implementar movimentos imutáveis para quantidades efetivamente repostas, com aprovação e auditoria.
-4. **Qualidade dos dados:** explicitar frescura/completude e separar os diferentes estados de stock.
-5. **Previsão:** evoluir a baseline e criar avaliação retrospetiva antes de usar previsões em decisões reais.
-6. **Dashboard:** completar filtros, explicações, auditoria e reconciliação.
-7. **Visão real:** ativar apenas após dataset autorizado, modelo licenciado e avaliação mensurável.
-8. **Piloto:** modo sombra e piloto supervisionado antes de integrações físicas ou escala.
+1. **Concorrência:** validar criação simultânea de tarefas duplicadas em PostgreSQL e tornar a proteção atómica.
+2. **Reconciliação de stock:** implementar movimentos imutáveis para quantidades efetivamente repostas, com aprovação e auditoria.
+3. **Qualidade dos dados:** explicitar frescura/completude e separar os diferentes estados de stock.
+4. **Previsão:** evoluir a baseline e criar avaliação retrospetiva antes de usar previsões em decisões reais.
+5. **Dashboard:** completar filtros, explicações, auditoria e reconciliação.
+6. **Visão real:** ativar apenas após dataset autorizado, modelo licenciado e avaliação mensurável.
+7. **Piloto:** modo sombra e piloto supervisionado antes de integrações físicas ou escala.
 
 ### Regras de manutenção deste TODO
 
@@ -116,7 +114,7 @@ Esta é a fonte de verdade para manter o SMART SHELF AI focado. Deve ser revista
 - Registar bloqueios e dependências externas e nunca declarar piloto, integração, modelo real ou produção concluídos sem evidência operacional.
 
 **Última revisão do roadmap:** 2026-11-13.  
-**Base técnica revista:** `main` em `b80acfd7d1aac461f4bbeca110e1ec480cf1b040`.
+**Última etapa concluída:** auditoria universal de criação de tarefas (`CREATED`), commit técnico `2cb505bb527f74e23f2cb6e7dfd2dec9d5652d4f`.
 
 
 ## 1. O que é o SMART SHELF AI?
