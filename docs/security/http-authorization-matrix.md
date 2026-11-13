@@ -69,7 +69,7 @@ O ficheiro `apps/api/tests/test_auth_middleware_jwt.py` cobre:
 
 - validação JWT dos endpoints de importação em lote de vendas horárias e tráfego: SUPERVISOR recebe 422 quando tenta misturar lojas no mesmo lote, e EMPLOYEE recebe 403 para ambos os endpoints;
 
-Os testes usam tokens criados pelo próprio módulo de segurança e o middleware HTTP real. Não substituem ainda uma suite completa de testes por endpoint nem a execução integral contra PostgreSQL.
+Os testes usam tokens criados pelo próprio módulo de segurança e o middleware HTTP real. A suite completa passou no API CI `43453794076` e Quality Gates `43453794115`, no commit `23155bce`, com PostgreSQL 16, migrações Alembic e smoke tests operacionais. A auditoria global permanece aberta: a passagem da suite existente não demonstra cobertura exaustiva de todos os métodos/rotas nem substitui revisão independente dos caminhos administrativos e indiretos.
 
 ## Cobertura JWT adicional — OCR e revisão humana
 
@@ -81,9 +81,9 @@ A criação de um exemplar e a sua aprovação são operações distintas. Um ut
 
 ## Limitações e próximos critérios de fecho
 
-- Expandir os testes JWT para cada método e rota administrativa, incluindo operações de retenção/legal hold, upload e leitura binária, OCR, embeddings e caminhos indiretos do worker. A cobertura das três vias de criação de tarefas e da reconciliação de inventário foi acrescentada e passou no API CI `43411781067` e Quality Gates `43411781094`. Nesta ronda foram acrescentados testes de isolamento do dashboard, decisões operacionais e bloqueio de analytics de equipa para EMPLOYEE; aguardar validação CI.
+- Expandir os testes JWT para cada método e rota administrativa, incluindo operações de retenção/legal hold, upload e leitura binária, OCR, embeddings e caminhos indiretos do worker. A cobertura das três vias de criação de tarefas, reconciliação, dashboard, decisões operacionais, analytics, observações, sessões de captura, lotes de vendas/tráfego e fronteiras OCR/embeddings está incluída na suite que passou no API CI `43453794076` e Quality Gates `43453794115` (commit `23155bce`). A cobertura por endpoint continua incompleta e deve ser fechada de forma sistemática.
 - Manter cobertura JWT de atribuição e transições de tarefas; acrescentar ainda casos de conclusão parcial, alteração de quantidades e tentativas de atualização de tarefa atribuída a outro utilizador.
-- Executar a matriz contra PostgreSQL 16 no CI; SQLite serve apenas para testes HTTP rápidos.
+- Continuar a executar os testes de autorização HTTP e os smoke tests de integridade em CI com PostgreSQL 16; os testes JWT HTTP focados continuam a usar SQLite isolado, pelo que não devem ser descritos como cobertura PostgreSQL por endpoint.
 - Confirmar a política de acesso dos endpoints administrativos e a autorização no próprio worker antes de fechar a auditoria.
 - Manter a purga física desativada até existir política formal de retenção e validação operacional.
 
