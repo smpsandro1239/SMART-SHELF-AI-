@@ -149,8 +149,7 @@ async def require_api_authentication(request: Request, call_next):
         supervisor_or_admin = (
             path.startswith("/api/v1/observation-alerts")
             or (method == "POST" and path.endswith("/observation-alerts/evaluate"))
-
-            (method == "POST" and path == "/api/v1/tasks/from-operational-decision")
+            or (method == "POST" and path == "/api/v1/tasks/from-operational-decision")
             or (method == "POST" and (path in {"/api/v1/sales/daily", "/api/v1/sales/import-csv", "/api/v1/warehouse/locations", "/api/v1/warehouse/placements", "/api/v1/warehouse/pallets", "/api/v1/warehouse/pallet-rotation/policies", "/api/v1/warehouse/pallet-rotation/simulate", "/api/v1/sales/hourly", "/api/v1/sales/traffic/hourly", "/api/v1/sales/hourly/batch", "/api/v1/sales/traffic/hourly/batch", "/api/v1/sales/hourly/import-csv", "/api/v1/sales/traffic/hourly/import-csv"} or (path.startswith("/api/v1/warehouse/pallets/") and path.endswith("/events"))))
             or (method == "PATCH" and path.startswith("/api/v1/warehouse/pallet-rotation/policies/"))
             or path == "/api/v1/product-embedding-exemplars"
@@ -495,6 +494,7 @@ def evaluate_and_persist_observation_alert(
         "window_minutes": window_minutes,
     }
     now = models.utc_now()
+    created_new = False
     if alert is None:
         alert = models.ObservationAlert(
             store_id=consensus_response["store_id"],
@@ -530,19 +530,27 @@ def evaluate_and_persist_observation_alert(
             if alert is None:
                 raise
         else:
+            created_new = True
             _record_observation_alert_event(
                 db, alert, "CREATED", actor, to_status="OPEN", evidence=evidence,
             )
-    if alert.created_at != now:
+    if not created_new:
         previous = {
             "last_seen_at": alert.last_seen_at,
             "confirmation_count": alert.confirmation_count,
             "average_confidence": alert.average_confidence,
             "sources": list(alert.sources or []),
         }
+        incoming_first_seen = datetime.fromisoformat(consensus["first_seen_at"])
         incoming_last_seen = datetime.fromisoformat(consensus["last_seen_at"])
-        alert.first_seen_at = min(alert.first_seen_at, datetime.fromisoformat(consensus["first_seen_at"]))
-        alert.last_seen_at = max(alert.last_seen_at, incoming_last_seen)
+        stored_first_seen = alert.first_seen_at
+        stored_last_seen = alert.last_seen_at
+        if stored_first_seen.tzinfo is None:
+            stored_first_seen = stored_first_seen.replace(tzinfo=timezone.utc)
+        if stored_last_seen.tzinfo is None:
+            stored_last_seen = stored_last_seen.replace(tzinfo=timezone.utc)
+        alert.first_seen_at = min(stored_first_seen, incoming_first_seen)
+        alert.last_seen_at = max(stored_last_seen, incoming_last_seen)
         alert.confirmation_count = max(alert.confirmation_count, consensus["confirmations"])
         alert.average_confidence = consensus["average_confidence"]
         alert.sources = sorted(set(alert.sources or []).union(consensus["sources"]))
