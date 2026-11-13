@@ -39,14 +39,14 @@ Esta é a fonte de verdade para manter o SMART SHELF AI focado. Deve ser revista
 - [x] Políticas consultivas de refill, picking e rotação de paletes, sem movimentos automáticos de stock.
 - [x] Documentação de arquitetura, segurança, piloto, decisões técnicas e limitações.
 - [x] REA externa atualizada: comparação de projetos públicos de visão/retalho e plataformas comerciais Simbe, Focal Systems e Pensa; decisões e lacunas convertidas em tarefas do roadmap, sem copiar código ou assumir métricas comerciais como resultados próprios.
-- [x] ADR-008 — desenho da reconciliação auditável de reposição/inventário, com snapshots imutáveis, aprovação humana, idempotência e bloqueio perante evidência desatualizada; implementação continua pendente.
+- [x] ADR-008 — reconciliação auditável de reposição/inventário implementada na API, com snapshots imutáveis, aprovação humana, idempotência, bloqueio perante evidência desatualizada e política de frescura configurável por loja/fonte; a validação CI dos cenários de rollback e frescura continua pendente.
 
 ### Em falta — necessário antes de um piloto operacional
 
 #### P0 — Integridade e fiabilidade operacional
 
 - [ ] Confirmar no CI PostgreSQL 16 a cronologia completa criação → atribuição → início → conclusão/cancelamento e a concorrência de transições, garantindo ausência de eventos duplicados. Foram acrescentados testes de cancelamento, rollback da alteração de estado quando a auditoria falha e duas atribuições simultâneas (uma 200 e uma 409); aguarda execução CI.
-- [ ] Completar a reconciliação ADR-008: confirmar no CI PostgreSQL 16 o cenário de rollback integral em falhas entre snapshot, movimento e auditoria. A janela de frescura por loja/fonte foi implementada com fallback de 240 minutos e limites de 1–10080 minutos; os testes API e o smoke test PostgreSQL da política (commit `2d8c376`) ainda aguardam execução CI. A falha forçada de auditoria e asserções de rollback foram acrescentadas ao smoke test no commit `057268d`; a execução bem-sucedida ainda não foi confirmada.
+- [ ] Completar a reconciliação ADR-008: confirmar no CI PostgreSQL 16 o cenário de rollback integral em falhas entre snapshot, movimento e auditoria. A janela de frescura por loja/fonte foi implementada com fallback de 240 minutos e limites de 1–10080 minutos; os testes API cobrem configuração, rejeição por idade, limites, autorização, isolamento e atualização. O smoke test PostgreSQL cobre criação e consulta da política (commit `2d8c376`); estes cenários ainda aguardam execução CI. A falha forçada de auditoria e asserções de rollback foram acrescentadas ao smoke test no commit `057268d`; a execução bem-sucedida ainda não foi confirmada.
 - [x] Validar em PostgreSQL 16 a cadeia completa de migrações, o índice único parcial e duas criações manuais simultâneas através da API (uma resposta 201 e outra 409); confirmar que uma tarefa concluída liberta a combinação loja/prateleira/produto.
 - [x] Validar no CI PostgreSQL 16 o smoke test concorrente nos três caminhos de criação (manual, recomendação e decisão operacional aprovada), incluindo a sequência de auditoria esperada por tarefa vencedora (`CREATED`, e `APPROVED` quando aplicável).
 - [ ] Rever autorização e isolamento multi-loja em todos os endpoints, incluindo imagens, OCR, embeddings, catálogo, auditoria e operações administrativas.
@@ -111,7 +111,7 @@ Esta é a fonte de verdade para manter o SMART SHELF AI focado. Deve ser revista
 
 1. [x] **Concorrência PostgreSQL na criação:** smoke test dos caminhos manual, recomendação e decisão operacional aprovada validado no CI PostgreSQL 16, incluindo a sequência de auditoria esperada.
 2. **Auditoria do ciclo de vida:** validar no CI a cronologia, rollback e concorrência das transições; testes adicionados nos commits `4877386` e `9445c99`, ainda sem confirmação da execução CI.
-3. **Reconciliação de stock:** confirmar no CI o rollback integral e os novos testes da política de frescura; depois preparar o fluxo de confirmação na interface.
+3. **Reconciliação de stock:** confirmar no CI PostgreSQL 16 o rollback integral e os testes de frescura; depois preparar o fluxo de confirmação na interface.
 3. **Qualidade dos dados:** explicitar frescura/completude e separar os diferentes estados de stock.
 4. **Consenso temporal:** deduplicar alertas por SKU/localização e exigir persistência de evidência antes de criar ocorrências.
 5. **Previsão:** evoluir a baseline e criar avaliação retrospetiva antes de usar previsões em decisões reais.
