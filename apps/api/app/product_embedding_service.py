@@ -23,10 +23,18 @@ def build_approved_product_registry(
             models.User,
             models.ProductEmbeddingExemplar.reviewed_by_user_id == models.User.id,
         )
+        .outerjoin(
+            models.ShelfImage,
+            models.ProductEmbeddingExemplar.shelf_image_id == models.ShelfImage.id,
+        )
         .filter(
             models.ProductEmbeddingExemplar.review_status == "APPROVED",
             models.ProductEmbeddingExemplar.model_version == model_version,
             models.ProductEmbeddingExemplar.reviewed_at.is_not(None),
+            (
+                models.ProductEmbeddingExemplar.shelf_image_id.is_(None)
+                | (models.ShelfImage.retention_status == "ACTIVE")
+            ),
         )
         .order_by(models.ProductEmbeddingExemplar.product_id, models.ProductEmbeddingExemplar.id)
         .all()
