@@ -114,7 +114,7 @@ Esta é a fonte de verdade para manter o SMART SHELF AI focado. Deve ser revista
 - Registar bloqueios e dependências externas e nunca declarar piloto, integração, modelo real ou produção concluídos sem evidência operacional.
 
 **Última revisão do roadmap:** 2026-11-13.  
-**Última etapa concluída:** auditoria universal de criação de tarefas (`CREATED`), commit técnico `2cb505bb527f74e23f2cb6e7dfd2dec9d5652d4f`.
+**Última etapa concluída:** auditoria universal de criação de tarefas (`CREATED`), commit técnico `5304ac54f448e119e69f25a151ff3e4213c2af84`.
 
 
 ## 1. O que é o SMART SHELF AI?
@@ -191,7 +191,7 @@ A API já suporta criação de tarefas, atribuição, início, conclusão e canc
 | Associação de utilizadores e tarefas a lojas | Implementado no modelo/API |
 | Resumo operacional para dashboard | Endpoint inicial implementado |
 | Dashboard web inicial | Implementado; gestão operacional completa ainda em falta |\n| PWA móvel | Planeado |
-| Inferência de visão computacional | Planeado |
+| Pipeline de visão e provider ONNX | Implementação experimental; sem pesos/modelo de produção validado |
 | Integrações POS / ERP / WMS / robô | Dependentes de acesso e validação |
 
 ## 5.2 Picking consultivo da retaguarda
@@ -632,7 +632,7 @@ O worker aceita embeddings opcionais por deteção e compara-os apenas com exemp
 
 ![Integridade das sessões de captura](docs/images/capture-session-integrity.svg)
 
-Foi especificada a próxima evolução da curadoria de dados: agrupar imagens por sessão de captura (câmara fixa, robô ou telemóvel), com loja, prateleira, dispositivo pseudónimo e janela temporal. O objetivo é impedir que frames da mesma sessão contaminem simultaneamente treino, validação e teste. Esta fase está documentada; a migração e os endpoints ainda não estão implementados.
+Foi especificada a próxima evolução da curadoria de dados: agrupar imagens por sessão de captura (câmara fixa, robô ou telemóvel), com loja, prateleira, dispositivo pseudónimo e janela temporal. O objetivo é impedir que frames da mesma sessão contaminem simultaneamente treino, validação e teste. A captura por sessões está implementada no modelo/API, com migração `0016_capture_sessions`, endpoints de abertura/fecho e testes. As imagens associadas à mesma sessão são mantidas como grupo indivisível na preparação de futuros splits; a validação de dados reais e a operação com câmaras/robôs continuam dependentes de equipamentos e autorizações.
 
 ## 17. Revisão de projetos externos de visão computacional
 
