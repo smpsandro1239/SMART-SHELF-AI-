@@ -689,7 +689,12 @@ def list_shelf_image_retention_events(image_id: int, request: Request, db: Sessi
     item = db.get(models.ShelfImage, image_id)
     if item is None:
         raise HTTPException(status_code=404, detail="Shelf image not found")
-    _enforce_store_scope(_request_user(db, request), _shelf_image_store_id(db, image_id))
+    actor = _request_user(db, request)
+    if actor is None and settings.app_env != "test":
+        raise HTTPException(status_code=401, detail="Authenticated user required")
+    if actor is not None and actor.role not in {"ADMIN", "SUPERVISOR"}:
+        raise HTTPException(status_code=403, detail="Supervisor role required")
+    _enforce_store_scope(actor, _shelf_image_store_id(db, image_id))
     return (
         db.query(models.ShelfImageRetentionEvent)
         .filter(models.ShelfImageRetentionEvent.shelf_image_id == image_id)
