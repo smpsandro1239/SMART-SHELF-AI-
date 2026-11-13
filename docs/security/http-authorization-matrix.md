@@ -60,8 +60,12 @@ O ficheiro `apps/api/tests/test_auth_middleware_jwt.py` cobre:
 - EMPLOYEE não reconcilia inventário, mesmo para tarefa da própria loja (403);
 - SUPERVISOR não reconcilia tarefas de outra loja (403);
 - resumo do dashboard limitado à loja do SUPERVISOR, com rejeição explícita de `store_id` estrangeiro (403);
+- observações filtradas pela loja do SUPERVISOR; filtro de prateleira estrangeira não revela registos e criação de observação noutra loja recebe 403;
+- sessões de captura listadas apenas para a loja do SUPERVISOR; criação/fecho de sessões estrangeiras recebe 403;
+- EMPLOYEE não cria nem fecha sessões de captura (403);
 - decisões operacionais limitadas à loja do SUPERVISOR, incluindo a rejeição de filtro estrangeiro (403);
-- EMPLOYEE não acede às decisões operacionais nem aos indicadores de carga da equipa (403).
+- EMPLOYEE não acede às decisões operacionais nem aos indicadores de carga da equipa (403);
+- observações e sessões de captura: isolamento multi-loja e restrições de criação/fecho, cobertos pelos testes adicionados nesta ronda.
 
 Os testes usam tokens criados pelo próprio módulo de segurança e o middleware HTTP real. Não substituem ainda uma suite completa de testes por endpoint nem a execução integral contra PostgreSQL.
 
