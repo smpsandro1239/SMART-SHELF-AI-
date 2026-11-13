@@ -7,6 +7,8 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
+from io import BytesIO
+from PIL import Image
 
 from app.database import Base, get_db
 from app import models  # noqa: F401
@@ -19,6 +21,12 @@ TEST_ENGINE = create_engine(
 )
 TestingSession = sessionmaker(bind=TEST_ENGINE, autoflush=False, autocommit=False)
 Base.metadata.create_all(bind=TEST_ENGINE)
+
+
+def _valid_image_bytes(image_format="PNG"):
+    buffer = BytesIO()
+    Image.new("RGB", (2, 2), color=(20, 80, 140)).save(buffer, format=image_format)
+    return buffer.getvalue()
 
 
 def override_get_db():
