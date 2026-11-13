@@ -86,9 +86,91 @@ def main() -> None:
 
         replacement = client.post("/api/v1/tasks", json=payload)
         assert replacement.status_code == 201, replacement.text
+
+        # Exercise the validated-recommendation creation path against the same
+        # PostgreSQL unique index, using a distinct SKU on the existing shelf.
+        recommended_product = client.post(
+            "/api/v1/products",
+            json={"sku": f"CI-REC-{suffix}", "name": "CI recommendation product"},
+        )
+        assert recommended_product.status_code == 201, recommended_product.text
+        recommended_product_id = recommended_product.json()["id"]
+        recommended_assignment = client.post(
+            "/api/v1/shelf-products",
+            json={
+                "shelf_id": shelf_id,
+                "product_id": recommended_product_id,
+                "target_quantity": 10,
+                "min_display_quantity": 2,
+            },
+        )
+        assert recommended_assignment.status_code == 201, recommended_assignment.text
+        observation = client.post(
+            "/api/v1/observations",
+            json={
+                "shelf_id": shelf_id,
+                "source": "simulation",
+                "status": "LOW_STOCK",
+                "confidence": 0.99,
+                "observed_quantity": 1,
+            },
+        )
+        assert observation.status_code == 201, observation.text
+        inventory = client.post(
+            "/api/v1/inventory/snapshots",
+            json={
+                "store_id": store_id,
+                "product_id": recommended_product_id,
+                "on_hand_quantity": 20,
+                "reserved_quantity": 0,
+                "source": "WMS",
+            },
+        )
+        assert inventory.status_code == 201, inventory.text
+
+        recommendation_payload = {
+            "store_id": store_id,
+            "shelf_id": shelf_id,
+            "product_id": recommended_product_id,
+            "requested_quantity": 2,
+        }
+        recommendation_barrier = Barrier(2)
+
+        def create_from_recommendation():
+            recommendation_barrier.wait(timeout=10)
+            return client.post(
+                "/api/v1/tasks/from-recommendation",
+                json=recommendation_payload,
+            )
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            recommendation_responses = list(
+                executor.map(lambda _: create_from_recommendation(), range(2))
+            )
+
+        recommendation_created = [
+            response for response in recommendation_responses
+            if response.status_code == 201
+        ]
+        recommendation_conflicts = [
+            response for response in recommendation_responses
+            if response.status_code == 409
+        ]
+        assert len(recommendation_created) == 1, [
+            response.text for response in recommendation_responses
+        ]
+        assert len(recommendation_conflicts) == 1, [
+            response.text for response in recommendation_responses
+        ]
+        assert (
+            recommendation_conflicts[0].json()["detail"]["code"]
+            == "ACTIVE_TASK_EXISTS"
+        )
+
         print(
             "PostgreSQL concurrent task creation: PASS "
-            "(one 201, one 409; terminal task releases the unique slot)"
+            "(manual and recommendation paths each return one 201 and one 409; "
+            "terminal task releases the unique slot)"
         )
 
 
