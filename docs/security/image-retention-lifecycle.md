@@ -2,7 +2,7 @@
 
 ## Estado
 
-Implementação parcial. A migração `0023_shelf_image_retention_metadata` introduz metadados de ciclo de vida (`ACTIVE`, `RESTRICTED`, `PENDING_PURGE`, `PURGED`), pedido, responsável, motivo, retenção legal e datas de purga. O estado inicial é `ACTIVE`. **Ainda não existem endpoints de pedido, bloqueio transversal de acesso, worker de purga nem política de retenção ativa.** Os campos são metadados e, nesta fase, não alteram o comportamento operacional.
+Implementação parcial. As migrações `0023_shelf_image_retention_metadata` e `0024_shelf_image_retention_events` introduzem metadados e auditoria append-only. Existem endpoints de restrição/restauro, consulta de eventos e bloqueio de acesso/worker para imagens não ativas. O estado inicial é `ACTIVE`. **Ainda não existem pedidos de purga agendada, worker de purga física, política de retenção aprovada nem gestão operacional de legal hold.**
 
 ## Objetivos e invariantes
 
@@ -72,8 +72,9 @@ A transição deve ser explícita, auditada, idempotente e autorizada. A purga n
 
 ## Sequência de implementação
 
-1. [x] Adicionar estado e timestamps de retenção com migração Alembic, sem alterar as FKs históricas (`0023_shelf_image_retention_metadata`).
-2. Introduzir serviço único de autorização/estado e aplicá-lo a todos os endpoints de imagem; até estar concluído, os novos campos não devem ser tratados como bloqueio efetivo.
+1. [x] Adicionar estados, timestamps e metadados de retenção (`0023_shelf_image_retention_metadata`).
+2. [x] Implementar restrição/restauro, eventos append-only, bloqueio dos endpoints de imagem e exclusão do worker (`0024_shelf_image_retention_events` e commits associados).
+3. Rever cobertura dos endpoints de imagem e garantir que filas, métricas agregadas e operações indiretas não expõem dados restritos.
 3. Adicionar pedido de restrição/eliminação lógica com auditoria e isolamento multi-loja.
 4. Adicionar worker de purga com política configurável, proteção de caminhos e tratamento de falhas.
 5. Definir tratamento de evidência derivada e anonimização/minimização dos metadados após validação jurídica.
