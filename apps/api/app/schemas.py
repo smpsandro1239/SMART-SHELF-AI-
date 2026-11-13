@@ -236,7 +236,7 @@ class ReplenishmentTaskRead(BaseModel):
 class ReplenishmentTaskEventRead(BaseModel):
     id: int
     task_id: int
-    event_type: Literal["APPROVED", "STATUS_CHANGED"]
+    event_type: Literal["CREATED", "APPROVED", "STATUS_CHANGED"]
     from_status: TaskStatus | None
     to_status: TaskStatus | None
     actor_user_id: int | None
