@@ -81,6 +81,8 @@ type OperationalDecision = {
 type OperationalDecisionRow = {
   store_id: number; zone_name: string; shelf_id: number; shelf_code: string;
   product_id: number; product_sku: string; product_name: string;
+  backroom_inventory?: { on_hand_quantity: number; reserved_quantity: number;
+    available_quantity: number; source: string; captured_at: string } | null;
   decision: OperationalDecision;
 };
 type OperationalZoneSummary = {
@@ -519,7 +521,9 @@ export default function App() {
                     <span>Prioridade: <strong>{item.decision.priority}</strong></span>
                     <span>Quantidade sugerida: <strong>{item.decision.suggested_replenishment_quantity == null ? "Não calculada" : item.decision.suggested_replenishment_quantity}</strong></span>
                     <span>Cobertura estimada: <strong>{item.decision.inventory_coverage_hours == null ? "—" : `${item.decision.inventory_coverage_hours.toFixed(1)} h`}</strong></span><span>Fontes: <strong>{item.decision.evidence.length}</strong></span>
+                    {item.backroom_inventory && <span>Retaguarda disponível: <strong>{item.backroom_inventory.available_quantity}</strong></span>}
                   </div>
+                  {item.backroom_inventory && <p className="decision-method">Stock de retaguarda: {item.backroom_inventory.on_hand_quantity} em mão · {item.backroom_inventory.reserved_quantity} reservado · {item.backroom_inventory.available_quantity} disponível. Não representa a quantidade física na prateleira.</p>}
                   {item.decision.warnings.length > 0 && <ul className="decision-warnings">{item.decision.warnings.map((warning, index) => <li key={index}>{warning}</li>)}</ul>}
                 </article>)}
               </div>
