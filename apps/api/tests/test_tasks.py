@@ -482,7 +482,9 @@ def _freshness_reconciliation_context(client, snapshot_age_minutes: int):
         "status": "IN_PROGRESS",
     }).status_code == 200
     completed = client.patch(f"/api/v1/tasks/{task_id}/status", json={
-        "status": "COMPLETED", "actual_quantity": 4,
+        "status": "COMPLETED",
+        "actual_quantity": 4,
+        "exception_reason": "Quantidade parcial para testar a política de frescura.",
     })
     assert completed.status_code == 200, completed.text
 
