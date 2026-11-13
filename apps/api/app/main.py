@@ -619,6 +619,67 @@ def restore_shelf_image(image_id: int, payload: ShelfImageRetentionRequest, requ
     return item
 
 
+@app.post(
+    "/api/v1/shelf-images/{image_id}/retention/legal-hold/apply",
+    response_model=ShelfImageRead,
+    tags=["computer-vision"],
+)
+def apply_shelf_image_legal_hold(
+    image_id: int, payload: ShelfImageRetentionRequest, request: Request, db: Session = Depends(get_db)
+):
+    """Apply a legal hold without changing operational visibility or deleting evidence."""
+    actor = _request_user(db, request)
+    if actor is None or actor.role != "ADMIN":
+        raise HTTPException(status_code=403, detail="Administrator role required to apply a legal hold")
+    item = db.query(models.ShelfImage).filter(models.ShelfImage.id == image_id).with_for_update().first()
+    if item is None:
+        raise HTTPException(status_code=404, detail="Shelf image not found")
+    _enforce_store_scope(actor, _shelf_image_store_id(db, image_id))
+    if item.retention_status == "PURGED":
+        raise HTTPException(status_code=409, detail="A purged image cannot be placed under legal hold")
+    if not item.legal_hold:
+        reason = payload.reason.strip()
+        item.legal_hold = True
+        db.add(models.ShelfImageRetentionEvent(
+            shelf_image_id=item.id, event_type="LEGAL_HOLD_APPLIED",
+            from_status=item.retention_status, to_status=item.retention_status,
+            actor_user_id=actor.id, reason=reason,
+        ))
+        db.commit()
+        db.refresh(item)
+    return item
+
+
+@app.post(
+    "/api/v1/shelf-images/{image_id}/retention/legal-hold/release",
+    response_model=ShelfImageRead,
+    tags=["computer-vision"],
+)
+def release_shelf_image_legal_hold(
+    image_id: int, payload: ShelfImageRetentionRequest, request: Request, db: Session = Depends(get_db)
+):
+    """Release a legal hold only through an audited administrator decision."""
+    actor = _request_user(db, request)
+    if actor is None or actor.role != "ADMIN":
+        raise HTTPException(status_code=403, detail="Administrator role required to release a legal hold")
+    item = db.query(models.ShelfImage).filter(models.ShelfImage.id == image_id).with_for_update().first()
+    if item is None:
+        raise HTTPException(status_code=404, detail="Shelf image not found")
+    _enforce_store_scope(actor, _shelf_image_store_id(db, image_id))
+    if not item.legal_hold:
+        return item
+    reason = payload.reason.strip()
+    item.legal_hold = False
+    db.add(models.ShelfImageRetentionEvent(
+        shelf_image_id=item.id, event_type="LEGAL_HOLD_RELEASED",
+        from_status=item.retention_status, to_status=item.retention_status,
+        actor_user_id=actor.id, reason=reason,
+    ))
+    db.commit()
+    db.refresh(item)
+    return item
+
+
 @app.get(
     "/api/v1/shelf-images/{image_id}/retention/events",
     response_model=list[ShelfImageRetentionEventRead],
