@@ -334,3 +334,114 @@ def test_embedding_exemplars_are_scoped_to_source_image_store(monkeypatch):
                 json={"review_status": "APPROVED", "review_notes": "Origem verificada"},
             )
             assert own_review.status_code == 200
+
+def test_restricted_source_image_blocks_embedding_exemplar_access_and_matching(monkeypatch):
+    from app.product_embedding_service import build_approved_product_registry
+
+    with TestClient(app) as client:
+        product_id = create_product(client)
+        store = client.post(
+            "/api/v1/stores",
+            json={"code": "EMB-RETENTION", "name": "Loja embeddings retenção"},
+        ).json()
+        zone = client.post(
+            "/api/v1/zones",
+            json={"store_id": store["id"], "name": "Zona"},
+        ).json()
+        shelf = client.post(
+            "/api/v1/shelves",
+            json={"zone_id": zone["id"], "code": "S-RET"},
+        ).json()
+
+        with TestingSession() as db:
+            image = models.ShelfImage(
+                shelf_id=shelf["id"],
+                original_filename="retention-source.jpg",
+                storage_path=f"/tmp/retention-source-{store['id']}.jpg",
+                mime_type="image/jpeg",
+                file_size_bytes=10,
+                sha256="9" * 64,
+            )
+            supervisor = models.User(
+                email="embedding-retention-supervisor@example.test",
+                full_name="Supervisor",
+                password_hash="test-only-not-used",
+                role="SUPERVISOR",
+                store_id=store["id"],
+                is_active=True,
+            )
+            reviewer = models.User(
+                email="embedding-retention-reviewer@example.test",
+                full_name="Reviewer",
+                password_hash="test-only-not-used",
+                role="ADMIN",
+                is_active=True,
+            )
+            db.add_all([image, supervisor, reviewer])
+            db.commit()
+            db.refresh(image)
+            db.refresh(supervisor)
+            db.refresh(reviewer)
+            image_id = image.id
+            supervisor_id = supervisor.id
+            reviewer_id = reviewer.id
+
+        with TestingSession() as db:
+            supervisor = db.get(models.User, supervisor_id)
+            monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: supervisor)
+
+            created = client.post(
+                "/api/v1/product-embedding-exemplars",
+                json=exemplar_payload(
+                    product_id,
+                    shelf_image_id=image_id,
+                    image_sha256="9" * 64,
+                ),
+            )
+            assert created.status_code == 201
+            exemplar_id = created.json()["id"]
+
+            with TestingSession() as write_db:
+                exemplar = write_db.get(models.ProductEmbeddingExemplar, exemplar_id)
+                exemplar.review_status = "APPROVED"
+                exemplar.reviewed_by_user_id = reviewer_id
+                exemplar.reviewed_at = models.utc_now()
+                source_image = write_db.get(models.ShelfImage, image_id)
+                source_image.retention_status = "RESTRICTED"
+                write_db.commit()
+
+            listed = client.get("/api/v1/product-embedding-exemplars")
+            assert listed.status_code == 200
+            assert all(item["id"] != exemplar_id for item in listed.json())
+
+            review = client.patch(
+                f"/api/v1/product-embedding-exemplars/{exemplar_id}/review",
+                json={"review_status": "REJECTED", "review_notes": "Retenção"},
+            )
+            assert review.status_code == 410
+
+            new_exemplar = client.post(
+                "/api/v1/product-embedding-exemplars",
+                json=exemplar_payload(
+                    product_id,
+                    shelf_image_id=image_id,
+                    image_sha256="9" * 64,
+                    model_version="embedding-model-v2",
+                ),
+            )
+            assert new_exemplar.status_code == 410
+
+            registry = build_approved_product_registry(
+                db,
+                model_version="embedding-model-v1",
+                minimum_similarity=0.8,
+            )
+            match = registry.match([0.25, 0.5, 0.75])
+            assert match.status == "UNKNOWN"
+            assert match.product_id is None
+
+        with TestingSession() as db:
+            exemplar = db.get(models.ProductEmbeddingExemplar, exemplar_id)
+            assert exemplar.review_status == "APPROVED"
+            assert exemplar.reviewed_by_user_id == reviewer_id
+
