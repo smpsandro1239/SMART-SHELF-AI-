@@ -120,3 +120,10 @@ O teste parametrizado `test_admin_only_creation_routes_reject_non_admin_roles_be
 - `POST /api/v1/warehouse/product-profiles` e `/api/v1/warehouse/product-packaging`.
 
 Para cada endpoint, SUPERVISOR e EMPLOYEE têm de receber HTTP 403 antes de entrar no handler. ADMIN tem de ultrapassar o gate de perfil; é enviado um payload vazio e espera-se HTTP 422 da validação de entrada, evitando criar recursos de teste. Esta cobertura verifica a fronteira do middleware e não substitui testes de validação de dados ou isolamento de loja dentro dos handlers.
+
+
+## Validação CI — cobertura administrativa e proteção de caminhos
+
+O commit `007f5e6c15aa566a22a5703f87680568133c552f` passou no API CI `43458212830` e no Quality Gates `43458212870`. A suite API terminou com **731 testes aprovados e 1 ignorado**; a compilação Python, as migrações Alembic e os dois smoke tests PostgreSQL 16 passaram, assim como o build de produção TypeScript/Vite. A cobertura ADMIN-only descrita acima foi incluída nesta execução.
+
+A regressão do worker para rejeitar symlinks no diretório da loja e em diretórios intermédios passou no API CI `43457363760` e no Quality Gates `43457363686`, no commit `f7fc3cc`. Estes resultados validam as regressões específicas; a auditoria global de autorização e isolamento multi-loja continua aberta.
