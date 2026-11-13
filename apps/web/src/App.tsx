@@ -292,6 +292,7 @@ export default function App() {
         }),
       });
       await refresh();
+      if (taskEvents[task.id] !== undefined) await loadTaskEvents(task.id);
     } catch (err) { setError(err instanceof Error ? err.message : "Não foi possível atualizar a tarefa."); }
   }
 
@@ -324,10 +325,9 @@ export default function App() {
       await loadTaskEvents(task.id);
       await refresh();
     } catch (err) {
-      setTaskReconcileMessages(current => ({
-        ...current,
-        [task.id]: err instanceof Error ? err.message : "Não foi possível reconciliar o inventário.",
-      }));
+      const message = err instanceof Error ? err.message : "Não foi possível reconciliar o inventário.";
+      setTaskReconcileMessages(current => ({ ...current, [task.id]: message }));
+      if (message.includes("INVENTORY_ALREADY_RECONCILED")) await loadTaskEvents(task.id);
     } finally {
       setTaskReconcileLoading(current => current === task.id ? null : current);
     }
