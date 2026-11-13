@@ -161,3 +161,6 @@ def test_operational_decisions_prioritize_high_confidence_empty_shelves():
         assert body["decisions"][0]["decision"]["priority"] == "HIGH"
         assert body["priority_counts"]["HIGH"] == 1
         assert body["priority_counts"]["NORMAL"] == 1
+        assert body["zone_summaries"][0]["zone_name"] == "Bebidas"
+        assert body["zone_summaries"][0]["high_priority"] == 1
+        assert body["zone_summaries"][0]["urgent_items"][0]["product_sku"] == "DEC-SKU-02"
