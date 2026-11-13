@@ -261,3 +261,10 @@ def test_task_rejects_non_finite_requested_quantities(invalid_quantity):
             headers={"Content-Type": "application/json"},
         )
         assert response.status_code == 422
+        errors = response.json()["detail"]
+        assert any(error["type"] == "finite_number" for error in errors)
+        assert all(
+            not isinstance(error.get("input"), float)
+            or __import__("math").isfinite(error["input"])
+            for error in errors
+        )
