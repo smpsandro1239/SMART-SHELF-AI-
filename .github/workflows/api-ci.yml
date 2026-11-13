@@ -49,5 +49,10 @@ jobs:
           DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/smart_shelf_ci
           APP_ENV: test
         run: alembic upgrade head
+      - name: Verify PostgreSQL active-task uniqueness
+        env:
+          DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/smart_shelf_ci
+          APP_ENV: test
+        run: python scripts/postgres_active_task_smoke.py
       - name: Run tests
         run: pytest -q
