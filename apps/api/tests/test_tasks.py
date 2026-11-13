@@ -629,3 +629,70 @@ def test_inventory_freshness_policy_upsert_updates_existing_row(monkeypatch):
         )
         assert len(listed.json()) == 1
         assert listed.json()[0]["max_age_minutes"] == 420
+
+
+
+def test_task_event_and_transition_endpoints_reject_cross_store_access(monkeypatch):
+    with TestClient(app) as client:
+        own_store_id, own_shelf_id, own_product_id = create_task_context(client)
+        foreign_store = client.post("/api/v1/stores", json={
+            "code": "TASK-FOREIGN", "name": "Loja externa",
+        })
+        assert foreign_store.status_code == 201
+        foreign_store_id = foreign_store.json()["id"]
+        foreign_zone = client.post("/api/v1/zones", json={
+            "store_id": foreign_store_id, "name": "Zona externa",
+        })
+        foreign_shelf = client.post("/api/v1/shelves", json={
+            "zone_id": foreign_zone.json()["id"], "code": "EXT-01",
+        })
+        foreign_product = client.post("/api/v1/products", json={
+            "sku": "TASK-FOREIGN-SKU", "name": "Produto externo",
+        })
+        foreign_task = client.post("/api/v1/tasks", json={
+            "store_id": foreign_store_id,
+            "shelf_id": foreign_shelf.json()["id"],
+            "product_id": foreign_product.json()["id"],
+        })
+        own_task = client.post("/api/v1/tasks", json={
+            "store_id": own_store_id,
+            "shelf_id": own_shelf_id,
+            "product_id": own_product_id,
+        })
+        assert foreign_task.status_code == 201
+        assert own_task.status_code == 201
+
+        with TestingSession() as db:
+            actor = models.User(
+                email="scope-supervisor@example.test",
+                full_name="Supervisor da loja própria",
+                password_hash="test-only-not-used",
+                role="SUPERVISOR",
+                store_id=own_store_id,
+                is_active=True,
+            )
+            db.add(actor)
+            db.commit()
+            db.refresh(actor)
+            actor_id = actor.id
+
+        with TestingSession() as db:
+            actor = db.get(models.User, actor_id)
+            monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: actor)
+
+            own_events = client.get(f"/api/v1/tasks/{own_task.json()['id']}/events")
+            assert own_events.status_code == 200
+            assert len(own_events.json()) == 1
+
+            foreign_events = client.get(f"/api/v1/tasks/{foreign_task.json()['id']}/events")
+            assert foreign_events.status_code == 403
+
+            foreign_transition = client.patch(
+                f"/api/v1/tasks/{foreign_task.json()['id']}/status",
+                json={"status": "CANCELLED", "exception_reason": "Tentativa cross-store"},
+            )
+            assert foreign_transition.status_code == 403
+
+            scoped_list = client.get("/api/v1/tasks", params={"store_id": foreign_store_id})
+            assert scoped_list.status_code == 200
+            assert scoped_list.json() == []
