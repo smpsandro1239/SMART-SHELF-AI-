@@ -109,7 +109,7 @@ Esta é a fonte de verdade para manter o SMART SHELF AI focado. Deve ser revista
 
 ### Próxima sequência de desenvolvimento
 
-1. **Concorrência PostgreSQL:** concluir a validação CI do smoke test alargado aos caminhos manual, recomendação e decisão operacional aprovada; corrigir eventuais falhas antes de marcar como concluído.
+1. [x] **Concorrência PostgreSQL:** smoke test dos caminhos manual, recomendação e decisão operacional aprovada validado no CI PostgreSQL 16, incluindo a sequência de auditoria esperada.
 2. **Reconciliação de stock:** implementar movimentos imutáveis para quantidades efetivamente repostas, com aprovação e auditoria.
 3. **Qualidade dos dados:** explicitar frescura/completude e separar os diferentes estados de stock.
 4. **Consenso temporal:** deduplicar alertas por SKU/localização e exigir persistência de evidência antes de criar ocorrências.
