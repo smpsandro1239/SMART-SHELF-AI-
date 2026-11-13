@@ -125,6 +125,7 @@ export default function App() {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [operationalDecisions, setOperationalDecisions] = useState<OperationalDecisionResponse | null>(null);
   const [decisionLoading, setDecisionLoading] = useState(false);
+  const [approvalLoadingKey, setApprovalLoadingKey] = useState<string | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [captures, setCaptures] = useState<ShelfImage[]>([]);
   const [imageDetections, setImageDetections] = useState<Record<number, ShelfImageDetection[]>>({});
@@ -417,6 +418,43 @@ export default function App() {
     }
   }
 
+  async function approveOperationalRefill(item: OperationalDecisionRow) {
+    const assessment = item.replenishment_assessment;
+    if (!assessment || assessment.status !== "NEEDS_REPLENISHMENT" || assessment.suggested_quantity == null) return;
+    const quantity = assessment.suggested_quantity;
+    const available = item.backroom_inventory?.available_quantity;
+    if (!item.backroom_inventory?.is_fresh || available == null || quantity > available) {
+      setError("A proposta deixou de ter stock de retaguarda atualizado e suficiente. Atualiza as decisões antes de aprovar.");
+      return;
+    }
+    const key = `${item.store_id}:${item.shelf_id}:${item.product_id}`;
+    const accepted = window.confirm(
+      `Aprovar tarefa de reposição?\\n\\n${item.product_name} (${item.product_sku})\\nPrateleira: ${item.shelf_code}\\nQuantidade: ${quantity}\\nStock disponível na retaguarda: ${available}\\n\\nA tarefa será criada, sem movimentar stock automaticamente.`
+    );
+    if (!accepted) return;
+    setApprovalLoadingKey(key);
+    setError("");
+    try {
+      await request<Task>("/api/v1/tasks/from-operational-decision?approved=true", {
+        method: "POST",
+        body: JSON.stringify({
+          store_id: item.store_id,
+          shelf_id: item.shelf_id,
+          product_id: item.product_id,
+          priority: item.decision.priority === "HIGH" ? "HIGH" : "NORMAL",
+          requested_quantity: quantity,
+          notes: "Aprovado pelo responsável no dashboard de decisões operacionais.",
+        }),
+      });
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Não foi possível criar a tarefa aprovada.");
+      await refresh();
+    } finally {
+      setApprovalLoadingKey(null);
+    }
+  }
+
   const taskRows = useMemo(() => tasks.filter(t => !["CANCELLED"].includes(t.status)), [tasks]);
   const taskTotal = summary ? Object.values(summary.tasks).reduce((a, b) => a + b, 0) : 0;
 
@@ -541,6 +579,9 @@ export default function App() {
                       <span>Por cobrir: <strong>{item.replenishment_assessment.remaining_gap_quantity == null ? "—" : item.replenishment_assessment.remaining_gap_quantity}</strong></span>
                     </div>
                     {item.replenishment_assessment.requires_human_review && <p className="decision-method">Requer validação humana antes de criar uma tarefa ou movimentar stock.</p>}
+                    {item.replenishment_assessment.status === "NEEDS_REPLENISHMENT" && item.replenishment_assessment.suggested_quantity != null && <button className="row-action decision-approve" onClick={() => void approveOperationalRefill(item)} disabled={approvalLoadingKey === `${item.store_id}:${item.shelf_id}:${item.product_id}` || !item.backroom_inventory?.is_fresh || item.replenishment_assessment.suggested_quantity > (item.backroom_inventory?.available_quantity ?? 0)}>
+                      {approvalLoadingKey === `${item.store_id}:${item.shelf_id}:${item.product_id}` ? "A criar tarefa…" : "Aprovar e criar tarefa"}
+                    </button>}
                   </div>}
                   {item.decision.warnings.length > 0 && <ul className="decision-warnings">{item.decision.warnings.map((warning, index) => <li key={index}>{warning}</li>)}</ul>}
                 </article>)}
