@@ -333,3 +333,49 @@ def test_image_detection_and_ocr_endpoints_enforce_store_scope(monkeypatch):
                 json={"decision": "REJECTED", "notes": "Tentativa cross-store"},
             )
             assert foreign_review.status_code == 403
+
+
+
+def test_image_content_endpoint_enforces_store_scope_and_file_availability(monkeypatch, tmp_path):
+    from types import SimpleNamespace
+
+    own_image_id, _ = create_image_with_detection()
+    foreign_image_id, _ = create_image_with_detection()
+    own_file = tmp_path / "own-image.jpg"
+    foreign_file = tmp_path / "foreign-image.jpg"
+    own_file.write_bytes(b"own-image-content")
+    foreign_file.write_bytes(b"foreign-image-content")
+
+    db = TestingSession()
+    own_image = db.get(models.ShelfImage, own_image_id)
+    foreign_image = db.get(models.ShelfImage, foreign_image_id)
+    own_image.storage_path = str(own_file)
+    foreign_image.storage_path = str(foreign_file)
+    own_shelf = db.get(models.Shelf, own_image.shelf_id)
+    own_zone = db.get(models.Zone, own_shelf.zone_id)
+    db.commit()
+    own_store_id = own_zone.store_id
+    db.close()
+
+    supervisor = SimpleNamespace(role="SUPERVISOR", store_id=own_store_id)
+    monkeypatch.setattr(main_module, "_request_user", lambda db, request: supervisor)
+
+    with TestClient(app) as client:
+        own_response = client.get(f"/api/v1/shelf-images/{own_image_id}/content")
+        assert own_response.status_code == 200
+        assert own_response.content == b"own-image-content"
+
+        foreign_response = client.get(f"/api/v1/shelf-images/{foreign_image_id}/content")
+        assert foreign_response.status_code == 403
+
+        missing_image = client.get("/api/v1/shelf-images/99999/content")
+        assert missing_image.status_code == 404
+
+        db = TestingSession()
+        own_image = db.get(models.ShelfImage, own_image_id)
+        own_image.storage_path = str(tmp_path / "deleted-file.jpg")
+        db.commit()
+        db.close()
+
+        missing_file = client.get(f"/api/v1/shelf-images/{own_image_id}/content")
+        assert missing_file.status_code == 404
