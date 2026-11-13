@@ -402,6 +402,7 @@ def list_observations(
         db.query(models.Observation)
         .join(models.Shelf, models.Observation.shelf_id == models.Shelf.id)
         .join(models.Zone, models.Shelf.zone_id == models.Zone.id)
+        .filter(models.ShelfImage.retention_status == "ACTIVE")
     )
     actor = _request_user(db, request)
     if actor is not None and actor.role != "ADMIN":
@@ -734,7 +735,6 @@ def list_shelf_image_detections(
     _require_active_shelf_image(image_record)
     actor = _request_user(db, request)
     _enforce_store_scope(actor, _shelf_image_store_id(db, image_id))
-    _require_active_shelf_image(image_record)
     return (
         db.query(models.ShelfImageDetection)
         .filter(models.ShelfImageDetection.shelf_image_id == image_id)
@@ -973,6 +973,7 @@ def get_shelf_image_review_queue_summary(
         .join(models.ShelfImage, models.ShelfImageDetection.shelf_image_id == models.ShelfImage.id)
         .join(models.Shelf, models.ShelfImage.shelf_id == models.Shelf.id)
         .join(models.Zone, models.Shelf.zone_id == models.Zone.id)
+        .filter(models.ShelfImage.retention_status == "ACTIVE")
         .filter(or_(
             latest_review_at.is_(None),
             latest_review_at < models.ShelfImageFusedEvidence.created_at,
@@ -1043,6 +1044,7 @@ def list_shelf_image_review_queue(
         .correlate(models.ShelfImageDetection)
         .scalar_subquery()
     )
+    query = query.filter(models.ShelfImage.retention_status == "ACTIVE")
     query = query.filter(or_(
         latest_review_at.is_(None),
         latest_review_at < models.ShelfImageFusedEvidence.created_at,
