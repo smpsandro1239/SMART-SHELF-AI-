@@ -1,9 +1,13 @@
 from datetime import date, datetime, timedelta, timezone
+from io import BytesIO
+import warnings
 from decimal import Decimal
 import math
 from pathlib import Path
 from uuid import uuid4
 import hashlib
+
+from PIL import Image, UnidentifiedImageError
 
 from fastapi import Depends, FastAPI, HTTPException, Request, UploadFile, File, Form
 from fastapi.exceptions import RequestValidationError
@@ -487,6 +491,24 @@ async def upload_shelf_image(
     if not signature_check(content):
         raise HTTPException(status_code=415, detail="Image content does not match its declared format")
 
+    expected_format = {
+        "image/jpeg": "JPEG",
+        "image/png": "PNG",
+        "image/webp": "WEBP",
+    }[mime_type]
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", Image.DecompressionBombWarning)
+            with Image.open(BytesIO(content)) as decoded:
+                if decoded.format != expected_format:
+                    raise ValueError("Decoded image format does not match MIME type")
+                width, height = decoded.size
+                if width < 1 or height < 1 or width * height > 40_000_000:
+                    raise ValueError("Image dimensions exceed the permitted pixel limit")
+                decoded.verify()
+    except (UnidentifiedImageError, OSError, ValueError, Image.DecompressionBombError, Image.DecompressionBombWarning):
+        raise HTTPException(status_code=415, detail="Uploaded file is not a valid supported image")
+
     image_id = uuid4().hex
     directory = Path(settings.image_storage_path) / str(shelf.zone.store_id)
     directory.mkdir(parents=True, exist_ok=True)
@@ -497,7 +519,7 @@ async def upload_shelf_image(
         shelf_id=shelf.id,
         capture_session_id=capture_session.id if capture_session else None,
         uploaded_by=actor.id if actor else None,
-        original_filename=(Path(image.filename or "capture").name[:255]),
+        original_filename=(Path((image.filename or "capture").replace("\\\\", "/")).name[:255]),
         storage_path=str(destination),
         mime_type=mime_type,
         file_size_bytes=len(content),
