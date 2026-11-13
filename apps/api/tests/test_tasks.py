@@ -95,7 +95,7 @@ def test_task_lifecycle_pending_assignment_start_and_completion():
         assert [event["to_status"] for event in events.json()[1:]] == ["ASSIGNED", "IN_PROGRESS", "COMPLETED"]
         assert events.json()[-1]["actual_quantity"] == 8
 
-        /* A terminal task releases the active-task slot for a future replenishment. */
+        # A terminal task releases the active-task slot for a future replenishment.
         next_task = client.post("/api/v1/tasks", json={
             "store_id": store_id, "shelf_id": shelf_id, "product_id": product_id,
             "requested_quantity": 2,
