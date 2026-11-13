@@ -163,6 +163,11 @@ A migração `0019_task_created_audit_event` alarga a constraint da tabela de ev
 
 A criação valida a loja, a pertença da prateleira à loja e a associação do produto à prateleira. A quantidade pedida é opcional e tem de ser positiva. A criação por esta rota regista o evento de auditoria `CREATED`.
 
+A integridade contra duplicados é também imposta pela base de dados através do índice único parcial `uq_active_task_store_shelf_product`, que só abrange estados ativos (`PENDING`, `ASSIGNED`, `IN_PROGRESS`). Assim, tarefas concluídas ou canceladas não bloqueiam uma reposição futura. A API mantém a verificação prévia e o bloqueio da linha da loja em PostgreSQL; o índice é a última barreira contra corridas concorrentes. Se uma inserção concorrente perder a corrida, a API responde HTTP 409 com `ACTIVE_TASK_EXISTS`.
+
+A migração `0020_active_task_unique_index` verifica primeiro se já existem grupos duplicados ativos. Se existirem, interrompe a migração e identifica até dez grupos para resolução manual; não cancela nem elimina tarefas automaticamente. Aplicar todas as migrações com `alembic upgrade head`.
+
+
 
 Criar uma tarefa diretamente a partir de uma recomendação confirmada:
 
