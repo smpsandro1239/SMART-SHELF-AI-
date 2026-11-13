@@ -146,7 +146,10 @@ def build_reviewed_prediction_report(
                 models.ShelfImageFusedEvidence.created_at <= models.DetectionSkuReview.created_at,
             ),
         )
-        .filter(models.DetectionSkuReview.id == latest_review_id)
+        .filter(
+            models.DetectionSkuReview.id == latest_review_id,
+            models.ShelfImage.retention_status == "ACTIVE",
+        )
     )
     if store_id is not None:
         query = query.filter(models.Zone.store_id == store_id)
