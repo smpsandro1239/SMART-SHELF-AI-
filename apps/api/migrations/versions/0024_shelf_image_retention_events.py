@@ -26,8 +26,44 @@ def upgrade() -> None:
     op.create_index("ix_shelf_image_retention_events_created_at", "shelf_image_retention_events", ["created_at"])
     op.create_index("ix_shelf_image_retention_events_image_created", "shelf_image_retention_events", ["shelf_image_id", "created_at"])
 
+    bind = op.get_bind()
+    if bind.dialect.name == "postgresql":
+        op.execute("""
+            CREATE FUNCTION prevent_shelf_image_retention_event_mutation()
+            RETURNS trigger
+            LANGUAGE plpgsql
+            AS $function$
+            BEGIN
+                RAISE EXCEPTION 'shelf_image_retention_events is append-only';
+            END;
+            $function$
+        """)
+        op.execute("""
+            CREATE TRIGGER trg_shelf_image_retention_events_append_only
+            BEFORE UPDATE OR DELETE ON shelf_image_retention_events
+            FOR EACH ROW EXECUTE FUNCTION prevent_shelf_image_retention_event_mutation()
+        """)
+    elif bind.dialect.name == "sqlite":
+        op.execute("""
+            CREATE TRIGGER trg_shelf_image_retention_events_no_update
+            BEFORE UPDATE ON shelf_image_retention_events
+            BEGIN SELECT RAISE(ABORT, 'shelf_image_retention_events is append-only'); END
+        """)
+        op.execute("""
+            CREATE TRIGGER trg_shelf_image_retention_events_no_delete
+            BEFORE DELETE ON shelf_image_retention_events
+            BEGIN SELECT RAISE(ABORT, 'shelf_image_retention_events is append-only'); END
+        """)
+
 
 def downgrade() -> None:
+    bind = op.get_bind()
+    if bind.dialect.name == "postgresql":
+        op.execute("DROP TRIGGER IF EXISTS trg_shelf_image_retention_events_append_only ON shelf_image_retention_events")
+        op.execute("DROP FUNCTION IF EXISTS prevent_shelf_image_retention_event_mutation()")
+    elif bind.dialect.name == "sqlite":
+        op.execute("DROP TRIGGER IF EXISTS trg_shelf_image_retention_events_no_update")
+        op.execute("DROP TRIGGER IF EXISTS trg_shelf_image_retention_events_no_delete")
     op.drop_index("ix_shelf_image_retention_events_image_created", table_name="shelf_image_retention_events")
     op.drop_index("ix_shelf_image_retention_events_created_at", table_name="shelf_image_retention_events")
     op.drop_index("ix_shelf_image_retention_events_actor_user_id", table_name="shelf_image_retention_events")
