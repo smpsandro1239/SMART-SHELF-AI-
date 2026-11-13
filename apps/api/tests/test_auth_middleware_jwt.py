@@ -1278,6 +1278,24 @@ def test_supervisor_jwt_cannot_access_foreign_warehouse_resources(auth_client):
             f"received HTTP {response.status_code}: {response.text}"
         )
 
+    # A denied cross-store write must not leave partial state behind.
+    admin_headers = bearer(ids["admin"], "ADMIN")
+    foreign_snapshots = client.get(
+        "/api/v1/inventory/snapshots",
+        params={"store_id": foreign_store_id},
+        headers=admin_headers,
+    )
+    assert foreign_snapshots.status_code == 200
+    assert foreign_snapshots.json() == []
+
+    foreign_freshness_policies = client.get(
+        "/api/v1/inventory/freshness-policies",
+        params={"store_id": foreign_store_id},
+        headers=admin_headers,
+    )
+    assert foreign_freshness_policies.status_code == 200
+    assert foreign_freshness_policies.json() == []
+
 
     
 def test_supervisor_jwt_cannot_read_or_write_foreign_inventory_and_placement_resources(auth_client):
