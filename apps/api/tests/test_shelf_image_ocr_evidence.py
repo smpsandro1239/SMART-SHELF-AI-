@@ -562,3 +562,71 @@ def test_shelf_image_retention_metadata_defaults_to_active_and_is_exposed():
     assert record["retention_status"] == "ACTIVE"
     assert record["legal_hold"] is False
     assert record["retention_policy_version"] is None
+
+
+
+def test_retention_restriction_blocks_image_access_and_is_audited(monkeypatch, tmp_path):
+    image_id, _ = create_image_with_detection()
+    db = TestingSession()
+    image = db.get(models.ShelfImage, image_id)
+    shelf = db.get(models.Shelf, image.shelf_id)
+    zone = db.get(models.Zone, shelf.zone_id)
+    supervisor = models.User(
+        email="retention-supervisor@test.local", full_name="Retention Supervisor",
+        password_hash="test-hash", role="SUPERVISOR", store_id=zone.store_id, is_active=True,
+    )
+    admin = models.User(
+        email="retention-admin@test.local", full_name="Retention Admin",
+        password_hash="test-hash", role="ADMIN", store_id=None, is_active=True,
+    )
+    db.add_all([supervisor, admin])
+    db.commit()
+    supervisor_id, admin_id, store_id = supervisor.id, admin.id, zone.store_id
+    image_path = tmp_path / str(store_id) / "shelf.jpg"
+    image_path.parent.mkdir(parents=True)
+    image_path.write_bytes(b"test-image")
+    image.storage_path = str(image_path)
+    db.commit()
+    db.close()
+
+    monkeypatch.setattr(main_module.settings, "image_storage_path", str(tmp_path))
+    actor = {"user": None}
+    def select_actor(user_id):
+        session = TestingSession()
+        actor["user"] = session.get(models.User, user_id)
+        session.expunge(actor["user"])
+        session.close()
+    select_actor(supervisor_id)
+    monkeypatch.setattr(main_module, "_request_user", lambda db, request: actor["user"])
+
+    with TestClient(app) as client:
+        restricted = client.post(
+            f"/api/v1/shelf-images/{image_id}/retention/restrict",
+            json={"reason": "Pedido de privacidade"},
+        )
+        assert restricted.status_code == 200
+        assert restricted.json()["retention_status"] == "RESTRICTED"
+        assert client.get(f"/api/v1/shelf-images/{image_id}/content").status_code == 410
+        assert client.get(f"/api/v1/shelf-images/{image_id}/detections").status_code == 410
+        assert client.get(f"/api/v1/shelf-images/{image_id}/ocr-runs").status_code == 410
+        listing = client.get("/api/v1/shelf-images")
+        assert listing.status_code == 200
+        assert all(row["id"] != image_id for row in listing.json())
+        events = client.get(f"/api/v1/shelf-images/{image_id}/retention/events")
+        assert events.status_code == 200
+        assert [event["event_type"] for event in events.json()] == ["RESTRICTED"]
+
+        assert client.post(
+            f"/api/v1/shelf-images/{image_id}/retention/restore",
+            json={"reason": "Revisão concluída"},
+        ).status_code == 403
+
+        select_actor(admin_id)
+        restored = client.post(
+            f"/api/v1/shelf-images/{image_id}/retention/restore",
+            json={"reason": "Revisão concluída"},
+        )
+        assert restored.status_code == 200
+        assert restored.json()["retention_status"] == "ACTIVE"
+        events = client.get(f"/api/v1/shelf-images/{image_id}/retention/events")
+        assert [event["event_type"] for event in events.json()] == ["RESTRICTED", "RESTORED"]
