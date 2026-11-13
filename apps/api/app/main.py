@@ -1497,9 +1497,10 @@ def create_product_embedding_exemplar(
         source_image = db.get(models.ShelfImage, payload.shelf_image_id)
         if source_image is None:
             raise HTTPException(status_code=404, detail="Source shelf image not found")
+        _enforce_store_scope(actor, _shelf_image_store_id(db, source_image.id))
+        _require_active_shelf_image(source_image)
         if source_image.sha256.lower() != payload.image_sha256.lower():
             raise HTTPException(status_code=422, detail="image_sha256 does not match source shelf image")
-        _enforce_store_scope(actor, _shelf_image_store_id(db, source_image.id))
     item = models.ProductEmbeddingExemplar(
         product_id=payload.product_id,
         shelf_image_id=payload.shelf_image_id,
@@ -1536,7 +1537,15 @@ def list_product_embedding_exemplars(
 ):
     if review_status is not None and review_status not in {"PENDING", "APPROVED", "REJECTED"}:
         raise HTTPException(status_code=422, detail="Invalid review_status")
-    query = db.query(models.ProductEmbeddingExemplar)
+    query = db.query(models.ProductEmbeddingExemplar).outerjoin(
+        models.ShelfImage,
+        models.ProductEmbeddingExemplar.shelf_image_id == models.ShelfImage.id,
+    ).filter(
+        or_(
+            models.ProductEmbeddingExemplar.shelf_image_id.is_(None),
+            models.ShelfImage.retention_status == "ACTIVE",
+        )
+    )
     if product_id is not None:
         query = query.filter(models.ProductEmbeddingExemplar.product_id == product_id)
     if review_status is not None:
@@ -1546,10 +1555,6 @@ def list_product_embedding_exemplars(
     actor = _request_user(db, request)
     if actor is not None and actor.role != "ADMIN":
         query = query.join(
-            models.ShelfImage,
-            models.ProductEmbeddingExemplar.shelf_image_id == models.ShelfImage.id,
-            isouter=True,
-        ).join(
             models.Shelf,
             models.ShelfImage.shelf_id == models.Shelf.id,
             isouter=True,
@@ -1584,7 +1589,10 @@ def review_product_embedding_exemplar(
         raise HTTPException(status_code=404, detail="Embedding exemplar not found")
     actor = _request_user(db, request)
     if item.shelf_image_id is not None:
-        _enforce_store_scope(actor, _shelf_image_store_id(db, item.shelf_image_id))
+        source_image = db.get(models.ShelfImage, item.shelf_image_id)
+        if source_image is not None:
+            _enforce_store_scope(actor, _shelf_image_store_id(db, item.shelf_image_id))
+            _require_active_shelf_image(source_image)
     elif actor is not None and actor.role != "ADMIN" and item.created_by_user_id != actor.id:
         raise HTTPException(status_code=403, detail="Access to this exemplar is not allowed")
     if item.review_status != "PENDING":
