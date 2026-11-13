@@ -939,3 +939,38 @@ def test_observation_alert_jwt_roles_and_store_scope(auth_client):
     )
     assert peer_events.status_code == 200
     assert [event["event_type"] for event in peer_events.json()] == ["CREATED"]
+    foreign_alert_id = foreign_alert.json()["id"]
+    foreign_update = client.patch(
+        f"/api/v1/observation-alerts/{foreign_alert_id}",
+        json={"status": "ACKNOWLEDGED"},
+        headers=bearer(ids["supervisor_a"], "SUPERVISOR"),
+    )
+    foreign_events = client.get(
+        f"/api/v1/observation-alerts/{foreign_alert_id}/events",
+        headers=bearer(ids["supervisor_a"], "SUPERVISOR"),
+    )
+    assert foreign_update.status_code == 403
+    assert foreign_events.status_code == 403
+
+    own_update = client.patch(
+        f"/api/v1/observation-alerts/{alert_id}",
+        json={"status": "ACKNOWLEDGED"},
+        headers=bearer(ids["supervisor_a"], "SUPERVISOR"),
+    )
+    assert own_update.status_code == 200, own_update.text
+    assert own_update.json()["status"] == "ACKNOWLEDGED"
+    own_events_after_update = client.get(
+        f"/api/v1/observation-alerts/{alert_id}/events",
+        headers=bearer(ids["supervisor_a_peer"], "SUPERVISOR"),
+    )
+    assert own_events_after_update.status_code == 200
+    assert [event["event_type"] for event in own_events_after_update.json()] == [
+        "CREATED", "ACKNOWLEDGED"
+    ]
+
+    foreign_admin_events = client.get(
+        f"/api/v1/observation-alerts/{foreign_alert_id}/events",
+        headers=bearer(ids["admin"], "ADMIN"),
+    )
+    assert foreign_admin_events.status_code == 200
+    assert [event["event_type"] for event in foreign_admin_events.json()] == ["CREATED"]

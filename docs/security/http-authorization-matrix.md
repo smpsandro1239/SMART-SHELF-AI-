@@ -36,6 +36,7 @@ Este documento regista a política de autorização aplicada pelo middleware HTT
 | EMPLOYEE: histórico de revisão da deteção (GET) | — | — | Permitido |
 | EMPLOYEE: atualização de estado de tarefa (PATCH `/status`) | — | — | Permitido, sujeito ao handler e atribuição |
 | Consulta de histórico de eventos de tarefa (GET `/api/v1/tasks/{id}/events`) | Permitido, sujeito ao âmbito | Permitido, sujeito ao âmbito da loja | Negado pelo middleware |
+| Alertas de observação (listar, avaliar, alterar estado e consultar eventos) | Todas as lojas | Apenas loja própria | Negado pelo middleware |
 
 **Importante:** a tabela representa as decisões do middleware, não garante por si só acesso ao recurso. ADMIN também pode ser limitado por validações de negócio; SUPERVISOR e EMPLOYEE têm de respeitar o `store_id` e as regras de atribuição implementadas nos handlers. O catálogo de produtos é global por decisão arquitetural; associações SKU–prateleira e dados derivados de imagens mantêm âmbito por loja.
 
@@ -65,7 +66,7 @@ O ficheiro `apps/api/tests/test_auth_middleware_jwt.py` cobre:
 - EMPLOYEE não cria nem fecha sessões de captura (403);
 - decisões operacionais limitadas à loja do SUPERVISOR, incluindo a rejeição de filtro estrangeiro (403);
 - EMPLOYEE não acede às decisões operacionais nem aos indicadores de carga da equipa (403);
-- alertas de observação: EMPLOYEE não lista, avalia, altera nem consulta eventos (403); SUPERVISOR avalia e consulta apenas alertas da própria loja; ADMIN pode avaliar/listar alertas de ambas as lojas. A cobertura usa JWT real e dados SKU atribuídos a prateleiras das duas lojas;
+- alertas de observação: EMPLOYEE não lista, avalia, altera nem consulta eventos (403); SUPERVISOR avalia, altera estado e consulta eventos apenas na própria loja; ADMIN pode avaliar/listar e consultar eventos de ambas as lojas. A cobertura usa JWT real e dados SKU atribuídos a prateleiras das duas lojas; tentativas de PATCH e leitura de auditoria sobre alerta estrangeiro recebem 403;
 - observações e sessões de captura: isolamento multi-loja e restrições de criação/fecho, cobertos pelos testes adicionados nesta ronda.
 
 - validação JWT dos endpoints de importação em lote de vendas horárias e tráfego: SUPERVISOR recebe 422 quando tenta misturar lojas no mesmo lote, e EMPLOYEE recebe 403 para ambos os endpoints;
@@ -82,7 +83,7 @@ A criação de um exemplar e a sua aprovação são operações distintas. Um ut
 
 ## Limitações e próximos critérios de fecho
 
-- Expandir os testes JWT para cada método e rota administrativa, incluindo operações de retenção/legal hold, upload e leitura binária, OCR, embeddings e caminhos indiretos do worker. A cobertura das três vias de criação de tarefas, reconciliação, dashboard, decisões operacionais, analytics, observações, sessões de captura, lotes de vendas/tráfego e fronteiras OCR/embeddings está incluída na suite que passou no API CI `43453794076` e Quality Gates `43453794115` (commit `23155bce`). A cobertura por endpoint continua incompleta e deve ser fechada de forma sistemática.
+- Expandir os testes JWT para cada método e rota administrativa, incluindo operações de retenção/legal hold, upload e leitura binária, OCR, embeddings e caminhos indiretos do worker. A cobertura de alertas foi ampliada para testar também PATCH e consulta de eventos em alerta estrangeiro (403), além de ACKNOWLEDGED e sequência de auditoria na própria loja; aguarda CI. A cobertura das três vias de criação de tarefas, reconciliação, dashboard, decisões operacionais, analytics, observações, sessões de captura, lotes de vendas/tráfego e fronteiras OCR/embeddings está incluída na suite anteriormente aprovada. A cobertura por endpoint continua incompleta e deve ser fechada de forma sistemática.
 - Manter cobertura JWT de atribuição e transições de tarefas; acrescentar ainda casos de conclusão parcial, alteração de quantidades e tentativas de atualização de tarefa atribuída a outro utilizador.
 - Continuar a executar os testes de autorização HTTP e os smoke tests de integridade em CI com PostgreSQL 16; os testes JWT HTTP focados continuam a usar SQLite isolado, pelo que não devem ser descritos como cobertura PostgreSQL por endpoint.
 - Confirmar a política de acesso dos endpoints administrativos e a autorização no próprio worker antes de fechar a auditoria.
