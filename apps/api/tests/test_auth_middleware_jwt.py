@@ -6,6 +6,7 @@ from sqlalchemy.pool import StaticPool
 
 from app import main as main_module
 from app.database import Base, get_db
+from app import models
 from app.models import Store, User
 from app.security import create_access_token, hash_password
 
@@ -41,6 +42,11 @@ def auth_client(monkeypatch):
                 password_hash=hash_password("test-password"), role="EMPLOYEE",
                 store_id=store_a.id, is_active=True,
             ),
+            "employee_b": User(
+                email="employee-b@example.test", full_name="Employee B",
+                password_hash=hash_password("test-password"), role="EMPLOYEE",
+                store_id=store_b.id, is_active=True,
+            ),
             "inactive": User(
                 email="inactive@example.test", full_name="Inactive",
                 password_hash=hash_password("test-password"), role="ADMIN",
@@ -48,8 +54,48 @@ def auth_client(monkeypatch):
             ),
         }
         db.add_all(users.values())
+        db.flush()
+
+        product = models.Product(sku="AUTH-TASK-SKU", name="Produto de teste")
+        zone_a = models.Zone(store_id=store_a.id, name="Zona A")
+        zone_b = models.Zone(store_id=store_b.id, name="Zona B")
+        db.add_all([product, zone_a, zone_b])
+        db.flush()
+        shelf_a_assigned = models.Shelf(zone_id=zone_a.id, code="A-ASSIGNED")
+        shelf_a_unassigned = models.Shelf(zone_id=zone_a.id, code="A-UNASSIGNED")
+        shelf_b = models.Shelf(zone_id=zone_b.id, code="B-ASSIGNED")
+        db.add_all([shelf_a_assigned, shelf_a_unassigned, shelf_b])
+        db.flush()
+        db.add_all([
+            models.ShelfProduct(shelf_id=shelf_a_assigned.id, product_id=product.id, target_quantity=10, min_display_quantity=2),
+            models.ShelfProduct(shelf_id=shelf_a_unassigned.id, product_id=product.id, target_quantity=10, min_display_quantity=2),
+            models.ShelfProduct(shelf_id=shelf_b.id, product_id=product.id, target_quantity=10, min_display_quantity=2),
+        ])
+        task_a_assigned = models.ReplenishmentTask(
+            store_id=store_a.id, shelf_id=shelf_a_assigned.id, product_id=product.id,
+            status="ASSIGNED", assigned_to=users["employee_a"].full_name,
+            assigned_user_id=users["employee_a"].id, requested_quantity=5,
+        )
+        task_a_unassigned = models.ReplenishmentTask(
+            store_id=store_a.id, shelf_id=shelf_a_unassigned.id, product_id=product.id,
+            status="PENDING", requested_quantity=4,
+        )
+        task_b_assigned = models.ReplenishmentTask(
+            store_id=store_b.id, shelf_id=shelf_b.id, product_id=product.id,
+            status="ASSIGNED", assigned_to=users["employee_b"].full_name,
+            assigned_user_id=users["employee_b"].id, requested_quantity=3,
+        )
+        db.add_all([task_a_assigned, task_a_unassigned, task_b_assigned])
+        db.flush()
+        db.add_all([
+            models.ReplenishmentTaskEvent(task_id=task.id, event_type="CREATED", to_status=task.status)
+            for task in (task_a_assigned, task_a_unassigned, task_b_assigned)
+        ])
         db.commit()
         ids = {key: user.id for key, user in users.items()}
+        ids["task_a_assigned"] = task_a_assigned.id
+        ids["task_a_unassigned"] = task_a_unassigned.id
+        ids["task_b_assigned"] = task_b_assigned.id
         store_ids = {"a": store_a.id, "b": store_b.id}
 
     def override_get_db():
@@ -172,3 +218,74 @@ def test_supervisor_store_listing_is_scoped_to_database_assignment(auth_client):
 
     assert response.status_code == 200
     assert [store["id"] for store in response.json()] == [store_ids["a"]]
+
+
+
+def test_employee_task_list_and_start_are_limited_to_own_assignment(auth_client):
+    client, ids, _ = auth_client
+
+    listed = client.get("/api/v1/tasks", headers=bearer(ids["employee_a"], "EMPLOYEE"))
+    assert listed.status_code == 200
+    assert [task["id"] for task in listed.json()] == [ids["task_a_assigned"]]
+
+    started = client.patch(
+        f"/api/v1/tasks/{ids['task_a_assigned']}/status",
+        json={"status": "IN_PROGRESS"},
+        headers=bearer(ids["employee_a"], "EMPLOYEE"),
+    )
+    assert started.status_code == 200
+    assert started.json()["status"] == "IN_PROGRESS"
+
+    events = client.get(
+        f"/api/v1/tasks/{ids['task_a_assigned']}/events",
+        headers=bearer(ids["employee_a"], "EMPLOYEE"),
+    )
+    assert events.status_code == 200
+    assert events.json()[-1]["actor_user_id"] == ids["employee_a"]
+
+
+def test_employee_cannot_start_unassigned_task_in_same_store(auth_client):
+    client, ids, _ = auth_client
+
+    response = client.patch(
+        f"/api/v1/tasks/{ids['task_a_unassigned']}/status",
+        json={"status": "IN_PROGRESS"},
+        headers=bearer(ids["employee_a"], "EMPLOYEE"),
+    )
+
+    assert response.status_code == 403
+
+
+def test_employee_cannot_cancel_even_own_assigned_task(auth_client):
+    client, ids, _ = auth_client
+
+    response = client.patch(
+        f"/api/v1/tasks/{ids['task_a_assigned']}/status",
+        json={"status": "CANCELLED", "exception_reason": "Teste de cancelamento"},
+        headers=bearer(ids["employee_a"], "EMPLOYEE"),
+    )
+
+    assert response.status_code == 403
+
+
+def test_supervisor_cannot_read_task_events_from_another_store(auth_client):
+    client, ids, _ = auth_client
+
+    response = client.get(
+        f"/api/v1/tasks/{ids['task_b_assigned']}/events",
+        headers=bearer(ids["supervisor_a"], "SUPERVISOR"),
+    )
+
+    assert response.status_code == 403
+
+
+def test_supervisor_cannot_cancel_task_from_another_store(auth_client):
+    client, ids, _ = auth_client
+
+    response = client.patch(
+        f"/api/v1/tasks/{ids['task_b_assigned']}/status",
+        json={"status": "CANCELLED", "exception_reason": "Tentativa cross-store"},
+        headers=bearer(ids["supervisor_a"], "SUPERVISOR"),
+    )
+
+    assert response.status_code == 403
