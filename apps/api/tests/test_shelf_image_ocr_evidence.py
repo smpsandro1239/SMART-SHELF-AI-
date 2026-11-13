@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 
 os.environ["APP_ENV"] = "test"
 os.environ["DATABASE_URL"] = "sqlite:///./test_unused.db"
@@ -379,3 +380,97 @@ def test_image_content_endpoint_enforces_store_scope_and_file_availability(monke
 
         missing_file = client.get(f"/api/v1/shelf-images/{own_image_id}/content")
         assert missing_file.status_code == 404
+
+
+
+def test_shelf_image_upload_decodes_content_and_sanitizes_filename(monkeypatch, tmp_path):
+    from hashlib import sha256
+    from io import BytesIO
+    from PIL import Image
+
+    db = TestingSession()
+    store = models.Store(code="UPLOAD-HARDEN", name="Loja upload")
+    db.add(store)
+    db.flush()
+    zone = models.Zone(store_id=store.id, name="Zona upload")
+    db.add(zone)
+    db.flush()
+    shelf = models.Shelf(zone_id=zone.id, code="UPLOAD-01")
+    db.add(shelf)
+    db.commit()
+    shelf_id, store_id = shelf.id, store.id
+    db.close()
+
+    monkeypatch.setattr(main_module.settings, "image_storage_path", str(tmp_path))
+    output = BytesIO()
+    Image.new("RGB", (16, 12), (30, 80, 120)).save(output, format="PNG")
+    valid_png = output.getvalue()
+
+    with TestClient(app) as client:
+        uploaded = client.post(
+            "/api/v1/shelf-images",
+            data={"shelf_id": str(shelf_id)},
+            files={"image": ("..\\\\..\\\\outside.png", valid_png, "image/png")},
+        )
+        assert uploaded.status_code == 201
+        record = uploaded.json()
+        assert record["original_filename"] == "outside.png"
+        assert record["mime_type"] == "image/png"
+        assert record["file_size_bytes"] == len(valid_png)
+        assert record["sha256"] == sha256(valid_png).hexdigest()
+
+        db = TestingSession()
+        stored_record = db.get(models.ShelfImage, record["id"])
+        actual_path = Path(stored_record.storage_path)
+        db.close()
+        assert actual_path.parent == tmp_path / str(store_id)
+        assert actual_path.read_bytes() == valid_png
+        assert not (tmp_path / "outside.png").exists()
+
+        spoofed = client.post(
+            "/api/v1/shelf-images",
+            data={"shelf_id": str(shelf_id)},
+            files={"image": ("spoof.png", b"\\x89PNG\\r\\n\\x1a\\nnot-a-real-png", "image/png")},
+        )
+        assert spoofed.status_code == 415
+
+        mismatched = client.post(
+            "/api/v1/shelf-images",
+            data={"shelf_id": str(shelf_id)},
+            files={"image": ("wrong.jpg", valid_png, "image/jpeg")},
+        )
+        assert mismatched.status_code == 415
+
+
+def test_shelf_image_upload_rejects_payload_over_configured_limit(monkeypatch, tmp_path):
+    from io import BytesIO
+    from PIL import Image
+
+    db = TestingSession()
+    store = models.Store(code="UPLOAD-LIMIT", name="Loja limite")
+    db.add(store)
+    db.flush()
+    zone = models.Zone(store_id=store.id, name="Zona limite")
+    db.add(zone)
+    db.flush()
+    shelf = models.Shelf(zone_id=zone.id, code="LIMIT-01")
+    db.add(shelf)
+    db.commit()
+    shelf_id = shelf.id
+    db.close()
+
+    monkeypatch.setattr(main_module.settings, "image_storage_path", str(tmp_path))
+    monkeypatch.setattr(main_module.settings, "max_image_upload_bytes", 1024)
+    output = BytesIO()
+    Image.effect_noise((128, 128), 100).convert("RGB").save(output, format="PNG")
+    payload = output.getvalue()
+    assert len(payload) > 1024
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/v1/shelf-images",
+            data={"shelf_id": str(shelf_id)},
+            files={"image": ("large.png", payload, "image/png")},
+        )
+    assert response.status_code == 413
+    assert not list(tmp_path.rglob("*"))
