@@ -81,3 +81,12 @@ Antes de criar a tarefa, a API reavalia a observação e o snapshot atuais. Só 
 A criação regista nas notas da tarefa que houve aprovação manual e as quantidades proposta e aprovada. A operação cria apenas uma tarefa: não reserva inventário, não altera stock e não envia comandos a equipamentos. O dashboard disponibiliza a ação apenas para ADMIN e SUPERVISOR, com confirmação explícita antes do pedido.
 
 A criação de tarefas bloqueia a linha da loja com `SELECT FOR UPDATE` antes de verificar tarefas ativas e inserir a nova tarefa. Em bases de dados com bloqueios de linha (por exemplo, PostgreSQL), isto serializa os pedidos concorrentes da mesma loja que passam pelos endpoints de criação e reduz a possibilidade de duas aprovações simultâneas criarem tarefas duplicadas. O bloqueio é por loja, pelo que pode serializar criações independentes dentro da mesma loja; SQLite não implementa este bloqueio de linha. A proteção por constraint única parcial continua a ser uma melhoria futura para garantias independentes da aplicação.
+
+
+## Execução e auditoria do ciclo de vida das tarefas
+
+A conclusão de uma tarefa exige o campo actual_quantity, que representa a quantidade efetivamente reposta. A quantidade não pode exceder a quantidade pedida. Se for inferior, é obrigatório indicar exception_reason para registar a diferença (por exemplo, falta de stock na retaguarda). O cancelamento também exige um motivo. A API rejeita quantidades não finitas, nulas ou não positivas através da validação do contrato.
+
+Cada aprovação operacional e cada transição de estado gera um registo append-only em replenishment_task_events, com tipo de evento, estado anterior/novo, utilizador responsável, quantidade efetiva quando aplicável, motivo e timestamp. O endpoint GET /api/v1/tasks/{task_id}/events devolve a cronologia, respeitando o isolamento por loja. A tarefa mantém ainda actual_quantity e exception_reason para consulta rápida.
+
+O endpoint de transição bloqueia a linha da tarefa com SELECT FOR UPDATE em bases de dados que suportam bloqueios de linha, evitando que duas transições concorrentes leiam o mesmo estado anterior e o sobrescrevam silenciosamente. SQLite não fornece o mesmo nível de bloqueio por linha; os testes automatizados nesse motor validam as regras de negócio, não a concorrência PostgreSQL.
