@@ -35,4 +35,4 @@ Após sucesso, a interface apresenta o identificador do movimento, quantidade e 
 
 ## Validação
 
-A compilação TypeScript e o build Vite passaram no Web CI run `43412797984`. A validação dos Quality Gates integrados ainda deve ser acompanhada no workflow correspondente. Os contratos de autorização, frescura, concorrência, imutabilidade e rollback da reconciliação backend já foram validados no API CI run `43401542425`; a interface não substitui esses controlos.
+A compilação TypeScript e o build Vite passaram no Web CI run `43412990422` e no job Web TypeScript and production build do Quality Gates run `43412990443`. O job API tests and Python compilation também passou no mesmo Quality Gates run. Os contratos de autorização, frescura, concorrência, imutabilidade e rollback da reconciliação backend já foram validados no API CI run `43401542425`; a interface não substitui esses controlos.
