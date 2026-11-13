@@ -119,20 +119,22 @@ def auth_client(monkeypatch):
         db.flush()
         embedding_exemplar_a = models.ProductEmbeddingExemplar(
             product_id=product.id,
+            shelf_image_id=image_a.id,
             embedding=[0.25, 0.5, 0.75],
             embedding_dimension=3,
             model_version="auth-embedding-v1",
-            image_sha256="a" * 64,
+            image_sha256="d" * 64,
             licence="store-owned-reference-image",
             review_status="PENDING",
             created_by_user_id=users["supervisor_a"].id,
         )
         embedding_exemplar_admin = models.ProductEmbeddingExemplar(
             product_id=product.id,
+            shelf_image_id=image_a.id,
             embedding=[0.5, 0.75, 0.25],
             embedding_dimension=3,
             model_version="auth-embedding-admin-v1",
-            image_sha256="b" * 64,
+            image_sha256="d" * 64,
             licence="store-owned-reference-image",
             review_status="PENDING",
             created_by_user_id=users["supervisor_a"].id,
