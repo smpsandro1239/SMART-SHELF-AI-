@@ -47,7 +47,8 @@ Esta é a fonte de verdade para manter o SMART SHELF AI focado. Deve ser revista
 
 - [ ] Testar a cronologia completa criação → aprovação/atribuição → início → conclusão/cancelamento e garantir ausência de eventos duplicados.
 - [ ] Implementar a reconciliação de stock definida em [ADR-008](docs/architecture/adr-008-inventory-reconciliation.md): movimento imutável, aprovação, idempotência e novo snapshot; nunca alterar snapshots históricos.
-- [ ] Executar testes concorrentes dos fluxos manual, recomendação e decisão operacional, validar o índice parcial, o locking e a cadeia de migrações em PostgreSQL real; o smoke test PostgreSQL atual cobre a criação manual.
+- [x] Validar em PostgreSQL 16 a cadeia completa de migrações, o índice único parcial e duas criações manuais simultâneas através da API (uma resposta 201 e outra 409); confirmar que uma tarefa concluída liberta a combinação loja/prateleira/produto.
+- [ ] Alargar os testes concorrentes PostgreSQL aos fluxos de criação por recomendação e decisão operacional; o smoke test atual cobre a criação manual.
 - [ ] Rever autorização e isolamento multi-loja em todos os endpoints, incluindo imagens, OCR, embeddings, catálogo, auditoria e operações administrativas.
 - [ ] Definir retenção, proteção, acesso e eliminação de imagens e dados de auditoria; completar hardening de uploads e armazenamento.
 
@@ -128,7 +129,7 @@ Esta é a fonte de verdade para manter o SMART SHELF AI focado. Deve ser revista
 - Registar bloqueios e dependências externas e nunca declarar piloto, integração, modelo real ou produção concluídos sem evidência operacional.
 
 **Última revisão do roadmap:** 2026-11-13.  
-**Última etapa concluída:** proteção de duplicados ativos com índice único parcial, commit técnico `9ac9df9349a07e795321f4ef47a5c43aa46cee53`.  
+**Última etapa concluída:** validação PostgreSQL 16 da migração `0020`, índice parcial e concorrência na criação manual; implementação técnica `a8e657b5b72ebd5b701c27b2cdbf5b4041696e57`.  
 **REA externa:** consultar [comparação de soluções](docs/reverse-engineering/external-solutions.md) e [revisão de visão computacional](docs/architecture/retail-vision-rea.md); as referências comerciais e académicas orientam o roadmap, mas as suas métricas não são assumidas como resultados do nosso sistema.
 
 
