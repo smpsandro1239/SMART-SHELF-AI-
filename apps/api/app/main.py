@@ -64,7 +64,7 @@ from app.schemas import (
     DetectionSkuReviewCreate, DetectionSkuReviewRead,
     ShelfImageOCRRunCreate, ShelfImageOCRRunRead, ShelfImageOCREvidenceRead,
     ShelfImageOCRMatchRead,
-    ShelfImageFusedEvidenceRead,
+    ShelfImageFusedEvidenceRead, ShelfImageRetentionRequest, ShelfImageRetentionEventRead,
     ShelfImageReviewQueueItem, ShelfImageTrainingCandidateRead, CaptureSessionCreate, CaptureSessionRead,
     WarehouseLocationCreate, WarehouseProductProfileCreate, WarehousePlacementCreate,
     ProductPackagingLevelCreate, StorePalletCreate, StorePalletRead,
@@ -201,6 +201,12 @@ def _shelf_image_store_id(db: Session, image_id: int) -> int | None:
         .filter(models.ShelfImage.id == image_id)
         .scalar()
     )
+
+
+def _require_active_shelf_image(image: models.ShelfImage) -> None:
+    """Prevent restricted or purged captures from being read or processed."""
+    if image.retention_status != "ACTIVE":
+        raise HTTPException(status_code=410, detail="Shelf image is not available under its retention state")
 
 
 def _resolve_shelf_image_storage_path(storage_path: str, store_id: int) -> Path:
@@ -554,6 +560,83 @@ async def upload_shelf_image(
     return record
 
 
+@app.post(
+    "/api/v1/shelf-images/{image_id}/retention/restrict",
+    response_model=ShelfImageRead,
+    tags=["computer-vision"],
+)
+def restrict_shelf_image(image_id: int, payload: ShelfImageRetentionRequest, request: Request, db: Session = Depends(get_db)):
+    """Restrict access without deleting image data or its human-review evidence."""
+    actor = _request_user(db, request)
+    if actor is not None and actor.role not in {"ADMIN", "SUPERVISOR"}:
+        raise HTTPException(status_code=403, detail="Supervisor role required")
+    item = db.query(models.ShelfImage).filter(models.ShelfImage.id == image_id).with_for_update().first()
+    if item is None:
+        raise HTTPException(status_code=404, detail="Shelf image not found")
+    _enforce_store_scope(actor, _shelf_image_store_id(db, image_id))
+    if item.retention_status == "PURGED":
+        raise HTTPException(status_code=409, detail="Purged image cannot be restricted")
+    if item.retention_status == "ACTIVE":
+        item.retention_status = "RESTRICTED"
+        item.retention_requested_at = models.utc_now()
+        item.retention_requested_by_user_id = actor.id if actor else None
+        item.retention_reason = payload.reason.strip()
+        db.add(models.ShelfImageRetentionEvent(
+            shelf_image_id=item.id, event_type="RESTRICTED", from_status="ACTIVE",
+            to_status="RESTRICTED", actor_user_id=actor.id if actor else None,
+            reason=payload.reason.strip(),
+        ))
+        db.commit()
+        db.refresh(item)
+    return item
+
+
+@app.post(
+    "/api/v1/shelf-images/{image_id}/retention/restore",
+    response_model=ShelfImageRead,
+    tags=["computer-vision"],
+)
+def restore_shelf_image(image_id: int, payload: ShelfImageRetentionRequest, request: Request, db: Session = Depends(get_db)):
+    """Restore access only through an administrator decision."""
+    actor = _request_user(db, request)
+    if actor is not None and actor.role != "ADMIN":
+        raise HTTPException(status_code=403, detail="Administrator role required to restore an image")
+    item = db.query(models.ShelfImage).filter(models.ShelfImage.id == image_id).with_for_update().first()
+    if item is None:
+        raise HTTPException(status_code=404, detail="Shelf image not found")
+    _enforce_store_scope(actor, _shelf_image_store_id(db, image_id))
+    if item.retention_status != "RESTRICTED":
+        raise HTTPException(status_code=409, detail="Only restricted images can be restored")
+    item.retention_status = "ACTIVE"
+    item.retention_reason = payload.reason.strip()
+    db.add(models.ShelfImageRetentionEvent(
+        shelf_image_id=item.id, event_type="RESTORED", from_status="RESTRICTED",
+        to_status="ACTIVE", actor_user_id=actor.id if actor else None,
+        reason=payload.reason.strip(),
+    ))
+    db.commit()
+    db.refresh(item)
+    return item
+
+
+@app.get(
+    "/api/v1/shelf-images/{image_id}/retention/events",
+    response_model=list[ShelfImageRetentionEventRead],
+    tags=["computer-vision"],
+)
+def list_shelf_image_retention_events(image_id: int, request: Request, db: Session = Depends(get_db)):
+    item = db.get(models.ShelfImage, image_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="Shelf image not found")
+    _enforce_store_scope(_request_user(db, request), _shelf_image_store_id(db, image_id))
+    return (
+        db.query(models.ShelfImageRetentionEvent)
+        .filter(models.ShelfImageRetentionEvent.shelf_image_id == image_id)
+        .order_by(models.ShelfImageRetentionEvent.created_at, models.ShelfImageRetentionEvent.id)
+        .all()
+    )
+
+
 @app.get("/api/v1/shelf-images", response_model=list[ShelfImageRead], tags=["computer-vision"])
 def list_shelf_images(
     request: Request,
@@ -569,6 +652,7 @@ def list_shelf_images(
     actor = _request_user(db, request)
     if actor is not None and actor.role != "ADMIN":
         query = query.filter(models.Zone.store_id == actor.store_id)
+    query = query.filter(models.ShelfImage.retention_status == "ACTIVE")
     if shelf_id is not None:
         query = query.filter(models.ShelfImage.shelf_id == shelf_id)
     return query.order_by(models.ShelfImage.created_at.desc()).limit(max(1, min(limit, 500))).all()
@@ -590,6 +674,7 @@ def get_shelf_image_content(image_id: int, request: Request, db: Session = Depen
     store_id = _shelf_image_store_id(db, image_id)
     if store_id is None:
         raise HTTPException(status_code=404, detail="Shelf image not found")
+    _require_active_shelf_image(item)
     path = _resolve_shelf_image_storage_path(item.storage_path, store_id)
     return FileResponse(path, media_type=item.mime_type, filename=item.original_filename, content_disposition_type="inline")
 
@@ -612,6 +697,7 @@ def retry_shelf_image_analysis(
     if actor is not None and actor.role not in {"ADMIN", "SUPERVISOR"}:
         raise HTTPException(status_code=403, detail="Supervisor role required")
     _enforce_store_scope(actor, _shelf_image_store_id(db, image_id))
+    _require_active_shelf_image(item)
     if item.analysis_status != "FAILED":
         raise HTTPException(status_code=409, detail="Only failed image analyses can be retried")
     item.analysis_status = "PENDING"
@@ -645,8 +731,10 @@ def list_shelf_image_detections(
     )
     if image_record is None:
         raise HTTPException(status_code=404, detail="Shelf image not found")
+    _require_active_shelf_image(image_record)
     actor = _request_user(db, request)
     _enforce_store_scope(actor, _shelf_image_store_id(db, image_id))
+    _require_active_shelf_image(image_record)
     return (
         db.query(models.ShelfImageDetection)
         .filter(models.ShelfImageDetection.shelf_image_id == image_id)
@@ -662,6 +750,7 @@ def match_shelf_image_ocr_to_catalogue(image_id: int, request: Request, db: Sess
     image_record = db.get(models.ShelfImage, image_id)
     if image_record is None:
         raise HTTPException(status_code=404, detail="Shelf image not found")
+    _require_active_shelf_image(image_record)
     actor = _request_user(db, request)
     _enforce_store_scope(actor, _shelf_image_store_id(db, image_id))
 
@@ -743,6 +832,7 @@ def list_shelf_image_ocr_matches(image_id: int, request: Request, limit: int = 5
     image_record = db.get(models.ShelfImage, image_id)
     if image_record is None:
         raise HTTPException(status_code=404, detail="Shelf image not found")
+    _require_active_shelf_image(image_record)
     _enforce_store_scope(_request_user(db, request), _shelf_image_store_id(db, image_id))
     return (
         db.query(models.ShelfImageOCRMatch)
@@ -764,6 +854,7 @@ def fuse_shelf_image_evidence(image_id: int, request: Request, db: Session = Dep
     image_record = db.get(models.ShelfImage, image_id)
     if image_record is None:
         raise HTTPException(status_code=404, detail="Shelf image not found")
+    _require_active_shelf_image(image_record)
     actor = _request_user(db, request)
     _enforce_store_scope(actor, _shelf_image_store_id(db, image_id))
 
@@ -1112,6 +1203,7 @@ def list_shelf_image_fused_evidence(
     image_record = db.get(models.ShelfImage, image_id)
     if image_record is None:
         raise HTTPException(status_code=404, detail="Shelf image not found")
+    _require_active_shelf_image(image_record)
     _enforce_store_scope(_request_user(db, request), _shelf_image_store_id(db, image_id))
     query = (
         db.query(models.ShelfImageFusedEvidence)
@@ -1130,6 +1222,7 @@ def create_shelf_image_ocr_run(image_id: int, payload: ShelfImageOCRRunCreate, r
     image_record = db.get(models.ShelfImage, image_id)
     if image_record is None:
         raise HTTPException(status_code=404, detail="Shelf image not found")
+    _require_active_shelf_image(image_record)
     actor = _request_user(db, request)
     _enforce_store_scope(actor, _shelf_image_store_id(db, image_id))
 
@@ -1181,6 +1274,7 @@ def list_shelf_image_ocr_evidence(image_id: int, request: Request, limit: int = 
     image_record = db.get(models.ShelfImage, image_id)
     if image_record is None:
         raise HTTPException(status_code=404, detail="Shelf image not found")
+    _require_active_shelf_image(image_record)
     _enforce_store_scope(_request_user(db, request), _shelf_image_store_id(db, image_id))
     return (
         db.query(models.ShelfImageOCREvidence)
@@ -1197,6 +1291,7 @@ def list_shelf_image_ocr_runs(image_id: int, request: Request, limit: int = 100,
     image_record = db.get(models.ShelfImage, image_id)
     if image_record is None:
         raise HTTPException(status_code=404, detail="Shelf image not found")
+    _require_active_shelf_image(image_record)
     _enforce_store_scope(_request_user(db, request), _shelf_image_store_id(db, image_id))
     return (
         db.query(models.ShelfImageOCRRun)
@@ -1227,6 +1322,7 @@ def create_detection_sku_review(
     image_record = db.get(models.ShelfImage, detection.shelf_image_id)
     if image_record is None:
         raise HTTPException(status_code=404, detail="Shelf image not found")
+    _require_active_shelf_image(image_record)
     actor = _request_user(db, request)
     _enforce_store_scope(actor, _shelf_image_store_id(db, image_record.id))
 
