@@ -223,6 +223,56 @@ def _record_task_event(db: Session, task: models.ReplenishmentTask, event_type: 
     ))
 
 
+def _persist_new_task(
+    db: Session,
+    task: models.ReplenishmentTask,
+    actor: models.User | None,
+    *,
+    creation_reason: str,
+    approval_quantity: float | None = None,
+    approval_reason: str | None = None,
+) -> models.ReplenishmentTask:
+    """Persist a task and its audit events atomically.
+
+    The partial unique index is the final concurrency guard. The store row lock
+    remains an optimization that serializes task creation on PostgreSQL.
+    """
+    try:
+        db.add(task)
+        db.flush()
+        _record_task_event(
+            db, task, "CREATED", actor, to_status=task.status,
+            reason=creation_reason,
+        )
+        if approval_quantity is not None:
+            _record_task_event(
+                db, task, "APPROVED", actor, to_status=task.status,
+                actual_quantity=approval_quantity, reason=approval_reason,
+            )
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        active_task = db.query(models.ReplenishmentTask).filter(
+            models.ReplenishmentTask.store_id == task.store_id,
+            models.ReplenishmentTask.shelf_id == task.shelf_id,
+            models.ReplenishmentTask.product_id == task.product_id,
+            models.ReplenishmentTask.status.in_(("PENDING", "ASSIGNED", "IN_PROGRESS")),
+        ).first()
+        if active_task is not None:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "ACTIVE_TASK_EXISTS",
+                    "task_id": active_task.id,
+                    "status": active_task.status,
+                    "message": "Já existe uma tarefa ativa para este produto nesta prateleira.",
+                },
+            ) from exc
+        raise
+    db.refresh(task)
+    return task
+
+
 @app.get("/health", tags=["system"])
 def health():
     return {"status": "ok", "service": "smart-shelf-ai-api", "environment": settings.app_env}
@@ -3882,13 +3932,10 @@ def create_replenishment_task(payload: ReplenishmentTaskCreate, request: Request
     data["assigned_user_id"] = assigned_user_id
     data["status"] = "ASSIGNED" if (data["assigned_to"] or assigned_user_id) else "PENDING"
     item = models.ReplenishmentTask(**data)
-    db.add(item)
-    db.flush()
-    _record_task_event(db, item, "CREATED", actor, to_status=item.status,
-                       reason="Tarefa criada através do fluxo operacional.")
-    db.commit()
-    db.refresh(item)
-    return item
+    return _persist_new_task(
+        db, item, actor,
+        creation_reason="Tarefa criada através do fluxo operacional.",
+    )
 
 
 
@@ -3967,15 +4014,10 @@ def create_task_from_recommendation(
     data["assigned_user_id"] = assigned_user_id
     data["status"] = "ASSIGNED" if (data["assigned_to"] or assigned_user_id) else "PENDING"
     item = models.ReplenishmentTask(**data)
-    db.add(item)
-    db.flush()
-    _record_task_event(
-        db, item, "CREATED", actor, to_status=item.status,
-        reason="Tarefa criada através do fluxo de recomendação validada.",
+    return _persist_new_task(
+        db, item, actor,
+        creation_reason="Tarefa criada através do fluxo de recomendação validada.",
     )
-    db.commit()
-    db.refresh(item)
-    return item
 
 
 
@@ -4732,18 +4774,10 @@ def create_task_from_operational_decision(
         requested_quantity=requested,
         notes=notes,
     )
-    db.add(task)
-    db.flush()
-    _record_task_event(
-        db, task, "CREATED", actor, to_status=task.status,
-        reason="Tarefa criada a partir de decisão operacional aprovada.",
+    return _persist_new_task(
+        db, task, actor,
+        creation_reason="Tarefa criada a partir de decisão operacional aprovada.",
+        approval_quantity=requested,
+        approval_reason=f"Proposta operacional aprovada; quantidade sugerida={suggested}.",
     )
-    _record_task_event(
-        db, task, "APPROVED", actor, to_status=task.status,
-        actual_quantity=requested,
-        reason=f"Proposta operacional aprovada; quantidade sugerida={suggested}.",
-    )
-    db.commit()
-    db.refresh(task)
-    return task
 
