@@ -16,6 +16,7 @@ from sqlalchemy.exc import IntegrityError
 from app.database import Base, get_db
 from app import models  # noqa: F401
 from app.main import app
+from app.security import create_access_token
 import app.main as main_module
 
 TEST_ENGINE = create_engine(
@@ -703,3 +704,70 @@ def test_task_event_and_transition_endpoints_reject_cross_store_access(monkeypat
             scoped_list = client.get("/api/v1/tasks", params={"store_id": foreign_store_id})
             assert scoped_list.status_code == 200
             assert scoped_list.json() == []
+
+
+
+def test_bearer_middleware_authenticates_active_users_and_rejects_invalid_or_inactive(monkeypatch):
+    with TestingSession() as db:
+        store = models.Store(code="AUTH-STORE", name="Loja autenticação")
+        db.add(store)
+        db.flush()
+        active = models.User(
+            email="bearer-active@example.test",
+            full_name="Utilizador ativo",
+            password_hash="test-only-not-used",
+            role="SUPERVISOR",
+            store_id=store.id,
+            is_active=True,
+        )
+        inactive = models.User(
+            email="bearer-inactive@example.test",
+            full_name="Utilizador inativo",
+            password_hash="test-only-not-used",
+            role="SUPERVISOR",
+            store_id=store.id,
+            is_active=False,
+        )
+        db.add_all([active, inactive])
+        db.commit()
+        db.refresh(active)
+        db.refresh(inactive)
+        active_id = active.id
+        inactive_id = inactive.id
+
+    monkeypatch.setattr(main_module.settings, "app_env", "development")
+    monkeypatch.setattr(main_module, "SessionLocal", TestingSession)
+    active_token, _ = create_access_token(user_id=active_id, role="SUPERVISOR")
+    inactive_token, _ = create_access_token(user_id=inactive_id, role="SUPERVISOR")
+
+    with TestClient(app) as client:
+        missing = client.get("/api/v1/auth/me")
+        assert missing.status_code == 401
+        assert missing.headers.get("www-authenticate") == "Bearer"
+
+        malformed = client.get(
+            "/api/v1/auth/me",
+            headers={"Authorization": "Bearer not-a-valid-token"},
+        )
+        assert malformed.status_code == 401
+
+        inactive_response = client.get(
+            "/api/v1/auth/me",
+            headers={"Authorization": f"Bearer {inactive_token}"},
+        )
+        assert inactive_response.status_code == 401
+
+        authenticated = client.get(
+            "/api/v1/auth/me",
+            headers={"Authorization": f"Bearer {active_token}"},
+        )
+        assert authenticated.status_code == 200
+        assert authenticated.json()["id"] == active_id
+        assert authenticated.json()["role"] == "SUPERVISOR"
+
+        forbidden_role = client.post(
+            "/api/v1/shelf-images/1/ocr-runs",
+            headers={"Authorization": f"Bearer {active_token}"},
+            json={"provider": "test", "model_version": "v1", "regions": []},
+        )
+        assert forbidden_role.status_code == 404
