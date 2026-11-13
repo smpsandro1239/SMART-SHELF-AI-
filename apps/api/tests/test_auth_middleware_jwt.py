@@ -112,6 +112,18 @@ def auth_client(monkeypatch):
         )
         db.add_all([image_a, image_b])
         db.flush()
+        embedding_exemplar_a = models.ProductEmbeddingExemplar(
+            product_id=product.id,
+            embedding=[0.25, 0.5, 0.75],
+            embedding_dimension=3,
+            model_version="auth-embedding-v1",
+            image_sha256="a" * 64,
+            licence="store-owned-reference-image",
+            review_status="PENDING",
+            created_by_user_id=users["supervisor_a"].id,
+        )
+        db.add(embedding_exemplar_a)
+        db.flush()
         db.add(models.ShelfImageRetentionEvent(
             shelf_image_id=image_b.id, event_type="RESTRICTED",
             from_status="ACTIVE", to_status="RESTRICTED",
@@ -150,6 +162,7 @@ def auth_client(monkeypatch):
         ids["task_b_assigned"] = task_b_assigned.id
         ids["image_a"] = image_a.id
         ids["image_b"] = image_b.id
+        ids["embedding_exemplar_a"] = embedding_exemplar_a.id
         ids["observation_a"] = observation_a.id
         ids["observation_b"] = observation_b.id
         ids["capture_session_a"] = capture_session_a.id
@@ -721,3 +734,28 @@ def test_employee_cannot_import_hourly_sales_or_traffic_batches(auth_client):
 
     assert sales.status_code == 403
     assert traffic.status_code == 403
+
+
+
+def test_supervisor_cannot_self_review_embedding_exemplar_with_real_jwt(auth_client):
+    client, ids, _ = auth_client
+    path = f"/api/v1/product-embedding-exemplars/{ids['embedding_exemplar_a']}/review"
+    payload = {
+        "review_status": "APPROVED",
+        "review_notes": "Tentativa de autoaprovação",
+    }
+
+    self_review = client.patch(
+        path,
+        json=payload,
+        headers=bearer(ids["supervisor_a"], "SUPERVISOR"),
+    )
+    assert self_review.status_code == 403
+
+    admin_review = client.patch(
+        path,
+        json={"review_status": "APPROVED", "review_notes": "Revisão administrativa independente"},
+        headers=bearer(ids["admin"], "ADMIN"),
+    )
+    assert admin_review.status_code == 200
+    assert admin_review.json()["review_status"] == "APPROVED"
