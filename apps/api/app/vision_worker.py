@@ -194,6 +194,17 @@ def process_next_image(db: Session, provider, ocr_provider=None) -> int | None:
         )
         if image is None or image.retention_status != "ACTIVE":
             db.rollback()
+            restricted_image = (
+                db.query(models.ShelfImage)
+                .filter(models.ShelfImage.id == image_id)
+                .with_for_update()
+                .first()
+            )
+            if restricted_image is not None:
+                restricted_image.analysis_status = "FAILED"
+                restricted_image.analysis_error = "Image restricted during processing"
+                restricted_image.analysis_completed_at = models.utc_now()
+                db.commit()
             logger.info("Discarded inference output for restricted shelf image %s", image_id)
             return image_id
         image.analysis_status = "COMPLETED"
