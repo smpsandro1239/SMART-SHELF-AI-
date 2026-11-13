@@ -147,6 +147,31 @@ def process_next_image(db: Session, provider, ocr_provider=None) -> int | None:
         if not image_path.is_file():
             raise FileNotFoundError("Stored shelf image is unavailable")
         result = VisionAnalysis.model_validate(provider.analyze(image_path))
+
+        /* Linearize retention against derived processing: if restriction committed
+           while inference was running, do not start OCR or persist any detections. */
+        image = (
+            db.query(models.ShelfImage)
+            .filter(models.ShelfImage.id == image_id)
+            .with_for_update()
+            .first()
+        )
+        if image is None or image.retention_status != "ACTIVE":
+            db.rollback()
+            restricted_image = (
+                db.query(models.ShelfImage)
+                .filter(models.ShelfImage.id == image_id)
+                .with_for_update()
+                .first()
+            )
+            if restricted_image is not None:
+                restricted_image.analysis_status = "FAILED"
+                restricted_image.analysis_error = "Image restricted during processing"
+                restricted_image.analysis_completed_at = models.utc_now()
+                db.commit()
+            logger.info("Skipped derived processing for restricted shelf image %s", image_id)
+            return image_id
+
         for detection in result.detections:
             detection.validate_box()
         db.query(models.ShelfImageDetection).filter_by(shelf_image_id=image_id).delete()
