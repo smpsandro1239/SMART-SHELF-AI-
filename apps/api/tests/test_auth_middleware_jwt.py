@@ -60,24 +60,28 @@ def auth_client(monkeypatch):
             db.close()
 
     previous_override = main_module.app.dependency_overrides.get(get_db)
+    original_settings = main_module.settings
     main_module.app.dependency_overrides[get_db] = override_get_db
     monkeypatch.setattr(main_module, "SessionLocal", session_factory)
     # Keep production mode local to this module; do not mutate the shared Settings singleton.
     monkeypatch.setattr(
         main_module,
         "settings",
-        main_module.settings.model_copy(update={"app_env": "production"}),
+        original_settings.model_copy(update={"app_env": "production"}),
     )
 
-    with TestClient(main_module.app) as client:
-        yield client, ids, store_ids
-
-    if previous_override is None:
-        main_module.app.dependency_overrides.pop(get_db, None)
-    else:
-        main_module.app.dependency_overrides[get_db] = previous_override
-    Base.metadata.drop_all(bind=engine)
-    engine.dispose()
+    try:
+        with TestClient(main_module.app) as client:
+            yield client, ids, store_ids
+    finally:
+        # Restore immediately, before pytest runs any other module's API tests.
+        main_module.settings = original_settings
+        if previous_override is None:
+            main_module.app.dependency_overrides.pop(get_db, None)
+        else:
+            main_module.app.dependency_overrides[get_db] = previous_override
+        Base.metadata.drop_all(bind=engine)
+        engine.dispose()
 
 
 def bearer(user_id: int, role_claim: str) -> dict[str, str]:
