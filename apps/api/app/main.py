@@ -5,6 +5,7 @@ from uuid import uuid4
 import hashlib
 
 from fastapi import Depends, FastAPI, HTTPException, Request, UploadFile, File, Form
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text, case, or_
@@ -66,6 +67,30 @@ from app.schemas import (
 )
 
 app = FastAPI(title=settings.app_name, version="0.2.0", description="Operational API for SMART SHELF AI.")
+
+
+def _json_safe_validation_value(value):
+    """Convert non-JSON values in validation errors into safe display values."""
+    if isinstance(value, float) and not math.isfinite(value):
+        return repr(value)
+    if isinstance(value, BaseException):
+        return str(value)
+    if isinstance(value, dict):
+        return {str(key): _json_safe_validation_value(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe_validation_value(item) for item in value]
+    return value
+
+
+@app.exception_handler(RequestValidationError)
+async def request_validation_exception_handler(request: Request, exc: RequestValidationError):
+    """Keep invalid numeric input as a normal 422 response, even for NaN/Infinity."""
+    return JSONResponse(
+        status_code=422,
+        content={"detail": _json_safe_validation_value(exc.errors())},
+    )
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[origin.strip() for origin in settings.cors_allowed_origins.split(",") if origin.strip()],
