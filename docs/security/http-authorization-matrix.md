@@ -110,6 +110,11 @@ Foi acrescentado o teste `test_supervisor_jwt_cannot_read_foreign_sales_forecast
 
 Esta cobertura complementa os testes anteriores de snapshots, políticas de frescura, localizações, paletes, políticas de rotação e slotting consultivo. O novo teste usa JWT real e handlers HTTP; a sua validação em PostgreSQL continua separada da suite SQLite de integração.
 
+
+### Escrita de vendas e tráfego — isolamento cross-store
+
+Foi acrescentado o teste `test_supervisor_jwt_cannot_write_foreign_sales_or_traffic_records`. Um SUPERVISOR da loja A tenta criar cinco registos válidos na loja B: vendas diárias, vendas horárias, tráfego horário e os dois endpoints de importação em lote. Todos têm de receber HTTP 403. Em seguida, ADMIN consulta os três históricos e o teste confirma que nenhuma das escritas recusadas deixou registos persistidos. O teste usa a data fixa do fixture e referências externas únicas para manter a verificação determinística.
+
 ## Limitações e próximos critérios de fecho
 
 - Expandir os testes JWT para cada método e rota administrativa, incluindo operações de retenção/legal hold, upload e leitura binária, OCR, embeddings e caminhos indiretos do worker. A cobertura de alertas foi ampliada para testar também PATCH e consulta de eventos em alerta estrangeiro (403), além de ACKNOWLEDGED e sequência de auditoria na própria loja; passou no API CI `43455507948` e Quality Gates `43455507915` (commit `8cb99a2`). A cobertura das três vias de criação de tarefas, reconciliação, dashboard, decisões operacionais, analytics, observações, sessões de captura, lotes de vendas/tráfego e fronteiras OCR/embeddings está incluída na suite anteriormente aprovada. A cobertura por endpoint continua incompleta e deve ser fechada de forma sistemática.
