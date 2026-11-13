@@ -431,3 +431,71 @@ def test_worker_rejects_symlinked_image_file(db, tmp_path, monkeypatch):
     stored_image = db.get(models.ShelfImage, image_id)
     assert stored_image.analysis_status == "FAILED"
     assert stored_image.analysis_error == "FileNotFoundError: processing failed"
+
+
+@pytest.mark.parametrize("symlink_component", ["store_directory", "nested_directory"])
+def test_worker_rejects_symlinked_store_or_nested_directory(
+    db, tmp_path, monkeypatch, symlink_component
+):
+    import app.vision_worker as worker
+
+    store = models.Store(
+        code=f"SYMLINK-DIR-{symlink_component.upper()}",
+        name="Symlink Directory Guard",
+    )
+    db.add(store)
+    db.flush()
+    zone = models.Zone(store_id=store.id, name="Zona")
+    db.add(zone)
+    db.flush()
+    shelf = models.Shelf(zone_id=zone.id, code="SYMLINK-DIR-01")
+    db.add(shelf)
+    db.flush()
+
+    storage_root = tmp_path / "storage"
+    store_root = storage_root / str(store.id)
+    outside_root = tmp_path / "outside"
+    outside_root.mkdir()
+    linked_file = outside_root / "linked.jpg"
+    linked_file.write_bytes(b"not-an-image")
+
+    if symlink_component == "store_directory":
+        try:
+            store_root.symlink_to(outside_root, target_is_directory=True)
+        except (NotImplementedError, OSError) as exc:
+            pytest.skip(f"Directory symlinks are unavailable: {exc}")
+        stored_path = store_root / linked_file.name
+    else:
+        store_root.mkdir(parents=True)
+        nested_link = store_root / "nested"
+        try:
+            nested_link.symlink_to(outside_root, target_is_directory=True)
+        except (NotImplementedError, OSError) as exc:
+            pytest.skip(f"Directory symlinks are unavailable: {exc}")
+        stored_path = nested_link / linked_file.name
+
+    monkeypatch.setattr(worker.settings, "image_storage_path", str(storage_root))
+    image = models.ShelfImage(
+        shelf_id=shelf.id,
+        original_filename="linked.jpg",
+        storage_path=str(stored_path),
+        mime_type="image/jpeg",
+        file_size_bytes=13,
+        sha256="d" * 64,
+        analysis_status="PENDING",
+        retention_status="ACTIVE",
+    )
+    db.add(image)
+    db.commit()
+    image_id = image.id
+
+    class MustNotRun:
+        def analyze(self, path):
+            raise AssertionError(
+                "worker must reject symlinked store and nested directories"
+            )
+
+    assert worker.process_next_image(db, MustNotRun()) == image_id
+    stored_image = db.get(models.ShelfImage, image_id)
+    assert stored_image.analysis_status == "FAILED"
+    assert stored_image.analysis_error == "FileNotFoundError: processing failed"

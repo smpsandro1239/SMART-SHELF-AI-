@@ -86,7 +86,7 @@ A criação de um exemplar e a sua aprovação são operações distintas. Um ut
 
 - Expandir os testes JWT para cada método e rota administrativa, incluindo operações de retenção/legal hold, upload e leitura binária, OCR, embeddings e caminhos indiretos do worker. A cobertura de alertas foi ampliada para testar também PATCH e consulta de eventos em alerta estrangeiro (403), além de ACKNOWLEDGED e sequência de auditoria na própria loja; passou no API CI `43455507948` e Quality Gates `43455507915` (commit `8cb99a2`). A cobertura das três vias de criação de tarefas, reconciliação, dashboard, decisões operacionais, analytics, observações, sessões de captura, lotes de vendas/tráfego e fronteiras OCR/embeddings está incluída na suite anteriormente aprovada. A cobertura por endpoint continua incompleta e deve ser fechada de forma sistemática.
 - Manter cobertura JWT de atribuição e transições de tarefas; os testes agora cobrem conclusão parcial, rejeição de quantidade acima do pedido, persistência da quantidade/motivo na auditoria e bloqueio de alteração de atribuição por EMPLOYEE. Continuar a cobrir transições e tarefas atribuídas a outro utilizador.
-- Continuar a executar os testes de autorização HTTP e os smoke tests de integridade em CI com PostgreSQL 16; os testes JWT HTTP focados continuam a usar SQLite isolado, pelo que não devem ser descritos como cobertura PostgreSQL por endpoint.
+- Continuar a executar os testes de autorização HTTP e os smoke tests de integridade em CI com PostgreSQL 16; os testes JWT HTTP focados continuam a usar SQLite isolado, pelo que não devem ser descritos como cobertura PostgreSQL por endpoint. O gate dinâmico `test_every_versioned_api_route_requires_bearer_except_public_auth_routes` passou no API CI `43456601696` e Quality Gates `43456602071` (commit `4559365`); verifica que todos os métodos das rotas versionadas exigem Bearer, exceto bootstrap e login.
 - Confirmar a política de acesso dos endpoints administrativos e a autorização no próprio worker antes de fechar a auditoria.
 - Manter a purga física desativada até existir política formal de retenção e validação operacional.
 
@@ -103,3 +103,8 @@ Validação do estado anterior: API CI `43455507948` e Quality Gates `4345550791
 ## Gate de cobertura global de autenticação das rotas
 
 O teste `test_every_versioned_api_route_requires_bearer_except_public_auth_routes` percorre dinamicamente as rotas `/api/v1/` registadas na aplicação FastAPI, substitui parâmetros de caminho por valores de teste e invoca cada método sem credenciais. Todas as rotas protegidas têm de responder HTTP 401 antes de validação de payload ou execução do handler. Apenas `/api/v1/auth/bootstrap` e `/api/v1/auth/login` são excluídas, por serem os endpoints públicos definidos no middleware. Este gate deteta novas rotas versionadas que escapem inadvertidamente à autenticação; não substitui os testes de autorização por perfil nem os testes de isolamento de recursos.
+
+
+## Estado de validação da autenticação global
+
+O teste dinâmico de inventário das rotas protegidas passou no API CI `43456601696` e no Quality Gates `43456602071`, commit `4559365`. A suite de API, a compilação Python e o build de produção TypeScript/Vite passaram. Este gate cobre a ausência de credenciais; a autorização por perfil, o isolamento de loja e a propriedade de cada recurso continuam a ser verificados por testes específicos e permanecem sujeitos a auditoria contínua.
