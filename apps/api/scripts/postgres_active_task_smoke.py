@@ -171,6 +171,76 @@ def main() -> None:
         ]
         assert len({event["id"] for event in lifecycle_audit}) == 4
 
+        # Cancellation must be a single audited transition and release the active-task key.
+        cancellation_task = client.post("/api/v1/tasks", json=payload)
+        assert cancellation_task.status_code == 201, cancellation_task.text
+        cancellation_task_id = cancellation_task.json()["id"]
+        cancelled = client.patch(
+            f"/api/v1/tasks/{cancellation_task_id}/status",
+            json={"status": "CANCELLED", "exception_reason": "CI cancellation lifecycle"},
+        )
+        assert cancelled.status_code == 200, cancelled.text
+        repeated_cancel = client.patch(
+            f"/api/v1/tasks/{cancellation_task_id}/status",
+            json={"status": "CANCELLED", "exception_reason": "CI duplicate cancellation"},
+        )
+        assert repeated_cancel.status_code == 409, repeated_cancel.text
+        cancellation_events = client.get(
+            f"/api/v1/tasks/{cancellation_task_id}/events"
+        )
+        assert cancellation_events.status_code == 200, cancellation_events.text
+        cancellation_audit = cancellation_events.json()
+        assert [event["event_type"] for event in cancellation_audit] == [
+            "CREATED", "STATUS_CHANGED",
+        ]
+        assert [
+            (event["from_status"], event["to_status"])
+            for event in cancellation_audit
+        ] == [(None, "PENDING"), ("PENDING", "CANCELLED")]
+        assert cancellation_audit[-1]["reason"] == "CI cancellation lifecycle"
+        assert len({event["id"] for event in cancellation_audit}) == 2
+
+        # An audit failure after flush must roll back both the state change
+        # and the inserted event on PostgreSQL, not just in SQLite unit tests.
+        rollback_task = client.post("/api/v1/tasks", json=payload)
+        assert rollback_task.status_code == 201, rollback_task.text
+        rollback_task_id = rollback_task.json()["id"]
+        original_record_task_event = main_module._record_task_event
+
+        def fail_status_audit_after_flush(db, task, event_type, actor, **kwargs):
+            original_record_task_event(db, task, event_type, actor, **kwargs)
+            if event_type == "STATUS_CHANGED":
+                db.flush()
+                raise RuntimeError("CI forced task lifecycle audit failure after flush")
+
+        main_module._record_task_event = fail_status_audit_after_flush
+        try:
+            with TestClient(app, raise_server_exceptions=False) as rollback_client:
+                rollback_response = rollback_client.patch(
+                    f"/api/v1/tasks/{rollback_task_id}/status",
+                    json={"status": "ASSIGNED", "assigned_to": "CI rollback operator"},
+                )
+        finally:
+            main_module._record_task_event = original_record_task_event
+        assert rollback_response.status_code == 500, rollback_response.text
+
+        rollback_db = SessionLocal()
+        try:
+            rolled_back_task = rollback_db.get(
+                models.ReplenishmentTask, rollback_task_id
+            )
+            assert rolled_back_task is not None
+            assert rolled_back_task.status == "PENDING"
+            rollback_events = (
+                rollback_db.query(models.ReplenishmentTaskEvent)
+                .filter(models.ReplenishmentTaskEvent.task_id == rollback_task_id)
+                .order_by(models.ReplenishmentTaskEvent.id)
+                .all()
+            )
+            assert [event.event_type for event in rollback_events] == ["CREATED"]
+        finally:
+            rollback_db.close()
+
         # Exercise the validated-recommendation creation path against the same
         # PostgreSQL unique index, using a distinct SKU on the existing shelf.
         recommended_product = client.post(
