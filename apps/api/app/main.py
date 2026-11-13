@@ -1440,8 +1440,8 @@ def list_detection_sku_reviews(
     image_record = db.get(models.ShelfImage, detection.shelf_image_id)
     if image_record is None:
         raise HTTPException(status_code=404, detail="Shelf image not found")
-    _require_active_shelf_image(image_record)
     _enforce_store_scope(_request_user(db, request), _shelf_image_store_id(db, detection.shelf_image_id))
+    _require_active_shelf_image(image_record)
     return (
         db.query(models.DetectionSkuReview)
         .filter(models.DetectionSkuReview.detection_id == detection_id)
