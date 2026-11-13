@@ -235,3 +235,38 @@ def test_optional_ocr_failure_is_recorded_without_raising_or_mutating_inventory(
     run = db.query(models.ShelfImageOCRRun).filter_by(shelf_image_id=image.id).one()
     assert run.status == "FAILED"
     assert db.query(models.InventorySnapshot).count() == 0
+
+
+
+def test_worker_does_not_claim_restricted_pending_images(db, tmp_path):
+    import app.vision_worker as worker
+
+    store = models.Store(code="RESTRICTED-WORKER", name="Restricted Worker")
+    db.add(store)
+    db.flush()
+    zone = models.Zone(store_id=store.id, name="Zona")
+    db.add(zone)
+    db.flush()
+    shelf = models.Shelf(zone_id=zone.id, code="RESTRICTED-01")
+    db.add(shelf)
+    db.flush()
+    image = models.ShelfImage(
+        shelf_id=shelf.id,
+        original_filename="restricted.jpg",
+        storage_path=str(tmp_path / "restricted.jpg"),
+        mime_type="image/jpeg",
+        file_size_bytes=10,
+        sha256="9" * 64,
+        analysis_status="PENDING",
+        retention_status="RESTRICTED",
+    )
+    db.add(image)
+    db.flush()
+
+    class MustNotRun:
+        def analyze(self, path):
+            raise AssertionError("restricted image must not be sent to inference")
+
+    assert worker.process_next_image(db, MustNotRun()) is None
+    db.refresh(image)
+    assert image.analysis_status == "PENDING"
