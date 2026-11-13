@@ -127,3 +127,10 @@ Para cada endpoint, SUPERVISOR e EMPLOYEE têm de receber HTTP 403 antes de entr
 O commit `007f5e6c15aa566a22a5703f87680568133c552f` passou no API CI `43458212830` e no Quality Gates `43458212870`. A suite API terminou com **731 testes aprovados e 1 ignorado**; a compilação Python, as migrações Alembic e os dois smoke tests PostgreSQL 16 passaram, assim como o build de produção TypeScript/Vite. A cobertura ADMIN-only descrita acima foi incluída nesta execução.
 
 A regressão do worker para rejeitar symlinks no diretório da loja e em diretórios intermédios passou no API CI `43457363760` e no Quality Gates `43457363686`, no commit `f7fc3cc`. Estes resultados validam as regressões específicas; a auditoria global de autorização e isolamento multi-loja continua aberta.
+
+
+## Cobertura JWT — leituras derivadas de imagem por EMPLOYEE
+
+O teste `test_employee_jwt_cannot_read_foreign_image_derived_data_or_content` usa um token real de EMPLOYEE da loja A e uma imagem/deteção da loja B, com a imagem em estado `RESTRICTED`. Verifica HTTP 403 em sete caminhos de leitura permitidos pelo middleware para funcionários quando pertencem à própria loja: conteúdo binário, deteções, evidência OCR, execuções OCR, correspondências OCR, fusão de evidência e histórico de revisão humana. A resposta 403 demonstra que o handler aplica o isolamento multi-loja antes de revelar o estado de retenção ou conteúdo derivado.
+
+Esta cobertura complementa os testes de SUPERVISOR em OCR/retry e os testes de isolamento por handler. Não valida o acesso cross-store em PostgreSQL: o fixture JWT HTTP usa SQLite isolado, enquanto os smoke tests PostgreSQL continuam a validar os fluxos operacionais e de concorrência.

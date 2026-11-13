@@ -1109,3 +1109,46 @@ def test_admin_only_creation_routes_reject_non_admin_roles_before_handler(
         "the empty payload should be rejected by request validation"
     )
 
+def test_employee_jwt_cannot_read_foreign_image_derived_data_or_content(auth_client):
+    client, ids, _ = auth_client
+    headers = bearer(ids["employee_a"], "EMPLOYEE")
+    foreign_image_id = ids["image_b"]
+    foreign_detection_id = ids["detection_b"]
+
+    requests = {
+        "binary content": client.get(
+            f"/api/v1/shelf-images/{foreign_image_id}/content",
+            headers=headers,
+        ),
+        "detections": client.get(
+            f"/api/v1/shelf-images/{foreign_image_id}/detections",
+            headers=headers,
+        ),
+        "OCR evidence": client.get(
+            f"/api/v1/shelf-images/{foreign_image_id}/ocr-evidence",
+            headers=headers,
+        ),
+        "OCR runs": client.get(
+            f"/api/v1/shelf-images/{foreign_image_id}/ocr-runs",
+            headers=headers,
+        ),
+        "OCR matches": client.get(
+            f"/api/v1/shelf-images/{foreign_image_id}/ocr-matches",
+            headers=headers,
+        ),
+        "fused evidence": client.get(
+            f"/api/v1/shelf-images/{foreign_image_id}/evidence-fusion",
+            headers=headers,
+        ),
+        "human review history": client.get(
+            f"/api/v1/shelf-image-detections/{foreign_detection_id}/reviews",
+            headers=headers,
+        ),
+    }
+
+    for resource, response in requests.items():
+        assert response.status_code == 403, (
+            f"EMPLOYEE must not access foreign {resource}; "
+            f"received HTTP {response.status_code}: {response.text}"
+        )
+

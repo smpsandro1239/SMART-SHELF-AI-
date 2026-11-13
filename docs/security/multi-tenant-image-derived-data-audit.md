@@ -63,3 +63,8 @@ A revisão de embeddings passou a impedir a autoaprovação por SUPERVISOR. O cr
 ## Critério para fechar a tarefa
 
 A tarefa só pode ser marcada como concluída quando a matriz de rotas estiver coberta, os testes cross-store passarem em CI com PostgreSQL e não existirem caminhos indiretos que revelem dados de outra loja ou evidência com retenção restrita.
+
+
+## Cobertura JWT adicional — leituras derivadas por EMPLOYEE
+
+Foi acrescentado um teste HTTP com JWT real de EMPLOYEE da loja A para tentar ler recursos associados a uma imagem RESTRICTED da loja B. O teste exige 403 em conteúdo binário, deteções, OCR evidence/runs/matches, fusão de evidência e histórico de revisão da deteção. Isto fecha uma lacuna na cobertura HTTP dos caminhos de leitura que o middleware permite a EMPLOYEE para imagens da própria loja; o handler continua responsável por validar o âmbito da loja e o estado de retenção.
