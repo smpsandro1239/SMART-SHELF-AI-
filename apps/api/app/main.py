@@ -792,9 +792,9 @@ def list_shelf_image_detections(
     )
     if image_record is None:
         raise HTTPException(status_code=404, detail="Shelf image not found")
-    _require_active_shelf_image(image_record)
     actor = _request_user(db, request)
     _enforce_store_scope(actor, _shelf_image_store_id(db, image_id))
+    _require_active_shelf_image(image_record)
     return (
         db.query(models.ShelfImageDetection)
         .filter(models.ShelfImageDetection.shelf_image_id == image_id)
@@ -810,9 +810,9 @@ def match_shelf_image_ocr_to_catalogue(image_id: int, request: Request, db: Sess
     image_record = db.get(models.ShelfImage, image_id)
     if image_record is None:
         raise HTTPException(status_code=404, detail="Shelf image not found")
-    _require_active_shelf_image(image_record)
     actor = _request_user(db, request)
     _enforce_store_scope(actor, _shelf_image_store_id(db, image_id))
+    _require_active_shelf_image(image_record)
 
     run = (
         db.query(models.ShelfImageOCRRun)
@@ -892,8 +892,8 @@ def list_shelf_image_ocr_matches(image_id: int, request: Request, limit: int = 5
     image_record = db.get(models.ShelfImage, image_id)
     if image_record is None:
         raise HTTPException(status_code=404, detail="Shelf image not found")
-    _require_active_shelf_image(image_record)
     _enforce_store_scope(_request_user(db, request), _shelf_image_store_id(db, image_id))
+    _require_active_shelf_image(image_record)
     return (
         db.query(models.ShelfImageOCRMatch)
         .join(models.ShelfImageOCRRun, models.ShelfImageOCRMatch.run_id == models.ShelfImageOCRRun.id)
@@ -914,9 +914,9 @@ def fuse_shelf_image_evidence(image_id: int, request: Request, db: Session = Dep
     image_record = db.get(models.ShelfImage, image_id)
     if image_record is None:
         raise HTTPException(status_code=404, detail="Shelf image not found")
-    _require_active_shelf_image(image_record)
     actor = _request_user(db, request)
     _enforce_store_scope(actor, _shelf_image_store_id(db, image_id))
+    _require_active_shelf_image(image_record)
 
     run = (
         db.query(models.ShelfImageOCRRun)
@@ -1266,8 +1266,8 @@ def list_shelf_image_fused_evidence(
     image_record = db.get(models.ShelfImage, image_id)
     if image_record is None:
         raise HTTPException(status_code=404, detail="Shelf image not found")
-    _require_active_shelf_image(image_record)
     _enforce_store_scope(_request_user(db, request), _shelf_image_store_id(db, image_id))
+    _require_active_shelf_image(image_record)
     query = (
         db.query(models.ShelfImageFusedEvidence)
         .join(models.ShelfImageDetection, models.ShelfImageFusedEvidence.detection_id == models.ShelfImageDetection.id)
@@ -1285,9 +1285,9 @@ def create_shelf_image_ocr_run(image_id: int, payload: ShelfImageOCRRunCreate, r
     image_record = db.get(models.ShelfImage, image_id)
     if image_record is None:
         raise HTTPException(status_code=404, detail="Shelf image not found")
-    _require_active_shelf_image(image_record)
     actor = _request_user(db, request)
     _enforce_store_scope(actor, _shelf_image_store_id(db, image_id))
+    _require_active_shelf_image(image_record)
 
     detection_ids = {item.detection_id for item in payload.regions if item.detection_id is not None}
     if detection_ids:
@@ -1337,8 +1337,8 @@ def list_shelf_image_ocr_evidence(image_id: int, request: Request, limit: int = 
     image_record = db.get(models.ShelfImage, image_id)
     if image_record is None:
         raise HTTPException(status_code=404, detail="Shelf image not found")
-    _require_active_shelf_image(image_record)
     _enforce_store_scope(_request_user(db, request), _shelf_image_store_id(db, image_id))
+    _require_active_shelf_image(image_record)
     return (
         db.query(models.ShelfImageOCREvidence)
         .join(models.ShelfImageOCRRun, models.ShelfImageOCREvidence.run_id == models.ShelfImageOCRRun.id)
@@ -1354,8 +1354,8 @@ def list_shelf_image_ocr_runs(image_id: int, request: Request, limit: int = 100,
     image_record = db.get(models.ShelfImage, image_id)
     if image_record is None:
         raise HTTPException(status_code=404, detail="Shelf image not found")
-    _require_active_shelf_image(image_record)
     _enforce_store_scope(_request_user(db, request), _shelf_image_store_id(db, image_id))
+    _require_active_shelf_image(image_record)
     return (
         db.query(models.ShelfImageOCRRun)
         .filter(models.ShelfImageOCRRun.shelf_image_id == image_id)
@@ -1385,9 +1385,9 @@ def create_detection_sku_review(
     image_record = db.get(models.ShelfImage, detection.shelf_image_id)
     if image_record is None:
         raise HTTPException(status_code=404, detail="Shelf image not found")
-    _require_active_shelf_image(image_record)
     actor = _request_user(db, request)
     _enforce_store_scope(actor, _shelf_image_store_id(db, image_record.id))
+    _require_active_shelf_image(image_record)
 
     selected_product_id = payload.selected_product_id
     if payload.decision == "CONFIRMED" and selected_product_id is None:
