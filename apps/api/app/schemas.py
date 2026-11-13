@@ -209,6 +209,8 @@ class ReplenishmentTaskStatusUpdate(BaseModel):
     status: TaskStatus
     assigned_to: str | None = Field(default=None, min_length=1, max_length=120)
     assigned_user_id: int | None = None
+    actual_quantity: float | None = Field(default=None, gt=0, allow_inf_nan=False)
+    exception_reason: str | None = Field(default=None, min_length=3, max_length=1000)
 
 
 class ReplenishmentTaskRead(BaseModel):
@@ -226,6 +228,21 @@ class ReplenishmentTaskRead(BaseModel):
     updated_at: datetime
     started_at: datetime | None
     completed_at: datetime | None
+    actual_quantity: float | None
+    exception_reason: str | None
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ReplenishmentTaskEventRead(BaseModel):
+    id: int
+    task_id: int
+    event_type: Literal["APPROVED", "STATUS_CHANGED"]
+    from_status: TaskStatus | None
+    to_status: TaskStatus | None
+    actor_user_id: int | None
+    actual_quantity: float | None
+    reason: str | None
+    created_at: datetime
     model_config = ConfigDict(from_attributes=True)
 
 
