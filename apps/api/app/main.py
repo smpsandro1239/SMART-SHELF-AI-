@@ -4510,3 +4510,131 @@ def dashboard_summary(
         "shelves_requiring_attention": observation_counts["low_stock"] + observation_counts["empty"],
         "note": "Counts are based on recorded observations; they are not a live computer-vision feed.",
     }
+
+@app.post(
+    "/api/v1/tasks/from-operational-decision",
+    response_model=ReplenishmentTaskRead,
+    status_code=201,
+    tags=["tasks"],
+)
+def create_task_from_operational_decision(
+    payload: ReplenishmentTaskCreate,
+    request: Request,
+    approved: bool = False,
+    db: Session = Depends(get_db),
+):
+    """Create a replenishment task only after explicit approval and fresh re-evaluation."""
+    actor = _request_user(db, request)
+    if actor is not None and actor.role == "EMPLOYEE":
+        raise HTTPException(status_code=403, detail="Supervisor role required")
+    if actor is not None and actor.role != "ADMIN" and actor.store_id != payload.store_id:
+        raise HTTPException(status_code=403, detail="Access to this store is not allowed")
+    if not approved:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "HUMAN_APPROVAL_REQUIRED",
+                "message": "Confirme explicitamente a aprovação antes de criar a tarefa.",
+            },
+        )
+
+    evaluation = operational_decisions(
+        request=request,
+        store_id=payload.store_id,
+        shelf_id=payload.shelf_id,
+        product_id=payload.product_id,
+        limit=500,
+        db=db,
+    )
+    item = next(
+        (
+            row for row in evaluation["decisions"]
+            if row["shelf_id"] == payload.shelf_id
+            and row["product_id"] == payload.product_id
+        ),
+        None,
+    )
+    if item is None:
+        raise HTTPException(status_code=404, detail="Produto não associado a esta prateleira nesta loja")
+    assessment = item.get("replenishment_assessment") or {}
+    if assessment.get("status") != "NEEDS_REPLENISHMENT":
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "REPLENISHMENT_NOT_APPROVED_BY_EVIDENCE",
+                "assessment_status": assessment.get("status", "NOT_AVAILABLE"),
+                "message": "A evidência atual não suporta uma tarefa quantitativa de reposição.",
+            },
+        )
+
+    suggested = assessment.get("suggested_quantity")
+    if suggested is None or suggested <= 0:
+        raise HTTPException(status_code=409, detail="Não existe uma quantidade de reposição validada")
+    requested = payload.requested_quantity if payload.requested_quantity is not None else suggested
+    if requested <= 0 or requested > suggested:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "REQUEST_EXCEEDS_APPROVED_QUANTITY",
+                "approved_quantity": suggested,
+                "requested_quantity": requested,
+                "message": "A quantidade da tarefa não pode exceder a proposta validada.",
+            },
+        )
+    backroom = item.get("backroom_inventory") or {}
+    available = backroom.get("available_quantity")
+    if not backroom.get("is_fresh") or available is None or requested > available:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "BACKROOM_STOCK_NOT_VALID",
+                "available_quantity": available,
+                "message": "O stock de retaguarda deixou de ser válido ou suficiente.",
+            },
+        )
+
+    active_task = db.query(models.ReplenishmentTask).filter(
+        models.ReplenishmentTask.store_id == payload.store_id,
+        models.ReplenishmentTask.shelf_id == payload.shelf_id,
+        models.ReplenishmentTask.product_id == payload.product_id,
+        models.ReplenishmentTask.status.in_(("PENDING", "ASSIGNED", "IN_PROGRESS")),
+    ).first()
+    if active_task is not None:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "ACTIVE_TASK_EXISTS",
+                "task_id": active_task.id,
+                "status": active_task.status,
+            },
+        )
+
+    assigned_user_id = payload.assigned_user_id
+    assigned_to = payload.assigned_to
+    if assigned_user_id is not None:
+        assignee = db.get(models.User, assigned_user_id)
+        if assignee is None or not assignee.is_active or assignee.store_id != payload.store_id:
+            raise HTTPException(status_code=422, detail="Assigned user must be active and belong to this store")
+        assigned_to = assignee.full_name
+
+    approval_note = (
+        f"Aprovado manualmente após reavaliação operacional. "
+        f"Quantidade proposta: {suggested}; quantidade aprovada: {requested}."
+    )
+    notes = f"{payload.notes.strip()}\n{approval_note}" if payload.notes and payload.notes.strip() else approval_note
+    task = models.ReplenishmentTask(
+        store_id=payload.store_id,
+        shelf_id=payload.shelf_id,
+        product_id=payload.product_id,
+        priority=payload.priority,
+        status="ASSIGNED" if (assigned_to or assigned_user_id) else "PENDING",
+        assigned_to=assigned_to,
+        assigned_user_id=assigned_user_id,
+        requested_quantity=requested,
+        notes=notes,
+    )
+    db.add(task)
+    db.commit()
+    db.refresh(task)
+    return task
+
