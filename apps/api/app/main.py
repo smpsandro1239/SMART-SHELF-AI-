@@ -3984,7 +3984,15 @@ def create_task_from_recommendation(
         models.ReplenishmentTask.status.in_(("PENDING", "ASSIGNED", "IN_PROGRESS")),
     ).first()
     if active_task is not None:
-        raise HTTPException(status_code=409, detail="An active replenishment task already exists")
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "ACTIVE_TASK_EXISTS",
+                "task_id": active_task.id,
+                "status": active_task.status,
+                "message": "Já existe uma tarefa ativa para este produto nesta prateleira.",
+            },
+        )
 
     data = payload.model_dump()
     suggested_quantity = recommendation["suggested_quantity"]
