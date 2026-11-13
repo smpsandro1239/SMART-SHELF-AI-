@@ -110,7 +110,66 @@ def main() -> None:
 
         replacement = client.post("/api/v1/tasks", json=payload)
         assert replacement.status_code == 201, replacement.text
-        assert_task_creation_audit(client, replacement.json()["id"])
+        replacement_task_id = replacement.json()["id"]
+        assert_task_creation_audit(client, replacement_task_id)
+
+        # Two operators racing to assign the same task must create one
+        # transition event only. PostgreSQL row locking serializes the writes.
+        transition_barrier = Barrier(2)
+
+        def assign_replacement_task():
+            transition_barrier.wait(timeout=10)
+            return client.patch(
+                f"/api/v1/tasks/{replacement_task_id}/status",
+                json={"status": "ASSIGNED", "assigned_to": "CI lifecycle operator"},
+            )
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            transition_responses = list(
+                executor.map(lambda _: assign_replacement_task(), range(2))
+            )
+
+        transition_successes = [
+            response for response in transition_responses if response.status_code == 200
+        ]
+        transition_conflicts = [
+            response for response in transition_responses if response.status_code == 409
+        ]
+        assert len(transition_successes) == 1, [
+            response.text for response in transition_responses
+        ]
+        assert len(transition_conflicts) == 1, [
+            response.text for response in transition_responses
+        ]
+
+        started_replacement = client.patch(
+            f"/api/v1/tasks/{replacement_task_id}/status",
+            json={"status": "IN_PROGRESS"},
+        )
+        assert started_replacement.status_code == 200, started_replacement.text
+        completed_replacement = client.patch(
+            f"/api/v1/tasks/{replacement_task_id}/status",
+            json={"status": "COMPLETED", "actual_quantity": 2},
+        )
+        assert completed_replacement.status_code == 200, completed_replacement.text
+        lifecycle_events = client.get(
+            f"/api/v1/tasks/{replacement_task_id}/events"
+        )
+        assert lifecycle_events.status_code == 200, lifecycle_events.text
+        lifecycle_audit = lifecycle_events.json()
+        assert [event["event_type"] for event in lifecycle_audit] == [
+            "CREATED", "STATUS_CHANGED", "STATUS_CHANGED", "STATUS_CHANGED",
+        ]
+        assert [
+            (event["from_status"], event["to_status"])
+            for event in lifecycle_audit
+        ] == [
+            (None, "PENDING"),
+            ("PENDING", "ASSIGNED"),
+            ("ASSIGNED", "IN_PROGRESS"),
+            ("IN_PROGRESS", "COMPLETED"),
+        ]
+        assert len({event["id"] for event in lifecycle_audit}) == 4
 
         # Exercise the validated-recommendation creation path against the same
         # PostgreSQL unique index, using a distinct SKU on the existing shelf.
