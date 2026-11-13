@@ -1595,6 +1595,11 @@ def review_product_embedding_exemplar(
             _require_active_shelf_image(source_image)
     elif actor is not None and actor.role != "ADMIN" and item.created_by_user_id != actor.id:
         raise HTTPException(status_code=403, detail="Access to this exemplar is not allowed")
+    if actor is not None and actor.role != "ADMIN" and item.created_by_user_id == actor.id:
+        raise HTTPException(
+            status_code=403,
+            detail="A different reviewer must approve or reject an exemplar created by this user",
+        )
     if item.review_status != "PENDING":
         raise HTTPException(status_code=409, detail="Only pending exemplars can be reviewed")
     item.review_status = payload.review_status
