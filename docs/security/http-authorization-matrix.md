@@ -71,6 +71,10 @@ O ficheiro `apps/api/tests/test_auth_middleware_jwt.py` cobre:
 
 Os testes usam tokens criados pelo próprio módulo de segurança e o middleware HTTP real. Não substituem ainda uma suite completa de testes por endpoint nem a execução integral contra PostgreSQL.
 
+## Separação de funções na curadoria de embeddings
+
+A criação de um exemplar e a sua aprovação são operações distintas. Um utilizador SUPERVISOR não pode rever o próprio exemplar (HTTP 403); um segundo SUPERVISOR da mesma loja pode rever, e ADMIN mantém capacidade de supervisão global. Esta regra evita que uma única identidade introduza e aprove a mesma referência usada pelo matching SKU.
+
 ## Limitações e próximos critérios de fecho
 
 - Expandir os testes JWT para cada método e rota administrativa, incluindo operações de retenção/legal hold, upload e leitura binária, OCR, embeddings e caminhos indiretos do worker. A cobertura das três vias de criação de tarefas e da reconciliação de inventário foi acrescentada e passou no API CI `43411781067` e Quality Gates `43411781094`. Nesta ronda foram acrescentados testes de isolamento do dashboard, decisões operacionais e bloqueio de analytics de equipa para EMPLOYEE; aguardar validação CI.
