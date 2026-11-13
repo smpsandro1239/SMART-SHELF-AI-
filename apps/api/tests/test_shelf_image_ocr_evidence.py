@@ -818,3 +818,88 @@ def test_retention_event_history_enforces_cross_store_scope(monkeypatch):
             )
             assert foreign_events.status_code == 403
             assert "Sensitive retention reason" not in foreign_events.text
+
+def test_cross_store_supervisor_cannot_mutate_foreign_shelf_image(monkeypatch):
+    own_image_id, _ = create_image_with_detection()
+    foreign_image_id, foreign_detection_id = create_image_with_detection()
+
+    with TestingSession() as db:
+        own_image = db.get(models.ShelfImage, own_image_id)
+        own_shelf = db.get(models.Shelf, own_image.shelf_id)
+        own_zone = db.get(models.Zone, own_shelf.zone_id)
+        foreign_image = db.get(models.ShelfImage, foreign_image_id)
+        foreign_image.analysis_status = "FAILED"
+        actor = models.User(
+            email="cross-store-image-writer@example.test",
+            full_name="Store Supervisor",
+            password_hash="test-only-not-used",
+            role="SUPERVISOR",
+            store_id=own_zone.store_id,
+            is_active=True,
+        )
+        db.add(actor)
+        db.commit()
+        db.refresh(actor)
+        actor_id = actor.id
+
+    with TestingSession() as db:
+        actor = db.get(models.User, actor_id)
+        monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: actor)
+
+        with TestClient(app) as client:
+            attempts = [
+                (
+                    "POST",
+                    f"/api/v1/shelf-images/{foreign_image_id}/ocr-runs",
+                    {
+                        "provider": "mock-ocr",
+                        "model_version": "mock-v1",
+                        "regions": [],
+                    },
+                ),
+                (
+                    "POST",
+                    f"/api/v1/shelf-images/{foreign_image_id}/evidence-fusion",
+                    None,
+                ),
+                (
+                    "POST",
+                    f"/api/v1/shelf-image-detections/{foreign_detection_id}/reviews",
+                    {
+                        "decision": "REJECTED",
+                        "selected_product_id": None,
+                        "notes": "Cross-store authorization regression test",
+                    },
+                ),
+                (
+                    "POST",
+                    f"/api/v1/shelf-images/{foreign_image_id}/retry",
+                    None,
+                ),
+                (
+                    "POST",
+                    f"/api/v1/shelf-images/{foreign_image_id}/retention/restrict",
+                    {"reason": "Cross-store authorization regression test"},
+                ),
+            ]
+
+            for method, path, payload in attempts:
+                response = client.request(method, path, json=payload)
+                assert response.status_code == 403, (
+                    method,
+                    path,
+                    response.status_code,
+                    response.text,
+                )
+
+    with TestingSession() as db:
+        foreign_image = db.get(models.ShelfImage, foreign_image_id)
+        assert foreign_image.retention_status == "ACTIVE"
+        assert foreign_image.analysis_status == "FAILED"
+        assert db.query(models.ShelfImageOCRRun).filter(
+            models.ShelfImageOCRRun.shelf_image_id == foreign_image_id
+        ).count() == 0
+        assert db.query(models.DetectionSkuReview).filter(
+            models.DetectionSkuReview.detection_id == foreign_detection_id
+        ).count() == 0
+
