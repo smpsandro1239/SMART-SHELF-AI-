@@ -148,7 +148,20 @@ Transições suportadas:
 
 As transições inválidas são rejeitadas com HTTP 409. A API regista as datas de início e conclusão. A tarefa pode ser associada a uma conta ativa da mesma loja através de `assigned_user_id`; o campo textual `assigned_to` é mantido por compatibilidade.
 
-A criação valida a loja, a pertença da prateleira à loja e a associação do produto à prateleira. A quantidade pedida é opcional e tem de ser positiva. A tarefa não é criada automaticamente a partir da recomendação nesta primeira versão.
+Cada criação de tarefa regista agora um evento `CREATED`, independentemente de a origem ser `POST /api/v1/tasks`, `POST /api/v1/tasks/from-recommendation` ou `POST /api/v1/tasks/from-operational-decision?approved=true`. A criação por decisão operacional regista também um evento `APPROVED`; são acontecimentos distintos e aparecem pela ordem cronológica.
+
+Consultar a cronologia de uma tarefa:
+
+    curl http://localhost:8000/api/v1/tasks/1/events
+
+Tipos de evento:
+- `CREATED`: tarefa criada; inclui o estado inicial em `to_status`.
+- `APPROVED`: proposta operacional aprovada por um utilizador; inclui quantidade aprovada e motivo/contexto.
+- `STATUS_CHANGED`: transição de estado; pode incluir quantidade efetivamente reposta e motivo de exceção.
+
+A migração `0019_task_created_audit_event` alarga a constraint da tabela de eventos para aceitar `CREATED`. Aplicar com `alembic upgrade head` antes de executar a versão atualizada da API.
+
+A criação valida a loja, a pertença da prateleira à loja e a associação do produto à prateleira. A quantidade pedida é opcional e tem de ser positiva. A criação por esta rota regista o evento de auditoria `CREATED`.
 
 
 Criar uma tarefa diretamente a partir de uma recomendação confirmada:
