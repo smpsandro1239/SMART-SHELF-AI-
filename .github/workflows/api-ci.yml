@@ -67,5 +67,10 @@ jobs:
           DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/smart_shelf_ci
           APP_ENV: test
         run: python scripts/postgres_observation_alert_smoke.py
+      - name: Verify PostgreSQL inventory and warehouse cross-store authorization
+        env:
+          DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/smart_shelf_ci
+          APP_ENV: test
+        run: python scripts/postgres_inventory_authorization_smoke.py
       - name: Run tests
         run: pytest -q
