@@ -1500,3 +1500,101 @@ def test_supervisor_jwt_cannot_read_foreign_sales_forecasts_or_warehouse_analyti
             f"received HTTP {response.status_code}: {response.text}"
         )
 
+def test_supervisor_jwt_cannot_write_foreign_sales_or_traffic_records(auth_client):
+    client, ids, store_ids = auth_client
+    headers = bearer(ids["supervisor_a"], "SUPERVISOR")
+    admin_headers = bearer(ids["admin"], "ADMIN")
+    foreign_store_id = store_ids["b"]
+    product_id = ids["product"]
+    business_date = "2026-11-13"
+
+    sales_record = {
+        "store_id": foreign_store_id,
+        "product_id": product_id,
+        "business_date": business_date,
+        "hour_of_day": 10,
+        "quantity": 3,
+        "source": "POS",
+        "external_reference": "AUTH-FOREIGN-HOURLY-SALES",
+    }
+    traffic_record = {
+        "store_id": foreign_store_id,
+        "business_date": business_date,
+        "hour_of_day": 10,
+        "customer_count": 12,
+        "source": "POS",
+        "external_reference": "AUTH-FOREIGN-HOURLY-TRAFFIC",
+    }
+    daily_record = {
+        "store_id": foreign_store_id,
+        "product_id": product_id,
+        "sales_date": business_date,
+        "quantity": 3,
+        "source": "POS",
+        "external_reference": "AUTH-FOREIGN-DAILY-SALES",
+    }
+
+    requests = {
+        "daily sales creation": client.post(
+            "/api/v1/sales/daily", json=daily_record, headers=headers
+        ),
+        "hourly sales creation": client.post(
+            "/api/v1/sales/hourly", json=sales_record, headers=headers
+        ),
+        "hourly traffic creation": client.post(
+            "/api/v1/sales/traffic/hourly", json=traffic_record, headers=headers
+        ),
+        "hourly sales batch creation": client.post(
+            "/api/v1/sales/hourly/batch",
+            json={"records": [sales_record]},
+            headers=headers,
+        ),
+        "hourly traffic batch creation": client.post(
+            "/api/v1/sales/traffic/hourly/batch",
+            json={"records": [traffic_record]},
+            headers=headers,
+        ),
+    }
+
+    for resource, response in requests.items():
+        assert response.status_code == 403, (
+            f"SUPERVISOR must not write foreign {resource}; "
+            f"received HTTP {response.status_code}: {response.text}"
+        )
+
+    daily_rows = client.get(
+        "/api/v1/sales/daily",
+        params={
+            "store_id": foreign_store_id,
+            "product_id": product_id,
+            "source": "POS",
+            "days": 1,
+        },
+        headers=admin_headers,
+    )
+    hourly_rows = client.get(
+        "/api/v1/sales/hourly",
+        params={
+            "store_id": foreign_store_id,
+            "start_date": business_date,
+            "end_date": business_date,
+        },
+        headers=admin_headers,
+    )
+    traffic_rows = client.get(
+        "/api/v1/sales/traffic/hourly",
+        params={
+            "store_id": foreign_store_id,
+            "start_date": business_date,
+            "end_date": business_date,
+        },
+        headers=admin_headers,
+    )
+
+    assert daily_rows.status_code == 200, daily_rows.text
+    assert hourly_rows.status_code == 200, hourly_rows.text
+    assert traffic_rows.status_code == 200, traffic_rows.text
+    assert daily_rows.json() == []
+    assert hourly_rows.json() == []
+    assert traffic_rows.json() == []
+
