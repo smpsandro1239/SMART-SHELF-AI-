@@ -322,3 +322,69 @@ def test_employee_cannot_update_task_assigned_to_another_employee_in_same_store(
     )
 
     assert response.status_code == 403
+
+
+
+def test_supervisor_cannot_create_tasks_for_another_store_through_any_creation_flow(auth_client):
+    client, ids, store_ids = auth_client
+    headers = bearer(ids["supervisor_a"], "SUPERVISOR")
+    foreign_payload = {
+        "store_id": store_ids["b"],
+        "shelf_id": 999999,
+        "product_id": 999999,
+        "requested_quantity": 2,
+    }
+
+    manual = client.post("/api/v1/tasks", json=foreign_payload, headers=headers)
+    recommendation = client.post(
+        "/api/v1/tasks/from-recommendation",
+        json=foreign_payload,
+        headers=headers,
+    )
+    operational_decision = client.post(
+        "/api/v1/tasks/from-operational-decision?approved=true",
+        json=foreign_payload,
+        headers=headers,
+    )
+
+    assert manual.status_code == 403
+    assert recommendation.status_code == 403
+    assert operational_decision.status_code == 403
+
+
+def test_employee_cannot_create_task_from_operational_decision(auth_client):
+    client, ids, store_ids = auth_client
+    response = client.post(
+        "/api/v1/tasks/from-operational-decision?approved=true",
+        json={
+            "store_id": store_ids["a"],
+            "shelf_id": 999999,
+            "product_id": 999999,
+            "requested_quantity": 1,
+        },
+        headers=bearer(ids["employee_a"], "EMPLOYEE"),
+    )
+
+    assert response.status_code == 403
+
+
+def test_employee_cannot_reconcile_inventory_even_for_own_store(auth_client):
+    client, ids, _ = auth_client
+    response = client.post(
+        f"/api/v1/tasks/{ids['task_a_assigned']}/reconcile-inventory",
+        json={"reason": "Tentativa de reconciliação por funcionário"},
+        headers=bearer(ids["employee_a"], "EMPLOYEE"),
+    )
+
+    assert response.status_code == 403
+
+
+def test_supervisor_cannot_reconcile_task_from_another_store(auth_client):
+    client, ids, _ = auth_client
+    response = client.post(
+        f"/api/v1/tasks/{ids['task_b_assigned']}/reconcile-inventory",
+        json={"reason": "Tentativa de reconciliação cross-store"},
+        headers=bearer(ids["supervisor_a"], "SUPERVISOR"),
+    )
+
+    assert response.status_code == 403
