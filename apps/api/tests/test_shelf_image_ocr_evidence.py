@@ -566,7 +566,7 @@ def test_shelf_image_retention_metadata_defaults_to_active_and_is_exposed():
 
 
 def test_retention_restriction_blocks_image_access_and_is_audited(monkeypatch, tmp_path):
-    image_id, _ = create_image_with_detection()
+    image_id, detection_id = create_image_with_detection()
     db = TestingSession()
     image = db.get(models.ShelfImage, image_id)
     shelf = db.get(models.Shelf, image.shelf_id)
@@ -609,6 +609,9 @@ def test_retention_restriction_blocks_image_access_and_is_audited(monkeypatch, t
         assert client.get(f"/api/v1/shelf-images/{image_id}/content").status_code == 410
         assert client.get(f"/api/v1/shelf-images/{image_id}/detections").status_code == 410
         assert client.get(f"/api/v1/shelf-images/{image_id}/ocr-runs").status_code == 410
+        assert client.get(
+            f"/api/v1/shelf-image-detections/{detection_id}/reviews"
+        ).status_code == 410
         listing = client.get("/api/v1/shelf-images")
         assert listing.status_code == 200
         assert all(row["id"] != image_id for row in listing.json())
