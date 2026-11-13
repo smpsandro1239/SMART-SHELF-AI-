@@ -272,7 +272,7 @@ def test_worker_does_not_claim_restricted_pending_images(db, tmp_path):
     assert image.analysis_status == "PENDING"
 
 
-def test_worker_stops_before_ocr_when_image_is_restricted_during_inference(db, tmp_path):
+def test_worker_stops_before_ocr_when_image_is_restricted_during_inference(db, tmp_path, monkeypatch):
     import app.vision_worker as worker
     from app.vision import DetectionResult, VisionAnalysis
 
@@ -285,7 +285,10 @@ def test_worker_stops_before_ocr_when_image_is_restricted_during_inference(db, t
     shelf = models.Shelf(zone_id=zone.id, code="RACE-01")
     db.add(shelf)
     db.flush()
-    image_path = tmp_path / "race.jpg"
+    storage_root = tmp_path / "storage"
+    monkeypatch.setattr(worker.settings, "image_storage_path", str(storage_root))
+    image_path = storage_root / str(store.id) / "race.jpg"
+    image_path.parent.mkdir(parents=True)
     image_path.write_bytes(b"test-image")
     image = models.ShelfImage(
         shelf_id=shelf.id,
@@ -339,3 +342,44 @@ def test_worker_stops_before_ocr_when_image_is_restricted_during_inference(db, t
     assert stored_image.analysis_error == "Image restricted during processing"
     assert db.query(models.ShelfImageDetection).filter_by(shelf_image_id=image_id).count() == 0
     assert db.query(models.ShelfImageOCRRun).filter_by(shelf_image_id=image_id).count() == 0
+
+
+def test_worker_rejects_image_path_outside_owning_store_directory(db, tmp_path, monkeypatch):
+    import app.vision_worker as worker
+
+    store = models.Store(code="PATH-GUARD", name="Path Guard")
+    db.add(store)
+    db.flush()
+    zone = models.Zone(store_id=store.id, name="Zona")
+    db.add(zone)
+    db.flush()
+    shelf = models.Shelf(zone_id=zone.id, code="PATH-01")
+    db.add(shelf)
+    db.flush()
+    storage_root = tmp_path / "storage"
+    storage_root.mkdir()
+    outside_path = tmp_path / "outside.jpg"
+    outside_path.write_bytes(b"not-an-image")
+    monkeypatch.setattr(worker.settings, "image_storage_path", str(storage_root))
+    image = models.ShelfImage(
+        shelf_id=shelf.id,
+        original_filename="outside.jpg",
+        storage_path=str(outside_path),
+        mime_type="image/jpeg",
+        file_size_bytes=13,
+        sha256="b" * 64,
+        analysis_status="PENDING",
+        retention_status="ACTIVE",
+    )
+    db.add(image)
+    db.commit()
+    image_id = image.id
+
+    class MustNotRun:
+        def analyze(self, path):
+            raise AssertionError("worker must never read a file outside the owning store directory")
+
+    assert worker.process_next_image(db, MustNotRun()) == image_id
+    stored_image = db.get(models.ShelfImage, image_id)
+    assert stored_image.analysis_status == "FAILED"
+    assert stored_image.analysis_error == "FileNotFoundError: processing failed"
