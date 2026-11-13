@@ -246,3 +246,90 @@ def test_review_queue_returns_unreviewed_conflicts_and_removes_reviewed_items(mo
         summary_after_review = client.get("/api/v1/shelf-image-review-queue/summary", headers=headers)
         assert summary_after_review.status_code == 200
         assert summary_after_review.json()["CONFLICT"] == 0
+
+
+
+def test_image_detection_and_ocr_endpoints_enforce_store_scope(monkeypatch):
+    own_image_id, own_detection_id = create_image_with_detection()
+    foreign_image_id, foreign_detection_id = create_image_with_detection()
+
+    with TestingSession() as db:
+        own_image = db.get(models.ShelfImage, own_image_id)
+        own_shelf = db.get(models.Shelf, own_image.shelf_id)
+        own_zone = db.get(models.Zone, own_shelf.zone_id)
+        actor = models.User(
+            email="image-scope-supervisor@example.test",
+            full_name="Supervisor da loja de origem",
+            password_hash="test-only-not-used",
+            role="SUPERVISOR",
+            store_id=own_zone.store_id,
+            is_active=True,
+        )
+        db.add(actor)
+        db.commit()
+        db.refresh(actor)
+        actor_id = actor.id
+
+    with TestClient(app) as client:
+        own_run = client.post(
+            f"/api/v1/shelf-images/{own_image_id}/ocr-runs",
+            json={
+                "provider": "mock-ocr",
+                "model_version": "mock-v1",
+                "regions": [{
+                    "detection_id": own_detection_id,
+                    "text": "Produto próprio",
+                    "confidence": 0.95,
+                    "x_min": 0.1,
+                    "y_min": 0.1,
+                    "x_max": 0.6,
+                    "y_max": 0.3,
+                }],
+            },
+        )
+        assert own_run.status_code == 201
+
+        with TestingSession() as db:
+            actor = db.get(models.User, actor_id)
+            monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: actor)
+
+            own_detections = client.get(f"/api/v1/shelf-images/{own_image_id}/detections")
+            own_runs = client.get(f"/api/v1/shelf-images/{own_image_id}/ocr-runs")
+            own_evidence = client.get(f"/api/v1/shelf-images/{own_image_id}/ocr-evidence")
+            assert own_detections.status_code == 200
+            assert len(own_detections.json()) == 1
+            assert own_runs.status_code == 200
+            assert len(own_runs.json()) == 1
+            assert own_evidence.status_code == 200
+            assert len(own_evidence.json()) == 1
+
+            foreign_detections = client.get(f"/api/v1/shelf-images/{foreign_image_id}/detections")
+            foreign_runs = client.get(f"/api/v1/shelf-images/{foreign_image_id}/ocr-runs")
+            foreign_evidence = client.get(f"/api/v1/shelf-images/{foreign_image_id}/ocr-evidence")
+            assert foreign_detections.status_code == 403
+            assert foreign_runs.status_code == 403
+            assert foreign_evidence.status_code == 403
+
+            foreign_ocr_create = client.post(
+                f"/api/v1/shelf-images/{foreign_image_id}/ocr-runs",
+                json={
+                    "provider": "mock-ocr",
+                    "model_version": "mock-v1",
+                    "regions": [{
+                        "detection_id": foreign_detection_id,
+                        "text": "Tentativa externa",
+                        "confidence": 0.9,
+                        "x_min": 0.1,
+                        "y_min": 0.1,
+                        "x_max": 0.5,
+                        "y_max": 0.3,
+                    }],
+                },
+            )
+            assert foreign_ocr_create.status_code == 403
+
+            foreign_review = client.post(
+                f"/api/v1/shelf-image-detections/{foreign_detection_id}/reviews",
+                json={"decision": "REJECTED", "notes": "Tentativa cross-store"},
+            )
+            assert foreign_review.status_code == 403
