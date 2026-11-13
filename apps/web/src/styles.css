@@ -176,3 +176,4 @@
 
 .task-cancel input{width:180px}
 @media(max-width:700px){.task-cancel{width:100%}.task-cancel input{flex:1;width:auto}}
+.task-outcome{display:block;font-size:9px;color:#7b8794;margin-top:4px;line-height:1.4}
