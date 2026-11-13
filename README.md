@@ -39,13 +39,14 @@ Esta é a fonte de verdade para manter o SMART SHELF AI focado. Deve ser revista
 - [x] Políticas consultivas de refill, picking e rotação de paletes, sem movimentos automáticos de stock.
 - [x] Documentação de arquitetura, segurança, piloto, decisões técnicas e limitações.
 - [x] REA externa atualizada: comparação de projetos públicos de visão/retalho e plataformas comerciais Simbe, Focal Systems e Pensa; decisões e lacunas convertidas em tarefas do roadmap, sem copiar código ou assumir métricas comerciais como resultados próprios.
+- [x] ADR-008 — desenho da reconciliação auditável de reposição/inventário, com snapshots imutáveis, aprovação humana, idempotência e bloqueio perante evidência desatualizada; implementação continua pendente.
 
 ### Em falta — necessário antes de um piloto operacional
 
 #### P0 — Integridade e fiabilidade operacional
 
 - [ ] Testar a cronologia completa criação → aprovação/atribuição → início → conclusão/cancelamento e garantir ausência de eventos duplicados.
-- [ ] Implementar reconciliação da quantidade efetivamente reposta com o inventário através de movimentos/ajustes imutáveis, com origem, ator, motivo e aprovação. Não alterar snapshots históricos.
+- [ ] Implementar a reconciliação de stock definida em [ADR-008](docs/architecture/adr-008-inventory-reconciliation.md): movimento imutável, aprovação, idempotência e novo snapshot; nunca alterar snapshots históricos.
 - [ ] Executar testes concorrentes e validar o bloqueio por linha/índice parcial em PostgreSQL real; os testes SQLite não comprovam locking PostgreSQL.
 - [ ] Validar locking, migrações e constraints em PostgreSQL real. Os testes SQLite não comprovam concorrência PostgreSQL.
 - [ ] Rever autorização e isolamento multi-loja em todos os endpoints, incluindo imagens, OCR, embeddings, catálogo, auditoria e operações administrativas.
