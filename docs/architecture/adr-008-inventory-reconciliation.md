@@ -1,6 +1,6 @@
 # ADR-008 — Reconciliação auditável da reposição com inventário
 
-**Estado:** implementação inicial publicada; endurecimento e validação operacional pendentes  
+**Estado:** implementação inicial publicada; concorrência e imutabilidade validadas em PostgreSQL 16; rollback transacional e política de frescura configurável pendentes  
 **Data:** 13-11-2026
 
 ## Contexto
@@ -59,7 +59,7 @@ A tabela não substitui os snapshots. É o registo de transferência que explica
 
 ## Implementação inicial publicada
 
-A primeira implementação está na branch `main` (commit `d602c9427eea47f70a0a5fba3b3d12f0cd689db9`), com testes API aprovados no commit de correção `d3db736d83945028198c54941f4081148474877a`.
+A primeira implementação está na branch `main` (commit `d602c9427eea47f70a0a5fba3b3d12f0cd689db9`), com testes API aprovados no commit `d3db736d83945028198c54941f4081148474877a` e validação PostgreSQL 16 da concorrência/imutabilidade no commit `a07c070f531ece7c346e0803141e0d192c339ec2`.
 
 - Endpoint: `POST /api/v1/tasks/{task_id}/reconcile-inventory`.
 - Apenas utilizadores autenticados com papel `ADMIN` ou `SUPERVISOR`; o supervisor fica limitado à sua loja.
