@@ -754,3 +754,50 @@ def test_cross_store_restricted_image_returns_forbidden_before_retention_state(m
             for path in paths:
                 response = client.get(path)
                 assert response.status_code == 403, (path, response.status_code, response.text)
+
+
+
+def test_retention_event_history_enforces_cross_store_scope(monkeypatch):
+    own_image_id, _ = create_image_with_detection()
+    foreign_image_id, _ = create_image_with_detection()
+    with TestingSession() as db:
+        own_image = db.get(models.ShelfImage, own_image_id)
+        own_shelf = db.get(models.Shelf, own_image.shelf_id)
+        own_zone = db.get(models.Zone, own_shelf.zone_id)
+        foreign_image = db.get(models.ShelfImage, foreign_image_id)
+        foreign_image.retention_status = "RESTRICTED"
+        actor = models.User(
+            email="retention-events-scope@example.test",
+            full_name="Retention Events Supervisor",
+            password_hash="test-only-not-used",
+            role="SUPERVISOR",
+            store_id=own_zone.store_id,
+            is_active=True,
+        )
+        db.add(actor)
+        db.add(models.ShelfImageRetentionEvent(
+            shelf_image_id=foreign_image_id,
+            event_type="RESTRICTED",
+            from_status="ACTIVE",
+            to_status="RESTRICTED",
+            reason="Sensitive retention reason from another store",
+        ))
+        db.commit()
+        db.refresh(actor)
+        actor_id = actor.id
+
+    with TestingSession() as db:
+        actor = db.get(models.User, actor_id)
+        monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: actor)
+        with TestClient(app) as client:
+            own_events = client.get(
+                f"/api/v1/shelf-images/{own_image_id}/retention/events"
+            )
+            assert own_events.status_code == 200
+            assert own_events.json() == []
+
+            foreign_events = client.get(
+                f"/api/v1/shelf-images/{foreign_image_id}/retention/events"
+            )
+            assert foreign_events.status_code == 403
+            assert "Sensitive retention reason" not in foreign_events.text
