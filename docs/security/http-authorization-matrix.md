@@ -155,3 +155,12 @@ O teste `test_supervisor_jwt_cannot_read_or_write_foreign_inventory_and_placemen
 ## Verificação de ausência de efeitos laterais — inventário cross-store
 
 Depois de sete pedidos JWT de SUPERVISOR da loja A para recursos da loja B receberem HTTP 403, o teste consulta os snapshots e as políticas de frescura da loja B com uma sessão ADMIN. Ambos os resultados têm de permanecer vazios. Esta verificação confirma que as tentativas negadas de criação não persistem parcialmente snapshots nem políticas. O teste de integração usa SQLite isolado; não substitui a validação PostgreSQL dos handlers.
+
+
+## Smoke test PostgreSQL — autorização cross-store de inventário e armazém
+
+O script `apps/api/scripts/postgres_inventory_authorization_smoke.py` foi adicionado ao API CI depois das migrações Alembic e dos smoke tests operacionais existentes. Usa PostgreSQL 16, sessões reais da aplicação, JWT assinado e middleware HTTP em modo de autenticação ativo.
+
+O cenário cria duas lojas, um supervisor da loja A, um administrador e uma localização de armazém na loja B. Executa sete operações cross-store (listagem e leitura de snapshots, criação de snapshot, leitura e upsert de política de frescura, criação de colocação e recomendações de slotting) e exige HTTP 403 em todas. Em seguida verifica através da API e diretamente na base de dados que as tentativas recusadas não persistiram snapshots, políticas nem colocações. Por fim confirma que o supervisor consegue criar um snapshot e uma política na sua própria loja.
+
+**Estado:** implementação e integração CI publicadas; validação PostgreSQL real pendente da conclusão verde do workflow. O smoke test não fecha a auditoria global de autorização.
