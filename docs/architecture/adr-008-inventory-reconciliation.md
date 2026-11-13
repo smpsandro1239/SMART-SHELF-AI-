@@ -74,7 +74,7 @@ A primeira implementação está na branch `main` (commit `d602c9427eea47f70a0a5
 ## Validação ainda necessária
 
 - [x] Testar duas aprovações simultâneas da mesma tarefa em PostgreSQL 16: exatamente uma resposta 201, uma 409 e um movimento/snapshot/evento.
-- Testar falhas entre a criação do snapshot, movimento e evento, confirmando rollback integral.
+- [ ] Confirmar no CI PostgreSQL 16 o cenário de falha entre a criação do snapshot, movimento e evento, confirmando rollback integral. O teste com falha forçada na auditoria e asserções de ausência de movimento/evento e preservação dos snapshots foi acrescentado ao smoke test no commit `057268d232c53284059d384d61859fa92ec46fb8`, mas ainda não há evidência de execução bem-sucedida.
 - [x] Exercitar os triggers append-only com tentativas reais de `UPDATE` e `DELETE` no CI PostgreSQL.
 - Tornar a janela de frescura configurável por loja/fonte; os 240 minutos atuais são um limite inicial conservador, não uma política final.
 - Validar a reconciliação com operadores e fontes reais antes de a usar como saldo operacional ou integração ERP/WMS.
