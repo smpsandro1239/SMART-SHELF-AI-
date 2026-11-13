@@ -45,7 +45,7 @@ Esta é a fonte de verdade para manter o SMART SHELF AI focado. Deve ser revista
 
 #### P0 — Integridade e fiabilidade operacional
 
-- [ ] Testar a cronologia completa criação → aprovação/atribuição → início → conclusão/cancelamento e garantir ausência de eventos duplicados.
+- [ ] Confirmar no CI PostgreSQL 16 a cronologia completa criação → atribuição → início → conclusão/cancelamento e a concorrência de transições, garantindo ausência de eventos duplicados. Foram acrescentados testes de cancelamento, rollback da alteração de estado quando a auditoria falha e duas atribuições simultâneas (uma 200 e uma 409); aguarda execução CI.
 - [ ] Completar a reconciliação ADR-008: confirmar no CI PostgreSQL 16 o novo cenário de rollback integral em falhas entre snapshot, movimento e auditoria; tornar a janela de frescura configurável por loja/fonte. A falha forçada de auditoria e asserções de rollback já foram acrescentadas ao smoke test no commit `057268d`; a execução bem-sucedida ainda não foi confirmada.
 - [x] Validar em PostgreSQL 16 a cadeia completa de migrações, o índice único parcial e duas criações manuais simultâneas através da API (uma resposta 201 e outra 409); confirmar que uma tarefa concluída liberta a combinação loja/prateleira/produto.
 - [x] Validar no CI PostgreSQL 16 o smoke test concorrente nos três caminhos de criação (manual, recomendação e decisão operacional aprovada), incluindo a sequência de auditoria esperada por tarefa vencedora (`CREATED`, e `APPROVED` quando aplicável).
@@ -109,8 +109,9 @@ Esta é a fonte de verdade para manter o SMART SHELF AI focado. Deve ser revista
 
 ### Próxima sequência de desenvolvimento
 
-1. [x] **Concorrência PostgreSQL:** smoke test dos caminhos manual, recomendação e decisão operacional aprovada validado no CI PostgreSQL 16, incluindo a sequência de auditoria esperada.
-2. **Reconciliação de stock:** endurecer a implementação inicial com testes de rollback integral, frescura configurável por loja/fonte e preparação do fluxo de confirmação na interface.
+1. [x] **Concorrência PostgreSQL na criação:** smoke test dos caminhos manual, recomendação e decisão operacional aprovada validado no CI PostgreSQL 16, incluindo a sequência de auditoria esperada.
+2. **Auditoria do ciclo de vida:** validar no CI a cronologia, rollback e concorrência das transições; testes adicionados nos commits `eca0778` e `9445c99`, ainda sem confirmação da execução CI.
+3. **Reconciliação de stock:** endurecer a implementação inicial com testes de rollback integral, frescura configurável por loja/fonte e preparação do fluxo de confirmação na interface.
 3. **Qualidade dos dados:** explicitar frescura/completude e separar os diferentes estados de stock.
 4. **Consenso temporal:** deduplicar alertas por SKU/localização e exigir persistência de evidência antes de criar ocorrências.
 5. **Previsão:** evoluir a baseline e criar avaliação retrospetiva antes de usar previsões em decisões reais.
@@ -129,7 +130,7 @@ Esta é a fonte de verdade para manter o SMART SHELF AI focado. Deve ser revista
 - Registar bloqueios e dependências externas e nunca declarar piloto, integração, modelo real ou produção concluídos sem evidência operacional.
 
 **Última revisão do roadmap:** 2026-11-13.  
-**Última validação confirmada:** CI do commit `a07c070f531ece7c346e0803141e0d192c339ec2` passou nos testes/compilação da API, build Web, migrações PostgreSQL 16 e suite completa. O smoke test PostgreSQL validou os três caminhos concorrentes de criação de tarefas, duas aprovações simultâneas da mesma reconciliação (uma 201 e uma 409), snapshot histórico intacto e triggers que bloqueiam UPDATE/DELETE dos movimentos. **Alteração posterior ainda sem validação CI confirmada:** o commit `057268d232c53284059d384d61859fa92ec46fb8` acrescentou uma falha forçada na auditoria para verificar rollback integral do movimento, snapshot resultante e evento. Continua pendente confirmar a execução desse cenário no CI e configurar a frescura por loja/fonte.  
+**Última validação confirmada:** CI do commit `a07c070f531ece7c346e0803141e0d192c339ec2` passou nos testes/compilação da API, build Web, migrações PostgreSQL 16 e suite completa. O smoke test PostgreSQL validou os três caminhos concorrentes de criação de tarefas, duas aprovações simultâneas da mesma reconciliação (uma 201 e uma 409), snapshot histórico intacto e triggers que bloqueiam UPDATE/DELETE dos movimentos. **Testes acrescentados posteriormente, ainda sem validação CI confirmada:** `057268d` acrescentou o rollback integral da reconciliação; `eca0778` acrescentou testes de cancelamento, transições repetidas e rollback de estado/auditoria; `9445c99` acrescentou concorrência de atribuição em PostgreSQL e verificação da cronologia completa. Continua pendente confirmar a execução destes cenários no CI e configurar a frescura por loja/fonte.  
 **REA externa:** consultar [comparação de soluções](docs/reverse-engineering/external-solutions.md) e [revisão de visão computacional](docs/architecture/retail-vision-rea.md); as referências comerciais e académicas orientam o roadmap, mas as suas métricas não são assumidas como resultados do nosso sistema.
 
 
