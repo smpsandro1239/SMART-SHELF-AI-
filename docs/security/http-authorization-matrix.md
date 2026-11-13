@@ -55,12 +55,16 @@ O ficheiro `apps/api/tests/test_auth_middleware_jwt.py` cobre:
 - cancelamento de tarefa por EMPLOYEE rejeitado (403);
 - histórico de eventos reservado a ADMIN/SUPERVISOR: EMPLOYEE recebe 403 mesmo para tarefa própria, e SUPERVISOR só consulta eventos da sua loja;
 - tentativa de consulta e cancelamento de tarefa de outra loja por SUPERVISOR rejeitada (403).
+- SUPERVISOR não cria tarefas de outra loja através dos fluxos manual, recomendação ou decisão operacional aprovada (403);
+- EMPLOYEE não cria tarefas a partir de decisões operacionais (403);
+- EMPLOYEE não reconcilia inventário, mesmo para tarefa da própria loja (403);
+- SUPERVISOR não reconcilia tarefas de outra loja (403).
 
 Os testes usam tokens criados pelo próprio módulo de segurança e o middleware HTTP real. Não substituem ainda uma suite completa de testes por endpoint nem a execução integral contra PostgreSQL.
 
 ## Limitações e próximos critérios de fecho
 
-- Expandir os testes JWT para cada método e rota administrativa, incluindo operações de retenção/legal hold, upload e leitura binária, OCR, embeddings e caminhos indiretos do worker.
+- Expandir os testes JWT para cada método e rota administrativa, incluindo operações de retenção/legal hold, upload e leitura binária, OCR, embeddings e caminhos indiretos do worker. A cobertura das três vias de criação de tarefas e da reconciliação de inventário foi acrescentada e passou no API CI `43411781067` e Quality Gates `43411781094`.
 - Manter cobertura JWT de atribuição e transições de tarefas; acrescentar ainda casos de conclusão parcial, alteração de quantidades e tentativas de atualização de tarefa atribuída a outro utilizador.
 - Executar a matriz contra PostgreSQL 16 no CI; SQLite serve apenas para testes HTTP rápidos.
 - Confirmar a política de acesso dos endpoints administrativos e a autorização no próprio worker antes de fechar a auditoria.
