@@ -203,6 +203,18 @@ def _enforce_store_scope(actor: models.User | None, store_id: int) -> None:
         raise HTTPException(status_code=403, detail="Access to this store is not allowed")
 
 
+def _lock_store_for_task_creation(db: Session, store_id: int) -> None:
+    """Serialize task creation per store on databases supporting row-level locks."""
+    store = (
+        db.query(models.Store)
+        .filter(models.Store.id == store_id)
+        .with_for_update()
+        .first()
+    )
+    if store is None:
+        raise HTTPException(status_code=404, detail="Store not found")
+
+
 @app.get("/health", tags=["system"])
 def health():
     return {"status": "ok", "service": "smart-shelf-ai-api", "environment": settings.app_env}
@@ -3838,6 +3850,7 @@ def create_replenishment_task(payload: ReplenishmentTaskCreate, request: Request
     ).first()
     if assignment is None:
         raise HTTPException(status_code=409, detail="Product is not assigned to this shelf")
+    _lock_store_for_task_creation(db, payload.store_id)
     active_task = db.query(models.ReplenishmentTask).filter(
         models.ReplenishmentTask.store_id == payload.store_id,
         models.ReplenishmentTask.shelf_id == payload.shelf_id,
@@ -3905,6 +3918,7 @@ def create_task_from_recommendation(
             detail=f"Cannot create replenishment task: recommendation status is {recommendation['recommendation_status']}",
         )
 
+    _lock_store_for_task_creation(db, payload.store_id)
     active_task = db.query(models.ReplenishmentTask).filter(
         models.ReplenishmentTask.store_id == payload.store_id,
         models.ReplenishmentTask.shelf_id == payload.shelf_id,
@@ -4619,6 +4633,7 @@ def create_task_from_operational_decision(
             },
         )
 
+    _lock_store_for_task_creation(db, payload.store_id)
     active_task = db.query(models.ReplenishmentTask).filter(
         models.ReplenishmentTask.store_id == payload.store_id,
         models.ReplenishmentTask.shelf_id == payload.shelf_id,
