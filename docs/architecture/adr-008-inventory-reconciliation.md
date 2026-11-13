@@ -27,9 +27,9 @@ Também não é seguro assumir que a quantidade efetivamente reposta deve ser ab
 8. O evento `INVENTORY_RECONCILED` entra na cronologia da tarefa com ator, quantidade, snapshot anterior e novo snapshot.
 9. A operação é transacional: movimento, snapshot resultante e evento de auditoria são confirmados ou revertidos em conjunto.
 
-## Modelo de dados proposto
+## Modelo de dados
 
-Tabela append-only `inventory_movements`:
+Tabela append-only `inventory_movements` (implementada):
 - `task_id` único e obrigatório;
 - `store_id`, `product_id`;
 - `movement_type` limitado a `BACKROOM_TO_SHELF`;
@@ -38,6 +38,12 @@ Tabela append-only `inventory_movements`:
 - `actor_user_id`, `reason`, `created_at`.
 
 A tabela não substitui os snapshots. É o registo de transferência que explica a diferença entre o snapshot de origem e o snapshot resultante.
+
+Tabela `inventory_freshness_policies` (implementada):
+- uma política por `store_id` + `source`;
+- `max_age_minutes` limitado entre 1 e 10080;
+- fallback de 240 minutos quando não existe política específica;
+- leitura e escrita apenas por ADMIN/SUPERVISOR, respeitando o isolamento do supervisor à sua loja.
 
 ## Limites e trabalho posterior
 
@@ -77,5 +83,6 @@ A primeira implementação está na branch `main` (commit `d602c9427eea47f70a0a5
 - [ ] Confirmar no CI PostgreSQL 16 o cenário de falha entre a criação do snapshot, movimento e evento, confirmando rollback integral. O teste com falha forçada na auditoria e asserções de ausência de movimento/evento e preservação dos snapshots foi acrescentado ao smoke test no commit `057268d232c53284059d384d61859fa92ec46fb8`, mas ainda não há evidência de execução bem-sucedida.
 - [x] Exercitar os triggers append-only com tentativas reais de `UPDATE` e `DELETE` no CI PostgreSQL.
 - [x] Tornar a janela de frescura configurável por loja/fonte, mantendo 240 minutos como fallback e limitando configurações entre 1 e 10080 minutos.
+- [x] Testar autorização por papel, isolamento por loja e atualização idempotente da política; a execução CI PostgreSQL continua pendente.
 - Validar a reconciliação com operadores e fontes reais antes de a usar como saldo operacional ou integração ERP/WMS.
 
