@@ -154,6 +154,8 @@ def auth_client(monkeypatch):
         ids["observation_b"] = observation_b.id
         ids["capture_session_a"] = capture_session_a.id
         ids["capture_session_b"] = capture_session_b.id
+        ids["shelf_a_assigned"] = shelf_a_assigned.id
+        ids["shelf_b"] = shelf_b.id
         store_ids = {"a": store_a.id, "b": store_b.id}
 
     def override_get_db():
@@ -565,16 +567,16 @@ def test_supervisor_observations_are_scoped_to_own_store(auth_client):
     own = client.get("/api/v1/observations", headers=headers)
     foreign_filter = client.get(
         "/api/v1/observations",
-        params={"shelf_id": 4},
+        params={"shelf_id": ids["shelf_b"]},
         headers=headers,
     )
     foreign_create = client.post(
         "/api/v1/observations",
-        json={"shelf_id": 4, "source": "simulation", "status": "EMPTY"},
+        json={"shelf_id": ids["shelf_b"], "source": "simulation", "status": "EMPTY"},
         headers=headers,
     )
 
-    assert all(row["shelf_id"] != 4 for row in own.json())
+    assert all(row["shelf_id"] != ids["shelf_b"] for row in own.json())
     assert foreign_filter.status_code == 200
     assert foreign_filter.json() == []
     assert foreign_create.status_code == 403
@@ -587,7 +589,7 @@ def test_supervisor_capture_sessions_are_scoped_to_own_store(auth_client):
     listed = client.get("/api/v1/capture-sessions", headers=headers)
     foreign_create = client.post(
         "/api/v1/capture-sessions",
-        json={"shelf_id": 4, "source_type": "mobile"},
+        json={"shelf_id": ids["shelf_b"], "source_type": "mobile"},
         headers=headers,
     )
     foreign_close = client.post(
@@ -607,7 +609,7 @@ def test_employee_cannot_create_or_close_capture_sessions(auth_client):
 
     create = client.post(
         "/api/v1/capture-sessions",
-        json={"shelf_id": 1, "source_type": "mobile"},
+        json={"shelf_id": ids["shelf_a_assigned"], "source_type": "mobile"},
         headers=headers,
     )
     close = client.post(
