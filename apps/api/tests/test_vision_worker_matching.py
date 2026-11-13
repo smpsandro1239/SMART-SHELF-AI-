@@ -383,3 +383,50 @@ def test_worker_rejects_image_path_outside_owning_store_directory(db, tmp_path, 
     stored_image = db.get(models.ShelfImage, image_id)
     assert stored_image.analysis_status == "FAILED"
     assert stored_image.analysis_error == "FileNotFoundError: processing failed"
+
+
+def test_worker_rejects_symlinked_image_file(db, tmp_path, monkeypatch):
+    import app.vision_worker as worker
+
+    store = models.Store(code="SYMLINK-GUARD", name="Symlink Guard")
+    db.add(store)
+    db.flush()
+    zone = models.Zone(store_id=store.id, name="Zona")
+    db.add(zone)
+    db.flush()
+    shelf = models.Shelf(zone_id=zone.id, code="SYMLINK-01")
+    db.add(shelf)
+    db.flush()
+    storage_root = tmp_path / "storage"
+    store_dir = storage_root / str(store.id)
+    store_dir.mkdir(parents=True)
+    outside_path = tmp_path / "outside.jpg"
+    outside_path.write_bytes(b"not-an-image")
+    linked_path = store_dir / "linked.jpg"
+    try:
+        linked_path.symlink_to(outside_path)
+    except (NotImplementedError, OSError) as exc:
+        pytest.skip(f"Symlinks are unavailable in this test environment: {exc}")
+    monkeypatch.setattr(worker.settings, "image_storage_path", str(storage_root))
+    image = models.ShelfImage(
+        shelf_id=shelf.id,
+        original_filename="linked.jpg",
+        storage_path=str(linked_path),
+        mime_type="image/jpeg",
+        file_size_bytes=13,
+        sha256="c" * 64,
+        analysis_status="PENDING",
+        retention_status="ACTIVE",
+    )
+    db.add(image)
+    db.commit()
+    image_id = image.id
+
+    class MustNotRun:
+        def analyze(self, path):
+            raise AssertionError("worker must not follow a symlinked image file")
+
+    assert worker.process_next_image(db, MustNotRun()) == image_id
+    stored_image = db.get(models.ShelfImage, image_id)
+    assert stored_image.analysis_status == "FAILED"
+    assert stored_image.analysis_error == "FileNotFoundError: processing failed"
