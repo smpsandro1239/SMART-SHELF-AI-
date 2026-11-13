@@ -17,6 +17,10 @@ Para aplicar manualmente as migrações depois de alterações ao schema:
 
     docker compose exec api alembic upgrade head
 
+A tabela interna `alembic_version` usa `VARCHAR(128)`, porque alguns identificadores históricos de revisão excedem o limite predefinido de 32 caracteres do Alembic. A inicialização alarga também instalações PostgreSQL existentes antes de aplicar novas revisões.
+
+O CI executa a cadeia completa `alembic upgrade head` num serviço PostgreSQL efémero, além dos testes da API. Este teste valida o dialecto PostgreSQL; não substitui a verificação de migração com cópia de segurança numa base de dados de produção.
+
 Para executar os testes localmente a partir de apps/api:
 
     pip install -r requirements.txt
