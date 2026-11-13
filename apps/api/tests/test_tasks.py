@@ -716,7 +716,7 @@ def test_bearer_middleware_authenticates_active_users_and_rejects_invalid_or_ina
             email="bearer-active@example.test",
             full_name="Utilizador ativo",
             password_hash="test-only-not-used",
-            role="SUPERVISOR",
+            role="EMPLOYEE",
             store_id=store.id,
             is_active=True,
         )
@@ -763,11 +763,11 @@ def test_bearer_middleware_authenticates_active_users_and_rejects_invalid_or_ina
         )
         assert authenticated.status_code == 200
         assert authenticated.json()["id"] == active_id
-        assert authenticated.json()["role"] == "SUPERVISOR"
+        assert authenticated.json()["role"] == "EMPLOYEE"
 
         forbidden_role = client.post(
             "/api/v1/shelf-images/1/ocr-runs",
             headers={"Authorization": f"Bearer {active_token}"},
             json={"provider": "test", "model_version": "v1", "regions": []},
         )
-        assert forbidden_role.status_code == 404
+        assert forbidden_role.status_code == 403
