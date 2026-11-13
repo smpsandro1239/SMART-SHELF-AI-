@@ -14,7 +14,7 @@ type Task = {
   id: number; store_id: number; shelf_id: number; product_id: number;
   priority: "LOW" | "NORMAL" | "HIGH" | "URGENT"; status: TaskStatus;
   assigned_to: string | null; assigned_user_id: number | null;
-  requested_quantity: number | null; notes: string | null; created_at: string;
+  requested_quantity: number | null; actual_quantity?: number | null; exception_reason?: string | null; notes: string | null; created_at: string;
 };
 type ShelfImage = { id: number; shelf_id: number; original_filename: string; mime_type: string; file_size_bytes: number; sha256: string; analysis_status: "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED"; analysis_error: string | null; analysis_started_at: string | null; analysis_completed_at: string | null; captured_at: string; created_at: string };
 type ShelfImageDetection = { id: number; shelf_image_id: number; product_id: number | null; label: string; confidence: number; x_min: number; y_min: number; x_max: number; y_max: number; model_version: string; sku_match_status?: "MATCHED" | "AMBIGUOUS" | "UNKNOWN" | null; sku_similarity?: number | null; sku_match_margin?: number | null; created_at: string };
@@ -246,11 +246,11 @@ export default function App() {
     finally { setLoading(false); }
   }
 
-  async function updateTask(task: Task, status: "ASSIGNED" | "IN_PROGRESS" | "COMPLETED", assignedUserId?: number) {
+  async function updateTask(task: Task, status: "ASSIGNED" | "IN_PROGRESS" | "COMPLETED", assignedUserId?: number, completion?: { actual_quantity: number; exception_reason?: string }) {
     setError("");
     try {
       await request<Task>(`/api/v1/tasks/${task.id}/status`, {
-        method: "PATCH", body: JSON.stringify({ status, ...(assignedUserId ? { assigned_user_id: assignedUserId } : {}) }),
+        method: "PATCH", body: JSON.stringify({ status, ...(assignedUserId ? { assigned_user_id: assignedUserId } : {}), ...(completion || {}) }),
       });
       await refresh();
     } catch (err) { setError(err instanceof Error ? err.message : "Não foi possível atualizar a tarefa."); }
@@ -744,16 +744,27 @@ export default function App() {
 function Metric({ icon, label, value, tone, detail }: { icon: ReactNode; label: string; value: number; tone: string; detail: string }) {
   return <article className="metric-card"><div className={`metric-icon ${tone}`}>{icon}</div><p>{label}</p><strong>{value.toLocaleString("pt-PT")}</strong><span>{detail}</span></article>;
 }
-function TaskRow({ task, canAssign, canProgress, onUpdate }: { task: Task; canAssign: boolean; canProgress: boolean; onUpdate: (task: Task, status: "ASSIGNED" | "IN_PROGRESS" | "COMPLETED", assignedUserId?: number) => void }) {
+function TaskRow({ task, canAssign, canProgress, onUpdate }: { task: Task; canAssign: boolean; canProgress: boolean; onUpdate: (task: Task, status: "ASSIGNED" | "IN_PROGRESS" | "COMPLETED", assignedUserId?: number, completion?: { actual_quantity: number; exception_reason?: string }) => void }) {
   const [assigneeId, setAssigneeId] = useState("");
+  const [actualQuantity, setActualQuantity] = useState(task.requested_quantity?.toString() || "");
+  const [exceptionReason, setExceptionReason] = useState("");
   const next = task.status === "ASSIGNED" ? "IN_PROGRESS" : task.status === "IN_PROGRESS" ? "COMPLETED" : null;
+  const actual = Number(actualQuantity);
+  const isValidCompletion = Number.isFinite(actual) && actual > 0
+    && (task.requested_quantity == null || actual <= task.requested_quantity)
+    && (task.requested_quantity == null || actual >= task.requested_quantity || exceptionReason.trim().length >= 3);
   return <div className="task-row">
     <div className="task-symbol"><ArrowDownToLine size={18} /></div>
     <div className="task-info"><strong>Reposição · Prateleira #{task.shelf_id}</strong><span>Produto #{task.product_id} · {task.assigned_to || "Por atribuir"} · #{task.id}</span></div>
-    <span className={`priority ${task.priority.toLowerCase()}`}>{task.priority}</span>
-    <span className={`task-status ${task.status.toLowerCase()}`}>{task.status.replace("_", " ")}</span>
-    {canAssign && task.status === "PENDING" && <div className="assign-control"><input aria-label={`ID do funcionário para a tarefa ${task.id}`} inputMode="numeric" placeholder="ID funcionário" value={assigneeId} onChange={e => setAssigneeId(e.target.value)} /><button className="row-action" disabled={!/^\d+$/.test(assigneeId) || Number(assigneeId) < 1} onClick={() => onUpdate(task, "ASSIGNED", Number(assigneeId))}>Atribuir</button></div>}
-    {canProgress && next && <button className="row-action" onClick={() => onUpdate(task, next)}>{next === "IN_PROGRESS" ? "Iniciar" : "Concluir"} <ArrowUpRight size={14} /></button>}
+    <span className={"priority " + task.priority.toLowerCase()}>{task.priority}</span>
+    <span className={"task-status " + task.status.toLowerCase()}>{task.status.replace("_", " ")}</span>
+    {canAssign && task.status === "PENDING" && <div className="assign-control"><input aria-label={"ID do funcionário para a tarefa " + task.id} inputMode="numeric" placeholder="ID funcionário" value={assigneeId} onChange={e => setAssigneeId(e.target.value)} /><button className="row-action" disabled={!/^\d+$/.test(assigneeId) || Number(assigneeId) < 1} onClick={() => onUpdate(task, "ASSIGNED", Number(assigneeId))}>Atribuir</button></div>}
+    {canProgress && task.status === "IN_PROGRESS" && <div className="assign-control task-completion">
+      <input aria-label={"Quantidade efetivamente reposta na tarefa " + task.id} type="number" min="0.001" step="0.001" placeholder={task.requested_quantity == null ? "Qtd. reposta" : "Qtd. reposta (pedido: " + task.requested_quantity + ")"} value={actualQuantity} onChange={e => setActualQuantity(e.target.value)} />
+      {task.requested_quantity != null && Number.isFinite(actual) && actual > 0 && actual < task.requested_quantity && <input aria-label={"Motivo da reposição parcial na tarefa " + task.id} placeholder="Motivo da diferença" value={exceptionReason} onChange={e => setExceptionReason(e.target.value)} />}
+      <button className="row-action" disabled={!isValidCompletion} onClick={() => onUpdate(task, "COMPLETED", undefined, { actual_quantity: actual, ...(exceptionReason.trim() ? { exception_reason: exceptionReason.trim() } : {}) })}>Concluir <ArrowUpRight size={14} /></button>
+    </div>}
+    {canProgress && next === "IN_PROGRESS" && <button className="row-action" onClick={() => onUpdate(task, "IN_PROGRESS")}>Iniciar <ArrowUpRight size={14} /></button>}
   </div>;
 }
 function StatusBar({ label, value, total, color }: { label: string; value: number; total: number; color: string }) {
