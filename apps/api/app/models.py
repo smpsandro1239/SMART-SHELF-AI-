@@ -365,7 +365,7 @@ class ReplenishmentTaskEvent(Base):
     """Append-only audit record for task approvals and lifecycle transitions."""
     __tablename__ = "replenishment_task_events"
     __table_args__ = (
-        CheckConstraint("event_type IN ('APPROVED', 'STATUS_CHANGED')", name="ck_task_event_type"),
+        CheckConstraint("event_type IN ('CREATED', 'APPROVED', 'STATUS_CHANGED')", name="ck_task_event_type"),
         CheckConstraint("actual_quantity IS NULL OR actual_quantity > 0", name="ck_task_event_actual_quantity_positive"),
         Index("ix_task_events_task_created", "task_id", "created_at"),
     )
