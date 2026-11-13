@@ -3883,6 +3883,9 @@ def create_replenishment_task(payload: ReplenishmentTaskCreate, request: Request
     data["status"] = "ASSIGNED" if (data["assigned_to"] or assigned_user_id) else "PENDING"
     item = models.ReplenishmentTask(**data)
     db.add(item)
+    db.flush()
+    _record_task_event(db, item, "CREATED", actor, to_status=item.status,
+                       reason="Tarefa criada manualmente.")
     db.commit()
     db.refresh(item)
     return item
@@ -4726,6 +4729,10 @@ def create_task_from_operational_decision(
     )
     db.add(task)
     db.flush()
+    _record_task_event(
+        db, task, "CREATED", actor, to_status=task.status,
+        reason="Tarefa criada a partir de decisão operacional aprovada.",
+    )
     _record_task_event(
         db, task, "APPROVED", actor, to_status=task.status,
         actual_quantity=requested,
