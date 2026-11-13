@@ -1,5 +1,7 @@
 import os
 import json
+from datetime import datetime, timedelta, timezone
+from uuid import uuid4
 
 os.environ["APP_ENV"] = "test"
 os.environ["DATABASE_URL"] = "sqlite:///./test_unused.db"
@@ -14,6 +16,7 @@ from sqlalchemy.exc import IntegrityError
 from app.database import Base, get_db
 from app import models  # noqa: F401
 from app.main import app
+import app.main as main_module
 
 TEST_ENGINE = create_engine(
     "sqlite://",
@@ -451,3 +454,107 @@ def test_task_status_and_audit_event_roll_back_together_when_audit_fails(monkeyp
         events = client.get(f"/api/v1/tasks/{task_id}/events")
         assert events.status_code == 200
         assert [event["event_type"] for event in events.json()] == ["CREATED"]
+
+
+
+def _freshness_reconciliation_context(client, snapshot_age_minutes: int):
+    store_id, shelf_id, product_id = create_task_context(client)
+    snapshot = client.post("/api/v1/inventory/snapshots", json={
+        "store_id": store_id,
+        "product_id": product_id,
+        "on_hand_quantity": 20,
+        "reserved_quantity": 2,
+        "source": "WMS",
+        "external_reference": f"FRESH-{uuid4().hex[:10]}",
+        "captured_at": (datetime.now(timezone.utc) - timedelta(minutes=snapshot_age_minutes)).isoformat(),
+    })
+    assert snapshot.status_code == 201, snapshot.text
+    task = client.post("/api/v1/tasks", json={
+        "store_id": store_id, "shelf_id": shelf_id, "product_id": product_id,
+        "requested_quantity": 5,
+    })
+    assert task.status_code == 201, task.text
+    task_id = task.json()["id"]
+    assert client.patch(f"/api/v1/tasks/{task_id}/status", json={
+        "status": "ASSIGNED", "assigned_to": "operador",
+    }).status_code == 200
+    assert client.patch(f"/api/v1/tasks/{task_id}/status", json={
+        "status": "IN_PROGRESS",
+    }).status_code == 200
+    completed = client.patch(f"/api/v1/tasks/{task_id}/status", json={
+        "status": "COMPLETED", "actual_quantity": 4,
+    })
+    assert completed.status_code == 200, completed.text
+
+    db = TestingSession()
+    try:
+        actor = models.User(
+            email=f"freshness-{uuid4().hex}@example.test",
+            store_id=store_id,
+            full_name="Freshness Supervisor",
+            password_hash="test-only-not-used",
+            role="SUPERVISOR",
+            is_active=True,
+        )
+        db.add(actor)
+        db.commit()
+        db.refresh(actor)
+        return store_id, task_id, actor
+    finally:
+        db.close()
+
+
+def test_reconciliation_uses_configured_freshness_for_store_and_source(monkeypatch):
+    with TestClient(app) as client:
+        store_id, task_id, actor = _freshness_reconciliation_context(client, 300)
+        monkeypatch.setattr(main_module, "_request_user", lambda db, request: actor)
+
+        configured = client.post("/api/v1/inventory/freshness-policies", json={
+            "store_id": store_id, "source": "WMS", "max_age_minutes": 360,
+        })
+        assert configured.status_code == 200, configured.text
+        assert configured.json()["max_age_minutes"] == 360
+
+        response = client.post(
+            f"/api/v1/tasks/{task_id}/reconcile-inventory",
+            json={"reason": "Política WMS específica da loja"},
+        )
+        assert response.status_code == 201, response.text
+
+        policies = client.get(
+            "/api/v1/inventory/freshness-policies",
+            params={"store_id": store_id},
+        )
+        assert policies.status_code == 200
+        assert [(item["source"], item["max_age_minutes"]) for item in policies.json()] == [("WMS", 360)]
+
+
+def test_reconciliation_rejects_snapshot_outside_configured_source_window(monkeypatch):
+    with TestClient(app) as client:
+        store_id, task_id, actor = _freshness_reconciliation_context(client, 180)
+        monkeypatch.setattr(main_module, "_request_user", lambda db, request: actor)
+
+        configured = client.post("/api/v1/inventory/freshness-policies", json={
+            "store_id": store_id, "source": "WMS", "max_age_minutes": 120,
+        })
+        assert configured.status_code == 200, configured.text
+
+        response = client.post(
+            f"/api/v1/tasks/{task_id}/reconcile-inventory",
+            json={"reason": "Snapshot fora da janela WMS"},
+        )
+        assert response.status_code == 409
+        detail = response.json()["detail"]
+        assert detail["code"] == "INVENTORY_SNAPSHOT_STALE"
+        assert detail["source"] == "WMS"
+        assert detail["max_age_minutes"] == 120
+
+
+def test_inventory_freshness_policy_rejects_out_of_range_values(monkeypatch):
+    with TestClient(app) as client:
+        store_id, _, actor = _freshness_reconciliation_context(client, 10)
+        monkeypatch.setattr(main_module, "_request_user", lambda db, request: actor)
+        response = client.post("/api/v1/inventory/freshness-policies", json={
+            "store_id": store_id, "source": "WMS", "max_age_minutes": 0,
+        })
+        assert response.status_code == 422
