@@ -4941,15 +4941,29 @@ def update_replenishment_task_status(
     if payload.status not in allowed[task.status]:
         raise HTTPException(status_code=409, detail=f"Transition from {task.status} to {payload.status} is not allowed")
 
+    normalized_exception_reason = (
+        payload.exception_reason.strip()
+        if payload.exception_reason is not None
+        else None
+    )
+    if normalized_exception_reason is not None and len(normalized_exception_reason) < 3:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "EXCEPTION_REASON_TOO_SHORT",
+                "message": "O motivo deve conter pelo menos três caracteres não brancos.",
+            },
+        )
+
     if payload.status == "COMPLETED":
         if payload.actual_quantity is None:
             raise HTTPException(status_code=422, detail={"code": "ACTUAL_QUANTITY_REQUIRED", "message": "Indique a quantidade efetivamente reposta."})
         if task.requested_quantity is not None and payload.actual_quantity > float(task.requested_quantity):
             raise HTTPException(status_code=409, detail={"code": "ACTUAL_QUANTITY_EXCEEDS_REQUESTED", "requested_quantity": float(task.requested_quantity)})
-        if task.requested_quantity is not None and payload.actual_quantity < float(task.requested_quantity) and not payload.exception_reason:
+        if task.requested_quantity is not None and payload.actual_quantity < float(task.requested_quantity) and not normalized_exception_reason:
             raise HTTPException(status_code=422, detail={"code": "PARTIAL_COMPLETION_REASON_REQUIRED", "message": "Explique a diferença entre a quantidade pedida e a quantidade reposta."})
     elif payload.status == "CANCELLED":
-        if not payload.exception_reason:
+        if not normalized_exception_reason:
             raise HTTPException(status_code=422, detail={"code": "CANCELLATION_REASON_REQUIRED", "message": "Indique o motivo do cancelamento."})
         if payload.actual_quantity is not None:
             raise HTTPException(status_code=422, detail="Actual quantity is only valid when completing a task")
@@ -4979,14 +4993,14 @@ def update_replenishment_task_status(
     elif payload.status == "COMPLETED":
         task.completed_at = now
         task.actual_quantity = payload.actual_quantity
-        task.exception_reason = payload.exception_reason
+        task.exception_reason = normalized_exception_reason
     elif payload.status == "CANCELLED":
-        task.exception_reason = payload.exception_reason
+        task.exception_reason = normalized_exception_reason
 
     _record_task_event(
         db, task, "STATUS_CHANGED", actor, from_status=previous_status,
         to_status=payload.status, actual_quantity=payload.actual_quantity,
-        reason=payload.exception_reason,
+        reason=normalized_exception_reason,
     )
     db.commit()
     db.refresh(task)
