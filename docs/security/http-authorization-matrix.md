@@ -142,3 +142,7 @@ O teste parametrizado `test_employee_cannot_use_supervisor_managed_write_endpoin
 ## Cobertura JWT — isolamento multi-loja nas operações de armazém
 
 O teste `test_supervisor_jwt_cannot_access_foreign_warehouse_resources` usa JWT real de SUPERVISOR da loja A e tenta consultar localizações, paletes e políticas de rotação da loja B, bem como criar uma localização, registar uma palete, criar uma política e simular rotação na loja B. Os sete pedidos têm de receber HTTP 403. Os pedidos de escrita usam payloads estruturalmente válidos para garantir que a rejeição decorre do âmbito da loja, antes de validações de entidades ou persistência. Esta cobertura valida os handlers de âmbito explícito para estes recursos; não certifica todos os endpoints de armazém nem substitui a auditoria por rota.
+
+## Validação CI — isolamento de armazém por loja
+
+O commit `4b0a023ca7996864c4dfc40dc3703a067785bc4f` passou no API CI `43468474493` e Quality Gates `43468474322`. A suite terminou com **746 testes aprovados e 1 ignorado**; migrações e smoke tests PostgreSQL 16, compilação Python e build TypeScript/Vite passaram. O novo teste JWT de SUPERVISOR acrescenta sete verificações cross-store no armazém. O fixture HTTP continua a usar SQLite; não se declara validação PostgreSQL individual desses sete handlers.
