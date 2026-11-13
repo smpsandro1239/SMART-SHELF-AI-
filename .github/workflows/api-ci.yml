@@ -14,6 +14,20 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: smart_shelf_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d smart_shelf_ci"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     defaults:
       run:
         working-directory: apps/api
@@ -30,9 +44,9 @@ jobs:
           cache-dependency-path: apps/api/requirements.txt
       - name: Install dependencies
         run: pip install -r requirements.txt
-      - name: Smoke-test Alembic migrations on SQLite
+      - name: Smoke-test Alembic migrations on PostgreSQL
         env:
-          DATABASE_URL: sqlite:///./ci_migrations.db
+          DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/smart_shelf_ci
           APP_ENV: test
         run: alembic upgrade head
       - name: Run tests
