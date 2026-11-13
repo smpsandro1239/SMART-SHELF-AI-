@@ -1361,3 +1361,142 @@ def test_supervisor_jwt_cannot_read_or_write_foreign_inventory_and_placement_res
             f"SUPERVISOR must not access foreign {resource}; "
             f"received HTTP {response.status_code}: {response.text}"
         )
+
+def test_supervisor_jwt_cannot_read_foreign_sales_forecasts_or_warehouse_analytics(auth_client):
+    client, ids, store_ids = auth_client
+    headers = bearer(ids["supervisor_a"], "SUPERVISOR")
+    foreign_store_id = store_ids["b"]
+    product_id = ids["product"]
+
+    requests = {
+        "hourly sales history": client.get(
+            "/api/v1/sales/hourly",
+            params={"store_id": foreign_store_id},
+            headers=headers,
+        ),
+        "hourly traffic history": client.get(
+            "/api/v1/sales/traffic/hourly",
+            params={"store_id": foreign_store_id},
+            headers=headers,
+        ),
+        "daily sales history": client.get(
+            "/api/v1/sales/daily",
+            params={"store_id": foreign_store_id, "product_id": product_id, "source": "POS"},
+            headers=headers,
+        ),
+        "traffic peak analytics": client.get(
+            "/api/v1/forecasting/traffic-peaks",
+            params={"store_id": foreign_store_id},
+            headers=headers,
+        ),
+        "hourly demand forecast": client.get(
+            "/api/v1/forecasting/hourly-demand",
+            params={"store_id": foreign_store_id, "product_id": product_id},
+            headers=headers,
+        ),
+        "daily demand forecast": client.get(
+            "/api/v1/forecasting/demand",
+            params={
+                "store_id": foreign_store_id,
+                "product_id": product_id,
+                "source": "POS",
+                "lead_time_days": 2,
+            },
+            headers=headers,
+        ),
+        "stockout risk": client.get(
+            "/api/v1/forecasting/stockout-risk",
+            params={
+                "store_id": foreign_store_id,
+                "product_id": product_id,
+                "source": "POS",
+                "lead_time_days": 2,
+            },
+            headers=headers,
+        ),
+        "stockout risk portfolio": client.get(
+            "/api/v1/forecasting/stockout-risk/portfolio",
+            params={
+                "store_id": foreign_store_id,
+                "source": "POS",
+                "lead_time_days": 2,
+            },
+            headers=headers,
+        ),
+        "pallet hourly demand profile": client.get(
+            "/api/v1/warehouse/pallet-rotation/hourly-profile",
+            params={"store_id": foreign_store_id, "product_id": product_id},
+            headers=headers,
+        ),
+        "pallet weekday/hour profile": client.get(
+            "/api/v1/warehouse/pallet-rotation/weekday-hourly-profile",
+            params={"store_id": foreign_store_id, "product_id": product_id},
+            headers=headers,
+        ),
+        "pallet rotation window plan": client.get(
+            "/api/v1/warehouse/pallet-rotation/window-plan",
+            params={
+                "store_id": foreign_store_id,
+                "product_id": product_id,
+                "pallet_id": 999999,
+                "current_hour": 12,
+                "residual_base_units": 1,
+            },
+            headers=headers,
+        ),
+        "historical pallet portfolio": client.get(
+            "/api/v1/warehouse/pallet-rotation/portfolio-from-history",
+            params={"store_id": foreign_store_id, "current_hour": 12},
+            headers=headers,
+        ),
+        "pallet rotation portfolio": client.get(
+            "/api/v1/warehouse/pallet-rotation/portfolio",
+            params={
+                "store_id": foreign_store_id,
+                "traffic_level": "UNKNOWN",
+                "forecast_consumption_until_low_traffic": 0,
+            },
+            headers=headers,
+        ),
+        "pallet lifecycle events": client.get(
+            "/api/v1/warehouse/pallets/999999/events",
+            params={"store_id": foreign_store_id},
+            headers=headers,
+        ),
+        "replenishment pack calculation": client.get(
+            "/api/v1/warehouse/replenishment-units",
+            params={
+                "store_id": foreign_store_id,
+                "product_id": product_id,
+                "required_base_units": 1,
+                "packaging_code": "CASE",
+            },
+            headers=headers,
+        ),
+        "physical warehouse slotting": client.get(
+            "/api/v1/warehouse/physical-slotting",
+            params={
+                "store_id": foreign_store_id,
+                "product_id": product_id,
+                "required_quantity": 1,
+            },
+            headers=headers,
+        ),
+        "replenishment recommendations": client.get(
+            "/api/v1/replenishment/recommendations",
+            params={"store_id": foreign_store_id},
+            headers=headers,
+        ),
+        "replenishment plan": client.get(
+            "/api/v1/replenishment/plan",
+            params={"store_id": foreign_store_id},
+            headers=headers,
+        ),
+    }
+
+    for resource, response in requests.items():
+        assert response.status_code == 403, (
+            f"SUPERVISOR must not access foreign {resource}; "
+            f"received HTTP {response.status_code}: {response.text}"
+        )
+
