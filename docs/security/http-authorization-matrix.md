@@ -67,6 +67,8 @@ O ficheiro `apps/api/tests/test_auth_middleware_jwt.py` cobre:
 - EMPLOYEE não acede às decisões operacionais nem aos indicadores de carga da equipa (403);
 - observações e sessões de captura: isolamento multi-loja e restrições de criação/fecho, cobertos pelos testes adicionados nesta ronda.
 
+- validação JWT dos endpoints de importação em lote de vendas horárias e tráfego: SUPERVISOR recebe 422 quando tenta misturar lojas no mesmo lote, e EMPLOYEE recebe 403 para ambos os endpoints;
+
 Os testes usam tokens criados pelo próprio módulo de segurança e o middleware HTTP real. Não substituem ainda uma suite completa de testes por endpoint nem a execução integral contra PostgreSQL.
 
 ## Limitações e próximos critérios de fecho
