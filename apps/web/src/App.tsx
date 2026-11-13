@@ -524,7 +524,7 @@ export default function App() {
     }
   }
 
-  const taskRows = useMemo(() => tasks.filter(t => !["CANCELLED"].includes(t.status)), [tasks]);
+  const taskRows = useMemo(() => tasks, [tasks]);
   const taskTotal = summary ? Object.values(summary.tasks).reduce((a, b) => a + b, 0) : 0;
 
   if (!token) return (
@@ -899,7 +899,7 @@ function TaskRow({
       {!eventsLoading && events?.length === 0 && <span>Sem eventos registados.</span>}
       {!eventsLoading && events && events.length > 0 && <ol>
         {events.map(event => <li key={event.id}>
-          <span className="task-event-heading">{event.event_type.replaceAll("_", " ")} · {new Date(event.created_at).toLocaleString("pt-PT")}</span>
+          <span className="task-event-heading">{event.event_type.replace(/_/g, " ")} · {new Date(event.created_at).toLocaleString("pt-PT")}</span>
           <span>{event.from_status ? `${event.from_status} → ${event.to_status}` : event.to_status || "Evento registado"} · Ator #{event.actor_user_id ?? "sistema"}</span>
           {event.actual_quantity != null && <span>Quantidade: {event.actual_quantity}</span>}
           {event.reason && <span>Motivo: {event.reason}</span>}
