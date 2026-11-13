@@ -164,3 +164,31 @@ def test_operational_decisions_prioritize_high_confidence_empty_shelves():
         assert body["zone_summaries"][0]["zone_name"] == "Bebidas"
         assert body["zone_summaries"][0]["high_priority"] == 1
         assert body["zone_summaries"][0]["urgent_items"][0]["product_sku"] == "DEC-SKU-02"
+
+
+def test_backroom_snapshot_is_not_misused_as_shelf_inventory_or_coverage():
+    with TestClient(app) as client:
+        store_id, shelf_id, product_id = create_context(client)
+        observation = client.post("/api/v1/observations", json={
+            "shelf_id": shelf_id, "source": "simulation",
+            "status": "EMPTY", "confidence": 0.99,
+        })
+        assert observation.status_code == 201
+        snapshot = client.post("/api/v1/inventory/snapshots", json={
+            "store_id": store_id, "product_id": product_id,
+            "on_hand_quantity": 20, "reserved_quantity": 5,
+            "source": "MANUAL", "external_reference": "BACKROOM-TEST-01",
+        })
+        assert snapshot.status_code == 201
+
+        response = client.get("/api/v1/operational-decisions", params={"store_id": store_id})
+        assert response.status_code == 200
+        item = response.json()["decisions"][0]
+        decision = item["decision"]
+        assert decision["status"] == "ACTION_RECOMMENDED"
+        assert decision["suggested_replenishment_quantity"] is None
+        assert decision["inventory_coverage_hours"] is None
+        assert item["backroom_inventory"]["on_hand_quantity"] == 20
+        assert item["backroom_inventory"]["reserved_quantity"] == 5
+        assert item["backroom_inventory"]["available_quantity"] == 15
+        assert any("retaguarda" in warning for warning in decision["warnings"])
