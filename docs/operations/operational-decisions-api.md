@@ -59,3 +59,14 @@ A ordenação das zonas favorece primeiro as que têm mais prioridades altas e r
 Os registos `InventorySnapshot` representam stock de retaguarda (em mão, reservado e disponível). Não representam uma contagem da exposição. Por isso, o endpoint de decisões operacionais não os injeta no motor como inventário da prateleira nem calcula cobertura de exposição a partir deles.
 
 O campo `backroom_inventory` apresenta as quantidades e a data da captura, mantendo explícita a origem. A observação visual EMPTY/LOW_STOCK pode justificar avaliação operacional, mas não permite deduzir uma quantidade exata a repor. Para uma proposta quantitativa, usar o fluxo de recomendações de reposição, que combina quantidade observada na prateleira, quantidade-alvo e stock disponível na retaguarda.
+
+
+## Avaliação quantitativa de reposição
+
+Cada decisão pode incluir `replenishment_assessment`, uma proposta separada do estado geral da decisão. Só é calculada quando existe uma observação `LOW_STOCK` ou `EMPTY` com quantidade medida, confiança suficiente e idade máxima de 120 minutos.
+
+A quantidade proposta é limitada simultaneamente pela diferença entre a quantidade observada e a quantidade-alvo da prateleira e pelo stock disponível na retaguarda. O resultado identifica a diferença total, a quantidade proposta e a diferença que continua por cobrir.
+
+O snapshot de retaguarda tem de ter no máximo 240 minutos e não pode ter data futura. Snapshots antigos ou futuros são apresentados como evidência não atualizada e não podem suportar uma quantidade. Observações futuras também são rejeitadas. Quando a observação não inclui uma contagem física, o estado é `QUANTITY_NOT_MEASURED` e a quantidade sugerida permanece nula.
+
+A proposta não cria tarefas, não reserva stock e não movimenta produtos. A validação humana continua obrigatória antes de qualquer execução.
