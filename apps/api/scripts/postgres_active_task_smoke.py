@@ -8,16 +8,23 @@ from fastapi.testclient import TestClient
 from app.main import app
 
 
-def assert_single_created_event(client: TestClient, task_id: int) -> None:
-    """Ensure one successful creation produces exactly one initial audit event."""
+def assert_task_creation_audit(
+    client: TestClient,
+    task_id: int,
+    expected_event_types: tuple[str, ...] = ("CREATED",),
+) -> None:
+    """Verify the exact atomic audit trail for one successful task creation."""
     response = client.get(f"/api/v1/tasks/{task_id}/events")
     assert response.status_code == 200, response.text
     events = response.json()
-    assert len(events) == 1, events
-    assert events[0]["task_id"] == task_id
-    assert events[0]["event_type"] == "CREATED"
+    assert [event["event_type"] for event in events] == list(expected_event_types), events
+    assert all(event["task_id"] == task_id for event in events)
     assert events[0]["from_status"] is None
     assert events[0]["to_status"] == "PENDING"
+    if "APPROVED" in expected_event_types:
+        approved_event = next(event for event in events if event["event_type"] == "APPROVED")
+        assert approved_event["actual_quantity"] > 0
+        assert approved_event["to_status"] == "PENDING"
 
 
 def main() -> None:
@@ -80,7 +87,7 @@ def main() -> None:
         assert conflicts[0].json()["detail"]["code"] == "ACTIVE_TASK_EXISTS"
 
         task_id = created[0].json()["id"]
-        assert_single_created_event(client, task_id)
+        assert_task_creation_audit(client, task_id)
         assigned = client.patch(
             f"/api/v1/tasks/{task_id}/status",
             json={"status": "ASSIGNED", "assigned_to": "CI operator"},
@@ -99,7 +106,7 @@ def main() -> None:
 
         replacement = client.post("/api/v1/tasks", json=payload)
         assert replacement.status_code == 201, replacement.text
-        assert_single_created_event(client, replacement.json()["id"])
+        assert_task_creation_audit(client, replacement.json()["id"])
 
         # Exercise the validated-recommendation creation path against the same
         # PostgreSQL unique index, using a distinct SKU on the existing shelf.
@@ -180,7 +187,7 @@ def main() -> None:
             recommendation_conflicts[0].json()["detail"]["code"]
             == "ACTIVE_TASK_EXISTS"
         )
-        assert_single_created_event(client, recommendation_created[0].json()["id"])
+        assert_task_creation_audit(client, recommendation_created[0].json()["id"])
 
         # Exercise explicit approval through the operational-decision path.
         decision_product = client.post(
@@ -256,7 +263,10 @@ def main() -> None:
             response.text for response in decision_responses
         ]
         assert decision_conflicts[0].json()["detail"]["code"] == "ACTIVE_TASK_EXISTS"
-        assert_single_created_event(client, decision_created[0].json()["id"])
+        assert_task_creation_audit(
+            client, decision_created[0].json()["id"],
+            expected_event_types=("CREATED", "APPROVED"),
+        )
 
         print(
             "PostgreSQL concurrent task creation: PASS "
