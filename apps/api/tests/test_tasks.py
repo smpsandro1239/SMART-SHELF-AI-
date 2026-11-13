@@ -195,6 +195,7 @@ def test_task_can_be_created_from_verified_recommendation_only_once():
 
         duplicate = client.post("/api/v1/tasks/from-recommendation", json=payload)
         assert duplicate.status_code == 409
+        assert duplicate.json()["detail"]["code"] == "ACTIVE_TASK_EXISTS"
 
 
 def test_task_from_recommendation_is_rejected_without_backroom_stock():
