@@ -110,7 +110,7 @@ Esta é a fonte de verdade para manter o SMART SHELF AI focado. Deve ser revista
 ### Próxima sequência de desenvolvimento
 
 1. [x] **Concorrência PostgreSQL:** smoke test dos caminhos manual, recomendação e decisão operacional aprovada validado no CI PostgreSQL 16, incluindo a sequência de auditoria esperada.
-2. **Reconciliação de stock:** implementar movimentos imutáveis para quantidades efetivamente repostas, com aprovação e auditoria.
+2. **Reconciliação de stock:** endurecer a implementação inicial com testes de rollback integral, frescura configurável por loja/fonte e preparação do fluxo de confirmação na interface.
 3. **Qualidade dos dados:** explicitar frescura/completude e separar os diferentes estados de stock.
 4. **Consenso temporal:** deduplicar alertas por SKU/localização e exigir persistência de evidência antes de criar ocorrências.
 5. **Previsão:** evoluir a baseline e criar avaliação retrospetiva antes de usar previsões em decisões reais.
