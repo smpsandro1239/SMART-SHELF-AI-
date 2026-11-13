@@ -168,3 +168,8 @@
 .decision-assessment>strong{font-size:10px;color:var(--text,#304256)}
 .decision-assessment>p{margin:0;font-size:9px;line-height:1.55;color:var(--muted,#8290a0)}
 .decision-assessment .decision-meta{display:flex;flex-wrap:wrap;gap:6px 14px}
+
+
+/* Human-approved operational task creation */
+.decision-approve{justify-self:start;min-height:34px;margin-top:3px;border:1px solid var(--accent,#315f8a);border-radius:8px;padding:7px 11px;background:var(--accent,#315f8a);color:#fff;font-size:10px;font-weight:650}
+.decision-approve:disabled{cursor:not-allowed;opacity:.45}
