@@ -270,3 +270,72 @@ def test_worker_does_not_claim_restricted_pending_images(db, tmp_path):
     assert worker.process_next_image(db, MustNotRun()) is None
     db.refresh(image)
     assert image.analysis_status == "PENDING"
+
+
+def test_worker_stops_before_ocr_when_image_is_restricted_during_inference(db, tmp_path):
+    import app.vision_worker as worker
+    from app.vision import DetectionResult, VisionAnalysis
+
+    store = models.Store(code="RACE-WORKER", name="Retention Race")
+    db.add(store)
+    db.flush()
+    zone = models.Zone(store_id=store.id, name="Zona")
+    db.add(zone)
+    db.flush()
+    shelf = models.Shelf(zone_id=zone.id, code="RACE-01")
+    db.add(shelf)
+    db.flush()
+    image_path = tmp_path / "race.jpg"
+    image_path.write_bytes(b"test-image")
+    image = models.ShelfImage(
+        shelf_id=shelf.id,
+        original_filename="race.jpg",
+        storage_path=str(image_path),
+        mime_type="image/jpeg",
+        file_size_bytes=10,
+        sha256="a" * 64,
+        analysis_status="PENDING",
+        retention_status="ACTIVE",
+    )
+    db.add(image)
+    db.commit()
+    image_id = image.id
+
+    class RestrictingVisionProvider:
+        def analyze(self, path):
+            # Simulate a separately committed retention request while inference runs.
+            stored = db.get(models.ShelfImage, image_id)
+            stored.retention_status = "RESTRICTED"
+            stored.retention_reason = "Pedido de privacidade"
+            db.commit()
+            return VisionAnalysis(
+                model_version="detector-race-v1",
+                detections=[
+                    DetectionResult(
+                        label="product",
+                        confidence=0.95,
+                        x_min=0.1,
+                        y_min=0.1,
+                        x_max=0.8,
+                        y_max=0.8,
+                    )
+                ],
+            )
+
+    class MustNotRunOCR:
+        def recognize(self, path):
+            raise AssertionError("OCR must not process an image restricted during inference")
+
+    processed = worker.process_next_image(
+        db,
+        RestrictingVisionProvider(),
+        ocr_provider=MustNotRunOCR(),
+    )
+
+    assert processed == image_id
+    stored_image = db.get(models.ShelfImage, image_id)
+    assert stored_image.retention_status == "RESTRICTED"
+    assert stored_image.analysis_status == "FAILED"
+    assert stored_image.analysis_error == "Image restricted during processing"
+    assert db.query(models.ShelfImageDetection).filter_by(shelf_image_id=image_id).count() == 0
+    assert db.query(models.ShelfImageOCRRun).filter_by(shelf_image_id=image_id).count() == 0
