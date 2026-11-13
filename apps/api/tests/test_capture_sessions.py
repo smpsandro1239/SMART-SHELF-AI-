@@ -130,7 +130,7 @@ def test_upload_links_image_to_open_capture_session(tmp_path, monkeypatch):
         uploaded = client.post(
             "/api/v1/shelf-images",
             data={"shelf_id": str(shelf_id), "capture_session_id": str(session_id)},
-            files={"image": ("frame.jpg", b"\xff\xd8\xff" + b"frame-data", "image/jpeg")},
+            files={"image": ("frame.jpg", _valid_image_bytes(), "image/jpeg")},
         )
         assert uploaded.status_code == 201
         assert uploaded.json()["capture_session_id"] == session_id
@@ -140,7 +140,7 @@ def test_upload_links_image_to_open_capture_session(tmp_path, monkeypatch):
         rejected = client.post(
             "/api/v1/shelf-images",
             data={"shelf_id": str(shelf_id), "capture_session_id": str(session_id)},
-            files={"image": ("late-frame.jpg", b"\xff\xd8\xff" + b"frame-data", "image/jpeg")},
+            files={"image": ("late-frame.jpg", _valid_image_bytes(), "image/jpeg")},
         )
         assert rejected.status_code == 409
         assert rejected.json()["detail"] == "Capture session is closed"
