@@ -898,3 +898,107 @@ def test_pallet_lifecycle_audit_endpoints_enforce_store_scope(monkeypatch):
             "REGISTERED",
             "STATUS_REVIEWED",
         ]
+
+
+
+def test_user_management_endpoints_require_admin_role_and_hash_password(monkeypatch):
+    with TestingSession() as db:
+        store = models.Store(code="USER-ADMIN-STORE", name="Loja gestão utilizadores")
+        db.add(store)
+        db.flush()
+        admin = models.User(
+            email="user-admin@example.test",
+            full_name="Administrador",
+            password_hash="test-only-not-used",
+            role="ADMIN",
+            store_id=None,
+            is_active=True,
+        )
+        supervisor = models.User(
+            email="user-supervisor@example.test",
+            full_name="Supervisor",
+            password_hash="test-only-not-used",
+            role="SUPERVISOR",
+            store_id=store.id,
+            is_active=True,
+        )
+        employee = models.User(
+            email="user-employee@example.test",
+            full_name="Colaborador",
+            password_hash="test-only-not-used",
+            role="EMPLOYEE",
+            store_id=store.id,
+            is_active=True,
+        )
+        db.add_all([admin, supervisor, employee])
+        db.commit()
+        db.refresh(admin)
+        db.refresh(supervisor)
+        db.refresh(employee)
+        admin_id, supervisor_id, employee_id = admin.id, supervisor.id, employee.id
+        store_id = store.id
+
+    monkeypatch.setattr(main_module.settings, "app_env", "development")
+    monkeypatch.setattr(main_module, "SessionLocal", TestingSession)
+    admin_token, _ = create_access_token(user_id=admin_id, role="EMPLOYEE")
+    supervisor_token, _ = create_access_token(user_id=supervisor_id, role="ADMIN")
+    employee_token, _ = create_access_token(user_id=employee_id, role="ADMIN")
+
+    headers = lambda token: {"Authorization": f"Bearer {token}"}
+    payload = {
+        "email": "  new.employee@example.test ",
+        "full_name": "Novo colaborador",
+        "password": "Strong-Test-Password-2026!",
+        "role": "EMPLOYEE",
+        "store_id": store_id,
+    }
+
+    with TestClient(app) as client:
+        created = client.post(
+            "/api/v1/auth/users",
+            headers=headers(admin_token),
+            json=payload,
+        )
+        assert created.status_code == 201
+        created_user = created.json()
+        assert created_user["email"] == "new.employee@example.test"
+        assert created_user["role"] == "EMPLOYEE"
+        assert created_user["store_id"] == store_id
+        assert "password" not in created_user
+        assert "password_hash" not in created_user
+
+        with TestingSession() as db:
+            stored_user = db.query(models.User).filter_by(
+                email="new.employee@example.test"
+            ).one()
+            assert stored_user.password_hash != payload["password"]
+            assert main_module.verify_password(
+                payload["password"], stored_user.password_hash
+            )
+
+        listed = client.get("/api/v1/auth/users", headers=headers(admin_token))
+        assert listed.status_code == 200
+        assert any(user["id"] == created_user["id"] for user in listed.json())
+
+        duplicate = client.post(
+            "/api/v1/auth/users",
+            headers=headers(admin_token),
+            json=payload,
+        )
+        assert duplicate.status_code == 409
+
+        for token in (supervisor_token, employee_token):
+            denied_create = client.post(
+                "/api/v1/auth/users",
+                headers=headers(token),
+                json={
+                    **payload,
+                    "email": "forbidden-create@example.test",
+                },
+            )
+            assert denied_create.status_code == 403
+            denied_list = client.get(
+                "/api/v1/auth/users",
+                headers=headers(token),
+            )
+            assert denied_list.status_code == 403
