@@ -273,3 +273,69 @@ def test_future_observation_and_future_inventory_are_not_accepted_for_refill():
         assert item["backroom_inventory"]["is_fresh"] is False
         assert item["replenishment_assessment"]["status"] == "FUTURE_OBSERVATION"
         assert item["replenishment_assessment"]["suggested_quantity"] is None
+
+
+def test_operational_decision_task_requires_explicit_approval_and_revalidates_evidence():
+    with TestClient(app) as client:
+        store_id, shelf_id, product_id = create_context(client)
+        observation = client.post("/api/v1/observations", json={
+            "shelf_id": shelf_id, "source": "simulation",
+            "status": "LOW_STOCK", "confidence": 0.98,
+            "observed_quantity": 2,
+        })
+        assert observation.status_code == 201
+        snapshot = client.post("/api/v1/inventory/snapshots", json={
+            "store_id": store_id, "product_id": product_id,
+            "on_hand_quantity": 8, "reserved_quantity": 3,
+            "source": "MANUAL", "external_reference": "APPROVAL-01",
+        })
+        assert snapshot.status_code == 201
+
+        payload = {
+            "store_id": store_id, "shelf_id": shelf_id,
+            "product_id": product_id, "priority": "HIGH",
+        }
+        rejected = client.post("/api/v1/tasks/from-operational-decision", json=payload)
+        assert rejected.status_code == 400
+        assert rejected.json()["detail"]["code"] == "HUMAN_APPROVAL_REQUIRED"
+        assert client.get("/api/v1/tasks", params={"store_id": store_id}).json() == []
+
+        created = client.post(
+            "/api/v1/tasks/from-operational-decision?approved=true", json=payload,
+        )
+        assert created.status_code == 201
+        task = created.json()
+        assert task["requested_quantity"] == 5
+        assert task["status"] == "PENDING"
+        assert "Aprovado manualmente" in task["notes"]
+
+        duplicate = client.post(
+            "/api/v1/tasks/from-operational-decision?approved=true", json=payload,
+        )
+        assert duplicate.status_code == 409
+        assert duplicate.json()["detail"]["code"] == "ACTIVE_TASK_EXISTS"
+
+
+def test_operational_decision_task_cannot_exceed_validated_refill_quantity():
+    with TestClient(app) as client:
+        store_id, shelf_id, product_id = create_context(client)
+        client.post("/api/v1/observations", json={
+            "shelf_id": shelf_id, "source": "simulation",
+            "status": "LOW_STOCK", "confidence": 0.98,
+            "observed_quantity": 2,
+        })
+        client.post("/api/v1/inventory/snapshots", json={
+            "store_id": store_id, "product_id": product_id,
+            "on_hand_quantity": 8, "reserved_quantity": 3,
+            "source": "MANUAL", "external_reference": "APPROVAL-02",
+        })
+        response = client.post(
+            "/api/v1/tasks/from-operational-decision?approved=true",
+            json={
+                "store_id": store_id, "shelf_id": shelf_id,
+                "product_id": product_id, "requested_quantity": 6,
+            },
+        )
+        assert response.status_code == 409
+        assert response.json()["detail"]["code"] == "REQUEST_EXCEEDS_APPROVED_QUANTITY"
+        assert client.get("/api/v1/tasks", params={"store_id": store_id}).json() == []
