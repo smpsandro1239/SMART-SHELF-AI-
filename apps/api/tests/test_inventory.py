@@ -295,7 +295,9 @@ def _completed_replenishment(client, *, snapshot_age_minutes: int = 5, on_hand: 
     }).status_code == 200
     assert client.patch(f"/api/v1/tasks/{task_id}/status", json={"status": "IN_PROGRESS"}).status_code == 200
     completed = client.patch(f"/api/v1/tasks/{task_id}/status", json={
-        "status": "COMPLETED", "actual_quantity": 4,
+        "status": "COMPLETED",
+        "actual_quantity": 4,
+        "exception_reason": "Reposição parcial confirmada para o teste.",
     })
     assert completed.status_code == 200, completed.text
     return store_id, product_id, task_id, snapshot.json()["id"]
