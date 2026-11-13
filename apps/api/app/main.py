@@ -4115,17 +4115,70 @@ def operational_decisions(
 
     counts = {}
     priority_counts = {}
+    zone_rollups = {}
     for item in decisions:
-        key = item["decision"]["status"]
+        decision = item["decision"]
+        key = decision["status"]
         counts[key] = counts.get(key, 0) + 1
-        priority = item["decision"].get("priority", "NONE")
+        priority = decision.get("priority", "NONE")
         priority_counts[priority] = priority_counts.get(priority, 0) + 1
+        zone_key = (item["store_id"], item["zone_name"])
+        rollup = zone_rollups.setdefault(zone_key, {
+            "store_id": item["store_id"], "zone_name": item["zone_name"],
+            "items_evaluated": 0, "action_recommended": 0,
+            "high_priority": 0, "already_in_progress": 0,
+            "insufficient_evidence": 0, "monitor": 0,
+            "lowest_coverage_hours": None, "urgent_items": [],
+        })
+        rollup["items_evaluated"] += 1
+        if key == "ACTION_RECOMMENDED":
+            rollup["action_recommended"] += 1
+            if priority == "HIGH":
+                rollup["high_priority"] += 1
+            coverage = decision.get("inventory_coverage_hours")
+            if coverage is not None and (
+                rollup["lowest_coverage_hours"] is None
+                or coverage < rollup["lowest_coverage_hours"]
+            ):
+                rollup["lowest_coverage_hours"] = coverage
+            rollup["urgent_items"].append({
+                "product_id": item["product_id"],
+                "product_name": item["product_name"],
+                "product_sku": item["product_sku"],
+                "shelf_id": item["shelf_id"],
+                "shelf_code": item["shelf_code"],
+                "priority": priority,
+                "reason": decision.get("reason"),
+                "inventory_coverage_hours": coverage,
+            })
+        elif key == "ALREADY_IN_PROGRESS":
+            rollup["already_in_progress"] += 1
+        elif key == "INSUFFICIENT_EVIDENCE":
+            rollup["insufficient_evidence"] += 1
+        else:
+            rollup["monitor"] += 1
+
+    zone_summaries = []
+    for rollup in zone_rollups.values():
+        rollup["urgent_items"].sort(key=lambda row: (
+            0 if row["priority"] == "HIGH" else 1,
+            row["inventory_coverage_hours"] if row["inventory_coverage_hours"] is not None else float("inf"),
+            row["shelf_id"], row["product_id"],
+        ))
+        rollup["urgent_items"] = rollup["urgent_items"][:3]
+        zone_summaries.append(rollup)
+    zone_summaries.sort(key=lambda row: (
+        -row["high_priority"], -row["action_recommended"],
+        row["lowest_coverage_hours"] if row["lowest_coverage_hours"] is not None else float("inf"),
+        row["store_id"], row["zone_name"],
+    ))
     return {
         "generated_at": aware(now).isoformat(),
         "store_id": store_id,
         "count": len(decisions),
         "status_counts": counts,
         "priority_counts": priority_counts,
+        "zone_summaries": zone_summaries,
         "forecast_policy": "Média diária simples dos dias com vendas registadas na janela móvel de sete dias; não ajusta promoções, sazonalidade, tráfego ou dias sem registo.",
         "decisions": decisions,
         "side_effects": {"tasks_created": 0, "inventory_changed": False},
