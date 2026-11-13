@@ -167,10 +167,85 @@ def main() -> None:
             == "ACTIVE_TASK_EXISTS"
         )
 
+        # Exercise explicit approval through the operational-decision path.
+        decision_product = client.post(
+            "/api/v1/products",
+            json={"sku": f"CI-DEC-{suffix}", "name": "CI decision product"},
+        )
+        assert decision_product.status_code == 201, decision_product.text
+        decision_product_id = decision_product.json()["id"]
+        decision_assignment = client.post(
+            "/api/v1/shelf-products",
+            json={
+                "shelf_id": shelf_id,
+                "product_id": decision_product_id,
+                "target_quantity": 12,
+                "min_display_quantity": 3,
+            },
+        )
+        assert decision_assignment.status_code == 201, decision_assignment.text
+        decision_observation = client.post(
+            "/api/v1/observations",
+            json={
+                "shelf_id": shelf_id,
+                "source": "simulation",
+                "status": "LOW_STOCK",
+                "confidence": 0.99,
+                "observed_quantity": 2,
+            },
+        )
+        assert decision_observation.status_code == 201, decision_observation.text
+        decision_inventory = client.post(
+            "/api/v1/inventory/snapshots",
+            json={
+                "store_id": store_id,
+                "product_id": decision_product_id,
+                "on_hand_quantity": 8,
+                "reserved_quantity": 0,
+                "source": "WMS",
+            },
+        )
+        assert decision_inventory.status_code == 201, decision_inventory.text
+
+        decision_payload = {
+            "store_id": store_id,
+            "shelf_id": shelf_id,
+            "product_id": decision_product_id,
+        }
+        decision_barrier = Barrier(2)
+
+        def create_from_operational_decision():
+            decision_barrier.wait(timeout=10)
+            return client.post(
+                "/api/v1/tasks/from-operational-decision?approved=true",
+                json=decision_payload,
+            )
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            decision_responses = list(
+                executor.map(lambda _: create_from_operational_decision(), range(2))
+            )
+
+        decision_created = [
+            response for response in decision_responses
+            if response.status_code == 201
+        ]
+        decision_conflicts = [
+            response for response in decision_responses
+            if response.status_code == 409
+        ]
+        assert len(decision_created) == 1, [
+            response.text for response in decision_responses
+        ]
+        assert len(decision_conflicts) == 1, [
+            response.text for response in decision_responses
+        ]
+        assert decision_conflicts[0].json()["detail"]["code"] == "ACTIVE_TASK_EXISTS"
+
         print(
             "PostgreSQL concurrent task creation: PASS "
-            "(manual and recommendation paths each return one 201 and one 409; "
-            "terminal task releases the unique slot)"
+            "(manual, recommendation and approved operational-decision paths "
+            "each return one 201 and one 409; terminal task releases the unique slot)"
         )
 
 
