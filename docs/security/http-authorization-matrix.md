@@ -150,3 +150,8 @@ O commit `4b0a023ca7996864c4dfc40dc3703a067785bc4f` passou no API CI `4346847449
 ## Cobertura JWT — isolamento de inventário e localizações de armazém
 
 O teste `test_supervisor_jwt_cannot_read_or_write_foreign_inventory_and_placement_resources` acrescenta sete pedidos autenticados por JWT real de SUPERVISOR da loja A para recursos da loja B: listagem e leitura do último snapshot, criação de snapshot, consulta e atualização de política de frescura, criação de colocação numa localização estrangeira e recomendações de slotting. Todos exigem HTTP 403. A localização estrangeira é criada no fixture e os payloads de escrita são estruturalmente válidos, para que a resposta demonstre o controlo de âmbito no handler. O teste usa SQLite isolado; a validação PostgreSQL individual destes endpoints permanece pendente.
+
+
+## Verificação de ausência de efeitos laterais — inventário cross-store
+
+Depois de sete pedidos JWT de SUPERVISOR da loja A para recursos da loja B receberem HTTP 403, o teste consulta os snapshots e as políticas de frescura da loja B com uma sessão ADMIN. Ambos os resultados têm de permanecer vazios. Esta verificação confirma que as tentativas negadas de criação não persistem parcialmente snapshots nem políticas. O teste de integração usa SQLite isolado; não substitui a validação PostgreSQL dos handlers.
