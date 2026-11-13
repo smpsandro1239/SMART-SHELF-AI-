@@ -1,4 +1,5 @@
 from datetime import date, datetime, timedelta, timezone
+from decimal import Decimal
 import math
 from pathlib import Path
 from uuid import uuid4
@@ -48,7 +49,7 @@ from app.schemas import (
     ObservationCreate, ObservationRead, ShelfCreate, ShelfRead,
     StoreCreate, StoreRead, ZoneCreate, ZoneRead,
     ProductCreate, ProductRead, ShelfProductCreate, ShelfProductRead,
-    InventorySnapshotCreate, InventorySnapshotRead, ReplenishmentRecommendationRead,
+    InventorySnapshotCreate, InventorySnapshotRead, InventoryReconciliationCreate, InventoryMovementRead, ReplenishmentRecommendationRead,
     DailySalesRecordCreate, DailySalesRecordRead, SalesSource,
     HourlySalesRecordCreate, HourlySalesRecordRead, HourlyStoreTrafficRecordCreate, HourlyStoreTrafficRecordRead,
     HourlySalesBatchCreate, HourlyStoreTrafficBatchCreate,
@@ -3500,7 +3501,8 @@ def create_inventory_snapshot(payload: InventorySnapshotCreate, request: Request
     _enforce_store_scope(_request_user(db, request), payload.store_id)
     if not db.get(models.Store, payload.store_id):
         raise HTTPException(status_code=404, detail="Store not found")
-    if not db.get(models.Product, payload.product_id):
+    product = db.query(models.Product).filter(models.Product.id == payload.product_id).with_for_update().first()
+    if product is None:
         raise HTTPException(status_code=404, detail="Product not found")
     data = payload.model_dump()
     if data["captured_at"] is None:
@@ -3554,6 +3556,192 @@ def get_latest_inventory_snapshot(
     if item is None:
         raise HTTPException(status_code=404, detail="No inventory snapshot found for this store and product")
     return item
+
+
+@app.post(
+    "/api/v1/tasks/{task_id}/reconcile-inventory",
+    response_model=InventoryMovementRead,
+    status_code=201,
+    tags=["inventory"],
+)
+def reconcile_completed_replenishment(
+    task_id: int,
+    payload: InventoryReconciliationCreate,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Approve and record an immutable backroom-to-shelf stock movement."""
+    actor = _request_user(db, request)
+    if actor is None:
+        raise HTTPException(status_code=401, detail="Authentication is required")
+    if len(payload.reason.strip()) < 3:
+        raise HTTPException(status_code=422, detail="A reconciliation reason with at least 3 non-space characters is required")
+    if actor.role not in {"ADMIN", "SUPERVISOR"}:
+        raise HTTPException(status_code=403, detail="Supervisor approval is required")
+
+    task = (
+        db.query(models.ReplenishmentTask)
+        .filter(models.ReplenishmentTask.id == task_id)
+        .with_for_update()
+        .first()
+    )
+    if task is None:
+        raise HTTPException(status_code=404, detail="Task not found")
+    _enforce_store_scope(actor, task.store_id)
+    product = db.query(models.Product).filter(models.Product.id == task.product_id).with_for_update().first()
+    if product is None:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    existing = db.query(models.InventoryMovement).filter_by(task_id=task.id).first()
+    if existing is not None:
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "INVENTORY_ALREADY_RECONCILED", "movement_id": existing.id},
+        )
+    if task.status != "COMPLETED" or task.actual_quantity is None or float(task.actual_quantity) <= 0:
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "TASK_NOT_RECONCILABLE", "message": "A tarefa tem de estar concluída e ter quantidade efetivamente reposta positiva."},
+        )
+    if task.completed_at is None:
+        raise HTTPException(status_code=409, detail={"code": "TASK_COMPLETION_TIME_MISSING"})
+
+    completed_at = task.completed_at
+    if completed_at.tzinfo is None:
+        completed_at = completed_at.replace(tzinfo=timezone.utc)
+    else:
+        completed_at = completed_at.astimezone(timezone.utc)
+    now = models.utc_now()
+
+    later_snapshot = (
+        db.query(models.InventorySnapshot)
+        .filter(
+            models.InventorySnapshot.store_id == task.store_id,
+            models.InventorySnapshot.product_id == task.product_id,
+            models.InventorySnapshot.captured_at > completed_at,
+        )
+        .order_by(models.InventorySnapshot.captured_at.desc(), models.InventorySnapshot.id.desc())
+        .first()
+    )
+    if later_snapshot is not None:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "INVENTORY_EVIDENCE_AFTER_TASK",
+                "snapshot_id": later_snapshot.id,
+                "message": "Existe um snapshot posterior à conclusão da tarefa. Confirme a origem externa antes de reconciliar.",
+            },
+        )
+
+    source_snapshot = (
+        db.query(models.InventorySnapshot)
+        .filter(
+            models.InventorySnapshot.store_id == task.store_id,
+            models.InventorySnapshot.product_id == task.product_id,
+            models.InventorySnapshot.captured_at <= completed_at,
+        )
+        .order_by(models.InventorySnapshot.captured_at.desc(), models.InventorySnapshot.id.desc())
+        .with_for_update()
+        .first()
+    )
+    if source_snapshot is None:
+        raise HTTPException(status_code=409, detail={"code": "INVENTORY_SNAPSHOT_MISSING"})
+    captured_at = source_snapshot.captured_at
+    if captured_at.tzinfo is None:
+        captured_at = captured_at.replace(tzinfo=timezone.utc)
+    else:
+        captured_at = captured_at.astimezone(timezone.utc)
+    age_minutes = (now - captured_at).total_seconds() / 60
+    if age_minutes < 0 or age_minutes > 240:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "INVENTORY_SNAPSHOT_STALE",
+                "snapshot_id": source_snapshot.id,
+                "age_minutes": round(age_minutes, 2),
+                "max_age_minutes": 240,
+            },
+        )
+
+    prior_movements = (
+        db.query(models.InventoryMovement)
+        .filter(models.InventoryMovement.source_snapshot_id == source_snapshot.id)
+        .with_for_update()
+        .all()
+    )
+    already_moved = sum((Decimal(str(item.quantity)) for item in prior_movements), Decimal("0"))
+    available = (
+        Decimal(str(source_snapshot.on_hand_quantity))
+        - Decimal(str(source_snapshot.reserved_quantity))
+        - already_moved
+    )
+    quantity = Decimal(str(task.actual_quantity))
+    if available < quantity:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "INSUFFICIENT_BACKROOM_STOCK",
+                "available_quantity": float(max(available, Decimal("0"))),
+                "requested_quantity": float(quantity),
+            },
+        )
+
+    resulting_on_hand = Decimal(str(source_snapshot.on_hand_quantity)) - already_moved - quantity
+    result_snapshot = models.InventorySnapshot(
+        store_id=task.store_id,
+        product_id=task.product_id,
+        on_hand_quantity=resulting_on_hand,
+        reserved_quantity=source_snapshot.reserved_quantity,
+        source="MANUAL",
+        external_reference=f"TASK-RECONCILIATION-{task.id}",
+        captured_at=now,
+        created_at=now,
+    )
+    movement = models.InventoryMovement(
+        task_id=task.id,
+        store_id=task.store_id,
+        product_id=task.product_id,
+        movement_type="BACKROOM_TO_SHELF",
+        quantity=quantity,
+        source_snapshot_id=source_snapshot.id,
+        actor_user_id=actor.id,
+        reason=payload.reason.strip(),
+        created_at=now,
+    )
+    try:
+        db.add(result_snapshot)
+        db.flush()
+        movement.result_snapshot_id = result_snapshot.id
+        db.add(movement)
+        db.flush()
+        _record_task_event(
+            db,
+            task,
+            "INVENTORY_RECONCILED",
+            actor,
+            from_status=task.status,
+            to_status=task.status,
+            actual_quantity=float(quantity),
+            reason=(
+                f"{payload.reason.strip()} | movimento={movement.id}; "
+                f"snapshot_origem={source_snapshot.id}; snapshot_resultante={result_snapshot.id}"
+            ),
+        )
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        existing = db.query(models.InventoryMovement).filter_by(task_id=task.id).first()
+        if existing is not None:
+            raise HTTPException(
+                status_code=409,
+                detail={"code": "INVENTORY_ALREADY_RECONCILED", "movement_id": existing.id},
+            ) from exc
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "INVENTORY_RECONCILIATION_CONFLICT", "message": "A reconciliação colidiu com outra alteração de inventário."},
+        ) from exc
+    db.refresh(movement)
+    return movement
 
 
 

@@ -162,6 +162,25 @@ class InventorySnapshotRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class InventoryReconciliationCreate(BaseModel):
+    reason: str = Field(min_length=3, max_length=1000)
+
+
+class InventoryMovementRead(BaseModel):
+    id: int
+    task_id: int
+    store_id: int
+    product_id: int
+    movement_type: Literal["BACKROOM_TO_SHELF"]
+    quantity: float
+    source_snapshot_id: int
+    result_snapshot_id: int
+    actor_user_id: int
+    reason: str
+    created_at: datetime
+    model_config = ConfigDict(from_attributes=True)
+
+
 ReplenishmentStatus = Literal[
     "NEEDS_REPLENISHMENT",
     "BACKROOM_OUT_OF_STOCK",
@@ -236,7 +255,7 @@ class ReplenishmentTaskRead(BaseModel):
 class ReplenishmentTaskEventRead(BaseModel):
     id: int
     task_id: int
-    event_type: Literal["CREATED", "APPROVED", "STATUS_CHANGED"]
+    event_type: Literal["CREATED", "APPROVED", "STATUS_CHANGED", "INVENTORY_RECONCILED"]
     from_status: TaskStatus | None
     to_status: TaskStatus | None
     actor_user_id: int | None

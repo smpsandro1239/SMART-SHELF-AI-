@@ -46,7 +46,7 @@ Esta é a fonte de verdade para manter o SMART SHELF AI focado. Deve ser revista
 #### P0 — Integridade e fiabilidade operacional
 
 - [ ] Testar a cronologia completa criação → aprovação/atribuição → início → conclusão/cancelamento e garantir ausência de eventos duplicados.
-- [ ] Implementar a reconciliação de stock definida em [ADR-008](docs/architecture/adr-008-inventory-reconciliation.md): movimento imutável, aprovação, idempotência e novo snapshot; nunca alterar snapshots históricos.
+- [ ] Validar e endurecer a primeira implementação da reconciliação ADR-008: movimento imutável, aprovação, idempotência, bloqueio de snapshots posteriores/desatualizados e novo snapshot; acrescentar testes PostgreSQL de concorrência e falha transacional.
 - [x] Validar em PostgreSQL 16 a cadeia completa de migrações, o índice único parcial e duas criações manuais simultâneas através da API (uma resposta 201 e outra 409); confirmar que uma tarefa concluída liberta a combinação loja/prateleira/produto.
 - [ ] Validar no CI PostgreSQL 16 o smoke test concorrente nos três caminhos de criação (manual, recomendação e decisão operacional aprovada), incluindo exatamente um evento `CREATED` por tarefa vencedora; o teste de auditoria foi acrescentado, mas a execução final desta revisão ainda está pendente.
 - [ ] Rever autorização e isolamento multi-loja em todos os endpoints, incluindo imagens, OCR, embeddings, catálogo, auditoria e operações administrativas.
@@ -129,7 +129,7 @@ Esta é a fonte de verdade para manter o SMART SHELF AI focado. Deve ser revista
 - Registar bloqueios e dependências externas e nunca declarar piloto, integração, modelo real ou produção concluídos sem evidência operacional.
 
 **Última revisão do roadmap:** 2026-11-13.  
-**Última etapa concluída:** validação PostgreSQL 16 da migração `0020`, índice parcial e concorrência na criação manual. O smoke test cobre os três caminhos de criação e verifica um único evento inicial `CREATED` por tarefa vencedora; a rota por recomendação normaliza o conflito `ACTIVE_TASK_EXISTS`. A validação PostgreSQL 16 desta extensão continua pendente no CI.  
+**Última etapa concluída:** CI do commit `d24c5913ddf417e4589fec83bc468c9731de5292` passou nos testes/compilação da API, build Web e smoke test PostgreSQL 16. Foi iniciada a primeira implementação da reconciliação ADR-008; permanece pendente a validação integral desta funcionalidade.  
 **REA externa:** consultar [comparação de soluções](docs/reverse-engineering/external-solutions.md) e [revisão de visão computacional](docs/architecture/retail-vision-rea.md); as referências comerciais e académicas orientam o roadmap, mas as suas métricas não são assumidas como resultados do nosso sistema.
 
 

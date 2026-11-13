@@ -210,8 +210,8 @@ class HourlySalesRecord(Base):
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    store_id: Mapped[int] = mapped_column(ForeignKey("stores.id", ondelete="CASCADE"), nullable=False, index=True)
-    product_id: Mapped[int] = mapped_column(ForeignKey("products.id", ondelete="CASCADE"), nullable=False, index=True)
+    store_id: Mapped[int] = mapped_column(ForeignKey("stores.id", ondelete="RESTRICT"), nullable=False, index=True)
+    product_id: Mapped[int] = mapped_column(ForeignKey("products.id", ondelete="RESTRICT"), nullable=False, index=True)
     business_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
     hour_of_day: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
     quantity: Mapped[float] = mapped_column(Numeric(12, 3), nullable=False)
@@ -334,6 +334,30 @@ class InventorySnapshot(Base):
         return float(self.on_hand_quantity - self.reserved_quantity)
 
 
+class InventoryMovement(Base):
+    """Immutable, approved transfer from backroom stock to shelf."""
+    __tablename__ = "inventory_movements"
+    __table_args__ = (
+        UniqueConstraint("task_id", name="uq_inventory_movement_task"),
+        UniqueConstraint("result_snapshot_id", name="uq_inventory_movement_result_snapshot"),
+        CheckConstraint("movement_type = 'BACKROOM_TO_SHELF'", name="ck_inventory_movement_type"),
+        CheckConstraint("quantity > 0", name="ck_inventory_movement_quantity_positive"),
+        CheckConstraint("source_snapshot_id <> result_snapshot_id", name="ck_inventory_movement_distinct_snapshots"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    task_id: Mapped[int] = mapped_column(ForeignKey("replenishment_tasks.id", ondelete="RESTRICT"), nullable=False)
+    store_id: Mapped[int] = mapped_column(ForeignKey("stores.id", ondelete="CASCADE"), nullable=False, index=True)
+    product_id: Mapped[int] = mapped_column(ForeignKey("products.id", ondelete="CASCADE"), nullable=False, index=True)
+    movement_type: Mapped[str] = mapped_column(String(30), nullable=False, default="BACKROOM_TO_SHELF")
+    quantity: Mapped[float] = mapped_column(Numeric(12, 3), nullable=False)
+    source_snapshot_id: Mapped[int] = mapped_column(ForeignKey("inventory_snapshots.id", ondelete="RESTRICT"), nullable=False, index=True)
+    result_snapshot_id: Mapped[int] = mapped_column(ForeignKey("inventory_snapshots.id", ondelete="RESTRICT"), nullable=False)
+    actor_user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False, index=True)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False, index=True)
+
+
 class ReplenishmentTask(Base):
     """Operational task for replenishing one product on one shelf."""
     __tablename__ = "replenishment_tasks"
@@ -372,7 +396,7 @@ class ReplenishmentTaskEvent(Base):
     """Append-only audit record for task approvals and lifecycle transitions."""
     __tablename__ = "replenishment_task_events"
     __table_args__ = (
-        CheckConstraint("event_type IN ('CREATED', 'APPROVED', 'STATUS_CHANGED')", name="ck_task_event_type"),
+        CheckConstraint("event_type IN ('CREATED', 'APPROVED', 'STATUS_CHANGED', 'INVENTORY_RECONCILED')", name="ck_task_event_type"),
         CheckConstraint("actual_quantity IS NULL OR actual_quantity > 0", name="ck_task_event_actual_quantity_positive"),
         Index("ix_task_events_task_created", "task_id", "created_at"),
     )
