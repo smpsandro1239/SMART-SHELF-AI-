@@ -88,7 +88,10 @@ def test_task_lifecycle_pending_assignment_start_and_completion():
 
         events = client.get(f"/api/v1/tasks/{task_id}/events")
         assert events.status_code == 200
-        assert [event["to_status"] for event in events.json()] == ["ASSIGNED", "IN_PROGRESS", "COMPLETED"]
+        assert [event["event_type"] for event in events.json()] == ["CREATED", "STATUS_CHANGED", "STATUS_CHANGED", "STATUS_CHANGED"]
+        assert events.json()[0]["from_status"] is None
+        assert events.json()[0]["to_status"] == "PENDING"
+        assert [event["to_status"] for event in events.json()[1:]] == ["ASSIGNED", "IN_PROGRESS", "COMPLETED"]
         assert events.json()[-1]["actual_quantity"] == 8
 
 
@@ -146,6 +149,11 @@ def test_task_can_be_created_from_verified_recommendation_only_once():
         created = client.post("/api/v1/tasks/from-recommendation", json=payload)
         assert created.status_code == 201
         assert created.json()["status"] == "PENDING"
+        audit = client.get(f"/api/v1/tasks/{created.json()['id']}/events")
+        assert audit.status_code == 200
+        assert len(audit.json()) == 1
+        assert audit.json()[0]["event_type"] == "CREATED"
+        assert audit.json()[0]["to_status"] == "PENDING"
 
         duplicate = client.post("/api/v1/tasks/from-recommendation", json=payload)
         assert duplicate.status_code == 409
