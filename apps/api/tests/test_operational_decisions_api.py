@@ -192,3 +192,58 @@ def test_backroom_snapshot_is_not_misused_as_shelf_inventory_or_coverage():
         assert item["backroom_inventory"]["reserved_quantity"] == 5
         assert item["backroom_inventory"]["available_quantity"] == 15
         assert any("retaguarda" in warning for warning in decision["warnings"])
+
+
+def test_operational_decision_proposes_partial_refill_only_from_fresh_measured_evidence():
+    with TestClient(app) as client:
+        store_id, shelf_id, product_id = create_context(client)
+        observation = client.post("/api/v1/observations", json={
+            "shelf_id": shelf_id, "source": "simulation",
+            "status": "LOW_STOCK", "confidence": 0.98,
+            "observed_quantity": 2,
+        })
+        assert observation.status_code == 201
+        snapshot = client.post("/api/v1/inventory/snapshots", json={
+            "store_id": store_id, "product_id": product_id,
+            "on_hand_quantity": 8, "reserved_quantity": 3,
+            "source": "MANUAL", "external_reference": "REFILL-PARTIAL-01",
+        })
+        assert snapshot.status_code == 201
+
+        response = client.get("/api/v1/operational-decisions", params={"store_id": store_id})
+        assert response.status_code == 200
+        item = response.json()["decisions"][0]
+        assessment = item["replenishment_assessment"]
+        assert assessment["status"] == "NEEDS_REPLENISHMENT"
+        assert assessment["shelf_gap_quantity"] == 10
+        assert assessment["suggested_quantity"] == 5
+        assert assessment["remaining_gap_quantity"] == 5
+        assert assessment["requires_human_review"] is True
+        assert item["backroom_inventory"]["is_fresh"] is True
+
+
+def test_operational_decision_never_uses_stale_backroom_stock_for_refill_quantity():
+    with TestClient(app) as client:
+        store_id, shelf_id, product_id = create_context(client)
+        observation = client.post("/api/v1/observations", json={
+            "shelf_id": shelf_id, "source": "simulation",
+            "status": "EMPTY", "confidence": 0.99,
+            "observed_quantity": 0,
+        })
+        assert observation.status_code == 201
+        snapshot = client.post("/api/v1/inventory/snapshots", json={
+            "store_id": store_id, "product_id": product_id,
+            "on_hand_quantity": 30, "reserved_quantity": 0,
+            "source": "MANUAL", "external_reference": "REFILL-STALE-01",
+            "captured_at": "2020-01-01T00:00:00Z",
+        })
+        assert snapshot.status_code == 201
+
+        response = client.get("/api/v1/operational-decisions", params={"store_id": store_id})
+        assert response.status_code == 200
+        item = response.json()["decisions"][0]
+        assessment = item["replenishment_assessment"]
+        assert item["backroom_inventory"]["is_fresh"] is False
+        assert assessment["status"] == "INVENTORY_UNKNOWN"
+        assert assessment["suggested_quantity"] is None
+        assert assessment["requires_human_review"] is True
