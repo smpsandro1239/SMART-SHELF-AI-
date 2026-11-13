@@ -428,10 +428,89 @@ def main() -> None:
         finally:
             audit_db.close()
 
+
+        # Force an audit failure after both inventory rows have been flushed.
+        # The movement, result snapshot and task event must all roll back.
+        rollback_task = client.post(
+            "/api/v1/tasks",
+            json={
+                "store_id": store_id,
+                "shelf_id": shelf_id,
+                "product_id": reconciliation_product_id,
+                "requested_quantity": 1,
+            },
+        )
+        assert rollback_task.status_code == 201, rollback_task.text
+        rollback_task_id = rollback_task.json()["id"]
+        rollback_assigned = client.patch(
+            f"/api/v1/tasks/{rollback_task_id}/status",
+            json={"status": "ASSIGNED", "assigned_to": "CI rollback operator"},
+        )
+        assert rollback_assigned.status_code == 200, rollback_assigned.text
+        rollback_started = client.patch(
+            f"/api/v1/tasks/{rollback_task_id}/status",
+            json={"status": "IN_PROGRESS"},
+        )
+        assert rollback_started.status_code == 200, rollback_started.text
+        rollback_completed = client.patch(
+            f"/api/v1/tasks/{rollback_task_id}/status",
+            json={"status": "COMPLETED", "actual_quantity": 1},
+        )
+        assert rollback_completed.status_code == 200, rollback_completed.text
+
+        original_record_task_event = main_module._record_task_event
+
+        def fail_reconciliation_audit(db, task, event_type, actor, **kwargs):
+            if event_type == "INVENTORY_RECONCILED":
+                raise RuntimeError("CI forced failure before reconciliation commit")
+            return original_record_task_event(db, task, event_type, actor, **kwargs)
+
+        main_module._request_user = lambda db, request: actor
+        main_module._record_task_event = fail_reconciliation_audit
+        try:
+            with TestClient(app, raise_server_exceptions=False) as rollback_client:
+                rollback_response = rollback_client.post(
+                    f"/api/v1/tasks/{rollback_task_id}/reconcile-inventory",
+                    json={"reason": "CI rollback atomicity test."},
+                )
+        finally:
+            main_module._request_user = original_request_user
+            main_module._record_task_event = original_record_task_event
+
+        assert rollback_response.status_code == 500, rollback_response.text
+        rollback_db = SessionLocal()
+        try:
+            assert (
+                rollback_db.query(models.InventoryMovement)
+                .filter(models.InventoryMovement.task_id == rollback_task_id)
+                .count()
+                == 0
+            )
+            assert (
+                rollback_db.query(models.InventorySnapshot)
+                .filter(
+                    models.InventorySnapshot.store_id == store_id,
+                    models.InventorySnapshot.product_id == reconciliation_product_id,
+                )
+                .count()
+                == 2
+            )
+            assert (
+                rollback_db.query(models.ReplenishmentTaskEvent)
+                .filter(
+                    models.ReplenishmentTaskEvent.task_id == rollback_task_id,
+                    models.ReplenishmentTaskEvent.event_type == "INVENTORY_RECONCILED",
+                )
+                .count()
+                == 0
+            )
+        finally:
+            rollback_db.close()
+
         print(
             "PostgreSQL concurrent task creation: PASS "
             "(three task-creation paths and approved reconciliation each return one 201 and one 409; "
-            "audit is unique, snapshots are immutable and inventory movements reject UPDATE/DELETE)"
+            "audit is unique, snapshots are preserved, movement UPDATE/DELETE are blocked and failed reconciliation rolls back atomically)"
         )
 
 
