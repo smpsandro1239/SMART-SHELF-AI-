@@ -181,7 +181,15 @@ export default function App() {
       },
     });
     const payload = await response.json().catch(() => ({}));
-    if (!response.ok) apiError(payload.detail || `Erro HTTP ${response.status}`);
+    if (!response.ok) {
+      const detail = payload.detail;
+      const message = typeof detail === "string"
+        ? detail
+        : detail && typeof detail === "object"
+          ? (detail.message || detail.code || JSON.stringify(detail))
+          : `Erro HTTP ${response.status}`;
+      apiError(message);
+    }
     return payload as T;
   }, [token]);
 
