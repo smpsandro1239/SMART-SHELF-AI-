@@ -9,6 +9,116 @@
 
 > **Transparência:** o backend inclui lojas, zonas, prateleiras, catálogo, observações, inventário, recomendações, tarefas, autenticação, captura de imagens e um worker de inferência com provider configurável. Existe uma aplicação web inicial com dashboard e fluxo de captura. Ainda não existe modelo de visão real configurado ou treinado, PWA nem integração POS/ERP/WMS operacional. Os mockups são ilustrativos e não representam dados reais.
 
+## 1.1. Roadmap e TODO — controlo central do projeto
+
+Esta é a fonte de verdade para manter o SMART SHELF AI focado. Deve ser revista antes de cada ronda de desenvolvimento e atualizada no mesmo commit em que forem concluídas novas tarefas. Só se marca como concluído o que está implementado e verificável; documentação, protótipos, mocks e testes simulados não equivalem a integração real.
+
+**Foco atual:** consolidar a inteligência operacional, a qualidade dos dados e a execução auditável. A rotação de paletes é uma estratégia opcional a jusante, não o objetivo central do produto.
+
+### Concluído — implementado
+
+- [x] Base técnica: FastAPI, SQLAlchemy, Pydantic, PostgreSQL, Alembic, Docker Compose e CI GitHub Actions.
+- [x] Modelo de lojas, zonas, prateleiras, catálogo de produtos e associação SKU–prateleira.
+- [x] Inventário por snapshots históricos, origem e timestamp; cálculo de stock disponível após reservas.
+- [x] Observações de prateleira com estado, confiança, timestamp e proveniência.
+- [x] Recomendações de reposição com validação de frescura, confiança e stock disponível; quantidades apenas com contagem quantitativa válida.
+- [x] Planeamento consultivo por zona, exclusão de tarefas ativas duplicadas, risco de rutura baseado em histórico disponível e estimativas de esforço com amostra mínima.
+- [x] Motor central de decisão que cruza observação, inventário, previsão baseline e tarefas ativas, sem criar tarefas nem alterar stock.
+- [x] API de decisões operacionais com filtros, prioridades, cobertura estimada, resumo por zona e evidências.
+- [x] Aprovação humana de reposição com revalidação da evidência, limite de quantidade, verificação de stock e validação de atribuição.
+- [x] Ciclo de vida de tarefas na API: criação, atribuição, início, conclusão e cancelamento, com validação de transições e permissões.
+- [x] Registo de quantidade efetivamente reposta; conclusão parcial e cancelamento exigem motivo.
+- [x] Auditoria estruturada de aprovações e transições de estado, com ator, timestamp e consulta cronológica. **Ainda falta o evento universal CREATED.**
+- [x] Autenticação JWT, hash Argon2 e perfis ADMIN, SUPERVISOR e EMPLOYEE, com isolamento por loja nas áreas implementadas.
+- [x] Dashboard web inicial em React/TypeScript/Vite: autenticação, resumo, tarefas e captura/histórico de imagens; inclui consulta de decisões e planeamento conforme os módulos disponíveis.
+- [x] Ingestão de imagens com validação, armazenamento persistente, SHA-256 e controlo de acesso por loja.
+- [x] Contrato de visão computacional, worker independente, provider configurável e persistência de deteções.
+- [x] Ferramentas de dataset: manifesto, validação COCO, integridade de splits, auditoria de imagens semelhantes, revisão visual/humana, comparação de versões e registo local de releases.
+- [x] Componentes experimentais de visão/SKU/OCR: provider ONNX CPU-first, embeddings, matching conservador, layout de prateleira, OCR opcional, associação e fusão de evidências, com testes e documentação.
+- [x] Políticas consultivas de refill, picking e rotação de paletes, sem movimentos automáticos de stock.
+- [x] Documentação de arquitetura, segurança, piloto, decisões técnicas e limitações.
+
+### Em falta — necessário antes de um piloto operacional
+
+#### P0 — Integridade e fiabilidade operacional
+
+- [ ] Registar evento de auditoria `CREATED` em **todas** as rotas de criação de tarefas: manual, recomendação e decisão operacional.
+- [ ] Testar a cronologia completa criação → aprovação/atribuição → início → conclusão/cancelamento e garantir ausência de eventos duplicados.
+- [ ] Implementar reconciliação da quantidade efetivamente reposta com o inventário através de movimentos/ajustes imutáveis, com origem, ator, motivo e aprovação. Não alterar snapshots históricos.
+- [ ] Tornar atómica a proteção contra tarefas duplicadas criadas em simultâneo; validar com testes concorrentes em PostgreSQL.
+- [ ] Validar locking, migrações e constraints em PostgreSQL real. Os testes SQLite não comprovam concorrência PostgreSQL.
+- [ ] Rever autorização e isolamento multi-loja em todos os endpoints, incluindo imagens, OCR, embeddings, catálogo, auditoria e operações administrativas.
+- [ ] Definir retenção, proteção, acesso e eliminação de imagens e dados de auditoria; completar hardening de uploads e armazenamento.
+
+#### P1 — Motor central de inteligência
+
+- [ ] Separar formalmente stock de exposição, retaguarda, reservas, stock em trânsito, encomendas e unidades em picking.
+- [ ] Evoluir a previsão por SKU/loja, dia da semana e hora, sazonalidade, promoções, feriados e tráfego; manter método, janela e proveniência explícitos.
+- [ ] Definir critérios de frescura, completude e qualidade dos dados de vendas/inventário; dados ausentes nunca devem ser convertidos em zero.
+- [ ] Consolidar prioridades e sequência de trabalho por loja, zona, corredor e localização; não apresentar heurísticas como rotas ótimas.
+- [ ] Avaliar previsões e recomendações contra resultados reais: precisão, falsos positivos, ruturas não detetadas e quantidades propostas versus executadas.
+- [ ] Permitir políticas configuráveis por loja/secção/produto, com simulação e aprovação antes de ativação.
+
+#### P1 — Dashboard e experiência operacional
+
+- [ ] Completar gestão de catálogo, SKU, zonas, prateleiras, associações e parâmetros de exposição.
+- [ ] Completar filtros por loja, secção/zona, corredor, estado, prioridade, responsável e período.
+- [ ] Mostrar frescura/qualidade dos dados, origem, confiança, explicação e motivo de abstinência em cada decisão.
+- [ ] Completar a gestão de utilizadores, atribuições, exceções e consulta da auditoria na interface.
+- [ ] Implementar confirmação e reconciliação de execução na interface, sem alterações silenciosas ao stock.
+- [ ] Avaliar e implementar PWA móvel, incluindo conectividade limitada e sincronização.
+
+#### P1 — Visão computacional real e validada
+
+- [ ] Obter imagens reais autorizadas, com diversidade de condições e identificação correta de loja/prateleira/dispositivo.
+- [ ] Criar e rever dataset representativo; documentar licenças, consentimentos e aprovação de release.
+- [ ] Selecionar/treinar modelo real de deteção e, se aplicável, matching SKU; confirmar licenças de modelos, pesos e datasets.
+- [ ] Calibrar thresholds e medir precisão, recall, falsos matches, cobertura e rejeição de produtos desconhecidos.
+- [ ] Integrar provider real no worker e validar ponta a ponta com imagens autorizadas. Manter inferência real desativada por omissão até validação.
+- [ ] Validar contagem de frentes/unidades e o efeito de oclusões; a face visível não permite inferir stock em profundidade.
+
+#### P2 — Integrações, Edge e automação física
+
+- [ ] Definir conectores POS/ERP/WMS, começando por leitura e reconciliação controlada.
+- [ ] Implementar sincronização idempotente, gestão de falhas, reprocessamento e rastreabilidade.
+- [ ] Definir arquitetura Edge para câmaras/dispositivos, filas locais, sincronização, conectividade e atualizações seguras.
+- [ ] Validar câmaras, permissões, posicionamento e cobertura numa loja piloto.
+- [ ] Validar fabricante, modelo, SDK/API e limites de segurança antes de qualquer integração de robô.
+- [ ] Não permitir escrita automática em ERP/POS nem movimento autónomo de robôs sem autorização formal, testes e aprovação humana.
+
+#### P2 — Piloto e preparação para produção
+
+- [ ] Selecionar uma loja, 1–2 secções, 2–4 corredores e 50–100 SKUs para um piloto controlado.
+- [ ] Recolher baseline operacional antes de ativar recomendações.
+- [ ] Executar primeiro em modo sombra, comparando decisões com verificações humanas sem gerar trabalho automático.
+- [ ] Definir metas e critérios de entrada/saída: precisão, falsos alertas, latência, disponibilidade e tempo de resolução.
+- [ ] Realizar piloto supervisionado, recolher feedback e rever políticas antes de escalar.
+- [ ] Preparar monitorização, alertas, backups, recuperação, gestão de incidentes e documentação de operação.
+
+### Próxima sequência de desenvolvimento
+
+1. **Auditoria universal de tarefas:** adicionar `CREATED` a todos os caminhos de criação e testar a cronologia completa.
+2. **Concorrência:** validar criação simultânea de tarefas duplicadas em PostgreSQL e tornar a proteção atómica.
+3. **Reconciliação de stock:** implementar movimentos imutáveis para quantidades efetivamente repostas, com aprovação e auditoria.
+4. **Qualidade dos dados:** explicitar frescura/completude e separar os diferentes estados de stock.
+5. **Previsão:** evoluir a baseline e criar avaliação retrospetiva antes de usar previsões em decisões reais.
+6. **Dashboard:** completar filtros, explicações, auditoria e reconciliação.
+7. **Visão real:** ativar apenas após dataset autorizado, modelo licenciado e avaliação mensurável.
+8. **Piloto:** modo sombra e piloto supervisionado antes de integrações físicas ou escala.
+
+### Regras de manutenção deste TODO
+
+- Ler este README e esta secção **antes de iniciar cada nova ronda de desenvolvimento**.
+- Escolher a próxima tarefa pela ordem de prioridade; evitar funcionalidades laterais que desviem o foco.
+- Implementar, testar e documentar uma unidade de trabalho de cada vez.
+- No final de cada ronda, atualizar as caixas [x]/[ ] e a sequência no mesmo commit das alterações técnicas.
+- Marcar como concluído apenas o que está implementado e validado; manter explícito o que é experimental, simulado, depende de terceiros ou não foi testado.
+- Registar bloqueios e dependências externas e nunca declarar piloto, integração, modelo real ou produção concluídos sem evidência operacional.
+
+**Última revisão do roadmap:** 2026-11-13.  
+**Base técnica revista:** `main` em `b80acfd7d1aac461f4bbeca110e1ec480cf1b040`.
+
+
 ## 1. O que é o SMART SHELF AI?
 
 O SMART SHELF AI pretende ajudar supermercados e operações de retalho a responder a perguntas práticas:
@@ -82,7 +192,7 @@ A API já suporta criação de tarefas, atribuição, início, conclusão e canc
 | Perfis ADMIN, SUPERVISOR e EMPLOYEE | Implementado na primeira camada |
 | Associação de utilizadores e tarefas a lojas | Implementado no modelo/API |
 | Resumo operacional para dashboard | Endpoint inicial implementado |
-| Dashboard web e PWA móvel | Planeado |
+| Dashboard web inicial | Implementado; gestão operacional completa ainda em falta |\n| PWA móvel | Planeado |
 | Inferência de visão computacional | Planeado |
 | Integrações POS / ERP / WMS / robô | Dependentes de acesso e validação |
 
