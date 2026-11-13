@@ -633,3 +633,74 @@ def test_retention_restriction_blocks_image_access_and_is_audited(monkeypatch, t
         assert restored.json()["retention_status"] == "ACTIVE"
         events = client.get(f"/api/v1/shelf-images/{image_id}/retention/events")
         assert [event["event_type"] for event in events.json()] == ["RESTRICTED", "RESTORED"]
+
+
+def test_legal_hold_requires_admin_and_records_append_only_events(monkeypatch):
+    image_id, _ = create_image_with_detection()
+    with TestingSession() as db:
+        image = db.get(models.ShelfImage, image_id)
+        shelf = db.get(models.Shelf, image.shelf_id)
+        zone = db.get(models.Zone, shelf.zone_id)
+        admin = models.User(
+            email="retention-admin@example.test",
+            full_name="Retention Admin",
+            password_hash="test-only-not-used",
+            role="ADMIN",
+            store_id=zone.store_id,
+            is_active=True,
+        )
+        supervisor = models.User(
+            email="retention-supervisor@example.test",
+            full_name="Retention Supervisor",
+            password_hash="test-only-not-used",
+            role="SUPERVISOR",
+            store_id=zone.store_id,
+            is_active=True,
+        )
+        db.add_all([admin, supervisor])
+        db.commit()
+        db.refresh(admin)
+        db.refresh(supervisor)
+        admin_id, supervisor_id = admin.id, supervisor.id
+
+    with TestClient(app) as client:
+        with TestingSession() as db:
+            supervisor = db.get(models.User, supervisor_id)
+            monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: supervisor)
+            denied = client.post(
+                f"/api/v1/shelf-images/{image_id}/retention/legal-hold/apply",
+                json={"reason": "Legal review requested"},
+            )
+            assert denied.status_code == 403
+
+        with TestingSession() as db:
+            admin = db.get(models.User, admin_id)
+            monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: admin)
+            applied = client.post(
+                f"/api/v1/shelf-images/{image_id}/retention/legal-hold/apply",
+                json={"reason": "Preservar evidência para análise jurídica"},
+            )
+            assert applied.status_code == 200
+            assert applied.json()["legal_hold"] is True
+            assert applied.json()["retention_status"] == "ACTIVE"
+
+            repeated = client.post(
+                f"/api/v1/shelf-images/{image_id}/retention/legal-hold/apply",
+                json={"reason": "Pedido repetido"},
+            )
+            assert repeated.status_code == 200
+
+            released = client.post(
+                f"/api/v1/shelf-images/{image_id}/retention/legal-hold/release",
+                json={"reason": "Análise jurídica concluída"},
+            )
+            assert released.status_code == 200
+            assert released.json()["legal_hold"] is False
+
+            events = client.get(f"/api/v1/shelf-images/{image_id}/retention/events")
+            assert events.status_code == 200
+            assert [event["event_type"] for event in events.json()] == [
+                "LEGAL_HOLD_APPLIED", "LEGAL_HOLD_RELEASED"
+            ]
+            assert all(event["from_status"] == "ACTIVE" and event["to_status"] == "ACTIVE"
+                       for event in events.json())
