@@ -40,3 +40,12 @@ O endpoint autenticado `GET /api/v1/shelves/{shelf_id}/observation-consensus` ex
 
 
 A consulta limita o custo de leitura às 500 observações mais recentes por prateleira. A seleção é feita em ordem descendente e os registos são reordenados cronologicamente antes da avaliação; desta forma, o limite não pode ocultar evidência recente atrás de um histórico antigo. A regressão correspondente semeia mais de 500 observações antigas e confirma que as três confirmações recentes continuam a ser avaliadas.
+
+
+## Persistência idempotente e resolução humana de alertas
+
+A migração `0027_observation_alerts` acrescenta `observation_alerts` e `observation_alert_events`. Apenas evidência com consenso `CONFIRMED` e SKU explícito pode originar um alerta. O endpoint `POST /api/v1/shelves/{shelf_id}/observation-alerts/evaluate?product_id=...` cria ou atualiza o alerta ativo da combinação loja/prateleira/SKU/condição. Um índice único parcial em PostgreSQL e SQLite impede duplicados ativos; o bloqueio da linha da loja serializa a avaliação concorrente em PostgreSQL. A mesma avaliação repetida atualiza a evidência existente, em vez de criar novo alerta.
+
+Os alertas podem ser consultados por `GET /api/v1/observation-alerts`, reconhecidos por `PATCH /api/v1/observation-alerts/{id}` com estado `ACKNOWLEDGED`, ou resolvidos/dispensados com motivo obrigatório. Apenas ADMIN/SUPERVISOR podem executar estas operações e o âmbito da loja é aplicado. O histórico é consultável em `GET /api/v1/observation-alerts/{id}/events`; a tabela de eventos é append-only em PostgreSQL e SQLite.
+
+A persistência não cria tarefas, não altera inventário e não movimenta stock. A avaliação continua a ser explícita via endpoint; a integração automática no worker permanece pendente. A migração e os testes de concorrência em PostgreSQL 16 devem passar antes de qualquer piloto.

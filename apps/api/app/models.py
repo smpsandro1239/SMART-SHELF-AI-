@@ -58,6 +58,61 @@ class Observation(Base):
     product: Mapped["Product | None"] = relationship(back_populates="observations")
 
 
+class ObservationAlert(Base):
+    """Persisted, deduplicated alert derived from repeated SKU-attributed evidence."""
+    __tablename__ = "observation_alerts"
+    __table_args__ = (
+        CheckConstraint("condition IN ('LOW_STOCK', 'EMPTY', 'MISPLACED', 'DAMAGED')", name="ck_observation_alert_condition"),
+        CheckConstraint("status IN ('OPEN', 'ACKNOWLEDGED', 'RESOLVED', 'DISMISSED')", name="ck_observation_alert_status"),
+        CheckConstraint("confirmation_count >= 2", name="ck_observation_alert_confirmations"),
+        CheckConstraint("average_confidence >= 0 AND average_confidence <= 1", name="ck_observation_alert_confidence"),
+        Index(
+            "uq_observation_alert_active_scope",
+            "store_id", "shelf_id", "product_id", "condition",
+            unique=True,
+            postgresql_where=text("status IN ('OPEN', 'ACKNOWLEDGED')"),
+            sqlite_where=text("status IN ('OPEN', 'ACKNOWLEDGED')"),
+        ),
+        Index("ix_observation_alert_store_status_created", "store_id", "status", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    store_id: Mapped[int] = mapped_column(ForeignKey("stores.id", ondelete="CASCADE"), nullable=False, index=True)
+    shelf_id: Mapped[int] = mapped_column(ForeignKey("shelves.id", ondelete="CASCADE"), nullable=False, index=True)
+    product_id: Mapped[int] = mapped_column(ForeignKey("products.id", ondelete="CASCADE"), nullable=False, index=True)
+    condition: Mapped[str] = mapped_column(String(20), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), default="OPEN", nullable=False, index=True)
+    first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    confirmation_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    average_confidence: Mapped[float] = mapped_column(Float, nullable=False)
+    sources: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    resolution_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    resolved_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+
+
+class ObservationAlertEvent(Base):
+    """Append-only audit trail for alert creation, evidence refresh and human decisions."""
+    __tablename__ = "observation_alert_events"
+    __table_args__ = (
+        CheckConstraint("event_type IN ('CREATED', 'EVIDENCE_UPDATED', 'ACKNOWLEDGED', 'RESOLVED', 'DISMISSED')", name="ck_observation_alert_event_type"),
+        Index("ix_observation_alert_events_alert_created", "alert_id", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    alert_id: Mapped[int] = mapped_column(ForeignKey("observation_alerts.id", ondelete="RESTRICT"), nullable=False, index=True)
+    event_type: Mapped[str] = mapped_column(String(24), nullable=False)
+    from_status: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    to_status: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    actor_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    evidence: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False, index=True)
+
+
 class Product(Base):
     __tablename__ = "products"
     id: Mapped[int] = mapped_column(primary_key=True)

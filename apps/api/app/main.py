@@ -51,7 +51,7 @@ from app.sku_review_evaluation import build_reviewed_prediction_report
 from app.sales_import import parse_daily_sales_csv
 from app.sales_import_hourly import parse_hourly_sales_csv, parse_hourly_traffic_csv
 from app.schemas import (
-    ObservationCreate, ObservationRead, ShelfCreate, ShelfRead,
+    ObservationCreate, ObservationRead, ObservationAlertRead, ObservationAlertUpdate, ObservationAlertEventRead, ShelfCreate, ShelfRead,
     StoreCreate, StoreRead, ZoneCreate, ZoneRead,
     ProductCreate, ProductRead, ShelfProductCreate, ShelfProductRead,
     InventorySnapshotCreate, InventorySnapshotRead, InventoryReconciliationCreate, InventoryMovementRead, InventoryFreshnessPolicyUpsert, InventoryFreshnessPolicyRead, ReplenishmentRecommendationRead,
@@ -147,6 +147,9 @@ async def require_api_authentication(request: Request, call_next):
             })
         )
         supervisor_or_admin = (
+            path.startswith("/api/v1/observation-alerts")
+            or (method == "POST" and path.endswith("/observation-alerts/evaluate"))
+
             (method == "POST" and path == "/api/v1/tasks/from-operational-decision")
             or (method == "POST" and (path in {"/api/v1/sales/daily", "/api/v1/sales/import-csv", "/api/v1/warehouse/locations", "/api/v1/warehouse/placements", "/api/v1/warehouse/pallets", "/api/v1/warehouse/pallet-rotation/policies", "/api/v1/warehouse/pallet-rotation/simulate", "/api/v1/sales/hourly", "/api/v1/sales/traffic/hourly", "/api/v1/sales/hourly/batch", "/api/v1/sales/traffic/hourly/batch", "/api/v1/sales/hourly/import-csv", "/api/v1/sales/traffic/hourly/import-csv"} or (path.startswith("/api/v1/warehouse/pallets/") and path.endswith("/events"))))
             or (method == "PATCH" and path.startswith("/api/v1/warehouse/pallet-rotation/policies/"))
@@ -405,6 +408,236 @@ def create_observation(payload: ObservationCreate, request: Request, db: Session
     db.commit()
     db.refresh(item)
     return item
+
+
+def _record_observation_alert_event(
+    db: Session,
+    alert: models.ObservationAlert,
+    event_type: str,
+    actor: models.User | None,
+    *,
+    from_status: str | None = None,
+    to_status: str | None = None,
+    reason: str | None = None,
+    evidence: dict | None = None,
+) -> None:
+    db.add(models.ObservationAlertEvent(
+        alert_id=alert.id,
+        event_type=event_type,
+        from_status=from_status,
+        to_status=to_status,
+        actor_user_id=actor.id if actor is not None else None,
+        reason=reason,
+        evidence=evidence,
+        created_at=models.utc_now(),
+    ))
+
+
+def _require_alert_supervisor(db: Session, request: Request, store_id: int) -> models.User:
+    actor = _request_user(db, request)
+    if actor is None or actor.role not in {"ADMIN", "SUPERVISOR"}:
+        raise HTTPException(status_code=403, detail="Supervisor role required")
+    _enforce_store_scope(actor, store_id)
+    return actor
+
+
+@app.post(
+    "/api/v1/shelves/{shelf_id}/observation-alerts/evaluate",
+    response_model=ObservationAlertRead | None,
+    tags=["observation alerts"],
+)
+def evaluate_and_persist_observation_alert(
+    shelf_id: int,
+    product_id: int,
+    window_minutes: int = 15,
+    minimum_confirmations: int = 3,
+    minimum_interval_seconds: int = 10,
+    minimum_confidence: float = 0.65,
+    request: Request = None,
+    db: Session = Depends(get_db),
+):
+    """Persist an idempotent alert only when SKU-scoped temporal consensus is confirmed."""
+    consensus_response = get_shelf_observation_consensus(
+        shelf_id=shelf_id,
+        product_id=product_id,
+        window_minutes=window_minutes,
+        minimum_confirmations=minimum_confirmations,
+        minimum_interval_seconds=minimum_interval_seconds,
+        minimum_confidence=minimum_confidence,
+        request=request,
+        db=db,
+    )
+    consensus = consensus_response["consensus"]
+    condition = consensus.get("consensus_observation_status")
+    if consensus.get("status") != "CONFIRMED" or condition not in {"LOW_STOCK", "EMPTY", "MISPLACED", "DAMAGED"}:
+        return None
+
+    actor = _require_alert_supervisor(db, request, consensus_response["store_id"])
+    _lock_store_for_task_creation(db, consensus_response["store_id"])
+    alert = (
+        db.query(models.ObservationAlert)
+        .filter(
+            models.ObservationAlert.store_id == consensus_response["store_id"],
+            models.ObservationAlert.shelf_id == shelf_id,
+            models.ObservationAlert.product_id == product_id,
+            models.ObservationAlert.condition == condition,
+            models.ObservationAlert.status.in_(("OPEN", "ACKNOWLEDGED")),
+        )
+        .with_for_update()
+        .first()
+    )
+    evidence = {
+        "first_seen_at": consensus["first_seen_at"],
+        "last_seen_at": consensus["last_seen_at"],
+        "confirmations": consensus["confirmations"],
+        "average_confidence": consensus["average_confidence"],
+        "sources": consensus["sources"],
+        "window_minutes": window_minutes,
+    }
+    now = models.utc_now()
+    if alert is None:
+        alert = models.ObservationAlert(
+            store_id=consensus_response["store_id"],
+            shelf_id=shelf_id,
+            product_id=product_id,
+            condition=condition,
+            status="OPEN",
+            first_seen_at=datetime.fromisoformat(consensus["first_seen_at"]),
+            last_seen_at=datetime.fromisoformat(consensus["last_seen_at"]),
+            confirmation_count=consensus["confirmations"],
+            average_confidence=consensus["average_confidence"],
+            sources=consensus["sources"],
+            created_at=now,
+            updated_at=now,
+        )
+        db.add(alert)
+        try:
+            db.flush()
+        except IntegrityError:
+            db.rollback()
+            alert = (
+                db.query(models.ObservationAlert)
+                .filter(
+                    models.ObservationAlert.store_id == consensus_response["store_id"],
+                    models.ObservationAlert.shelf_id == shelf_id,
+                    models.ObservationAlert.product_id == product_id,
+                    models.ObservationAlert.condition == condition,
+                    models.ObservationAlert.status.in_(("OPEN", "ACKNOWLEDGED")),
+                )
+                .with_for_update()
+                .first()
+            )
+            if alert is None:
+                raise
+        else:
+            _record_observation_alert_event(
+                db, alert, "CREATED", actor, to_status="OPEN", evidence=evidence,
+            )
+    if alert.created_at != now:
+        previous = {
+            "last_seen_at": alert.last_seen_at,
+            "confirmation_count": alert.confirmation_count,
+            "average_confidence": alert.average_confidence,
+            "sources": list(alert.sources or []),
+        }
+        incoming_last_seen = datetime.fromisoformat(consensus["last_seen_at"])
+        alert.first_seen_at = min(alert.first_seen_at, datetime.fromisoformat(consensus["first_seen_at"]))
+        alert.last_seen_at = max(alert.last_seen_at, incoming_last_seen)
+        alert.confirmation_count = max(alert.confirmation_count, consensus["confirmations"])
+        alert.average_confidence = consensus["average_confidence"]
+        alert.sources = sorted(set(alert.sources or []).union(consensus["sources"]))
+        alert.updated_at = now
+        if (
+            alert.last_seen_at != previous["last_seen_at"]
+            or alert.confirmation_count != previous["confirmation_count"]
+            or alert.average_confidence != previous["average_confidence"]
+            or alert.sources != previous["sources"]
+        ):
+            _record_observation_alert_event(
+                db, alert, "EVIDENCE_UPDATED", actor,
+                from_status=alert.status, to_status=alert.status, evidence=evidence,
+            )
+    db.commit()
+    db.refresh(alert)
+    return alert
+
+
+@app.get("/api/v1/observation-alerts", response_model=list[ObservationAlertRead], tags=["observation alerts"])
+def list_observation_alerts(
+    status: str | None = None,
+    shelf_id: int | None = None,
+    product_id: int | None = None,
+    limit: int = 100,
+    request: Request = None,
+    db: Session = Depends(get_db),
+):
+    actor = _request_user(db, request)
+    if actor is None or actor.role not in {"ADMIN", "SUPERVISOR"}:
+        raise HTTPException(status_code=403, detail="Supervisor role required")
+    query = db.query(models.ObservationAlert)
+    if actor.role != "ADMIN":
+        query = query.filter(models.ObservationAlert.store_id == actor.store_id)
+    if status is not None:
+        if status not in {"OPEN", "ACKNOWLEDGED", "RESOLVED", "DISMISSED"}:
+            raise HTTPException(status_code=422, detail="Invalid alert status")
+        query = query.filter(models.ObservationAlert.status == status)
+    if shelf_id is not None:
+        query = query.filter(models.ObservationAlert.shelf_id == shelf_id)
+    if product_id is not None:
+        query = query.filter(models.ObservationAlert.product_id == product_id)
+    return query.order_by(models.ObservationAlert.updated_at.desc(), models.ObservationAlert.id.desc()).limit(max(1, min(limit, 500))).all()
+
+
+@app.patch("/api/v1/observation-alerts/{alert_id}", response_model=ObservationAlertRead, tags=["observation alerts"])
+def update_observation_alert(
+    alert_id: int,
+    payload: ObservationAlertUpdate,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    alert = db.query(models.ObservationAlert).filter(models.ObservationAlert.id == alert_id).with_for_update().first()
+    if alert is None:
+        raise HTTPException(status_code=404, detail="Observation alert not found")
+    actor = _require_alert_supervisor(db, request, alert.store_id)
+    previous_status = alert.status
+    if payload.status == "ACKNOWLEDGED":
+        if previous_status != "OPEN":
+            raise HTTPException(status_code=409, detail="Only open alerts can be acknowledged")
+        event_type = "ACKNOWLEDGED"
+    else:
+        if previous_status not in {"OPEN", "ACKNOWLEDGED"}:
+            raise HTTPException(status_code=409, detail="Only active alerts can be resolved or dismissed")
+        event_type = payload.status
+        alert.resolved_at = models.utc_now()
+        alert.resolution_reason = payload.reason
+        alert.resolved_by_user_id = actor.id
+    alert.status = payload.status
+    alert.updated_at = models.utc_now()
+    _record_observation_alert_event(
+        db, alert, event_type, actor,
+        from_status=previous_status, to_status=payload.status, reason=payload.reason,
+    )
+    db.commit()
+    db.refresh(alert)
+    return alert
+
+
+@app.get(
+    "/api/v1/observation-alerts/{alert_id}/events",
+    response_model=list[ObservationAlertEventRead],
+    tags=["observation alerts"],
+)
+def list_observation_alert_events(alert_id: int, request: Request, db: Session = Depends(get_db)):
+    alert = db.get(models.ObservationAlert, alert_id)
+    if alert is None:
+        raise HTTPException(status_code=404, detail="Observation alert not found")
+    actor = _require_alert_supervisor(db, request, alert.store_id)
+    return (
+        db.query(models.ObservationAlertEvent)
+        .filter(models.ObservationAlertEvent.alert_id == alert_id)
+        .order_by(models.ObservationAlertEvent.created_at.asc(), models.ObservationAlertEvent.id.asc())
+        .all()
+    )
 
 
 @app.get("/api/v1/observations", response_model=list[ObservationRead], tags=["observations"])

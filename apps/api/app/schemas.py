@@ -282,6 +282,59 @@ class ReplenishmentTaskEventRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+ObservationAlertStatus = Literal["OPEN", "ACKNOWLEDGED", "RESOLVED", "DISMISSED"]
+ObservationAlertCondition = Literal["LOW_STOCK", "EMPTY", "MISPLACED", "DAMAGED"]
+
+
+class ObservationAlertRead(BaseModel):
+    id: int
+    store_id: int
+    shelf_id: int
+    product_id: int
+    condition: ObservationAlertCondition
+    status: ObservationAlertStatus
+    first_seen_at: datetime
+    last_seen_at: datetime
+    confirmation_count: int
+    average_confidence: float
+    sources: list[str]
+    created_at: datetime
+    updated_at: datetime
+    resolved_at: datetime | None
+    resolution_reason: str | None
+    resolved_by_user_id: int | None
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ObservationAlertUpdate(BaseModel):
+    status: Literal["ACKNOWLEDGED", "RESOLVED", "DISMISSED"]
+    reason: str | None = Field(default=None, max_length=500)
+
+    @field_validator("reason")
+    @classmethod
+    def normalize_reason(cls, value):
+        return value.strip() if value is not None else None
+
+    @model_validator(mode="after")
+    def require_resolution_reason(self):
+        if self.status in {"RESOLVED", "DISMISSED"} and not self.reason:
+            raise ValueError("A non-empty reason is required to resolve or dismiss an alert")
+        return self
+
+
+class ObservationAlertEventRead(BaseModel):
+    id: int
+    alert_id: int
+    event_type: Literal["CREATED", "EVIDENCE_UPDATED", "ACKNOWLEDGED", "RESOLVED", "DISMISSED"]
+    from_status: ObservationAlertStatus | None
+    to_status: ObservationAlertStatus | None
+    actor_user_id: int | None
+    reason: str | None
+    evidence: dict | None
+    created_at: datetime
+    model_config = ConfigDict(from_attributes=True)
+
+
 UserRole = Literal["ADMIN", "SUPERVISOR", "EMPLOYEE"]
 
 
