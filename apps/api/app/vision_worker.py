@@ -127,7 +127,7 @@ def resolve_sku_match(db: Session, detection, registry_cache=None):
 def process_next_image(db: Session, provider, ocr_provider=None) -> int | None:
     image = (
         db.query(models.ShelfImage)
-        .filter(models.ShelfImage.analysis_status == "PENDING")
+        .filter(models.ShelfImage.analysis_status == "PENDING", models.ShelfImage.retention_status == "ACTIVE")
         .order_by(models.ShelfImage.created_at.asc(), models.ShelfImage.id.asc())
         .with_for_update(skip_locked=True)
         .first()
