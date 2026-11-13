@@ -774,7 +774,15 @@ def test_retention_event_history_enforces_cross_store_scope(monkeypatch):
             store_id=own_zone.store_id,
             is_active=True,
         )
-        db.add(actor)
+        employee = models.User(
+            email="retention-events-employee@example.test",
+            full_name="Retention Events Employee",
+            password_hash="test-only-not-used",
+            role="EMPLOYEE",
+            store_id=own_zone.store_id,
+            is_active=True,
+        )
+        db.add_all([actor, employee])
         db.add(models.ShelfImageRetentionEvent(
             shelf_image_id=foreign_image_id,
             event_type="RESTRICTED",
@@ -784,7 +792,8 @@ def test_retention_event_history_enforces_cross_store_scope(monkeypatch):
         ))
         db.commit()
         db.refresh(actor)
-        actor_id = actor.id
+        db.refresh(employee)
+        actor_id, employee_id = actor.id, employee.id
 
     with TestingSession() as db:
         actor = db.get(models.User, actor_id)
@@ -796,6 +805,14 @@ def test_retention_event_history_enforces_cross_store_scope(monkeypatch):
             assert own_events.status_code == 200
             assert own_events.json() == []
 
+            employee = db.get(models.User, employee_id)
+            monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: employee)
+            employee_events = client.get(
+                f"/api/v1/shelf-images/{own_image_id}/retention/events"
+            )
+            assert employee_events.status_code == 403
+
+            monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: actor)
             foreign_events = client.get(
                 f"/api/v1/shelf-images/{foreign_image_id}/retention/events"
             )
