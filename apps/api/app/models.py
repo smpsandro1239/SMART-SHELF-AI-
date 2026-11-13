@@ -334,6 +334,22 @@ class InventorySnapshot(Base):
         return float(self.on_hand_quantity - self.reserved_quantity)
 
 
+class InventoryFreshnessPolicy(Base):
+    """Maximum accepted age for inventory evidence, scoped to one store and source."""
+    __tablename__ = "inventory_freshness_policies"
+    __table_args__ = (
+        UniqueConstraint("store_id", "source", name="uq_inventory_freshness_store_source"),
+        CheckConstraint("source IN ('ERP', 'WMS', 'POS', 'MANUAL', 'IMPORT')", name="ck_inventory_freshness_source"),
+        CheckConstraint("max_age_minutes >= 1 AND max_age_minutes <= 10080", name="ck_inventory_freshness_max_age"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    store_id: Mapped[int] = mapped_column(ForeignKey("stores.id", ondelete="CASCADE"), nullable=False, index=True)
+    source: Mapped[str] = mapped_column(String(20), nullable=False)
+    max_age_minutes: Mapped[int] = mapped_column(Integer, nullable=False, default=240)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False)
+
+
 class InventoryMovement(Base):
     """Immutable, approved transfer from backroom stock to shelf."""
     __tablename__ = "inventory_movements"
