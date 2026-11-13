@@ -72,6 +72,26 @@ def auth_client(monkeypatch):
         shelf_b = models.Shelf(zone_id=zone_b.id, code="B-ASSIGNED")
         db.add_all([shelf_a_assigned, shelf_a_unassigned, shelf_a_peer, shelf_b])
         db.flush()
+        observation_a = models.Observation(
+            shelf_id=shelf_a_assigned.id, source="simulation", status="LOW_STOCK",
+            confidence=0.9, observed_quantity=2,
+        )
+        observation_b = models.Observation(
+            shelf_id=shelf_b.id, source="simulation", status="EMPTY",
+            confidence=0.95, observed_quantity=0,
+        )
+        capture_session_a = models.CaptureSession(
+            store_id=store_a.id, shelf_id=shelf_a_assigned.id,
+            source_type="mobile", capture_mode="single",
+            created_by_user_id=users["supervisor_a"].id,
+        )
+        capture_session_b = models.CaptureSession(
+            store_id=store_b.id, shelf_id=shelf_b.id,
+            source_type="mobile", capture_mode="single",
+            created_by_user_id=users["employee_b"].id,
+        )
+        db.add_all([observation_a, observation_b, capture_session_a, capture_session_b])
+        db.flush()
         db.add_all([
             models.ShelfProduct(shelf_id=shelf_a_assigned.id, product_id=product.id, target_quantity=10, min_display_quantity=2),
             models.ShelfProduct(shelf_id=shelf_a_unassigned.id, product_id=product.id, target_quantity=10, min_display_quantity=2),
@@ -130,6 +150,10 @@ def auth_client(monkeypatch):
         ids["task_b_assigned"] = task_b_assigned.id
         ids["image_a"] = image_a.id
         ids["image_b"] = image_b.id
+        ids["observation_a"] = observation_a.id
+        ids["observation_b"] = observation_b.id
+        ids["capture_session_a"] = capture_session_a.id
+        ids["capture_session_b"] = capture_session_b.id
         store_ids = {"a": store_a.id, "b": store_b.id}
 
     def override_get_db():
@@ -532,3 +556,64 @@ def test_employee_cannot_access_team_analytics_or_operational_decisions(auth_cli
 
     assert decisions.status_code == 403
     assert workload.status_code == 403
+
+
+def test_supervisor_observations_are_scoped_to_own_store(auth_client):
+    client, ids, store_ids = auth_client
+    headers = bearer(ids["supervisor_a"], "SUPERVISOR")
+
+    own = client.get("/api/v1/observations", headers=headers)
+    foreign_filter = client.get(
+        "/api/v1/observations",
+        params={"shelf_id": 4},
+        headers=headers,
+    )
+    foreign_create = client.post(
+        "/api/v1/observations",
+        json={"shelf_id": 4, "source": "simulation", "status": "EMPTY"},
+        headers=headers,
+    )
+
+    assert all(row["shelf_id"] != 4 for row in own.json())
+    assert foreign_filter.status_code == 200
+    assert foreign_filter.json() == []
+    assert foreign_create.status_code == 403
+
+
+def test_supervisor_capture_sessions_are_scoped_to_own_store(auth_client):
+    client, ids, store_ids = auth_client
+    headers = bearer(ids["supervisor_a"], "SUPERVISOR")
+
+    listed = client.get("/api/v1/capture-sessions", headers=headers)
+    foreign_create = client.post(
+        "/api/v1/capture-sessions",
+        json={"shelf_id": 4, "source_type": "mobile"},
+        headers=headers,
+    )
+    foreign_close = client.post(
+        f"/api/v1/capture-sessions/{ids['capture_session_b']}/close",
+        headers=headers,
+    )
+
+    assert listed.status_code == 200
+    assert all(item["store_id"] == store_ids["a"] for item in listed.json())
+    assert foreign_create.status_code == 403
+    assert foreign_close.status_code == 403
+
+
+def test_employee_cannot_create_or_close_capture_sessions(auth_client):
+    client, ids, _ = auth_client
+    headers = bearer(ids["employee_a"], "EMPLOYEE")
+
+    create = client.post(
+        "/api/v1/capture-sessions",
+        json={"shelf_id": 1, "source_type": "mobile"},
+        headers=headers,
+    )
+    close = client.post(
+        f"/api/v1/capture-sessions/{ids['capture_session_a']}/close",
+        headers=headers,
+    )
+
+    assert create.status_code == 403
+    assert close.status_code == 403
