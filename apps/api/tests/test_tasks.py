@@ -771,3 +771,130 @@ def test_bearer_middleware_authenticates_active_users_and_rejects_invalid_or_ina
             json={"provider": "test", "model_version": "v1", "regions": []},
         )
         assert forbidden_role.status_code == 403
+
+
+
+def test_pallet_lifecycle_audit_endpoints_enforce_store_scope(monkeypatch):
+    from types import SimpleNamespace
+
+    db = TestingSession()
+    own_store = models.Store(code="PAL-AUDIT-OWN", name="Loja própria")
+    foreign_store = models.Store(code="PAL-AUDIT-FOREIGN", name="Loja externa")
+    db.add_all([own_store, foreign_store])
+    db.flush()
+
+    product = models.Product(sku="PAL-AUDIT-SKU", name="Produto auditoria")
+    db.add(product)
+    db.flush()
+    packaging = models.ProductPackagingLevel(
+        product_id=product.id,
+        code="PAL",
+        name="Palete",
+        package_type="PALLET",
+        base_units_per_package=100,
+    )
+    db.add(packaging)
+    db.flush()
+
+    own_pallet = models.StorePallet(
+        store_id=own_store.id,
+        product_id=product.id,
+        packaging_level_id=packaging.id,
+        pallet_code="OWN-001",
+        base_quantity=80,
+        status="READY",
+        location_type="WAREHOUSE",
+    )
+    foreign_pallet = models.StorePallet(
+        store_id=foreign_store.id,
+        product_id=product.id,
+        packaging_level_id=packaging.id,
+        pallet_code="FOREIGN-001",
+        base_quantity=80,
+        status="READY",
+        location_type="WAREHOUSE",
+    )
+    db.add_all([own_pallet, foreign_pallet])
+    db.flush()
+
+    db.add_all([
+        models.PalletRotationEvent(
+            pallet_id=own_pallet.id,
+            event_type="REGISTERED",
+            quantity_before=80,
+            quantity_after=80,
+            to_location_type="WAREHOUSE",
+        ),
+        models.PalletRotationEvent(
+            pallet_id=foreign_pallet.id,
+            event_type="REGISTERED",
+            quantity_before=80,
+            quantity_after=80,
+            to_location_type="WAREHOUSE",
+        ),
+    ])
+    own_store_id, foreign_store_id = own_store.id, foreign_store.id
+    own_pallet_id, foreign_pallet_id = own_pallet.id, foreign_pallet.id
+    db.commit()
+    db.close()
+
+    supervisor = SimpleNamespace(role="SUPERVISOR", store_id=own_store_id, id=None)
+    monkeypatch.setattr(main_module, "_request_user", lambda db, request: supervisor)
+
+    with TestClient(app) as client:
+        own_events = client.get(
+            f"/api/v1/warehouse/pallets/{own_pallet_id}/events",
+            params={"store_id": own_store_id},
+        )
+        assert own_events.status_code == 200
+        assert len(own_events.json()) == 1
+        assert own_events.json()[0]["event_type"] == "REGISTERED"
+
+        foreign_events = client.get(
+            f"/api/v1/warehouse/pallets/{foreign_pallet_id}/events",
+            params={"store_id": foreign_store_id},
+        )
+        assert foreign_events.status_code == 403
+
+        forged_store_filter = client.get(
+            f"/api/v1/warehouse/pallets/{foreign_pallet_id}/events",
+            params={"store_id": own_store_id},
+        )
+        assert forged_store_filter.status_code == 404
+
+        foreign_update = client.post(
+            f"/api/v1/warehouse/pallets/{foreign_pallet_id}/events",
+            json={
+                "expected_status": "READY",
+                "expected_base_quantity": 80,
+                "status": "ON_DISPLAY",
+                "location_type": "SALES_FLOOR",
+                "location_code": "A-01",
+                "reason": "Colocação na exposição",
+            },
+        )
+        assert foreign_update.status_code == 403
+
+        own_update = client.post(
+            f"/api/v1/warehouse/pallets/{own_pallet_id}/events",
+            json={
+                "expected_status": "READY",
+                "expected_base_quantity": 80,
+                "status": "ON_DISPLAY",
+                "location_type": "SALES_FLOOR",
+                "location_code": "A-01",
+                "reason": "Colocação na exposição",
+            },
+        )
+        assert own_update.status_code == 201
+        assert own_update.json()["event_type"] == "STATUS_REVIEWED"
+
+        own_events_after = client.get(
+            f"/api/v1/warehouse/pallets/{own_pallet_id}/events",
+            params={"store_id": own_store_id},
+        )
+        assert own_events_after.status_code == 200
+        assert [event["event_type"] for event in own_events_after.json()] == [
+            "REGISTERED",
+            "STATUS_REVIEWED",
+        ]
