@@ -39,6 +39,8 @@ jobs:
         working-directory: apps/api
     env:
       PYTHONPATH: ${{ github.workspace }}/apps/api
+      APP_ENV: test
+      JWT_SECRET_KEY: test-only-secret-not-for-production
     steps:
       - name: Checkout
         uses: actions/checkout@v4
