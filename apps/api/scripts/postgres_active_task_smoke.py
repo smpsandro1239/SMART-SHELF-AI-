@@ -68,6 +68,16 @@ def main() -> None:
         assert conflicts[0].json()["detail"]["code"] == "ACTIVE_TASK_EXISTS"
 
         task_id = created[0].json()["id"]
+        assigned = client.patch(
+            f"/api/v1/tasks/{task_id}/status",
+            json={"status": "ASSIGNED", "assigned_to": "CI operator"},
+        )
+        assert assigned.status_code == 200, assigned.text
+        started = client.patch(
+            f"/api/v1/tasks/{task_id}/status",
+            json={"status": "IN_PROGRESS"},
+        )
+        assert started.status_code == 200, started.text
         completed = client.patch(
             f"/api/v1/tasks/{task_id}/status",
             json={"status": "COMPLETED", "actual_quantity": 2},
