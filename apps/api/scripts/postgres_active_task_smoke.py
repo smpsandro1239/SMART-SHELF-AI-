@@ -1,69 +1,85 @@
-"""Smoke-test the active-task partial unique index on a migrated PostgreSQL DB."""
+"""Exercise concurrent task creation through the API against migrated PostgreSQL."""
+from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier
 from uuid import uuid4
 
-from sqlalchemy.exc import IntegrityError
+from fastapi.testclient import TestClient
 
-from app.database import SessionLocal
-from app import models
+from app.main import app
 
 
 def main() -> None:
     suffix = uuid4().hex[:12]
-    db = SessionLocal()
-    contender = SessionLocal()
-    try:
-        store = models.Store(code=f"CI-{suffix}", name="CI concurrency smoke")
-        product = models.Product(sku=f"CI-SKU-{suffix}", name="CI product")
-        db.add_all([store, product])
-        db.flush()
-        zone = models.Zone(store_id=store.id, name="CI zone")
-        db.add(zone)
-        db.flush()
-        shelf = models.Shelf(zone_id=zone.id, code=f"CI-SHELF-{suffix}")
-        db.add(shelf)
-        db.flush()
-
-        first = models.ReplenishmentTask(
-            store_id=store.id,
-            shelf_id=shelf.id,
-            product_id=product.id,
-            priority="NORMAL",
-            status="PENDING",
+    with TestClient(app) as client:
+        store_response = client.post(
+            "/api/v1/stores",
+            json={"code": f"CI-{suffix}", "name": "CI concurrent task smoke"},
         )
-        db.add(first)
-        db.commit()
+        assert store_response.status_code == 201, store_response.text
+        store_id = store_response.json()["id"]
 
-        duplicate = models.ReplenishmentTask(
-            store_id=store.id,
-            shelf_id=shelf.id,
-            product_id=product.id,
-            priority="NORMAL",
-            status="PENDING",
+        zone_response = client.post(
+            "/api/v1/zones", json={"store_id": store_id, "name": "CI zone"},
         )
-        contender.add(duplicate)
-        try:
-            contender.commit()
-        except IntegrityError:
-            contender.rollback()
-        else:
-            raise AssertionError("PostgreSQL allowed a duplicate active task")
-
-        first.status = "COMPLETED"
-        db.commit()
-
-        replacement = models.ReplenishmentTask(
-            store_id=store.id,
-            shelf_id=shelf.id,
-            product_id=product.id,
-            priority="NORMAL",
-            status="PENDING",
+        assert zone_response.status_code == 201, zone_response.text
+        shelf_response = client.post(
+            "/api/v1/shelves",
+            json={"zone_id": zone_response.json()["id"], "code": f"CI-{suffix}"},
         )
-        db.add(replacement)
-        db.commit()
-        print("PostgreSQL active-task unique index: PASS")
-    finally:
-        contender.close()
-        db.close()
+        assert shelf_response.status_code == 201, shelf_response.text
+        shelf_id = shelf_response.json()["id"]
+
+        product_response = client.post(
+            "/api/v1/products",
+            json={"sku": f"CI-SKU-{suffix}", "name": "CI product"},
+        )
+        assert product_response.status_code == 201, product_response.text
+        product_id = product_response.json()["id"]
+        assignment_response = client.post(
+            "/api/v1/shelf-products",
+            json={
+                "shelf_id": shelf_id,
+                "product_id": product_id,
+                "target_quantity": 10,
+                "min_display_quantity": 2,
+            },
+        )
+        assert assignment_response.status_code == 201, assignment_response.text
+
+        payload = {
+            "store_id": store_id,
+            "shelf_id": shelf_id,
+            "product_id": product_id,
+            "requested_quantity": 2,
+        }
+        barrier = Barrier(2)
+
+        def create_task():
+            barrier.wait(timeout=10)
+            return client.post("/api/v1/tasks", json=payload)
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            responses = list(executor.map(lambda _: create_task(), range(2)))
+
+        created = [response for response in responses if response.status_code == 201]
+        conflicts = [response for response in responses if response.status_code == 409]
+        assert len(created) == 1, [response.text for response in responses]
+        assert len(conflicts) == 1, [response.text for response in responses]
+        assert conflicts[0].json()["detail"]["code"] == "ACTIVE_TASK_EXISTS"
+
+        task_id = created[0].json()["id"]
+        completed = client.patch(
+            f"/api/v1/tasks/{task_id}/status",
+            json={"status": "COMPLETED", "actual_quantity": 2},
+        )
+        assert completed.status_code == 200, completed.text
+
+        replacement = client.post("/api/v1/tasks", json=payload)
+        assert replacement.status_code == 201, replacement.text
+        print(
+            "PostgreSQL concurrent task creation: PASS "
+            "(one 201, one 409; terminal task releases the unique slot)"
+        )
 
 
 if __name__ == "__main__":
