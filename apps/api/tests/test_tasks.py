@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
+from sqlalchemy.exc import IntegrityError
 
 from app.database import Base, get_db
 from app import models  # noqa: F401
@@ -94,6 +95,37 @@ def test_task_lifecycle_pending_assignment_start_and_completion():
         assert [event["to_status"] for event in events.json()[1:]] == ["ASSIGNED", "IN_PROGRESS", "COMPLETED"]
         assert events.json()[-1]["actual_quantity"] == 8
 
+        /* A terminal task releases the active-task slot for a future replenishment. */
+        next_task = client.post("/api/v1/tasks", json={
+            "store_id": store_id, "shelf_id": shelf_id, "product_id": product_id,
+            "requested_quantity": 2,
+        })
+        assert next_task.status_code == 201
+
+
+
+def test_database_unique_index_blocks_duplicate_active_tasks():
+    with TestClient(app) as client:
+        store_id, shelf_id, product_id = create_task_context(client)
+        created = client.post("/api/v1/tasks", json={
+            "store_id": store_id, "shelf_id": shelf_id, "product_id": product_id,
+        })
+        assert created.status_code == 201
+
+        db = TestingSession()
+        try:
+            duplicate = models.ReplenishmentTask(
+                store_id=store_id,
+                shelf_id=shelf_id,
+                product_id=product_id,
+                status="PENDING",
+            )
+            db.add(duplicate)
+            with pytest.raises(IntegrityError):
+                db.commit()
+            db.rollback()
+        finally:
+            db.close()
 
 def test_task_rejects_invalid_transition_and_unlinked_product():
     with TestClient(app) as client:
