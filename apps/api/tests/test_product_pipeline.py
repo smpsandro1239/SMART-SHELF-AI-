@@ -191,7 +191,8 @@ def test_pipeline_abstains_for_low_confidence_ocr(db):
     assert fused.status == "VISUAL_ONLY"
 
 
-def test_worker_automatically_runs_catalogue_matching_and_fusion(db, tmp_path):
+def test_worker_automatically_runs_catalogue_matching_and_fusion(db, tmp_path, monkeypatch):
+    import app.vision_worker as worker
     from app.ocr_paddle import OCRRegion
     from app.product_text import OCRText
     from app.vision import DetectionResult, VisionAnalysis
@@ -206,7 +207,10 @@ def test_worker_automatically_runs_catalogue_matching_and_fusion(db, tmp_path):
     shelf = models.Shelf(zone_id=zone.id, code="AUTO-01")
     db.add(shelf)
     db.flush()
-    image_path = tmp_path / "automatic.jpg"
+    storage_root = tmp_path / "storage"
+    monkeypatch.setattr(worker.settings, "image_storage_path", str(storage_root))
+    image_path = storage_root / str(store.id) / "automatic.jpg"
+    image_path.parent.mkdir(parents=True)
     image_path.write_bytes(b"test-image")
     image = models.ShelfImage(
         shelf_id=shelf.id,
