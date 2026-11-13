@@ -1,7 +1,7 @@
 # REA externa — comparação de soluções existentes para reposição de prateleiras
 
 **Âmbito:** projetos públicos de terceiros e plataformas consolidadas, não os repositórios do autor do SMART SHELF AI.  
-**Data da consulta:** 12-11-2026.  
+**Data da consulta:** 13-11-2026.  
 **Método:** inspeção de README, árvores de ficheiros, código-fonte, documentação oficial, metadados GitHub e licenças visíveis. Não foi executado código dos projetos externos nem reproduzido o treino dos seus modelos.
 
 ## 1. Objetivo
