@@ -2,7 +2,7 @@
 
 ## Estado
 
-Implementação parcial. As migrações `0023_shelf_image_retention_metadata` e `0024_shelf_image_retention_events` (inclui triggers de imutabilidade no PostgreSQL/SQLite) introduzem metadados e auditoria append-only, protegida por triggers contra UPDATE/DELETE em PostgreSQL e SQLite. Existem endpoints de restrição/restauro, consulta de eventos e bloqueio de acesso/worker para imagens não ativas. O histórico de revisões por deteção e os relatórios de avaliação SKU também excluem imagens restritas; as imagens restritas não são elegíveis para candidatos de treino. O estado inicial é `ACTIVE`. **Ainda não existem pedidos de purga agendada, worker de purga física, política de retenção aprovada nem gestão operacional de legal hold.**
+Implementação parcial. As migrações `0023_shelf_image_retention_metadata` e `0024_shelf_image_retention_events` (inclui triggers de imutabilidade no PostgreSQL/SQLite) introduzem metadados e auditoria append-only, protegida por triggers contra UPDATE/DELETE em PostgreSQL e SQLite. Existem endpoints de restrição/restauro, consulta de eventos e bloqueio de acesso/worker para imagens não ativas. O histórico de revisões por deteção e os relatórios de avaliação SKU também excluem imagens restritas; as imagens restritas não são elegíveis para candidatos de treino. O estado inicial é `ACTIVE`. **Ainda não existem pedidos de purga agendada, worker de purga física nem política de retenção aprovada.** A gestão operacional de legal hold foi acrescentada: aplicação e libertação exclusivas de ADMIN, motivo obrigatório e eventos append-only; o hold não altera o estado operacional da imagem nem ativa purga. A migração e os testes desta evolução aguardam validação CI PostgreSQL.
 
 ## Objetivos e invariantes
 
@@ -74,11 +74,11 @@ A transição deve ser explícita, auditada, idempotente e autorizada. A purga n
 
 1. [x] Adicionar estados, timestamps e metadados de retenção (`0023_shelf_image_retention_metadata`).
 2. [x] Implementar restrição/restauro, eventos append-only, bloqueio dos endpoints de imagem e exclusão do worker (`0024_shelf_image_retention_events` e commits associados).
-3. Rever cobertura dos endpoints de imagem e garantir que filas, métricas agregadas e operações indiretas não expõem dados restritos.
-3. Adicionar pedido de restrição/eliminação lógica com auditoria e isolamento multi-loja.
-4. Adicionar worker de purga com política configurável, proteção de caminhos e tratamento de falhas.
-5. Definir tratamento de evidência derivada e anonimização/minimização dos metadados após validação jurídica.
-6. Testar em PostgreSQL 16, incluindo concorrência, rollback, falhas de filesystem e reexecução idempotente.
+3. [ ] Rever cobertura dos endpoints de imagem e garantir que filas, métricas agregadas e operações indiretas não expõem dados restritos.
+4. [x] Adicionar gestão de legal hold: aplicação/libertação ADMIN-only, motivo obrigatório, bloqueio de hold em imagens purgadas e eventos append-only; não altera visibilidade nem elimina dados.
+5. [ ] Adicionar pedido de purga com política configurável, proteção de caminhos e tratamento de falhas — apenas após aprovação formal da política.
+6. [ ] Definir tratamento de evidência derivada e anonimização/minimização dos metadados após validação jurídica.
+7. [ ] Testar em PostgreSQL 16, incluindo concorrência, rollback, falhas de filesystem e reexecução idempotente.
 
 ## Limitação
 
