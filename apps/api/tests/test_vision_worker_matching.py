@@ -238,10 +238,11 @@ def test_optional_ocr_failure_is_recorded_without_raising_or_mutating_inventory(
 
 
 
-def test_worker_does_not_claim_restricted_pending_images(db, tmp_path):
+@pytest.mark.parametrize("retention_status", ["RESTRICTED", "PENDING_PURGE", "PURGED"])
+def test_worker_does_not_claim_non_active_pending_images(db, tmp_path, retention_status):
     import app.vision_worker as worker
 
-    store = models.Store(code="RESTRICTED-WORKER", name="Restricted Worker")
+    store = models.Store(code=f"NONACTIVE-WORKER-{retention_status}", name="Non-active Worker")
     db.add(store)
     db.flush()
     zone = models.Zone(store_id=store.id, name="Zona")
@@ -252,13 +253,13 @@ def test_worker_does_not_claim_restricted_pending_images(db, tmp_path):
     db.flush()
     image = models.ShelfImage(
         shelf_id=shelf.id,
-        original_filename="restricted.jpg",
-        storage_path=str(tmp_path / "restricted.jpg"),
+        original_filename="non-active.jpg",
+        storage_path=str(tmp_path / "non-active.jpg"),
         mime_type="image/jpeg",
         file_size_bytes=10,
         sha256="9" * 64,
         analysis_status="PENDING",
-        retention_status="RESTRICTED",
+        retention_status=retention_status,
     )
     db.add(image)
     db.flush()
