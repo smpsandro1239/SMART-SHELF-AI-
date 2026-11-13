@@ -3570,7 +3570,33 @@ def upsert_inventory_freshness_policy(
         db.add(policy)
     else:
         policy.max_age_minutes = payload.max_age_minutes
-    db.commit()
+
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        # Two first-time writers can both observe no row; recover the unique-key race.
+        db.rollback()
+        policy = (
+            db.query(models.InventoryFreshnessPolicy)
+            .filter_by(store_id=payload.store_id, source=payload.source)
+            .with_for_update()
+            .first()
+        )
+        if policy is None:
+            raise HTTPException(
+                status_code=409,
+                detail="Inventory freshness policy changed concurrently; retry the request",
+            ) from exc
+        policy.max_age_minutes = payload.max_age_minutes
+        try:
+            db.commit()
+        except IntegrityError as retry_exc:
+            db.rollback()
+            raise HTTPException(
+                status_code=409,
+                detail="Inventory freshness policy changed concurrently; retry the request",
+            ) from retry_exc
+
     db.refresh(policy)
     return policy
 
