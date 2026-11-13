@@ -560,3 +560,72 @@ def test_inventory_freshness_policy_rejects_out_of_range_values(monkeypatch):
             "store_id": store_id, "source": "WMS", "max_age_minutes": 0,
         })
         assert response.status_code == 422
+
+
+
+def test_inventory_freshness_policy_endpoints_enforce_role_and_store_scope(monkeypatch):
+    with TestClient(app) as client:
+        store_id, _, actor = _freshness_reconciliation_context(client, 10)
+        other_store = client.post(
+            "/api/v1/stores",
+            json={"code": "TASK-OTHER", "name": "Outra loja"},
+        )
+        assert other_store.status_code == 201, other_store.text
+        other_store_id = other_store.json()["id"]
+
+        employee = models.User(
+            email=f"freshness-employee-{uuid4().hex}@example.test",
+            store_id=store_id,
+            full_name="Freshness Employee",
+            password_hash="test-only-not-used",
+            role="EMPLOYEE",
+            is_active=True,
+        )
+        db = TestingSession()
+        try:
+            db.add(employee)
+            db.commit()
+            db.refresh(employee)
+        finally:
+            db.close()
+
+        monkeypatch.setattr(main_module, "_request_user", lambda db, request: employee)
+        assert client.get(
+            "/api/v1/inventory/freshness-policies",
+            params={"store_id": store_id},
+        ).status_code == 403
+        assert client.post("/api/v1/inventory/freshness-policies", json={
+            "store_id": store_id, "source": "WMS", "max_age_minutes": 300,
+        }).status_code == 403
+
+        monkeypatch.setattr(main_module, "_request_user", lambda db, request: actor)
+        assert client.get(
+            "/api/v1/inventory/freshness-policies",
+            params={"store_id": other_store_id},
+        ).status_code == 403
+        assert client.post("/api/v1/inventory/freshness-policies", json={
+            "store_id": other_store_id, "source": "WMS", "max_age_minutes": 300,
+        }).status_code == 403
+
+
+def test_inventory_freshness_policy_upsert_updates_existing_row(monkeypatch):
+    with TestClient(app) as client:
+        store_id, _, actor = _freshness_reconciliation_context(client, 10)
+        monkeypatch.setattr(main_module, "_request_user", lambda db, request: actor)
+
+        first = client.post("/api/v1/inventory/freshness-policies", json={
+            "store_id": store_id, "source": "WMS", "max_age_minutes": 300,
+        })
+        second = client.post("/api/v1/inventory/freshness-policies", json={
+            "store_id": store_id, "source": "WMS", "max_age_minutes": 420,
+        })
+        assert first.status_code == 200, first.text
+        assert second.status_code == 200, second.text
+        assert second.json()["id"] == first.json()["id"]
+        assert second.json()["max_age_minutes"] == 420
+        listed = client.get(
+            "/api/v1/inventory/freshness-policies",
+            params={"store_id": store_id},
+        )
+        assert len(listed.json()) == 1
+        assert listed.json()[0]["max_age_minutes"] == 420
