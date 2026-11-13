@@ -2,7 +2,7 @@
 
 ## Estado
 
-Implementação parcial. As migrações `0023_shelf_image_retention_metadata` e `0024_shelf_image_retention_events` (inclui triggers de imutabilidade no PostgreSQL/SQLite) introduzem metadados e auditoria append-only, protegida por triggers contra UPDATE/DELETE em PostgreSQL e SQLite. Existem endpoints de restrição/restauro, consulta de eventos e bloqueio de acesso/worker para imagens não ativas. O estado inicial é `ACTIVE`. **Ainda não existem pedidos de purga agendada, worker de purga física, política de retenção aprovada nem gestão operacional de legal hold.**
+Implementação parcial. As migrações `0023_shelf_image_retention_metadata` e `0024_shelf_image_retention_events` (inclui triggers de imutabilidade no PostgreSQL/SQLite) introduzem metadados e auditoria append-only, protegida por triggers contra UPDATE/DELETE em PostgreSQL e SQLite. Existem endpoints de restrição/restauro, consulta de eventos e bloqueio de acesso/worker para imagens não ativas. O histórico de revisões por deteção e os relatórios de avaliação SKU também excluem imagens restritas; as imagens restritas não são elegíveis para candidatos de treino. O estado inicial é `ACTIVE`. **Ainda não existem pedidos de purga agendada, worker de purga física, política de retenção aprovada nem gestão operacional de legal hold.**
 
 ## Objetivos e invariantes
 
