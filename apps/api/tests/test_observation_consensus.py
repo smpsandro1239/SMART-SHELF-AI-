@@ -81,6 +81,7 @@ def test_clear_winner_can_be_selected_when_other_status_is_not_confirmed():
 @pytest.mark.parametrize("kwargs", [
     {"window_minutes": 0},
     {"minimum_confirmations": 1},
+    {"minimum_interval_seconds": 0},
     {"minimum_interval_seconds": -1},
     {"minimum_confidence": 1.1},
     {"minimum_confidence": True},
