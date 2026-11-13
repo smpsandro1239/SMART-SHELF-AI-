@@ -1002,3 +1002,96 @@ def test_user_management_endpoints_require_admin_role_and_hash_password(monkeypa
                 headers=headers(token),
             )
             assert denied_list.status_code == 403
+
+
+
+def test_partial_task_completion_rejects_whitespace_only_reason_without_changing_task():
+    with TestClient(app) as client:
+        store_id, shelf_id, product_id = create_task_context(client)
+        created = client.post("/api/v1/tasks", json={
+            "store_id": store_id,
+            "shelf_id": shelf_id,
+            "product_id": product_id,
+            "requested_quantity": 8,
+        })
+        assert created.status_code == 201
+        task_id = created.json()["id"]
+        assert client.patch(
+            f"/api/v1/tasks/{task_id}/status",
+            json={"status": "ASSIGNED", "assigned_to": "ana"},
+        ).status_code == 200
+        assert client.patch(
+            f"/api/v1/tasks/{task_id}/status",
+            json={"status": "IN_PROGRESS"},
+        ).status_code == 200
+
+        response = client.patch(
+            f"/api/v1/tasks/{task_id}/status",
+            json={
+                "status": "COMPLETED",
+                "actual_quantity": 5,
+                "exception_reason": "   \t  ",
+            },
+        )
+
+        assert response.status_code == 422
+        assert response.json()["detail"]["code"] == "EXCEPTION_REASON_TOO_SHORT"
+        task = next(
+            item for item in client.get("/api/v1/tasks").json()
+            if item["id"] == task_id
+        )
+        assert task["status"] == "IN_PROGRESS"
+        assert task["actual_quantity"] is None
+        assert client.get(f"/api/v1/tasks/{task_id}/events").json()[-1]["to_status"] == "IN_PROGRESS"
+
+
+def test_task_cancellation_rejects_whitespace_only_reason_without_changing_task():
+    with TestClient(app) as client:
+        store_id, shelf_id, product_id = create_task_context(client)
+        created = client.post("/api/v1/tasks", json={
+            "store_id": store_id,
+            "shelf_id": shelf_id,
+            "product_id": product_id,
+        })
+        assert created.status_code == 201
+        task_id = created.json()["id"]
+
+        response = client.patch(
+            f"/api/v1/tasks/{task_id}/status",
+            json={"status": "CANCELLED", "exception_reason": "   "},
+        )
+
+        assert response.status_code == 422
+        assert response.json()["detail"]["code"] == "EXCEPTION_REASON_TOO_SHORT"
+        task = next(
+            item for item in client.get("/api/v1/tasks").json()
+            if item["id"] == task_id
+        )
+        assert task["status"] == "PENDING"
+        events = client.get(f"/api/v1/tasks/{task_id}/events").json()
+        assert [event["to_status"] for event in events] == ["PENDING"]
+
+
+def test_task_exception_reason_is_trimmed_before_persistence_and_audit():
+    with TestClient(app) as client:
+        store_id, shelf_id, product_id = create_task_context(client)
+        created = client.post("/api/v1/tasks", json={
+            "store_id": store_id,
+            "shelf_id": shelf_id,
+            "product_id": product_id,
+        })
+        assert created.status_code == 201
+        task_id = created.json()["id"]
+
+        response = client.patch(
+            f"/api/v1/tasks/{task_id}/status",
+            json={
+                "status": "CANCELLED",
+                "exception_reason": "  Produto descontinuado  ",
+            },
+        )
+
+        assert response.status_code == 200
+        assert response.json()["exception_reason"] == "Produto descontinuado"
+        event = client.get(f"/api/v1/tasks/{task_id}/events").json()[-1]
+        assert event["reason"] == "Produto descontinuado"
