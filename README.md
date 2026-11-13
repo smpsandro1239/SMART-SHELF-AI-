@@ -47,8 +47,7 @@ Esta é a fonte de verdade para manter o SMART SHELF AI focado. Deve ser revista
 
 - [ ] Testar a cronologia completa criação → aprovação/atribuição → início → conclusão/cancelamento e garantir ausência de eventos duplicados.
 - [ ] Implementar a reconciliação de stock definida em [ADR-008](docs/architecture/adr-008-inventory-reconciliation.md): movimento imutável, aprovação, idempotência e novo snapshot; nunca alterar snapshots históricos.
-- [ ] Executar testes concorrentes e validar o bloqueio por linha/índice parcial em PostgreSQL real; os testes SQLite não comprovam locking PostgreSQL.
-- [ ] Validar locking, migrações e constraints em PostgreSQL real. Os testes SQLite não comprovam concorrência PostgreSQL.
+- [ ] Executar testes concorrentes dos três fluxos de criação, validar o índice parcial, o locking e a cadeia de migrações em PostgreSQL real; os testes SQLite não comprovam concorrência PostgreSQL.
 - [ ] Rever autorização e isolamento multi-loja em todos os endpoints, incluindo imagens, OCR, embeddings, catálogo, auditoria e operações administrativas.
 - [ ] Definir retenção, proteção, acesso e eliminação de imagens e dados de auditoria; completar hardening de uploads e armazenamento.
 
