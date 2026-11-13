@@ -339,3 +339,60 @@ def test_operational_decision_task_cannot_exceed_validated_refill_quantity():
         assert response.status_code == 409
         assert response.json()["detail"]["code"] == "REQUEST_EXCEEDS_APPROVED_QUANTITY"
         assert client.get("/api/v1/tasks", params={"store_id": store_id}).json() == []
+
+
+def test_task_approval_rechecks_latest_stock_and_refuses_when_backroom_is_empty():
+    with TestClient(app) as client:
+        store_id, shelf_id, product_id = create_context(client)
+        client.post("/api/v1/observations", json={
+            "shelf_id": shelf_id, "source": "simulation",
+            "status": "EMPTY", "confidence": 0.99,
+            "observed_quantity": 0,
+        })
+        first = client.post("/api/v1/inventory/snapshots", json={
+            "store_id": store_id, "product_id": product_id,
+            "on_hand_quantity": 12, "reserved_quantity": 0,
+            "source": "MANUAL", "external_reference": "APPROVAL-STOCK-01",
+        })
+        assert first.status_code == 201
+        changed = client.post("/api/v1/inventory/snapshots", json={
+            "store_id": store_id, "product_id": product_id,
+            "on_hand_quantity": 0, "reserved_quantity": 0,
+            "source": "MANUAL", "external_reference": "APPROVAL-STOCK-02",
+        })
+        assert changed.status_code == 201
+
+        response = client.post(
+            "/api/v1/tasks/from-operational-decision?approved=true",
+            json={
+                "store_id": store_id, "shelf_id": shelf_id,
+                "product_id": product_id,
+            },
+        )
+        assert response.status_code == 409
+        assert response.json()["detail"]["code"] == "REPLENISHMENT_NOT_APPROVED_BY_EVIDENCE"
+        assert client.get("/api/v1/tasks", params={"store_id": store_id}).json() == []
+
+
+def test_task_approval_refuses_status_only_detection_without_measured_shelf_quantity():
+    with TestClient(app) as client:
+        store_id, shelf_id, product_id = create_context(client)
+        client.post("/api/v1/observations", json={
+            "shelf_id": shelf_id, "source": "simulation",
+            "status": "EMPTY", "confidence": 0.99,
+        })
+        client.post("/api/v1/inventory/snapshots", json={
+            "store_id": store_id, "product_id": product_id,
+            "on_hand_quantity": 12, "reserved_quantity": 0,
+            "source": "MANUAL", "external_reference": "APPROVAL-NO-COUNT-01",
+        })
+        response = client.post(
+            "/api/v1/tasks/from-operational-decision?approved=true",
+            json={
+                "store_id": store_id, "shelf_id": shelf_id,
+                "product_id": product_id,
+            },
+        )
+        assert response.status_code == 409
+        assert response.json()["detail"]["code"] == "REPLENISHMENT_NOT_APPROVED_BY_EVIDENCE"
+        assert client.get("/api/v1/tasks", params={"store_id": store_id}).json() == []
