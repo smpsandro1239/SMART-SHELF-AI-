@@ -110,7 +110,7 @@ Esta é a fonte de verdade para manter o SMART SHELF AI focado. Deve ser revista
 ### Próxima sequência de desenvolvimento
 
 1. [x] **Concorrência PostgreSQL na criação:** smoke test dos caminhos manual, recomendação e decisão operacional aprovada validado no CI PostgreSQL 16, incluindo a sequência de auditoria esperada.
-2. **Auditoria do ciclo de vida:** validar no CI PostgreSQL 16 a cronologia, rollback e concorrência das transições; testes acrescentados nos commits `4877386` e `9445c99`. O workflow `.github/workflows/api-ci.yml` passou a suportar execução manual (`workflow_dispatch`) e identifica explicitamente o smoke test de ciclo de vida/concorrrência/reconciliação; aguarda confirmação do resultado CI.
+2. **Auditoria do ciclo de vida:** validar no CI PostgreSQL 16 a cronologia, rollback e concorrência das transições; testes acrescentados nos commits `4877386` e `9445c99`. O workflow `.github/workflows/api-ci.yml` passou a suportar execução manual (`workflow_dispatch`) e identifica explicitamente o smoke test de ciclo de vida/concorrência/reconciliação; aguarda confirmação do resultado CI.
 3. **Reconciliação de stock:** confirmar no CI PostgreSQL 16 o rollback integral e os testes de frescura; depois preparar o fluxo de confirmação na interface.
 4. **Qualidade dos dados:** explicitar frescura/completude e separar os diferentes estados de stock.
 5. **Consenso temporal:** deduplicar alertas por SKU/localização e exigir persistência de evidência antes de criar ocorrências.
