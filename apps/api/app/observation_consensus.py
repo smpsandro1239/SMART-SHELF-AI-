@@ -1,429 +1,150 @@
-import os
+"""Temporal consensus for repeated shelf observations.
 
-os.environ["APP_ENV"] = "test"
-os.environ["DATABASE_URL"] = "sqlite:///./test_unused.db"
+The caller must scope observations to one store/shelf/SKU before invoking this
+module. This module is deliberately pure: it does not persist alerts or create
+replenishment tasks.
+"""
+from __future__ import annotations
 
-from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
-from io import BytesIO
-from PIL import Image
-
-from app.database import Base, get_db
-from app import models  # noqa: F401
-from app.main import app
-
-TEST_ENGINE = create_engine(
-    "sqlite://",
-    connect_args={"check_same_thread": False},
-    poolclass=StaticPool,
-)
-TestingSession = sessionmaker(bind=TEST_ENGINE, autoflush=False, autocommit=False)
-Base.metadata.create_all(bind=TEST_ENGINE)
+from collections import defaultdict
+from datetime import datetime, timedelta, timezone
+import math
+from typing import Any, Iterable
 
 
-def _valid_image_bytes(image_format="PNG"):
-    buffer = BytesIO()
-    Image.new("RGB", (2, 2), color=(20, 80, 140)).save(buffer, format=image_format)
-    return buffer.getvalue()
+ATTENTION_STATUSES = frozenset({"LOW_STOCK", "EMPTY", "MISPLACED", "DAMAGED"})
 
 
-def override_get_db():
-    db = TestingSession()
-    try:
-        yield db
-    finally:
-        db.close()
-
-
-app.dependency_overrides[get_db] = override_get_db
-
-
-def test_create_store_shelf_and_observation():
-    Base.metadata.drop_all(bind=TEST_ENGINE)
-    Base.metadata.create_all(bind=TEST_ENGINE)
-    with TestClient(app) as client:
-        store = client.post("/api/v1/stores", json={"code": "TEST-01", "name": "Loja de teste"})
-        assert store.status_code == 201
-        zone = client.post("/api/v1/zones", json={"store_id": store.json()["id"], "name": "Bebidas"})
-        assert zone.status_code == 201
-        shelf = client.post("/api/v1/shelves", json={"zone_id": zone.json()["id"], "code": "BEB-01"})
-        assert shelf.status_code == 201
-        observation = client.post(
-            "/api/v1/observations",
-            json={"shelf_id": shelf.json()["id"], "source": "simulation", "status": "LOW_STOCK", "confidence": 0.82},
-        )
-        assert observation.status_code == 201
-        assert observation.json()["status"] == "LOW_STOCK"
-        listed = client.get("/api/v1/observations", params={"shelf_id": shelf.json()["id"]})
-        assert listed.status_code == 200
-        assert len(listed.json()) == 1
-
-
-def test_observation_rejects_confidence_outside_range():
-    with TestClient(app) as client:
-        response = client.post(
-            "/api/v1/observations",
-            json={"shelf_id": 1, "confidence": 1.5},
-        )
-        assert response.status_code == 422
-
-
-def test_upload_and_retrieve_shelf_image(tmp_path, monkeypatch):
-    from app.config import settings
-
-    monkeypatch.setattr(settings, "image_storage_path", str(tmp_path))
-    Base.metadata.drop_all(bind=TEST_ENGINE)
-    Base.metadata.create_all(bind=TEST_ENGINE)
-    image_bytes = _valid_image_bytes()
-
-    with TestClient(app) as client:
-        store = client.post("/api/v1/stores", json={"code": "IMG-01", "name": "Loja imagem"})
-        zone = client.post("/api/v1/zones", json={"store_id": store.json()["id"], "name": "Frescos"})
-        shelf = client.post("/api/v1/shelves", json={"zone_id": zone.json()["id"], "code": "FR-01"})
-        uploaded = client.post(
-            "/api/v1/shelf-images",
-            data={"shelf_id": str(shelf.json()["id"])},
-            files={"image": ("shelf.png", image_bytes, "image/png")},
-        )
-        assert uploaded.status_code == 201
-        record = uploaded.json()
-        assert record["analysis_status"] == "PENDING"
-        assert record["mime_type"] == "image/png"
-        assert record["file_size_bytes"] == len(image_bytes)
-        assert len(record["sha256"]) == 64
-
-        listed = client.get("/api/v1/shelf-images", params={"shelf_id": shelf.json()["id"]})
-        assert listed.status_code == 200
-        assert len(listed.json()) == 1
-
-        content = client.get(f"/api/v1/shelf-images/{record['id']}/content")
-        assert content.status_code == 200
-        assert content.content == image_bytes
-
-
-def test_upload_rejects_mismatched_image_signature(tmp_path, monkeypatch):
-    from app.config import settings
-
-    monkeypatch.setattr(settings, "image_storage_path", str(tmp_path))
-    Base.metadata.drop_all(bind=TEST_ENGINE)
-    Base.metadata.create_all(bind=TEST_ENGINE)
-    with TestClient(app) as client:
-        store = client.post("/api/v1/stores", json={"code": "IMG-02", "name": "Loja imagem 2"})
-        zone = client.post("/api/v1/zones", json={"store_id": store.json()["id"], "name": "Bebidas"})
-        shelf = client.post("/api/v1/shelves", json={"zone_id": zone.json()["id"], "code": "BE-01"})
-        response = client.post(
-            "/api/v1/shelf-images",
-            data={"shelf_id": str(shelf.json()["id"])},
-            files={"image": ("not-image.png", b"not a real PNG", "image/png")},
-        )
-        assert response.status_code == 415
-
-
-def test_upload_rejects_unsupported_media_type():
-    Base.metadata.drop_all(bind=TEST_ENGINE)
-    Base.metadata.create_all(bind=TEST_ENGINE)
-    with TestClient(app) as client:
-        store = client.post("/api/v1/stores", json={"code": "IMG-03", "name": "Loja imagem 3"})
-        zone = client.post("/api/v1/zones", json={"store_id": store.json()["id"], "name": "Laticínios"})
-        shelf = client.post("/api/v1/shelves", json={"zone_id": zone.json()["id"], "code": "LA-01"})
-        response = client.post(
-            "/api/v1/shelf-images",
-            data={"shelf_id": str(shelf.json()["id"])},
-            files={"image": ("capture.gif", b"GIF89a", "image/gif")},
-        )
-        assert response.status_code == 415
-
-
-def test_supervisor_cannot_upload_image_to_another_store(tmp_path, monkeypatch):
-    from types import SimpleNamespace
-    from app.config import settings
-    import app.main as main_module
-
-    monkeypatch.setattr(settings, "image_storage_path", str(tmp_path))
-    monkeypatch.setattr(
-        main_module,
-        "_request_user",
-        lambda db, request: SimpleNamespace(id=44, role="SUPERVISOR", store_id=999),
-    )
-    Base.metadata.drop_all(bind=TEST_ENGINE)
-    Base.metadata.create_all(bind=TEST_ENGINE)
-    with TestClient(app) as client:
-        store = client.post("/api/v1/stores", json={"code": "IMG-04", "name": "Loja protegida"})
-        zone = client.post("/api/v1/zones", json={"store_id": store.json()["id"], "name": "Congelados"})
-        shelf = client.post("/api/v1/shelves", json={"zone_id": zone.json()["id"], "code": "CG-01"})
-        response = client.post(
-            "/api/v1/shelf-images",
-            data={"shelf_id": str(shelf.json()["id"])},
-            files={"image": ("capture.png", _valid_image_bytes(), "image/png")},
-        )
-        assert response.status_code == 403
-
-
-def test_list_shelf_image_detections(tmp_path, monkeypatch):
-    from app.config import settings
-
-    monkeypatch.setattr(settings, "image_storage_path", str(tmp_path))
-    Base.metadata.drop_all(bind=TEST_ENGINE)
-    Base.metadata.create_all(bind=TEST_ENGINE)
-    image_bytes = _valid_image_bytes()
-
-    with TestClient(app) as client:
-        store = client.post("/api/v1/stores", json={"code": "DET-01", "name": "Loja deteções"})
-        zone = client.post("/api/v1/zones", json={"store_id": store.json()["id"], "name": "Bebidas"})
-        shelf = client.post("/api/v1/shelves", json={"zone_id": zone.json()["id"], "code": "DET-01"})
-        uploaded = client.post(
-            "/api/v1/shelf-images",
-            data={"shelf_id": str(shelf.json()["id"])},
-            files={"image": ("shelf.png", image_bytes, "image/png")},
-        )
-        assert uploaded.status_code == 201
-        image_id = uploaded.json()["id"]
-
-        db = TestingSession()
+def _timestamp(value: Any, field: str) -> datetime:
+    if isinstance(value, str):
         try:
-            detection = models.ShelfImageDetection(
-                shelf_image_id=image_id,
-                label="bottle",
-                confidence=0.94,
-                x_min=0.1,
-                y_min=0.2,
-                x_max=0.6,
-                y_max=0.9,
-                model_version="test-model-0.1",
-            )
-            db.add(detection)
-            db.commit()
-        finally:
-            db.close()
-
-        response = client.get(f"/api/v1/shelf-images/{image_id}/detections")
-        assert response.status_code == 200
-        records = response.json()
-        assert len(records) == 1
-        assert records[0]["label"] == "bottle"
-        assert records[0]["confidence"] == 0.94
-        assert records[0]["model_version"] == "test-model-0.1"
-        assert records[0]["x_min"] == 0.1
-        assert records[0]["x_max"] == 0.6
+            value = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError as exc:
+            raise ValueError(f"{field} must be an ISO-8601 timestamp") from exc
+    if not isinstance(value, datetime) or value.tzinfo is None or value.utcoffset() is None:
+        raise ValueError(f"{field} must be a timezone-aware datetime")
+    return value.astimezone(timezone.utc)
 
 
-def test_detection_query_respects_store_scope(tmp_path, monkeypatch):
-    from types import SimpleNamespace
-    from app.config import settings
-    import app.main as main_module
-
-    monkeypatch.setattr(settings, "image_storage_path", str(tmp_path))
-    Base.metadata.drop_all(bind=TEST_ENGINE)
-    Base.metadata.create_all(bind=TEST_ENGINE)
-    with TestClient(app) as client:
-        store = client.post("/api/v1/stores", json={"code": "DET-02", "name": "Loja privada"})
-        zone = client.post("/api/v1/zones", json={"store_id": store.json()["id"], "name": "Frescos"})
-        shelf = client.post("/api/v1/shelves", json={"zone_id": zone.json()["id"], "code": "FR-02"})
-        uploaded = client.post(
-            "/api/v1/shelf-images",
-            data={"shelf_id": str(shelf.json()["id"])},
-            files={"image": ("shelf.png", _valid_image_bytes(), "image/png")},
-        )
-        assert uploaded.status_code == 201
-        monkeypatch.setattr(
-            main_module,
-            "_request_user",
-            lambda db, request: SimpleNamespace(id=99, role="SUPERVISOR", store_id=999),
-        )
-        response = client.get(f"/api/v1/shelf-images/{uploaded.json()['id']}/detections")
-        assert response.status_code == 403
+def _confidence(value: Any) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError("confidence must be numeric")
+    result = float(value)
+    if not math.isfinite(result) or not 0 <= result <= 1:
+        raise ValueError("confidence must be finite and between 0 and 1")
+    return result
 
 
-def test_vision_worker_persists_provider_detections(tmp_path, monkeypatch):
-    from app.config import settings
-    from app.vision import VisionAnalysis
-    from app.vision_worker import process_next_image
+def evaluate_observation_consensus(
+    observations: Iterable[dict[str, Any]],
+    *,
+    now: datetime,
+    window_minutes: int = 15,
+    minimum_confirmations: int = 3,
+    minimum_interval_seconds: int = 10,
+    minimum_confidence: float = 0.65,
+) -> dict[str, Any]:
+    """Evaluate repeated evidence for one already-scoped shelf/SKU pair.
 
-    monkeypatch.setattr(settings, "image_storage_path", str(tmp_path))
-    Base.metadata.drop_all(bind=TEST_ENGINE)
-    Base.metadata.create_all(bind=TEST_ENGINE)
+    Future-dated, stale, low-confidence and non-attention observations are not
+    counted. Confirmations of the same status must be separated by the minimum
+    interval, reducing frame-burst inflation. Competing confirmed statuses
+    return CONFLICT rather than selecting an arbitrary winner.
+    """
+    current = _timestamp(now, "now")
+    for name, value, minimum, maximum in (
+        ("window_minutes", window_minutes, 1, 1440),
+        ("minimum_confirmations", minimum_confirmations, 2, 100),
+        ("minimum_interval_seconds", minimum_interval_seconds, 1, 3600),
+    ):
+        if isinstance(value, bool) or not isinstance(value, int) or not minimum <= value <= maximum:
+            raise ValueError(f"{name} must be an integer between {minimum} and {maximum}")
+    threshold = _confidence(minimum_confidence)
+    cutoff = current - timedelta(minutes=window_minutes)
 
-    class FakeProvider:
-        def analyze(self, image_path):
-            assert image_path.is_file()
-            return VisionAnalysis.model_validate({
-                "model_version": "fake-test-1",
-                "detections": [{
-                    "label": "water_bottle",
-                    "confidence": 0.97,
-                    "x_min": 0.1,
-                    "y_min": 0.2,
-                    "x_max": 0.7,
-                    "y_max": 0.9,
-                }],
-            })
+    grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    ignored = {"future": 0, "stale": 0, "low_confidence": 0, "irrelevant": 0}
+    for index, item in enumerate(observations):
+        if not isinstance(item, dict):
+            raise ValueError("each observation must be a dictionary")
+        status = str(item.get("status", "")).strip().upper()
+        if status not in ATTENTION_STATUSES:
+            ignored["irrelevant"] += 1
+            continue
+        observed_at = _timestamp(item.get("observed_at"), f"observations[{index}].observed_at")
+        if observed_at > current:
+            ignored["future"] += 1
+            continue
+        if observed_at < cutoff:
+            ignored["stale"] += 1
+            continue
+        raw_confidence = item.get("confidence")
+        if raw_confidence is None:
+            ignored["low_confidence"] += 1
+            continue
+        confidence = _confidence(raw_confidence)
+        if confidence < threshold:
+            ignored["low_confidence"] += 1
+            continue
+        grouped[status].append({
+            "observed_at": observed_at,
+            "confidence": confidence,
+            "source": str(item.get("source") or "unspecified"),
+        })
 
-    with TestClient(app) as client:
-        store = client.post("/api/v1/stores", json={"code": "WORK-01", "name": "Worker test"})
-        zone = client.post("/api/v1/zones", json={"store_id": store.json()["id"], "name": "Bebidas"})
-        shelf = client.post("/api/v1/shelves", json={"zone_id": zone.json()["id"], "code": "WK-01"})
-        uploaded = client.post(
-            "/api/v1/shelf-images",
-            data={"shelf_id": str(shelf.json()["id"])},
-            files={"image": ("worker.png", _valid_image_bytes(), "image/png")},
-        )
-        assert uploaded.status_code == 201
-        image_id = uploaded.json()["id"]
+    confirmed: dict[str, list[dict[str, Any]]] = {}
+    for status, entries in grouped.items():
+        accepted: list[dict[str, Any]] = []
+        for entry in sorted(entries, key=lambda row: row["observed_at"]):
+            if not accepted or (
+                entry["observed_at"] - accepted[-1]["observed_at"]
+            ).total_seconds() >= minimum_interval_seconds:
+                accepted.append(entry)
+        if len(accepted) >= minimum_confirmations:
+            confirmed[status] = accepted
 
-        db = TestingSession()
-        try:
-            assert process_next_image(db, FakeProvider()) == image_id
-            image = db.get(models.ShelfImage, image_id)
-            assert image.analysis_status == "COMPLETED"
-            assert image.model_version == "fake-test-1"
-            assert image.analysis_started_at is not None
-            assert image.analysis_completed_at is not None
-            assert image.analysis_error is None
-            detections = db.query(models.ShelfImageDetection).filter_by(shelf_image_id=image_id).all()
-            assert len(detections) == 1
-            assert detections[0].label == "water_bottle"
-            assert detections[0].confidence == 0.97
-        finally:
-            db.close()
+    ranked = sorted(confirmed.items(), key=lambda pair: (-len(pair[1]), pair[0]))
+    if not ranked:
+        result_status = "NO_CONSENSUS"
+        selected_status = None
+        selected = []
+    elif len(ranked) > 1 and len(ranked[0][1]) == len(ranked[1][1]):
+        result_status = "CONFLICT"
+        selected_status = None
+        selected = []
+    elif len(ranked) > 1 and len(ranked[1][1]) >= minimum_confirmations:
+        result_status = "CONFLICT"
+        selected_status = None
+        selected = []
+    else:
+        result_status = "CONFIRMED"
+        selected_status, selected = ranked[0]
 
+    if selected:
+        first_seen = selected[0]["observed_at"]
+        last_seen = selected[-1]["observed_at"]
+        average_confidence = round(sum(row["confidence"] for row in selected) / len(selected), 4)
+        sources = sorted({row["source"] for row in selected})
+        count = len(selected)
+    else:
+        first_seen = last_seen = None
+        average_confidence = None
+        sources = []
+        count = 0
 
-def test_vision_worker_marks_provider_errors_as_failed(tmp_path, monkeypatch):
-    from app.config import settings
-    from app.vision_worker import process_next_image
-
-    monkeypatch.setattr(settings, "image_storage_path", str(tmp_path))
-    Base.metadata.drop_all(bind=TEST_ENGINE)
-    Base.metadata.create_all(bind=TEST_ENGINE)
-
-    class BrokenProvider:
-        def analyze(self, image_path):
-            raise RuntimeError("provider unavailable")
-
-    with TestClient(app) as client:
-        store = client.post("/api/v1/stores", json={"code": "WORK-02", "name": "Worker failure"})
-        zone = client.post("/api/v1/zones", json={"store_id": store.json()["id"], "name": "Frescos"})
-        shelf = client.post("/api/v1/shelves", json={"zone_id": zone.json()["id"], "code": "WK-02"})
-        uploaded = client.post(
-            "/api/v1/shelf-images",
-            data={"shelf_id": str(shelf.json()["id"])},
-            files={"image": ("worker.png", _valid_image_bytes(), "image/png")},
-        )
-        assert uploaded.status_code == 201
-        image_id = uploaded.json()["id"]
-
-        db = TestingSession()
-        try:
-            assert process_next_image(db, BrokenProvider()) == image_id
-            image = db.get(models.ShelfImage, image_id)
-            assert image.analysis_status == "FAILED"
-            assert image.analysis_error == "RuntimeError: processing failed"
-            assert image.analysis_completed_at is not None
-            assert db.query(models.ShelfImageDetection).filter_by(shelf_image_id=image_id).count() == 0
-        finally:
-            db.close()
-
-
-def test_failed_image_analysis_can_be_retried_by_store_supervisor(tmp_path, monkeypatch):
-    from types import SimpleNamespace
-    from app.config import settings
-    import app.main as main_module
-
-    monkeypatch.setattr(settings, "image_storage_path", str(tmp_path))
-    actor = SimpleNamespace(id=77, role="SUPERVISOR", store_id=None)
-    monkeypatch.setattr(main_module, "_request_user", lambda db, request: actor)
-    Base.metadata.drop_all(bind=TEST_ENGINE)
-    Base.metadata.create_all(bind=TEST_ENGINE)
-
-    with TestClient(app) as client:
-        store = client.post("/api/v1/stores", json={"code": "RETRY-01", "name": "Loja retry"})
-        actor.store_id = store.json()["id"]
-        zone = client.post("/api/v1/zones", json={"store_id": actor.store_id, "name": "Bebidas"})
-        shelf = client.post("/api/v1/shelves", json={"zone_id": zone.json()["id"], "code": "RT-01"})
-        uploaded = client.post(
-            "/api/v1/shelf-images",
-            data={"shelf_id": str(shelf.json()["id"])},
-            files={"image": ("retry.png", _valid_image_bytes(), "image/png")},
-        )
-        assert uploaded.status_code == 201
-        image_id = uploaded.json()["id"]
-
-        db = TestingSession()
-        try:
-            image = db.get(models.ShelfImage, image_id)
-            image.analysis_status = "FAILED"
-            image.analysis_error = "RuntimeError: processing failed"
-            image.model_version = "old-model"
-            image.analysis_started_at = models.utc_now()
-            image.analysis_completed_at = models.utc_now()
-            db.commit()
-        finally:
-            db.close()
-
-        retried = client.post(f"/api/v1/shelf-images/{image_id}/retry")
-        assert retried.status_code == 200
-        assert retried.json()["analysis_status"] == "PENDING"
-        assert retried.json()["analysis_error"] is None
-        assert retried.json()["analysis_started_at"] is None
-        assert retried.json()["analysis_completed_at"] is None
-        assert retried.json()["model_version"] is None
-
-        conflict = client.post(f"/api/v1/shelf-images/{image_id}/retry")
-        assert conflict.status_code == 409
-
-        db = TestingSession()
-        try:
-            image = db.get(models.ShelfImage, image_id)
-            image.analysis_status = "FAILED"
-            db.commit()
-        finally:
-            db.close()
-
-        actor.store_id = 999
-        forbidden = client.post(f"/api/v1/shelf-images/{image_id}/retry")
-        assert forbidden.status_code == 403
-
-
-def test_shelf_observation_consensus_endpoint_requires_persistent_evidence():
-    from datetime import datetime, timedelta, timezone
-
-    Base.metadata.drop_all(bind=TEST_ENGINE)
-    Base.metadata.create_all(bind=TEST_ENGINE)
-    with TestClient(app) as client:
-        store = client.post("/api/v1/stores", json={"code": "CONS-01", "name": "Loja consenso"})
-        zone = client.post("/api/v1/zones", json={"store_id": store.json()["id"], "name": "Bebidas"})
-        shelf = client.post("/api/v1/shelves", json={"zone_id": zone.json()["id"], "code": "CONS-01"})
-        now = datetime.now(timezone.utc)
-        for seconds_ago in (30, 15, 0):
-            created = client.post("/api/v1/observations", json={
-                "shelf_id": shelf.json()["id"], "source": "camera", "status": "LOW_STOCK",
-                "confidence": 0.91, "observed_at": (now - timedelta(seconds=seconds_ago)).isoformat(),
-            })
-            assert created.status_code == 201
-        response = client.get(f"/api/v1/shelves/{shelf.json()['id']}/observation-consensus")
-        assert response.status_code == 200
-        body = response.json()
-        assert body["consensus"]["status"] == "CONFIRMED"
-        assert body["consensus"]["consensus_observation_status"] == "LOW_STOCK"
-        assert body["consensus"]["confirmations"] == 3
-        assert body["consensus"]["requires_human_approval"] is True
-        assert body["consensus"]["automatic_task_creation_allowed"] is False
-        assert body["consensus"]["automatic_stock_movement_allowed"] is False
-        assert body["scope"] == "SHELF"
-        assert body["sku_attribution_available"] is False
-
-
-def test_shelf_observation_consensus_endpoint_enforces_store_scope(monkeypatch):
-    from types import SimpleNamespace
-    import app.main as main_module
-
-    Base.metadata.drop_all(bind=TEST_ENGINE)
-    Base.metadata.create_all(bind=TEST_ENGINE)
-    with TestClient(app) as client:
-        store = client.post("/api/v1/stores", json={"code": "CONS-02", "name": "Loja privada"})
-        zone = client.post("/api/v1/zones", json={"store_id": store.json()["id"], "name": "Frescos"})
-        shelf = client.post("/api/v1/shelves", json={"zone_id": zone.json()["id"], "code": "CONS-02"})
-        monkeypatch.setattr(main_module, "_request_user", lambda db, request: SimpleNamespace(id=91, role="SUPERVISOR", store_id=999))
-        response = client.get(f"/api/v1/shelves/{shelf.json()['id']}/observation-consensus")
-        assert response.status_code == 403
+    return {
+        "status": result_status,
+        "consensus_observation_status": selected_status,
+        "confirmations": count,
+        "required_confirmations": minimum_confirmations,
+        "first_seen_at": first_seen.isoformat() if first_seen else None,
+        "last_seen_at": last_seen.isoformat() if last_seen else None,
+        "average_confidence": average_confidence,
+        "sources": sources,
+        "window_minutes": window_minutes,
+        "minimum_interval_seconds": minimum_interval_seconds,
+        "ignored_observations": ignored,
+        "requires_human_approval": True,
+        "automatic_task_creation_allowed": False,
+        "automatic_stock_movement_allowed": False,
+    }

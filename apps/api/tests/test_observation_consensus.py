@@ -1,39 +1,120 @@
-# Consenso temporal de observações
+from datetime import datetime, timedelta, timezone
 
-O módulo `app.observation_consensus` fornece uma função determinística para avaliar evidência repetida de uma única combinação loja/prateleira/SKU. O chamador tem de filtrar previamente os registos para esse âmbito; o módulo não consulta a base de dados nem agrega entidades diferentes.
+import pytest
 
-## Contrato
-
-`evaluate_observation_consensus(observations, now=...)` recebe observações com `status`, `observed_at`, `confidence` e, opcionalmente, `source`.
-
-- Considera apenas `LOW_STOCK`, `EMPTY`, `MISPLACED` e `DAMAGED`.
-- Exclui observações fora da janela, no futuro ou abaixo da confiança mínima.
-- Exige confirmações temporalmente espaçadas para reduzir a inflação provocada por frames consecutivos.
-- Devolve `CONFLICT` quando existem estados concorrentes com suporte suficiente; não escolhe arbitrariamente.
-- Expõe primeira/última ocorrência, número de confirmações, confiança média e fontes.
-- Não cria alertas persistidos, tarefas, movimentos nem altera stock.
-
-## Exemplo
-
-```python
-from datetime import datetime, timezone
 from app.observation_consensus import evaluate_observation_consensus
 
-result = evaluate_observation_consensus(
-    observations,
-    now=datetime.now(timezone.utc),
-    window_minutes=15,
-    minimum_confirmations=3,
-    minimum_interval_seconds=10,
-    minimum_confidence=0.65,
-)
-```
 
-Os valores por omissão são parâmetros iniciais conservadores, não thresholds calibrados. Antes da integração no motor/API, é necessário validar a janela, intervalo e confiança com imagens reais autorizadas, associar a evidência à identidade do SKU e implementar persistência/idempotência do alerta. O módulo não está ainda ligado ao worker nem às decisões operacionais.
+NOW = datetime(2026, 11, 13, 12, 0, tzinfo=timezone.utc)
 
 
-## Integração HTTP inicial (âmbito de prateleira)
+def rows(status="EMPTY", count=3, *, confidence=0.9, spacing=30):
+    return [
+        {
+            "status": status,
+            "observed_at": NOW - timedelta(seconds=spacing * (count - index - 1)),
+            "confidence": confidence,
+            "source": "camera-a",
+        }
+        for index in range(count)
+    ]
 
-O endpoint autenticado `GET /api/v1/shelves/{shelf_id}/observation-consensus` expõe a avaliação de observações repetidas para uma prateleira e respeita o isolamento por loja. Aceita `window_minutes`, `minimum_confirmations`, `minimum_interval_seconds` e `minimum_confidence`. Observações sem confiança são tratadas como evidência não elegível.
 
-**Limite semântico:** o modelo `Observation` referencia apenas `shelf_id`, não um SKU. A API declara `scope: SHELF` e `sku_attribution_available: false`; não replica incorretamente uma observação por todos os produtos da prateleira. A persistência/idempotência de alertas, resolução humana, associação explícita a SKU, integração do worker e calibração com imagens reais continuam pendentes. O endpoint não cria tarefas nem movimenta inventário.
+def test_repeated_fresh_observations_reach_consensus():
+    result = evaluate_observation_consensus(rows(), now=NOW)
+
+    assert result["status"] == "CONFIRMED"
+    assert result["consensus_observation_status"] == "EMPTY"
+    assert result["confirmations"] == 3
+    assert result["sources"] == ["camera-a"]
+    assert result["automatic_task_creation_allowed"] is False
+    assert result["automatic_stock_movement_allowed"] is False
+
+
+def test_single_observation_does_not_trigger_consensus():
+    result = evaluate_observation_consensus(rows(count=1), now=NOW)
+
+    assert result["status"] == "NO_CONSENSUS"
+    assert result["confirmations"] == 0
+
+
+def test_frame_burst_is_not_counted_as_independent_confirmations():
+    result = evaluate_observation_consensus(
+        rows(count=5, spacing=1), now=NOW, minimum_interval_seconds=10
+    )
+
+    assert result["status"] == "NO_CONSENSUS"
+
+
+def test_stale_future_and_low_confidence_observations_are_ignored():
+    history = [
+        *rows(count=2),
+        {"status": "EMPTY", "observed_at": NOW - timedelta(hours=1), "confidence": 0.99},
+        {"status": "EMPTY", "observed_at": NOW + timedelta(minutes=1), "confidence": 0.99},
+        {"status": "EMPTY", "observed_at": NOW, "confidence": 0.2},
+    ]
+    result = evaluate_observation_consensus(history, now=NOW)
+
+    assert result["status"] == "NO_CONSENSUS"
+    assert result["ignored_observations"] == {
+        "future": 1, "stale": 1, "low_confidence": 1, "irrelevant": 0
+    }
+
+
+def test_competing_confirmed_statuses_return_conflict():
+    history = rows("EMPTY") + rows("MISPLACED")
+    result = evaluate_observation_consensus(history, now=NOW)
+
+    assert result["status"] == "CONFLICT"
+    assert result["consensus_observation_status"] is None
+    assert result["confirmations"] == 0
+
+
+def test_clear_winner_can_be_selected_when_other_status_is_not_confirmed():
+    history = rows("EMPTY") + rows("MISPLACED", count=2)
+    result = evaluate_observation_consensus(history, now=NOW)
+
+    assert result["status"] == "CONFIRMED"
+    assert result["consensus_observation_status"] == "EMPTY"
+
+
+@pytest.mark.parametrize("kwargs", [
+    {"window_minutes": 0},
+    {"minimum_confirmations": 1},
+    {"minimum_interval_seconds": 0},
+    {"minimum_interval_seconds": -1},
+    {"minimum_confidence": 1.1},
+    {"minimum_confidence": True},
+])
+def test_invalid_policy_is_rejected(kwargs):
+    with pytest.raises(ValueError):
+        evaluate_observation_consensus([], now=NOW, **kwargs)
+
+
+def test_timezone_naive_timestamp_is_rejected():
+    with pytest.raises(ValueError, match="timezone-aware"):
+        evaluate_observation_consensus(
+            [{"status": "EMPTY", "observed_at": datetime(2026, 11, 13, 12), "confidence": 0.9}],
+            now=NOW,
+        )
+
+
+def test_non_finite_confidence_is_rejected():
+    with pytest.raises(ValueError, match="confidence"):
+        evaluate_observation_consensus(
+            [{"status": "EMPTY", "observed_at": NOW, "confidence": float("nan")}],
+            now=NOW,
+        )
+
+
+def test_missing_confidence_is_ignored_instead_of_breaking_consensus():
+    now = datetime.now(timezone.utc)
+    result = evaluate_observation_consensus(
+        [
+            {"status": "LOW_STOCK", "confidence": None, "observed_at": now, "source": "camera"},
+            {"status": "LOW_STOCK", "confidence": 0.9, "observed_at": now - timedelta(seconds=20), "source": "camera"},
+        ],
+        now=now,
+    )
+    assert result["status"] == "NO_CONSENSUS"
+    assert result["ignored_observations"]["low_confidence"] == 1
