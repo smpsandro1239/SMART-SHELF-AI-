@@ -45,3 +45,10 @@ A resposta é ordenada para colocar primeiro recomendações que exigem ação, 
 A prioridade alta exige uma observação de estado EMPTY recente e com confiança suficiente, ou uma previsão válida de cobertura com inventário disponível igual a zero. Um estado EMPTY antigo ou de baixa confiança não pode, por si só, elevar a prioridade.
 
 A resposta inclui `priority_counts`, permitindo ao dashboard distinguir quantidade de ações recomendadas e quantidade de ações de prioridade alta.
+
+
+## Resumo de prioridades por zona
+
+A resposta inclui `zone_summaries`, agregando as decisões por loja e zona sem misturar zonas com o mesmo nome em lojas diferentes. Cada resumo apresenta referências avaliadas, recomendações, prioridades altas, tarefas já em execução, situações sem evidência e itens em monitorização.
+
+A ordenação das zonas favorece primeiro as que têm mais prioridades altas e recomendações; a menor cobertura estimada desempata quando existe informação suficiente. Cada zona inclui até três referências recomendadas para consulta rápida. Este resumo não altera tarefas, inventário nem atribuições de colaboradores.
