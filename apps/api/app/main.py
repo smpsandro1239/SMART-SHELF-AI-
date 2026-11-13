@@ -4046,12 +4046,19 @@ def operational_decisions(
                 "confidence": observation.confidence,
                 "source": observation.source,
             }
-        inventory_input = None
+        # InventorySnapshot is explicitly a backroom-stock record. Keep it
+        # separate from shelf quantity: using it as shelf inventory would
+        # distort display coverage and replenishment quantities.
+        backroom_inventory = None
         if snapshot is not None:
-            inventory_input = {
-                "available_quantity": snapshot.available_quantity,
-                "recorded_at": aware(snapshot.captured_at),
+            backroom_inventory = {
+                "on_hand_quantity": float(snapshot.on_hand_quantity),
+                "reserved_quantity": float(snapshot.reserved_quantity),
+                "available_quantity": float(snapshot.available_quantity),
+                "source": snapshot.source,
+                "captured_at": aware(snapshot.captured_at).isoformat(),
             }
+        inventory_input = None
         forecast_input = None
         if sales_rows:
             total_sold = sum(float(row.quantity) for row in sales_rows)
@@ -4086,7 +4093,13 @@ def operational_decisions(
                 "warnings": [str(exc)],
                 "evaluated_at": aware(now).isoformat(),
             }
+        if backroom_inventory is not None:
+            result["warnings"] = list(dict.fromkeys([
+                *result.get("warnings", []),
+                "O stock apresentado separadamente corresponde à retaguarda; não foi usado como quantidade na prateleira nem para calcular cobertura de exposição.",
+            ]))
         decisions.append({
+            "backroom_inventory": backroom_inventory,
             "store_id": zone.store_id,
             "zone_name": zone.name,
             "shelf_id": shelf.id,
