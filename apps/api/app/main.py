@@ -49,7 +49,7 @@ from app.schemas import (
     ObservationCreate, ObservationRead, ShelfCreate, ShelfRead,
     StoreCreate, StoreRead, ZoneCreate, ZoneRead,
     ProductCreate, ProductRead, ShelfProductCreate, ShelfProductRead,
-    InventorySnapshotCreate, InventorySnapshotRead, InventoryReconciliationCreate, InventoryMovementRead, ReplenishmentRecommendationRead,
+    InventorySnapshotCreate, InventorySnapshotRead, InventoryReconciliationCreate, InventoryMovementRead, InventoryFreshnessPolicyUpsert, InventoryFreshnessPolicyRead, ReplenishmentRecommendationRead,
     DailySalesRecordCreate, DailySalesRecordRead, SalesSource,
     HourlySalesRecordCreate, HourlySalesRecordRead, HourlyStoreTrafficRecordCreate, HourlyStoreTrafficRecordRead,
     HourlySalesBatchCreate, HourlyStoreTrafficBatchCreate,
@@ -3520,6 +3520,61 @@ def create_inventory_snapshot(payload: InventorySnapshotCreate, request: Request
     return item
 
 
+@app.get("/api/v1/inventory/freshness-policies", response_model=list[InventoryFreshnessPolicyRead], tags=["inventory"])
+def list_inventory_freshness_policies(
+    store_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    actor = _request_user(db, request)
+    if actor is None:
+        raise HTTPException(status_code=401, detail="Authentication is required")
+    if actor.role not in {"ADMIN", "SUPERVISOR"}:
+        raise HTTPException(status_code=403, detail="Supervisor approval is required")
+    _enforce_store_scope(actor, store_id)
+    return (
+        db.query(models.InventoryFreshnessPolicy)
+        .filter(models.InventoryFreshnessPolicy.store_id == store_id)
+        .order_by(models.InventoryFreshnessPolicy.source.asc())
+        .all()
+    )
+
+
+@app.post("/api/v1/inventory/freshness-policies", response_model=InventoryFreshnessPolicyRead, tags=["inventory"])
+def upsert_inventory_freshness_policy(
+    payload: InventoryFreshnessPolicyUpsert,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    actor = _request_user(db, request)
+    if actor is None:
+        raise HTTPException(status_code=401, detail="Authentication is required")
+    if actor.role not in {"ADMIN", "SUPERVISOR"}:
+        raise HTTPException(status_code=403, detail="Supervisor approval is required")
+    _enforce_store_scope(actor, payload.store_id)
+    if db.get(models.Store, payload.store_id) is None:
+        raise HTTPException(status_code=404, detail="Store not found")
+
+    policy = (
+        db.query(models.InventoryFreshnessPolicy)
+        .filter_by(store_id=payload.store_id, source=payload.source)
+        .with_for_update()
+        .first()
+    )
+    if policy is None:
+        policy = models.InventoryFreshnessPolicy(
+            store_id=payload.store_id,
+            source=payload.source,
+            max_age_minutes=payload.max_age_minutes,
+        )
+        db.add(policy)
+    else:
+        policy.max_age_minutes = payload.max_age_minutes
+    db.commit()
+    db.refresh(policy)
+    return policy
+
+
 @app.get("/api/v1/inventory/snapshots", response_model=list[InventorySnapshotRead], tags=["inventory"])
 def list_inventory_snapshots(
     store_id: int | None = None,
@@ -3652,14 +3707,21 @@ def reconcile_completed_replenishment(
     else:
         captured_at = captured_at.astimezone(timezone.utc)
     age_minutes = (now - captured_at).total_seconds() / 60
-    if age_minutes < 0 or age_minutes > 240:
+    freshness_policy = (
+        db.query(models.InventoryFreshnessPolicy)
+        .filter_by(store_id=task.store_id, source=source_snapshot.source)
+        .first()
+    )
+    max_age_minutes = freshness_policy.max_age_minutes if freshness_policy else 240
+    if age_minutes < 0 or age_minutes > max_age_minutes:
         raise HTTPException(
             status_code=409,
             detail={
                 "code": "INVENTORY_SNAPSHOT_STALE",
                 "snapshot_id": source_snapshot.id,
+                "source": source_snapshot.source,
                 "age_minutes": round(age_minutes, 2),
-                "max_age_minutes": 240,
+                "max_age_minutes": max_age_minutes,
             },
         )
 
