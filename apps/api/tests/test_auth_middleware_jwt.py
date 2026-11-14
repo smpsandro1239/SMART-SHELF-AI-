@@ -609,6 +609,42 @@ def test_employee_can_upload_valid_image_to_own_store_capture_session(
     assert listed.status_code == 200, listed.text
     assert payload["id"] in {item["id"] for item in listed.json()}
 
+def test_employee_cannot_upload_image_with_foreign_capture_session(
+    auth_client, monkeypatch, tmp_path
+):
+    from io import BytesIO
+    from PIL import Image
+
+    client, ids, _ = auth_client
+    headers = bearer(ids["employee_a"], "EMPLOYEE")
+    monkeypatch.setattr(main_module.settings, "image_storage_path", str(tmp_path))
+
+    with main_module.SessionLocal() as db:
+        before_count = db.query(models.ShelfImage).filter(
+            models.ShelfImage.shelf_id == ids["shelf_a_assigned"]
+        ).count()
+
+    image_bytes = BytesIO()
+    Image.new("RGB", (10, 8), (45, 85, 125)).save(image_bytes, format="PNG")
+    response = client.post(
+        "/api/v1/shelf-images",
+        data={
+            "shelf_id": str(ids["shelf_a_assigned"]),
+            "capture_session_id": str(ids["capture_session_b"]),
+        },
+        files={"image": ("foreign-session.png", image_bytes.getvalue(), "image/png")},
+        headers=headers,
+    )
+
+    assert response.status_code == 422, response.text
+    assert not list(tmp_path.rglob("*"))
+    with main_module.SessionLocal() as db:
+        after_count = db.query(models.ShelfImage).filter(
+            models.ShelfImage.shelf_id == ids["shelf_a_assigned"]
+        ).count()
+    assert after_count == before_count
+
+
 def test_employee_cannot_read_or_mutate_shelf_image_retention(auth_client):
     client, ids, _ = auth_client
     headers = bearer(ids["employee_a"], "EMPLOYEE")
