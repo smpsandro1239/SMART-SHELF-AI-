@@ -496,6 +496,38 @@ def test_supervisor_cannot_reconcile_task_from_another_store(auth_client):
     assert response.status_code == 403
 
 
+def test_employee_image_list_is_scoped_and_excludes_restricted_images(auth_client):
+    client, ids, _ = auth_client
+    headers = bearer(ids["employee_a"], "EMPLOYEE")
+
+    # Activate the foreign image so tenant isolation is tested independently
+    # from the retention-status filter.
+    with main_module.SessionLocal() as db:
+        foreign_image = db.get(models.ShelfImage, ids["image_b"])
+        assert foreign_image is not None
+        foreign_image.retention_status = "ACTIVE"
+        db.commit()
+
+    response = client.get("/api/v1/shelf-images", headers=headers)
+    assert response.status_code == 200, response.text
+    listed_ids = {item["id"] for item in response.json()}
+    assert ids["image_a"] in listed_ids
+    assert ids["image_b"] not in listed_ids
+
+    # A restricted image in the employee's own store must also disappear.
+    with main_module.SessionLocal() as db:
+        own_image = db.get(models.ShelfImage, ids["image_a"])
+        assert own_image is not None
+        own_image.retention_status = "RESTRICTED"
+        db.commit()
+
+    restricted_response = client.get("/api/v1/shelf-images", headers=headers)
+    assert restricted_response.status_code == 200, restricted_response.text
+    restricted_ids = {item["id"] for item in restricted_response.json()}
+    assert ids["image_a"] not in restricted_ids
+    assert ids["image_b"] not in restricted_ids
+
+
 def test_employee_cannot_read_or_mutate_shelf_image_retention(auth_client):
     client, ids, _ = auth_client
     headers = bearer(ids["employee_a"], "EMPLOYEE")
