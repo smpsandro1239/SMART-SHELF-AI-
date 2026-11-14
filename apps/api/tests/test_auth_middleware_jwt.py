@@ -533,7 +533,7 @@ def test_supervisor_cannot_apply_or_release_legal_hold(auth_client):
     assert release.status_code == 403
 
 
-def test_supervisor_cannot_access_foreign_store_retention_history_or_mutate_image(auth_client):
+def test_supervisor_cannot_access_foreign_retention_or_use_admin_restore(auth_client):
     client, ids, _ = auth_client
     headers = bearer(ids["supervisor_a"], "SUPERVISOR")
     admin_headers = bearer(ids["admin"], "ADMIN")
