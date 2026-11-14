@@ -92,5 +92,9 @@ A suite JWT foi ampliada com duas verificações complementares:
 - Um SUPERVISOR da loja A não pode consultar o histórico, restringir nem restaurar uma imagem da loja B. O teste consulta depois o histórico com ADMIN e confirma que as tentativas recusadas não acrescentaram eventos.
 - ADMIN pode aplicar e libertar legal hold; repetir qualquer operação é idempotente, não duplica eventos e não altera o estado operacional `ACTIVE` da imagem. A cronologia deve conter exatamente um evento de aplicação e um de libertação, com os motivos originais normalizados.
 
-Os testes estão nos commits `09f8d7c` e `63f97a2`; aguardam execução no API CI/Quality Gates. A tarefa de auditoria multi-loja permanece aberta até cobrir todos os caminhos administrativos, indiretos e de worker, com validação PostgreSQL onde exista persistência ou concorrência.
+Os testes de autorização cross-store e legal hold passaram no API CI [43578500510](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/43578500510) e no Quality Gates [43578515611](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/43578515611), com 750 testes aprovados e 1 ignorado. Foi acrescentado um caso complementar: SUPERVISOR não pode restaurar uma imagem restrita mesmo quando pertence à sua própria loja; este último teste aguarda CI. A tarefa de auditoria multi-loja permanece aberta até cobrir todos os caminhos administrativos, indiretos e de worker, com validação PostgreSQL onde exista persistência ou concorrência.
 
+
+## Fronteira explícita de restauro ADMIN-only
+
+O teste `test_supervisor_cannot_restore_restricted_image_even_in_own_store` cria uma imagem restrita por ADMIN e tenta restaurá-la com JWT de SUPERVISOR da mesma loja. A resposta esperada é HTTP 403 e a cronologia consultada por ADMIN tem de continuar a conter apenas o evento `RESTRICTED`. Esta verificação separa deliberadamente a autorização por perfil da autorização por loja, evitando atribuir a um bloqueio cross-store uma prova que, na realidade, decorre do papel ADMIN-only. O teste foi acrescentado no commit `a3fcd94` e aguarda CI.
