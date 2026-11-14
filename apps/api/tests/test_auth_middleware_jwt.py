@@ -2,7 +2,7 @@ import pytest
 import re
 from datetime import datetime, timedelta, timezone
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -867,12 +867,12 @@ def test_supervisor_jwt_cannot_access_foreign_ocr_or_retry_restricted_image(auth
 
     def foreign_derived_data_counts():
         with main_module.SessionLocal() as db:
-            run_ids = db.query(models.ShelfImageOCRRun.id).filter(
+            run_ids = select(models.ShelfImageOCRRun.id).where(
                 models.ShelfImageOCRRun.shelf_image_id == foreign_image
-            ).subquery()
-            detection_ids = db.query(models.ShelfImageDetection.id).filter(
+            )
+            detection_ids = select(models.ShelfImageDetection.id).where(
                 models.ShelfImageDetection.shelf_image_id == foreign_image
-            ).subquery()
+            )
             return {
                 "ocr_runs": db.query(models.ShelfImageOCRRun).filter(
                     models.ShelfImageOCRRun.shelf_image_id == foreign_image

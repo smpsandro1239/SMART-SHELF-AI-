@@ -214,3 +214,10 @@ O teste adicional `test_supervisor_cannot_restore_restricted_image_even_in_own_s
 ## Visão computacional — matching e persistência cross-store
 
 A regressão JWT `test_supervisor_jwt_cannot_access_foreign_ocr_or_retry_restricted_image` verifica que SUPERVISOR não consegue ler conteúdo/deteções/OCR/fusão/revisões de imagem estrangeira, nem criar OCR, executar matching com persistência, persistir fusão visual/OCR, repetir análise ou submeter revisão humana. Os pedidos usam uma imagem estrangeira em retenção `RESTRICTED` e devem devolver 403 por isolamento antes de avaliar a retenção. O teste verifica ainda que a listagem filtrada por prateleira estrangeira não devolve resultados e que as tentativas recusadas não alteram contagens de OCR runs/evidence/matches, fusão ou revisões humanas. A suite JWT usa SQLite; não se afirma validação PostgreSQL individual destes endpoints.
+
+
+## Cobertura JWT — OCR/matching/fusão cross-store validada
+
+O teste `test_supervisor_jwt_cannot_access_foreign_ocr_or_retry_restricted_image` cobre 12 operações contra uma imagem estrangeira em estado `RESTRICTED`: leituras de runs/evidência/matches/fusão/deteções/conteúdo binário/histórico de revisão; criação OCR; matching e fusão com persistência; retry de análise; e escrita de revisão humana. Todas as operações recebem HTTP 403 antes de expor o estado de retenção. O teste também confirma que a listagem por prateleira estrangeira devolve uma lista vazia e que as contagens de registos derivados permanecem inalteradas.
+
+**Validação:** commit `14f6e7b1e4b551cd8f8f1a28256447f8deac113b`; API CI [43583454630](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/43583454630) e Quality Gates [43583454568](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/43583454568) passaram. A suite terminou com **751 testes aprovados e 1 ignorado**. Os testes JWT HTTP desta cobertura usam SQLite isolado; os smoke tests PostgreSQL 16 do workflow validam os fluxos operacionais existentes, não estes 12 handlers individualmente.
