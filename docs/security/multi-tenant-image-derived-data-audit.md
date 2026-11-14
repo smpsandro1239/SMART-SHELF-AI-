@@ -139,3 +139,13 @@ auditoria concorrente completa de todos os caminhos de dados derivados.
 
 
 A prova concorrente de matching/retenção em PostgreSQL 16 passou no API CI `43589628653`, juntamente com os restantes smoke tests e 753 testes aprovados (1 ignorado). O Quality Gates `43589628597` também passou.
+
+
+### Concorrência na aprovação de exemplares
+
+A rota de revisão de embeddings bloqueia e refresca primeiro o exemplar e,
+quando aplicável, bloqueia e refresca a imagem de origem antes de verificar
+retenção e gravar a decisão. Isto impede atualizações perdidas entre revisores
+e evita aprovar com base num estado de retenção obsoleto. O novo smoke test
+PostgreSQL postgres_embedding_review_smoke.py disputa APPROVED/REJECTED em
+duas sessões HTTP, esperando um único sucesso e um conflito 409.

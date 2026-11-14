@@ -1931,15 +1931,32 @@ def review_product_embedding_exemplar(
     db: Session = Depends(get_db),
 ):
     """Approve or reject a pending exemplar with reviewer attribution."""
-    item = db.get(models.ProductEmbeddingExemplar, exemplar_id)
+    # Serialize competing review decisions. A second reviewer must observe
+    # the committed decision and receive 409 rather than overwrite it.
+    item = (
+        db.query(models.ProductEmbeddingExemplar)
+        .filter(models.ProductEmbeddingExemplar.id == exemplar_id)
+        .with_for_update()
+        .populate_existing()
+        .first()
+    )
     if item is None:
         raise HTTPException(status_code=404, detail="Embedding exemplar not found")
     actor = _request_user(db, request)
     if item.shelf_image_id is not None:
-        source_image = db.get(models.ShelfImage, item.shelf_image_id)
-        if source_image is not None:
-            _enforce_store_scope(actor, _shelf_image_store_id(db, item.shelf_image_id))
-            _require_active_shelf_image(source_image)
+        # Retention operations lock this same image row. Refresh it under lock
+        # so approval cannot rely on a stale ACTIVE value.
+        source_image = (
+            db.query(models.ShelfImage)
+            .filter(models.ShelfImage.id == item.shelf_image_id)
+            .with_for_update()
+            .populate_existing()
+            .first()
+        )
+        if source_image is None:
+            raise HTTPException(status_code=410, detail="Source shelf image is no longer available")
+        _enforce_store_scope(actor, _shelf_image_store_id(db, item.shelf_image_id))
+        _require_active_shelf_image(source_image)
     elif actor is not None and actor.role != "ADMIN" and item.created_by_user_id != actor.id:
         raise HTTPException(status_code=403, detail="Access to this exemplar is not allowed")
     if actor is not None and actor.role != "ADMIN" and item.created_by_user_id == actor.id:

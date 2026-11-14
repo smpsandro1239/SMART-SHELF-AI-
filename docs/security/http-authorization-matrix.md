@@ -243,3 +243,12 @@ associadas e revalida o estado `ACTIVE` sob o bloqueio. A rota de restrição
 bloqueia a mesma linha, o que serializa ambas as operações em PostgreSQL. O
 teste sequencial em SQLite confirma a exclusão de exemplares cuja imagem passou
 a `RESTRICTED`; não substitui um teste de concorrência PostgreSQL.
+
+
+## Revisão concorrente de exemplares SKU
+
+A rota PATCH /api/v1/product-embedding-exemplars/{id}/review bloqueia a linha
+do exemplar antes de validar PENDING, e bloqueia também a imagem de origem
+antes de validar ACTIVE. As decisões concorrentes são serializadas; uma
+decisão posterior à primeira recebe 409. O smoke test concorrente PostgreSQL
+valida a disputa entre dois revisores ADMIN e confirma a decisão persistida.

@@ -132,3 +132,18 @@ PostgreSQL 16.
 ## Validação CI
 
 O smoke concorrente PostgreSQL foi executado com sucesso no API CI `43589628653`; a suite terminou com 753 testes aprovados e 1 ignorado. O Quality Gates `43589628597` também passou, incluindo compilação Python e build web.
+
+
+## Concorrência na revisão humana de exemplares
+
+A revisão bloqueia a linha do exemplar com SELECT FOR UPDATE e, quando existe
+imagem de origem, bloqueia também a linha dessa imagem antes de validar o estado
+de retenção. Duas decisões concorrentes deixam de poder sobrescrever-se: a
+primeira transação confirma a decisão; a segunda lê o estado já revisto e recebe
+HTTP 409. O bloqueio da imagem também serializa a aprovação com restrições e
+restauros de retenção.
+
+O script apps/api/scripts/postgres_embedding_review_smoke.py usa dois revisores
+ADMIN e pedidos HTTP concorrentes para o mesmo exemplar. Exige exatamente um
+HTTP 200 e um HTTP 409 e confirma o estado persistido e o revisor vencedor. A
+validação é executada no API CI PostgreSQL 16.
