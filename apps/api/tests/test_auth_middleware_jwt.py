@@ -533,22 +533,38 @@ def test_supervisor_cannot_apply_or_release_legal_hold(auth_client):
     assert release.status_code == 403
 
 
-def test_supervisor_cannot_access_foreign_store_retention_history_or_restrict_image(auth_client):
+def test_supervisor_cannot_access_foreign_store_retention_history_or_mutate_image(auth_client):
     client, ids, _ = auth_client
     headers = bearer(ids["supervisor_a"], "SUPERVISOR")
+    admin_headers = bearer(ids["admin"], "ADMIN")
+    image_id = ids["image_b"]
 
     history = client.get(
-        f"/api/v1/shelf-images/{ids['image_b']}/retention/events",
+        f"/api/v1/shelf-images/{image_id}/retention/events",
         headers=headers,
     )
     restrict = client.post(
-        f"/api/v1/shelf-images/{ids['image_b']}/retention/restrict",
-        json={"reason": "Pedido do utilizador"},
+        f"/api/v1/shelf-images/{image_id}/retention/restrict",
+        json={"reason": "Tentativa de restrição cross-store"},
+        headers=headers,
+    )
+    restore = client.post(
+        f"/api/v1/shelf-images/{image_id}/retention/restore",
+        json={"reason": "Tentativa de restauro cross-store"},
         headers=headers,
     )
 
     assert history.status_code == 403
     assert restrict.status_code == 403
+    assert restore.status_code == 403
+
+    admin_history = client.get(
+        f"/api/v1/shelf-images/{image_id}/retention/events",
+        headers=admin_headers,
+    )
+    assert admin_history.status_code == 200
+    assert [event["event_type"] for event in admin_history.json()] == ["RESTRICTED"]
+    assert admin_history.json()[0]["reason"] == "Pedido de privacidade"
 
 
 def test_supervisor_can_restrict_image_in_own_store_with_audit_event(auth_client):
