@@ -12,6 +12,7 @@ from sqlalchemy.pool import StaticPool
 from app.database import Base, get_db
 from app import models
 from app.main import app
+import app.main as main_module
 
 TEST_ENGINE = create_engine(
     "sqlite://",
@@ -188,3 +189,38 @@ def test_human_sku_review_cannot_confirm_or_correct_to_inactive_product():
         assert db.query(models.DetectionSkuReview).filter(
             models.DetectionSkuReview.detection_id == data["detection_id"]
         ).count() == 0
+
+def test_detection_review_reloads_detection_after_source_image_lock(monkeypatch):
+    data = create_detection()
+    original_scope_lookup = main_module._shelf_image_store_id
+
+    def remove_detection_after_scope_lookup(db, image_id):
+        store_id = original_scope_lookup(db, image_id)
+        db.query(models.ShelfImageDetection).filter(
+            models.ShelfImageDetection.id == data["detection_id"]
+        ).delete(synchronize_session=False)
+        db.commit()
+        return store_id
+
+    monkeypatch.setattr(
+        main_module,
+        "_shelf_image_store_id",
+        remove_detection_after_scope_lookup,
+    )
+
+    with TestClient(app) as client:
+        response = client.post(
+            f"/api/v1/shelf-image-detections/{data['detection_id']}/reviews",
+            json={"decision": "CONFIRMED", "notes": "Confirmação concorrente"},
+        )
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == (
+        "Detection changed during review; refresh the image and retry"
+    )
+
+    with TestingSession() as db:
+        assert db.query(models.DetectionSkuReview).filter(
+            models.DetectionSkuReview.detection_id == data["detection_id"]
+        ).count() == 0
+
