@@ -561,6 +561,54 @@ def test_employee_cannot_upload_image_to_foreign_store_shelf(
     assert after_count == before_count
 
 
+
+def test_employee_can_upload_valid_image_to_own_store_capture_session(
+    auth_client, monkeypatch, tmp_path
+):
+    from hashlib import sha256
+    from io import BytesIO
+    from PIL import Image
+
+    client, ids, store_ids = auth_client
+    headers = bearer(ids["employee_a"], "EMPLOYEE")
+    monkeypatch.setattr(main_module.settings, "image_storage_path", str(tmp_path))
+
+    image_bytes = BytesIO()
+    Image.new("RGB", (12, 10), (35, 75, 115)).save(image_bytes, format="PNG")
+    content = image_bytes.getvalue()
+
+    response = client.post(
+        "/api/v1/shelf-images",
+        data={
+            "shelf_id": str(ids["shelf_a_assigned"]),
+            "capture_session_id": str(ids["capture_session_a"]),
+        },
+        files={"image": ("own-capture.png", content, "image/png")},
+        headers=headers,
+    )
+
+    assert response.status_code == 201, response.text
+    payload = response.json()
+    assert payload["original_filename"] == "own-capture.png"
+    assert payload["mime_type"] == "image/png"
+    assert payload["file_size_bytes"] == len(content)
+    assert payload["sha256"] == sha256(content).hexdigest()
+
+    with main_module.SessionLocal() as db:
+        stored = db.get(models.ShelfImage, payload["id"])
+        assert stored is not None
+        assert stored.shelf_id == ids["shelf_a_assigned"]
+        assert stored.capture_session_id == ids["capture_session_a"]
+        assert stored.uploaded_by == ids["employee_a"]
+        assert stored.retention_status == "ACTIVE"
+        stored_path = __import__("pathlib").Path(stored.storage_path)
+        assert stored_path.parent == tmp_path / str(store_ids["a"])
+        assert stored_path.read_bytes() == content
+
+    listed = client.get("/api/v1/shelf-images", headers=headers)
+    assert listed.status_code == 200, listed.text
+    assert payload["id"] in {item["id"] for item in listed.json()}
+
 def test_employee_cannot_read_or_mutate_shelf_image_retention(auth_client):
     client, ids, _ = auth_client
     headers = bearer(ids["employee_a"], "EMPLOYEE")
