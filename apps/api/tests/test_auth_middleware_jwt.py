@@ -2115,6 +2115,59 @@ def test_catalogue_is_global_but_shelf_product_assignments_are_store_scoped(auth
     }
 
 
+
+def test_admin_can_create_global_warehouse_product_metadata_with_real_jwt(auth_client):
+    client, ids, _ = auth_client
+    headers = bearer(ids["admin"], "ADMIN")
+
+    profile_response = client.post(
+        "/api/v1/warehouse/product-profiles",
+        json={
+            "product_id": ids["product"],
+            "unit_volume_cm3": 1250,
+            "unit_weight_kg": 0.75,
+            "temperature_requirement": "CHILLED",
+            "is_fragile": True,
+            "requires_segregation": False,
+        },
+        headers=headers,
+    )
+    assert profile_response.status_code == 201, profile_response.text
+    assert profile_response.json()["product_id"] == ids["product"]
+    assert profile_response.json()["temperature_requirement"] == "CHILLED"
+    assert profile_response.json()["is_fragile"] is True
+
+    packaging_response = client.post(
+        "/api/v1/warehouse/product-packaging",
+        json={
+            "product_id": ids["product"],
+            "code": "AUTH-ADMIN-CASE",
+            "name": "Caixa criada por ADMIN",
+            "package_type": "CASE",
+            "base_units_per_package": 6,
+            "is_ordering_unit": True,
+            "is_replenishment_unit": True,
+        },
+        headers=headers,
+    )
+    assert packaging_response.status_code == 201, packaging_response.text
+    assert packaging_response.json()["product_id"] == ids["product"]
+    assert packaging_response.json()["code"] == "AUTH-ADMIN-CASE"
+    assert packaging_response.json()["base_units_per_package"] == 6
+
+    with main_module.SessionLocal() as db:
+        persisted_profile = db.query(models.WarehouseProductProfile).filter_by(
+            product_id=ids["product"]
+        ).one()
+        persisted_packaging = db.query(models.ProductPackagingLevel).filter_by(
+            product_id=ids["product"],
+            code="AUTH-ADMIN-CASE",
+        ).one()
+        assert persisted_profile.temperature_requirement == "CHILLED"
+        assert persisted_profile.is_fragile is True
+        assert persisted_packaging.is_ordering_unit is True
+        assert persisted_packaging.is_replenishment_unit is True
+
 def test_product_packaging_read_is_global_for_supervisors_and_denied_to_employees(auth_client):
     client, ids, _ = auth_client
     path = "/api/v1/warehouse/product-packaging"
