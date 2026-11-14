@@ -15,12 +15,19 @@ client = TestClient(app)
 
 
 def _client_with_database(engine):
+    previous_overrides = app.dependency_overrides.copy()
+
     def override_get_db():
         with Session(engine) as db:
             yield db
 
     app.dependency_overrides[main_module.get_db] = override_get_db
-    return TestClient(app)
+    return TestClient(app), previous_overrides
+
+
+def _restore_dependency_overrides(previous_overrides):
+    app.dependency_overrides.clear()
+    app.dependency_overrides.update(previous_overrides)
 
 
 def test_health_endpoint():
@@ -36,13 +43,13 @@ def test_readiness_rejects_database_without_alembic_migrations(monkeypatch):
         poolclass=StaticPool,
     )
     monkeypatch.setattr(main_module, "_expected_alembic_heads", lambda: {"release-head"})
-    test_client = _client_with_database(engine)
+    test_client, previous_overrides = _client_with_database(engine)
     try:
         response = test_client.get("/health/ready")
         assert response.status_code == 503
         assert response.json()["detail"] == "Database migrations are not up to date"
     finally:
-        app.dependency_overrides.clear()
+        _restore_dependency_overrides(previous_overrides)
         engine.dispose()
 
 
