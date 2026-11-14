@@ -2,9 +2,10 @@
 
 The matching worker holds the target/source image, product and approved-exemplar
 locks while three independent API requests attempt retention, pending-exemplar
-review and human detection review. The smoke observes all three requests blocked
-by the worker PID in pg_stat_activity before releasing it, then verifies that
-the requests finish without a deadlock and that persisted state/audit are sound.
+review and human detection review. The smoke follows direct and transitive
+PostgreSQL lock blockers in pg_stat_activity before releasing the worker, then
+verifies that the requests finish without a deadlock and persisted state/audit
+are sound.
 """
 from concurrent.futures import ThreadPoolExecutor
 from threading import Barrier, Event
@@ -187,25 +188,72 @@ def main() -> None:
             try:
                 deadline = monotonic() + 20
                 observed_waiters = 0
+                waiter_diagnostics = []
                 while monotonic() < deadline:
                     with SessionLocal() as monitor:
                         observed_waiters = monitor.execute(
                             text(
-                                "SELECT count(*) FROM pg_stat_activity "
-                                "WHERE wait_event_type = 'Lock' "
-                                "AND :worker_pid = ANY(pg_blocking_pids(pid))"
+                                """
+                                WITH RECURSIVE blocking_chain(waiter_pid, blocker_pid, path) AS (
+                                    SELECT activity.pid, blocker.blocker_pid,
+                                           ARRAY[activity.pid, blocker.blocker_pid]
+                                    FROM pg_stat_activity AS activity
+                                    CROSS JOIN LATERAL unnest(pg_blocking_pids(activity.pid))
+                                        AS blocker(blocker_pid)
+                                    WHERE activity.wait_event_type = 'Lock'
+                                    UNION ALL
+                                    SELECT chain.waiter_pid, next_blocker.blocker_pid,
+                                           chain.path || next_blocker.blocker_pid
+                                    FROM blocking_chain AS chain
+                                    JOIN pg_stat_activity AS blocked
+                                      ON blocked.pid = chain.blocker_pid
+                                    CROSS JOIN LATERAL unnest(pg_blocking_pids(blocked.pid))
+                                        AS next_blocker(blocker_pid)
+                                    WHERE NOT next_blocker.blocker_pid = ANY(chain.path)
+                                )
+                                SELECT count(DISTINCT waiter_pid)
+                                FROM blocking_chain
+                                WHERE blocker_pid = :worker_pid
+                                """
                             ),
                             {"worker_pid": worker_pid_holder[0]},
                         ).scalar_one()
+                        waiter_diagnostics = monitor.execute(
+                            text(
+                                """
+                                SELECT pid, state, wait_event_type, wait_event,
+                                       pg_blocking_pids(pid) AS blockers,
+                                       left(query, 180) AS query
+                                FROM pg_stat_activity
+                                WHERE wait_event_type = 'Lock'
+                                ORDER BY pid
+                                """
+                            )
+                        ).mappings().all()
                     if observed_waiters >= 3:
                         break
-                    if any(future.done() for future in api_futures):
-                        break
                     sleep(0.05)
-                assert observed_waiters >= 3, (
-                    "expected all three API operations to wait on matching worker; "
-                    f"observed {observed_waiters}"
-                )
+                if observed_waiters < 3:
+                    completed = []
+                    for label, future in zip(
+                        ("retention", "exemplar-review", "detection-review"),
+                        api_futures,
+                    ):
+                        if future.done():
+                            try:
+                                response = future.result()
+                                completed.append(
+                                    f"{label}=HTTP {response.status_code} "
+                                    f"{response.text[:240]}"
+                                )
+                            except Exception as exc:
+                                completed.append(f"{label}={type(exc).__name__}: {exc}")
+                    raise AssertionError(
+                        "expected all three API operations to be blocked directly "
+                        "or transitively by the matching worker; "
+                        f"observed {observed_waiters}. Completed requests: {completed}. "
+                        f"PostgreSQL lock waiters: {waiter_diagnostics}"
+                    )
             finally:
                 release_worker.set()
 
