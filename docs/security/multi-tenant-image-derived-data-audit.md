@@ -84,3 +84,13 @@ A cobertura JWT de isolamento multi-loja para localizações, paletes e polític
 ## Cobertura JWT — inventário e operações de armazém
 
 A cobertura cross-store por JWT foi estendida a snapshots de inventário (listagem, último snapshot e criação), políticas de frescura (consulta e upsert), colocações em localizações e recomendações de slotting. O supervisor da loja A tenta aceder a recursos explicitamente associados à loja B e todos os sete pedidos devem receber 403. O fixture contém uma localização real da loja B para evitar validar apenas identificadores inexistentes. O teste HTTP usa SQLite; a validação PostgreSQL destes handlers, em particular a persistência e concorrência, continua separada.
+
+## Cobertura adicional de retenção e legal hold (novembro de 2026)
+
+A suite JWT foi ampliada com duas verificações complementares:
+
+- Um SUPERVISOR da loja A não pode consultar o histórico, restringir nem restaurar uma imagem da loja B. O teste consulta depois o histórico com ADMIN e confirma que as tentativas recusadas não acrescentaram eventos.
+- ADMIN pode aplicar e libertar legal hold; repetir qualquer operação é idempotente, não duplica eventos e não altera o estado operacional `ACTIVE` da imagem. A cronologia deve conter exatamente um evento de aplicação e um de libertação, com os motivos originais normalizados.
+
+Os testes estão nos commits `09f8d7c` e `63f97a2`; aguardam execução no API CI/Quality Gates. A tarefa de auditoria multi-loja permanece aberta até cobrir todos os caminhos administrativos, indiretos e de worker, com validação PostgreSQL onde exista persistência ou concorrência.
+
