@@ -203,3 +203,9 @@ O script `apps/api/scripts/postgres_inventory_authorization_smoke.py` foi adicio
 O cenário cria duas lojas, um supervisor da loja A, um administrador e uma localização de armazém na loja B. Executa sete operações cross-store (listagem e leitura de snapshots, criação de snapshot, leitura e upsert de política de frescura, criação de colocação e recomendações de slotting) e exige HTTP 403 em todas. Em seguida verifica através da API e diretamente na base de dados que as tentativas recusadas não persistiram snapshots, políticas nem colocações. Por fim confirma que o supervisor consegue criar um snapshot e uma política na sua própria loja.
 
 **Estado:** implementação e integração CI publicadas; validação PostgreSQL real pendente da conclusão verde do workflow. O smoke test não fecha a auditoria global de autorização.
+
+## Retenção de imagens — validação recente
+
+Os testes JWT de isolamento cross-store do histórico/restrição de imagens e de idempotência do legal hold ADMIN passaram no API CI [43578500510](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/43578500510) e no Quality Gates [43578515611](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/43578515611). A suite concluiu com 750 testes aprovados e 1 ignorado; as migrações PostgreSQL 16, smoke tests de concorrência/auditoria e build web também passaram.
+
+O teste adicional `test_supervisor_cannot_restore_restricted_image_even_in_own_store` isola a regra ADMIN-only do restauro, usando uma imagem da própria loja e verificando que a tentativa 403 não acrescenta eventos. Foi publicado no commit `a3fcd94` e aguarda a execução CI correspondente.
