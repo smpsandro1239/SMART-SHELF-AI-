@@ -532,9 +532,9 @@ def test_inactive_product_exemplars_are_excluded_from_matching_registry():
 
             assert result.status == "UNKNOWN"
             assert result.product_id is None
-            assert {
-                exemplar.product_id for exemplar in registry.exemplars
-            } == {active_product.json()["id"]}
+            active_result = registry.match([1.0, 0.0, 0.0])
+            assert active_result.status == "MATCHED"
+            assert active_result.product_id == active_product.json()["id"]
 
 
 def test_inactive_product_exemplar_cannot_be_approved_but_can_be_rejected():
