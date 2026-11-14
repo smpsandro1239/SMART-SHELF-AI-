@@ -1817,6 +1817,7 @@ def create_detection_sku_review(
         )
         if product is None or not product.is_active:
             raise HTTPException(status_code=422, detail="Selected product must exist and be active")
+        assigned = db.query(models.ShelfProduct.id).filter(
             models.ShelfProduct.shelf_id == image_record.shelf_id,
             models.ShelfProduct.product_id == selected_product_id,
         ).first()
