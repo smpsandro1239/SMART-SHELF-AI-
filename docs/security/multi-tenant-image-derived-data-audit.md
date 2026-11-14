@@ -98,3 +98,13 @@ Os testes de autorização cross-store e legal hold passaram no API CI [43578500
 ## Fronteira explícita de restauro ADMIN-only
 
 O teste `test_supervisor_cannot_restore_restricted_image_even_in_own_store` cria uma imagem restrita por ADMIN e tenta restaurá-la com JWT de SUPERVISOR da mesma loja. A resposta esperada é HTTP 403 e a cronologia consultada por ADMIN tem de continuar a conter apenas o evento `RESTRICTED`. Esta verificação separa deliberadamente a autorização por perfil da autorização por loja, evitando atribuir a um bloqueio cross-store uma prova que, na realidade, decorre do papel ADMIN-only. O teste foi acrescentado no commit `a3fcd94` e aguarda CI.
+
+
+## Cobertura JWT alargada — matching e persistência de evidência estrangeira
+
+O teste `test_supervisor_jwt_cannot_access_foreign_ocr_or_retry_restricted_image` foi alargado para cobrir, com JWT real de SUPERVISOR da loja A, uma imagem RESTRICTED da loja B. A regressão exige HTTP 403 para:
+
+- leitura de conteúdo binário, deteções, execuções/evidência/resultados OCR, fusão de evidência e histórico de revisão;
+- criação de execuções OCR, matching OCR com persistência, fusão visual/OCR com persistência, repetição da análise e submissão de revisão humana.
+
+O teste confirma ainda que uma listagem com filtro explícito para a prateleira estrangeira devolve uma lista vazia, sem revelar a existência da imagem. Antes e depois das tentativas, compara contagens de execuções OCR, evidência OCR, matches, evidência fundida e revisões humanas; nenhuma escrita recusada pode criar registos. A validação é HTTP/JWT sobre SQLite isolado; o smoke PostgreSQL existente valida outros fluxos, não estes handlers individualmente. A auditoria global mantém-se aberta.

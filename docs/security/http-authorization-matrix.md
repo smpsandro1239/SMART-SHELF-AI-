@@ -209,3 +209,8 @@ O cenário cria duas lojas, um supervisor da loja A, um administrador e uma loca
 Os testes JWT de isolamento cross-store do histórico/restrição de imagens e de idempotência do legal hold ADMIN passaram no API CI [43578500510](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/43578500510) e no Quality Gates [43578515611](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/43578515611). A suite concluiu com 750 testes aprovados e 1 ignorado; as migrações PostgreSQL 16, smoke tests de concorrência/auditoria e build web também passaram.
 
 O teste adicional `test_supervisor_cannot_restore_restricted_image_even_in_own_store` isola a regra ADMIN-only do restauro, usando uma imagem da própria loja e verificando que a tentativa 403 não acrescenta eventos. Foi publicado no commit `a3fcd94` e aguarda a execução CI correspondente.
+
+
+## Visão computacional — matching e persistência cross-store
+
+A regressão JWT `test_supervisor_jwt_cannot_access_foreign_ocr_or_retry_restricted_image` verifica que SUPERVISOR não consegue ler conteúdo/deteções/OCR/fusão/revisões de imagem estrangeira, nem criar OCR, executar matching com persistência, persistir fusão visual/OCR, repetir análise ou submeter revisão humana. Os pedidos usam uma imagem estrangeira em retenção `RESTRICTED` e devem devolver 403 por isolamento antes de avaliar a retenção. O teste verifica ainda que a listagem filtrada por prateleira estrangeira não devolve resultados e que as tentativas recusadas não alteram contagens de OCR runs/evidence/matches, fusão ou revisões humanas. A suite JWT usa SQLite; não se afirma validação PostgreSQL individual destes endpoints.

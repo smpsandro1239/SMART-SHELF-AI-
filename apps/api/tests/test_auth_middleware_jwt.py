@@ -865,23 +865,83 @@ def test_supervisor_jwt_cannot_access_foreign_ocr_or_retry_restricted_image(auth
     foreign_image = ids["image_b"]
     ocr_payload = {"provider": "test-provider", "model_version": "test-v1", "regions": []}
 
-    ocr_runs = client.get(f"/api/v1/shelf-images/{foreign_image}/ocr-runs", headers=headers)
-    ocr_create = client.post(
-        f"/api/v1/shelf-images/{foreign_image}/ocr-runs",
-        json=ocr_payload,
-        headers=headers,
-    )
-    retry = client.post(f"/api/v1/shelf-images/{foreign_image}/retry", headers=headers)
-    review = client.post(
-        f"/api/v1/shelf-image-detections/{ids['detection_b']}/reviews",
-        json={"decision": "REJECTED", "selected_product_id": None},
-        headers=headers,
-    )
+    def foreign_derived_data_counts():
+        with main_module.SessionLocal() as db:
+            run_ids = db.query(models.ShelfImageOCRRun.id).filter(
+                models.ShelfImageOCRRun.shelf_image_id == foreign_image
+            ).subquery()
+            detection_ids = db.query(models.ShelfImageDetection.id).filter(
+                models.ShelfImageDetection.shelf_image_id == foreign_image
+            ).subquery()
+            return {
+                "ocr_runs": db.query(models.ShelfImageOCRRun).filter(
+                    models.ShelfImageOCRRun.shelf_image_id == foreign_image
+                ).count(),
+                "ocr_evidence": db.query(models.ShelfImageOCREvidence).filter(
+                    models.ShelfImageOCREvidence.run_id.in_(run_ids)
+                ).count(),
+                "ocr_matches": db.query(models.ShelfImageOCRMatch).filter(
+                    models.ShelfImageOCRMatch.run_id.in_(run_ids)
+                ).count(),
+                "fused_evidence": db.query(models.ShelfImageFusedEvidence).filter(
+                    models.ShelfImageFusedEvidence.ocr_run_id.in_(run_ids)
+                ).count(),
+                "human_reviews": db.query(models.DetectionSkuReview).filter(
+                    models.DetectionSkuReview.detection_id.in_(detection_ids)
+                ).count(),
+            }
 
-    assert ocr_runs.status_code == 403
-    assert ocr_create.status_code == 403
-    assert retry.status_code == 403
-    assert review.status_code == 403
+    before = foreign_derived_data_counts()
+    requests = {
+        "OCR runs": client.get(f"/api/v1/shelf-images/{foreign_image}/ocr-runs", headers=headers),
+        "OCR evidence": client.get(f"/api/v1/shelf-images/{foreign_image}/ocr-evidence", headers=headers),
+        "OCR matches": client.get(f"/api/v1/shelf-images/{foreign_image}/ocr-matches", headers=headers),
+        "fused evidence": client.get(f"/api/v1/shelf-images/{foreign_image}/evidence-fusion", headers=headers),
+        "detections": client.get(f"/api/v1/shelf-images/{foreign_image}/detections", headers=headers),
+        "binary content": client.get(f"/api/v1/shelf-images/{foreign_image}/content", headers=headers),
+        "human review history": client.get(
+            f"/api/v1/shelf-image-detections/{ids['detection_b']}/reviews",
+            headers=headers,
+        ),
+        "OCR creation": client.post(
+            f"/api/v1/shelf-images/{foreign_image}/ocr-runs",
+            json=ocr_payload,
+            headers=headers,
+        ),
+        "OCR matching/persistence": client.post(
+            f"/api/v1/shelf-images/{foreign_image}/ocr-matches",
+            headers=headers,
+        ),
+        "visual/OCR fusion persistence": client.post(
+            f"/api/v1/shelf-images/{foreign_image}/evidence-fusion",
+            headers=headers,
+        ),
+        "analysis retry": client.post(
+            f"/api/v1/shelf-images/{foreign_image}/retry",
+            headers=headers,
+        ),
+        "human review write": client.post(
+            f"/api/v1/shelf-image-detections/{ids['detection_b']}/reviews",
+            json={"decision": "REJECTED", "selected_product_id": None},
+            headers=headers,
+        ),
+    }
+    for resource, response in requests.items():
+        assert response.status_code == 403, (
+            f"SUPERVISOR must not access foreign {resource}; "
+            f"received HTTP {response.status_code}: {response.text}"
+        )
+
+    # Explicit shelf filters must not disclose whether a foreign image exists.
+    foreign_listing = client.get(
+        f"/api/v1/shelf-images?shelf_id={ids['shelf_b']}",
+        headers=headers,
+    )
+    assert foreign_listing.status_code == 200
+    assert foreign_listing.json() == []
+
+    # Rejected reads/writes must not create OCR, fusion, or human-review records.
+    assert foreign_derived_data_counts() == before
 
 
 def test_employee_jwt_cannot_start_ocr_or_submit_human_sku_reviews(auth_client):
