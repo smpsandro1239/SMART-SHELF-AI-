@@ -8,6 +8,11 @@ Implementação parcial. As migrações `0023_shelf_image_retention_metadata` e 
 
 O commit `4559365` passou no API CI `43456601696` e no Quality Gates `43456602071`. A validação inclui também o gate dinâmico de autenticação de todas as rotas versionadas, a compilação Python e o build TypeScript/Vite. O commit `23155bce` e os respetivos workflows anteriores continuam no histórico como validação de funcionalidades de retenção e concorrência. A execução inclui a suite de testes de worker, incluindo rejeição de caminhos externos e symlinks, exclusão de estados não ativos e corrida entre inferência e restrição da imagem, além das migrações PostgreSQL 16 e dos smoke tests de concorrência. Esta validação não cobre purga física, porque essa funcionalidade continua intencionalmente desativada.
 
+
+### Regressões de autorização e legal hold
+
+A cobertura JWT foi reforçada para verificar que um SUPERVISOR não consegue consultar o histórico, restringir nem restaurar uma imagem pertencente a outra loja. O teste confirma, através de ADMIN, que as tentativas cross-store não acrescentam eventos nem alteram o histórico. Foi também acrescentado um teste de ciclo de vida do legal hold por ADMIN: aplicar e libertar duas vezes é idempotente, mantém a imagem operacionalmente `ACTIVE` e produz exatamente um evento `LEGAL_HOLD_APPLIED` e um `LEGAL_HOLD_RELEASED`, com motivos normalizados. Os testes aguardam a execução dos workflows CI dos commits `09f8d7c` e `63f97a2`.
+
 ## Objetivos e invariantes
 
 - Aplicar minimização e limitação da conservação: conservar a imagem apenas pelo período e finalidade aprovados pela organização.
