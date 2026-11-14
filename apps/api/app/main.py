@@ -1933,6 +1933,8 @@ def create_product_embedding_exemplar(
             raise HTTPException(status_code=404, detail="Source shelf image not found")
         _enforce_store_scope(actor, _shelf_image_store_id(db, source_image.id))
         _require_active_shelf_image(source_image)
+        if source_image.sha256.lower() != payload.image_sha256.lower():
+            raise HTTPException(status_code=422, detail="image_sha256 does not match source shelf image")
     product = (
         db.query(models.Product)
         .filter(models.Product.id == payload.product_id)
@@ -1942,8 +1944,6 @@ def create_product_embedding_exemplar(
     )
     if product is None or not product.is_active:
         raise HTTPException(status_code=404, detail="Active product not found")
-        if source_image.sha256.lower() != payload.image_sha256.lower():
-            raise HTTPException(status_code=422, detail="image_sha256 does not match source shelf image")
     item = models.ProductEmbeddingExemplar(
         product_id=payload.product_id,
         shelf_image_id=payload.shelf_image_id,
