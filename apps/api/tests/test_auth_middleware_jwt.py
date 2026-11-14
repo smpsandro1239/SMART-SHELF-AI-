@@ -212,6 +212,8 @@ def auth_client(monkeypatch):
         ids["capture_session_a"] = capture_session_a.id
         ids["capture_session_b"] = capture_session_b.id
         ids["shelf_a_assigned"] = shelf_a_assigned.id
+        ids["shelf_a_unassigned"] = shelf_a_unassigned.id
+        ids["shelf_a_peer"] = shelf_a_peer.id
         ids["shelf_b"] = shelf_b.id
         store_ids = {"a": store_a.id, "b": store_b.id}
         ids["product"] = product.id
