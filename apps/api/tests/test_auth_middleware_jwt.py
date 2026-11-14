@@ -2168,6 +2168,116 @@ def test_admin_can_create_global_warehouse_product_metadata_with_real_jwt(auth_c
         assert persisted_packaging.is_ordering_unit is True
         assert persisted_packaging.is_replenishment_unit is True
 
+def test_supervisor_can_create_store_scoped_warehouse_resources_with_real_jwt(auth_client):
+    client, ids, store_ids = auth_client
+    store_id = store_ids["a"]
+    headers = bearer(ids["supervisor_a"], "SUPERVISOR")
+
+    location_response = client.post(
+        "/api/v1/warehouse/locations",
+        json={
+            "store_id": store_id,
+            "code": "A-AUTH-LOCATION",
+            "aisle": "A",
+            "rack": "01",
+            "bin_code": "01",
+            "distance_to_picking_m": 8,
+            "max_volume_cm3": 50000,
+            "max_weight_kg": 250,
+            "temperature_zone": "AMBIENT",
+        },
+        headers=headers,
+    )
+    assert location_response.status_code == 201, location_response.text
+    location_id = location_response.json()["id"]
+    assert location_response.json()["store_id"] == store_id
+
+    placement_response = client.post(
+        "/api/v1/warehouse/placements",
+        json={
+            "location_id": location_id,
+            "product_id": ids["product"],
+            "quantity": 18,
+        },
+        headers=headers,
+    )
+    assert placement_response.status_code == 201, placement_response.text
+    assert placement_response.json()["location_id"] == location_id
+    assert placement_response.json()["product_id"] == ids["product"]
+    assert float(placement_response.json()["quantity"]) == 18
+
+    with main_module.SessionLocal() as db:
+        pallet_level = models.ProductPackagingLevel(
+            product_id=ids["product"],
+            code="AUTH-PALLET",
+            name="Palete de teste",
+            package_type="PALLET",
+            base_units_per_package=48,
+            is_active=True,
+        )
+        db.add(pallet_level)
+        db.commit()
+        db.refresh(pallet_level)
+        pallet_level_id = pallet_level.id
+
+    pallet_response = client.post(
+        "/api/v1/warehouse/pallets",
+        json={
+            "store_id": store_id,
+            "product_id": ids["product"],
+            "packaging_level_id": pallet_level_id,
+            "pallet_code": "A-AUTH-PALLET",
+            "lot_code": "LOT-AUTH-01",
+            "base_quantity": 48,
+            "status": "READY",
+            "location_type": "WAREHOUSE",
+            "location_code": "A-AUTH-LOCATION",
+        },
+        headers=headers,
+    )
+    assert pallet_response.status_code == 201, pallet_response.text
+    pallet_id = pallet_response.json()["id"]
+    assert pallet_response.json()["store_id"] == store_id
+    assert pallet_response.json()["product_id"] == ids["product"]
+    assert pallet_response.json()["packaging_level_id"] == pallet_level_id
+    assert pallet_response.json()["pallet_code"] == "A-AUTH-PALLET"
+
+    own_locations = client.get(
+        "/api/v1/warehouse/locations",
+        params={"store_id": store_id},
+        headers=headers,
+    )
+    assert own_locations.status_code == 200
+    assert any(item["id"] == location_id for item in own_locations.json())
+
+    own_pallets = client.get(
+        "/api/v1/warehouse/pallets",
+        params={"store_id": store_id},
+        headers=headers,
+    )
+    assert own_pallets.status_code == 200
+    assert any(item["id"] == pallet_id for item in own_pallets.json())
+
+    with main_module.SessionLocal() as db:
+        persisted_location = db.get(models.WarehouseLocation, location_id)
+        persisted_placement = db.query(models.WarehouseProductPlacement).filter_by(
+            location_id=location_id, product_id=ids["product"]
+        ).one()
+        persisted_pallet = db.get(models.StorePallet, pallet_id)
+        events = db.query(models.PalletRotationEvent).filter_by(pallet_id=pallet_id).all()
+
+        assert persisted_location is not None
+        assert persisted_location.store_id == store_id
+        assert float(persisted_placement.quantity) == 18
+        assert persisted_pallet is not None
+        assert persisted_pallet.store_id == store_id
+        assert len(events) == 1
+        assert events[0].event_type == "REGISTERED"
+        assert events[0].performed_by_user_id == ids["supervisor_a"]
+        assert float(events[0].quantity_before) == 0
+        assert float(events[0].quantity_after) == 48
+
+
 def test_product_packaging_read_is_global_for_supervisors_and_denied_to_employees(auth_client):
     client, ids, _ = auth_client
     path = "/api/v1/warehouse/product-packaging"
