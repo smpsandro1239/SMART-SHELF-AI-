@@ -78,6 +78,12 @@ jobs:
           APP_ENV: test
           JWT_SECRET_KEY: test-only-secret-not-for-production
         run: python scripts/postgres_embedding_review_smoke.py
+      - name: Verify PostgreSQL four-way SKU matching, retention and human-review concurrency
+        env:
+          DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/smart_shelf_ci
+          APP_ENV: test
+          JWT_SECRET_KEY: test-only-secret-not-for-production
+        run: python scripts/postgres_four_way_concurrency_smoke.py
       - name: Verify PostgreSQL inventory and warehouse cross-store authorization
         env:
           DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/smart_shelf_ci
