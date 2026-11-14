@@ -273,3 +273,12 @@ O teste `test_catalogue_is_global_but_shelf_product_assignments_are_store_scoped
 A validação HTTP usa o fixture JWT com SQLite isolado; não representa uma validação PostgreSQL individual deste handler. Os smoke tests PostgreSQL do mesmo workflow passaram, mas cobrem outros fluxos operacionais. API CI [43608505591](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/43608505591) e Quality Gates [43608505546](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/43608505546) passaram no commit `4890a32199ab54a9f3feaa5ce7616c640a2bd979`; a suite API, compilação Python e build web terminaram com sucesso.
 
 Esta cobertura confirma a fronteira de leitura do catálogo e das associações. Não fecha a revisão de todos os endpoints administrativos, handlers e caminhos indiretos; a auditoria global mantém-se aberta.
+
+
+## Embalagens de produto — leitura global e controlo por perfil
+
+O teste JWT `test_product_packaging_read_is_global_for_supervisors_and_denied_to_employees` confirma o contrato do endpoint `GET /api/v1/warehouse/product-packaging`: SUPERVISOR e ADMIN podem consultar os metadados globais de embalagem do produto; EMPLOYEE recebe HTTP 403. A resposta contém apenas níveis ativos, excluindo embalagens desativadas. Esta leitura é global porque os níveis de embalagem são metadados do catálogo, não registos físicos pertencentes a uma loja.
+
+**Validação:** commit `4cf0f34848cd2beab83d0b12db89888dbdd162d3`; API CI [43609023974](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/43609023974) e Quality Gates [43609023990](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/43609023990) concluíram com sucesso. A suite API, migrações e smoke tests PostgreSQL 16, compilação Python e build web passaram. O teste HTTP usa SQLite isolado; os smoke tests PostgreSQL do workflow cobrem outros fluxos e não validam individualmente este handler.
+
+A cobertura confirma a leitura de embalagens, não a autorização integral de todos os endpoints de armazém ou os respetivos caminhos indiretos. A auditoria global mantém-se aberta.
