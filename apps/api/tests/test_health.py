@@ -63,13 +63,13 @@ def test_readiness_rejects_database_on_an_older_migration_head(monkeypatch):
         connection.execute(text("CREATE TABLE alembic_version (version_num VARCHAR(128) NOT NULL)"))
         connection.execute(text("INSERT INTO alembic_version (version_num) VALUES ('old-head')"))
     monkeypatch.setattr(main_module, "_expected_alembic_heads", lambda: {"release-head"})
-    test_client = _client_with_database(engine)
+    test_client, previous_overrides = _client_with_database(engine)
     try:
         response = test_client.get("/health/ready")
         assert response.status_code == 503
         assert response.json()["detail"] == "Database migrations are not up to date"
     finally:
-        app.dependency_overrides.clear()
+        _restore_dependency_overrides(previous_overrides)
         engine.dispose()
 
 
@@ -83,7 +83,7 @@ def test_readiness_accepts_database_at_all_current_migration_heads(monkeypatch):
         connection.execute(text("CREATE TABLE alembic_version (version_num VARCHAR(128) NOT NULL)"))
         connection.execute(text("INSERT INTO alembic_version (version_num) VALUES ('release-head')"))
     monkeypatch.setattr(main_module, "_expected_alembic_heads", lambda: {"release-head"})
-    test_client = _client_with_database(engine)
+    test_client, previous_overrides = _client_with_database(engine)
     try:
         response = test_client.get("/health/ready")
         assert response.status_code == 200
@@ -93,5 +93,5 @@ def test_readiness_accepts_database_at_all_current_migration_heads(monkeypatch):
             "migrations": "current",
         }
     finally:
-        app.dependency_overrides.clear()
+        _restore_dependency_overrides(previous_overrides)
         engine.dispose()
