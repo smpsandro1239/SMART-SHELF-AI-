@@ -10,6 +10,9 @@ import hashlib
 from PIL import Image, UnidentifiedImageError
 
 from fastapi import Depends, FastAPI, HTTPException, Request, UploadFile, File, Form
+from alembic.config import Config as AlembicConfig
+from alembic.runtime.migration import MigrationContext
+from alembic.script import ScriptDirectory
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -308,13 +311,36 @@ def health():
     return {"status": "ok", "service": "smart-shelf-ai-api", "environment": settings.app_env}
 
 
+def _expected_alembic_heads() -> set[str]:
+    """Return every migration head declared by this API release."""
+    config_path = Path(__file__).resolve().parent.parent / "alembic.ini"
+    config = AlembicConfig(str(config_path))
+    return set(ScriptDirectory.from_config(config).get_heads())
+
+
+def _current_database_heads(db: Session) -> set[str]:
+    """Read all applied Alembic heads; an empty/unmigrated database returns an empty set."""
+    context = MigrationContext.configure(db.connection())
+    return set(context.get_current_heads())
+
+
 @app.get("/health/ready", tags=["system"])
 def readiness(db: Session = Depends(get_db)):
     try:
         db.execute(text("SELECT 1"))
+        expected_heads = _expected_alembic_heads()
+        current_heads = _current_database_heads(db)
     except Exception as exc:
-        raise HTTPException(status_code=503, detail="Database unavailable") from exc
-    return {"status": "ready", "database": "connected"}
+        raise HTTPException(status_code=503, detail="Database readiness check failed") from exc
+
+    if current_heads != expected_heads:
+        raise HTTPException(status_code=503, detail="Database migrations are not up to date")
+
+    return {
+        "status": "ready",
+        "database": "connected",
+        "migrations": "current",
+    }
 
 
 @app.post("/api/v1/stores", response_model=StoreRead, status_code=201, tags=["stores"])

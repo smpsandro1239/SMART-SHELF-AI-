@@ -34,6 +34,8 @@ A Vercel não fornece automaticamente uma base de dados PostgreSQL nem armazenam
    ```
 4. Não colocar segredos em `vercel.json`, no frontend, no Git ou em variáveis `VITE_*`.
 
+O endpoint `/health/ready` só responde `200` quando consegue consultar PostgreSQL e todas as heads Alembic declaradas no código estão aplicadas. Uma base de dados vazia ou com migrações desatualizadas responde `503`; aplicar as migrações antes de considerar a API pronta.
+
 A configuração de CORS não é necessária para as chamadas normais do frontend, porque usa o mesmo domínio e os rewrites da Vercel. Se a API vier a ser consumida a partir de outro domínio, configurar `CORS_ALLOWED_ORIGINS` com as origens explícitas.
 
 ## Limitações funcionais que permanecem
