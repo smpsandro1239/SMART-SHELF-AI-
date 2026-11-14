@@ -170,3 +170,10 @@ IDs inativos são removidos da decisão consolidada e o estado passa a
 `UNKNOWN`. Os registos OCR/visuais de origem são preservados. Os relatórios de
 avaliação usam a decisão humana e a previsão existentes no momento da revisão;
 não filtram retroativamente produtos que tenham sido desativados depois.
+
+
+## Upload positivo de imagem com JWT real — própria loja
+
+Foi acrescentado `test_employee_can_upload_valid_image_to_own_store_capture_session` em `apps/api/tests/test_auth_middleware_jwt.py`. O teste usa JWT real de EMPLOYEE e executa o upload para uma prateleira e sessão de captura da própria loja. Exige HTTP 201 e verifica o nome original, MIME, tamanho, SHA-256, registo persistido, prateleira/sessão, utilizador que carregou, estado `ACTIVE`, conteúdo no diretório isolado da loja e presença da imagem na listagem autorizada. Este cenário complementa o teste negativo cross-store, que exige HTTP 403 e ausência de ficheiro/registo.
+
+A validação passou no API CI [43598971758](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/43598971758) e no Quality Gates [43598971764](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/43598971764). O API CI concluiu com sucesso as migrações e smoke tests PostgreSQL 16 e a suite API; o Quality Gates concluiu com sucesso os testes API, compilação Python e build web. A auditoria global permanece parcial: este teste comprova o caminho positivo de upload para a própria loja, não a matriz completa de autorização nem os caminhos indiretos/worker.
