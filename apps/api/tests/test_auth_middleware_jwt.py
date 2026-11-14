@@ -73,6 +73,24 @@ def auth_client(monkeypatch):
         zone_b = models.Zone(store_id=store_b.id, name="Zona B")
         db.add_all([product, zone_a, zone_b])
         db.flush()
+        active_packaging = models.ProductPackagingLevel(
+            product_id=product.id,
+            code="AUTH-CASE",
+            name="Caixa de teste",
+            package_type="CASE",
+            base_units_per_package=12,
+            is_active=True,
+        )
+        inactive_packaging = models.ProductPackagingLevel(
+            product_id=product.id,
+            code="AUTH-OLD",
+            name="Embalagem desativada",
+            package_type="CASE",
+            base_units_per_package=24,
+            is_active=False,
+        )
+        db.add_all([active_packaging, inactive_packaging])
+        db.flush()
         warehouse_location_b = models.WarehouseLocation(
             store_id=store_b.id,
             code="B-WAREHOUSE-01",
@@ -217,6 +235,8 @@ def auth_client(monkeypatch):
         ids["shelf_b"] = shelf_b.id
         store_ids = {"a": store_a.id, "b": store_b.id}
         ids["product"] = product.id
+        ids["active_packaging"] = active_packaging.id
+        ids["inactive_packaging"] = inactive_packaging.id
         ids["warehouse_location_b"] = warehouse_location_b.id
 
     def override_get_db():
@@ -2093,3 +2113,33 @@ def test_catalogue_is_global_but_shelf_product_assignments_are_store_scoped(auth
         ids["shelf_a_peer"],
         ids["shelf_b"],
     }
+
+
+def test_product_packaging_read_is_global_for_supervisors_and_denied_to_employees(auth_client):
+    client, ids, _ = auth_client
+    path = "/api/v1/warehouse/product-packaging"
+    params = {"product_id": ids["product"]}
+
+    supervisor_response = client.get(
+        path,
+        params=params,
+        headers=bearer(ids["supervisor_a"], "SUPERVISOR"),
+    )
+    assert supervisor_response.status_code == 200, supervisor_response.text
+    assert [item["id"] for item in supervisor_response.json()] == [ids["active_packaging"]]
+    assert supervisor_response.json()[0]["product_id"] == ids["product"]
+
+    admin_response = client.get(
+        path,
+        params=params,
+        headers=bearer(ids["admin"], "ADMIN"),
+    )
+    assert admin_response.status_code == 200, admin_response.text
+    assert admin_response.json() == supervisor_response.json()
+
+    employee_response = client.get(
+        path,
+        params=params,
+        headers=bearer(ids["employee_a"], "EMPLOYEE"),
+    )
+    assert employee_response.status_code == 403
