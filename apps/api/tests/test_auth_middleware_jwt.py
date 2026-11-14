@@ -1758,3 +1758,92 @@ def test_admin_legal_hold_is_idempotent_and_preserves_operational_visibility(aut
     assert history.json()[0]["reason"] == "Preservar evidência para investigação"
     assert history.json()[1]["reason"] == "Investigação concluída e libertação autorizada"
 
+
+
+def test_supervisor_review_queue_and_summary_are_scoped_to_own_store(auth_client):
+    client, ids, _ = auth_client
+
+    # Activate the foreign image in this isolated test so tenant filtering,
+    # rather than the independent retention filter, is what excludes it.
+    with main_module.SessionLocal() as db:
+        foreign_image = db.get(models.ShelfImage, ids["image_b"])
+        foreign_image.retention_status = "ACTIVE"
+        run_a = models.ShelfImageOCRRun(
+            shelf_image_id=ids["image_a"], provider="auth-test-provider",
+            model_version="auth-test-v1", status="COMPLETED",
+        )
+        run_b = models.ShelfImageOCRRun(
+            shelf_image_id=ids["image_b"], provider="auth-test-provider",
+            model_version="auth-test-v1", status="COMPLETED",
+        )
+        db.add_all([run_a, run_b])
+        db.flush()
+        evidence_a = models.ShelfImageFusedEvidence(
+            ocr_run_id=run_a.id, detection_id=ids["detection_a"],
+            status="CONFLICT", visual_status="MATCHED", text_status="SUGGESTED",
+            visual_similarity=0.91, text_score=0.82, ocr_confidence=0.88,
+            visual_model_version="auth-visual-v1",
+            ocr_provider="auth-test-provider", ocr_model_version="auth-test-v1",
+            reason="Divergência de teste na loja A",
+        )
+        evidence_b = models.ShelfImageFusedEvidence(
+            ocr_run_id=run_b.id, detection_id=ids["detection_b"],
+            status="CONSENSUS", visual_status="MATCHED", text_status="MATCHED",
+            visual_similarity=0.96, text_score=0.94, ocr_confidence=0.93,
+            visual_model_version="auth-visual-v1",
+            ocr_provider="auth-test-provider", ocr_model_version="auth-test-v1",
+            reason="Concordância de teste na loja B",
+        )
+        db.add_all([evidence_a, evidence_b])
+        db.commit()
+        evidence_a_id, evidence_b_id = evidence_a.id, evidence_b.id
+
+    supervisor_headers = bearer(ids["supervisor_a"], "SUPERVISOR")
+    supervisor_queue = client.get(
+        "/api/v1/shelf-image-review-queue", headers=supervisor_headers
+    )
+    supervisor_summary = client.get(
+        "/api/v1/shelf-image-review-queue/summary", headers=supervisor_headers
+    )
+    assert supervisor_queue.status_code == 200, supervisor_queue.text
+    assert [item["fused_evidence_id"] for item in supervisor_queue.json()] == [evidence_a_id]
+    assert all(item["shelf_image_id"] == ids["image_a"] for item in supervisor_queue.json())
+    assert supervisor_summary.status_code == 200, supervisor_summary.text
+    assert supervisor_summary.json()["CONFLICT"] == 1
+    assert supervisor_summary.json()["CONSENSUS"] == 0
+    assert sum(supervisor_summary.json().values()) == 1
+
+    admin_headers = bearer(ids["admin"], "ADMIN")
+    admin_queue = client.get(
+        "/api/v1/shelf-image-review-queue", headers=admin_headers
+    )
+    admin_summary = client.get(
+        "/api/v1/shelf-image-review-queue/summary", headers=admin_headers
+    )
+    assert admin_queue.status_code == 200, admin_queue.text
+    assert {item["fused_evidence_id"] for item in admin_queue.json()} == {
+        evidence_a_id, evidence_b_id
+    }
+    assert {item["shelf_image_id"] for item in admin_queue.json()} == {
+        ids["image_a"], ids["image_b"]
+    }
+    assert admin_summary.status_code == 200, admin_summary.text
+    assert admin_summary.json()["CONFLICT"] == 1
+    assert admin_summary.json()["CONSENSUS"] == 1
+    assert sum(admin_summary.json().values()) == 2
+
+    employee_headers = bearer(ids["employee_a"], "EMPLOYEE")
+    employee_queue = client.get(
+        "/api/v1/shelf-image-review-queue", headers=employee_headers
+    )
+    employee_summary = client.get(
+        "/api/v1/shelf-image-review-queue/summary", headers=employee_headers
+    )
+    assert employee_queue.status_code == 403
+    assert employee_summary.status_code == 403
+
+    # Both endpoints are read-only.
+    with main_module.SessionLocal() as db:
+        assert db.query(models.ShelfImageFusedEvidence).count() == 2
+        assert db.get(models.ShelfImageFusedEvidence, evidence_a_id) is not None
+        assert db.get(models.ShelfImageFusedEvidence, evidence_b_id) is not None

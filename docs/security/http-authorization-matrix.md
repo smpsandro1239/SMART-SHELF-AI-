@@ -221,3 +221,16 @@ A regressão JWT `test_supervisor_jwt_cannot_access_foreign_ocr_or_retry_restric
 O teste `test_supervisor_jwt_cannot_access_foreign_ocr_or_retry_restricted_image` cobre 12 operações contra uma imagem estrangeira em estado `RESTRICTED`: leituras de runs/evidência/matches/fusão/deteções/conteúdo binário/histórico de revisão; criação OCR; matching e fusão com persistência; retry de análise; e escrita de revisão humana. Todas as operações recebem HTTP 403 antes de expor o estado de retenção. O teste também confirma que a listagem por prateleira estrangeira devolve uma lista vazia e que as contagens de registos derivados permanecem inalteradas.
 
 **Validação:** commit `14f6e7b1e4b551cd8f8f1a28256447f8deac113b`; API CI [43583454630](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/43583454630) e Quality Gates [43583454568](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/43583454568) passaram. A suite terminou com **751 testes aprovados e 1 ignorado**. Os testes JWT HTTP desta cobertura usam SQLite isolado; os smoke tests PostgreSQL 16 do workflow validam os fluxos operacionais existentes, não estes 12 handlers individualmente.
+
+
+## Fila de revisão humana — isolamento multi-loja
+
+Os endpoints `GET /api/v1/shelf-image-review-queue` e `GET /api/v1/shelf-image-review-queue/summary` são restritos a ADMIN/SUPERVISOR pelo middleware. Para SUPERVISOR, ambos filtram por `Zone.store_id`; ADMIN mantém a visão global. A fila e os contadores excluem imagens cujo estado de retenção não seja `ACTIVE` e evidências já revistas depois da respetiva fusão.
+
+O teste JWT `test_supervisor_review_queue_and_summary_are_scoped_to_own_store` semeia evidências ativas em duas lojas e confirma:
+- SUPERVISOR recebe apenas a evidência da sua loja e contagens correspondentes;
+- ADMIN recebe as duas evidências e ambos os estados agregados;
+- EMPLOYEE recebe HTTP 403 nos dois endpoints;
+- as consultas não criam, alteram nem removem evidências.
+
+O teste usa SQLite isolado e prova o contrato HTTP/tenant-scope. Não substitui uma validação PostgreSQL específica destes dois endpoints.
