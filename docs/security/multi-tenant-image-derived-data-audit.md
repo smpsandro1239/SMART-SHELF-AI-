@@ -159,3 +159,14 @@ pendentes; estas podem ser rejeitadas para fechar a fila. O registo do worker
 só inclui exemplares aprovados associados a produtos ativos, com bloqueio
 transacional do catálogo durante o matching. A informação histórica é
 preservada e não é apagada quando o produto é desativado.
+
+
+### Revisão humana, fusão e histórico face a produtos desativados
+
+A confirmação/correção humana exige um SKU ativo e serializa a validação com
+desativação do catálogo e retenção da imagem. A fusão de evidências recém-gerada
+não promove sugestões OCR/visuais que já apontem para produtos inativos: os
+IDs inativos são removidos da decisão consolidada e o estado passa a
+`UNKNOWN`. Os registos OCR/visuais de origem são preservados. Os relatórios de
+avaliação usam a decisão humana e a previsão existentes no momento da revisão;
+não filtram retroativamente produtos que tenham sido desativados depois.

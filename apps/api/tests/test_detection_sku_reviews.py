@@ -158,3 +158,33 @@ def test_correction_requires_active_product_assigned_to_same_shelf():
             json={"decision": "CORRECTED", "selected_product_id": other_id},
         )
         assert response.status_code == 422
+
+
+
+def test_human_sku_review_cannot_confirm_or_correct_to_inactive_product():
+    data = create_detection(second_product=True)
+    with TestingSession() as db:
+        inactive = db.get(models.Product, data["proposed_product_id"])
+        inactive.is_active = False
+        db.commit()
+
+    with TestClient(app) as client:
+        confirmed = client.post(
+            f"/api/v1/shelf-image-detections/{data['detection_id']}/reviews",
+            json={"decision": "CONFIRMED"},
+        )
+        corrected = client.post(
+            f"/api/v1/shelf-image-detections/{data['detection_id']}/reviews",
+            json={
+                "decision": "CORRECTED",
+                "selected_product_id": data["proposed_product_id"],
+            },
+        )
+
+        assert confirmed.status_code == 422
+        assert corrected.status_code == 422
+
+    with TestingSession() as db:
+        assert db.query(models.DetectionSkuReview).filter(
+            models.DetectionSkuReview.detection_id == data["detection_id"]
+        ).count() == 0

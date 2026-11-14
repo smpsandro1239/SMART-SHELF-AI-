@@ -1021,3 +1021,55 @@ def test_supervisor_cannot_upload_image_to_foreign_store_shelf(monkeypatch, tmp_
         assert db.query(models.ShelfImage).filter(
             models.ShelfImage.shelf_id == foreign_shelf_id
         ).count() == 1
+
+
+
+def test_fusion_suppresses_inactive_visual_and_cached_ocr_candidates():
+    image_id, detection_id = create_image_with_detection()
+    with TestingSession() as db:
+        product = models.Product(
+            sku="OCR-RETIRED-01",
+            name="Produto desativado",
+            is_active=True,
+        )
+        db.add(product)
+        db.flush()
+        product_id = product.id
+        detection = db.get(models.ShelfImageDetection, detection_id)
+        detection.product_id = product_id
+        detection.sku_match_status = "MATCHED"
+        detection.sku_similarity = 0.97
+        run = models.ShelfImageOCRRun(
+            shelf_image_id=image_id,
+            provider="mock-ocr",
+            model_version="ocr-v1",
+            status="COMPLETED",
+        )
+        db.add(run)
+        db.flush()
+        db.add(models.ShelfImageOCRMatch(
+            run_id=run.id,
+            detection_id=detection_id,
+            suggested_product_id=product_id,
+            observed_text="Produto desativado",
+            ocr_confidence=0.98,
+            status="SUGGESTED",
+            top_score=0.99,
+            margin=0.2,
+            candidates=[{"product_id": product_id, "score": 0.99, "reasons": ["name"]}],
+        ))
+        product.is_active = False
+        db.commit()
+
+    with TestClient(app) as client:
+        response = client.post(f"/api/v1/shelf-images/{image_id}/evidence-fusion")
+
+    assert response.status_code == 200
+    assert len(response.json()) == 1
+    fused = response.json()[0]
+    assert fused["status"] == "UNKNOWN"
+    assert fused["suggested_product_id"] is None
+    assert fused["visual_product_id"] is None
+    assert fused["text_product_id"] is None
+    assert fused["visual_status"] == "UNKNOWN"
+    assert fused["text_status"] == "UNKNOWN"

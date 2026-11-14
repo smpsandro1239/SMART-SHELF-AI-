@@ -159,3 +159,16 @@ catálogo, inclui apenas produtos ativos e mantém o bloqueio das linhas de
 produto durante a transação de matching. Assim, exemplares historicamente
 aprovados deixam de gerar previsões quando o respetivo SKU é desativado. A
 desativação não apaga o histórico de revisão nem os exemplares.
+
+
+## Consistência entre catálogo, revisão e fusão
+
+As decisões humanas sobre deteções bloqueiam o SKU selecionado antes da imagem
+de origem e revalidam ambos os estados antes de gravar a decisão. A criação e
+revisão de exemplares segue a mesma ordem de locks do matching
+(catálogo → imagem → exemplar), reduzindo o risco de deadlocks com o worker e
+com a retenção. A fusão recém-gerada volta a validar os IDs visuais e OCR contra
+o catálogo ativo sob bloqueio; sugestões de produtos entretanto desativados
+são convertidas em evidência `UNKNOWN`, sem apagar os registos OCR ou visuais
+originais. A avaliação histórica mantém os IDs e as decisões humanas originais:
+desativar um produto não reescreve a verdade operacional registada no passado.

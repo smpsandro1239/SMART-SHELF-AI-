@@ -1299,15 +1299,59 @@ def fuse_shelf_image_evidence(image_id: int, request: Request, db: Session = Dep
         .filter(models.ShelfImageDetection.shelf_image_id == image_id)
         .order_by(models.ShelfImageDetection.id.asc()).all()
     )
+
+    candidate_product_ids = {
+        detection.product_id
+        for detection in detections
+        if detection.sku_match_status == "MATCHED" and detection.product_id is not None
+    }
+    for text_row in text_rows.values():
+        if text_row.suggested_product_id is not None:
+            candidate_product_ids.add(text_row.suggested_product_id)
+        candidate_product_ids.update(
+            int(candidate["product_id"])
+            for candidate in (text_row.candidates or [])
+            if isinstance(candidate, dict) and candidate.get("product_id") is not None
+        )
+    active_products = (
+        db.query(models.Product)
+        .filter(models.Product.id.in_(sorted(candidate_product_ids)))
+        .order_by(models.Product.id)
+        .with_for_update()
+        .populate_existing()
+        .all()
+        if candidate_product_ids else []
+    )
+    active_product_ids = {product.id for product in active_products if product.is_active}
+
+    # Lock the image only after candidate products, matching the global
+    # catalogue -> source-image order. Retention may win first; if so, abort.
+    image_record = (
+        db.query(models.ShelfImage)
+        .filter(models.ShelfImage.id == image_id)
+        .with_for_update()
+        .populate_existing()
+        .first()
+    )
+    if image_record is None:
+        raise HTTPException(status_code=404, detail="Shelf image not found")
+    _require_active_shelf_image(image_record)
+
     results = []
     for detection in detections:
         text_row = text_rows.get(detection.id)
         visual_status = detection.sku_match_status or "UNKNOWN"
+        visual_product_id = (
+            detection.product_id
+            if visual_status == "MATCHED" and detection.product_id in active_product_ids
+            else None
+        )
+        effective_visual_status = visual_status if visual_product_id is not None else "UNKNOWN"
         visual = ProductMatch(
-            status=visual_status,
-            product_id=detection.product_id if visual_status == "MATCHED" else None,
-            similarity=detection.sku_similarity,
-            margin=detection.sku_match_margin,
+            status=effective_visual_status,
+            product_id=visual_product_id,
+            similarity=detection.sku_similarity if visual_product_id is not None else None,
+            margin=detection.sku_match_margin if visual_product_id is not None else None,
             candidates=(),
         )
         if text_row is None:
@@ -1322,12 +1366,23 @@ def fuse_shelf_image_evidence(image_id: int, request: Request, db: Session = Dep
                 )
                 for item in (text_row.candidates or [])
             )
+            text_product_id = (
+                text_row.suggested_product_id
+                if text_row.suggested_product_id in active_product_ids
+                else None
+            )
+            effective_text_status = (
+                text_row.status if text_product_id is not None else "UNKNOWN"
+            )
             text = TextMatch(
-                status=text_row.status,
-                product_id=text_row.suggested_product_id,
-                score=text_row.top_score,
-                margin=text_row.margin,
-                candidates=candidates,
+                status=effective_text_status,
+                product_id=text_product_id,
+                score=text_row.top_score if text_product_id is not None else None,
+                margin=text_row.margin if text_product_id is not None else None,
+                candidates=tuple(
+                    candidate for candidate in candidates
+                    if candidate.product_id in active_product_ids
+                ),
             )
             ocr = OCRText(text=text_row.observed_text or "sem texto", confidence=text_row.ocr_confidence) if (text_row.observed_text or "").strip() else None
             if ocr is None:
@@ -1739,7 +1794,6 @@ def create_detection_sku_review(
         raise HTTPException(status_code=404, detail="Shelf image not found")
     actor = _request_user(db, request)
     _enforce_store_scope(actor, _shelf_image_store_id(db, image_record.id))
-    _require_active_shelf_image(image_record)
 
     selected_product_id = payload.selected_product_id
     if payload.decision == "CONFIRMED" and selected_product_id is None:
@@ -1751,15 +1805,34 @@ def create_detection_sku_review(
     if payload.decision in {"CONFIRMED", "CORRECTED"}:
         if selected_product_id is None:
             raise HTTPException(status_code=422, detail="There is no proposed SKU to confirm")
-        product = db.get(models.Product, selected_product_id)
+        # Match the SKU-review lock order used by embedding matching:
+        # product first, then the source image. This serializes review against
+        # product deactivation and image-retention transitions.
+        product = (
+            db.query(models.Product)
+            .filter(models.Product.id == selected_product_id)
+            .with_for_update()
+            .populate_existing()
+            .first()
+        )
         if product is None or not product.is_active:
             raise HTTPException(status_code=422, detail="Selected product must exist and be active")
-        assigned = db.query(models.ShelfProduct.id).filter(
             models.ShelfProduct.shelf_id == image_record.shelf_id,
             models.ShelfProduct.product_id == selected_product_id,
         ).first()
         if assigned is None:
             raise HTTPException(status_code=422, detail="Selected product is not assigned to the detected shelf")
+
+    image_record = (
+        db.query(models.ShelfImage)
+        .filter(models.ShelfImage.id == detection.shelf_image_id)
+        .with_for_update()
+        .populate_existing()
+        .first()
+    )
+    if image_record is None:
+        raise HTTPException(status_code=404, detail="Shelf image not found")
+    _require_active_shelf_image(image_record)
 
     review = models.DetectionSkuReview(
         detection_id=detection.id,
@@ -1849,7 +1922,13 @@ def create_product_embedding_exemplar(
         raise HTTPException(status_code=404, detail="Active product not found")
     actor = _request_user(db, request)
     if payload.shelf_image_id is not None:
-        source_image = db.get(models.ShelfImage, payload.shelf_image_id)
+        source_image = (
+            db.query(models.ShelfImage)
+            .filter(models.ShelfImage.id == payload.shelf_image_id)
+            .with_for_update()
+            .populate_existing()
+            .first()
+        )
         if source_image is None:
             raise HTTPException(status_code=404, detail="Source shelf image not found")
         _enforce_store_scope(actor, _shelf_image_store_id(db, source_image.id))
@@ -1939,8 +2018,38 @@ def review_product_embedding_exemplar(
     db: Session = Depends(get_db),
 ):
     """Approve or reject a pending exemplar with reviewer attribution."""
-    # Serialize competing review decisions. A second reviewer must observe
-    # the committed decision and receive 409 rather than overwrite it.
+    # Use the same lock order as matching: catalogue product, source image,
+    # then exemplar. This prevents a review holding an image while waiting for
+    # a product row that a matching transaction already owns.
+    initial = db.get(models.ProductEmbeddingExemplar, exemplar_id)
+    if initial is None:
+        raise HTTPException(status_code=404, detail="Embedding exemplar not found")
+    product = (
+        db.query(models.Product)
+        .filter(models.Product.id == initial.product_id)
+        .with_for_update()
+        .populate_existing()
+        .first()
+    )
+    if product is None:
+        raise HTTPException(status_code=409, detail="Exemplar product no longer exists")
+    actor = _request_user(db, request)
+    source_image = None
+    if initial.shelf_image_id is not None:
+        source_image = (
+            db.query(models.ShelfImage)
+            .filter(models.ShelfImage.id == initial.shelf_image_id)
+            .with_for_update()
+            .populate_existing()
+            .first()
+        )
+        if source_image is None:
+            raise HTTPException(status_code=410, detail="Source shelf image is no longer available")
+        _enforce_store_scope(actor, _shelf_image_store_id(db, initial.shelf_image_id))
+        _require_active_shelf_image(source_image)
+
+    # Lock and refresh the exemplar last, so a concurrent reviewer sees the
+    # first review's committed status and receives HTTP 409.
     item = (
         db.query(models.ProductEmbeddingExemplar)
         .filter(models.ProductEmbeddingExemplar.id == exemplar_id)
@@ -1950,22 +2059,9 @@ def review_product_embedding_exemplar(
     )
     if item is None:
         raise HTTPException(status_code=404, detail="Embedding exemplar not found")
-    actor = _request_user(db, request)
-    if item.shelf_image_id is not None:
-        # Retention operations lock this same image row. Refresh it under lock
-        # so approval cannot rely on a stale ACTIVE value.
-        source_image = (
-            db.query(models.ShelfImage)
-            .filter(models.ShelfImage.id == item.shelf_image_id)
-            .with_for_update()
-            .populate_existing()
-            .first()
-        )
-        if source_image is None:
-            raise HTTPException(status_code=410, detail="Source shelf image is no longer available")
-        _enforce_store_scope(actor, _shelf_image_store_id(db, item.shelf_image_id))
-        _require_active_shelf_image(source_image)
-    elif actor is not None and actor.role != "ADMIN" and item.created_by_user_id != actor.id:
+    if item.product_id != initial.product_id or item.shelf_image_id != initial.shelf_image_id:
+        raise HTTPException(status_code=409, detail="Exemplar source changed; retry the review")
+    if source_image is None and actor is not None and actor.role != "ADMIN" and item.created_by_user_id != actor.id:
         raise HTTPException(status_code=403, detail="Access to this exemplar is not allowed")
     if actor is not None and actor.role != "ADMIN" and item.created_by_user_id == actor.id:
         raise HTTPException(
@@ -1974,17 +2070,8 @@ def review_product_embedding_exemplar(
         )
     if item.review_status != "PENDING":
         raise HTTPException(status_code=409, detail="Only pending exemplars can be reviewed")
-    # Serialize approval against catalogue deactivation. Rejection remains
-    # available so pending references for retired products can be closed.
-    product = (
-        db.query(models.Product)
-        .filter(models.Product.id == item.product_id)
-        .with_for_update()
-        .populate_existing()
-        .first()
-    )
-    if product is None:
-        raise HTTPException(status_code=409, detail="Exemplar product no longer exists")
+    # Product was locked before the source image and exemplar above.
+    # Rejection remains available for pending references of retired products.
     if payload.review_status == "APPROVED" and not product.is_active:
         raise HTTPException(
             status_code=409,

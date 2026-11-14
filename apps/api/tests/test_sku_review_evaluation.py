@@ -209,3 +209,23 @@ def test_database_report_excludes_restricted_images(db):
     assert report["sample_count"] == 0
     assert report["latest_review_count"] == 0
     assert report["reviewed_detections_without_matching_fusion"] == 0
+
+
+
+def test_historical_review_evaluation_preserves_ground_truth_after_product_deactivation(db):
+    session, store_id, product_a_id, product_b_id = db
+    product_a = session.get(models.Product, product_a_id)
+    product_b = session.get(models.Product, product_b_id)
+    product_a.is_active = False
+    product_b.is_active = False
+    session.flush()
+
+    report = build_reviewed_prediction_report(session, store_id=store_id)
+
+    # Deactivation changes current matching eligibility, not the historical
+    # meaning of a human decision recorded before the catalogue change.
+    assert report["sample_count"] == 3
+    assert report["correct_matches"] == 0
+    assert report["incorrect_known_matches"] == 1
+    assert report["false_accepts_on_rejected_detections"] == 1
+    assert report["missed_known_products"] == 1
