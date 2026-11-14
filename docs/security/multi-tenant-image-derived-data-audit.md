@@ -108,3 +108,20 @@ O teste `test_supervisor_jwt_cannot_access_foreign_ocr_or_retry_restricted_image
 - criação de execuções OCR, matching OCR com persistência, fusão visual/OCR com persistência, repetição da análise e submissão de revisão humana.
 
 O teste confirma ainda que uma listagem com filtro explícito para a prateleira estrangeira devolve uma lista vazia, sem revelar a existência da imagem. Antes e depois das tentativas, compara contagens de execuções OCR, evidência OCR, matches, evidência fundida e revisões humanas; nenhuma escrita recusada pode criar registos. A validação é HTTP/JWT sobre SQLite isolado; o smoke PostgreSQL existente valida outros fluxos, não estes handlers individualmente. A auditoria global mantém-se aberta.
+
+
+## Matching de embeddings — serialização com retenção
+
+A construção do registo de matching foi reforçada para bloquear, com
+`SELECT FOR UPDATE`, cada imagem de origem associada a exemplares aprovados.
+O estado `ACTIVE` é revalidado depois de adquirir os bloqueios e estes mantêm-se
+até ao fim da transação do worker. A operação de restrição já bloqueia a mesma
+linha de `shelf_images`, pelo que a restrição e a utilização do exemplar ficam
+serializadas em PostgreSQL.
+
+Foi acrescentado um teste de regressão que confirma que um exemplar ligado a
+uma imagem ativa pode ser usado e deixa de ser elegível depois de a imagem passar
+a `RESTRICTED`. Este teste é sequencial e usa SQLite; não prova a concorrência
+real de bloqueios. Falta um teste concorrente PostgreSQL que intercale o
+matching com a restrição e confirme a ordem de bloqueio e a ausência de uso
+posterior à restrição.

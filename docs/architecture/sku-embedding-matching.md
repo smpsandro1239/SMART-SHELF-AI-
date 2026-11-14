@@ -94,3 +94,22 @@ Antes de selecionar thresholds para o worker, usar o avaliador offline e a grelh
 ## Filas, frentes visíveis e OCR auxiliar
 
 A localização geométrica das deteções e o contrato de OCR auxiliar estão documentados em [Filas, frentes visíveis e OCR](shelf-layout-and-product-text.md). Estes módulos ainda não estão ligados ao worker de produção.
+
+
+## Concorrência com retenção da imagem de origem
+
+Ao construir o registo de matching, o serviço identifica os exemplares aprovados
+que apontam para imagens capturadas na plataforma e bloqueia as linhas dessas
+imagens com `SELECT ... FOR UPDATE`, revalidando `retention_status = ACTIVE`
+depois de adquirir o bloqueio. O bloqueio mantém-se até ao commit/rollback da
+transação do worker. Como a operação de restrição também bloqueia a linha da
+imagem, a restrição e o uso do exemplar ficam serializados: se a restrição
+ganhar primeiro, o exemplar não entra no registo; se o matching adquirir o
+bloqueio primeiro, a restrição aguarda a conclusão dessa transação.
+
+Exemplares sem `shelf_image_id` continuam permitidos para referências externas
+com licença declarada. A retenção de uma captura não pode ser inferida para
+essas referências desligadas; a sua elegibilidade depende da licença e da
+governação da fonte. A validação sequencial de regressão usa SQLite, que não
+implementa bloqueios de linha equivalentes aos do PostgreSQL. A garantia de
+serialização concorrente deve ser confirmada em PostgreSQL antes de produção.

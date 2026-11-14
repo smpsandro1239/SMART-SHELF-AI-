@@ -234,3 +234,12 @@ O teste JWT `test_supervisor_review_queue_and_summary_are_scoped_to_own_store` s
 - as consultas não criam, alteram nem removem evidências.
 
 O teste usa SQLite isolado e prova o contrato HTTP/tenant-scope. Não substitui uma validação PostgreSQL específica destes dois endpoints.
+
+
+## Retenção de imagens de referência do matching SKU
+
+O serviço que carrega exemplares aprovados bloqueia as imagens de origem
+associadas e revalida o estado `ACTIVE` sob o bloqueio. A rota de restrição
+bloqueia a mesma linha, o que serializa ambas as operações em PostgreSQL. O
+teste sequencial em SQLite confirma a exclusão de exemplares cuja imagem passou
+a `RESTRICTED`; não substitui um teste de concorrência PostgreSQL.

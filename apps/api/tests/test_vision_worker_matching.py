@@ -499,3 +499,62 @@ def test_worker_rejects_symlinked_store_or_nested_directory(
     stored_image = db.get(models.ShelfImage, image_id)
     assert stored_image.analysis_status == "FAILED"
     assert stored_image.analysis_error == "FileNotFoundError: processing failed"
+
+
+
+def test_worker_excludes_exemplar_when_its_source_image_is_restricted(db):
+    store = models.Store(code="EMBED-RETENTION", name="Embedding retention")
+    db.add(store)
+    db.flush()
+    zone = models.Zone(store_id=store.id, name="Zona")
+    db.add(zone)
+    db.flush()
+    shelf = models.Shelf(zone_id=zone.id, code="EMBED-01")
+    db.add(shelf)
+    db.flush()
+    source_image = models.ShelfImage(
+        shelf_id=shelf.id,
+        original_filename="reference.jpg",
+        storage_path="/tmp/reference.jpg",
+        mime_type="image/jpeg",
+        file_size_bytes=10,
+        sha256="e" * 64,
+        retention_status="ACTIVE",
+    )
+    db.add(source_image)
+    db.flush()
+    exemplar = models.ProductEmbeddingExemplar(
+        product_id=db.info["product_id"],
+        shelf_image_id=source_image.id,
+        embedding=[1.0, 0.0, 0.0],
+        embedding_dimension=3,
+        model_version="embed-v1",
+        image_sha256="e" * 64,
+        licence="store-owned-test-image",
+        review_status="APPROVED",
+        reviewed_by_user_id=db.info["reviewer_id"],
+        reviewed_at=models.utc_now(),
+    )
+    db.add(exemplar)
+    db.flush()
+
+    detection = DetectionResult(
+        label="product",
+        confidence=0.9,
+        x_min=0.1,
+        y_min=0.1,
+        x_max=0.8,
+        y_max=0.8,
+        embedding=[1.0, 0.0, 0.0],
+        embedding_model_version="embed-v1",
+    )
+    active_result = resolve_sku_match(db, detection, {})
+    assert active_result["status"] == "MATCHED"
+    assert active_result["product_id"] == db.info["product_id"]
+
+    source_image.retention_status = "RESTRICTED"
+    db.flush()
+    restricted_result = resolve_sku_match(db, detection, {})
+
+    assert restricted_result["status"] == "UNKNOWN"
+    assert restricted_result["product_id"] is None
