@@ -1996,3 +1996,52 @@ def test_supervisor_review_queue_and_summary_are_scoped_to_own_store(auth_client
         assert db.query(models.ShelfImageFusedEvidence).count() == 2
         assert db.get(models.ShelfImageFusedEvidence, evidence_a_id) is not None
         assert db.get(models.ShelfImageFusedEvidence, evidence_b_id) is not None
+
+
+def test_supervisor_can_create_and_close_capture_session_in_own_store(auth_client):
+    client, ids, store_ids = auth_client
+    headers = bearer(ids["supervisor_a"], "SUPERVISOR")
+
+    created = client.post(
+        "/api/v1/capture-sessions",
+        json={
+            "shelf_id": ids["shelf_a_assigned"],
+            "source_type": "mobile",
+            "source_device_id": "supervisor-security-test",
+            "capture_mode": "burst",
+        },
+        headers=headers,
+    )
+
+    assert created.status_code == 201, created.text
+    created_payload = created.json()
+    assert created_payload["store_id"] == store_ids["a"]
+    assert created_payload["shelf_id"] == ids["shelf_a_assigned"]
+    assert created_payload["created_by_user_id"] == ids["supervisor_a"]
+    assert created_payload["source_type"] == "mobile"
+    assert created_payload["source_device_id"] == "supervisor-security-test"
+    assert created_payload["capture_mode"] == "burst"
+    assert created_payload["started_at"] is not None
+    assert created_payload["ended_at"] is None
+
+    closed = client.post(
+        f"/api/v1/capture-sessions/{created_payload['id']}/close",
+        headers=headers,
+    )
+
+    assert closed.status_code == 200, closed.text
+    closed_payload = closed.json()
+    assert closed_payload["id"] == created_payload["id"]
+    assert closed_payload["store_id"] == store_ids["a"]
+    assert closed_payload["shelf_id"] == ids["shelf_a_assigned"]
+    assert closed_payload["created_by_user_id"] == ids["supervisor_a"]
+    assert closed_payload["started_at"] == created_payload["started_at"]
+    assert closed_payload["ended_at"] is not None
+
+    with main_module.SessionLocal() as db:
+        persisted = db.get(models.CaptureSession, created_payload["id"])
+        assert persisted is not None
+        assert persisted.store_id == store_ids["a"]
+        assert persisted.shelf_id == ids["shelf_a_assigned"]
+        assert persisted.created_by_user_id == ids["supervisor_a"]
+        assert persisted.ended_at is not None
