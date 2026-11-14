@@ -6,6 +6,48 @@ from app import models
 from app.product_matching import ProductEmbeddingRegistry, ProductExemplar
 
 
+
+def lock_matching_source_images(
+    db: Session,
+    *,
+    target_image_id: int,
+    model_versions,
+) -> None:
+    """Lock target and approved exemplar source images in one stable ID order.
+
+    The worker calls this after inference but before locking the target image for
+    persistence. Acquiring the union in ascending primary-key order prevents two
+    workers processing images that are also exemplars from deadlocking while
+    each holds its target and waits for the other's source image.
+    """
+    versions = sorted({version for version in model_versions if version})
+    image_ids = {target_image_id}
+    if versions:
+        source_rows = (
+            db.query(models.ProductEmbeddingExemplar.shelf_image_id)
+            .join(
+                models.User,
+                models.ProductEmbeddingExemplar.reviewed_by_user_id == models.User.id,
+            )
+            .filter(
+                models.ProductEmbeddingExemplar.review_status == "APPROVED",
+                models.ProductEmbeddingExemplar.model_version.in_(versions),
+                models.ProductEmbeddingExemplar.reviewed_at.is_not(None),
+                models.ProductEmbeddingExemplar.shelf_image_id.is_not(None),
+            )
+            .distinct()
+            .all()
+        )
+        image_ids.update(image_id for (image_id,) in source_rows)
+
+    (
+        db.query(models.ShelfImage.id)
+        .filter(models.ShelfImage.id.in_(sorted(image_ids)))
+        .order_by(models.ShelfImage.id)
+        .with_for_update()
+        .all()
+    )
+
 def build_approved_product_registry(
     db: Session,
     *,

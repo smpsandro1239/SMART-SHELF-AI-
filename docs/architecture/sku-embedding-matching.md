@@ -98,10 +98,11 @@ A localização geométrica das deteções e o contrato de OCR auxiliar estão d
 
 ## Concorrência com retenção da imagem de origem
 
-Ao construir o registo de matching, o serviço identifica os exemplares aprovados
-que apontam para imagens capturadas na plataforma e bloqueia as linhas dessas
-imagens com `SELECT ... FOR UPDATE`, revalidando `retention_status = ACTIVE`
-depois de adquirir o bloqueio. O bloqueio mantém-se até ao commit/rollback da
+Ao construir o registo de matching, o worker identifica os exemplares aprovados
+que apontam para imagens capturadas na plataforma e bloqueia, numa única
+operação ordenada por ID, a imagem alvo e todas as imagens de origem relevantes
+com `SELECT ... FOR UPDATE`. O serviço de registo volta a validar
+`retention_status = ACTIVE` depois de adquirir os bloqueios. O bloqueio mantém-se até ao commit/rollback da
 transação do worker. Como a operação de restrição também bloqueia a linha da
 imagem, a restrição e o uso do exemplar ficam serializados: se a restrição
 ganhar primeiro, o exemplar não entra no registo; se o matching adquirir o

@@ -16,7 +16,10 @@ from app.config import settings
 from app.database import SessionLocal
 from app import models
 from app.vision import VisionAnalysis, VisionProviderNotConfigured
-from app.product_embedding_service import build_approved_product_registry
+from app.product_embedding_service import (
+    build_approved_product_registry,
+    lock_matching_source_images,
+)
 from app.product_ocr_association import associate_ocr_regions
 from app.product_text import normalize_product_text
 from app.product_pipeline import process_completed_ocr_run
@@ -196,6 +199,16 @@ def process_next_image(db: Session, provider, ocr_provider=None) -> int | None:
 
         # Linearize retention against derived processing: if restriction committed
         # while inference was running, do not start OCR or persist any detections.
+        lock_matching_source_images(
+            db,
+            target_image_id=image_id,
+            model_versions={
+                detection.embedding_model_version
+                for detection in result.detections
+                if detection.embedding is not None
+                and detection.embedding_model_version
+            },
+        )
         image = (
             db.query(models.ShelfImage)
             .filter(models.ShelfImage.id == image_id)
