@@ -2045,3 +2045,49 @@ def test_supervisor_can_create_and_close_capture_session_in_own_store(auth_clien
         assert persisted.shelf_id == ids["shelf_a_assigned"]
         assert persisted.created_by_user_id == ids["supervisor_a"]
         assert persisted.ended_at is not None
+
+
+def test_catalogue_is_global_but_shelf_product_assignments_are_store_scoped(auth_client):
+    client, ids, _ = auth_client
+    supervisor_headers = bearer(ids["supervisor_a"], "SUPERVISOR")
+    admin_headers = bearer(ids["admin"], "ADMIN")
+
+    supervisor_products = client.get(
+        "/api/v1/products",
+        headers=supervisor_headers,
+    )
+    assert supervisor_products.status_code == 200, supervisor_products.text
+    assert [item["id"] for item in supervisor_products.json()] == [ids["product"]]
+
+    supervisor_assignments = client.get(
+        "/api/v1/shelf-products",
+        headers=supervisor_headers,
+    )
+    assert supervisor_assignments.status_code == 200, supervisor_assignments.text
+    assert len(supervisor_assignments.json()) == 3
+    assert {item["shelf_id"] for item in supervisor_assignments.json()} == {
+        ids["shelf_a_assigned"],
+        ids["shelf_a_unassigned"],
+        ids["shelf_a_peer"],
+    }
+
+    foreign_assignment = client.get(
+        "/api/v1/shelf-products",
+        params={"shelf_id": ids["shelf_b"]},
+        headers=supervisor_headers,
+    )
+    assert foreign_assignment.status_code == 200, foreign_assignment.text
+    assert foreign_assignment.json() == []
+
+    admin_assignments = client.get(
+        "/api/v1/shelf-products",
+        headers=admin_headers,
+    )
+    assert admin_assignments.status_code == 200, admin_assignments.text
+    assert len(admin_assignments.json()) == 4
+    assert {item["shelf_id"] for item in admin_assignments.json()} == {
+        ids["shelf_a_assigned"],
+        ids["shelf_a_unassigned"],
+        ids["shelf_a_peer"],
+        ids["shelf_b"],
+    }
