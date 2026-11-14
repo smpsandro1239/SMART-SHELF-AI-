@@ -200,3 +200,12 @@ Foi acrescentado o teste `test_catalogue_is_global_but_shelf_product_assignments
 A execução do teste HTTP usa SQLite isolado. Não se afirma validação PostgreSQL individual deste endpoint. No mesmo commit, API CI [43608505591](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/43608505591) e Quality Gates [43608505546](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/43608505546) concluíram com sucesso; os smoke tests PostgreSQL existentes também passaram, sem substituir a validação específica do handler.
 
 A auditoria permanece parcial: falta completar a revisão sistemática dos métodos/rotas administrativas, handlers e caminhos indiretos/worker, bem como validar em PostgreSQL os fluxos em que isso é aplicável.
+
+
+## Metadados globais de embalagem — autorização de leitura
+
+O endpoint `GET /api/v1/warehouse/product-packaging` expõe níveis de embalagem ativos associados ao catálogo global de produtos. O teste `test_product_packaging_read_is_global_for_supervisors_and_denied_to_employees`, com JWT real, confirma que SUPERVISOR e ADMIN recebem os mesmos metadados e que níveis inativos são excluídos; EMPLOYEE recebe HTTP 403. A distinção é intencional: embalagem define unidades logísticas do produto, enquanto localizações, colocações e paletes são recursos operacionais com âmbito de loja.
+
+A validação passou no API CI [43609023974](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/43609023974) e Quality Gates [43609023990](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/43609023990), no commit `4cf0f34848cd2beab83d0b12db89888dbdd162d3`. O workflow API concluiu migrações e smoke tests PostgreSQL 16 e a suite completa; Quality Gates passou testes API, compilação Python e build web. A integração HTTP do teste usa SQLite isolado; não se afirma validação PostgreSQL individual deste endpoint.
+
+A cobertura acrescentada não fecha a auditoria global de autorização, nem substitui a revisão de todas as rotas e caminhos indiretos.
