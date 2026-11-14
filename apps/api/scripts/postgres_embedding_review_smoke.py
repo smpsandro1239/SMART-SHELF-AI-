@@ -5,7 +5,7 @@ from uuid import uuid4
 
 from fastapi.testclient import TestClient
 
-from app import models
+from app import main as main_module, models
 from app.database import SessionLocal
 from app.main import app
 from app.security import create_access_token
@@ -98,29 +98,36 @@ def main() -> None:
             )
         return decision, response.status_code, response.json()
 
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        futures = [
-            executor.submit(submit_review, reviewer_a_id, "APPROVED"),
-            executor.submit(submit_review, reviewer_b_id, "REJECTED"),
-        ]
-        results = [future.result(timeout=20) for future in futures]
+    original_settings = main_module.settings
+    main_module.settings = original_settings.model_copy(
+        update={"app_env": "production"}
+    )
+    try:
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            futures = [
+                executor.submit(submit_review, reviewer_a_id, "APPROVED"),
+                executor.submit(submit_review, reviewer_b_id, "REJECTED"),
+            ]
+            results = [future.result(timeout=20) for future in futures]
 
-    successful = [item for item in results if item[1] == 200]
-    conflicts = [item for item in results if item[1] == 409]
-    assert len(successful) == 1, results
-    assert len(conflicts) == 1, results
-    winning_decision = successful[0][0]
-    assert successful[0][2]["review_status"] == winning_decision
+        successful = [item for item in results if item[1] == 200]
+        conflicts = [item for item in results if item[1] == 409]
+        assert len(successful) == 1, results
+        assert len(conflicts) == 1, results
+        winning_decision = successful[0][0]
+        assert successful[0][2]["review_status"] == winning_decision
 
-    with SessionLocal() as db:
-        stored = db.get(models.ProductEmbeddingExemplar, exemplar_id)
-        assert stored is not None
-        assert stored.review_status == winning_decision
-        expected_reviewer_id = (
-            reviewer_a_id if winning_decision == "APPROVED" else reviewer_b_id
-        )
-        assert stored.reviewed_by_user_id == expected_reviewer_id
-        assert stored.reviewed_at is not None
+        with SessionLocal() as db:
+            stored = db.get(models.ProductEmbeddingExemplar, exemplar_id)
+            assert stored is not None
+            assert stored.review_status == winning_decision
+            expected_reviewer_id = (
+                reviewer_a_id if winning_decision == "APPROVED" else reviewer_b_id
+            )
+            assert stored.reviewed_by_user_id == expected_reviewer_id
+            assert stored.reviewed_at is not None
+    finally:
+        main_module.settings = original_settings
 
     print(
         "PostgreSQL embedding review concurrency smoke passed: "
