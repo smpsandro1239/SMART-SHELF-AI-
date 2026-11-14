@@ -567,6 +567,34 @@ def test_supervisor_cannot_access_foreign_retention_or_use_admin_restore(auth_cl
     assert admin_history.json()[0]["reason"] == "Pedido de privacidade"
 
 
+def test_supervisor_cannot_restore_restricted_image_even_in_own_store(auth_client):
+    client, ids, _ = auth_client
+    admin_headers = bearer(ids["admin"], "ADMIN")
+    supervisor_headers = bearer(ids["supervisor_a"], "SUPERVISOR")
+    image_id = ids["image_a"]
+    base = f"/api/v1/shelf-images/{image_id}/retention"
+
+    restricted = client.post(
+        f"{base}/restrict",
+        json={"reason": "Restrição administrativa para validar o limite de função"},
+        headers=admin_headers,
+    )
+    assert restricted.status_code == 200, restricted.text
+    assert restricted.json()["retention_status"] == "RESTRICTED"
+
+    restore = client.post(
+        f"{base}/restore",
+        json={"reason": "Tentativa de restauro por supervisor da própria loja"},
+        headers=supervisor_headers,
+    )
+    assert restore.status_code == 403, restore.text
+
+    history = client.get(f"{base}/events", headers=admin_headers)
+    assert history.status_code == 200, history.text
+    assert [event["event_type"] for event in history.json()] == ["RESTRICTED"]
+    assert history.json()[0]["reason"] == "Restrição administrativa para validar o limite de função"
+
+
 def test_supervisor_can_restrict_image_in_own_store_with_audit_event(auth_client):
     client, ids, _ = auth_client
 
