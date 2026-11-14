@@ -1313,19 +1313,8 @@ def fuse_shelf_image_evidence(image_id: int, request: Request, db: Session = Dep
             for candidate in (text_row.candidates or [])
             if isinstance(candidate, dict) and candidate.get("product_id") is not None
         )
-    active_products = (
-        db.query(models.Product)
-        .filter(models.Product.id.in_(sorted(candidate_product_ids)))
-        .order_by(models.Product.id)
-        .with_for_update()
-        .populate_existing()
-        .all()
-        if candidate_product_ids else []
-    )
-    active_product_ids = {product.id for product in active_products if product.is_active}
-
-    # Lock the image only after candidate products, matching the global
-    # catalogue -> source-image order. Retention may win first; if so, abort.
+    # The worker and retention lifecycle lock source images before products.
+    # Revalidate the image first, then lock candidate catalogue rows in ID order.
     image_record = (
         db.query(models.ShelfImage)
         .filter(models.ShelfImage.id == image_id)
@@ -1336,6 +1325,16 @@ def fuse_shelf_image_evidence(image_id: int, request: Request, db: Session = Dep
     if image_record is None:
         raise HTTPException(status_code=404, detail="Shelf image not found")
     _require_active_shelf_image(image_record)
+    active_products = (
+        db.query(models.Product)
+        .filter(models.Product.id.in_(sorted(candidate_product_ids)))
+        .order_by(models.Product.id)
+        .with_for_update()
+        .populate_existing()
+        .all()
+        if candidate_product_ids else []
+    )
+    active_product_ids = {product.id for product in active_products if product.is_active}
 
     results = []
     for detection in detections:
@@ -1805,9 +1804,17 @@ def create_detection_sku_review(
     if payload.decision in {"CONFIRMED", "CORRECTED"}:
         if selected_product_id is None:
             raise HTTPException(status_code=422, detail="There is no proposed SKU to confirm")
-        # Match the SKU-review lock order used by embedding matching:
-        # product first, then the source image. This serializes review against
-        # product deactivation and image-retention transitions.
+        # Lock order follows the vision worker: source image, then SKU.
+        image_record = (
+            db.query(models.ShelfImage)
+            .filter(models.ShelfImage.id == detection.shelf_image_id)
+            .with_for_update()
+            .populate_existing()
+            .first()
+        )
+        if image_record is None:
+            raise HTTPException(status_code=404, detail="Shelf image not found")
+        _require_active_shelf_image(image_record)
         product = (
             db.query(models.Product)
             .filter(models.Product.id == selected_product_id)
@@ -1824,16 +1831,17 @@ def create_detection_sku_review(
         if assigned is None:
             raise HTTPException(status_code=422, detail="Selected product is not assigned to the detected shelf")
 
-    image_record = (
-        db.query(models.ShelfImage)
-        .filter(models.ShelfImage.id == detection.shelf_image_id)
-        .with_for_update()
-        .populate_existing()
-        .first()
-    )
-    if image_record is None:
-        raise HTTPException(status_code=404, detail="Shelf image not found")
-    _require_active_shelf_image(image_record)
+    if payload.decision == "REJECTED":
+        image_record = (
+            db.query(models.ShelfImage)
+            .filter(models.ShelfImage.id == detection.shelf_image_id)
+            .with_for_update()
+            .populate_existing()
+            .first()
+        )
+        if image_record is None:
+            raise HTTPException(status_code=404, detail="Shelf image not found")
+        _require_active_shelf_image(image_record)
 
     review = models.DetectionSkuReview(
         detection_id=detection.id,
@@ -1910,17 +1918,8 @@ def create_product_embedding_exemplar(
     db: Session = Depends(get_db),
 ):
     """Register a reference embedding as PENDING; it is not used for matching yet."""
-    # Hold the catalogue row until the pending exemplar is committed. This
-    # prevents a concurrent product deactivation from racing its creation.
-    product = (
-        db.query(models.Product)
-        .filter(models.Product.id == payload.product_id)
-        .with_for_update()
-        .populate_existing()
-        .first()
-    )
-    if product is None or not product.is_active:
-        raise HTTPException(status_code=404, detail="Active product not found")
+    # Match the worker's global lock order: source image, then catalogue.
+    # This serializes creation against retention and product deactivation.
     actor = _request_user(db, request)
     if payload.shelf_image_id is not None:
         source_image = (
@@ -1934,6 +1933,15 @@ def create_product_embedding_exemplar(
             raise HTTPException(status_code=404, detail="Source shelf image not found")
         _enforce_store_scope(actor, _shelf_image_store_id(db, source_image.id))
         _require_active_shelf_image(source_image)
+    product = (
+        db.query(models.Product)
+        .filter(models.Product.id == payload.product_id)
+        .with_for_update()
+        .populate_existing()
+        .first()
+    )
+    if product is None or not product.is_active:
+        raise HTTPException(status_code=404, detail="Active product not found")
         if source_image.sha256.lower() != payload.image_sha256.lower():
             raise HTTPException(status_code=422, detail="image_sha256 does not match source shelf image")
     item = models.ProductEmbeddingExemplar(
@@ -2019,21 +2027,11 @@ def review_product_embedding_exemplar(
     db: Session = Depends(get_db),
 ):
     """Approve or reject a pending exemplar with reviewer attribution."""
-    # Use the same lock order as matching: catalogue product, source image,
-    # then exemplar. This prevents a review holding an image while waiting for
-    # a product row that a matching transaction already owns.
+    # Follow the worker's lock order: source image, catalogue product,
+    # exemplar. This prevents inversion with matching's prelocked image set.
     initial = db.get(models.ProductEmbeddingExemplar, exemplar_id)
     if initial is None:
         raise HTTPException(status_code=404, detail="Embedding exemplar not found")
-    product = (
-        db.query(models.Product)
-        .filter(models.Product.id == initial.product_id)
-        .with_for_update()
-        .populate_existing()
-        .first()
-    )
-    if product is None:
-        raise HTTPException(status_code=409, detail="Exemplar product no longer exists")
     actor = _request_user(db, request)
     source_image = None
     if initial.shelf_image_id is not None:
@@ -2048,6 +2046,15 @@ def review_product_embedding_exemplar(
             raise HTTPException(status_code=410, detail="Source shelf image is no longer available")
         _enforce_store_scope(actor, _shelf_image_store_id(db, initial.shelf_image_id))
         _require_active_shelf_image(source_image)
+    product = (
+        db.query(models.Product)
+        .filter(models.Product.id == initial.product_id)
+        .with_for_update()
+        .populate_existing()
+        .first()
+    )
+    if product is None:
+        raise HTTPException(status_code=409, detail="Exemplar product no longer exists")
 
     # Lock and refresh the exemplar last, so a concurrent reviewer sees the
     # first review's committed status and receives HTTP 409.
