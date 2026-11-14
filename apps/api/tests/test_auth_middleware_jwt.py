@@ -887,11 +887,14 @@ def test_supervisor_jwt_cannot_access_foreign_ocr_or_retry_restricted_image(auth
 def test_employee_jwt_cannot_start_ocr_or_submit_human_sku_reviews(auth_client):
     client, ids, _ = auth_client
     headers = bearer(ids["employee_a"], "EMPLOYEE")
+    image_url = f"/api/v1/shelf-images/{ids['image_a']}"
     ocr_create = client.post(
-        f"/api/v1/shelf-images/{ids['image_a']}/ocr-runs",
+        f"{image_url}/ocr-runs",
         json={"provider": "test-provider", "model_version": "test-v1", "regions": []},
         headers=headers,
     )
+    ocr_match = client.post(f"{image_url}/ocr-matches", headers=headers)
+    evidence_fusion = client.post(f"{image_url}/evidence-fusion", headers=headers)
     review = client.post(
         f"/api/v1/shelf-image-detections/{ids['detection_a']}/reviews",
         json={"decision": "REJECTED", "selected_product_id": None},
@@ -899,6 +902,8 @@ def test_employee_jwt_cannot_start_ocr_or_submit_human_sku_reviews(auth_client):
     )
 
     assert ocr_create.status_code == 403
+    assert ocr_match.status_code == 403
+    assert evidence_fusion.status_code == 403
     assert review.status_code == 403
 
 
