@@ -1614,3 +1614,54 @@ def test_supervisor_jwt_cannot_write_foreign_sales_or_traffic_records(auth_clien
     assert hourly_rows.json() == []
     assert traffic_rows.json() == []
 
+def test_admin_legal_hold_is_idempotent_and_preserves_operational_visibility(auth_client):
+    client, ids, _ = auth_client
+    headers = bearer(ids["admin"], "ADMIN")
+    image_id = ids["image_a"]
+    base = f"/api/v1/shelf-images/{image_id}/retention"
+
+    first_apply = client.post(
+        f"{base}/legal-hold/apply",
+        json={"reason": "Preservar evidência para investigação"},
+        headers=headers,
+    )
+    repeated_apply = client.post(
+        f"{base}/legal-hold/apply",
+        json={"reason": "Repetição idempotente do pedido"},
+        headers=headers,
+    )
+
+    assert first_apply.status_code == 200, first_apply.text
+    assert repeated_apply.status_code == 200, repeated_apply.text
+    assert first_apply.json()["legal_hold"] is True
+    assert repeated_apply.json()["legal_hold"] is True
+    assert first_apply.json()["retention_status"] == "ACTIVE"
+    assert repeated_apply.json()["retention_status"] == "ACTIVE"
+
+    first_release = client.post(
+        f"{base}/legal-hold/release",
+        json={"reason": "Investigação concluída e libertação autorizada"},
+        headers=headers,
+    )
+    repeated_release = client.post(
+        f"{base}/legal-hold/release",
+        json={"reason": "Repetição idempotente da libertação"},
+        headers=headers,
+    )
+
+    assert first_release.status_code == 200, first_release.text
+    assert repeated_release.status_code == 200, repeated_release.text
+    assert first_release.json()["legal_hold"] is False
+    assert repeated_release.json()["legal_hold"] is False
+    assert first_release.json()["retention_status"] == "ACTIVE"
+    assert repeated_release.json()["retention_status"] == "ACTIVE"
+
+    history = client.get(f"{base}/events", headers=headers)
+    assert history.status_code == 200, history.text
+    assert [event["event_type"] for event in history.json()] == [
+        "LEGAL_HOLD_APPLIED",
+        "LEGAL_HOLD_RELEASED",
+    ]
+    assert history.json()[0]["reason"] == "Preservar evidência para investigação"
+    assert history.json()[1]["reason"] == "Investigação concluída e libertação autorizada"
+
