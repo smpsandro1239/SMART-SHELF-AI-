@@ -125,3 +125,14 @@ a `RESTRICTED`. Este teste é sequencial e usa SQLite; não prova a concorrênci
 real de bloqueios. Falta um teste concorrente PostgreSQL que intercale o
 matching com a restrição e confirme a ordem de bloqueio e a ausência de uso
 posterior à restrição.
+
+
+### Prova de bloqueios em PostgreSQL 16
+
+Foi acrescentado o smoke test `postgres_embedding_retention_smoke.py`, integrado
+no API CI. Com duas sessões independentes, o teste observa o waiter de retenção
+em `pg_stat_activity` e verifica `pg_blocking_pids`, confirmando que a
+restrição aguarda o commit do matching que bloqueou a imagem de origem. Depois
+confirma que a imagem fica `RESTRICTED` e que o registo reconstruído exclui o
+exemplar. A cobertura é específica desta serialização; não representa uma
+auditoria concorrente completa de todos os caminhos de dados derivados.

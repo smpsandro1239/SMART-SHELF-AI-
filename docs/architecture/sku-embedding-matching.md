@@ -114,3 +114,16 @@ essas referências desligadas; a sua elegibilidade depende da licença e da
 governação da fonte. A validação sequencial de regressão usa SQLite, que não
 implementa bloqueios de linha equivalentes aos do PostgreSQL. A garantia de
 serialização concorrente deve ser confirmada em PostgreSQL antes de produção.
+
+
+## Prova de concorrência em PostgreSQL
+
+O script `apps/api/scripts/postgres_embedding_retention_smoke.py` executa duas
+transações em sessões independentes: o worker adquire os bloqueios da imagem
+alvo e das referências aprovadas; em paralelo, a operação de retenção tenta
+bloquear a imagem de referência. O teste consulta `pg_stat_activity` e
+`pg_blocking_pids` para confirmar que a segunda transação está efetivamente à
+espera da primeira, liberta o matching e confirma que a restrição termina depois
+do commit. Por fim, constrói um novo registo e confirma que o exemplar restrito
+já não produz correspondência. O script corre no API CI após as migrações
+PostgreSQL 16.
