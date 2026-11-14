@@ -5,7 +5,7 @@ import {
   Store, Truck, UserRound, Warehouse, Check, X, History, Image as ImageIcon,
 } from "lucide-react";
 
-const API_BASE = (import.meta.env.VITE_API_BASE_URL || "http://localhost:8000").replace(/\/$/, "");
+const API_BASE = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
 
 type Role = "ADMIN" | "SUPERVISOR" | "EMPLOYEE";
 type TaskStatus = "PENDING" | "ASSIGNED" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
