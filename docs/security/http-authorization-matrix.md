@@ -115,6 +115,12 @@ Esta cobertura complementa os testes anteriores de snapshots, políticas de fres
 
 Foi acrescentado o teste `test_supervisor_jwt_cannot_write_foreign_sales_or_traffic_records`. Um SUPERVISOR da loja A tenta criar cinco registos válidos na loja B: vendas diárias, vendas horárias, tráfego horário e os dois endpoints de importação em lote. Todos têm de receber HTTP 403. Em seguida, ADMIN consulta os três históricos e o teste confirma que nenhuma das escritas recusadas deixou registos persistidos. O teste usa a data fixa do fixture e referências externas únicas para manter a verificação determinística.
 
+### Validação dos testes cross-store de vendas, previsões e armazém
+
+Os 23 cenários adicionados à suite JWT no commit `39094be` foram executados com sucesso no API CI [43489618791](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/43489618791). O Quality Gates [43489650122](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/43489650122) também passou, incluindo a suite API, compilação Python e build web. Os 18 pedidos de leitura e cinco pedidos de escrita cross-store receberam os resultados de autorização esperados; as escritas recusadas não persistiram registos.
+
+A cobertura da retenção de imagens foi ainda reforçada no commit `09f8d7c`: além de impedir a leitura do histórico e a restrição de uma imagem estrangeira, o teste impede o restauro cross-store e confirma, através de ADMIN, que a tentativa não acrescentou eventos nem alterou o histórico. Este último reforço aguarda CI próprio.
+
 ## Limitações e próximos critérios de fecho
 
 - Expandir os testes JWT para cada método e rota administrativa, incluindo operações de retenção/legal hold, upload e leitura binária, OCR, embeddings e caminhos indiretos do worker. A cobertura de alertas foi ampliada para testar também PATCH e consulta de eventos em alerta estrangeiro (403), além de ACKNOWLEDGED e sequência de auditoria na própria loja; passou no API CI `43455507948` e Quality Gates `43455507915` (commit `8cb99a2`). A cobertura das três vias de criação de tarefas, reconciliação, dashboard, decisões operacionais, analytics, observações, sessões de captura, lotes de vendas/tráfego e fronteiras OCR/embeddings está incluída na suite anteriormente aprovada. A cobertura por endpoint continua incompleta e deve ser fechada de forma sistemática.
