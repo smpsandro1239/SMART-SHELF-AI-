@@ -2078,7 +2078,7 @@ def review_product_embedding_exemplar(
         )
     if item.review_status != "PENDING":
         raise HTTPException(status_code=409, detail="Only pending exemplars can be reviewed")
-    # Product was locked before the source image and exemplar above.
+    # Resource lock order is source image -> product -> exemplar.
     # Rejection remains available for pending references of retired products.
     if payload.review_status == "APPROVED" and not product.is_active:
         raise HTTPException(
