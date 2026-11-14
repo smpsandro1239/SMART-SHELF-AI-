@@ -252,3 +252,10 @@ do exemplar antes de validar PENDING, e bloqueia também a imagem de origem
 antes de validar ACTIVE. As decisões concorrentes são serializadas; uma
 decisão posterior à primeira recebe 409. O smoke test concorrente PostgreSQL
 valida a disputa entre dois revisores ADMIN e confirma a decisão persistida.
+
+
+## Ciclo positivo de sessões de captura — SUPERVISOR
+
+O teste JWT real `test_supervisor_can_create_and_close_capture_session_in_own_store` cobre agora o percurso autorizado completo. Um SUPERVISOR cria uma sessão `mobile` numa prateleira da própria loja (HTTP 201); a resposta e a base de dados confirmam `store_id`, `shelf_id` e `created_by_user_id` correspondentes à identidade autenticada. O mesmo utilizador fecha a sessão (HTTP 200), sendo verificado `ended_at` na resposta e no registo persistido. Esta prova complementa os testes negativos de criação/fecho cross-store e de bloqueio a EMPLOYEE. A suite usa fixture HTTP SQLite; os smoke tests PostgreSQL do workflow validam migrações e outros fluxos operacionais, não este endpoint individual em PostgreSQL.
+
+O teste foi publicado no commit `8c2ed7fafd6f79fe3a0f2ae76afd9b55a42958da` e passou no API CI [43604700291](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/43604700291) e Quality Gates [43604700289](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/43604700289). A cobertura de autorização das sessões de captura fica reforçada, mas não equivale à auditoria integral de todos os endpoints.
