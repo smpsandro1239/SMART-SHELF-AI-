@@ -149,3 +149,13 @@ retenção e gravar a decisão. Isto impede atualizações perdidas entre reviso
 e evita aprovar com base num estado de retenção obsoleto. O novo smoke test
 PostgreSQL postgres_embedding_review_smoke.py disputa APPROVED/REJECTED em
 duas sessões HTTP, esperando um único sucesso e um conflito 409.
+
+
+### Elegibilidade por estado do catálogo
+
+A revisão de exemplares valida o estado atual do produto sob bloqueio de linha.
+Um produto desativado não pode receber novos exemplares nem aprovar referências
+pendentes; estas podem ser rejeitadas para fechar a fila. O registo do worker
+só inclui exemplares aprovados associados a produtos ativos, com bloqueio
+transacional do catálogo durante o matching. A informação histórica é
+preservada e não é apagada quando o produto é desativado.

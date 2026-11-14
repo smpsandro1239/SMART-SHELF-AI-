@@ -463,3 +463,127 @@ def test_restricted_source_image_blocks_embedding_exemplar_access_and_matching(m
             assert exemplar.review_status == "APPROVED"
             assert exemplar.reviewed_by_user_id == reviewer_id
 
+
+
+
+def test_inactive_product_exemplars_are_excluded_from_matching_registry():
+    from app.product_embedding_service import build_approved_product_registry
+
+    with TestClient(app) as client:
+        active_product = client.post(
+            "/api/v1/products",
+            json={"sku": "SKU-ACTIVE-REGISTRY", "name": "Produto ativo"},
+        )
+        inactive_product = client.post(
+            "/api/v1/products",
+            json={"sku": "SKU-INACTIVE-REGISTRY", "name": "Produto desativado"},
+        )
+        assert active_product.status_code == 201
+        assert inactive_product.status_code == 201
+
+        active_exemplar = client.post(
+            "/api/v1/product-embedding-exemplars",
+            json=exemplar_payload(
+                active_product.json()["id"],
+                embedding=[1.0, 0.0, 0.0],
+                image_sha256="1" * 64,
+            ),
+        )
+        inactive_exemplar = client.post(
+            "/api/v1/product-embedding-exemplars",
+            json=exemplar_payload(
+                inactive_product.json()["id"],
+                embedding=[0.0, 1.0, 0.0],
+                image_sha256="2" * 64,
+            ),
+        )
+        assert active_exemplar.status_code == 201
+        assert inactive_exemplar.status_code == 201
+
+        with TestingSession() as db:
+            reviewer = models.User(
+                email="inactive-product-registry-reviewer@example.test",
+                full_name="Embedding reviewer",
+                password_hash="test-only-not-used",
+                role="ADMIN",
+                is_active=True,
+            )
+            db.add(reviewer)
+            db.flush()
+            for exemplar_id in (
+                active_exemplar.json()["id"],
+                inactive_exemplar.json()["id"],
+            ):
+                exemplar = db.get(models.ProductEmbeddingExemplar, exemplar_id)
+                exemplar.review_status = "APPROVED"
+                exemplar.reviewed_by_user_id = reviewer.id
+                exemplar.reviewed_at = models.utc_now()
+            inactive = db.get(models.Product, inactive_product.json()["id"])
+            inactive.is_active = False
+            db.commit()
+
+            registry = build_approved_product_registry(
+                db,
+                model_version="embedding-model-v1",
+                minimum_similarity=0.8,
+                minimum_margin=0.05,
+            )
+            result = registry.match([0.0, 1.0, 0.0])
+
+            assert result.status == "UNKNOWN"
+            assert result.product_id is None
+            assert {
+                exemplar.product_id for exemplar in registry.exemplars
+            } == {active_product.json()["id"]}
+
+
+def test_inactive_product_exemplar_cannot_be_approved_but_can_be_rejected():
+    with TestClient(app) as client:
+        product_id = create_product(client)
+        created = client.post(
+            "/api/v1/product-embedding-exemplars",
+            json=exemplar_payload(product_id),
+        )
+        assert created.status_code == 201
+        exemplar_id = created.json()["id"]
+
+        with TestingSession() as db:
+            product = db.get(models.Product, product_id)
+            product.is_active = False
+            db.commit()
+
+        approval = client.patch(
+            f"/api/v1/product-embedding-exemplars/{exemplar_id}/review",
+            json={"review_status": "APPROVED", "review_notes": "Produto desativado"},
+        )
+        assert approval.status_code == 409
+        assert "Inactive products" in approval.json()["detail"]
+
+        with TestingSession() as db:
+            exemplar = db.get(models.ProductEmbeddingExemplar, exemplar_id)
+            assert exemplar.review_status == "PENDING"
+            assert exemplar.reviewed_at is None
+
+        rejection = client.patch(
+            f"/api/v1/product-embedding-exemplars/{exemplar_id}/review",
+            json={"review_status": "REJECTED", "review_notes": "SKU desativado"},
+        )
+        assert rejection.status_code == 200
+        assert rejection.json()["review_status"] == "REJECTED"
+
+
+def test_inactive_product_cannot_receive_new_embedding_exemplar():
+    with TestClient(app) as client:
+        product_id = create_product(client)
+        with TestingSession() as db:
+            product = db.get(models.Product, product_id)
+            product.is_active = False
+            db.commit()
+
+        response = client.post(
+            "/api/v1/product-embedding-exemplars",
+            json=exemplar_payload(product_id, image_sha256="3" * 64),
+        )
+
+        assert response.status_code == 404
+        assert response.json()["detail"] == "Active product not found"

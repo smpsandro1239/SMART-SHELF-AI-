@@ -1836,7 +1836,15 @@ def create_product_embedding_exemplar(
     db: Session = Depends(get_db),
 ):
     """Register a reference embedding as PENDING; it is not used for matching yet."""
-    product = db.get(models.Product, payload.product_id)
+    # Hold the catalogue row until the pending exemplar is committed. This
+    # prevents a concurrent product deactivation from racing its creation.
+    product = (
+        db.query(models.Product)
+        .filter(models.Product.id == payload.product_id)
+        .with_for_update()
+        .populate_existing()
+        .first()
+    )
     if product is None or not product.is_active:
         raise HTTPException(status_code=404, detail="Active product not found")
     actor = _request_user(db, request)
@@ -1966,6 +1974,22 @@ def review_product_embedding_exemplar(
         )
     if item.review_status != "PENDING":
         raise HTTPException(status_code=409, detail="Only pending exemplars can be reviewed")
+    # Serialize approval against catalogue deactivation. Rejection remains
+    # available so pending references for retired products can be closed.
+    product = (
+        db.query(models.Product)
+        .filter(models.Product.id == item.product_id)
+        .with_for_update()
+        .populate_existing()
+        .first()
+    )
+    if product is None:
+        raise HTTPException(status_code=409, detail="Exemplar product no longer exists")
+    if payload.review_status == "APPROVED" and not product.is_active:
+        raise HTTPException(
+            status_code=409,
+            detail="Inactive products cannot have approved embedding exemplars",
+        )
     item.review_status = payload.review_status
     item.review_notes = payload.review_notes
     item.reviewed_by_user_id = actor.id if actor else None

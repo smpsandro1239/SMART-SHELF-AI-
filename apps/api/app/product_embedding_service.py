@@ -29,7 +29,12 @@ def lock_matching_source_images(
                 models.User,
                 models.ProductEmbeddingExemplar.reviewed_by_user_id == models.User.id,
             )
+            .join(
+                models.Product,
+                models.ProductEmbeddingExemplar.product_id == models.Product.id,
+            )
             .filter(
+                models.Product.is_active.is_(True),
                 models.ProductEmbeddingExemplar.review_status == "APPROVED",
                 models.ProductEmbeddingExemplar.model_version.in_(versions),
                 models.ProductEmbeddingExemplar.reviewed_at.is_not(None),
@@ -69,11 +74,17 @@ def build_approved_product_registry(
             models.User,
             models.ProductEmbeddingExemplar.reviewed_by_user_id == models.User.id,
         )
+        .join(
+            models.Product,
+            models.ProductEmbeddingExemplar.product_id == models.Product.id,
+        )
         .filter(
+            models.Product.is_active.is_(True),
             models.ProductEmbeddingExemplar.review_status == "APPROVED",
             models.ProductEmbeddingExemplar.model_version == model_version,
             models.ProductEmbeddingExemplar.reviewed_at.is_not(None),
         )
+        .with_for_update(of=models.Product)
         .order_by(
             models.ProductEmbeddingExemplar.product_id,
             models.ProductEmbeddingExemplar.id,

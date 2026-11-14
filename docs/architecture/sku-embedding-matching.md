@@ -147,3 +147,15 @@ O script apps/api/scripts/postgres_embedding_review_smoke.py usa dois revisores
 ADMIN e pedidos HTTP concorrentes para o mesmo exemplar. Exige exatamente um
 HTTP 200 e um HTTP 409 e confirma o estado persistido e o revisor vencedor. A
 validação é executada no API CI PostgreSQL 16.
+
+
+## Produtos desativados e elegibilidade de exemplares
+
+O catálogo é a autoridade sobre a elegibilidade operacional do SKU. A criação
+de exemplares e a aprovação humana bloqueiam a linha do produto e revalidam
+`is_active`; uma referência pendente de produto desativado pode ser rejeitada,
+mas não aprovada. A construção do registo de matching faz INNER JOIN ao
+catálogo, inclui apenas produtos ativos e mantém o bloqueio das linhas de
+produto durante a transação de matching. Assim, exemplares historicamente
+aprovados deixam de gerar previsões quando o respetivo SKU é desativado. A
+desativação não apaga o histórico de revisão nem os exemplares.
