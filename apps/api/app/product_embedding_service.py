@@ -6,7 +6,6 @@ from app import models
 from app.product_matching import ProductEmbeddingRegistry, ProductExemplar
 
 
-
 def lock_matching_source_images(
     db: Session,
     *,
@@ -15,10 +14,10 @@ def lock_matching_source_images(
 ) -> None:
     """Lock target and approved exemplar source images in one stable ID order.
 
-    The worker calls this after inference but before locking the target image for
-    persistence. Acquiring the union in ascending primary-key order prevents two
-    workers processing images that are also exemplars from deadlocking while
-    each holds its target and waits for the other's source image.
+    The worker acquires this image lock set before loading the registry. All
+    paths that need more than one resource use the global order
+    source-image -> product -> exemplar. Sorting each resource class prevents
+    two workers from taking the same rows in opposite orders.
     """
     versions = sorted({version for version in model_versions if version})
     image_ids = {target_image_id}
@@ -53,6 +52,7 @@ def lock_matching_source_images(
         .all()
     )
 
+
 def build_approved_product_registry(
     db: Session,
     *,
@@ -60,19 +60,20 @@ def build_approved_product_registry(
     minimum_similarity: float = 0.90,
     minimum_margin: float = 0.05,
 ) -> ProductEmbeddingRegistry:
-    """Load approved exemplars and hold active source images against retention.
+    """Load approved exemplars while serializing against review and retention.
 
-    Source-image rows are locked until the caller commits or rolls back. The
-    retention endpoint takes the same row lock, so a restriction either wins
-    before this query (and the exemplar is excluded) or waits until the current
-    matching transaction finishes. Exemplars without a linked source image
-    remain supported for explicitly licensed, externally supplied references.
+    Lock acquisition follows the shared order: source images by ID, products
+    by ID, then exemplars by ID. The initial candidate read is deliberately
+    unlocked; every eligibility decision is repeated after the corresponding
+    rows have been locked. Locks remain held until the caller commits or rolls
+    back, so a concurrent retention/review cannot invalidate the registry
+    between validation and use.
     """
-    rows = (
-        db.query(models.ProductEmbeddingExemplar, models.User.email)
-        .join(
-            models.User,
-            models.ProductEmbeddingExemplar.reviewed_by_user_id == models.User.id,
+    candidates = (
+        db.query(
+            models.ProductEmbeddingExemplar.id,
+            models.ProductEmbeddingExemplar.product_id,
+            models.ProductEmbeddingExemplar.shelf_image_id,
         )
         .join(
             models.Product,
@@ -84,7 +85,6 @@ def build_approved_product_registry(
             models.ProductEmbeddingExemplar.model_version == model_version,
             models.ProductEmbeddingExemplar.reviewed_at.is_not(None),
         )
-        .with_for_update(of=models.Product)
         .order_by(
             models.ProductEmbeddingExemplar.product_id,
             models.ProductEmbeddingExemplar.id,
@@ -92,24 +92,67 @@ def build_approved_product_registry(
         .all()
     )
 
+    if not candidates:
+        return ProductEmbeddingRegistry(
+            (),
+            model_version=model_version,
+            minimum_similarity=minimum_similarity,
+            minimum_margin=minimum_margin,
+        )
+
     source_image_ids = sorted({
-        exemplar.shelf_image_id
-        for exemplar, _reviewer_email in rows
-        if exemplar.shelf_image_id is not None
+        shelf_image_id
+        for _exemplar_id, _product_id, shelf_image_id in candidates
+        if shelf_image_id is not None
     })
     active_source_image_ids: set[int] = set()
     if source_image_ids:
-        locked_source_images = (
-            db.query(models.ShelfImage.id)
-            .filter(
-                models.ShelfImage.id.in_(source_image_ids),
-                models.ShelfImage.retention_status == "ACTIVE",
-            )
+        source_images = (
+            db.query(models.ShelfImage)
+            .filter(models.ShelfImage.id.in_(source_image_ids))
             .order_by(models.ShelfImage.id)
             .with_for_update()
             .all()
         )
-        active_source_image_ids = {image_id for (image_id,) in locked_source_images}
+        active_source_image_ids = {
+            image.id for image in source_images
+            if image.retention_status == "ACTIVE"
+        }
+
+    product_ids = sorted({product_id for _eid, product_id, _sid in candidates})
+    (
+        db.query(models.Product.id)
+        .filter(models.Product.id.in_(product_ids))
+        .order_by(models.Product.id)
+        .with_for_update()
+        .all()
+    )
+
+    candidate_ids = [exemplar_id for exemplar_id, _pid, _sid in candidates]
+    rows = (
+        db.query(models.ProductEmbeddingExemplar, models.User.email)
+        .join(
+            models.User,
+            models.ProductEmbeddingExemplar.reviewed_by_user_id == models.User.id,
+        )
+        .join(
+            models.Product,
+            models.ProductEmbeddingExemplar.product_id == models.Product.id,
+        )
+        .filter(
+            models.ProductEmbeddingExemplar.id.in_(candidate_ids),
+            models.Product.is_active.is_(True),
+            models.ProductEmbeddingExemplar.review_status == "APPROVED",
+            models.ProductEmbeddingExemplar.model_version == model_version,
+            models.ProductEmbeddingExemplar.reviewed_at.is_not(None),
+        )
+        .order_by(
+            models.ProductEmbeddingExemplar.product_id,
+            models.ProductEmbeddingExemplar.id,
+        )
+        .with_for_update(of=models.ProductEmbeddingExemplar)
+        .all()
+    )
 
     exemplars = [
         ProductExemplar(
