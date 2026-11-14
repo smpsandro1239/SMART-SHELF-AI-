@@ -191,3 +191,12 @@ A validação passou no API CI [43600274027](https://github.com/smpsandro1239/SM
 A cobertura JWT foi completada para o ciclo positivo de gestão de sessões na própria loja através de `test_supervisor_can_create_and_close_capture_session_in_own_store`. O teste cria uma sessão numa prateleira da loja A com token real de SUPERVISOR, verifica que a API atribui a sessão à loja e ao utilizador autenticado e fecha-a através do endpoint próprio. Confirma HTTP 201 na criação, HTTP 200 no fecho e persistência de `ended_at`, sem alterar o âmbito de loja nem o criador. Em conjunto com os testes existentes de acesso estrangeiro (403) e de bloqueio a EMPLOYEE (403), cobre os caminhos positivos e negativos do ciclo HTTP.
 
 Validação concluída no API CI [43604700291](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/43604700291) e Quality Gates [43604700289](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/43604700289), ambos com conclusão `success`. A integração HTTP JWT usa SQLite isolado; não se afirma validação PostgreSQL individual do handler de sessões. A auditoria multi-loja global permanece aberta para os restantes endpoints, caminhos administrativos, workers e operações indiretas.
+
+
+## Catálogo global e associações por loja — cobertura JWT
+
+Foi acrescentado o teste `test_catalogue_is_global_but_shelf_product_assignments_are_store_scoped` à suite `apps/api/tests/test_auth_middleware_jwt.py`. Com JWT real, confirma que o catálogo de produtos é global para SUPERVISOR, enquanto as associações SKU–prateleira são filtradas pela loja do ator. O SUPERVISOR da loja A vê as três associações locais, não recebe associações ao filtrar pela prateleira da loja B, e ADMIN vê as quatro associações das duas lojas.
+
+A execução do teste HTTP usa SQLite isolado. Não se afirma validação PostgreSQL individual deste endpoint. No mesmo commit, API CI [43608505591](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/43608505591) e Quality Gates [43608505546](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/43608505546) concluíram com sucesso; os smoke tests PostgreSQL existentes também passaram, sem substituir a validação específica do handler.
+
+A auditoria permanece parcial: falta completar a revisão sistemática dos métodos/rotas administrativas, handlers e caminhos indiretos/worker, bem como validar em PostgreSQL os fluxos em que isso é aplicável.
