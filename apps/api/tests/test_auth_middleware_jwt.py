@@ -528,6 +528,39 @@ def test_employee_image_list_is_scoped_and_excludes_restricted_images(auth_clien
     assert ids["image_b"] not in restricted_ids
 
 
+def test_employee_cannot_upload_image_to_foreign_store_shelf(
+    auth_client, monkeypatch, tmp_path
+):
+    from io import BytesIO
+    from PIL import Image
+
+    client, ids, _ = auth_client
+    headers = bearer(ids["employee_a"], "EMPLOYEE")
+    monkeypatch.setattr(main_module.settings, "image_storage_path", str(tmp_path))
+
+    with main_module.SessionLocal() as db:
+        before_count = db.query(models.ShelfImage).filter(
+            models.ShelfImage.shelf_id == ids["shelf_b"]
+        ).count()
+
+    image_bytes = BytesIO()
+    Image.new("RGB", (8, 8), (20, 40, 60)).save(image_bytes, format="PNG")
+    response = client.post(
+        "/api/v1/shelf-images",
+        data={"shelf_id": str(ids["shelf_b"])},
+        files={"image": ("foreign.png", image_bytes.getvalue(), "image/png")},
+        headers=headers,
+    )
+
+    assert response.status_code == 403
+    assert not list(tmp_path.rglob("*"))
+    with main_module.SessionLocal() as db:
+        after_count = db.query(models.ShelfImage).filter(
+            models.ShelfImage.shelf_id == ids["shelf_b"]
+        ).count()
+    assert after_count == before_count
+
+
 def test_employee_cannot_read_or_mutate_shelf_image_retention(auth_client):
     client, ids, _ = auth_client
     headers = bearer(ids["employee_a"], "EMPLOYEE")
