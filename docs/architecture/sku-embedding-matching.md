@@ -127,3 +127,8 @@ espera da primeira, liberta o matching e confirma que a restrição termina depo
 do commit. Por fim, constrói um novo registo e confirma que o exemplar restrito
 já não produz correspondência. O script corre no API CI após as migrações
 PostgreSQL 16.
+
+
+## Validação CI
+
+O smoke concorrente PostgreSQL foi executado com sucesso no API CI `43589628653`; a suite terminou com 753 testes aprovados e 1 ignorado. O Quality Gates `43589628597` também passou, incluindo compilação Python e build web.

@@ -136,3 +136,6 @@ restrição aguarda o commit do matching que bloqueou a imagem de origem. Depois
 confirma que a imagem fica `RESTRICTED` e que o registo reconstruído exclui o
 exemplar. A cobertura é específica desta serialização; não representa uma
 auditoria concorrente completa de todos os caminhos de dados derivados.
+
+
+A prova concorrente de matching/retenção em PostgreSQL 16 passou no API CI `43589628653`, juntamente com os restantes smoke tests e 753 testes aprovados (1 ignorado). O Quality Gates `43589628597` também passou.
