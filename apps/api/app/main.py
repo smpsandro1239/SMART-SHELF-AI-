@@ -1784,15 +1784,47 @@ def create_detection_sku_review(
     request: Request,
     db: Session = Depends(get_db),
 ):
-    """Append a human SKU decision without overwriting the model's original detection."""
-    detection = db.get(models.ShelfImageDetection, detection_id)
-    if detection is None:
+    """Append a human SKU decision without overwriting the model's original detection.
+
+    The detection is first read only to discover its source image. The image row
+    is then locked before the detection is refreshed, matching the worker's
+    image -> product lock order. This prevents a review from being appended
+    against a stale detection that the worker replaced while the request waited.
+    """
+    initial_detection = db.get(models.ShelfImageDetection, detection_id)
+    if initial_detection is None:
         raise HTTPException(status_code=404, detail="Detection not found")
-    image_record = db.get(models.ShelfImage, detection.shelf_image_id)
+    source_image_id = initial_detection.shelf_image_id
+
+    actor = _request_user(db, request)
+    _enforce_store_scope(actor, _shelf_image_store_id(db, source_image_id))
+
+    image_record = (
+        db.query(models.ShelfImage)
+        .filter(models.ShelfImage.id == source_image_id)
+        .with_for_update()
+        .populate_existing()
+        .first()
+    )
     if image_record is None:
         raise HTTPException(status_code=404, detail="Shelf image not found")
-    actor = _request_user(db, request)
-    _enforce_store_scope(actor, _shelf_image_store_id(db, image_record.id))
+    if image_record.retention_status != "ACTIVE":
+        _require_active_shelf_image(image_record)
+
+    detection = (
+        db.query(models.ShelfImageDetection)
+        .filter(
+            models.ShelfImageDetection.id == detection_id,
+            models.ShelfImageDetection.shelf_image_id == source_image_id,
+        )
+        .populate_existing()
+        .first()
+    )
+    if detection is None:
+        raise HTTPException(
+            status_code=409,
+            detail="Detection changed during review; refresh the image and retry",
+        )
 
     selected_product_id = payload.selected_product_id
     if payload.decision == "CONFIRMED" and selected_product_id is None:
@@ -1804,17 +1836,6 @@ def create_detection_sku_review(
     if payload.decision in {"CONFIRMED", "CORRECTED"}:
         if selected_product_id is None:
             raise HTTPException(status_code=422, detail="There is no proposed SKU to confirm")
-        # Lock order follows the vision worker: source image, then SKU.
-        image_record = (
-            db.query(models.ShelfImage)
-            .filter(models.ShelfImage.id == detection.shelf_image_id)
-            .with_for_update()
-            .populate_existing()
-            .first()
-        )
-        if image_record is None:
-            raise HTTPException(status_code=404, detail="Shelf image not found")
-        _require_active_shelf_image(image_record)
         product = (
             db.query(models.Product)
             .filter(models.Product.id == selected_product_id)
@@ -1830,18 +1851,6 @@ def create_detection_sku_review(
         ).first()
         if assigned is None:
             raise HTTPException(status_code=422, detail="Selected product is not assigned to the detected shelf")
-
-    if payload.decision == "REJECTED":
-        image_record = (
-            db.query(models.ShelfImage)
-            .filter(models.ShelfImage.id == detection.shelf_image_id)
-            .with_for_update()
-            .populate_existing()
-            .first()
-        )
-        if image_record is None:
-            raise HTTPException(status_code=404, detail="Shelf image not found")
-        _require_active_shelf_image(image_record)
 
     review = models.DetectionSkuReview(
         detection_id=detection.id,
