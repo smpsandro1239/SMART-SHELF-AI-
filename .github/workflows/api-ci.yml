@@ -95,5 +95,11 @@ jobs:
           APP_ENV: test
           JWT_SECRET_KEY: test-only-secret-not-for-production
         run: python scripts/postgres_sku_evaluation_authorization_smoke.py
+      - name: Verify PostgreSQL capture-session tenant authorization
+        env:
+          DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/smart_shelf_ci
+          APP_ENV: test
+          JWT_SECRET_KEY: test-only-secret-not-for-production
+        run: python scripts/postgres_capture_session_authorization_smoke.py
       - name: Run tests
         run: pytest -q
