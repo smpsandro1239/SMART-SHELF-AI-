@@ -74,3 +74,18 @@ O worker reencaminha tarefas `PROCESSING` abandonadas para `PENDING` quando `ana
 ## Exclusão de resultados de leases expirados
 
 Cada tentativa de processamento fica identificada pelo valor de `analysis_started_at` gravado quando a imagem é reclamada. Após a inferência, o worker bloqueia e atualiza a leitura da linha (`populate_existing`) e verifica que o estado continua `PROCESSING` e que o timestamp ainda pertence à sua tentativa. Se o timeout tiver reencaminhado a tarefa e outro worker a tiver reclamado, a tentativa anterior termina sem persistir deteções ou evidência OCR. A mesma verificação é repetida antes de marcar a imagem como `COMPLETED`. O teste `test_worker_discards_result_when_processing_lease_changes_during_inference` cobre a substituição do lease durante a inferência. A validação CI ainda está pendente.
+
+## Retenção, restrição e purge definitivo
+
+A restrição (RESTRICTED) é uma suspensão de acesso e processamento, não uma eliminação. O endpoint de conteúdo devolve HTTP 410 para imagens restringidas, e a listagem de exemplares de embeddings exclui exemplares ligados a imagens que não estejam ACTIVE. O teste de integração test_restricted_own_store_image_rejects_ocr_writes_and_retry cobre também estes dois limites.
+
+**Limitação identificada na auditoria:** o modelo contém campos para PURGED, purged_at e purge_not_before, mas a API atual não expõe um fluxo de purge definitivo nem foi encontrado um worker que elimine o ficheiro e os dados derivados. Não se deve interpretar a restrição como cumprimento de um pedido de apagamento definitivo.
+
+Um fluxo de purge futuro tem de:
+- exigir autorização administrativa e motivo auditável;
+- recusar imagens com legal_hold ativo ou ainda dentro do período de retenção;
+- serializar a operação com workers e alterações de retenção através do lock da imagem;
+- remover o ficheiro apenas depois de validar que o caminho pertence ao diretório da loja;
+- eliminar ou anonimizar embeddings de origem, deteções, execuções OCR, evidências, correspondências e fusões;
+- preservar o registo mínimo da imagem e os eventos de auditoria, incluindo um evento explícito de purge, sem deixar conteúdo pessoal recuperável;
+- ser idempotente e recuperar de falhas entre a remoção do ficheiro e a confirmação transacional.
