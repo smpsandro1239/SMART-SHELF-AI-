@@ -849,3 +849,8 @@ Consultar [a política operacional e o contrato do endpoint](docs/operations/pal
 ## Deploy na Vercel — Multi-Service
 
 A configuração inicial para Vercel encontra-se em [docs/deployment/vercel-services.md](docs/deployment/vercel-services.md). Publica o frontend Vite em `/` e a API FastAPI em `/api/*`, no mesmo domínio. O frontend usa chamadas relativas à API e o proxy do Vite mantém o desenvolvimento local compatível. Esta configuração não aloja PostgreSQL, armazenamento persistente de imagens nem o worker contínuo; consultar a documentação antes de usar endpoints com persistência.
+
+### Atualização da auditoria de visão computacional — candidatos de treino
+
+Foi acrescentado o teste JWT `test_reviewed_training_candidates_are_scoped_to_supervisor_store` para `GET /api/v1/training-candidates/reviewed`: SUPERVISOR só recebe candidatos derivados de imagens da própria loja, ADMIN mantém acesso global e EMPLOYEE recebe 403. O teste usa dados de duas lojas e confirma que a retenção da imagem não mascara o filtro multi-loja. Código no commit `895adcee`; a validação CI desta alteração está pendente. A auditoria global continua aberta e os candidatos continuam a exigir aprovação humana antes de poderem alimentar exemplares/datasets.
+
