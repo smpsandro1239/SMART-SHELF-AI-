@@ -271,3 +271,59 @@ def test_worker_automatically_runs_catalogue_matching_and_fusion(db, tmp_path, m
     assert fused.status == "TEXT_ONLY"
     assert fused.suggested_product_id == db.info["product_a_id"]
     assert db.query(models.InventorySnapshot).count() == 0
+
+
+def test_worker_requeues_only_abandoned_active_processing_jobs(db, monkeypatch):
+    from datetime import timedelta
+
+    from app import vision_worker
+
+    now = models.utc_now()
+    stale = models.ShelfImage(
+        shelf_id=db.query(models.Shelf).first().id,
+        original_filename="stale.jpg",
+        storage_path="/tmp/stale.jpg",
+        mime_type="image/jpeg",
+        file_size_bytes=100,
+        sha256="b" * 64,
+        analysis_status="PROCESSING",
+        analysis_started_at=now - timedelta(hours=25),
+        retention_status="ACTIVE",
+    )
+    recent = models.ShelfImage(
+        shelf_id=db.query(models.Shelf).first().id,
+        original_filename="recent.jpg",
+        storage_path="/tmp/recent.jpg",
+        mime_type="image/jpeg",
+        file_size_bytes=100,
+        sha256="c" * 64,
+        analysis_status="PROCESSING",
+        analysis_started_at=now - timedelta(minutes=5),
+        retention_status="ACTIVE",
+    )
+    restricted = models.ShelfImage(
+        shelf_id=db.query(models.Shelf).first().id,
+        original_filename="restricted.jpg",
+        storage_path="/tmp/restricted.jpg",
+        mime_type="image/jpeg",
+        file_size_bytes=100,
+        sha256="e" * 64,
+        analysis_status="PROCESSING",
+        analysis_started_at=now - timedelta(hours=25),
+        retention_status="RESTRICTED",
+    )
+    db.add_all([stale, recent, restricted])
+    db.flush()
+    stale_id, recent_id, restricted_id = stale.id, recent.id, restricted.id
+
+    recovered = vision_worker.requeue_stale_processing_images(
+        db,
+        stale_after_seconds=86400,
+    )
+
+    assert recovered == 1
+    assert db.get(models.ShelfImage, stale_id).analysis_status == "PENDING"
+    assert db.get(models.ShelfImage, stale_id).analysis_started_at is None
+    assert "Recovered abandoned" in db.get(models.ShelfImage, stale_id).analysis_error
+    assert db.get(models.ShelfImage, recent_id).analysis_status == "PROCESSING"
+    assert db.get(models.ShelfImage, restricted_id).analysis_status == "PROCESSING"
