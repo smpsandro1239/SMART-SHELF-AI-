@@ -200,7 +200,7 @@ Cada entrada declara `source_type`:
 
 Todas as entradas declaram uma `purpose` e uma transformação. `original` exige que o hash do ficheiro corresponda ao hash da origem; `crop` e `derived` exigem hash do progenitor igual ao hash declarado da origem e uma descrição da operação. O contrato é um registo de declarações e hashes, não uma prova criptográfica de direitos, de identidade do revisor ou de correspondência com a base de dados.
 
-**Limites atuais:** o sidecar é validado como utilitário offline e ainda não está ligado ao `dataset_approval`, ao exportador operacional ou à base de dados. Não verifica se uma imagem interna continua `ACTIVE`, se existe legal hold, nem se a referência `store_id` corresponde ao `shelf_image_id`. Antes de treino/exportação operacional, é necessário integrar uma verificação autenticada na origem e no release, revalidando estado e legal hold, e definir a propagação de restrições a crops, cópias, relatórios, backups e caches. A purga física continua desativada.
+**Limites atuais:** o sidecar é obrigatório no `dataset_approval`. Para entradas `internal`, o gate consulta a base de dados operacional e confirma que `shelf_image_id` existe, que a cadeia `Shelf → Zone → Store` corresponde ao `store_id` declarado, que o SHA-256 de origem coincide com o registo e que a imagem está `ACTIVE` sem legal hold. As linhas das imagens são bloqueadas com `SELECT FOR UPDATE` por ID crescente durante a execução do gate. Entradas `external` não exigem consulta à base de dados e continuam dependentes das declarações de licença/referência de direitos. Esta validação é um snapshot protegido durante o processo CLI; como o CLI não inicia o treino nem controla a publicação externa, não garante atomicidade entre o gate e uma operação posterior. A integração tem de manter a validação e o consumo do dataset na mesma transação/fluxo de release. A propagação de restrições a crops, cópias, relatórios, backups e caches continua pendente. A purga física continua desativada.
 
 
 ## Gate offline de aprovação com proveniência obrigatória
@@ -208,3 +208,25 @@ Todas as entradas declaram uma `purpose` e uma transformação. `original` exige
 O comando `app.dataset_approval` exige agora o argumento `--provenance-manifest` com o sidecar JSON versionado definido em `app.dataset_provenance`. O gate compara a cobertura exata de `split`/`file_name`/`image_sha256` com o manifesto SHA-256 e bloqueia entradas em falta, duplicadas, não correspondentes, hashes divergentes, origem interna sem IDs positivos ou origem externa sem referência de direitos. O relatório inclui `checks.image_provenance`.
 
 Este gate apenas valida as declarações e a linhagem descritas nos ficheiros offline. Não confirma que `shelf_image_id` pertence a `store_id`, que a imagem continua `ACTIVE`, que não existe legal hold, nem que o revisor está autenticado. A integração com a base de dados operacional e a propagação de restrições a derivados continuam pendentes. Datasets antigos sem sidecar deixam de ser elegíveis para aprovação através deste gate até serem completamente documentados. A purga física continua desativada.
+
+
+## Verificação operacional de proveniência no gate de datasets
+
+O módulo `app.dataset_operational_eligibility` verifica cada entrada `internal`
+contra a base de dados operacional. A consulta percorre
+`ShelfImage → Shelf → Zone → Store`, compara `store_id` e
+`source_image_sha256`, exige `retention_status = ACTIVE` e
+`legal_hold = false`. As imagens são bloqueadas por `SELECT FOR UPDATE`
+em ordem crescente de ID para serializar a decisão com alterações de retenção
+concorrentes. A ausência de sessão de base de dados bloqueia qualquer dataset
+que declare imagens internas; datasets apenas externos não precisam dessa
+consulta.
+
+O CLI cria uma sessão apenas quando o sidecar contém fontes internas e mantém
+a transação aberta durante a validação e a escrita do relatório. Ao terminar,
+liberta os locks. Como o gate ainda não executa o treino nem publica o dataset,
+a aprovação não constitui uma reserva permanente de elegibilidade: o sistema
+que consumir/publicar o dataset terá de executar a validação e o consumo no
+mesmo fluxo transacional, ou revalidar imediatamente antes da utilização. A
+propagação de restrições a derivados e cópias permanece pendente. A purga
+física continua desativada.
