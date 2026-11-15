@@ -924,3 +924,10 @@ A migração `0032_shelf_image_purge_schedule_events` alarga a restrição dos t
 A migração `0033_shelf_image_artifact_references` e os endpoints administrativos `POST/GET /api/v1/shelf-images/{image_id}/artifacts` permitem declarar referências a cópias de datasets, releases, crops, relatórios, backups, caches e réplicas externas. As declarações são append-only, associadas à loja resolvida a partir da imagem e idempotentes; referências repetidas com metadados divergentes são rejeitadas.
 
 Este inventário é um primeiro passo de proveniência, não uma atestação de cobertura nem uma disposição aprovada. A pré-validação de purge continua bloqueada por `external_artifact_disposition_not_verified`, mesmo sem referências declaradas. Não existe executor de purge ou eliminação física.
+
+
+### Diagnóstico dos checks de CI e deployment (2026-11-15)
+
+Os jobs de GitHub Actions observados falharam antes de qualquer passo: não disponibilizam `logs_url`, a API devolve `steps: null`/lista vazia e o download dos logs devolve `BlobNotFound`. Foi adicionado o workflow mínimo `.github/workflows/runner-diagnostics.yml`, sem checkout, actions de terceiros, serviços ou instalação de dependências, para isolar a inicialização do runner. Até este workflow conseguir executar o primeiro passo, não há evidência de falha de compilação Python/TypeScript.
+
+Os checks Vercel também reportaram `build-rate-limit`. Este estado indica limitação de deployments no fornecedor, não uma falha de compilação comprovada. O histórico, IDs dos runs e procedimento de diagnóstico estão em [docs/operations/github-actions-diagnostics.md](docs/operations/github-actions-diagnostics.md). Não considerar CI ou deployment aprovados enquanto não houver execução e logs verificáveis.
