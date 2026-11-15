@@ -172,3 +172,16 @@ o catálogo ativo sob bloqueio; sugestões de produtos entretanto desativados
 são convertidas em evidência `UNKNOWN`, sem apagar os registos OCR ou visuais
 originais. A avaliação histórica mantém os IDs e as decisões humanas originais:
 desativar um produto não reescreve a verdade operacional registada no passado.
+
+
+## Proteção contra perda da proveniência por eliminação da imagem
+
+Embora `shelf_image_id` continue opcional para referências externas
+licenciadas, a eliminação direta de uma imagem interna já não pode transformar
+um exemplar associado numa referência sem captura. A migração
+`0028_embedding_source_image_restrict` instala um trigger de integridade na
+base de dados que rejeita a eliminação da imagem enquanto existirem exemplares
+associados. O bloqueio preserva a relação de proveniência e não executa
+eliminação dos vetores nem define prazos de retenção. A validação concorrente
+e funcional é executada pelo smoke PostgreSQL
+`postgres_embedding_retention_smoke.py`.
