@@ -12,6 +12,7 @@ from time import monotonic, sleep
 from uuid import uuid4
 
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 
 from app import models
 from app.database import SessionLocal
@@ -182,11 +183,34 @@ def main() -> None:
         result = registry.match([1.0, 0.0, 0.0])
         assert result.status == "UNKNOWN", result
 
+    # A source-image deletion must not silently turn its derived exemplar into
+    # an unlinked external reference (the FK's legacy ON DELETE SET NULL path).
+    with SessionLocal() as db:
+        try:
+            db.query(models.ShelfImage).filter(
+                models.ShelfImage.id == source_image_id
+            ).delete(synchronize_session=False)
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+        else:
+            raise AssertionError(
+                "source image deletion detached a derived embedding exemplar"
+            )
+
+        exemplar = (
+            db.query(models.ProductEmbeddingExemplar)
+            .filter(models.ProductEmbeddingExemplar.image_sha256 == "a" * 64)
+            .one()
+        )
+        assert exemplar.shelf_image_id == source_image_id
+
     print(
         "PostgreSQL embedding-retention concurrency smoke passed: "
         "retention was observed waiting on the matching row lock, "
         "completed after matching committed, and the restricted exemplar "
-        "was excluded from the next registry."
+        "was excluded from the next registry, and direct source deletion "
+        "was blocked to preserve exemplar lineage."
     )
 
 
