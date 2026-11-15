@@ -2805,3 +2805,71 @@ def test_reviewed_sku_evaluation_database_query_isolated_by_supervisor_store(aut
         headers=bearer(ids["employee_a"], "EMPLOYEE"),
     )
     assert employee_response.status_code == 403
+
+
+def test_employee_upload_rejects_forged_image_and_unsupported_mime(
+    auth_client, monkeypatch, tmp_path
+):
+    """Reject extension/MIME spoofing before writing files or database rows."""
+    client, ids, _ = auth_client
+    headers = bearer(ids["employee_a"], "EMPLOYEE")
+    monkeypatch.setattr(main_module.settings, "image_storage_path", str(tmp_path))
+
+    with main_module.SessionLocal() as db:
+        before_count = db.query(models.ShelfImage).count()
+
+    forged_png = b"\\x89PNG\\r\\n\\x1a\\n" + b"not-a-real-png"
+    forged_response = client.post(
+        "/api/v1/shelf-images",
+        data={"shelf_id": str(ids["shelf_a_assigned"])},
+        files={"image": ("forged.png", forged_png, "image/png")},
+        headers=headers,
+    )
+    unsupported_response = client.post(
+        "/api/v1/shelf-images",
+        data={"shelf_id": str(ids["shelf_a_assigned"])},
+        files={"image": ("vector.svg", b"<svg></svg>", "image/svg+xml")},
+        headers=headers,
+    )
+
+    assert forged_response.status_code == 415, forged_response.text
+    assert unsupported_response.status_code == 415, unsupported_response.text
+    assert not list(tmp_path.rglob("*"))
+
+    with main_module.SessionLocal() as db:
+        after_count = db.query(models.ShelfImage).count()
+    assert after_count == before_count
+
+
+def test_employee_upload_sanitizes_client_filename(
+    auth_client, monkeypatch, tmp_path
+):
+    """A client-supplied path must never be persisted as the original filename."""
+    from io import BytesIO
+    from PIL import Image
+
+    client, ids, _ = auth_client
+    headers = bearer(ids["employee_a"], "EMPLOYEE")
+    monkeypatch.setattr(main_module.settings, "image_storage_path", str(tmp_path))
+
+    image_bytes = BytesIO()
+    Image.new("RGB", (8, 8), (55, 95, 135)).save(image_bytes, format="PNG")
+    response = client.post(
+        "/api/v1/shelf-images",
+        data={"shelf_id": str(ids["shelf_a_assigned"])},
+        files={
+            "image": (
+                "../../outside/renamed.png",
+                image_bytes.getvalue(),
+                "image/png",
+            )
+        },
+        headers=headers,
+    )
+
+    assert response.status_code == 201, response.text
+    payload = response.json()
+    assert payload["original_filename"] == "renamed.png"
+    stored_path = __import__("pathlib").Path(payload["storage_path"])
+    assert stored_path.parent == tmp_path / str(ids["store_a"])
+    assert stored_path.exists()
