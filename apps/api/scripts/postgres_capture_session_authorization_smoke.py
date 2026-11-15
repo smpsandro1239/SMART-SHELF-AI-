@@ -13,8 +13,8 @@ from app.main import app
 from app.security import create_access_token
 
 
-def _bearer(user_id: int) -> dict[str, str]:
-    token, _ = create_access_token(user_id=user_id)
+def _bearer(user_id: int, role: str) -> dict[str, str]:
+    token, _ = create_access_token(user_id=user_id, role=role)
     return {"Authorization": f"Bearer {token}"}
 
 
@@ -95,7 +95,7 @@ def main() -> None:
     main_module.settings = original_settings.model_copy(update={"app_env": "production"})
     try:
         with TestClient(app) as client:
-            supervisor_headers = _bearer(supervisor_id)
+            supervisor_headers = _bearer(supervisor_id, "SUPERVISOR")
             own = client.get("/api/v1/capture-sessions", headers=supervisor_headers)
             assert own.status_code == 200, own.text
             own_rows = own.json()
@@ -121,7 +121,7 @@ def main() -> None:
 
             admin_response = client.get(
                 "/api/v1/capture-sessions",
-                headers=_bearer(admin_id),
+                headers=_bearer(admin_id, "ADMIN"),
             )
             assert admin_response.status_code == 200, admin_response.text
             admin_rows = admin_response.json()
@@ -130,7 +130,7 @@ def main() -> None:
 
             employee_response = client.get(
                 "/api/v1/capture-sessions",
-                headers=_bearer(employee_id),
+                headers=_bearer(employee_id, "EMPLOYEE"),
             )
             assert employee_response.status_code == 403, employee_response.text
     finally:
