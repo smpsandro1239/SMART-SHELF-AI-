@@ -96,3 +96,15 @@ Um fluxo de purge futuro tem de:
 O endpoint `GET /api/v1/shelf-images/{image_id}/retention/purge-eligibility` está limitado a ADMIN e fornece uma pré-validação sem apagar dados. Verifica se a imagem está `RESTRICTED` ou `PENDING_PURGE`, se não existe legal hold, se `purge_not_before` está definido e expirado, se a análise não está em execução e se o ficheiro continua presente num caminho seguro dentro do diretório da loja. Devolve também contagens de deteções, execuções/registos OCR, fusões e exemplares de embeddings associados.
 
 A resposta inclui `eligible`, a lista de `blockers` e `deletion_performed: false`. A elegibilidade é apenas uma pré-condição, não uma autorização para apagar diretamente. A API ainda não implementa o executor de purge. Nenhuma duração de retenção é inferida: `purge_not_before` tem de ser definido por uma política aprovada e aplicada por um fluxo próprio. O endpoint é útil para auditoria operacional, mas não substitui uma operação de purge idempotente com recuperação de falhas entre filesystem e base de dados.
+
+
+### Agendamento administrativo do purge
+
+Apenas ADMIN pode agendar ou cancelar a data de purge de uma imagem `RESTRICTED`. O agendamento exige uma data futura com fuso horário explícito, uma versão de política (`policy_version`) e uma justificação. A operação grava `purge_not_before`, `retention_policy_version` e a justificação, sem alterar o estado `RESTRICTED` e sem apagar conteúdo. A tabela append-only de eventos regista `PURGE_SCHEDULED`; o cancelamento limpa a data e a versão da política e regista `PURGE_CANCELLED`. Imagens com legal hold, em processamento ou que não estejam `RESTRICTED` não podem ser agendadas. O cancelamento também não restaura a imagem nem remove o legal hold.
+
+Endpoints:
+- `POST /api/v1/shelf-images/{image_id}/retention/purge-schedule`
+- `POST /api/v1/shelf-images/{image_id}/retention/purge-schedule/cancel`
+- `GET /api/v1/shelf-images/{image_id}/retention/purge-eligibility`
+
+A migração `0032_shelf_image_purge_schedule_events` alarga a restrição dos tipos de evento para incluir os dois eventos de agendamento. O executor de purge continua por implementar; a data agendada não dispara qualquer eliminação automática.
