@@ -503,3 +503,45 @@ def test_failed_ocr_can_be_retried_without_rerunning_vision(db, monkeypatch, tmp
         .order_by(models.ShelfImageDetection.id.asc())
         .all()
     ] == original_detection_ids
+
+@pytest.mark.parametrize(
+    ("retention_status", "add_failed_run"),
+    [
+        ("RESTRICTED", True),
+        ("ACTIVE", False),
+    ],
+)
+def test_ocr_retry_rejects_restricted_or_non_failed_latest_attempt(
+    db, monkeypatch, retention_status, add_failed_run
+):
+    from app import vision_worker
+
+    image_id = db.info["image_id"]
+    image = db.get(models.ShelfImage, image_id)
+    image.retention_status = retention_status
+    if add_failed_run:
+        db.add(models.ShelfImageOCRRun(
+            shelf_image_id=image_id,
+            provider="fake-ocr",
+            model_version="test-v1",
+            status="FAILED",
+        ))
+        db.flush()
+
+    def unexpected_path_resolution(*args, **kwargs):
+        raise AssertionError("ineligible OCR retry must not resolve or read the image")
+
+    monkeypatch.setattr(
+        vision_worker, "_resolve_worker_image_path", unexpected_path_resolution
+    )
+
+    class UnexpectedOCR:
+        def recognize(self, path):
+            raise AssertionError("ineligible OCR retry must not invoke the provider")
+
+    assert vision_worker.retry_failed_ocr_for_image(
+        db, image_id, UnexpectedOCR()
+    ) is False
+    assert db.query(models.ShelfImageOCRRun).filter_by(
+        shelf_image_id=image_id
+    ).count() == (2 if add_failed_run else 1)
