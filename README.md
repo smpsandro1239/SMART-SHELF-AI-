@@ -916,4 +916,4 @@ Endpoints:
 - `POST /api/v1/shelf-images/{image_id}/retention/purge-schedule/cancel`
 - `GET /api/v1/shelf-images/{image_id}/retention/purge-eligibility`
 
-A migração `0032_shelf_image_purge_schedule_events` alarga a restrição dos tipos de evento para incluir os dois eventos de agendamento. O executor de purge continua por implementar; a data agendada não dispara qualquer eliminação automática.
+A migração `0032_shelf_image_purge_schedule_events` alarga a restrição dos tipos de evento para incluir os dois eventos de agendamento. O executor de purge continua por implementar; a data agendada não dispara qualquer eliminação automática. A pré-validação também compara tamanho e SHA-256 do ficheiro armazenado. Mesmo com as verificações internas aprovadas, `eligible` permanece `false` enquanto releases externas, backups, caches e réplicas de armazenamento não forem inventariados e tiverem uma disposição aprovada. Não há eliminação física automática.
