@@ -2848,7 +2848,7 @@ def test_employee_upload_sanitizes_client_filename(
     from io import BytesIO
     from PIL import Image
 
-    client, ids, _ = auth_client
+    client, ids, store_ids = auth_client
     headers = bearer(ids["employee_a"], "EMPLOYEE")
     monkeypatch.setattr(main_module.settings, "image_storage_path", str(tmp_path))
 
@@ -2871,5 +2871,5 @@ def test_employee_upload_sanitizes_client_filename(
     payload = response.json()
     assert payload["original_filename"] == "renamed.png"
     stored_path = __import__("pathlib").Path(payload["storage_path"])
-    assert stored_path.parent == tmp_path / str(ids["store_a"])
+    assert stored_path.parent == tmp_path / str(store_ids["a"])
     assert stored_path.exists()
