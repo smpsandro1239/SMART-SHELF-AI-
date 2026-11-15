@@ -83,6 +83,37 @@ def _create_fixture(suffix: str) -> tuple[int, int, int]:
             reviewed_by_user_id=reviewer.id,
             reviewed_at=models.utc_now(),
         ))
+        target_detection = models.ShelfImageDetection(
+            shelf_image_id=target_image.id,
+            label="product",
+            confidence=0.95,
+            x_min=0.1,
+            y_min=0.1,
+            x_max=0.8,
+            y_max=0.9,
+            model_version="pg-vision-lineage-v1",
+        )
+        target_ocr_run = models.ShelfImageOCRRun(
+            shelf_image_id=target_image.id,
+            provider="smoke",
+            model_version="pg-ocr-lineage-v1",
+            status="COMPLETED",
+        )
+        db.add_all([target_detection, target_ocr_run])
+        db.flush()
+        target_ocr_evidence = models.ShelfImageOCREvidence(
+            run_id=target_ocr_run.id,
+            detection_id=target_detection.id,
+            text="SKU-123",
+            normalized_text="SKU123",
+            confidence=0.99,
+            x_min=0.1,
+            y_min=0.1,
+            x_max=0.8,
+            y_max=0.2,
+            association_status="ASSIGNED",
+        )
+        db.add(target_ocr_evidence)
         db.commit()
         return source_image.id, target_image.id, product.id
     except Exception:
@@ -205,12 +236,40 @@ def main() -> None:
         )
         assert exemplar.shelf_image_id == source_image_id
 
+    # Deleting an image with detections/OCR must not cascade away the
+    # human-review and OCR evidence lineage.
+    with SessionLocal() as db:
+        try:
+            db.query(models.ShelfImage).filter(
+                models.ShelfImage.id == target_image_id
+            ).delete(synchronize_session=False)
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+        else:
+            raise AssertionError(
+                "source image deletion cascaded into visual/OCR evidence"
+            )
+
+        assert db.query(models.ShelfImage).filter(
+            models.ShelfImage.id == target_image_id
+        ).one_or_none() is not None
+        assert db.query(models.ShelfImageDetection).filter(
+            models.ShelfImageDetection.shelf_image_id == target_image_id
+        ).count() == 1
+        assert db.query(models.ShelfImageOCRRun).filter(
+            models.ShelfImageOCRRun.shelf_image_id == target_image_id
+        ).count() == 1
+        assert db.query(models.ShelfImageOCREvidence).filter(
+            models.ShelfImageOCREvidence.text == "SKU-123"
+        ).count() == 1
+
     print(
         "PostgreSQL embedding-retention concurrency smoke passed: "
         "retention was observed waiting on the matching row lock, "
         "completed after matching committed, and the restricted exemplar "
         "was excluded from the next registry, and direct source deletion "
-        "was blocked to preserve exemplar lineage."
+        "was blocked to preserve embedding, detection and OCR evidence lineage."
     )
 
 
