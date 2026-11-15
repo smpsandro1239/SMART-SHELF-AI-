@@ -17,6 +17,7 @@ from app.dataset_integrity import audit_manifest_against_coco, read_manifest
 from app.dataset_quality import analyze_dataset_quality
 from app.dataset_review import sha256_file, validate_visual_review_record
 from app.dataset_provenance import validate_provenance_manifest
+from app.dataset_operational_eligibility import validate_internal_image_eligibility
 
 SPLITS = ("train", "val", "test")
 SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
@@ -168,6 +169,7 @@ def run_release_gate(
     split_paths: dict[str, Path],
     *,
     provenance_path: Path,
+    db_session: Any | None = None,
     mode: str = "training",
     review_paths: dict[str, Path] | None = None,
     require_visual_review: bool = False,
@@ -221,6 +223,20 @@ def run_release_gate(
     report["checks"]["image_provenance"] = {
         "passed": not provenance_errors,
         **provenance_report,
+    }
+    if errors:
+        report["status"] = "BLOCKED"
+        report["errors"] = errors
+        return errors, report
+
+    operational_errors, operational_report = validate_internal_image_eligibility(
+        db_session,
+        provenance_record.get("images", []) if isinstance(provenance_record, dict) else [],
+    )
+    errors.extend(operational_errors)
+    report["checks"]["operational_image_eligibility"] = {
+        "passed": not operational_errors,
+        **operational_report,
     }
     if errors:
         report["status"] = "BLOCKED"
@@ -323,35 +339,62 @@ def main() -> int:
         print(f"ERROR: cannot read release record: {exc}")
         return 2
 
-    errors, report = run_release_gate(
-        record,
-        args.manifest,
-        {"train": args.train, "val": args.val, "test": args.test},
-        provenance_path=args.provenance_manifest,
-        mode=args.mode,
-        review_paths=(
-            {"train": args.review_train, "val": args.review_val, "test": args.review_test}
-            if all(review_args) else None
-        ),
-        require_visual_review=args.require_visual_review,
-    )
-    print(json.dumps(report, ensure_ascii=False, indent=2))
-    if args.json_report:
+    db_session = None
+    try:
         try:
-            args.json_report.parent.mkdir(parents=True, exist_ok=True)
-            args.json_report.write_text(
-                json.dumps(report, ensure_ascii=False, indent=2) + "\n",
-                encoding="utf-8",
+            provenance_record = json.loads(args.provenance_manifest.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            provenance_record = None
+        has_internal_sources = (
+            isinstance(provenance_record, dict)
+            and isinstance(provenance_record.get("images"), list)
+            and any(
+                isinstance(item, dict) and item.get("source_type") == "internal"
+                for item in provenance_record["images"]
             )
-        except OSError as exc:
-            print(f"ERROR: cannot write gate report: {exc}")
-            return 2
-    if errors:
-        for error in errors:
-            print(f"BLOCKED: {error}")
-        return 1
-    print(f"Dataset release gate passed for {args.mode}.")
-    return 0
+        )
+        if has_internal_sources:
+            from app.database import SessionLocal
+            db_session = SessionLocal()
+
+        errors, report = run_release_gate(
+            record,
+            args.manifest,
+            {"train": args.train, "val": args.val, "test": args.test},
+            provenance_path=args.provenance_manifest,
+            db_session=db_session,
+            mode=args.mode,
+            review_paths=(
+                {"train": args.review_train, "val": args.review_val, "test": args.review_test}
+                if all(review_args) else None
+            ),
+            require_visual_review=args.require_visual_review,
+        )
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+        if args.json_report:
+            try:
+                args.json_report.parent.mkdir(parents=True, exist_ok=True)
+                args.json_report.write_text(
+                    json.dumps(report, ensure_ascii=False, indent=2) + "\n",
+                    encoding="utf-8",
+                )
+            except OSError as exc:
+                print(f"ERROR: cannot write gate report: {exc}")
+                return 2
+        if errors:
+            for error in errors:
+                print(f"BLOCKED: {error}")
+            return 1
+        print(f"Dataset release gate passed for {args.mode}.")
+        return 0
+    except Exception as exc:
+        print(f"ERROR: operational dataset eligibility check failed: {exc}")
+        return 2
+    finally:
+        if db_session is not None:
+            db_session.rollback()
+            db_session.close()
+
 
 
 if __name__ == "__main__":
