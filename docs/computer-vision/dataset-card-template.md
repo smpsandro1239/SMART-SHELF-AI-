@@ -8,6 +8,7 @@
 - Data de criação:
 - Responsável:
 - Hash/checksum do manifesto:
+- Sidecar de proveniência por imagem e respetivo SHA-256:
 - Localização de armazenamento privado:
 
 ## Finalidade e âmbito
@@ -19,6 +20,7 @@
 ## Proveniência e permissões
 - Organização/lojas de origem:
 - Autorização para recolha:
+- Origem por imagem (`internal`/`external`) e referência de direitos aplicável:
 - Direitos de utilização:
 - Ferramenta de anotação e versão:
 - Licença do dataset:
