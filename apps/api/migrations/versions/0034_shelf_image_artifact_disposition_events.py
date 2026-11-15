@@ -51,11 +51,6 @@ def upgrade() -> None:
         ),
     )
     op.create_index(
-        "ix_shelf_image_artifact_disposition_events_artifact_reference_id",
-        "shelf_image_artifact_disposition_events",
-        ["artifact_reference_id"],
-    )
-    op.create_index(
         "ix_shelf_image_artifact_disposition_events_shelf_image_id",
         "shelf_image_artifact_disposition_events",
         ["shelf_image_id"],
@@ -128,10 +123,6 @@ def downgrade() -> None:
     )
     op.drop_index(
         "ix_shelf_image_artifact_disposition_events_shelf_image_id",
-        table_name="shelf_image_artifact_disposition_events",
-    )
-    op.drop_index(
-        "ix_shelf_image_artifact_disposition_events_artifact_reference_id",
         table_name="shelf_image_artifact_disposition_events",
     )
     op.drop_table("shelf_image_artifact_disposition_events")
