@@ -561,6 +561,37 @@ class ShelfImage(Base):
     retention_policy_version: Mapped[str | None] = mapped_column(String(40), nullable=True)
 
 
+class ShelfImageArtifactReference(Base):
+    """Append-only declaration of an external artifact derived from a shelf image."""
+    __tablename__ = "shelf_image_artifact_references"
+    __table_args__ = (
+        CheckConstraint(
+            "artifact_type IN ('DATASET_COPY', 'DATASET_RELEASE', 'CROP', 'REPORT', 'BACKUP', 'CACHE', 'OBJECT_REPLICA', 'OTHER')",
+            name="ck_shelf_image_artifact_type",
+        ),
+        CheckConstraint(
+            "sha256 IS NULL OR length(sha256) = 64",
+            name="ck_shelf_image_artifact_sha256_length",
+        ),
+        UniqueConstraint(
+            "shelf_image_id", "artifact_type", "external_system", "external_reference",
+            name="uq_shelf_image_artifact_reference",
+        ),
+        Index("ix_shelf_image_artifacts_store_image", "store_id", "shelf_image_id"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    shelf_image_id: Mapped[int] = mapped_column(ForeignKey("shelf_images.id", ondelete="RESTRICT"), nullable=False, index=True)
+    store_id: Mapped[int] = mapped_column(ForeignKey("stores.id", ondelete="RESTRICT"), nullable=False, index=True)
+    artifact_type: Mapped[str] = mapped_column(String(24), nullable=False)
+    external_system: Mapped[str] = mapped_column(String(120), nullable=False)
+    external_reference: Mapped[str] = mapped_column(String(500), nullable=False)
+    release_id: Mapped[str | None] = mapped_column(String(160), nullable=True, index=True)
+    sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    declared_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+
 class ShelfImageRetentionEvent(Base):
     """Append-only audit trail for shelf-image retention state changes."""
     __tablename__ = "shelf_image_retention_events"
