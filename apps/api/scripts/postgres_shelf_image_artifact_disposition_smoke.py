@@ -76,11 +76,31 @@ def main() -> None:
             name="Other store for lineage violation",
         )
         db.add(other_store)
-        db.flush()
+        db.commit()
+        other_store_id = other_store.id
+
+    with SessionLocal() as db:
+        mismatched_artifact = models.ShelfImageArtifactReference(
+            shelf_image_id=image_id,
+            store_id=other_store_id,
+            artifact_type="OTHER",
+            external_system="postgres-smoke",
+            external_reference=f"mismatched-artifact/{suffix}",
+            declared_by_user_id=admin_id,
+        )
+        db.add(mismatched_artifact)
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+        else:
+            raise AssertionError("PostgreSQL accepted an artifact reference with mismatched store lineage")
+
+    with SessionLocal() as db:
         mismatched_event = models.ShelfImageArtifactDispositionEvent(
             artifact_reference_id=artifact_id,
             shelf_image_id=image_id,
-            store_id=other_store.id,
+            store_id=other_store_id,
             event_type="PROPOSED",
             actor_user_id=admin_id,
             reason="This mismatched store lineage must be rejected",
@@ -117,7 +137,7 @@ def main() -> None:
 
     print(
         "PostgreSQL artifact disposition smoke passed: "
-        "disposition events reject cross-store lineage, UPDATE and DELETE."
+        "artifact references and disposition events reject cross-store lineage; disposition events also reject UPDATE and DELETE."
     )
 
 
