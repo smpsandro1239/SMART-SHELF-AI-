@@ -25,6 +25,14 @@ python -m app.vision_worker --once
 
 Sem `OCR_PROVIDER_FACTORY`, o worker executa apenas a visão. Se a inicialização ou inferência OCR falhar, a análise visual é preservada e a tentativa OCR fica registada como `FAILED`. A escrita de cada execução OCR usa um savepoint: uma falha durante a leitura ou persistência não deixa regiões parciais nem elimina deteções visuais. As tentativas são append-only, permitindo distinguir falhas de execuções concluídas.
 
+Para repetir apenas o OCR de uma imagem cuja análise visual já terminou, configurar `OCR_PROVIDER_FACTORY` e executar:
+
+```bash
+python -m app.vision_worker --retry-failed-ocr-image-id 123
+```
+
+O comando só aceita imagens `ACTIVE` com análise visual `COMPLETED` e cuja tentativa OCR mais recente esteja `FAILED`. Bloqueia a linha da imagem durante a operação para serializar a repetição com alterações de retenção. Não volta a executar deteção nem embeddings; preserva as deteções e as tentativas OCR anteriores. Código de saída `0` indica uma nova execução OCR concluída, `1` indica que a imagem não era elegível ou que a repetição falhou, e `2` indica configuração/provider indisponível.
+
 ## Sequência funcional
 
 1. Carregar a fotografia para `POST /api/v1/shelf-images`.
