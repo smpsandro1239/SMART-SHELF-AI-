@@ -90,6 +90,30 @@ def upgrade() -> None:
     bind = op.get_bind()
     if bind.dialect.name == "postgresql":
         op.execute("""
+            CREATE FUNCTION validate_shelf_image_artifact_reference_store()
+            RETURNS trigger LANGUAGE plpgsql AS $function$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1
+                    FROM shelf_images si
+                    JOIN shelves sh ON sh.id = si.shelf_id
+                    JOIN zones z ON z.id = sh.zone_id
+                    WHERE si.id = NEW.shelf_image_id
+                      AND z.store_id = NEW.store_id
+                ) THEN
+                    RAISE EXCEPTION 'artifact reference store does not match shelf image lineage'
+                        USING ERRCODE = '23514';
+                END IF;
+                RETURN NEW;
+            END;
+            $function$
+        """)
+        op.execute("""
+            CREATE TRIGGER trg_shelf_image_artifact_reference_store
+            BEFORE INSERT ON shelf_image_artifact_references
+            FOR EACH ROW EXECUTE FUNCTION validate_shelf_image_artifact_reference_store()
+        """)
+        op.execute("""
             CREATE FUNCTION prevent_shelf_image_artifact_disposition_event_mutation()
             RETURNS trigger LANGUAGE plpgsql AS $function$
             BEGIN
@@ -105,6 +129,21 @@ def upgrade() -> None:
         """)
     elif bind.dialect.name == "sqlite":
         op.execute("""
+            CREATE TRIGGER trg_shelf_image_artifact_reference_store
+            BEFORE INSERT ON shelf_image_artifact_references
+            WHEN NOT EXISTS (
+                SELECT 1
+                FROM shelf_images si
+                JOIN shelves sh ON sh.id = si.shelf_id
+                JOIN zones z ON z.id = sh.zone_id
+                WHERE si.id = NEW.shelf_image_id
+                  AND z.store_id = NEW.store_id
+            )
+            BEGIN
+                SELECT RAISE(ABORT, 'artifact reference store does not match shelf image lineage');
+            END
+        """)
+        op.execute("""
             CREATE TRIGGER trg_shelf_image_artifact_disposition_events_no_update
             BEFORE UPDATE ON shelf_image_artifact_disposition_events
             BEGIN SELECT RAISE(ABORT, 'shelf_image_artifact_disposition_events is append-only'); END
@@ -119,9 +158,12 @@ def upgrade() -> None:
 def downgrade() -> None:
     bind = op.get_bind()
     if bind.dialect.name == "postgresql":
+        op.execute("DROP TRIGGER IF EXISTS trg_shelf_image_artifact_reference_store ON shelf_image_artifact_references")
+        op.execute("DROP FUNCTION IF EXISTS validate_shelf_image_artifact_reference_store()")
         op.execute("DROP TRIGGER IF EXISTS trg_shelf_image_artifact_disposition_events_append_only ON shelf_image_artifact_disposition_events")
         op.execute("DROP FUNCTION IF EXISTS prevent_shelf_image_artifact_disposition_event_mutation()")
     elif bind.dialect.name == "sqlite":
+        op.execute("DROP TRIGGER IF EXISTS trg_shelf_image_artifact_reference_store")
         op.execute("DROP TRIGGER IF EXISTS trg_shelf_image_artifact_disposition_events_no_update")
         op.execute("DROP TRIGGER IF EXISTS trg_shelf_image_artifact_disposition_events_no_delete")
 
