@@ -31,12 +31,32 @@ def setup_release_inputs(tmp_path):
     write_manifest(manifest)
     write_report(split, splits={"train": {"classes": {"1": {"instances": 4}}}})
     write_report(visual, algorithm="dHash-64", max_hamming_distance=6, images_scanned=3)
-    return manifest, split, visual
+    from app.dataset_release import load_manifest
+
+    rows = load_manifest(manifest)
+    provenance = tmp_path / "provenance.json"
+    entries = [{
+        "split": row["split"],
+        "file_name": row["file_name"],
+        "image_sha256": row["sha256"],
+        "source_image_sha256": row["sha256"],
+        "source_type": "external",
+        "source_name": "Test licensed dataset",
+        "license": "CC-BY-4.0",
+        "rights_reference": "test-rights-record",
+        "purpose": "Product detection training",
+        "transformation": {"type": "original"},
+    } for row in rows]
+    provenance.write_text(
+        json.dumps({"schema_version": 1, "images": entries}),
+        encoding="utf-8",
+    )
+    return manifest, split, visual, provenance
 
 
 def test_release_is_created_with_deterministic_fingerprint_and_quality_metadata(tmp_path):
-    manifest, split, visual = setup_release_inputs(tmp_path)
-    release, created = create_release(manifest, split, visual, tmp_path / "registry")
+    manifest, split, visual, provenance = setup_release_inputs(tmp_path)
+    release, created = create_release(manifest, split, visual, tmp_path / "registry", provenance_path=provenance)
     assert created is True
     assert release["image_count"] == 3
     assert release["images_by_split"] == {"test": 1, "train": 1, "val": 1}
@@ -49,7 +69,7 @@ def test_release_is_created_with_deterministic_fingerprint_and_quality_metadata(
 def test_release_creation_is_idempotent(tmp_path):
     manifest, split, visual = setup_release_inputs(tmp_path)
     registry = tmp_path / "registry"
-    first, created_first = create_release(manifest, split, visual, registry)
+    first, created_first = create_release(manifest, split, visual, registry, provenance_path=provenance)
     second, created_second = create_release(manifest, split, visual, registry)
     assert created_first is True
     assert created_second is False
@@ -114,6 +134,7 @@ def test_release_can_enforce_minimum_class_instances_per_split(tmp_path):
     with pytest.raises(ValueError, match="minimum is 3"):
         create_release(
             manifest, split, visual, tmp_path / "registry",
+            provenance_path=provenance,
             min_class_instances=3,
         )
 
@@ -123,5 +144,34 @@ def test_release_can_enforce_minimum_images_per_split(tmp_path):
     with pytest.raises(ValueError, match="minimum is 2"):
         create_release(
             manifest, split, visual, tmp_path / "registry",
+            provenance_path=provenance,
             min_images_per_split=2,
         )
+
+def test_release_requires_complete_provenance_sidecar(tmp_path):
+    manifest, split, visual, provenance = setup_release_inputs(tmp_path)
+    provenance.write_text(json.dumps({"schema_version": 1, "images": []}), encoding="utf-8")
+    with pytest.raises(ValueError, match="provenance manifest rejected"):
+        create_release(manifest, split, visual, tmp_path / "registry", provenance_path=provenance)
+
+
+def test_release_blocks_internal_provenance_without_operational_database(tmp_path):
+    manifest, split, visual, provenance = setup_release_inputs(tmp_path)
+    record = json.loads(provenance.read_text(encoding="utf-8"))
+    for entry in record["images"]:
+        entry.update({"source_type": "internal", "shelf_image_id": 1, "store_id": 1})
+        for field in ("source_name", "license", "rights_reference"):
+            entry.pop(field, None)
+    provenance.write_text(json.dumps(record), encoding="utf-8")
+    with pytest.raises(ValueError, match="database session is required"):
+        create_release(manifest, split, visual, tmp_path / "registry", provenance_path=provenance)
+
+
+def test_release_records_provenance_and_operational_eligibility_hashes(tmp_path):
+    import hashlib
+    manifest, split, visual, provenance = setup_release_inputs(tmp_path)
+    release, created = create_release(manifest, split, visual, tmp_path / "registry", provenance_path=provenance)
+    assert created is True
+    assert release["provenance"]["status"] == "APPROVED"
+    assert release["provenance"]["manifest_sha256"] == hashlib.sha256(provenance.read_bytes()).hexdigest()
+    assert release["provenance"]["operational_eligibility"] == {"status": "APPROVED", "internal_images": 0, "checked_images": 0}
