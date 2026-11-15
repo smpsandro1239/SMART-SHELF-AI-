@@ -315,3 +315,5 @@ O fluxo exige dois administradores distintos: quem propõe não pode aprovar/rej
 A evidência é uma declaração humana referenciada, não uma verificação automática do sistema externo. A aplicação não apaga artefactos nem consulta o fornecedor externo. A pré-validação apresenta contagens por estado, mas continua a incluir `external_artifact_disposition_not_verified` mesmo quando todas as referências conhecidas têm `DISPOSAL_ATTESTED`, porque ainda não existe prova independente de cobertura completa do inventário externo. Portanto, esta funcionalidade **não torna o purge elegível**.
 
 O workflow API CI executa também `postgres_shelf_image_artifact_disposition_smoke.py` após as migrações para verificar que o PostgreSQL rejeita UPDATE e DELETE ao histórico.
+
+A migração também cria um índice único composto sobre a referência, imagem e loja, e uma chave estrangeira composta nos eventos de disposição. Assim, a base de dados rejeita eventos cuja referência de artefacto pertença a outra imagem ou loja, mesmo que sejam escritos fora da API. O smoke test PostgreSQL cobre esta tentativa de cruzamento de tenant, além das operações UPDATE/DELETE proibidas.
