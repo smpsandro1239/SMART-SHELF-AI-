@@ -1272,3 +1272,17 @@ A migração `0033_shelf_image_artifact_references` cria um inventário append-o
 O corpo de criação inclui `artifact_type`, `external_system`, `external_reference`, e opcionalmente `release_id` e `sha256`. Os tipos aceites são `DATASET_COPY`, `DATASET_RELEASE`, `CROP`, `REPORT`, `BACKUP`, `CACHE`, `OBJECT_REPLICA` e `OTHER`. A loja é sempre derivada da imagem; o cliente não pode escolher o `store_id`. A mesma referência é idempotente, mas metadados divergentes devolvem HTTP 409.
 
 O registo é uma declaração e não comprova a existência, integridade, cobertura ou disposição do artefacto. Por isso, o purge permanece sempre inelegível até existir um processo independente de inventário completo e aprovação de disposição.
+
+
+### External artifact disposition workflow
+
+External artifact references now support an append-only, two-person decision history:
+
+- `POST /api/v1/shelf-images/{image_id}/artifacts/{artifact_id}/disposition-events`
+- `GET /api/v1/shelf-images/{image_id}/artifacts/{artifact_id}/disposition-events`
+
+Actions are `PROPOSE`, `APPROVE`, `REJECT` and `ATTEST_DISPOSED`. The proposer cannot approve/reject their own proposal; the approver cannot attest the final disposition. Final attestation requires an evidence reference and SHA-256. A rejected proposal may be proposed again.
+
+The evidence is a human declaration and is not independently verified against an external provider. The purge preview reports per-image disposition counts but continues to block deletion with `external_artifact_disposition_not_verified`, even if all currently declared references are attested. Complete inventory coverage and trusted external verification are still missing. No external or physical deletion is performed.
+
+PostgreSQL CI includes `scripts/postgres_shelf_image_artifact_disposition_smoke.py` to verify UPDATE/DELETE protection on the event history after migrations.
