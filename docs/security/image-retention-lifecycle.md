@@ -187,3 +187,17 @@ Esta prova cobre o matching OCR manual e não deve ser interpretada como prova c
 Os utilitários `app.coco_dataset`, `app.coco_review` e `app.dataset_review` operam sobre ficheiros COCO e diretórios fornecidos por quem executa o comando. Validam estrutura, anotações, caminhos e registos de revisão, mas não consultam a base de dados operacional, não resolvem um `shelf_image_id`, não verificam a loja proprietária, o estado `ACTIVE/RESTRICTED` ou o legal hold. O campo de revisor do registo offline é texto fornecido no ficheiro e não uma identidade autenticada pela API.
 
 Estes utilitários não estão ligados a treino automático nem constituem, por si, um processo de exportação das imagens da aplicação. Contudo, se forem usados com imagens provenientes das capturas SMART SHELF AI, não existe atualmente uma ligação técnica que propague uma restrição posterior aos ficheiros COCO, cópias, relatórios ou datasets externos. Antes de qualquer exportação/treino operacional, exigir um manifesto de proveniência que ligue cada imagem/crop à origem, loja e hash, mais uma verificação de elegibilidade no momento de exportação e de release. O tratamento de cópias, backups e caches permanece dependente de política formal aprovada; não implementar purga por inferência.
+
+
+## Contrato de proveniência por imagem para datasets offline
+
+O módulo `app.dataset_provenance` define um sidecar JSON versionado (`schema_version: 1`) que liga cada imagem do dataset ao manifesto SHA-256 através de `split`, `file_name` e `image_sha256`. O validador exige cobertura exata: entradas em falta, duplicadas, fora do manifesto ou com hash divergente bloqueiam a validação.
+
+Cada entrada declara `source_type`:
+
+- `internal`: exige `shelf_image_id`, `store_id` e `source_image_sha256`.
+- `external`: exige `source_name`, `license`, `rights_reference` e `source_image_sha256`; não aceita IDs operacionais internos.
+
+Todas as entradas declaram uma `purpose` e uma transformação. `original` exige que o hash do ficheiro corresponda ao hash da origem; `crop` e `derived` exigem hash do progenitor igual ao hash declarado da origem e uma descrição da operação. O contrato é um registo de declarações e hashes, não uma prova criptográfica de direitos, de identidade do revisor ou de correspondência com a base de dados.
+
+**Limites atuais:** o sidecar é validado como utilitário offline e ainda não está ligado ao `dataset_approval`, ao exportador operacional ou à base de dados. Não verifica se uma imagem interna continua `ACTIVE), se existe legal hold, nem se a referência `store_id` corresponde ao `shelf_image_id`. Antes de treino/exportação operacional, é necessário integrar uma verificação autenticada na origem e no release, revalidando estado e legal hold, e definir a propagação de restrições a crops, cópias, relatórios, backups e caches. A purga física continua desativada.
