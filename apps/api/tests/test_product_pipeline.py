@@ -327,3 +327,69 @@ def test_worker_requeues_only_abandoned_active_processing_jobs(db, monkeypatch):
     assert "Recovered abandoned" in db.get(models.ShelfImage, stale_id).analysis_error
     assert db.get(models.ShelfImage, recent_id).analysis_status == "PROCESSING"
     assert db.get(models.ShelfImage, restricted_id).analysis_status == "PROCESSING"
+
+
+def test_worker_discards_result_when_processing_lease_changes_during_inference(
+    db, tmp_path, monkeypatch
+):
+    from datetime import timedelta
+
+    import app.vision_worker as worker
+    from app.vision import DetectionResult, VisionAnalysis
+
+    store = models.Store(code="LEASE-TEST", name="Lease test")
+    db.add(store)
+    db.flush()
+    zone = models.Zone(store_id=store.id, name="Zona")
+    db.add(zone)
+    db.flush()
+    shelf = models.Shelf(zone_id=zone.id, code="LEASE-01")
+    db.add(shelf)
+    db.flush()
+
+    storage_root = tmp_path / "storage"
+    monkeypatch.setattr(worker.settings, "image_storage_path", str(storage_root))
+    image_path = storage_root / str(store.id) / "lease.jpg"
+    image_path.parent.mkdir(parents=True)
+    image_path.write_bytes(b"lease-test-image")
+    image = models.ShelfImage(
+        shelf_id=shelf.id,
+        original_filename="lease.jpg",
+        storage_path=str(image_path),
+        mime_type="image/jpeg",
+        file_size_bytes=image_path.stat().st_size,
+        sha256="d" * 64,
+        analysis_status="PENDING",
+    )
+    db.add(image)
+    db.flush()
+    image_id = image.id
+
+    class LeaseChangingVision:
+        def analyze(self, path):
+            claimed = db.get(models.ShelfImage, image_id)
+            claimed.analysis_started_at = models.utc_now() + timedelta(seconds=1)
+            db.commit()
+            return VisionAnalysis(
+                model_version="detector-lease-test",
+                detections=[
+                    DetectionResult(
+                        label="product",
+                        confidence=0.95,
+                        x_min=0.1,
+                        y_min=0.1,
+                        x_max=0.8,
+                        y_max=0.8,
+                    )
+                ],
+            )
+
+    processed_id = worker.process_next_image(db, LeaseChangingVision())
+
+    assert processed_id == image_id
+    persisted_image = db.get(models.ShelfImage, image_id)
+    assert persisted_image.analysis_status == "PROCESSING"
+    assert persisted_image.analysis_started_at is not None
+    assert db.query(models.ShelfImageDetection).filter_by(
+        shelf_image_id=image_id
+    ).count() == 0
