@@ -272,3 +272,183 @@ def test_external_artifact_registration_rejects_purged_image(db_session, tmp_pat
 
     assert exc.value.status_code == 409
     assert db_session.query(models.ShelfImageArtifactReference).count() == 0
+
+
+
+def test_artifact_disposition_requires_two_person_approval_and_evidence(db_session, tmp_path):
+    from fastapi import HTTPException
+    from app.schemas import (
+        ShelfImageArtifactReferenceCreate,
+        ShelfImageArtifactDispositionActionRequest,
+    )
+
+    image_id, first_admin_id = build_restricted_image(
+        db_session, tmp_path, with_detection=False
+    )
+    second_admin = models.User(
+        email="second-purge-admin@example.test",
+        full_name="Second administrator",
+        password_hash="test-only",
+        role="ADMIN",
+        is_active=True,
+    )
+    db_session.add(second_admin)
+    db_session.commit()
+    second_admin_id = second_admin.id
+
+    artifact = main_module.register_shelf_image_artifact_reference(
+        image_id,
+        ShelfImageArtifactReferenceCreate(
+            artifact_type="BACKUP",
+            external_system="backup-vault",
+            external_reference="backup/retention/object-1",
+        ),
+        SimpleNamespace(state=SimpleNamespace(user_id=first_admin_id)),
+        db_session,
+    )
+    first_request = SimpleNamespace(state=SimpleNamespace(user_id=first_admin_id))
+    second_request = SimpleNamespace(state=SimpleNamespace(user_id=second_admin_id))
+
+    proposed = main_module.create_shelf_image_artifact_disposition_event(
+        image_id,
+        artifact.id,
+        ShelfImageArtifactDispositionActionRequest(
+            action="PROPOSE",
+            reason="Backup retention period has expired",
+        ),
+        first_request,
+        db_session,
+    )
+    assert proposed.event_type == "PROPOSED"
+
+    with pytest.raises(HTTPException) as self_approval:
+        main_module.create_shelf_image_artifact_disposition_event(
+            image_id,
+            artifact.id,
+            ShelfImageArtifactDispositionActionRequest(
+                action="APPROVE",
+                reason="Attempted self approval",
+            ),
+            first_request,
+            db_session,
+        )
+    assert self_approval.value.status_code == 409
+
+    approved = main_module.create_shelf_image_artifact_disposition_event(
+        image_id,
+        artifact.id,
+        ShelfImageArtifactDispositionActionRequest(
+            action="APPROVE",
+            reason="Independent review completed",
+        ),
+        second_request,
+        db_session,
+    )
+    assert approved.event_type == "APPROVED"
+
+    with pytest.raises(HTTPException) as missing_evidence:
+        main_module.create_shelf_image_artifact_disposition_event(
+            image_id,
+            artifact.id,
+            ShelfImageArtifactDispositionActionRequest(
+                action="ATTEST_DISPOSED",
+                reason="External backup removal reported",
+            ),
+            first_request,
+            db_session,
+        )
+    assert missing_evidence.value.status_code == 422
+
+    with pytest.raises(HTTPException) as approver_attests:
+        main_module.create_shelf_image_artifact_disposition_event(
+            image_id,
+            artifact.id,
+            ShelfImageArtifactDispositionActionRequest(
+                action="ATTEST_DISPOSED",
+                reason="Same reviewer cannot attest completion",
+                evidence_reference="ticket/cleanup-1",
+                evidence_sha256="a" * 64,
+            ),
+            second_request,
+            db_session,
+        )
+    assert approver_attests.value.status_code == 409
+
+    attested = main_module.create_shelf_image_artifact_disposition_event(
+        image_id,
+        artifact.id,
+        ShelfImageArtifactDispositionActionRequest(
+            action="ATTEST_DISPOSED",
+            reason="External backup removal evidence recorded",
+            evidence_reference="ticket/cleanup-1",
+            evidence_sha256="a" * 64,
+        ),
+        first_request,
+        db_session,
+    )
+    assert attested.event_type == "DISPOSAL_ATTESTED"
+    assert attested.evidence_sha256 == "a" * 64
+
+    history = main_module.list_shelf_image_artifact_disposition_events(
+        image_id, artifact.id, first_request, db_session
+    )
+    assert [event.event_type for event in history] == [
+        "PROPOSED", "APPROVED", "DISPOSAL_ATTESTED"
+    ]
+
+
+def test_rejected_artifact_disposition_can_be_reproposed(db_session, tmp_path):
+    from app.schemas import (
+        ShelfImageArtifactReferenceCreate,
+        ShelfImageArtifactDispositionActionRequest,
+    )
+
+    image_id, first_admin_id = build_restricted_image(
+        db_session, tmp_path, with_detection=False
+    )
+    second_admin = models.User(
+        email="review-admin@example.test",
+        full_name="Review administrator",
+        password_hash="test-only",
+        role="ADMIN",
+        is_active=True,
+    )
+    db_session.add(second_admin)
+    db_session.commit()
+    first_request = SimpleNamespace(state=SimpleNamespace(user_id=first_admin_id))
+    second_request = SimpleNamespace(state=SimpleNamespace(user_id=second_admin.id))
+    artifact = main_module.register_shelf_image_artifact_reference(
+        image_id,
+        ShelfImageArtifactReferenceCreate(
+            artifact_type="CACHE",
+            external_system="edge-cache",
+            external_reference="cache/key-42",
+        ),
+        first_request,
+        db_session,
+    )
+
+    main_module.create_shelf_image_artifact_disposition_event(
+        image_id, artifact.id,
+        ShelfImageArtifactDispositionActionRequest(
+            action="PROPOSE", reason="Request cache purge",
+        ),
+        first_request, db_session,
+    )
+    rejected = main_module.create_shelf_image_artifact_disposition_event(
+        image_id, artifact.id,
+        ShelfImageArtifactDispositionActionRequest(
+            action="REJECT", reason="Cache still required by active release",
+        ),
+        second_request, db_session,
+    )
+    assert rejected.event_type == "REJECTED"
+
+    reproposed = main_module.create_shelf_image_artifact_disposition_event(
+        image_id, artifact.id,
+        ShelfImageArtifactDispositionActionRequest(
+            action="PROPOSE", reason="New evidence confirms cache is obsolete",
+        ),
+        first_request, db_session,
+    )
+    assert reproposed.event_type == "PROPOSED"
