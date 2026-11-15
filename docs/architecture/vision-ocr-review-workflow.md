@@ -23,7 +23,7 @@ Executar o worker a partir de `apps/api`:
 python -m app.vision_worker --once
 ```
 
-Sem `OCR_PROVIDER_FACTORY`, o worker executa apenas a visão. Se a inicialização ou inferência OCR falhar, a análise visual é preservada e a execução OCR fica marcada como `FAILED`.
+Sem `OCR_PROVIDER_FACTORY`, o worker executa apenas a visão. Se a inicialização ou inferência OCR falhar, a análise visual é preservada e a tentativa OCR fica registada como `FAILED`. A escrita de cada execução OCR usa um savepoint: uma falha durante a leitura ou persistência não deixa regiões parciais nem elimina deteções visuais. As tentativas são append-only, permitindo distinguir falhas de execuções concluídas.
 
 ## Sequência funcional
 
