@@ -889,3 +889,7 @@ Foi acrescentado o teste JWT `test_reviewed_sku_evaluation_is_scoped_to_supervis
 
 O teste JWT `test_product_embedding_exemplar_listing_is_scoped_to_source_image_store` confirma que SUPERVISOR só consulta exemplares associados a imagens da própria loja, ADMIN pode consultar ambas as lojas e EMPLOYEE recebe 403. Commit `07f46a43`; CI pendente. A integração HTTP usa SQLite isolado e não substitui validação PostgreSQL individual.
 
+
+### Recuperação de tarefas de visão interrompidas
+
+O `vision-worker` recupera automaticamente imagens que permaneçam em `PROCESSING` por mais do que `VISION_PROCESSING_TIMEOUT_SECONDS` (predefinição: 86400 segundos / 24 horas), devolvendo-as a `PENDING`. Só recupera imagens `ACTIVE`, limpa os timestamps da tentativa anterior e regista a recuperação em `analysis_error`. O limite configurável aceita valores entre 60 segundos e 7 dias. O teste `test_worker_requeues_only_abandoned_active_processing_jobs` verifica que tarefas antigas são recuperadas, tarefas recentes não são interrompidas e imagens com retenção `RESTRICTED` não são reencaminhadas. A cobertura usa SQLite; CI ainda por confirmar.
