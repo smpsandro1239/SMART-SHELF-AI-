@@ -70,6 +70,7 @@ from app.schemas import (
     ShelfImageOCRMatchRead,
     ShelfImageFusedEvidenceRead, ShelfImageRetentionRequest, ShelfImageRetentionEventRead, ShelfImagePurgeScheduleRequest,
     ShelfImageReviewQueueItem, ShelfImageTrainingCandidateRead, CaptureSessionCreate, CaptureSessionRead,
+    ShelfImageArtifactReferenceCreate, ShelfImageArtifactReferenceRead,
     WarehouseLocationCreate, WarehouseProductProfileCreate, WarehousePlacementCreate,
     ProductPackagingLevelCreate, StorePalletCreate, StorePalletRead,
     PalletRotationPolicyCreate, PalletRotationPolicyRead, PalletRotationPolicyUpdate, PalletRotationEventRead, PalletLifecycleUpdate, PalletRotationSimulationRequest,
@@ -1165,6 +1166,102 @@ def cancel_shelf_image_purge_schedule(
     db.commit()
     db.refresh(item)
     return item
+
+
+@app.post(
+    "/api/v1/shelf-images/{image_id}/artifacts",
+    response_model=ShelfImageArtifactReferenceRead,
+    status_code=201,
+    tags=["computer-vision"],
+)
+def register_shelf_image_artifact_reference(
+    image_id: int,
+    payload: ShelfImageArtifactReferenceCreate,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Register a declared external derivative; this does not verify its presence or disposition."""
+    actor = _request_user(db, request)
+    if actor is None or actor.role != "ADMIN":
+        raise HTTPException(status_code=403, detail="Administrator role required")
+    image = db.query(models.ShelfImage).filter(
+        models.ShelfImage.id == image_id
+    ).with_for_update().first()
+    if image is None:
+        raise HTTPException(status_code=404, detail="Shelf image not found")
+    store_id = _shelf_image_store_id(db, image_id)
+    if store_id is None:
+        raise HTTPException(status_code=409, detail="Shelf image has no valid store lineage")
+    _enforce_store_scope(actor, store_id)
+
+    existing = db.query(models.ShelfImageArtifactReference).filter(
+        models.ShelfImageArtifactReference.shelf_image_id == image_id,
+        models.ShelfImageArtifactReference.artifact_type == payload.artifact_type,
+        models.ShelfImageArtifactReference.external_system == payload.external_system,
+        models.ShelfImageArtifactReference.external_reference == payload.external_reference,
+    ).first()
+    if existing is not None:
+        if existing.sha256 != payload.sha256 or existing.release_id != payload.release_id:
+            raise HTTPException(status_code=409, detail="Artifact reference already exists with different metadata")
+        return existing
+
+    record = models.ShelfImageArtifactReference(
+        shelf_image_id=image_id,
+        store_id=store_id,
+        artifact_type=payload.artifact_type,
+        external_system=payload.external_system,
+        external_reference=payload.external_reference,
+        release_id=payload.release_id,
+        sha256=payload.sha256,
+        declared_by_user_id=actor.id,
+    )
+    db.add(record)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        existing = db.query(models.ShelfImageArtifactReference).filter(
+            models.ShelfImageArtifactReference.shelf_image_id == image_id,
+            models.ShelfImageArtifactReference.artifact_type == payload.artifact_type,
+            models.ShelfImageArtifactReference.external_system == payload.external_system,
+            models.ShelfImageArtifactReference.external_reference == payload.external_reference,
+        ).first()
+        if existing is None or existing.sha256 != payload.sha256 or existing.release_id != payload.release_id:
+            raise HTTPException(status_code=409, detail="Artifact reference conflicts with an existing declaration")
+        return existing
+    db.refresh(record)
+    return record
+
+
+@app.get(
+    "/api/v1/shelf-images/{image_id}/artifacts",
+    response_model=list[ShelfImageArtifactReferenceRead],
+    tags=["computer-vision"],
+)
+def list_shelf_image_artifact_references(
+    image_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    limit: int = 200,
+):
+    """List declared external derivatives for an image within the caller's store scope."""
+    actor = _request_user(db, request)
+    if actor is None or actor.role != "ADMIN":
+        raise HTTPException(status_code=403, detail="Administrator role required")
+    store_id = _shelf_image_store_id(db, image_id)
+    if store_id is None:
+        raise HTTPException(status_code=404, detail="Shelf image not found")
+    _enforce_store_scope(actor, store_id)
+    return (
+        db.query(models.ShelfImageArtifactReference)
+        .filter(
+            models.ShelfImageArtifactReference.shelf_image_id == image_id,
+            models.ShelfImageArtifactReference.store_id == store_id,
+        )
+        .order_by(models.ShelfImageArtifactReference.created_at, models.ShelfImageArtifactReference.id)
+        .limit(max(1, min(limit, 500)))
+        .all()
+    )
 
 
 @app.get(
