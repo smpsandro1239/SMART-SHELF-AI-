@@ -77,7 +77,7 @@ def validate_provenance_manifest(
             errors.append(f"{label}.source_image_sha256 must be a 64-character lowercase SHA-256")
 
         source_type = item.get("source_type")
-        if source_type not in {"internal", "external"}:
+        if not isinstance(source_type, str) or source_type not in {"internal", "external"}:
             errors.append(f"{label}.source_type must be internal or external")
         elif source_type == "internal":
             if not _positive_id(item.get("shelf_image_id")):
@@ -105,7 +105,7 @@ def validate_provenance_manifest(
             errors.append(f"{label}.transformation must be an object")
         else:
             kind = transformation.get("type")
-            if kind not in {"original", "crop", "derived"}:
+            if not isinstance(kind, str) or kind not in {"original", "crop", "derived"}:
                 errors.append(f"{label}.transformation.type must be original, crop or derived")
             elif kind == "original":
                 if "parent_sha256" in transformation:
