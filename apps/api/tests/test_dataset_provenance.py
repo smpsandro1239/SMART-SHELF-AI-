@@ -152,3 +152,16 @@ def test_crop_parent_must_match_declared_source_hash():
         [manifest_row()],
     )
     assert any("parent_sha256 must match source_image_sha256" in error for error in errors)
+
+
+def test_provenance_validator_reports_unhashable_json_values_without_crashing():
+    entry = external_entry()
+    entry["source_type"] = ["external"]
+    entry["transformation"]["type"] = {"kind": "original"}
+    errors, report = validate_provenance_manifest(
+        {"schema_version": 1, "images": [entry]},
+        [manifest_row()],
+    )
+    assert any("source_type must be internal or external" in error for error in errors)
+    assert any("transformation.type must be original, crop or derived" in error for error in errors)
+    assert report["status"] == "BLOCKED"
