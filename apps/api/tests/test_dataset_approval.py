@@ -256,3 +256,26 @@ def test_release_gate_blocks_when_provenance_sidecar_is_incomplete(tmp_path):
     assert report["status"] == "BLOCKED"
     assert report["checks"]["image_provenance"]["passed"] is False
     assert any("missing provenance entry" in error for error in errors)
+
+def test_release_gate_blocks_internal_sources_without_operational_database(tmp_path):
+    manifest, paths, provenance = write_dataset(tmp_path)
+    record = make_record(hashlib.sha256(manifest.read_bytes()).hexdigest())
+    provenance_record = json.loads(provenance.read_text(encoding="utf-8"))
+    for entry in provenance_record["images"]:
+        entry.update({
+            "source_type": "internal",
+            "shelf_image_id": 1,
+            "store_id": 1,
+        })
+        for field in ("source_name", "license", "rights_reference"):
+            entry.pop(field, None)
+    provenance.write_text(json.dumps(provenance_record), encoding="utf-8")
+
+    errors, report = run_release_gate(
+        record, manifest, paths, provenance_path=provenance
+    )
+
+    assert report["status"] == "BLOCKED"
+    assert report["checks"]["image_provenance"]["passed"] is True
+    assert report["checks"]["operational_image_eligibility"]["passed"] is False
+    assert any("database session is required" in error for error in errors)
