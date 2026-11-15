@@ -41,6 +41,11 @@ Este documento regista a política de autorização aplicada pelo middleware HTT
 
 **Importante:** a tabela representa as decisões do middleware, não garante por si só acesso ao recurso. ADMIN também pode ser limitado por validações de negócio; SUPERVISOR e EMPLOYEE têm de respeitar o `store_id` e as regras de atribuição implementadas nos handlers. O catálogo de produtos é global por decisão arquitetural; associações SKU–prateleira e dados derivados de imagens mantêm âmbito por loja.
 
+
+## Validação do upload de imagens
+
+A suite JWT inclui `test_employee_upload_rejects_forged_image_and_unsupported_mime`, que verifica a rejeição de conteúdo PNG truncado/forjado e de MIME SVG, sem criar ficheiros nem registos na base de dados. Inclui também `test_employee_upload_sanitizes_client_filename`, que confirma que caminhos fornecidos pelo cliente são reduzidos ao nome base e que o ficheiro permanece no diretório da loja. Estes testes usam o handler HTTP real e SQLite isolado; não são uma validação PostgreSQL. A execução CI dos novos testes está pendente.
+
 ## Validação PostgreSQL — sessões de captura
 
 O smoke `apps/api/scripts/postgres_capture_session_authorization_smoke.py` exercita a listagem de sessões com dois estabelecimentos e JWT reais: SUPERVISOR recebe apenas sessões da sua loja; o filtro por prateleira estrangeira devolve lista vazia; ADMIN vê ambas as lojas; EMPLOYEE recebe HTTP 403. O smoke está integrado no workflow API CI após as migrações e os restantes smoke tests PostgreSQL. A assinatura de `create_access_token` exige `user_id` e `role`; o helper do smoke fornece explicitamente os três claims de perfil. A execução CI deste cenário ainda não foi confirmada, pelo que a validação permanece pendente.
