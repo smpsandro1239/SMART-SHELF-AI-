@@ -36,3 +36,6 @@ See [GitHub's workflow run logs guide](https://docs.github.com/en/actions/how-to
 ## Follow-up on application changes (2026-11-15)
 
 After the new disposition migration, API endpoint, tests and PostgreSQL smoke script were committed, API CI run `43777489500` also failed before recording any step (`steps: []`, `logs_url: null`). Quality-gates run `43777523625` showed the same pre-step failure for both API and web jobs. This repeats the runner/log symptom on independent jobs and still provides no application-level test result.
+
+
+The final implementation revision checked in this session, `866f75087b17920b1b5743ec08a578248c46e1f5`, reproduced the same result: API CI run `43777605958` has an empty step list and `logs_url: null`; quality-gates run `43777605937` has the same result for both API and web jobs. The minimal diagnostic retry also failed before its first step. No source-level test result is available from these runs.
