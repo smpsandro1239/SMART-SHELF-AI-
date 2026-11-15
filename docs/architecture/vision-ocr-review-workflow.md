@@ -89,3 +89,10 @@ Um fluxo de purge futuro tem de:
 - eliminar ou anonimizar embeddings de origem, deteções, execuções OCR, evidências, correspondências e fusões;
 - preservar o registo mínimo da imagem e os eventos de auditoria, incluindo um evento explícito de purge, sem deixar conteúdo pessoal recuperável;
 - ser idempotente e recuperar de falhas entre a remoção do ficheiro e a confirmação transacional.
+
+
+## Pré-validação administrativa de purge (não destrutiva)
+
+O endpoint `GET /api/v1/shelf-images/{image_id}/retention/purge-eligibility` está limitado a ADMIN e fornece uma pré-validação sem apagar dados. Verifica se a imagem está `RESTRICTED` ou `PENDING_PURGE`, se não existe legal hold, se `purge_not_before` está definido e expirado, se a análise não está em execução e se o ficheiro continua presente num caminho seguro dentro do diretório da loja. Devolve também contagens de deteções, execuções/registos OCR, fusões e exemplares de embeddings associados.
+
+A resposta inclui `eligible`, a lista de `blockers` e `deletion_performed: false`. A elegibilidade é apenas uma pré-condição, não uma autorização para apagar diretamente. A API ainda não implementa o executor de purge. Nenhuma duração de retenção é inferida: `purge_not_before` tem de ser definido por uma política aprovada e aplicada por um fluxo próprio. O endpoint é útil para auditoria operacional, mas não substitui uma operação de purge idempotente com recuperação de falhas entre filesystem e base de dados.
