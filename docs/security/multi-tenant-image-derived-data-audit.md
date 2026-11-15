@@ -209,3 +209,10 @@ O endpoint `GET /api/v1/warehouse/product-packaging` expõe níveis de embalagem
 A validação passou no API CI [43609023974](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/43609023974) e Quality Gates [43609023990](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/43609023990), no commit `4cf0f34848cd2beab83d0b12db89888dbdd162d3`. O workflow API concluiu migrações e smoke tests PostgreSQL 16 e a suite completa; Quality Gates passou testes API, compilação Python e build web. A integração HTTP do teste usa SQLite isolado; não se afirma validação PostgreSQL individual deste endpoint.
 
 A cobertura acrescentada não fecha a auditoria global de autorização, nem substitui a revisão de todas as rotas e caminhos indiretos.
+
+## Candidatos de treino revistos — isolamento multi-loja
+
+Foi acrescentado `test_reviewed_training_candidates_are_scoped_to_supervisor_store` à suite JWT HTTP. O teste cria decisões humanas elegíveis para deteções de duas lojas, ativa ambas as imagens e confirma que o SUPERVISOR da loja A recebe apenas o candidato da loja A, ADMIN recebe os dois e EMPLOYEE recebe HTTP 403. A preparação evita que a imagem local seja excluída por já possuir um exemplar de embedding, isolando assim o comportamento do endpoint de candidatos.
+
+O teste foi publicado no commit `895adcee93699ab56b7bec202ce88d554593f214`. A execução CI está pendente; o teste usa SQLite isolado e não representa validação PostgreSQL individual. A listagem de candidatos não inicia treino nem substitui a aprovação humana de exemplares. A auditoria global permanece aberta.
+
