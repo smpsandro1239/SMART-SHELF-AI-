@@ -157,3 +157,18 @@ Esta proteção cobre eliminações diretas e não constitui uma política de
 retenção nem um fluxo de purga. A validação de concorrência específica destas
 novas relações continua pendente; a validação funcional sequencial é
 executada no smoke PostgreSQL 16.
+
+
+## Imutabilidade da proveniência visual/OCR
+
+A proteção contra eliminação dos registos-pai não impedia alterações ou
+eliminações diretas nas próprias linhas de histórico. A migração
+`0031_visual_ocr_evidence_append_only` instala triggers de base de dados
+para rejeitar `UPDATE` e `DELETE` em revisões humanas de SKU, execuções OCR,
+regiões OCR, resultados de matching e fusões visuais/OCR.
+
+O smoke PostgreSQL `postgres_embedding_retention_smoke.py` exercita ambas as
+operações nas cinco tabelas e confirma que os valores e registos originais
+permanecem. Esta proteção é uma regra de imutabilidade, não um mecanismo de
+purga ou anonimização. A validação CI da migração e do smoke permanece
+pendente.
