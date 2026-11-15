@@ -906,3 +906,14 @@ O worker suporta `python -m app.vision_worker --retry-failed-ocr-image-id <ID>` 
 O teste `test_restricted_own_store_image_rejects_ocr_writes_and_retry` foi alargado para confirmar que uma imagem `RESTRICTED` devolve HTTP 410 no endpoint de conteúdo binário e que exemplares de embeddings ligados a essa imagem deixam de aparecer na listagem. Isto valida o bloqueio de acesso, não a eliminação física dos dados.
 
 **Lacuna P0 identificada:** a eliminação definitiva ainda não está implementada. Foi acrescentado `GET /api/v1/shelf-images/{image_id}/retention/purge-eligibility`, exclusivo de ADMIN, como pré-validação não destrutiva: verifica estado de retenção, legal hold, prazo, processamento em curso e segurança/presença do ficheiro, e apresenta contagens dos principais dados derivados. A resposta declara explicitamente `deletion_performed: false`; o endpoint não apaga ficheiros nem registos. A elegibilidade exige uma data `purge_not_before` previamente definida e expirada. Não foi criada uma duração de retenção por omissão, porque essa política tem de ser aprovada. Até existir um executor de purge transacional e recuperável, `RESTRICTED` não deve ser apresentado como apagamento definitivo. Ver [auditoria do fluxo de retenção e OCR](docs/architecture/vision-ocr-review-workflow.md).
+
+### Agendamento administrativo do purge
+
+Apenas ADMIN pode agendar ou cancelar a data de purge de uma imagem `RESTRICTED`. O agendamento exige uma data futura com fuso horário explícito, uma versão de política (`policy_version`) e uma justificação. A operação grava `purge_not_before`, `retention_policy_version` e a justificação, sem alterar o estado `RESTRICTED` e sem apagar conteúdo. A tabela append-only de eventos regista `PURGE_SCHEDULED`; o cancelamento limpa a data e a versão da política e regista `PURGE_CANCELLED`. Imagens com legal hold, em processamento ou que não estejam `RESTRICTED` não podem ser agendadas. O cancelamento também não restaura a imagem nem remove o legal hold.
+
+Endpoints:
+- `POST /api/v1/shelf-images/{image_id}/retention/purge-schedule`
+- `POST /api/v1/shelf-images/{image_id}/retention/purge-schedule/cancel`
+- `GET /api/v1/shelf-images/{image_id}/retention/purge-eligibility`
+
+A migração `0032_shelf_image_purge_schedule_events` alarga a restrição dos tipos de evento para incluir os dois eventos de agendamento. O executor de purge continua por implementar; a data agendada não dispara qualquer eliminação automática.
