@@ -280,3 +280,24 @@ O smoke PostgreSQL tenta `UPDATE` e `DELETE` individualmente em cada tabela
 e confirma que o conteúdo original continua presente. Esta alteração não
 fecha a auditoria de todos os dados derivados nem substitui a revisão dos
 caminhos administrativos e do worker.
+
+
+## Verificação de curadoria e treino — limite dos datasets offline
+
+Os caminhos operacionais consultados mantêm filtros de elegibilidade:
+
+- `GET /api/v1/shelf-image-review-queue` e o respetivo resumo filtram imagens `ACTIVE`.
+- `GET /api/v1/training-candidates/reviewed` exige a última revisão humana `CONFIRMED/CORRECTED`, produto ativo e imagem `ACTIVE`; não inicia treino nem aprova automaticamente exemplares.
+- `GET /api/v1/sku-evaluation/reviewed` delega no agregador de previsões revistas, cuja consulta SQL filtra `ShelfImage.retention_status == ACTIVE` e aplica o âmbito de loja do supervisor no handler.
+- O registo de matching de embeddings bloqueia as imagens de origem em ordem estável e só inclui exemplares aprovados cujas imagens de origem continuam `ACTIVE`.
+- O worker só seleciona imagens `PENDING/ACTIVE`, valida o caminho físico dentro do diretório da loja e volta a bloquear/refrescar a imagem antes de persistir deteções/OCR; se a retenção vencer a corrida, descarta os resultados.
+
+A validação do commit `b8392369486026a01f1ffa728198f5d886565314` passou no API CI [43710660312](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/43710660312) e Quality Gates [43710660309](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/43710660309): 778 testes aprovados, 1 ignorado, smoke tests PostgreSQL 16, compilação Python e build web.
+
+### Limite identificado: COCO e revisão offline
+
+Os módulos `coco_dataset`, `coco_review` e `dataset_review` trabalham sobre JSON e diretórios de imagens externos. A validação de ficheiros e a galeria não consultam o estado da captura, a loja, o legal hold ou a política de retenção; a identidade de revisor no ledger offline é texto introduzido no ficheiro, não uma identidade autenticada. Não existe integração automática com treino nem um exportador ligado à base de dados, pelo que não se deve afirmar que estes módulos estão a consumir imagens operacionais por defeito. Ainda assim, a sua utilização manual com imagens derivadas das capturas pode criar cópias fora do controlo de retenção da aplicação.
+
+**Bloqueio antes de exportação/treino operacional:** criar manifesto verificável de proveniência (imagem de origem, loja, hash, crop/transformação, finalidade e revisão humana), validar `ACTIVE` e legal hold no momento de exportação e de release, e definir tratamento de cópias, relatórios, backups e caches. Até existir este contrato e uma política aprovada, não ligar os utilitários offline a um fluxo automático nem implementar purga física.
+
+A auditoria global de autorização e retenção permanece aberta: a cobertura dos handlers operacionais melhorou, mas não existe ainda uma reconciliação completa de todas as rotas e destinos externos de evidência.
