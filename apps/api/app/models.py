@@ -1,6 +1,6 @@
 from datetime import date, datetime, timezone
 
-from sqlalchemy import JSON, Date, DateTime, ForeignKey, String, Text, Float, Integer, Boolean, Numeric, UniqueConstraint, CheckConstraint, Index, text
+from sqlalchemy import JSON, Date, DateTime, ForeignKey, String, Text, Float, Integer, Boolean, Numeric, UniqueConstraint, CheckConstraint, ForeignKeyConstraint, Index, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -577,6 +577,10 @@ class ShelfImageArtifactReference(Base):
             "shelf_image_id", "artifact_type", "external_system", "external_reference",
             name="uq_shelf_image_artifact_reference",
         ),
+        UniqueConstraint(
+            "id", "shelf_image_id", "store_id",
+            name="uq_shelf_image_artifact_reference_lineage",
+        ),
         Index("ix_shelf_image_artifacts_store_image", "store_id", "shelf_image_id"),
     )
 
@@ -596,6 +600,16 @@ class ShelfImageArtifactDispositionEvent(Base):
     """Append-only two-person approval and evidence trail for external artifact disposition."""
     __tablename__ = "shelf_image_artifact_disposition_events"
     __table_args__ = (
+        ForeignKeyConstraint(
+            ["artifact_reference_id", "shelf_image_id", "store_id"],
+            [
+                "shelf_image_artifact_references.id",
+                "shelf_image_artifact_references.shelf_image_id",
+                "shelf_image_artifact_references.store_id",
+            ],
+            name="fk_shelf_image_artifact_disposition_reference_lineage",
+            ondelete="RESTRICT",
+        ),
         CheckConstraint(
             "event_type IN ('PROPOSED', 'APPROVED', 'REJECTED', 'DISPOSAL_ATTESTED')",
             name="ck_shelf_image_artifact_disposition_event_type",
