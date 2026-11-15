@@ -47,7 +47,7 @@ Esta é a fonte de verdade para manter o SMART SHELF AI focado. Deve ser revista
 
 #### P0 — Integridade e fiabilidade operacional
 
-- [ ] Integrar a proveniência por imagem dos datasets offline com o gate de release e a origem operacional: validar `shelf_image_id`/`store_id`, estado `ACTIVE`, legal hold e autorização no momento da exportação e do release; propagar restrições a crops, cópias, relatórios e armazenamento externo. O contrato offline `app.dataset_provenance` e os testes unitários já existem, mas ainda não fazem esta consulta nem bloqueiam o `dataset_approval`.
+- [ ] Integrar a proveniência por imagem com a origem operacional: validar `shelf_image_id`/`store_id`, estado `ACTIVE`, legal hold e autorização no momento da exportação e do release; propagar restrições a crops, cópias, relatórios e armazenamento externo. O gate offline `dataset_approval` já exige e valida o sidecar versionado e bloqueia cobertura/hash/origem declarada incompletos; ainda não consulta a base de dados nem confirma elegibilidade operacional.
 
 
 - [x] Reforçar `/health/ready` para verificar a conectividade PostgreSQL e comparar todas as heads Alembic esperadas com as efetivamente aplicadas. Bases vazias ou com migrações em falta devolvem HTTP 503, sem expor detalhes internos; a resposta `ready` só é emitida quando o esquema está atualizado. Testes cobrem base vazia, revisão antiga e heads atuais. Validado no API CI [43630039330](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/43630039330) (**772 testes aprovados, 1 ignorado**) e Quality Gates [43630039355](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/43630039355), commit `652f71ac`.
