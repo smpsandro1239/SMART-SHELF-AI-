@@ -2667,3 +2667,113 @@ def test_embedding_exemplar_review_is_scoped_to_source_store_and_reviewer_role(a
         assert own_persisted.reviewed_by_user_id == ids["supervisor_a"]
         assert foreign_persisted.review_status == "APPROVED"
         assert foreign_persisted.reviewed_by_user_id == ids["admin"]
+
+
+def test_reviewed_sku_evaluation_database_query_isolated_by_supervisor_store(auth_client):
+    client, ids, store_ids = auth_client
+    reviewed_at = datetime.now(timezone.utc)
+
+    with main_module.SessionLocal() as db:
+        image_b = db.get(models.ShelfImage, ids["image_b"])
+        image_b.retention_status = "ACTIVE"
+        run_a = models.ShelfImageOCRRun(
+            shelf_image_id=ids["image_a"],
+            provider="sku-evaluation-auth-test",
+            model_version="sku-evaluation-ocr-v1",
+            status="COMPLETED",
+            created_at=reviewed_at - timedelta(minutes=2),
+        )
+        run_b = models.ShelfImageOCRRun(
+            shelf_image_id=ids["image_b"],
+            provider="sku-evaluation-auth-test",
+            model_version="sku-evaluation-ocr-v1",
+            status="COMPLETED",
+            created_at=reviewed_at - timedelta(minutes=2),
+        )
+        db.add_all([run_a, run_b])
+        db.flush()
+
+        db.add_all([
+            models.DetectionSkuReview(
+                detection_id=ids["detection_a"],
+                previous_product_id=ids["product"],
+                selected_product_id=ids["product"],
+                decision="CONFIRMED",
+                reviewer_user_id=ids["admin"],
+                created_at=reviewed_at,
+            ),
+            models.DetectionSkuReview(
+                detection_id=ids["detection_b"],
+                previous_product_id=ids["product"],
+                selected_product_id=ids["product"],
+                decision="CONFIRMED",
+                reviewer_user_id=ids["admin"],
+                created_at=reviewed_at,
+            ),
+            models.ShelfImageFusedEvidence(
+                ocr_run_id=run_a.id,
+                detection_id=ids["detection_a"],
+                status="CONSENSUS",
+                suggested_product_id=ids["product"],
+                visual_product_id=ids["product"],
+                text_product_id=None,
+                visual_status="MATCHED",
+                text_status="UNKNOWN",
+                visual_similarity=0.95,
+                text_score=None,
+                ocr_confidence=0.9,
+                visual_model_version="embed-store-a-v1",
+                ocr_provider="sku-evaluation-auth-test",
+                ocr_model_version="sku-evaluation-ocr-v1",
+                reason="Reviewed prediction in store A",
+                created_at=reviewed_at - timedelta(minutes=1),
+            ),
+            models.ShelfImageFusedEvidence(
+                ocr_run_id=run_b.id,
+                detection_id=ids["detection_b"],
+                status="CONSENSUS",
+                suggested_product_id=ids["product"],
+                visual_product_id=ids["product"],
+                text_product_id=None,
+                visual_status="MATCHED",
+                text_status="UNKNOWN",
+                visual_similarity=0.95,
+                text_score=None,
+                ocr_confidence=0.9,
+                visual_model_version="embed-store-b-v1",
+                ocr_provider="sku-evaluation-auth-test",
+                ocr_model_version="sku-evaluation-ocr-v1",
+                reason="Reviewed prediction in store B",
+                created_at=reviewed_at - timedelta(minutes=1),
+            ),
+        ])
+        db.commit()
+
+    supervisor_response = client.get(
+        "/api/v1/sku-evaluation/reviewed",
+        headers=bearer(ids["supervisor_a"], "SUPERVISOR"),
+    )
+    assert supervisor_response.status_code == 200, supervisor_response.text
+    supervisor_report = supervisor_response.json()
+    assert supervisor_report["store_id"] == store_ids["a"]
+    assert supervisor_report["sample_count"] == 1
+    assert set(supervisor_report["by_model_version"]) == {"embed-store-a-v1"}
+
+    admin_response = client.get(
+        "/api/v1/sku-evaluation/reviewed",
+        headers=bearer(ids["admin"], "ADMIN"),
+    )
+    assert admin_response.status_code == 200, admin_response.text
+    admin_report = admin_response.json()
+    assert admin_report["store_id"] is None
+    assert admin_report["sample_count"] == 2
+    assert set(admin_report["by_model_version"]) == {
+        "embed-store-a-v1",
+        "embed-store-b-v1",
+    }
+
+    employee_response = client.get(
+        "/api/v1/sku-evaluation/reviewed",
+        headers=bearer(ids["employee_a"], "EMPLOYEE"),
+    )
+    assert employee_response.status_code == 403
