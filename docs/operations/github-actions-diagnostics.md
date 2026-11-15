@@ -1,0 +1,34 @@
+# GitHub Actions diagnostics
+
+Last checked: 2026-11-15 (UTC)
+
+## Observed failure pattern
+
+The following workflows fail before any recorded runner step:
+
+- Smart Shelf quality gates, run `43777084186`, commit `1008aaca09e715d23ad78bdbfb441dfa2e40cf6d`.
+- Runner diagnostics, run `43777317171`, commit `49d216541ff205700a9b3a361bccfe8e09a00e89`.
+
+For the quality-gates run, both jobs (`API tests and Python compilation` and `Web TypeScript and production build`) report failure with no steps. The GitHub Actions jobs endpoint reports `logs_url: null` and `steps: null`; the step endpoint returns an empty array; downloading logs returns HTTP 404 with `BlobNotFound`; no workflow artifacts were produced.
+
+A dedicated diagnostic workflow was added at `.github/workflows/runner-diagnostics.yml`. It deliberately avoids checkout, third-party actions, package installation, services and repository code. Its only job runs a few preinstalled runtime version commands. The first attempt also failed before any step, with no log URL. A single job retry was queued for follow-up; its result must be inspected before concluding whether the failure is transient.
+
+This evidence does **not** establish a Python, TypeScript, application, or workflow-command failure: none of those commands were reached. It is consistent with a runner provisioning/orchestration or Actions log-initialization failure, but repository billing, runner policy and account-level restrictions have not been independently inspected. Do not label CI green or blame source code without an executed step and diagnostic output.
+
+## Vercel deployment checks
+
+The commit status for the relevant revisions reported:
+
+- `Vercel – smart-shelf-ai-r5gl`: failure, target URL indicates `build-rate-limit`.
+- `Vercel – smart-shelf-ai`: failure or pending depending on the deployment revision; a prior status explicitly reported the same build-rate-limit destination.
+
+This is a deployment quota/rate-limit signal, not evidence of an application compilation error. Repeated commits or forced deployments should not be used as a workaround for a provider limit.
+
+## Follow-up procedure
+
+1. Inspect the newest run and retry of `Runner diagnostics`. A successful first step with the expected version output demonstrates that a hosted runner can execute a minimal job at that time.
+2. If a fresh minimal run still has no steps and no logs, check GitHub Actions service status, repository Actions enablement, account/organization spending limits and runner policies; escalate to GitHub Support with run/job IDs if those checks are normal.
+3. Once the minimal job executes, rerun API CI and quality gates. Diagnose actual Python/TypeScript failures from their step logs.
+4. Respect the Vercel build rate limit; resume deployment after the provider allows it rather than changing application code to hide the status.
+
+See [GitHub's workflow run logs guide](https://docs.github.com/en/actions/how-tos/monitor-workflows/use-workflow-run-logs) and [workflow troubleshooting guide](https://docs.github.com/en/actions/how-tos/troubleshoot-workflows).
