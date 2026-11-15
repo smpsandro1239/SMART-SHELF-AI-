@@ -308,3 +308,15 @@ O teste `test_reviewed_training_candidates_are_scoped_to_supervisor_store` valid
 
 A integração HTTP usa SQLite isolado. O teste foi acrescentado no commit `895adcee`; a validação CI deste commit está pendente. Este teste não autoriza treino automático: os candidatos continuam sujeitos a curadoria/aprovação de exemplar e às regras de integridade do dataset.
 
+## Avaliação histórica SKU — isolamento multi-loja
+
+O teste `test_reviewed_sku_evaluation_is_scoped_to_supervisor_store` cobre diretamente `GET /api/v1/sku-evaluation/reviewed` com JWT real e substitui apenas o agregador de métricas para observar os argumentos que lhe chegam:
+
+- SUPERVISOR consulta o relatório sem indicar loja e o handler força o `store_id` da sua própria conta;
+- a tentativa de indicar explicitamente a loja B a partir da loja A recebe HTTP 403 antes de executar o agregador;
+- ADMIN pode pedir o relatório da loja B;
+- EMPLOYEE recebe HTTP 403 antes de qualquer agregação;
+- o filtro `model_version` é preservado no encaminhamento do relatório.
+
+A prova isola a fronteira HTTP/autorização e não valida o cálculo SQL das métricas. O teste usa SQLite isolado e mock do agregador; a validação CI deste commit está pendente.
+
