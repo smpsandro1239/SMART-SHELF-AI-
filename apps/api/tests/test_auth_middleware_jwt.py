@@ -2818,7 +2818,7 @@ def test_employee_upload_rejects_forged_image_and_unsupported_mime(
     with main_module.SessionLocal() as db:
         before_count = db.query(models.ShelfImage).count()
 
-    forged_png = b"\\x89PNG\\r\\n\\x1a\\n" + b"not-a-real-png"
+    forged_png = b"\x89PNG\r\n\x1a\n" + b"not-a-real-png"
     forged_response = client.post(
         "/api/v1/shelf-images",
         data={"shelf_id": str(ids["shelf_a_assigned"])},
