@@ -1249,3 +1249,15 @@ Estados possíveis por produto:
 - `PROFILE_UNKNOWN`: falta o perfil térmico do produto; não se assume temperatura ambiente.
 
 A resposta identifica `distance_metric` como distância ao ponto de picking, não distância entre localizações. Por isso, a sequência é uma heurística de picking e **não** uma rota física otimizada: ainda não existe grafo de corredores nem matriz de distâncias entre localizações. A quantidade das colocações é uma fotografia de stock, não uma reserva. A proposta não reserva stock, não cria tarefas, não atualiza inventário e não autoriza movimentos físicos. Antes de executar, é necessário confirmar disponibilidade, reservas concorrentes, lote/validade e capacidade real de transporte.
+
+
+### Agendamento administrativo do purge
+
+Apenas ADMIN pode agendar ou cancelar a data de purge de uma imagem `RESTRICTED`. O agendamento exige uma data futura com fuso horário explícito, uma versão de política (`policy_version`) e uma justificação. A operação grava `purge_not_before`, `retention_policy_version` e a justificação, sem alterar o estado `RESTRICTED` e sem apagar conteúdo. A tabela append-only de eventos regista `PURGE_SCHEDULED`; o cancelamento limpa a data e a versão da política e regista `PURGE_CANCELLED`. Imagens com legal hold, em processamento ou que não estejam `RESTRICTED` não podem ser agendadas. O cancelamento também não restaura a imagem nem remove o legal hold.
+
+Endpoints:
+- `POST /api/v1/shelf-images/{image_id}/retention/purge-schedule`
+- `POST /api/v1/shelf-images/{image_id}/retention/purge-schedule/cancel`
+- `GET /api/v1/shelf-images/{image_id}/retention/purge-eligibility`
+
+A migração `0032_shelf_image_purge_schedule_events` alarga a restrição dos tipos de evento para incluir os dois eventos de agendamento. O executor de purge continua por implementar; a data agendada não dispara qualquer eliminação automática.
