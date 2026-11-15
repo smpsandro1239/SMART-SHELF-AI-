@@ -395,7 +395,9 @@ def test_worker_discards_result_when_processing_lease_changes_during_inference(
     ).count() == 0
 
 
-def test_worker_records_ocr_failure_without_losing_visual_detections(db, monkeypatch):
+def test_worker_records_ocr_failure_without_losing_visual_detections(db):
+    from pathlib import Path
+
     import app.vision_worker as worker
 
     image_id = db.info["image_id"]
@@ -414,7 +416,7 @@ def test_worker_records_ocr_failure_without_losing_visual_detections(db, monkeyp
     worker.persist_ocr_evidence(
         db,
         image_id,
-        __import__("pathlib").Path("/tmp/not-read-by-provider.jpg"),
+        Path("/tmp/not-read-by-provider.jpg"),
         detections,
         BrokenOCR(),
     )
