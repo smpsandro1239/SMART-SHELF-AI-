@@ -9,11 +9,15 @@ by the matching transaction before allowing matching to commit.
 from concurrent.futures import ThreadPoolExecutor
 from threading import Event
 from time import monotonic, sleep
+from types import SimpleNamespace
 from uuid import uuid4
+
+from fastapi import HTTPException
 
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 
+from app import main as main_module
 from app import models
 from app.database import SessionLocal
 from app.product_embedding_service import (
@@ -249,6 +253,109 @@ def main() -> None:
         )
         result = registry.match([1.0, 0.0, 0.0])
         assert result.status == "UNKNOWN", result
+
+    # Manual OCR matching must serialize with retention just like the
+    # background worker. The API route locks and refreshes the source image;
+    # after retention commits, the waiting request must observe RESTRICTED.
+    with SessionLocal() as db:
+        reviewer_id = db.query(models.User.id).filter(
+            models.User.email == f"pg-embed-reviewer-{suffix}@example.test"
+        ).scalar()
+        before_matches = db.query(models.ShelfImageOCRMatch).join(
+            models.ShelfImageOCRRun,
+            models.ShelfImageOCRMatch.run_id == models.ShelfImageOCRRun.id,
+        ).filter(models.ShelfImageOCRRun.shelf_image_id == target_image_id).count()
+
+    ocr_application_name = f"ss-ocr-retention-{suffix}"
+    image_locked = Event()
+    allow_restriction_commit = Event()
+    ocr_request_started = Event()
+    ocr_request_finished = Event()
+    ocr_request_result: dict[str, int] = {}
+
+    def image_lock_transaction() -> None:
+        with SessionLocal() as db:
+            image = (
+                db.query(models.ShelfImage)
+                .filter(models.ShelfImage.id == target_image_id)
+                .with_for_update()
+                .one()
+            )
+            image_locked.set()
+            if not allow_restriction_commit.wait(timeout=15):
+                raise TimeoutError("image lock transaction was not released")
+            image.retention_status = "RESTRICTED"
+            image.retention_reason = "PostgreSQL OCR retention serialization smoke"
+            image.retention_requested_at = models.utc_now()
+            db.commit()
+
+    def ocr_matching_request() -> None:
+        with SessionLocal() as db:
+            db.execute(
+                text("SELECT set_config('application_name', :name, false)"),
+                {"name": ocr_application_name},
+            )
+            ocr_request_started.set()
+            request = SimpleNamespace(state=SimpleNamespace(user_id=reviewer_id))
+            try:
+                main_module.match_shelf_image_ocr_to_catalogue(
+                    target_image_id,
+                    request,
+                    db,
+                )
+            except HTTPException as exc:
+                ocr_request_result["status_code"] = exc.status_code
+            else:
+                ocr_request_result["status_code"] = 200
+            finally:
+                ocr_request_finished.set()
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        lock_future = executor.submit(image_lock_transaction)
+        assert image_locked.wait(timeout=10), "retention transaction did not lock OCR source image"
+        ocr_future = executor.submit(ocr_matching_request)
+        assert ocr_request_started.wait(timeout=10), "OCR matching request did not start"
+
+        deadline = monotonic() + 10
+        observed_ocr_blocker = False
+        while monotonic() < deadline:
+            with SessionLocal() as monitor:
+                activity = monitor.execute(
+                    text(
+                        "SELECT wait_event_type, pg_blocking_pids(pid) "
+                        "FROM pg_stat_activity WHERE application_name = :name"
+                    ),
+                    {"name": ocr_application_name},
+                ).first()
+            if activity is not None and activity[0] == "Lock" and activity[1]:
+                observed_ocr_blocker = True
+                break
+            if ocr_request_finished.is_set():
+                break
+            sleep(0.05)
+
+        try:
+            assert observed_ocr_blocker, (
+                "manual OCR matching did not wait for the source-image retention lock"
+            )
+            assert not ocr_request_finished.is_set(), (
+                "manual OCR matching completed before the retention decision committed"
+            )
+        finally:
+            allow_restriction_commit.set()
+
+        lock_future.result(timeout=10)
+        ocr_future.result(timeout=10)
+
+    assert ocr_request_result.get("status_code") == 410, ocr_request_result
+    with SessionLocal() as db:
+        image = db.get(models.ShelfImage, target_image_id)
+        assert image is not None and image.retention_status == "RESTRICTED"
+        after_matches = db.query(models.ShelfImageOCRMatch).join(
+            models.ShelfImageOCRRun,
+            models.ShelfImageOCRMatch.run_id == models.ShelfImageOCRRun.id,
+        ).filter(models.ShelfImageOCRRun.shelf_image_id == target_image_id).count()
+        assert after_matches == before_matches
 
     # A source-image deletion must not silently turn its derived exemplar into
     # an unlinked external reference (the FK's legacy ON DELETE SET NULL path).
