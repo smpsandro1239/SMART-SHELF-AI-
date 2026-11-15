@@ -434,6 +434,39 @@ class ShelfImageRetentionRequest(BaseModel):
         return normalized
 
 
+ArtifactType = Literal["DATASET_COPY", "DATASET_RELEASE", "CROP", "REPORT", "BACKUP", "CACHE", "OBJECT_REPLICA", "OTHER"]
+
+
+class ShelfImageArtifactReferenceCreate(BaseModel):
+    artifact_type: ArtifactType
+    external_system: str = Field(min_length=1, max_length=120)
+    external_reference: str = Field(min_length=1, max_length=500)
+    release_id: str | None = Field(default=None, max_length=160)
+    sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+
+    @field_validator("external_system", "external_reference")
+    @classmethod
+    def strip_required_text(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("value cannot be blank")
+        return normalized
+
+
+class ShelfImageArtifactReferenceRead(BaseModel):
+    id: int
+    shelf_image_id: int
+    store_id: int
+    artifact_type: ArtifactType
+    external_system: str
+    external_reference: str
+    release_id: str | None
+    sha256: str | None
+    declared_by_user_id: int | None
+    created_at: datetime
+    model_config = ConfigDict(from_attributes=True)
+
+
 class ShelfImagePurgeScheduleRequest(BaseModel):
     purge_not_before: datetime
     policy_version: str = Field(min_length=1, max_length=40)
