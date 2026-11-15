@@ -283,3 +283,19 @@ A resposta distingue:
 - `eligible`: permanece sempre `false` enquanto o inventário de releases externas, backups, caches e réplicas de object storage não estiver ligado e verificado.
 
 O bloqueio `external_artifact_disposition_not_verified` é intencional e fail-closed. Uma imagem sem dependências internas não é, por si só, prova de que não existem cópias ou derivados fora da base de dados. Não existe ainda executor de purge nem qualquer eliminação física.
+
+
+## Inventário de artefactos externos derivados
+
+A migração `0033_shelf_image_artifact_references` introduz um registo append-only de referências declaradas a artefactos externos associados a uma imagem e à respetiva loja. Os tipos suportados são cópia de dataset, release, crop, relatório, backup, cache, réplica de object storage e outros.
+
+Os endpoints administrativos são:
+
+- `POST /api/v1/shelf-images/{image_id}/artifacts` — declara uma referência externa, sistema de origem, tipo, identificador opcional de release e SHA-256 opcional.
+- `GET /api/v1/shelf-images/{image_id}/artifacts` — consulta as referências declaradas no âmbito da loja do administrador.
+
+A criação é idempotente para a mesma imagem/tipo/sistema/referência. Reutilizar a chave com hash ou release diferentes devolve HTTP 409. O `store_id` é sempre resolvido a partir de `Shelf → Zone → Store`; nunca é aceite do cliente. A chave estrangeira impede a eliminação da imagem enquanto existirem referências.
+
+**Limitação de segurança:** estes registos são declarações administrativas, não uma prova criptográfica de que o artefacto existe, foi integralmente inventariado, está sob controlo da aplicação ou recebeu uma disposição aprovada. Não existe ainda um processo de atestação de cobertura nem um fluxo de aprovação/eliminação externa. Consequentemente, a pré-validação de purge continua a devolver `eligible: false` e o bloqueio `external_artifact_disposition_not_verified`, mesmo quando não há referências registadas. A contagem `declared_external_artifact_references` é informativa e não altera essa decisão.
+
+Não foi implementado qualquer worker destrutivo, nem qualquer eliminação de imagens, datasets, backups, caches ou réplicas.
