@@ -93,3 +93,24 @@ A transição deve ser explícita, auditada, idempotente e autorizada. A purga n
 ## Limitação
 
 Este documento é uma especificação técnica inicial, não um parecer jurídico nem uma política de retenção aprovada. A duração e as condições de conservação têm de ser definidas pela organização com o responsável de proteção de dados e assessoria jurídica antes de ativar a funcionalidade.
+
+
+## Proteção da proveniência dos exemplares de embedding
+
+A FK histórica `product_embedding_exemplars.shelf_image_id` usa
+`ON DELETE SET NULL`, porque o modelo também admite referências externas
+licenciadas sem captura interna. Sem proteção adicional, uma eliminação direta
+da linha de uma imagem interna poderia converter silenciosamente um exemplar
+derivado numa referência sem origem, que o motor trata como referência externa.
+
+A migração `0028_embedding_source_image_restrict` acrescenta uma proteção
+ao nível da base de dados: a eliminação de uma linha `shelf_images` é
+rejeitada enquanto existir um exemplar de embedding associado. A proteção é
+implementada por trigger em PostgreSQL e SQLite e é exercitada pelo smoke
+PostgreSQL `postgres_embedding_retention_smoke.py`.
+
+Esta proteção preserva a proveniência; não elimina exemplares, não implementa
+purga e não substitui uma política formal para binários, embeddings, evidência
+derivada, backups e caches. A remoção deliberada de uma imagem com exemplares
+associados permanece bloqueada até existir um fluxo de eliminação aprovado
+que trate explicitamente todos os dados dependentes.
