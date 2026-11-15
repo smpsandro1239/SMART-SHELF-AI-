@@ -216,3 +216,9 @@ Foi acrescentado `test_reviewed_training_candidates_are_scoped_to_supervisor_sto
 
 O teste foi publicado no commit `895adcee93699ab56b7bec202ce88d554593f214`. A execução CI está pendente; o teste usa SQLite isolado e não representa validação PostgreSQL individual. A listagem de candidatos não inicia treino nem substitui a aprovação humana de exemplares. A auditoria global permanece aberta.
 
+## Avaliação histórica de previsões SKU — controlo do âmbito do relatório
+
+Foi acrescentado o teste JWT `test_reviewed_sku_evaluation_is_scoped_to_supervisor_store`. A rota força o âmbito da loja do SUPERVISOR, rejeita um `store_id` estrangeiro antes de invocar o agregador, permite ao ADMIN consultar explicitamente outra loja e bloqueia EMPLOYEE. O teste verifica também que a versão do modelo é transmitida ao serviço de avaliação.
+
+O teste valida a autorização HTTP e o encaminhamento dos filtros, não a precisão do cálculo SQL; o agregador é substituído no teste. Commit `26f3afe93122a7539ca02dc1c718449b2da72c4d`; CI pendente. A auditoria multi-loja dos dados derivados de imagem continua aberta.
+
