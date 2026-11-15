@@ -109,7 +109,17 @@ def write_dataset(tmp_path):
         writer = csv.DictWriter(stream, fieldnames=["split", "file_name", "size_bytes", "sha256"])
         writer.writeheader()
         writer.writerows(rows)
-    return manifest, paths
+    provenance = tmp_path / "provenance.json"
+    provenance_entries = [{
+        "split": row["split"], "file_name": row["file_name"],
+        "image_sha256": row["sha256"], "source_image_sha256": row["sha256"],
+        "source_type": "external", "source_name": "Test licensed dataset",
+        "license": "CC-BY-4.0", "rights_reference": "test-licence-record",
+        "purpose": "Approved product detection training",
+        "transformation": {"type": "original"},
+    } for row in rows]
+    provenance.write_text(json.dumps({"schema_version": 1, "images": provenance_entries}), encoding="utf-8")
+    return manifest, paths, provenance
 
 
 def test_release_record_requires_explicit_approvals():
@@ -120,9 +130,9 @@ def test_release_record_requires_explicit_approvals():
 
 
 def test_training_gate_passes_only_when_manifest_and_audits_match(tmp_path):
-    manifest, paths = write_dataset(tmp_path)
+    manifest, paths, provenance = write_dataset(tmp_path)
     record = make_record(hashlib.sha256(manifest.read_bytes()).hexdigest())
-    errors, report = run_release_gate(record, manifest, paths)
+    errors, report = run_release_gate(record, manifest, paths, provenance_path=provenance)
     assert errors == []
     assert report["status"] == "APPROVED"
     assert report["checks"]["manifest_coco_integrity"]["passed"] is True
@@ -200,7 +210,7 @@ def test_release_gate_can_require_complete_visual_reviews(tmp_path):
     reviews = write_approved_visual_reviews(tmp_path, paths)
 
     errors, report = run_release_gate(
-        record, manifest, paths, review_paths=reviews, require_visual_review=True
+        record, manifest, paths, provenance_path=provenance, review_paths=reviews, require_visual_review=True
     )
 
     assert errors == []
@@ -213,7 +223,7 @@ def test_release_gate_blocks_when_required_visual_reviews_are_missing(tmp_path):
     record = make_record(hashlib.sha256(manifest.read_bytes()).hexdigest())
 
     errors, report = run_release_gate(
-        record, manifest, paths, require_visual_review=True
+        record, manifest, paths, provenance_path=provenance, require_visual_review=True
     )
 
     assert any("visual review records are required" in error for error in errors)
@@ -236,3 +246,13 @@ def test_release_gate_detects_stale_visual_review_after_coco_change(tmp_path):
     assert report["status"] == "BLOCKED"
     assert any("different COCO file hash" in error for error in errors)
     assert any("annotations changed since review" in error for error in errors)
+
+
+def test_release_gate_blocks_when_provenance_sidecar_is_incomplete(tmp_path):
+    manifest, paths, provenance = write_dataset(tmp_path)
+    record = make_record(hashlib.sha256(manifest.read_bytes()).hexdigest())
+    provenance.write_text(json.dumps({"schema_version": 1, "images": []}), encoding="utf-8")
+    errors, report = run_release_gate(record, manifest, paths, provenance_path=provenance)
+    assert report["status"] == "BLOCKED"
+    assert report["checks"]["image_provenance"]["passed"] is False
+    assert any("missing provenance entry" in error for error in errors)
