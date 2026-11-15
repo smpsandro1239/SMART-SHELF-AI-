@@ -1,4 +1,5 @@
 from datetime import timedelta
+import hashlib
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -61,7 +62,7 @@ def build_restricted_image(db, storage_root: Path, *, with_detection: bool):
         storage_path=str(image_path),
         mime_type="image/jpeg",
         file_size_bytes=10,
-        sha256="a" * 64,
+        sha256=hashlib.sha256(b"test-image").hexdigest(),
         analysis_status="COMPLETED",
         retention_status="RESTRICTED",
         retention_reason="Approved restriction for test",
@@ -105,6 +106,30 @@ def test_purge_preview_blocks_images_with_derived_evidence(db_session, tmp_path,
     assert (tmp_path / "1" / "restricted.jpg").exists()
 
 
+def test_purge_preview_blocks_file_integrity_mismatch(db_session, tmp_path, monkeypatch):
+    image_id, admin_id = build_restricted_image(
+        db_session, tmp_path, with_detection=False
+    )
+    image = db_session.get(models.ShelfImage, image_id)
+    image.sha256 = "b" * 64
+    db_session.commit()
+    monkeypatch.setattr(main_module.settings, "image_storage_path", str(tmp_path))
+    request = SimpleNamespace(state=SimpleNamespace(user_id=admin_id))
+
+    result = main_module.get_shelf_image_purge_eligibility(
+        image_id, request, db_session
+    )
+
+    assert result["eligible"] is False
+    assert result["internal_checks_passed"] is False
+    assert "stored_file_integrity_mismatch" in result["blockers"]
+    assert "external_artifact_disposition_not_verified" in result["blockers"]
+    assert result["stored_file_available"] is True
+    assert result["stored_file_integrity_verified"] is False
+    assert result["deletion_performed"] is False
+    assert (tmp_path / "1" / "restricted.jpg").exists()
+
+
 def test_purge_preview_allows_only_clean_scheduled_candidate(db_session, tmp_path, monkeypatch):
     image_id, admin_id = build_restricted_image(
         db_session, tmp_path, with_detection=False
@@ -116,8 +141,10 @@ def test_purge_preview_allows_only_clean_scheduled_candidate(db_session, tmp_pat
         image_id, request, db_session
     )
 
-    assert result["eligible"] is True
-    assert result["blockers"] == []
+    assert result["eligible"] is False
+    assert result["internal_checks_passed"] is True
+    assert result["blockers"] == ["external_artifact_disposition_not_verified"]
+    assert result["stored_file_integrity_verified"] is True
     assert result["derived_records"]["detections"] == 0
     assert result["derived_records"]["ocr_runs"] == 0
     assert result["derived_records"]["embedding_exemplars"] == 0
