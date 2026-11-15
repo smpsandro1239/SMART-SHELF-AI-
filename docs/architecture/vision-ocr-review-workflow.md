@@ -58,3 +58,7 @@ Uma revisão é um registo append-only. Se for criada nova evidência depois da 
 O dashboard React apresenta a fila de revisão a administradores e supervisores, com contagens por estado, prioridade, identificação da fotografia e motivo da decisão. A ação **Abrir fotografia e rever** leva à captura correspondente, onde o operador pode consultar as caixas de deteção, os produtos atribuídos à prateleira e o histórico de decisões humanas.
 
 A fila do dashboard carrega até 50 itens prioritários. O endpoint suporta paginação por `limit` e `offset`; a navegação de todas as páginas pode ser adicionada quando o volume operacional o justificar.
+
+## Recuperação de tarefas de inferência interrompidas
+
+O worker reencaminha tarefas `PROCESSING` abandonadas para `PENDING` quando `analysis_started_at` é anterior ao limite configurado em `VISION_PROCESSING_TIMEOUT_SECONDS` (24 horas por omissão; intervalo permitido de 60 segundos a 7 dias). Apenas imagens com retenção `ACTIVE` são elegíveis. O mecanismo limpa os timestamps de execução e conserva uma indicação de recuperação em `analysis_error`. Imagens recentes e imagens `RESTRICTED` não são recuperadas. A recuperação é executada antes de cada procura de novo trabalho.
