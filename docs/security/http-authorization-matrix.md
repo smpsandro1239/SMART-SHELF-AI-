@@ -295,3 +295,16 @@ O teste `test_shelf_observation_consensus_is_scoped_to_supervisor_store` valida 
 - a operação é apenas de leitura: a contagem de observações permanece inalterada.
 
 O teste usa JWT real, middleware HTTP ativo e SQLite isolado. Não equivale a validação PostgreSQL individual do endpoint.
+
+## Cobertura JWT — candidatos de treino derivados de imagens
+
+O teste `test_reviewed_training_candidates_are_scoped_to_supervisor_store` valida diretamente `GET /api/v1/training-candidates/reviewed` com JWT real:
+
+- SUPERVISOR recebe apenas os recortes revistos da própria loja, mesmo quando existem candidatos elegíveis em duas lojas;
+- ADMIN recebe candidatos das duas lojas;
+- EMPLOYEE recebe HTTP 403;
+- o cenário ativa explicitamente a imagem da segunda loja para que a exclusão do SUPERVISOR seja atribuível ao filtro multi-loja, e não ao estado de retenção;
+- a imagem da primeira loja usa um SHA-256 sem exemplar pré-existente, para que ambos os recortes sejam elegíveis para a fila de candidatos.
+
+A integração HTTP usa SQLite isolado. O teste foi acrescentado no commit `895adcee`; a validação CI deste commit está pendente. Este teste não autoriza treino automático: os candidatos continuam sujeitos a curadoria/aprovação de exemplar e às regras de integridade do dataset.
+
