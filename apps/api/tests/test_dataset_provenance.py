@@ -33,6 +33,7 @@ def external_entry():
         "split": "train",
         "file_name": "shelf.jpg",
         "image_sha256": digest("a"),
+        "source_image_sha256": digest("a"),
         "source_type": "external",
         "source_name": "Licensed retail dataset",
         "license": "CC-BY-4.0",
@@ -131,3 +132,23 @@ def test_provenance_rejects_mixed_internal_and_external_fields():
         [manifest_row()],
     )
     assert any("license is not applicable to internal images" in error for error in errors)
+
+
+def test_original_image_hash_must_match_declared_source_hash():
+    entry = external_entry()
+    entry["source_image_sha256"] = digest("b")
+    errors, _ = validate_provenance_manifest(
+        {"schema_version": 1, "images": [entry]},
+        [manifest_row()],
+    )
+    assert any("original image hash must equal source_image_sha256" in error for error in errors)
+
+
+def test_crop_parent_must_match_declared_source_hash():
+    entry = internal_entry()
+    entry["transformation"]["parent_sha256"] = digest("c")
+    errors, _ = validate_provenance_manifest(
+        {"schema_version": 1, "images": [entry]},
+        [manifest_row()],
+    )
+    assert any("parent_sha256 must match source_image_sha256" in error for error in errors)
