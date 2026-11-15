@@ -67,7 +67,7 @@ def test_release_is_created_with_deterministic_fingerprint_and_quality_metadata(
 
 
 def test_release_creation_is_idempotent(tmp_path):
-    manifest, split, visual = setup_release_inputs(tmp_path)
+    manifest, split, visual, provenance = setup_release_inputs(tmp_path)
     registry = tmp_path / "registry"
     first, created_first = create_release(manifest, split, visual, registry, provenance_path=provenance)
     second, created_second = create_release(manifest, split, visual, registry, provenance_path=provenance)
@@ -77,17 +77,17 @@ def test_release_creation_is_idempotent(tmp_path):
 
 
 def test_release_rejects_failed_split_quality_gate(tmp_path):
-    manifest, split, visual = setup_release_inputs(tmp_path)
+    manifest, split, visual, provenance = setup_release_inputs(tmp_path)
     write_report(split, status="failed", errors=["capture session leaked"])
     with pytest.raises(ValueError, match="split audit quality gate"):
         create_release(manifest, split, visual, tmp_path / "registry", provenance_path=provenance)
 
 
 def test_release_rejects_failed_visual_quality_gate(tmp_path):
-    manifest, split, visual = setup_release_inputs(tmp_path)
+    manifest, split, visual, provenance = setup_release_inputs(tmp_path)
     write_report(visual, status="failed", errors=["near duplicate across splits"])
     with pytest.raises(ValueError, match="visual similarity audit quality gate"):
-        create_release(manifest, split, visual, tmp_path / "registry")
+        create_release(manifest, split, visual, tmp_path / "registry", provenance_path=provenance)
 
 
 def test_manifest_rejects_path_traversal(tmp_path):
@@ -113,7 +113,7 @@ def test_manifest_requires_all_three_splits(tmp_path):
 
 
 def test_release_reports_classes_missing_from_a_split(tmp_path):
-    manifest, split, visual = setup_release_inputs(tmp_path)
+    manifest, split, visual, provenance = setup_release_inputs(tmp_path)
     write_report(split, splits={
         "train": {"classes": {"1": {"name": "soda", "instances": 10}}},
         "val": {"classes": {"1": {"name": "soda", "instances": 2}}},
@@ -125,7 +125,7 @@ def test_release_reports_classes_missing_from_a_split(tmp_path):
 
 
 def test_release_can_enforce_minimum_class_instances_per_split(tmp_path):
-    manifest, split, visual = setup_release_inputs(tmp_path)
+    manifest, split, visual, provenance = setup_release_inputs(tmp_path)
     write_report(split, splits={
         "train": {"classes": {"1": {"instances": 10}}},
         "val": {"classes": {"1": {"instances": 2}}},
@@ -140,7 +140,7 @@ def test_release_can_enforce_minimum_class_instances_per_split(tmp_path):
 
 
 def test_release_can_enforce_minimum_images_per_split(tmp_path):
-    manifest, split, visual = setup_release_inputs(tmp_path)
+    manifest, split, visual, provenance = setup_release_inputs(tmp_path)
     with pytest.raises(ValueError, match="minimum is 2"):
         create_release(
             manifest, split, visual, tmp_path / "registry",
