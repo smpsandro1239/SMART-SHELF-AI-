@@ -299,3 +299,5 @@ A criação é idempotente para a mesma imagem/tipo/sistema/referência. Reutili
 **Limitação de segurança:** estes registos são declarações administrativas, não uma prova criptográfica de que o artefacto existe, foi integralmente inventariado, está sob controlo da aplicação ou recebeu uma disposição aprovada. Não existe ainda um processo de atestação de cobertura nem um fluxo de aprovação/eliminação externa. Consequentemente, a pré-validação de purge continua a devolver `eligible: false` e o bloqueio `external_artifact_disposition_not_verified`, mesmo quando não há referências registadas. A contagem `declared_external_artifact_references` é informativa e não altera essa decisão.
 
 Não foi implementado qualquer worker destrutivo, nem qualquer eliminação de imagens, datasets, backups, caches ou réplicas.
+
+A API também rejeita novas declarações para imagens cujo estado já seja `PURGED` (HTTP 409), preservando a cronologia do inventário e evitando associar retroativamente novos artefactos a uma imagem já declarada eliminada.
