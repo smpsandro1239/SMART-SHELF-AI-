@@ -47,6 +47,9 @@ Esta é a fonte de verdade para manter o SMART SHELF AI focado. Deve ser revista
 
 #### P0 — Integridade e fiabilidade operacional
 
+- [ ] Integrar a proveniência por imagem dos datasets offline com o gate de release e a origem operacional: validar `shelf_image_id`/`store_id`, estado `ACTIVE`, legal hold e autorização no momento da exportação e do release; propagar restrições a crops, cópias, relatórios e armazenamento externo. O contrato offline `app.dataset_provenance` e os testes unitários já existem, mas ainda não fazem esta consulta nem bloqueiam o `dataset_approval`.
+
+
 - [x] Reforçar `/health/ready` para verificar a conectividade PostgreSQL e comparar todas as heads Alembic esperadas com as efetivamente aplicadas. Bases vazias ou com migrações em falta devolvem HTTP 503, sem expor detalhes internos; a resposta `ready` só é emitida quando o esquema está atualizado. Testes cobrem base vazia, revisão antiga e heads atuais. Validado no API CI [43630039330](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/43630039330) (**772 testes aprovados, 1 ignorado**) e Quality Gates [43630039355](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/43630039355), commit `652f71ac`.
 
 - [x] Serializar o matching de embeddings com a retenção da imagem de origem: o worker bloqueia a imagem alvo e as fontes de exemplares em ordem crescente de ID, e o serviço revalida fontes `ACTIVE`. O smoke test PostgreSQL `postgres_embedding_retention_smoke.py` usa duas sessões, confirma em `pg_stat_activity`/`pg_blocking_pids` que a retenção espera pelo matching e verifica que o exemplar deixa de ser elegível após a restrição. Validado no API CI [43589628653](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/43589628653) e Quality Gates [43589628597](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/43589628597): **753 testes aprovados, 1 ignorado**; migrações PostgreSQL 16, smoke tests operacionais, compilação Python e build web passaram.
@@ -556,6 +559,12 @@ O repositório inclui ferramentas para validar COCO, auditar separação entre t
 - [Template de registo de aprovação](docs/computer-vision/dataset-release-template.json)
 
 O gate `python -m app.dataset_approval` exige autorizações e revisões humanas declaradas e volta a executar os controlos técnicos sobre manifesto e ficheiros COCO.
+
+### Proveniência por imagem — sidecar offline
+
+O módulo `app.dataset_provenance` valida um sidecar JSON `schema_version: 1` com uma entrada por imagem, ligada ao manifesto por `split`, `file_name` e SHA-256. A origem pode ser `internal` (exige `shelf_image_id`, `store_id` e hash da captura) ou `external` (exige fonte, licença, referência dos direitos e hash da origem). Cada entrada declara finalidade e transformação; crops/derivados têm de identificar o hash do progenitor e a operação.
+
+O validador pode ser chamado a partir de código Python com `validate_provenance_manifest(record, manifest_rows)`. **Ainda não está ligado ao gate `dataset_approval` nem consulta PostgreSQL**: não confirma que IDs internos correspondem, que a imagem continua `ACTIVE), que não existe legal hold, nem que a licença externa é juridicamente suficiente. Não usar este sidecar isoladamente para autorizar exportação ou treino operacional. Ver [ciclo de vida e retenção de imagens](docs/security/image-retention-lifecycle.md).
 
 ### Sessões de captura e integridade de splits
 
