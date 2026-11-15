@@ -861,6 +861,16 @@ def test_supervisor_capture_sessions_are_scoped_to_own_store(auth_client):
     headers = bearer(ids["supervisor_a"], "SUPERVISOR")
 
     listed = client.get("/api/v1/capture-sessions", headers=headers)
+    own_shelf = client.get(
+        "/api/v1/capture-sessions",
+        params={"shelf_id": ids["shelf_a_assigned"]},
+        headers=headers,
+    )
+    foreign_shelf = client.get(
+        "/api/v1/capture-sessions",
+        params={"shelf_id": ids["shelf_b"]},
+        headers=headers,
+    )
     foreign_create = client.post(
         "/api/v1/capture-sessions",
         json={"shelf_id": ids["shelf_b"], "source_type": "mobile"},
@@ -870,11 +880,29 @@ def test_supervisor_capture_sessions_are_scoped_to_own_store(auth_client):
         f"/api/v1/capture-sessions/{ids['capture_session_b']}/close",
         headers=headers,
     )
+    admin_listed = client.get(
+        "/api/v1/capture-sessions",
+        headers=bearer(ids["admin"], "ADMIN"),
+    )
+    employee_listed = client.get(
+        "/api/v1/capture-sessions",
+        headers=bearer(ids["employee_a"], "EMPLOYEE"),
+    )
 
     assert listed.status_code == 200
     assert all(item["store_id"] == store_ids["a"] for item in listed.json())
+    assert own_shelf.status_code == 200
+    assert len(own_shelf.json()) == 1
+    assert own_shelf.json()[0]["shelf_id"] == ids["shelf_a_assigned"]
+    assert foreign_shelf.status_code == 200
+    assert foreign_shelf.json() == []
     assert foreign_create.status_code == 403
     assert foreign_close.status_code == 403
+    assert admin_listed.status_code == 200
+    assert {item["store_id"] for item in admin_listed.json()} == {
+        store_ids["a"], store_ids["b"]
+    }
+    assert employee_listed.status_code == 403
 
 
 def test_employee_cannot_create_or_close_capture_sessions(auth_client):

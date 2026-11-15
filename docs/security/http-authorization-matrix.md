@@ -51,6 +51,7 @@ O ficheiro `apps/api/tests/test_auth_middleware_jwt.py` cobre:
 - acesso ADMIN à listagem de utilizadores;
 - rejeição de token válido associado a utilizador inativo;
 - listagem de lojas por SUPERVISOR limitada à loja atribuída na base de dados;
+- listagem de sessões de captura limitada à loja do SUPERVISOR, incluindo filtro explícito por prateleira estrangeira sem resultados; ADMIN mantém listagem global e EMPLOYEE recebe 403;
 - listagem de tarefas de EMPLOYEE limitada às tarefas atribuídas ao próprio utilizador;
 - início de tarefa atribuída permitido, mas tentativa de iniciar tarefa sem atribuição ou atribuída a outro funcionário da mesma loja rejeitada (403);
 - cancelamento de tarefa por EMPLOYEE rejeitado (403);
