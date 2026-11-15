@@ -2425,3 +2425,50 @@ def test_reviewed_training_candidates_are_scoped_to_supervisor_store(auth_client
     )
     assert employee_response.status_code == 403
 
+def test_reviewed_sku_evaluation_is_scoped_to_supervisor_store(auth_client, monkeypatch):
+    client, ids, store_ids = auth_client
+    calls = []
+
+    def fake_report(db, *, store_id=None, model_version=None):
+        calls.append({"store_id": store_id, "model_version": model_version})
+        return {"store_id": store_id, "model_version": model_version}
+
+    monkeypatch.setattr(main_module, "build_reviewed_prediction_report", fake_report)
+
+    supervisor_headers = bearer(ids["supervisor_a"], "SUPERVISOR")
+    own_store_response = client.get(
+        "/api/v1/sku-evaluation/reviewed?model_version=vision-v1",
+        headers=supervisor_headers,
+    )
+    assert own_store_response.status_code == 200, own_store_response.text
+    assert own_store_response.json() == {
+        "store_id": store_ids["a"],
+        "model_version": "vision-v1",
+    }
+    assert calls == [{"store_id": store_ids["a"], "model_version": "vision-v1"}]
+
+    foreign_store_response = client.get(
+        f"/api/v1/sku-evaluation/reviewed?store_id={store_ids['b']}",
+        headers=supervisor_headers,
+    )
+    assert foreign_store_response.status_code == 403
+    assert len(calls) == 1, "Foreign-store requests must be rejected before report generation"
+
+    admin_response = client.get(
+        f"/api/v1/sku-evaluation/reviewed?store_id={store_ids['b']}&model_version=vision-v1",
+        headers=bearer(ids["admin"], "ADMIN"),
+    )
+    assert admin_response.status_code == 200, admin_response.text
+    assert admin_response.json() == {
+        "store_id": store_ids["b"],
+        "model_version": "vision-v1",
+    }
+    assert calls[-1] == {"store_id": store_ids["b"], "model_version": "vision-v1"}
+
+    employee_response = client.get(
+        "/api/v1/sku-evaluation/reviewed",
+        headers=bearer(ids["employee_a"], "EMPLOYEE"),
+    )
+    assert employee_response.status_code == 403
+    assert len(calls) == 2, "EMPLOYEE requests must be rejected before report generation"
+
