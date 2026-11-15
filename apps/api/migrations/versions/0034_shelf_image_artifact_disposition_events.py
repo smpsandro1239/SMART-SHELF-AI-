@@ -9,6 +9,11 @@ depends_on = None
 
 
 def upgrade() -> None:
+    op.create_unique_constraint(
+        "uq_shelf_image_artifact_reference_lineage",
+        "shelf_image_artifact_references",
+        ["id", "shelf_image_id", "store_id"],
+    )
     op.create_table(
         "shelf_image_artifact_disposition_events",
         sa.Column("id", sa.Integer(), primary_key=True),
@@ -41,6 +46,16 @@ def upgrade() -> None:
         sa.Column("evidence_sha256", sa.String(length=64), nullable=True),
         sa.Column("reason", sa.Text(), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+        sa.ForeignKeyConstraint(
+            ["artifact_reference_id", "shelf_image_id", "store_id"],
+            [
+                "shelf_image_artifact_references.id",
+                "shelf_image_artifact_references.shelf_image_id",
+                "shelf_image_artifact_references.store_id",
+            ],
+            name="fk_shelf_image_artifact_disposition_reference_lineage",
+            ondelete="RESTRICT",
+        ),
         sa.CheckConstraint(
             "event_type IN ('PROPOSED', 'APPROVED', 'REJECTED', 'DISPOSAL_ATTESTED')",
             name="ck_shelf_image_artifact_disposition_event_type",
@@ -126,3 +141,8 @@ def downgrade() -> None:
         table_name="shelf_image_artifact_disposition_events",
     )
     op.drop_table("shelf_image_artifact_disposition_events")
+    op.drop_constraint(
+        "uq_shelf_image_artifact_reference_lineage",
+        "shelf_image_artifact_references",
+        type_="unique",
+    )
