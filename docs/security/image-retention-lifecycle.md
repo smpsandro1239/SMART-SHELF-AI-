@@ -230,3 +230,22 @@ que consumir/publicar o dataset terá de executar a validação e o consumo no
 mesmo fluxo transacional, ou revalidar imediatamente antes da utilização. A
 propagação de restrições a derivados e cópias permanece pendente. A purga
 física continua desativada.
+
+
+## Proveniência obrigatória no registo imutável de release
+
+O criador de releases `app.dataset_release` exige também
+`--provenance-manifest`. Antes de escrever no registry, valida a cobertura
+exata e os hashes do sidecar contra o manifesto, e executa
+`validate_internal_image_eligibility` para todas as origens internas. A
+ausência de sessão DB, imagem inexistente, loja divergente, hash divergente,
+estado diferente de `ACTIVE` ou legal hold bloqueiam a criação. As imagens
+são bloqueadas em ordem crescente de ID durante a validação.
+
+O hash SHA-256 do sidecar passa a integrar a fingerprint do release, evitando
+que dois sidecars diferentes para o mesmo manifesto reutilizem a mesma
+identidade. O artefacto registado conserva o hash do sidecar, o estado da
+proveniência e um resumo da validação operacional. A criação do registo não
+torna a elegibilidade permanente: a utilização/treino/publicação posterior
+tem de revalidar e consumir os dados no mesmo fluxo protegido. A propagação
+de restrições a derivados e cópias continua pendente.
