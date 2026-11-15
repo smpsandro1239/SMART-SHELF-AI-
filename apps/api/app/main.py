@@ -231,6 +231,22 @@ def _resolve_shelf_image_storage_path(storage_path: str, store_id: int) -> Path:
     return resolved
 
 
+def _verify_shelf_image_storage_integrity(path: Path, expected_size: int, expected_sha256: str) -> bool:
+    """Verify persisted image bytes against immutable upload metadata."""
+    try:
+        if path.is_symlink() or not path.is_file():
+            return False
+        if path.stat().st_size != expected_size:
+            return False
+        digest = hashlib.sha256()
+        with path.open("rb") as stored_file:
+            for chunk in iter(lambda: stored_file.read(1024 * 1024), b""):
+                digest.update(chunk)
+        return digest.hexdigest() == expected_sha256
+    except OSError:
+        return False
+
+
 def _enforce_store_scope(actor: models.User | None, store_id: int) -> None:
     if actor is not None and actor.role != "ADMIN" and actor.store_id != store_id:
         raise HTTPException(status_code=403, detail="Access to this store is not allowed")
@@ -1195,10 +1211,16 @@ def get_shelf_image_purge_eligibility(
         blockers.append("analysis_still_processing")
 
     file_available = False
+    file_integrity_verified = False
     if item.retention_status != "PURGED":
         try:
-            _resolve_shelf_image_storage_path(item.storage_path, store_id)
+            stored_path = _resolve_shelf_image_storage_path(item.storage_path, store_id)
             file_available = True
+            file_integrity_verified = _verify_shelf_image_storage_integrity(
+                stored_path, item.file_size_bytes, item.sha256
+            )
+            if not file_integrity_verified:
+                blockers.append("stored_file_integrity_mismatch")
         except HTTPException:
             blockers.append("stored_file_missing_or_unsafe")
 
@@ -1238,15 +1260,23 @@ def get_shelf_image_purge_eligibility(
     )):
         blockers.append("derived_records_require_approved_disposition")
 
+    # External dataset releases, backups, caches and object-store replicas are
+    # not yet inventoried by this application. A clean local database/file
+    # check therefore cannot authorize irreversible deletion.
+    blockers.append("external_artifact_disposition_not_verified")
+    internal_checks_passed = len(blockers) == 1
+
     return {
         "image_id": item.id,
         "retention_status": item.retention_status,
         "legal_hold": item.legal_hold,
         "purge_not_before": item.purge_not_before,
         "evaluated_at": now,
-        "eligible": not blockers,
+        "eligible": False,
+        "internal_checks_passed": internal_checks_passed,
         "blockers": blockers,
         "stored_file_available": file_available,
+        "stored_file_integrity_verified": file_integrity_verified,
         "derived_records": {
             "detections": detection_count,
             "ocr_runs": ocr_run_count,
