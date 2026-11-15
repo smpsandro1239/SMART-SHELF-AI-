@@ -316,4 +316,4 @@ A evidência é uma declaração humana referenciada, não uma verificação aut
 
 O workflow API CI executa também `postgres_shelf_image_artifact_disposition_smoke.py` após as migrações para verificar que o PostgreSQL rejeita UPDATE e DELETE ao histórico.
 
-A migração também cria um índice único composto sobre a referência, imagem e loja, e uma chave estrangeira composta nos eventos de disposição. Assim, a base de dados rejeita eventos cuja referência de artefacto pertença a outra imagem ou loja, mesmo que sejam escritos fora da API. O smoke test PostgreSQL cobre esta tentativa de cruzamento de tenant, além das operações UPDATE/DELETE proibidas.
+A migração também cria um índice único composto sobre a referência, imagem e loja, uma chave estrangeira composta nos eventos de disposição e um trigger que valida a loja da imagem em cada nova referência. Assim, a base de dados rejeita referências e eventos cuja associação de imagem/loja não corresponda à linhagem real, mesmo que sejam escritos fora da API. O smoke test PostgreSQL cobre estas tentativas de cruzamento de tenant, além das operações UPDATE/DELETE proibidas.
