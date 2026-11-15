@@ -8,6 +8,7 @@ import importlib
 import logging
 import os
 import time
+from datetime import timedelta
 from pathlib import Path
 
 from sqlalchemy.orm import Session
@@ -181,7 +182,7 @@ def requeue_stale_processing_images(
 ) -> int:
     """Return abandoned PROCESSING jobs to PENDING after a conservative lease timeout."""
     timeout = stale_after_seconds or settings.vision_processing_timeout_seconds
-    cutoff = models.utc_now() - __import__("datetime").timedelta(seconds=timeout)
+    cutoff = models.utc_now() - timedelta(seconds=timeout)
     stale_images = (
         db.query(models.ShelfImage)
         .filter(
