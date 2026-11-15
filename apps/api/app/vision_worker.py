@@ -108,6 +108,70 @@ def persist_ocr_evidence(db: Session, image_id: int, image_path: Path, detection
         db.flush()
 
 
+
+def retry_failed_ocr_for_image(db: Session, image_id: int, provider) -> bool:
+    """Retry only the latest failed OCR pass for an already analysed active image."""
+    image = (
+        db.query(models.ShelfImage)
+        .filter(models.ShelfImage.id == image_id)
+        .with_for_update()
+        .populate_existing()
+        .first()
+    )
+    if (
+        image is None
+        or image.retention_status != "ACTIVE"
+        or image.analysis_status != "COMPLETED"
+    ):
+        return False
+
+    latest_run = (
+        db.query(models.ShelfImageOCRRun)
+        .filter(models.ShelfImageOCRRun.shelf_image_id == image_id)
+        .order_by(models.ShelfImageOCRRun.id.desc())
+        .first()
+    )
+    if latest_run is None or latest_run.status != "FAILED":
+        return False
+
+    detections = (
+        db.query(models.ShelfImageDetection)
+        .filter(models.ShelfImageDetection.shelf_image_id == image_id)
+        .order_by(models.ShelfImageDetection.id.asc())
+        .all()
+    )
+    image_path = _resolve_worker_image_path(db, image)
+    persist_ocr_evidence(db, image_id, image_path, detections, provider)
+
+    new_run = (
+        db.query(models.ShelfImageOCRRun)
+        .filter(
+            models.ShelfImageOCRRun.shelf_image_id == image_id,
+            models.ShelfImageOCRRun.id > latest_run.id,
+        )
+        .order_by(models.ShelfImageOCRRun.id.desc())
+        .first()
+    )
+    if new_run is not None and new_run.status == "COMPLETED":
+        try:
+            with db.begin_nested():
+                process_completed_ocr_run(db, image_id)
+                db.flush()
+        except Exception:
+            logger.exception(
+                "OCR matching/fusion retry failed for shelf image %s; OCR regions remain available",
+                image_id,
+            )
+
+    # Recheck retention while holding the image row lock. The lock serializes
+    # this commit with a concurrent restriction request.
+    db.refresh(image)
+    if image.retention_status != "ACTIVE":
+        db.rollback()
+        return False
+    db.commit()
+    return new_run is not None and new_run.status == "COMPLETED"
+
 def resolve_sku_match(db: Session, detection, registry_cache=None):
     """Match only against approved exemplars; reuse one registry per model version."""
     if detection.embedding is None or not detection.embedding_model_version:
@@ -380,8 +444,32 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Process pending SMART SHELF AI image-analysis jobs")
     parser.add_argument("--once", action="store_true", help="Process at most one pending image and exit")
     parser.add_argument("--poll-interval", type=float, default=5.0, help="Seconds between queue checks")
+    parser.add_argument(
+        "--retry-failed-ocr-image-id",
+        type=int,
+        help="Retry OCR for one completed, active image without rerunning visual inference",
+    )
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO)
+
+    if args.retry_failed_ocr_image_id is not None:
+        try:
+            ocr_provider = load_ocr_provider()
+        except Exception:
+            logger.exception("OCR provider could not be loaded")
+            return 2
+        if ocr_provider is None:
+            logger.error("OCR_PROVIDER_FACTORY is required for an OCR retry")
+            return 2
+        db = SessionLocal()
+        try:
+            retried = retry_failed_ocr_for_image(
+                db, args.retry_failed_ocr_image_id, ocr_provider
+            )
+            return 0 if retried else 1
+        finally:
+            db.close()
+
     try:
         provider = load_provider()
     except VisionProviderNotConfigured as exc:
