@@ -1129,7 +1129,13 @@ def retry_shelf_image_analysis(
     db: Session = Depends(get_db),
 ):
     """Requeue a failed image analysis for an authorized store supervisor."""
-    item = db.get(models.ShelfImage, image_id)
+    item = (
+        db.query(models.ShelfImage)
+        .filter(models.ShelfImage.id == image_id)
+        .with_for_update()
+        .populate_existing()
+        .first()
+    )
     if item is None:
         raise HTTPException(status_code=404, detail="Shelf image not found")
     actor = _request_user(db, request)
@@ -1185,7 +1191,13 @@ def list_shelf_image_detections(
 @app.post("/api/v1/shelf-images/{image_id}/ocr-matches", response_model=list[ShelfImageOCRMatchRead], tags=["computer-vision"])
 def match_shelf_image_ocr_to_catalogue(image_id: int, request: Request, db: Session = Depends(get_db)):
     """Rank active catalogue candidates for OCR text grouped by product detection."""
-    image_record = db.get(models.ShelfImage, image_id)
+    image_record = (
+        db.query(models.ShelfImage)
+        .filter(models.ShelfImage.id == image_id)
+        .with_for_update()
+        .populate_existing()
+        .first()
+    )
     if image_record is None:
         raise HTTPException(status_code=404, detail="Shelf image not found")
     actor = _request_user(db, request)
@@ -1714,7 +1726,13 @@ def list_shelf_image_fused_evidence(
 @app.post("/api/v1/shelf-images/{image_id}/ocr-runs", response_model=ShelfImageOCRRunRead, status_code=201, tags=["computer-vision"])
 def create_shelf_image_ocr_run(image_id: int, payload: ShelfImageOCRRunCreate, request: Request, db: Session = Depends(get_db)):
     """Persist one immutable OCR pass and its per-region detection associations."""
-    image_record = db.get(models.ShelfImage, image_id)
+    image_record = (
+        db.query(models.ShelfImage)
+        .filter(models.ShelfImage.id == image_id)
+        .with_for_update()
+        .populate_existing()
+        .first()
+    )
     if image_record is None:
         raise HTTPException(status_code=404, detail="Shelf image not found")
     actor = _request_user(db, request)
