@@ -249,3 +249,19 @@ proveniência e um resumo da validação operacional. A criação do registo nã
 torna a elegibilidade permanente: a utilização/treino/publicação posterior
 tem de revalidar e consumir os dados no mesmo fluxo protegido. A propagação
 de restrições a derivados e cópias continua pendente.
+
+
+### Integridade do registry e reutilização idempotente
+
+Ao reutilizar um release já existente, `dataset_release` não confia apenas no
+campo `fingerprint` do JSON. Revalida a estrutura, o timestamp com timezone e
+compara todos os campos imutáveis com os valores reconstruídos a partir do
+manifesto, sidecar e relatórios de qualidade atuais. Uma divergência bloqueia
+a operação; JSON ilegível e ficheiros de release que sejam symlinks também
+são rejeitados. Isto protege contra adulteração acidental ou manual dos
+metadados do registo. O campo `created_at` é preservado do primeiro registo e
+não integra a fingerprint determinística; por isso, esta verificação não é
+uma assinatura criptográfica nem prova de autoria. Para resistência a um
+atacante com capacidade de modificar o registry e os seus controlos, será
+necessário armazenamento com permissões adequadas e assinatura/chave
+protegida fora do diretório do registry.
