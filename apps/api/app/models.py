@@ -617,7 +617,7 @@ class ShelfImageArtifactDispositionEvent(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     artifact_reference_id: Mapped[int] = mapped_column(
         ForeignKey("shelf_image_artifact_references.id", ondelete="RESTRICT"),
-        nullable=False, index=True,
+        nullable=False,
     )
     shelf_image_id: Mapped[int] = mapped_column(
         ForeignKey("shelf_images.id", ondelete="RESTRICT"),
