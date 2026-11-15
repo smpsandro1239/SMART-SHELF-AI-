@@ -136,3 +136,24 @@ Esta proteção é uma barreira contra eliminação acidental e perda de
 proveniência. Não define prazos, não elimina dados derivados e não substitui
 uma política formal que trate separadamente binários, evidência, backups e
 caches. A purga física continua desativada.
+
+
+## Proteção da auditoria humana e dos resultados derivados
+
+A proteção da imagem de origem não é suficiente se uma deteção ou execução OCR
+puder ser apagada diretamente. As relações históricas usam cascatas que
+podem remover revisões humanas, regiões OCR, resultados de matching e
+fusões de evidência.
+
+A migração `0030_detection_ocr_audit_restrict` acrescenta triggers para
+rejeitar a eliminação de uma deteção quando existem revisões humanas,
+associações OCR, resultados de matching ou fusões. Também rejeita a
+eliminação de uma execução OCR quando existem regiões de texto, resultados
+de matching ou fusões associados. O smoke PostgreSQL
+`postgres_embedding_retention_smoke.py` verifica a preservação desses
+registos perante tentativas diretas de eliminação.
+
+Esta proteção cobre eliminações diretas e não constitui uma política de
+retenção nem um fluxo de purga. A validação de concorrência específica destas
+novas relações continua pendente; a validação funcional sequencial é
+executada no smoke PostgreSQL 16.
