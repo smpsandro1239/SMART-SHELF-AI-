@@ -282,3 +282,16 @@ O teste JWT `test_product_packaging_read_is_global_for_supervisors_and_denied_to
 **Validação:** commit `4cf0f34848cd2beab83d0b12db89888dbdd162d3`; API CI [43609023974](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/43609023974) e Quality Gates [43609023990](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/43609023990) concluíram com sucesso. A suite API, migrações e smoke tests PostgreSQL 16, compilação Python e build web passaram. O teste HTTP usa SQLite isolado; os smoke tests PostgreSQL do workflow cobrem outros fluxos e não validam individualmente este handler.
 
 A cobertura confirma a leitura de embalagens, não a autorização integral de todos os endpoints de armazém ou os respetivos caminhos indiretos. A auditoria global mantém-se aberta.
+
+
+## Cobertura JWT — consenso de observações por prateleira
+
+O teste `test_shelf_observation_consensus_is_scoped_to_supervisor_store` valida diretamente `GET /api/v1/shelves/{shelf_id}/observation-consensus`, sem depender apenas da rota de avaliação/persistência de alertas que chama o mesmo serviço internamente. O cenário usa evidência SKU atribuída a prateleiras de duas lojas e confirma:
+
+- SUPERVISOR recebe HTTP 200 e apenas o resultado da própria loja;
+- o mesmo SUPERVISOR recebe HTTP 403 ao consultar uma prateleira estrangeira;
+- EMPLOYEE recebe HTTP 403, mesmo para uma prateleira da própria loja;
+- ADMIN pode consultar a prateleira da outra loja;
+- a operação é apenas de leitura: a contagem de observações permanece inalterada.
+
+O teste usa JWT real, middleware HTTP ativo e SQLite isolado. Não equivale a validação PostgreSQL individual do endpoint.
