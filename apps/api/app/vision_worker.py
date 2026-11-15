@@ -8,7 +8,7 @@ import importlib
 import logging
 import os
 import time
-from datetime import timedelta
+from datetime import timedelta, timezone
 from pathlib import Path
 
 from sqlalchemy.orm import Session
@@ -207,6 +207,18 @@ def requeue_stale_processing_images(
     return len(stale_images)
 
 
+
+def _same_claim_timestamp(current, claimed) -> bool:
+    """Compare lease timestamps consistently across PostgreSQL and SQLite."""
+    if current is None or claimed is None:
+        return current is claimed
+    if current.tzinfo is None:
+        current = current.replace(tzinfo=timezone.utc)
+    if claimed.tzinfo is None:
+        claimed = claimed.replace(tzinfo=timezone.utc)
+    return current == claimed
+
+
 def process_next_image(db: Session, provider, ocr_provider=None) -> int | None:
     requeue_stale_processing_images(db)
     image = (
@@ -225,6 +237,7 @@ def process_next_image(db: Session, provider, ocr_provider=None) -> int | None:
     image.analysis_started_at = models.utc_now()
     image.analysis_completed_at = None
     db.commit()
+    claimed_started_at = image.analysis_started_at
 
     try:
         image_path = _resolve_worker_image_path(db, image)
@@ -246,8 +259,19 @@ def process_next_image(db: Session, provider, ocr_provider=None) -> int | None:
             db.query(models.ShelfImage)
             .filter(models.ShelfImage.id == image_id)
             .with_for_update()
+            .populate_existing()
             .first()
         )
+        if (
+            image is not None
+            and (
+                image.analysis_status != "PROCESSING"
+                or not _same_claim_timestamp(image.analysis_started_at, claimed_started_at)
+            )
+        ):
+            db.rollback()
+            logger.info("Discarded stale inference result for shelf image %s; worker no longer owns the processing lease", image_id)
+            return image_id
         if image is None or image.retention_status != "ACTIVE":
             db.rollback()
             restricted_image = (
@@ -307,8 +331,19 @@ def process_next_image(db: Session, provider, ocr_provider=None) -> int | None:
             db.query(models.ShelfImage)
             .filter(models.ShelfImage.id == image_id)
             .with_for_update()
+            .populate_existing()
             .first()
         )
+        if (
+            image is not None
+            and (
+                image.analysis_status != "PROCESSING"
+                or not _same_claim_timestamp(image.analysis_started_at, claimed_started_at)
+            )
+        ):
+            db.rollback()
+            logger.info("Discarded stale persisted output for shelf image %s; worker no longer owns the processing lease", image_id)
+            return image_id
         if image is None or image.retention_status != "ACTIVE":
             db.rollback()
             restricted_image = (
