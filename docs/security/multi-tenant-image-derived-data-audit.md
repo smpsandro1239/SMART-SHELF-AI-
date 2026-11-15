@@ -228,3 +228,24 @@ Foi acrescentado `test_product_embedding_exemplar_listing_is_scoped_to_source_im
 
 Commit `07f46a43c17a9f617aea8b55a242b3d3f7426106`. A validação CI está pendente; o teste usa SQLite isolado e não representa validação PostgreSQL individual do endpoint. A auditoria permanece aberta.
 
+
+
+## Integridade da proveniência perante eliminação direta
+
+A migração `0028_embedding_source_image_restrict` impediu a perda silenciosa
+da relação entre imagens e exemplares de embeddings. A auditoria posterior
+identificou outras relações em cascata: deteções e execuções OCR eram
+eliminadas com a imagem, levando consigo revisões humanas, evidência OCR,
+matching e fusões.
+
+A migração `0029_image_derived_evidence_restrict` alarga a proteção ao nível
+da base de dados. A eliminação de uma imagem é rejeitada quando existem
+exemplares de embedding, deteções ou execuções OCR associados. A proteção é
+aplicada em PostgreSQL e SQLite; o smoke PostgreSQL verifica a preservação
+conjunta da imagem, deteção, execução OCR e texto reconhecido.
+
+O estado `RESTRICTED` continua a ser a operação normal e reversível para
+bloquear acesso/uso operacional. A proteção de DELETE não representa uma
+implementação de purga nem autoriza apagar evidência. A auditoria da
+proveniência de outros dados derivados e caminhos administrativos permanece
+aberta.
