@@ -114,3 +114,25 @@ purga e não substitui uma política formal para binários, embeddings, evidênc
 derivada, backups e caches. A remoção deliberada de uma imagem com exemplares
 associados permanece bloqueada até existir um fluxo de eliminação aprovado
 que trate explicitamente todos os dados dependentes.
+
+
+## Proteção da evidência visual e OCR
+
+A auditoria identificou que `shelf_image_detections` e
+`shelf_image_ocr_runs` também usavam `ON DELETE CASCADE` em relação à
+imagem. Uma eliminação direta podia, por isso, remover deteções, revisões
+humanas associadas, execuções OCR, regiões de texto, resultados de matching e
+fusões de evidência.
+
+A migração `0029_image_derived_evidence_restrict` alarga o trigger de
+integridade: além dos exemplares de embeddings, bloqueia a eliminação da
+imagem quando existem deteções ou execuções OCR. As relações dependentes
+(matching OCR, regiões e fusões) ficam protegidas pela preservação das linhas
+de deteção/execução que as sustentam. O smoke PostgreSQL
+`postgres_embedding_retention_smoke.py` verifica que a tentativa de
+eliminação não apaga a imagem, a deteção, a execução OCR nem a região de texto.
+
+Esta proteção é uma barreira contra eliminação acidental e perda de
+proveniência. Não define prazos, não elimina dados derivados e não substitui
+uma política formal que trate separadamente binários, evidência, backups e
+caches. A purga física continua desativada.
