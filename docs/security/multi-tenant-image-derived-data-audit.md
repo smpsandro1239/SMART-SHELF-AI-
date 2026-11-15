@@ -266,3 +266,17 @@ fusão permanecem ligados à deteção e execução originais.
 A proteção de eliminação direta não substitui a auditoria de concorrência
 nem fecha a revisão dos caminhos administrativos/worker. A auditoria global
 de dados derivados mantém-se aberta.
+
+
+## Imutabilidade dos registos de proveniência visual/OCR
+
+A auditoria confirmou que as tabelas de revisões humanas, execuções OCR,
+regiões OCR, matching e fusões não tinham triggers próprios de imutabilidade,
+apesar de serem descritas como append-only/imutáveis nos modelos e contratos.
+A migração `0031_visual_ocr_evidence_append_only` passa a rejeitar alterações
+e eliminações diretas nas cinco tabelas, tanto em PostgreSQL como em SQLite.
+
+O smoke PostgreSQL tenta `UPDATE` e `DELETE` individualmente em cada tabela
+e confirma que o conteúdo original continua presente. Esta alteração não
+fecha a auditoria de todos os dados derivados nem substitui a revisão dos
+caminhos administrativos e do worker.
