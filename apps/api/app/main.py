@@ -1496,13 +1496,46 @@ def get_shelf_image_purge_eligibility(
     )):
         blockers.append("derived_records_require_approved_disposition")
 
-    artifact_reference_count = db.query(models.ShelfImageArtifactReference).filter(
+    artifact_references = db.query(models.ShelfImageArtifactReference).filter(
         models.ShelfImageArtifactReference.shelf_image_id == image_id,
         models.ShelfImageArtifactReference.store_id == store_id,
-    ).count()
+    ).order_by(models.ShelfImageArtifactReference.id).all()
+    disposition_counts = {
+        "proposed": 0,
+        "approved": 0,
+        "rejected": 0,
+        "disposal_attested": 0,
+        "without_final_disposition": 0,
+    }
+    for artifact_reference in artifact_references:
+        latest_disposition = (
+            db.query(models.ShelfImageArtifactDispositionEvent)
+            .filter(
+                models.ShelfImageArtifactDispositionEvent.artifact_reference_id == artifact_reference.id
+            )
+            .order_by(
+                models.ShelfImageArtifactDispositionEvent.created_at.desc(),
+                models.ShelfImageArtifactDispositionEvent.id.desc(),
+            )
+            .first()
+        )
+        if latest_disposition is None:
+            disposition_counts["without_final_disposition"] += 1
+        elif latest_disposition.event_type == "PROPOSED":
+            disposition_counts["proposed"] += 1
+            disposition_counts["without_final_disposition"] += 1
+        elif latest_disposition.event_type == "APPROVED":
+            disposition_counts["approved"] += 1
+            disposition_counts["without_final_disposition"] += 1
+        elif latest_disposition.event_type == "REJECTED":
+            disposition_counts["rejected"] += 1
+            disposition_counts["without_final_disposition"] += 1
+        elif latest_disposition.event_type == "DISPOSAL_ATTESTED":
+            disposition_counts["disposal_attested"] += 1
 
-    # Declarations improve traceability but do not prove inventory completeness,
-    # current artifact existence, deletion, or an approved disposition.
+    # Human declarations and two-person approvals improve traceability but do
+    # not prove inventory completeness or independently verify external deletion.
+    # Keep the purge blocked until a trusted inventory attestation exists.
     blockers.append("external_artifact_disposition_not_verified")
     internal_checks_passed = len(blockers) == 1
 
@@ -1517,7 +1550,8 @@ def get_shelf_image_purge_eligibility(
         "blockers": blockers,
         "stored_file_available": file_available,
         "stored_file_integrity_verified": file_integrity_verified,
-        "declared_external_artifact_references": artifact_reference_count,
+        "declared_external_artifact_references": len(artifact_references),
+        "external_artifact_disposition": disposition_counts,
         "derived_records": {
             "detections": detection_count,
             "ocr_runs": ocr_run_count,
