@@ -2527,3 +2527,83 @@ def test_product_embedding_exemplar_listing_is_scoped_to_source_image_store(auth
     )
     assert employee_response.status_code == 403
 
+def test_embedding_exemplar_review_is_scoped_to_source_store_and_reviewer_role(auth_client):
+    client, ids, _ = auth_client
+
+    with main_module.SessionLocal() as db:
+        image_a = db.get(models.ShelfImage, ids["image_a"])
+        image_b = db.get(models.ShelfImage, ids["image_b"])
+        image_b.retention_status = "ACTIVE"
+
+        own_store_exemplar = models.ProductEmbeddingExemplar(
+            product_id=ids["product"],
+            shelf_image_id=image_a.id,
+            embedding=[0.1, 0.2, 0.3],
+            embedding_dimension=3,
+            model_version="auth-review-own-store-v1",
+            image_sha256=image_a.sha256,
+            licence="store-owned-reference-image",
+            review_status="PENDING",
+            created_by_user_id=ids["employee_a"],
+        )
+        foreign_store_exemplar = models.ProductEmbeddingExemplar(
+            product_id=ids["product"],
+            shelf_image_id=image_b.id,
+            embedding=[0.3, 0.2, 0.1],
+            embedding_dimension=3,
+            model_version="auth-review-foreign-store-v1",
+            image_sha256=image_b.sha256,
+            licence="store-owned-reference-image",
+            review_status="PENDING",
+            created_by_user_id=ids["employee_b"],
+        )
+        db.add_all([own_store_exemplar, foreign_store_exemplar])
+        db.commit()
+        db.refresh(own_store_exemplar)
+        db.refresh(foreign_store_exemplar)
+        own_exemplar_id = own_store_exemplar.id
+        foreign_exemplar_id = foreign_store_exemplar.id
+
+    review_payload = {
+        "review_status": "APPROVED",
+        "review_notes": "Revisão independente autorizada",
+    }
+    supervisor_headers = bearer(ids["supervisor_a"], "SUPERVISOR")
+
+    own_store_review = client.patch(
+        f"/api/v1/product-embedding-exemplars/{own_exemplar_id}/review",
+        json=review_payload,
+        headers=supervisor_headers,
+    )
+    assert own_store_review.status_code == 200, own_store_review.text
+    assert own_store_review.json()["review_status"] == "APPROVED"
+
+    foreign_store_review = client.patch(
+        f"/api/v1/product-embedding-exemplars/{foreign_exemplar_id}/review",
+        json=review_payload,
+        headers=supervisor_headers,
+    )
+    assert foreign_store_review.status_code == 403
+
+    employee_review = client.patch(
+        f"/api/v1/product-embedding-exemplars/{own_exemplar_id}/review",
+        json={"review_status": "REJECTED", "review_notes": "Não autorizado"},
+        headers=bearer(ids["employee_a"], "EMPLOYEE"),
+    )
+    assert employee_review.status_code == 403
+
+    admin_review = client.patch(
+        f"/api/v1/product-embedding-exemplars/{foreign_exemplar_id}/review",
+        json=review_payload,
+        headers=bearer(ids["admin"], "ADMIN"),
+    )
+    assert admin_review.status_code == 200, admin_review.text
+    assert admin_review.json()["review_status"] == "APPROVED"
+
+    with main_module.SessionLocal() as db:
+        own_persisted = db.get(models.ProductEmbeddingExemplar, own_exemplar_id)
+        foreign_persisted = db.get(models.ProductEmbeddingExemplar, foreign_exemplar_id)
+        assert own_persisted.review_status == "APPROVED"
+        assert own_persisted.reviewed_by_user_id == ids["supervisor_a"]
+        assert foreign_persisted.review_status == "APPROVED"
+        assert foreign_persisted.reviewed_by_user_id == ids["admin"]
