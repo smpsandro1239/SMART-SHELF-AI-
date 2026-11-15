@@ -275,7 +275,7 @@ def test_external_artifact_registration_rejects_purged_image(db_session, tmp_pat
 
 
 
-def test_artifact_disposition_requires_two_person_approval_and_evidence(db_session, tmp_path):
+def test_artifact_disposition_requires_two_person_approval_and_evidence(db_session, tmp_path, monkeypatch):
     from fastapi import HTTPException
     from app.schemas import (
         ShelfImageArtifactReferenceCreate,
@@ -395,6 +395,16 @@ def test_artifact_disposition_requires_two_person_approval_and_evidence(db_sessi
     assert [event.event_type for event in history] == [
         "PROPOSED", "APPROVED", "DISPOSAL_ATTESTED"
     ]
+
+    monkeypatch.setattr(main_module.settings, "image_storage_path", str(tmp_path))
+    preview = main_module.get_shelf_image_purge_eligibility(
+        image_id, first_request, db_session
+    )
+    assert preview["eligible"] is False
+    assert "external_artifact_disposition_not_verified" in preview["blockers"]
+    assert preview["external_artifact_disposition"]["disposal_attested"] == 1
+    assert preview["external_artifact_disposition"]["without_final_disposition"] == 0
+    assert preview["deletion_performed"] is False
 
 
 def test_rejected_artifact_disposition_can_be_reproposed(db_session, tmp_path):
