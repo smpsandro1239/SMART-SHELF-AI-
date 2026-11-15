@@ -72,6 +72,10 @@ def validate_provenance_manifest(
         elif item.get("image_sha256") != manifest_row["sha256"]:
             errors.append(f"{label}: image_sha256 does not match manifest for {split}/{file_name}")
 
+        source_hash = item.get("source_image_sha256")
+        if not _valid_sha256(source_hash):
+            errors.append(f"{label}.source_image_sha256 must be a 64-character lowercase SHA-256")
+
         source_type = item.get("source_type")
         if source_type not in {"internal", "external"}:
             errors.append(f"{label}.source_type must be internal or external")
@@ -80,8 +84,6 @@ def validate_provenance_manifest(
                 errors.append(f"{label}.shelf_image_id must be a positive integer for internal images")
             if not _positive_id(item.get("store_id")):
                 errors.append(f"{label}.store_id must be a positive integer for internal images")
-            if not _valid_sha256(item.get("source_image_sha256")):
-                errors.append(f"{label}.source_image_sha256 must be a 64-character lowercase SHA-256")
             for field in ("source_name", "license", "rights_reference"):
                 if field in item:
                     errors.append(f"{label}.{field} is not applicable to internal images")
@@ -90,7 +92,7 @@ def validate_provenance_manifest(
                 value = item.get(field)
                 if not isinstance(value, str) or not value.strip():
                     errors.append(f"{label}.{field} is required for external images")
-            for field in ("shelf_image_id", "store_id", "source_image_sha256"):
+            for field in ("shelf_image_id", "store_id"):
                 if field in item:
                     errors.append(f"{label}.{field} is not applicable to external images")
 
@@ -105,13 +107,19 @@ def validate_provenance_manifest(
             kind = transformation.get("type")
             if kind not in {"original", "crop", "derived"}:
                 errors.append(f"{label}.transformation.type must be original, crop or derived")
-            elif kind in {"crop", "derived"}:
-                if not _valid_sha256(transformation.get("parent_sha256")):
+            elif kind == "original":
+                if "parent_sha256" in transformation:
+                    errors.append(f"{label}.transformation.parent_sha256 is only valid for crop/derived images")
+                if _valid_sha256(source_hash) and item.get("image_sha256") != source_hash:
+                    errors.append(f"{label}: original image hash must equal source_image_sha256")
+            else:
+                parent_hash = transformation.get("parent_sha256")
+                if not _valid_sha256(parent_hash):
                     errors.append(f"{label}.transformation.parent_sha256 is required for crop/derived images")
+                elif _valid_sha256(source_hash) and parent_hash != source_hash:
+                    errors.append(f"{label}.transformation.parent_sha256 must match source_image_sha256")
                 if not isinstance(transformation.get("operation"), str) or not transformation.get("operation", "").strip():
                     errors.append(f"{label}.transformation.operation is required for crop/derived images")
-            elif "parent_sha256" in transformation:
-                errors.append(f"{label}.transformation.parent_sha256 is only valid for crop/derived images")
 
     for split, file_name in sorted(set(expected) - seen):
         errors.append(f"missing provenance entry for {split}/{file_name}")
