@@ -2925,3 +2925,69 @@ def test_purge_eligibility_preview_is_admin_only_and_non_destructive(auth_client
         image = db.get(models.ShelfImage, image_id)
         assert image.retention_status == "RESTRICTED"
         assert image.purged_at is None
+
+
+
+def test_admin_can_schedule_cancel_and_audit_future_purge(auth_client):
+    client, ids, _ = auth_client
+    image_id = ids["image_b"]
+    admin_headers = bearer(ids["admin"], "ADMIN")
+    employee_headers = bearer(ids["employee_a"], "EMPLOYEE")
+    scheduled_at = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
+    payload = {
+        "purge_not_before": scheduled_at,
+        "policy_version": "retention-2026-01",
+        "reason": "Prazo de retenção aprovado pela política interna",
+    }
+
+    denied = client.post(
+        f"/api/v1/shelf-images/{image_id}/retention/purge-schedule",
+        json=payload,
+        headers=employee_headers,
+    )
+    assert denied.status_code == 403
+
+    scheduled = client.post(
+        f"/api/v1/shelf-images/{image_id}/retention/purge-schedule",
+        json=payload,
+        headers=admin_headers,
+    )
+    assert scheduled.status_code == 200, scheduled.text
+    assert scheduled.json()["retention_status"] == "RESTRICTED"
+    assert scheduled.json()["retention_policy_version"] == "retention-2026-01"
+    assert scheduled.json()["purge_not_before"] is not None
+
+    events = client.get(
+        f"/api/v1/shelf-images/{image_id}/retention/events",
+        headers=admin_headers,
+    )
+    assert events.status_code == 200, events.text
+    assert any(event["event_type"] == "PURGE_SCHEDULED" for event in events.json())
+
+    cancelled = client.post(
+        f"/api/v1/shelf-images/{image_id}/retention/purge-schedule/cancel",
+        json={"reason": "Revisão da política de retenção"},
+        headers=admin_headers,
+    )
+    assert cancelled.status_code == 200, cancelled.text
+    assert cancelled.json()["purge_not_before"] is None
+    assert cancelled.json()["retention_status"] == "RESTRICTED"
+
+    events = client.get(
+        f"/api/v1/shelf-images/{image_id}/retention/events",
+        headers=admin_headers,
+    )
+    assert any(event["event_type"] == "PURGE_CANCELLED" for event in events.json())
+
+    hold = client.post(
+        f"/api/v1/shelf-images/{image_id}/retention/legal-hold/apply",
+        json={"reason": "Preservação para auditoria legal"},
+        headers=admin_headers,
+    )
+    assert hold.status_code == 200, hold.text
+    blocked = client.post(
+        f"/api/v1/shelf-images/{image_id}/retention/purge-schedule",
+        json=payload,
+        headers=admin_headers,
+    )
+    assert blocked.status_code == 409
