@@ -139,9 +139,9 @@ def test_training_gate_passes_only_when_manifest_and_audits_match(tmp_path):
 
 
 def test_manifest_hash_mismatch_blocks_release(tmp_path):
-    manifest, paths = write_dataset(tmp_path)
+    manifest, paths, provenance = write_dataset(tmp_path)
     record = make_record("0" * 64)
-    errors, report = run_release_gate(record, manifest, paths)
+    errors, report = run_release_gate(record, manifest, paths, provenance_path=provenance)
     assert any("does not match" in error for error in errors)
     assert report["status"] == "BLOCKED"
 
@@ -205,7 +205,7 @@ def write_approved_visual_reviews(tmp_path, paths):
 
 
 def test_release_gate_can_require_complete_visual_reviews(tmp_path):
-    manifest, paths = write_dataset(tmp_path)
+    manifest, paths, provenance = write_dataset(tmp_path)
     record = make_record(hashlib.sha256(manifest.read_bytes()).hexdigest())
     reviews = write_approved_visual_reviews(tmp_path, paths)
 
@@ -219,7 +219,7 @@ def test_release_gate_can_require_complete_visual_reviews(tmp_path):
 
 
 def test_release_gate_blocks_when_required_visual_reviews_are_missing(tmp_path):
-    manifest, paths = write_dataset(tmp_path)
+    manifest, paths, provenance = write_dataset(tmp_path)
     record = make_record(hashlib.sha256(manifest.read_bytes()).hexdigest())
 
     errors, report = run_release_gate(
@@ -231,7 +231,7 @@ def test_release_gate_blocks_when_required_visual_reviews_are_missing(tmp_path):
 
 
 def test_release_gate_detects_stale_visual_review_after_coco_change(tmp_path):
-    manifest, paths = write_dataset(tmp_path)
+    manifest, paths, provenance = write_dataset(tmp_path)
     record = make_record(hashlib.sha256(manifest.read_bytes()).hexdigest())
     reviews = write_approved_visual_reviews(tmp_path, paths)
 
