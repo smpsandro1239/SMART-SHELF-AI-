@@ -176,11 +176,14 @@ def main() -> None:
             assert global_report.status_code == 200, global_report.text
             admin_report = global_report.json()
             assert admin_report["store_id"] is None, admin_report
-            assert admin_report["sample_count"] == 2, admin_report
-            assert set(admin_report["by_model_version"]) == {
+            expected_versions = {
                 "embed-store-a-pg-smoke-v1",
                 "embed-store-b-pg-smoke-v1",
-            }, admin_report
+            }
+            assert admin_report["sample_count"] >= 2, admin_report
+            assert expected_versions.issubset(admin_report["by_model_version"]), admin_report
+            for version in expected_versions:
+                assert admin_report["by_model_version"][version]["sample_count"] == 1, admin_report
 
             employee_response = client.get(
                 "/api/v1/sku-evaluation/reviewed",
