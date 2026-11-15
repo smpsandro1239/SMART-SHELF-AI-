@@ -306,7 +306,7 @@ O teste `test_reviewed_training_candidates_are_scoped_to_supervisor_store` valid
 - o cenário ativa explicitamente a imagem da segunda loja para que a exclusão do SUPERVISOR seja atribuível ao filtro multi-loja, e não ao estado de retenção;
 - a imagem da primeira loja usa um SHA-256 sem exemplar pré-existente, para que ambos os recortes sejam elegíveis para a fila de candidatos.
 
-A integração HTTP usa SQLite isolado. O teste foi acrescentado no commit `895adcee`; a validação CI deste commit está pendente. Este teste não autoriza treino automático: os candidatos continuam sujeitos a curadoria/aprovação de exemplar e às regras de integridade do dataset.
+A integração HTTP usa SQLite isolado. O teste foi acrescentado no commit `895adcee`; API CI [43668452686](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/43668452686) e Quality Gates [43668471717](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/43668471717) passaram. Não equivale a validação PostgreSQL individual do endpoint. Este teste não autoriza treino automático: os candidatos continuam sujeitos a curadoria/aprovação de exemplar e às regras de integridade do dataset.
 
 ## Avaliação histórica SKU — isolamento multi-loja
 
