@@ -917,3 +917,10 @@ Endpoints:
 - `GET /api/v1/shelf-images/{image_id}/retention/purge-eligibility`
 
 A migração `0032_shelf_image_purge_schedule_events` alarga a restrição dos tipos de evento para incluir os dois eventos de agendamento. O executor de purge continua por implementar; a data agendada não dispara qualquer eliminação automática. A pré-validação também compara tamanho e SHA-256 do ficheiro armazenado. Mesmo com as verificações internas aprovadas, `eligible` permanece `false` enquanto releases externas, backups, caches e réplicas de armazenamento não forem inventariados e tiverem uma disposição aprovada. Não há eliminação física automática.
+
+
+### Inventário de artefactos externos de imagens
+
+A migração `0033_shelf_image_artifact_references` e os endpoints administrativos `POST/GET /api/v1/shelf-images/{image_id}/artifacts` permitem declarar referências a cópias de datasets, releases, crops, relatórios, backups, caches e réplicas externas. As declarações são append-only, associadas à loja resolvida a partir da imagem e idempotentes; referências repetidas com metadados divergentes são rejeitadas.
+
+Este inventário é um primeiro passo de proveniência, não uma atestação de cobertura nem uma disposição aprovada. A pré-validação de purge continua bloqueada por `external_artifact_disposition_not_verified`, mesmo sem referências declaradas. Não existe executor de purge ou eliminação física.
