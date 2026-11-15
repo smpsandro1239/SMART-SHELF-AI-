@@ -211,14 +211,36 @@ def create_release(
     releases_dir.mkdir(parents=True, exist_ok=True)
     destination = releases_dir / f"{fingerprint}.json"
     serialized = json.dumps(release, ensure_ascii=False, sort_keys=True, indent=2) + "\n"
+    if destination.is_symlink():
+        raise RuntimeError("registry integrity error: release path must not be a symlink")
     try:
         with destination.open("x", encoding="utf-8") as stream:
             stream.write(serialized)
         created = True
     except FileExistsError:
-        existing = json.loads(destination.read_text(encoding="utf-8"))
-        if existing.get("fingerprint") != fingerprint:
+        if destination.is_symlink():
+            raise RuntimeError("registry integrity error: release path must not be a symlink")
+        try:
+            existing = json.loads(destination.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise RuntimeError("registry integrity error: existing release is unreadable") from exc
+        if not isinstance(existing, dict) or existing.get("fingerprint") != fingerprint:
             raise RuntimeError("registry collision: existing release fingerprint differs")
+        existing_created_at = existing.get("created_at")
+        if not isinstance(existing_created_at, str):
+            raise RuntimeError("registry integrity error: existing release timestamp is missing")
+        try:
+            parsed_created_at = datetime.fromisoformat(existing_created_at.replace("Z", "+00:00"))
+        except ValueError as exc:
+            raise RuntimeError("registry integrity error: existing release timestamp is invalid") from exc
+        if parsed_created_at.tzinfo is None:
+            raise RuntimeError("registry integrity error: existing release timestamp must include a timezone")
+        expected_immutable = dict(release)
+        existing_immutable = dict(existing)
+        expected_immutable.pop("created_at", None)
+        existing_immutable.pop("created_at", None)
+        if existing_immutable != expected_immutable:
+            raise RuntimeError("registry integrity error: existing release metadata differs from validated inputs")
         release = existing
         created = False
     return release, created
