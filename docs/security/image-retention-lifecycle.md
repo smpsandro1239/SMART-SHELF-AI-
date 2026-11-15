@@ -301,3 +301,17 @@ A criação é idempotente para a mesma imagem/tipo/sistema/referência. Reutili
 Não foi implementado qualquer worker destrutivo, nem qualquer eliminação de imagens, datasets, backups, caches ou réplicas.
 
 A API também rejeita novas declarações para imagens cujo estado já seja `PURGED` (HTTP 409), preservando a cronologia do inventário e evitando associar retroativamente novos artefactos a uma imagem já declarada eliminada.
+
+
+## Aprovação e evidência de disposição de artefactos externos
+
+A migração `0034_shelf_image_artifact_disposition_events` acrescenta um histórico append-only por referência de artefacto. A API administrativa permite propor, aprovar/rejeitar e registar uma atestação de disposição:
+
+- `POST /api/v1/shelf-images/{image_id}/artifacts/{artifact_id}/disposition-events`
+- `GET /api/v1/shelf-images/{image_id}/artifacts/{artifact_id}/disposition-events`
+
+O fluxo exige dois administradores distintos: quem propõe não pode aprovar/rejeitar; quem aprova não pode ser a pessoa que atesta a conclusão. A atestação final exige uma referência de evidência e SHA-256. Uma proposta rejeitada pode ser submetida novamente; propostas pendentes, aprovadas ou já atestadas não podem ser duplicadas.
+
+A evidência é uma declaração humana referenciada, não uma verificação automática do sistema externo. A aplicação não apaga artefactos nem consulta o fornecedor externo. A pré-validação apresenta contagens por estado, mas continua a incluir `external_artifact_disposition_not_verified` mesmo quando todas as referências conhecidas têm `DISPOSAL_ATTESTED`, porque ainda não existe prova independente de cobertura completa do inventário externo. Portanto, esta funcionalidade **não torna o purge elegível**.
+
+O workflow API CI executa também `postgres_shelf_image_artifact_disposition_smoke.py` após as migrações para verificar que o PostgreSQL rejeita UPDATE e DELETE ao histórico.
