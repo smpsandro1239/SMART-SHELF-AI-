@@ -70,7 +70,7 @@ def test_release_creation_is_idempotent(tmp_path):
     manifest, split, visual = setup_release_inputs(tmp_path)
     registry = tmp_path / "registry"
     first, created_first = create_release(manifest, split, visual, registry, provenance_path=provenance)
-    second, created_second = create_release(manifest, split, visual, registry)
+    second, created_second = create_release(manifest, split, visual, registry, provenance_path=provenance)
     assert created_first is True
     assert created_second is False
     assert first["fingerprint"] == second["fingerprint"]
@@ -80,7 +80,7 @@ def test_release_rejects_failed_split_quality_gate(tmp_path):
     manifest, split, visual = setup_release_inputs(tmp_path)
     write_report(split, status="failed", errors=["capture session leaked"])
     with pytest.raises(ValueError, match="split audit quality gate"):
-        create_release(manifest, split, visual, tmp_path / "registry")
+        create_release(manifest, split, visual, tmp_path / "registry", provenance_path=provenance)
 
 
 def test_release_rejects_failed_visual_quality_gate(tmp_path):
@@ -119,7 +119,7 @@ def test_release_reports_classes_missing_from_a_split(tmp_path):
         "val": {"classes": {"1": {"name": "soda", "instances": 2}}},
         "test": {"classes": {"1": {"name": "soda", "instances": 0}}},
     })
-    release, _ = create_release(manifest, split, visual, tmp_path / "registry")
+    release, _ = create_release(manifest, split, visual, tmp_path / "registry", provenance_path=provenance)
     assert "class 1 has no annotated instances in test" in release["class_balance"]["warnings"]
     assert release["class_balance"]["instances_by_class_and_split"]["1"]["val"] == 2
 
