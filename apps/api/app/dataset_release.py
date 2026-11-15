@@ -13,6 +13,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from app.dataset_provenance import validate_provenance_manifest
+from app.dataset_operational_eligibility import validate_internal_image_eligibility
+
 REQUIRED_SPLITS = {"train", "val", "test"}
 REQUIRED_COLUMNS = {"split", "file_name", "size_bytes", "sha256"}
 
@@ -85,10 +88,27 @@ def create_release(
     visual_audit_path: Path,
     registry_dir: Path,
     *,
+    provenance_path: Path,
+    db_session: Any | None = None,
     min_images_per_split: int = 1,
     min_class_instances: int = 0,
 ) -> tuple[dict[str, Any], bool]:
     rows = load_manifest(manifest_path)
+    try:
+        provenance_record = json.loads(provenance_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(f"cannot read provenance manifest: {exc}") from exc
+    provenance_errors, provenance_report = validate_provenance_manifest(provenance_record, rows)
+    if provenance_errors:
+        raise ValueError("provenance manifest rejected: " + "; ".join(provenance_errors))
+
+    operational_errors, operational_report = validate_internal_image_eligibility(
+        db_session,
+        provenance_record.get("images", []) if isinstance(provenance_record, dict) else [],
+    )
+    if operational_errors:
+        raise ValueError("operational image eligibility rejected: " + "; ".join(operational_errors))
+
     split_report, split_report_hash = _load_passed_report(split_audit_path, "split audit")
     visual_report, visual_report_hash = _load_passed_report(visual_audit_path, "visual similarity audit")
 
@@ -146,6 +166,17 @@ def create_release(
         "fingerprint": fingerprint,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "manifest_sha256": sha256_file(manifest_path),
+        "provenance": {
+            "schema_version": provenance_report.get("schema_version"),
+            "manifest_sha256": sha256_file(provenance_path),
+            "image_count": provenance_report.get("images", 0),
+            "status": provenance_report.get("status"),
+            "operational_eligibility": {
+                "status": operational_report.get("status"),
+                "internal_images": operational_report.get("internal_images", 0),
+                "checked_images": operational_report.get("checked_images", 0),
+            },
+        },
         "image_count": len(rows),
         "images_by_split": {split: counts.get(split, 0) for split in sorted(REQUIRED_SPLITS)},
         "quality_gates": {
@@ -192,19 +223,43 @@ def main() -> int:
     parser.add_argument("--manifest", required=True, type=Path)
     parser.add_argument("--split-audit", required=True, type=Path)
     parser.add_argument("--visual-audit", required=True, type=Path)
+    parser.add_argument("--provenance-manifest", required=True, type=Path)
     parser.add_argument("--registry", required=True, type=Path)
     parser.add_argument("--min-images-per-split", type=int, default=1)
     parser.add_argument("--min-class-instances", type=int, default=0)
     args = parser.parse_args()
+    db_session = None
     try:
+        try:
+            provenance_record = json.loads(args.provenance_manifest.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            provenance_record = None
+        has_internal_sources = (
+            isinstance(provenance_record, dict)
+            and isinstance(provenance_record.get("images"), list)
+            and any(
+                isinstance(item, dict) and item.get("source_type") == "internal"
+                for item in provenance_record["images"]
+            )
+        )
+        if has_internal_sources:
+            from app.database import SessionLocal
+            db_session = SessionLocal()
+
         release, created = create_release(
             args.manifest, args.split_audit, args.visual_audit, args.registry,
+            provenance_path=args.provenance_manifest,
+            db_session=db_session,
             min_images_per_split=args.min_images_per_split,
             min_class_instances=args.min_class_instances,
         )
-    except (OSError, ValueError, RuntimeError) as exc:
+    except Exception as exc:
         print(f"ERROR: dataset release rejected: {exc}")
         return 1
+    finally:
+        if db_session is not None:
+            db_session.rollback()
+            db_session.close()
     print(json.dumps(release, ensure_ascii=False, indent=2))
     print("Dataset release created." if created else "Dataset release already exists (idempotent).")
     return 0
