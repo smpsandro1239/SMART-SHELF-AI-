@@ -2,7 +2,7 @@
 
 A release is created only when the split-leakage and visual-similarity
 reports explicitly contain status='passed' and an empty errors list.
-The release fingerprint is deterministic for the normalized image manifest.
+The release fingerprint binds the normalized image manifest and provenance sidecar hash.
 """
 import argparse
 import csv
@@ -158,7 +158,13 @@ def create_release(
                 )
         class_instance_counts[category_name] = per_split
 
-    canonical = json.dumps(rows, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    provenance_digest = sha256_file(provenance_path)
+    canonical = json.dumps(
+        {"images": rows, "provenance_sha256": provenance_digest},
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    )
     fingerprint = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
     release = {
         "schema_version": 1,
