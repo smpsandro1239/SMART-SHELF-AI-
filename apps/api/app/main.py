@@ -68,7 +68,7 @@ from app.schemas import (
     DetectionSkuReviewCreate, DetectionSkuReviewRead,
     ShelfImageOCRRunCreate, ShelfImageOCRRunRead, ShelfImageOCREvidenceRead,
     ShelfImageOCRMatchRead,
-    ShelfImageFusedEvidenceRead, ShelfImageRetentionRequest, ShelfImageRetentionEventRead,
+    ShelfImageFusedEvidenceRead, ShelfImageRetentionRequest, ShelfImageRetentionEventRead, ShelfImagePurgeScheduleRequest,
     ShelfImageReviewQueueItem, ShelfImageTrainingCandidateRead, CaptureSessionCreate, CaptureSessionRead,
     WarehouseLocationCreate, WarehouseProductProfileCreate, WarehousePlacementCreate,
     ProductPackagingLevelCreate, StorePalletCreate, StorePalletRead,
@@ -1047,6 +1047,104 @@ def release_shelf_image_legal_hold(
         shelf_image_id=item.id, event_type="LEGAL_HOLD_RELEASED",
         from_status=item.retention_status, to_status=item.retention_status,
         actor_user_id=actor.id, reason=reason,
+    ))
+    db.commit()
+    db.refresh(item)
+    return item
+
+
+@app.post(
+    "/api/v1/shelf-images/{image_id}/retention/purge-schedule",
+    response_model=ShelfImageRead,
+    tags=["computer-vision"],
+)
+def schedule_shelf_image_purge(
+    image_id: int,
+    payload: ShelfImagePurgeScheduleRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Schedule a future purge date; this endpoint never deletes data."""
+    actor = _request_user(db, request)
+    if actor is None or actor.role != "ADMIN":
+        raise HTTPException(status_code=403, detail="Administrator role required")
+    item = (
+        db.query(models.ShelfImage)
+        .filter(models.ShelfImage.id == image_id)
+        .with_for_update()
+        .populate_existing()
+        .first()
+    )
+    if item is None:
+        raise HTTPException(status_code=404, detail="Shelf image not found")
+    _enforce_store_scope(actor, _shelf_image_store_id(db, image_id))
+    if item.retention_status != "RESTRICTED":
+        raise HTTPException(status_code=409, detail="Only restricted images can be scheduled for purge")
+    if item.legal_hold:
+        raise HTTPException(status_code=409, detail="Image is protected by an active legal hold")
+    if item.analysis_status == "PROCESSING":
+        raise HTTPException(status_code=409, detail="Image analysis is still processing")
+    purge_at = payload.purge_not_before.astimezone(timezone.utc)
+    now = models.utc_now()
+    if purge_at <= now:
+        raise HTTPException(status_code=422, detail="Purge date must be in the future")
+
+    previous_date = item.purge_not_before.isoformat() if item.purge_not_before else "not scheduled"
+    item.purge_not_before = purge_at
+    item.retention_policy_version = payload.policy_version
+    item.retention_reason = payload.reason.strip()
+    db.add(models.ShelfImageRetentionEvent(
+        shelf_image_id=item.id,
+        event_type="PURGE_SCHEDULED",
+        from_status=item.retention_status,
+        to_status=item.retention_status,
+        actor_user_id=actor.id,
+        reason=f"{payload.reason.strip()} | policy={payload.policy_version} | previous_date={previous_date} | scheduled_date={purge_at.isoformat()}",
+    ))
+    db.commit()
+    db.refresh(item)
+    return item
+
+
+@app.post(
+    "/api/v1/shelf-images/{image_id}/retention/purge-schedule/cancel",
+    response_model=ShelfImageRead,
+    tags=["computer-vision"],
+)
+def cancel_shelf_image_purge_schedule(
+    image_id: int,
+    payload: ShelfImageRetentionRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Cancel a scheduled purge without restoring access or deleting evidence."""
+    actor = _request_user(db, request)
+    if actor is None or actor.role != "ADMIN":
+        raise HTTPException(status_code=403, detail="Administrator role required")
+    item = (
+        db.query(models.ShelfImage)
+        .filter(models.ShelfImage.id == image_id)
+        .with_for_update()
+        .populate_existing()
+        .first()
+    )
+    if item is None:
+        raise HTTPException(status_code=404, detail="Shelf image not found")
+    _enforce_store_scope(actor, _shelf_image_store_id(db, image_id))
+    if item.retention_status != "RESTRICTED":
+        raise HTTPException(status_code=409, detail="Only restricted images can have a purge schedule cancelled")
+    if item.purge_not_before is None:
+        raise HTTPException(status_code=409, detail="Image has no scheduled purge")
+    previous_date = item.purge_not_before.isoformat()
+    item.purge_not_before = None
+    item.retention_policy_version = None
+    db.add(models.ShelfImageRetentionEvent(
+        shelf_image_id=item.id,
+        event_type="PURGE_CANCELLED",
+        from_status=item.retention_status,
+        to_status=item.retention_status,
+        actor_user_id=actor.id,
+        reason=f"{payload.reason.strip()} | cancelled_date={previous_date}",
     ))
     db.commit()
     db.refresh(item)
