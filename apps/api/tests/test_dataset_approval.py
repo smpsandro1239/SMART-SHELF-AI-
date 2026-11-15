@@ -240,7 +240,7 @@ def test_release_gate_detects_stale_visual_review_after_coco_change(tmp_path):
     paths["train"].write_text(json.dumps(document), encoding="utf-8")
 
     errors, report = run_release_gate(
-        record, manifest, paths, review_paths=reviews, require_visual_review=True
+        record, manifest, paths, provenance_path=provenance, review_paths=reviews, require_visual_review=True
     )
 
     assert report["status"] == "BLOCKED"
