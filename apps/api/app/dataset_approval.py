@@ -16,6 +16,7 @@ from app.dataset_audit import audit_splits
 from app.dataset_integrity import audit_manifest_against_coco, read_manifest
 from app.dataset_quality import analyze_dataset_quality
 from app.dataset_review import sha256_file, validate_visual_review_record
+from app.dataset_provenance import validate_provenance_manifest
 
 SPLITS = ("train", "val", "test")
 SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
@@ -166,6 +167,7 @@ def run_release_gate(
     manifest_path: Path,
     split_paths: dict[str, Path],
     *,
+    provenance_path: Path,
     mode: str = "training",
     review_paths: dict[str, Path] | None = None,
     require_visual_review: bool = False,
@@ -205,6 +207,25 @@ def run_release_gate(
         "errors": manifest_errors,
         "images": len(manifest_rows),
     }
+
+    try:
+        provenance_record = json.loads(provenance_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        provenance_errors = [f"cannot read provenance manifest: {exc}"]
+        provenance_report = {"status": "BLOCKED", "errors": provenance_errors}
+    else:
+        provenance_errors, provenance_report = validate_provenance_manifest(
+            provenance_record, manifest_rows
+        )
+    errors.extend(provenance_errors)
+    report["checks"]["image_provenance"] = {
+        "passed": not provenance_errors,
+        **provenance_report,
+    }
+    if errors:
+        report["status"] = "BLOCKED"
+        report["errors"] = errors
+        return errors, report
 
     documents: dict[str, Any] = {}
     for split in SPLITS:
@@ -279,6 +300,7 @@ def main() -> int:
     )
     parser.add_argument("--release-record", required=True, type=Path, help="Completed dataset release JSON")
     parser.add_argument("--manifest", required=True, type=Path, help="SHA-256 CSV image manifest")
+    parser.add_argument("--provenance-manifest", required=True, type=Path, help="Versioned per-image provenance JSON sidecar")
     parser.add_argument("--train", required=True, type=Path, help="COCO training annotations")
     parser.add_argument("--val", required=True, type=Path, help="COCO validation annotations")
     parser.add_argument("--test", required=True, type=Path, help="COCO test annotations")
@@ -305,6 +327,7 @@ def main() -> int:
         record,
         args.manifest,
         {"train": args.train, "val": args.val, "test": args.test},
+        provenance_path=args.provenance_manifest,
         mode=args.mode,
         review_paths=(
             {"train": args.review_train, "val": args.review_val, "test": args.review_test}
