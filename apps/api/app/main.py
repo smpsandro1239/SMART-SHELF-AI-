@@ -1357,9 +1357,13 @@ def get_shelf_image_purge_eligibility(
     )):
         blockers.append("derived_records_require_approved_disposition")
 
-    # External dataset releases, backups, caches and object-store replicas are
-    # not yet inventoried by this application. A clean local database/file
-    # check therefore cannot authorize irreversible deletion.
+    artifact_reference_count = db.query(models.ShelfImageArtifactReference).filter(
+        models.ShelfImageArtifactReference.shelf_image_id == image_id,
+        models.ShelfImageArtifactReference.store_id == store_id,
+    ).count()
+
+    # Declarations improve traceability but do not prove inventory completeness,
+    # current artifact existence, deletion, or an approved disposition.
     blockers.append("external_artifact_disposition_not_verified")
     internal_checks_passed = len(blockers) == 1
 
@@ -1374,6 +1378,7 @@ def get_shelf_image_purge_eligibility(
         "blockers": blockers,
         "stored_file_available": file_available,
         "stored_file_integrity_verified": file_integrity_verified,
+        "declared_external_artifact_references": artifact_reference_count,
         "derived_records": {
             "detections": detection_count,
             "ocr_runs": ocr_run_count,
