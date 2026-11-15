@@ -434,10 +434,31 @@ class ShelfImageRetentionRequest(BaseModel):
         return normalized
 
 
+class ShelfImagePurgeScheduleRequest(BaseModel):
+    purge_not_before: datetime
+    policy_version: str = Field(min_length=1, max_length=40)
+    reason: str = Field(min_length=3, max_length=2000)
+
+    @field_validator("policy_version", "reason")
+    @classmethod
+    def normalize_retention_text(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("Retention policy metadata cannot be blank")
+        return normalized
+
+    @field_validator("purge_not_before")
+    @classmethod
+    def require_timezone(cls, value: datetime) -> datetime:
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("purge_not_before must include a timezone")
+        return value
+
+
 class ShelfImageRetentionEventRead(BaseModel):
     id: int
     shelf_image_id: int
-    event_type: Literal["RESTRICTED", "RESTORED", "LEGAL_HOLD_APPLIED", "LEGAL_HOLD_RELEASED"]
+    event_type: Literal["RESTRICTED", "RESTORED", "LEGAL_HOLD_APPLIED", "LEGAL_HOLD_RELEASED", "PURGE_SCHEDULED", "PURGE_CANCELLED"]
     from_status: str
     to_status: str
     actor_user_id: int | None
