@@ -39,3 +39,5 @@ After the new disposition migration, API endpoint, tests and PostgreSQL smoke sc
 
 
 The final implementation revision checked in this session, `866f75087b17920b1b5743ec08a578248c46e1f5`, reproduced the same result: API CI run `43777605958` has an empty step list and `logs_url: null`; quality-gates run `43777605937` has the same result for both API and web jobs. The minimal diagnostic retry also failed before its first step. No source-level test result is available from these runs.
+
+After the final database-lineage hardening, API CI run `43777686506` and quality-gates run `43777694940` again failed before any step; the API job and both quality jobs expose empty step lists. This confirms that the latest revisions still have no CI execution evidence.
