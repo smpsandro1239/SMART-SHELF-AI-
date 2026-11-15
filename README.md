@@ -177,6 +177,8 @@ Foi acrescentada cobertura JWT cross-store para sete operações de inventário/
 
 **Análise técnica desta ronda (2026-11-15, continuação 2):** a revisão da assinatura de `create_access_token` detetou que exige `user_id` e `role`. O smoke PostgreSQL de sessões de captura foi corrigido para emitir tokens com os três perfis reais (SUPERVISOR, ADMIN e EMPLOYEE). A listagem já aplica filtro por `store_id` a todos os utilizadores não ADMIN; o gate de autorização por perfil é exercido pela camada global e coberto pelo teste JWT existente. A validação PostgreSQL permanece pendente de execução CI, pelo que não se declara concluída.
 
+**Segurança de upload de imagens (2026-11-15):** foram acrescentados dois testes JWT à suite `apps/api/tests/test_auth_middleware_jwt.py`: rejeição de ficheiros PNG com assinatura válida mas conteúdo inválido e rejeição de MIME não suportado (SVG), confirmando ausência de ficheiros e registos parciais; e sanitização de nomes de ficheiro fornecidos pelo cliente (`../../outside/renamed.png` é persistido apenas como `renamed.png`, dentro do diretório da loja). Os testes exercitam o handler de upload real com utilizador EMPLOYEE autenticado. A execução CI destes novos cenários ainda está pendente.
+
 ## 1. O que é o SMART SHELF AI?
 
 O SMART SHELF AI pretende ajudar supermercados e operações de retalho a responder a perguntas práticas:
