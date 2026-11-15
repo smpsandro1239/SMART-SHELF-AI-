@@ -2890,3 +2890,38 @@ def test_employee_upload_sanitizes_client_filename(
     stored_path = __import__("pathlib").Path(payload["storage_path"])
     assert stored_path.parent == tmp_path / str(store_ids["a"])
     assert stored_path.exists()
+
+
+
+def test_purge_eligibility_preview_is_admin_only_and_non_destructive(auth_client):
+    client, ids, _ = auth_client
+    admin_headers = bearer(ids["admin"], "ADMIN")
+    employee_headers = bearer(ids["employee_a"], "EMPLOYEE")
+    image_id = ids["image_b"]
+
+    with main_module.SessionLocal() as db:
+        image = db.get(models.ShelfImage, image_id)
+        image.purge_not_before = models.utc_now() + timedelta(days=1)
+        db.commit()
+
+    denied = client.get(
+        f"/api/v1/shelf-images/{image_id}/retention/purge-eligibility",
+        headers=employee_headers,
+    )
+    assert denied.status_code == 403
+
+    preview = client.get(
+        f"/api/v1/shelf-images/{image_id}/retention/purge-eligibility",
+        headers=admin_headers,
+    )
+    assert preview.status_code == 200, preview.text
+    payload = preview.json()
+    assert payload["eligible"] is False
+    assert "retention_period_not_elapsed" in payload["blockers"]
+    assert "stored_file_missing_or_unsafe" in payload["blockers"]
+    assert payload["deletion_performed"] is False
+
+    with main_module.SessionLocal() as db:
+        image = db.get(models.ShelfImage, image_id)
+        assert image.retention_status == "RESTRICTED"
+        assert image.purged_at is None
