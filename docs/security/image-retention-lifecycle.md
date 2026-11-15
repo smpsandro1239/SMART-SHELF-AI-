@@ -172,3 +172,18 @@ operações nas cinco tabelas e confirma que os valores e registos originais
 permanecem. Esta proteção é uma regra de imutabilidade, não um mecanismo de
 purga ou anonimização. A validação CI da migração e do smoke permanece
 pendente.
+
+
+## Serialização das operações OCR com a retenção
+
+As operações HTTP que criam evidência derivada ou alteram o estado de análise têm de disputar o mesmo bloqueio de linha da imagem que a operação de restrição. Os handlers de criação de execuções OCR, matching OCR manual e retry obtêm `SELECT FOR UPDATE`, refrescam o registo e só depois validam `ACTIVE`. A fusão visual/OCR adquire igualmente o bloqueio antes de persistir resultados e revalida o estado. A revisão humana já seguia a ordem imagem → produto e refrescava a deteção depois do bloqueio.
+
+O smoke `postgres_embedding_retention_smoke.py` acrescenta uma corrida real entre uma transação que bloqueia/restringe a imagem e o endpoint de matching OCR manual. O teste observa o pedido bloqueado em `pg_stat_activity`/ `pg_blocking_pids`, confirma que não termina antes do commit de retenção e exige HTTP 410 após a imagem ficar `RESTRICTED`, sem novos matches. API CI [43710660312](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/43710660312) e Quality Gates [43710660309](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/43710660309) passaram, com 778 testes aprovados e 1 ignorado.
+
+Esta prova cobre o matching OCR manual e não deve ser interpretada como prova concorrente individual de todos os handlers. As restantes rotas de escrita e os fluxos de exportação continuam na matriz de auditoria.
+
+## Limite de retenção nos datasets COCO offline
+
+Os utilitários `app.coco_dataset`, `app.coco_review` e `app.dataset_review` operam sobre ficheiros COCO e diretórios fornecidos por quem executa o comando. Validam estrutura, anotações, caminhos e registos de revisão, mas não consultam a base de dados operacional, não resolvem um `shelf_image_id`, não verificam a loja proprietária, o estado `ACTIVE/RESTRICTED` ou o legal hold. O campo de revisor do registo offline é texto fornecido no ficheiro e não uma identidade autenticada pela API.
+
+Estes utilitários não estão ligados a treino automático nem constituem, por si, um processo de exportação das imagens da aplicação. Contudo, se forem usados com imagens provenientes das capturas SMART SHELF AI, não existe atualmente uma ligação técnica que propague uma restrição posterior aos ficheiros COCO, cópias, relatórios ou datasets externos. Antes de qualquer exportação/treino operacional, exigir um manifesto de proveniência que ligue cada imagem/crop à origem, loja e hash, mais uma verificação de elegibilidade no momento de exportação e de release. O tratamento de cópias, backups e caches permanece dependente de política formal aprovada; não implementar purga por inferência.
