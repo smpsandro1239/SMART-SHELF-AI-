@@ -485,6 +485,10 @@ def test_failed_ocr_can_be_retried_without_rerunning_vision(db, monkeypatch, tmp
     assert vision_worker.retry_failed_ocr_for_image(
         db, image_id, SuccessfulOCR()
     ) is True
+    # A completed retry is now the latest attempt; a second invocation is a no-op.
+    assert vision_worker.retry_failed_ocr_for_image(
+        db, image_id, SuccessfulOCR()
+    ) is False
 
     runs = (
         db.query(models.ShelfImageOCRRun)
