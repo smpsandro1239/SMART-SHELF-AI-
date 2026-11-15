@@ -31,3 +31,8 @@ This is a deployment quota/rate-limit signal, not evidence of an application com
 3. Respect the Vercel build rate limit; resume deployment after the provider allows it rather than changing application code to hide the status.
 
 See [GitHub's workflow run logs guide](https://docs.github.com/en/actions/how-tos/monitor-workflows/use-workflow-run-logs) and [workflow troubleshooting guide](https://docs.github.com/en/actions/how-tos/troubleshoot-workflows).
+
+
+## Follow-up on application changes (2026-11-15)
+
+After the new disposition migration, API endpoint, tests and PostgreSQL smoke script were committed, API CI run `43777489500` also failed before recording any step (`steps: []`, `logs_url: null`). Quality-gates run `43777523625` showed the same pre-step failure for both API and web jobs. This repeats the runner/log symptom on independent jobs and still provides no application-level test result.
