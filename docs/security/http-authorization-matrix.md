@@ -320,3 +320,9 @@ O teste `test_reviewed_sku_evaluation_is_scoped_to_supervisor_store` cobre diret
 
 A prova isola a fronteira HTTP/autorização e não valida o cálculo SQL das métricas. O teste usa SQLite isolado e mock do agregador; a validação CI deste commit está pendente.
 
+## Listagem de exemplares de embedding — isolamento da imagem de origem
+
+O teste JWT `test_product_embedding_exemplar_listing_is_scoped_to_source_image_store` cobre `GET /api/v1/product-embedding-exemplars` com exemplares associados a imagens de duas lojas. Confirma que SUPERVISOR da loja A só recebe exemplares cuja imagem de origem pertence à loja A, ADMIN recebe os exemplares das duas lojas e EMPLOYEE recebe HTTP 403. A imagem estrangeira é ativada no cenário para que o filtro de retenção não esconda uma falha de isolamento.
+
+A prova cobre a listagem HTTP e o âmbito da imagem de origem; não avalia a utilização dos vetores pelo motor de matching. Commit `07f46a43c17a9f617aea8b55a242b3d3f7426106`; CI pendente.
+
