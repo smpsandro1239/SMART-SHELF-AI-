@@ -71,6 +71,7 @@ from app.schemas import (
     ShelfImageFusedEvidenceRead, ShelfImageRetentionRequest, ShelfImageRetentionEventRead, ShelfImagePurgeScheduleRequest,
     ShelfImageReviewQueueItem, ShelfImageTrainingCandidateRead, CaptureSessionCreate, CaptureSessionRead,
     ShelfImageArtifactReferenceCreate, ShelfImageArtifactReferenceRead,
+    ShelfImageArtifactDispositionActionRequest, ShelfImageArtifactDispositionEventRead,
     WarehouseLocationCreate, WarehouseProductProfileCreate, WarehousePlacementCreate,
     ProductPackagingLevelCreate, StorePalletCreate, StorePalletRead,
     PalletRotationPolicyCreate, PalletRotationPolicyRead, PalletRotationPolicyUpdate, PalletRotationEventRead, PalletLifecycleUpdate, PalletRotationSimulationRequest,
@@ -1261,6 +1262,142 @@ def list_shelf_image_artifact_references(
             models.ShelfImageArtifactReference.store_id == store_id,
         )
         .order_by(models.ShelfImageArtifactReference.created_at, models.ShelfImageArtifactReference.id)
+        .limit(max(1, min(limit, 500)))
+        .all()
+    )
+
+
+@app.post(
+    "/api/v1/shelf-images/{image_id}/artifacts/{artifact_id}/disposition-events",
+    response_model=ShelfImageArtifactDispositionEventRead,
+    status_code=201,
+    tags=["computer-vision"],
+)
+def create_shelf_image_artifact_disposition_event(
+    image_id: int,
+    artifact_id: int,
+    payload: ShelfImageArtifactDispositionActionRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Record a two-person disposition decision; external deletion is never performed here."""
+    actor = _request_user(db, request)
+    if actor is None or actor.role != "ADMIN":
+        raise HTTPException(status_code=403, detail="Administrator role required")
+
+    image = db.query(models.ShelfImage).filter(
+        models.ShelfImage.id == image_id
+    ).with_for_update().first()
+    if image is None:
+        raise HTTPException(status_code=404, detail="Shelf image not found")
+    if image.retention_status == "PURGED":
+        raise HTTPException(status_code=409, detail="Cannot change disposition after image purge")
+
+    store_id = _shelf_image_store_id(db, image_id)
+    if store_id is None:
+        raise HTTPException(status_code=409, detail="Shelf image has no valid store lineage")
+    _enforce_store_scope(actor, store_id)
+
+    artifact = db.query(models.ShelfImageArtifactReference).filter(
+        models.ShelfImageArtifactReference.id == artifact_id,
+        models.ShelfImageArtifactReference.shelf_image_id == image_id,
+        models.ShelfImageArtifactReference.store_id == store_id,
+    ).with_for_update().first()
+    if artifact is None:
+        raise HTTPException(status_code=404, detail="Artifact reference not found")
+
+    latest = (
+        db.query(models.ShelfImageArtifactDispositionEvent)
+        .filter(
+            models.ShelfImageArtifactDispositionEvent.artifact_reference_id == artifact_id
+        )
+        .order_by(
+            models.ShelfImageArtifactDispositionEvent.created_at.desc(),
+            models.ShelfImageArtifactDispositionEvent.id.desc(),
+        )
+        .first()
+    )
+    action = payload.action
+    evidence_reference = payload.evidence_reference
+    evidence_sha256 = payload.evidence_sha256
+
+    if action == "PROPOSE":
+        if latest is not None and latest.event_type in {"PROPOSED", "APPROVED", "DISPOSAL_ATTESTED"}:
+            raise HTTPException(status_code=409, detail="An active or completed disposition already exists")
+        if evidence_reference is not None or evidence_sha256 is not None:
+            raise HTTPException(status_code=422, detail="Evidence is only accepted when attesting completed external disposition")
+        event_type = "PROPOSED"
+    elif action in {"APPROVE", "REJECT"}:
+        if latest is None or latest.event_type != "PROPOSED":
+            raise HTTPException(status_code=409, detail="A pending disposition proposal is required")
+        if latest.actor_user_id == actor.id:
+            raise HTTPException(status_code=409, detail="A different administrator must review the proposal")
+        if evidence_reference is not None or evidence_sha256 is not None:
+            raise HTTPException(status_code=422, detail="Evidence is only accepted when attesting completed external disposition")
+        event_type = "APPROVED" if action == "APPROVE" else "REJECTED"
+    else:
+        if latest is None or latest.event_type != "APPROVED":
+            raise HTTPException(status_code=409, detail="An approved disposition is required before completion attestation")
+        if latest.actor_user_id == actor.id:
+            raise HTTPException(status_code=409, detail="A different administrator must attest the external disposition")
+        if not evidence_reference or not evidence_sha256:
+            raise HTTPException(status_code=422, detail="Completed disposition requires an evidence reference and SHA-256")
+        event_type = "DISPOSAL_ATTESTED"
+
+    event = models.ShelfImageArtifactDispositionEvent(
+        artifact_reference_id=artifact_id,
+        shelf_image_id=image_id,
+        store_id=store_id,
+        event_type=event_type,
+        actor_user_id=actor.id,
+        evidence_reference=evidence_reference,
+        evidence_sha256=evidence_sha256,
+        reason=payload.reason,
+        created_at=models.utc_now(),
+    )
+    db.add(event)
+    db.commit()
+    db.refresh(event)
+    return event
+
+
+@app.get(
+    "/api/v1/shelf-images/{image_id}/artifacts/{artifact_id}/disposition-events",
+    response_model=list[ShelfImageArtifactDispositionEventRead],
+    tags=["computer-vision"],
+)
+def list_shelf_image_artifact_disposition_events(
+    image_id: int,
+    artifact_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    limit: int = 100,
+):
+    """Return the immutable decision history for one external artifact reference."""
+    actor = _request_user(db, request)
+    if actor is None or actor.role != "ADMIN":
+        raise HTTPException(status_code=403, detail="Administrator role required")
+    store_id = _shelf_image_store_id(db, image_id)
+    if store_id is None:
+        raise HTTPException(status_code=404, detail="Shelf image not found")
+    _enforce_store_scope(actor, store_id)
+    artifact = db.query(models.ShelfImageArtifactReference.id).filter(
+        models.ShelfImageArtifactReference.id == artifact_id,
+        models.ShelfImageArtifactReference.shelf_image_id == image_id,
+        models.ShelfImageArtifactReference.store_id == store_id,
+    ).first()
+    if artifact is None:
+        raise HTTPException(status_code=404, detail="Artifact reference not found")
+    return (
+        db.query(models.ShelfImageArtifactDispositionEvent)
+        .filter(
+            models.ShelfImageArtifactDispositionEvent.artifact_reference_id == artifact_id,
+            models.ShelfImageArtifactDispositionEvent.store_id == store_id,
+        )
+        .order_by(
+            models.ShelfImageArtifactDispositionEvent.created_at,
+            models.ShelfImageArtifactDispositionEvent.id,
+        )
         .limit(max(1, min(limit, 500)))
         .all()
     )
