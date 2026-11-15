@@ -437,3 +437,69 @@ def test_worker_records_ocr_failure_without_losing_visual_detections(db):
         .order_by(models.ShelfImageDetection.id.asc())
         .all()
     ] == detection_ids
+
+
+def test_failed_ocr_can_be_retried_without_rerunning_vision(db, monkeypatch, tmp_path):
+    from app import vision_worker
+
+    image_id = db.info["image_id"]
+    image = db.get(models.ShelfImage, image_id)
+    image.retention_status = "ACTIVE"
+    original_detection_ids = [
+        row.id
+        for row in db.query(models.ShelfImageDetection)
+        .filter_by(shelf_image_id=image_id)
+        .order_by(models.ShelfImageDetection.id.asc())
+        .all()
+    ]
+    previous_completed_run = (
+        db.query(models.ShelfImageOCRRun)
+        .filter_by(shelf_image_id=image_id, status="COMPLETED")
+        .one()
+    )
+    previous_evidence_count = db.query(models.ShelfImageOCREvidence).filter_by(
+        run_id=previous_completed_run.id
+    ).count()
+    failed_run = models.ShelfImageOCRRun(
+        shelf_image_id=image_id,
+        provider="fake-ocr",
+        model_version="test-v1",
+        status="FAILED",
+    )
+    db.add(failed_run)
+    db.flush()
+
+    retry_path = tmp_path / "retry.jpg"
+    retry_path.write_bytes(b"existing-image")
+    monkeypatch.setattr(
+        vision_worker,
+        "_resolve_worker_image_path",
+        lambda session, shelf_image: retry_path,
+    )
+
+    class SuccessfulOCR:
+        def recognize(self, path):
+            assert path == retry_path
+            return ()
+
+    assert vision_worker.retry_failed_ocr_for_image(
+        db, image_id, SuccessfulOCR()
+    ) is True
+
+    runs = (
+        db.query(models.ShelfImageOCRRun)
+        .filter_by(shelf_image_id=image_id)
+        .order_by(models.ShelfImageOCRRun.id.asc())
+        .all()
+    )
+    assert [run.status for run in runs] == ["COMPLETED", "FAILED", "COMPLETED"]
+    assert db.query(models.ShelfImageOCREvidence).filter_by(
+        run_id=previous_completed_run.id
+    ).count() == previous_evidence_count
+    assert [
+        row.id
+        for row in db.query(models.ShelfImageDetection)
+        .filter_by(shelf_image_id=image_id)
+        .order_by(models.ShelfImageDetection.id.asc())
+        .all()
+    ] == original_detection_ids
