@@ -467,6 +467,48 @@ class ShelfImageArtifactReferenceRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+ArtifactDispositionAction = Literal["PROPOSE", "APPROVE", "REJECT", "ATTEST_DISPOSED"]
+
+
+class ShelfImageArtifactDispositionActionRequest(BaseModel):
+    action: ArtifactDispositionAction
+    reason: str = Field(min_length=3, max_length=2000)
+    evidence_reference: str | None = Field(default=None, min_length=1, max_length=500)
+    evidence_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+
+    @field_validator("reason")
+    @classmethod
+    def normalize_disposition_reason(cls, value: str) -> str:
+        normalized = value.strip()
+        if len(normalized) < 3:
+            raise ValueError("A meaningful disposition reason is required")
+        return normalized
+
+    @field_validator("evidence_reference")
+    @classmethod
+    def normalize_evidence_reference(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("Evidence reference cannot be blank")
+        return normalized
+
+
+class ShelfImageArtifactDispositionEventRead(BaseModel):
+    id: int
+    artifact_reference_id: int
+    shelf_image_id: int
+    store_id: int
+    event_type: Literal["PROPOSED", "APPROVED", "REJECTED", "DISPOSAL_ATTESTED"]
+    actor_user_id: int | None
+    evidence_reference: str | None
+    evidence_sha256: str | None
+    reason: str
+    created_at: datetime
+    model_config = ConfigDict(from_attributes=True)
+
+
 class ShelfImagePurgeScheduleRequest(BaseModel):
     purge_not_before: datetime
     policy_version: str = Field(min_length=1, max_length=40)
