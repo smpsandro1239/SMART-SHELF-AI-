@@ -900,3 +900,9 @@ O `vision-worker` recupera automaticamente imagens que permaneçam em `PROCESSIN
 ### Repetição isolada de OCR
 
 O worker suporta `python -m app.vision_worker --retry-failed-ocr-image-id <ID>` para repetir OCR numa imagem cuja análise visual já esteja concluída, sem executar novamente deteção ou embeddings. A operação só é elegível para imagens com retenção `ACTIVE` e última tentativa OCR `FAILED`; preserva deteções e histórico de tentativas. Os testes `test_failed_ocr_can_be_retried_without_rerunning_vision` e `test_ocr_retry_rejects_restricted_or_non_failed_latest_attempt` cobrem a repetição bem-sucedida, a preservação dos resultados visuais, a rejeição antecipada de imagens restringidas ou sem falha OCR recente e a não criação de execuções duplicadas após sucesso. Testes ainda não executados nesta sessão.
+
+### Auditoria de retenção — restrição de conteúdo e purge definitivo
+
+O teste `test_restricted_own_store_image_rejects_ocr_writes_and_retry` foi alargado para confirmar que uma imagem `RESTRICTED` devolve HTTP 410 no endpoint de conteúdo binário e que exemplares de embeddings ligados a essa imagem deixam de aparecer na listagem. Isto valida o bloqueio de acesso, não a eliminação física dos dados.
+
+**Lacuna P0 identificada:** o modelo prevê `PURGED`, `purged_at` e `purge_not_before`, mas a API/worker ainda não implementa um processo de purge definitivo. É necessário definir e implementar um fluxo administrativo idempotente que respeite `legal_hold` e o prazo de retenção, remova ficheiros e dados derivados (incluindo embeddings), e preserve um registo mínimo e auditável. Até essa implementação, `RESTRICTED` não deve ser apresentado como apagamento definitivo. Ver [auditoria do fluxo de retenção e OCR](docs/architecture/vision-ocr-review-workflow.md).
