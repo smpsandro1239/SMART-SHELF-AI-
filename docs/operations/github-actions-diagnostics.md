@@ -11,7 +11,7 @@ The following workflows fail before any recorded runner step:
 
 For the quality-gates run, both jobs (`API tests and Python compilation` and `Web TypeScript and production build`) report failure with no steps. The GitHub Actions jobs endpoint reports `logs_url: null` and `steps: null`; the step endpoint returns an empty array; downloading logs returns HTTP 404 with `BlobNotFound`; no workflow artifacts were produced.
 
-A dedicated diagnostic workflow was added at `.github/workflows/runner-diagnostics.yml`. It deliberately avoids checkout, third-party actions, package installation, services and repository code. Its only job runs a few preinstalled runtime version commands. The first attempt also failed before any step, with no log URL. A single job retry was queued for follow-up; its result must be inspected before concluding whether the failure is transient.
+A dedicated diagnostic workflow was added at `.github/workflows/runner-diagnostics.yml`. It deliberately avoids checkout, third-party actions, package installation, services and repository code. Its only job runs a few preinstalled runtime version commands. The first attempt and one explicit retry both failed before any step. The retry job also reports an empty step list, `logs_url: null`, and HTTP 404 `BlobNotFound` when logs are requested. This makes a transient one-off failure less likely.
 
 This evidence does **not** establish a Python, TypeScript, application, or workflow-command failure: none of those commands were reached. It is consistent with a runner provisioning/orchestration or Actions log-initialization failure, but repository billing, runner policy and account-level restrictions have not been independently inspected. Do not label CI green or blame source code without an executed step and diagnostic output.
 
@@ -26,9 +26,8 @@ This is a deployment quota/rate-limit signal, not evidence of an application com
 
 ## Follow-up procedure
 
-1. Inspect the newest run and retry of `Runner diagnostics`. A successful first step with the expected version output demonstrates that a hosted runner can execute a minimal job at that time.
-2. If a fresh minimal run still has no steps and no logs, check GitHub Actions service status, repository Actions enablement, account/organization spending limits and runner policies; escalate to GitHub Support with run/job IDs if those checks are normal.
-3. Once the minimal job executes, rerun API CI and quality gates. Diagnose actual Python/TypeScript failures from their step logs.
-4. Respect the Vercel build rate limit; resume deployment after the provider allows it rather than changing application code to hide the status.
+1. The minimal diagnostic and its retry both failed before the first step. Check GitHub Actions service status, repository Actions enablement, account/organization spending limits and runner policies; escalate to GitHub Support with run/job IDs if those checks are normal.
+2. Once a fresh minimal job executes, rerun API CI and quality gates. Diagnose actual Python/TypeScript failures from their step logs.
+3. Respect the Vercel build rate limit; resume deployment after the provider allows it rather than changing application code to hide the status.
 
 See [GitHub's workflow run logs guide](https://docs.github.com/en/actions/how-tos/monitor-workflows/use-workflow-run-logs) and [workflow troubleshooting guide](https://docs.github.com/en/actions/how-tos/troubleshoot-workflows).
