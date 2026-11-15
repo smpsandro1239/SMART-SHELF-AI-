@@ -136,6 +136,7 @@ def test_training_gate_passes_only_when_manifest_and_audits_match(tmp_path):
     assert errors == []
     assert report["status"] == "APPROVED"
     assert report["checks"]["manifest_coco_integrity"]["passed"] is True
+    assert report["checks"]["operational_image_eligibility"]["passed"] is True
 
 
 def test_manifest_hash_mismatch_blocks_release(tmp_path):
