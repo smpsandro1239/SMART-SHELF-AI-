@@ -1,0 +1,28 @@
+name: Runner diagnostics
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/runner-diagnostics.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  runner-smoke:
+    name: Minimal GitHub-hosted runner smoke test
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Confirm runner provisioning and command execution
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "GitHub-hosted runner reached the first workflow step."
+          echo "Runner OS: ${RUNNER_OS}"
+          echo "Runner architecture: ${RUNNER_ARCH}"
+          python --version
+          node --version
+          echo "Runner diagnostic completed successfully."
