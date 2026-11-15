@@ -249,3 +249,20 @@ bloquear acesso/uso operacional. A proteção de DELETE não representa uma
 implementação de purga nem autoriza apagar evidência. A auditoria da
 proveniência de outros dados derivados e caminhos administrativos permanece
 aberta.
+
+
+## Integridade de revisões humanas e fusões visuais/OCR
+
+A auditoria identificou que a eliminação direta de uma deteção podia apagar
+o histórico append-only de revisão SKU, anular a associação de regiões OCR
+e eliminar matching/fusão. A eliminação direta de uma execução OCR podia
+apagar regiões de texto, matching e fusões.
+
+A migração `0030_detection_ocr_audit_restrict` instala proteções de base de
+dados para impedir essas eliminações quando existem registos dependentes.
+O smoke PostgreSQL verifica que revisão humana, evidência OCR, matching e
+fusão permanecem ligados à deteção e execução originais.
+
+A proteção de eliminação direta não substitui a auditoria de concorrência
+nem fecha a revisão dos caminhos administrativos/worker. A auditoria global
+de dados derivados mantém-se aberta.
