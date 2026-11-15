@@ -114,6 +114,42 @@ def _create_fixture(suffix: str) -> tuple[int, int, int]:
             association_status="ASSIGNED",
         )
         db.add(target_ocr_evidence)
+        db.add(models.DetectionSkuReview(
+            detection_id=target_detection.id,
+            previous_product_id=None,
+            selected_product_id=product.id,
+            decision="CONFIRMED",
+            reviewer_user_id=reviewer.id,
+            notes="PostgreSQL lineage smoke",
+        ))
+        db.add(models.ShelfImageOCRMatch(
+            run_id=target_ocr_run.id,
+            detection_id=target_detection.id,
+            suggested_product_id=product.id,
+            observed_text="SKU-123",
+            ocr_confidence=0.99,
+            status="SUGGESTED",
+            top_score=0.99,
+            margin=0.2,
+            candidates=[{"product_id": product.id, "score": 0.99}],
+        ))
+        db.add(models.ShelfImageFusedEvidence(
+            ocr_run_id=target_ocr_run.id,
+            detection_id=target_detection.id,
+            status="CONSENSUS",
+            suggested_product_id=product.id,
+            visual_product_id=product.id,
+            text_product_id=product.id,
+            visual_status="MATCHED",
+            text_status="MATCHED",
+            visual_similarity=0.99,
+            text_score=0.99,
+            ocr_confidence=0.99,
+            visual_model_version="pg-vision-lineage-v1",
+            ocr_provider="smoke",
+            ocr_model_version="pg-ocr-lineage-v1",
+            reason="PostgreSQL lineage smoke",
+        ))
         db.commit()
         return source_image.id, target_image.id, product.id
     except Exception:
@@ -263,13 +299,77 @@ def main() -> None:
         assert db.query(models.ShelfImageOCREvidence).filter(
             models.ShelfImageOCREvidence.text == "SKU-123"
         ).count() == 1
+        assert db.query(models.DetectionSkuReview).filter(
+            models.DetectionSkuReview.notes == "PostgreSQL lineage smoke"
+        ).count() == 1
+        assert db.query(models.ShelfImageOCRMatch).filter(
+            models.ShelfImageOCRMatch.observed_text == "SKU-123"
+        ).count() == 1
+        assert db.query(models.ShelfImageFusedEvidence).filter(
+            models.ShelfImageFusedEvidence.reason == "PostgreSQL lineage smoke"
+        ).count() == 1
+
+    # Direct deletion of a detection must not cascade away its human review,
+    # OCR association, matching or fused evidence.
+    with SessionLocal() as db:
+        detection = db.query(models.ShelfImageDetection).filter(
+            models.ShelfImageDetection.shelf_image_id == target_image_id
+        ).one()
+        detection_id = detection.id
+        try:
+            db.delete(detection)
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+        else:
+            raise AssertionError(
+                "detection deletion cascaded into human review or derived evidence"
+            )
+        assert db.query(models.DetectionSkuReview).filter(
+            models.DetectionSkuReview.detection_id == detection_id
+        ).count() == 1
+        assert db.query(models.ShelfImageOCREvidence).filter(
+            models.ShelfImageOCREvidence.detection_id == detection_id
+        ).count() == 1
+        assert db.query(models.ShelfImageOCRMatch).filter(
+            models.ShelfImageOCRMatch.detection_id == detection_id
+        ).count() == 1
+        assert db.query(models.ShelfImageFusedEvidence).filter(
+            models.ShelfImageFusedEvidence.detection_id == detection_id
+        ).count() == 1
+
+    # Direct deletion of an OCR run must preserve its text, matches and fusion.
+    with SessionLocal() as db:
+        ocr_run = db.query(models.ShelfImageOCRRun).filter(
+            models.ShelfImageOCRRun.shelf_image_id == target_image_id
+        ).one()
+        ocr_run_id = ocr_run.id
+        try:
+            db.delete(ocr_run)
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+        else:
+            raise AssertionError(
+                "OCR run deletion cascaded into OCR or fused evidence"
+            )
+        assert db.query(models.ShelfImageOCREvidence).filter(
+            models.ShelfImageOCREvidence.run_id == ocr_run_id
+        ).count() == 1
+        assert db.query(models.ShelfImageOCRMatch).filter(
+            models.ShelfImageOCRMatch.run_id == ocr_run_id
+        ).count() == 1
+        assert db.query(models.ShelfImageFusedEvidence).filter(
+            models.ShelfImageFusedEvidence.ocr_run_id == ocr_run_id
+        ).count() == 1
 
     print(
         "PostgreSQL embedding-retention concurrency smoke passed: "
         "retention was observed waiting on the matching row lock, "
         "completed after matching committed, and the restricted exemplar "
         "was excluded from the next registry, and direct source deletion "
-        "was blocked to preserve embedding, detection and OCR evidence lineage."
+        "was blocked to preserve embedding, detection, human-review, OCR, "
+        "matching and fused-evidence lineage."
     )
 
 
