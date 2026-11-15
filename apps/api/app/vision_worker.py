@@ -175,7 +175,39 @@ def _resolve_worker_image_path(db: Session, image: models.ShelfImage) -> Path:
     return resolved
 
 
+def requeue_stale_processing_images(
+    db: Session,
+    stale_after_seconds: int | None = None,
+) -> int:
+    """Return abandoned PROCESSING jobs to PENDING after a conservative lease timeout."""
+    timeout = stale_after_seconds or settings.vision_processing_timeout_seconds
+    cutoff = models.utc_now() - __import__("datetime").timedelta(seconds=timeout)
+    stale_images = (
+        db.query(models.ShelfImage)
+        .filter(
+            models.ShelfImage.analysis_status == "PROCESSING",
+            models.ShelfImage.retention_status == "ACTIVE",
+            (
+                models.ShelfImage.analysis_started_at.is_(None)
+                | (models.ShelfImage.analysis_started_at < cutoff)
+            ),
+        )
+        .with_for_update(skip_locked=True)
+        .all()
+    )
+    for image in stale_images:
+        image.analysis_status = "PENDING"
+        image.analysis_error = "Recovered abandoned processing job after timeout"
+        image.analysis_started_at = None
+        image.analysis_completed_at = None
+    if stale_images:
+        db.commit()
+        logger.warning("Requeued %s abandoned shelf-image jobs", len(stale_images))
+    return len(stale_images)
+
+
 def process_next_image(db: Session, provider, ocr_provider=None) -> int | None:
+    requeue_stale_processing_images(db)
     image = (
         db.query(models.ShelfImage)
         .filter(models.ShelfImage.analysis_status == "PENDING", models.ShelfImage.retention_status == "ACTIVE")
