@@ -62,3 +62,7 @@ A fila do dashboard carrega até 50 itens prioritários. O endpoint suporta pagi
 ## Recuperação de tarefas de inferência interrompidas
 
 O worker reencaminha tarefas `PROCESSING` abandonadas para `PENDING` quando `analysis_started_at` é anterior ao limite configurado em `VISION_PROCESSING_TIMEOUT_SECONDS` (24 horas por omissão; intervalo permitido de 60 segundos a 7 dias). Apenas imagens com retenção `ACTIVE` são elegíveis. O mecanismo limpa os timestamps de execução e conserva uma indicação de recuperação em `analysis_error`. Imagens recentes e imagens `RESTRICTED` não são recuperadas. A recuperação é executada antes de cada procura de novo trabalho.
+
+## Exclusão de resultados de leases expirados
+
+Cada tentativa de processamento fica identificada pelo valor de `analysis_started_at` gravado quando a imagem é reclamada. Após a inferência, o worker bloqueia e atualiza a leitura da linha (`populate_existing`) e verifica que o estado continua `PROCESSING` e que o timestamp ainda pertence à sua tentativa. Se o timeout tiver reencaminhado a tarefa e outro worker a tiver reclamado, a tentativa anterior termina sem persistir deteções ou evidência OCR. A mesma verificação é repetida antes de marcar a imagem como `COMPLETED`. O teste `test_worker_discards_result_when_processing_lease_changes_during_inference` cobre a substituição do lease durante a inferência. A validação CI ainda está pendente.
