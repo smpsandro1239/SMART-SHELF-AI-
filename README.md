@@ -564,7 +564,7 @@ O gate `python -m app.dataset_approval` exige autorizações e revisões humanas
 
 O módulo `app.dataset_provenance` valida um sidecar JSON `schema_version: 1` com uma entrada por imagem, ligada ao manifesto por `split`, `file_name` e SHA-256. A origem pode ser `internal` (exige `shelf_image_id`, `store_id` e hash da captura) ou `external` (exige fonte, licença, referência dos direitos e hash da origem). Cada entrada declara finalidade e transformação; crops/derivados têm de identificar o hash do progenitor e a operação.
 
-O validador pode ser chamado a partir de código Python com `validate_provenance_manifest(record, manifest_rows)`. **Ainda não está ligado ao gate `dataset_approval` nem consulta PostgreSQL**: não confirma que IDs internos correspondem, que a imagem continua `ACTIVE), que não existe legal hold, nem que a licença externa é juridicamente suficiente. Não usar este sidecar isoladamente para autorizar exportação ou treino operacional. Ver [ciclo de vida e retenção de imagens](docs/security/image-retention-lifecycle.md).
+O validador pode ser chamado a partir de código Python com `validate_provenance_manifest(record, manifest_rows)`. **Ainda não está ligado ao gate `dataset_approval` nem consulta PostgreSQL**: não confirma que IDs internos correspondem, que a imagem continua `ACTIVE`, que não existe legal hold, nem que a licença externa é juridicamente suficiente. Não usar este sidecar isoladamente para autorizar exportação ou treino operacional. Ver [ciclo de vida e retenção de imagens](docs/security/image-retention-lifecycle.md).
 
 ### Sessões de captura e integridade de splits
 
