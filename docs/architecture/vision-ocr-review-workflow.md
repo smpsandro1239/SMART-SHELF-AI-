@@ -31,7 +31,7 @@ Para repetir apenas o OCR de uma imagem cuja análise visual já terminou, confi
 python -m app.vision_worker --retry-failed-ocr-image-id 123
 ```
 
-O comando só aceita imagens `ACTIVE` com análise visual `COMPLETED` e cuja tentativa OCR mais recente esteja `FAILED`. Bloqueia a linha da imagem durante a operação para serializar a repetição com alterações de retenção. Não volta a executar deteção nem embeddings; preserva as deteções e as tentativas OCR anteriores. Código de saída `0` indica uma nova execução OCR concluída, `1` indica que a imagem não era elegível ou que a repetição falhou, e `2` indica configuração/provider indisponível.
+O comando só aceita imagens `ACTIVE` com análise visual `COMPLETED` e cuja tentativa OCR mais recente esteja `FAILED`. Bloqueia a linha da imagem durante a operação para serializar a repetição com alterações de retenção. Não volta a executar deteção nem embeddings; preserva as deteções e as tentativas OCR anteriores. A suite `test_product_pipeline.py` também verifica que imagens `RESTRICTED` e imagens sem uma última tentativa `FAILED` são rejeitadas antes de resolver o caminho do ficheiro ou chamar o provider OCR. Código de saída `0` indica uma nova execução OCR concluída, `1` indica que a imagem não era elegível ou que a repetição falhou, e `2` indica configuração/provider indisponível.
 
 ## Sequência funcional
 
