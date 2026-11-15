@@ -175,3 +175,41 @@ def test_release_records_provenance_and_operational_eligibility_hashes(tmp_path)
     assert release["provenance"]["status"] == "APPROVED"
     assert release["provenance"]["manifest_sha256"] == hashlib.sha256(provenance.read_bytes()).hexdigest()
     assert release["provenance"]["operational_eligibility"] == {"status": "APPROVED", "internal_images": 0, "checked_images": 0}
+
+
+
+def test_release_registry_rejects_modified_existing_metadata(tmp_path):
+    manifest, split, visual, provenance = setup_release_inputs(tmp_path)
+    registry = tmp_path / "registry"
+    release, created = create_release(
+        manifest, split, visual, registry, provenance_path=provenance
+    )
+    assert created is True
+    destination = registry / "releases" / f"{release['fingerprint']}.json"
+    tampered = json.loads(destination.read_text(encoding="utf-8"))
+    tampered["image_count"] = 999
+    destination.write_text(json.dumps(tampered), encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match="existing release metadata differs"):
+        create_release(
+            manifest, split, visual, registry, provenance_path=provenance
+        )
+
+
+def test_release_registry_rejects_symlinked_release_record(tmp_path):
+    manifest, split, visual, provenance = setup_release_inputs(tmp_path)
+    registry = tmp_path / "registry"
+    release, created = create_release(
+        manifest, split, visual, registry, provenance_path=provenance
+    )
+    assert created is True
+    destination = registry / "releases" / f"{release['fingerprint']}.json"
+    destination.unlink()
+    external = tmp_path / "external-release.json"
+    external.write_text("{}", encoding="utf-8")
+    destination.symlink_to(external)
+
+    with pytest.raises(RuntimeError, match="must not be a symlink"):
+        create_release(
+            manifest, split, visual, registry, provenance_path=provenance
+        )
