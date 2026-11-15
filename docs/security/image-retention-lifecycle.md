@@ -201,3 +201,10 @@ Cada entrada declara `source_type`:
 Todas as entradas declaram uma `purpose` e uma transformação. `original` exige que o hash do ficheiro corresponda ao hash da origem; `crop` e `derived` exigem hash do progenitor igual ao hash declarado da origem e uma descrição da operação. O contrato é um registo de declarações e hashes, não uma prova criptográfica de direitos, de identidade do revisor ou de correspondência com a base de dados.
 
 **Limites atuais:** o sidecar é validado como utilitário offline e ainda não está ligado ao `dataset_approval`, ao exportador operacional ou à base de dados. Não verifica se uma imagem interna continua `ACTIVE`, se existe legal hold, nem se a referência `store_id` corresponde ao `shelf_image_id`. Antes de treino/exportação operacional, é necessário integrar uma verificação autenticada na origem e no release, revalidando estado e legal hold, e definir a propagação de restrições a crops, cópias, relatórios, backups e caches. A purga física continua desativada.
+
+
+## Gate offline de aprovação com proveniência obrigatória
+
+O comando `app.dataset_approval` exige agora o argumento `--provenance-manifest` com o sidecar JSON versionado definido em `app.dataset_provenance`. O gate compara a cobertura exata de `split`/`file_name`/`image_sha256` com o manifesto SHA-256 e bloqueia entradas em falta, duplicadas, não correspondentes, hashes divergentes, origem interna sem IDs positivos ou origem externa sem referência de direitos. O relatório inclui `checks.image_provenance`.
+
+Este gate apenas valida as declarações e a linhagem descritas nos ficheiros offline. Não confirma que `shelf_image_id` pertence a `store_id`, que a imagem continua `ACTIVE`, que não existe legal hold, nem que o revisor está autenticado. A integração com a base de dados operacional e a propagação de restrições a derivados continuam pendentes. Datasets antigos sem sidecar deixam de ser elegíveis para aprovação através deste gate até serem completamente documentados. A purga física continua desativada.
