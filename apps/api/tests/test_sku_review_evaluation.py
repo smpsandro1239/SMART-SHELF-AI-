@@ -229,3 +229,89 @@ def test_historical_review_evaluation_preserves_ground_truth_after_product_deact
     assert report["incorrect_known_matches"] == 1
     assert report["false_accepts_on_rejected_detections"] == 1
     assert report["missed_known_products"] == 1
+
+
+def test_database_report_scopes_reviewed_predictions_to_requested_store(db):
+    session, store_id, product_a_id, _ = db
+
+    foreign_store = models.Store(code="EVAL-02", name="Foreign evaluation store")
+    session.add(foreign_store)
+    session.flush()
+    foreign_zone = models.Zone(store_id=foreign_store.id, name="Foreign zone")
+    session.add(foreign_zone)
+    session.flush()
+    foreign_shelf = models.Shelf(zone_id=foreign_zone.id, code="E-02")
+    session.add(foreign_shelf)
+    session.flush()
+    foreign_image = models.ShelfImage(
+        shelf_id=foreign_shelf.id,
+        original_filename="foreign-evaluation.jpg",
+        storage_path="/tmp/foreign-evaluation.jpg",
+        mime_type="image/jpeg",
+        file_size_bytes=100,
+        sha256="d" * 64,
+        analysis_status="COMPLETED",
+        model_version="detector-v1",
+    )
+    session.add(foreign_image)
+    session.flush()
+    foreign_detection = models.ShelfImageDetection(
+        shelf_image_id=foreign_image.id,
+        product_id=product_a_id,
+        label="product",
+        confidence=0.95,
+        x_min=0.1,
+        y_min=0.1,
+        x_max=0.4,
+        y_max=0.8,
+        model_version="detector-v1",
+        embedding_model_version="embed-foreign-v1",
+        sku_match_status="MATCHED",
+    )
+    session.add(foreign_detection)
+    session.flush()
+    reviewed_at = datetime(2026, 11, 2, 12, 0, tzinfo=timezone.utc)
+    session.add(models.DetectionSkuReview(
+        detection_id=foreign_detection.id,
+        previous_product_id=product_a_id,
+        selected_product_id=product_a_id,
+        decision="CONFIRMED",
+        created_at=reviewed_at,
+    ))
+    run = models.ShelfImageOCRRun(
+        shelf_image_id=foreign_image.id,
+        provider="test-ocr",
+        model_version="ocr-test-v1",
+        status="COMPLETED",
+        created_at=reviewed_at - timedelta(minutes=1),
+    )
+    session.add(run)
+    session.flush()
+    session.add(models.ShelfImageFusedEvidence(
+        ocr_run_id=run.id,
+        detection_id=foreign_detection.id,
+        status="CONSENSUS",
+        suggested_product_id=product_a_id,
+        visual_product_id=product_a_id,
+        text_product_id=None,
+        visual_status="MATCHED",
+        text_status="UNKNOWN",
+        visual_similarity=0.9,
+        text_score=None,
+        ocr_confidence=0.9,
+        visual_model_version="embed-foreign-v1",
+        ocr_provider="test-ocr",
+        ocr_model_version="ocr-test-v1",
+        reason="foreign store test evidence",
+        created_at=reviewed_at - timedelta(minutes=1),
+    ))
+    session.flush()
+
+    scoped = build_reviewed_prediction_report(session, store_id=store_id)
+    global_report = build_reviewed_prediction_report(session)
+
+    assert scoped["sample_count"] == 3
+    assert scoped["store_id"] == store_id
+    assert scoped["by_model_version"].get("embed-foreign-v1") is None
+    assert global_report["sample_count"] == 4
+    assert global_report["by_model_version"]["embed-foreign-v1"]["sample_count"] == 1
