@@ -1179,6 +1179,23 @@ def test_restricted_own_store_image_rejects_ocr_writes_and_retry(auth_client):
             )
 
     before = derived_counts()
+    # Retention restriction must block the original binary and source-linked
+    # embedding exemplars, not only OCR writes and analysis retries.
+    binary_content = client.get(
+        f"/api/v1/shelf-images/{image_id}/content",
+        headers=admin_headers,
+    )
+    exemplar_listing = client.get(
+        "/api/v1/product-embedding-exemplars",
+        headers=admin_headers,
+    )
+    assert binary_content.status_code == 410
+    assert exemplar_listing.status_code == 200, exemplar_listing.text
+    assert all(
+        item["shelf_image_id"] != image_id
+        for item in exemplar_listing.json()
+    )
+
     ocr_create = client.post(
         f"/api/v1/shelf-images/{image_id}/ocr-runs",
         json={"provider": "test-provider", "model_version": "test-v1", "regions": []},
