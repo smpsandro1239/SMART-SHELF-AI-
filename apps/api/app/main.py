@@ -1054,6 +1054,97 @@ def release_shelf_image_legal_hold(
 
 
 @app.get(
+    "/api/v1/shelf-images/{image_id}/retention/purge-eligibility",
+    tags=["computer-vision"],
+)
+def get_shelf_image_purge_eligibility(
+    image_id: int, request: Request, db: Session = Depends(get_db)
+):
+    """Preview purge eligibility without deleting files or database records."""
+    actor = _request_user(db, request)
+    if actor is None or actor.role != "ADMIN":
+        raise HTTPException(status_code=403, detail="Administrator role required")
+
+    item = (
+        db.query(models.ShelfImage)
+        .filter(models.ShelfImage.id == image_id)
+        .with_for_update()
+        .populate_existing()
+        .first()
+    )
+    if item is None:
+        raise HTTPException(status_code=404, detail="Shelf image not found")
+    store_id = _shelf_image_store_id(db, image_id)
+    _enforce_store_scope(actor, store_id)
+
+    now = models.utc_now()
+    blockers: list[str] = []
+    if item.retention_status == "PURGED":
+        blockers.append("already_purged")
+    elif item.retention_status not in {"RESTRICTED", "PENDING_PURGE"}:
+        blockers.append("image_must_be_restricted")
+    if item.legal_hold:
+        blockers.append("legal_hold_active")
+    if item.purge_not_before is None:
+        blockers.append("purge_date_not_scheduled")
+    else:
+        purge_at = item.purge_not_before
+        if purge_at.tzinfo is None:
+            purge_at = purge_at.replace(tzinfo=timezone.utc)
+        if purge_at > now:
+            blockers.append("retention_period_not_elapsed")
+    if item.analysis_status == "PROCESSING":
+        blockers.append("analysis_still_processing")
+
+    file_available = False
+    if item.retention_status != "PURGED":
+        try:
+            _resolve_shelf_image_storage_path(item.storage_path, store_id)
+            file_available = True
+        except HTTPException:
+            blockers.append("stored_file_missing_or_unsafe")
+
+    detection_count = db.query(models.ShelfImageDetection).filter(
+        models.ShelfImageDetection.shelf_image_id == image_id
+    ).count()
+    ocr_run_ids = db.query(models.ShelfImageOCRRun.id).filter(
+        models.ShelfImageOCRRun.shelf_image_id == image_id
+    )
+    ocr_run_count = db.query(models.ShelfImageOCRRun).filter(
+        models.ShelfImageOCRRun.shelf_image_id == image_id
+    ).count()
+    exemplar_count = db.query(models.ProductEmbeddingExemplar).filter(
+        models.ProductEmbeddingExemplar.shelf_image_id == image_id
+    ).count()
+
+    return {
+        "image_id": item.id,
+        "retention_status": item.retention_status,
+        "legal_hold": item.legal_hold,
+        "purge_not_before": item.purge_not_before,
+        "evaluated_at": now,
+        "eligible": not blockers,
+        "blockers": blockers,
+        "stored_file_available": file_available,
+        "derived_records": {
+            "detections": detection_count,
+            "ocr_runs": ocr_run_count,
+            "ocr_evidence": db.query(models.ShelfImageOCREvidence).filter(
+                models.ShelfImageOCREvidence.run_id.in_(ocr_run_ids)
+            ).count(),
+            "ocr_matches": db.query(models.ShelfImageOCRMatch).filter(
+                models.ShelfImageOCRMatch.run_id.in_(ocr_run_ids)
+            ).count(),
+            "fused_evidence": db.query(models.ShelfImageFusedEvidence).filter(
+                models.ShelfImageFusedEvidence.ocr_run_id.in_(ocr_run_ids)
+            ).count(),
+            "embedding_exemplars": exemplar_count,
+        },
+        "deletion_performed": False,
+    }
+
+
+@app.get(
     "/api/v1/shelf-images/{image_id}/retention/events",
     response_model=list[ShelfImageRetentionEventRead],
     tags=["computer-vision"],
