@@ -204,6 +204,7 @@ A partir de `apps/api`:
 python -m app.dataset_approval \\
   --release-record /dados/private/dataset-release.json \\
   --manifest /dados/metadata/image_manifest.csv \\
+  --provenance-manifest /dados/metadata/image-provenance.json \\
   --train /dados/annotations/instances_train.json \\
   --val /dados/annotations/instances_val.json \\
   --test /dados/annotations/instances_test.json \\
@@ -218,13 +219,13 @@ O gate verifica:
 3. Revisão de privacidade, remoção EXIF/GPS declarada, revisão de dados pessoais, retenção e incidentes.
 4. Protocolo e revisão de qualidade das anotações.
 5. Aprovação técnica e aprovação de privacidade/licença, com revisor, data e decisão explícita.
-6. Hash real do manifesto, estrutura do CSV, correspondência COCO/manifesto, auditoria de leakage e relatório quantitativo de qualidade.
+6. Hash real do manifesto, sidecar de proveniência por imagem, verificação operacional de imagens internas (`shelf_image_id`, `store_id`, SHA-256, estado `ACTIVE` e ausência de legal hold), estrutura do CSV, correspondência COCO/manifesto, auditoria de leakage e relatório quantitativo de qualidade.
 
 O resultado `APPROVED` significa apenas que os campos declarados e os controlos automatizados passaram para o modo escolhido. Não autentica a identidade dos revisores, não verifica a veracidade de autorizações, não presta aconselhamento jurídico e não substitui inspeção visual humana.
 
 Para treino, é obrigatória a aprovação explícita `approved_for_training: true`. Para inferência operacional, usar `--mode inference`: além da aprovação para treino, exige aprovação operacional separada, identificação/licença do modelo, protocolo de avaliação e métricas medidas por classe (`precision`, `recall`, `ap50`). Não preencher métricas com estimativas ou valores de exemplo.
 
-A ferramenta não faz upload de imagens nem publica o registo privado. Manter dataset, manifesto e registos de autorização em armazenamento com acesso controlado; não colocar dados pessoais, contratos ou credenciais no GitHub.
+Para imagens de origem `internal`, o comando liga-se à base de dados configurada em `app.database`; se a ligação não estiver disponível, o gate bloqueia. O sidecar é obrigatório para todas as imagens. A ferramenta não faz upload de imagens nem publica o registo privado. Manter dataset, manifesto e registos de autorização em armazenamento com acesso controlado; não colocar dados pessoais, contratos ou credenciais no GitHub.
 
 
 ## 17. Revisão visual das caixas delimitadoras
@@ -302,3 +303,30 @@ Este avaliador é uma implementação transparente do projeto, não uma
 substituição certificada da API oficial COCO: exclui `iscrowd=1` em vez de
 implementar a semântica de crowd do COCO. Os resultados só são fiáveis quando
 as anotações de referência são completas e aprovadas por revisão humana.
+
+
+## 19. Criar o registo imutável de release
+
+Depois de concluir os controlos anteriores, o criador de releases exige novamente
+o sidecar e revalida a elegibilidade operacional antes de escrever no registry.
+Executar a partir de `apps/api`:
+
+```bash
+python -m app.dataset_release \
+  --manifest /dados/metadata/image_manifest.csv \
+  --provenance-manifest /dados/metadata/image-provenance.json \
+  --split-audit /dados/reports/dataset-audit.json \
+  --visual-audit /dados/reports/visual-similarity.json \
+  --registry /dados/private/dataset-registry
+```
+
+Para fontes internas, a base de dados configurada em `app.database` tem de
+estar acessível. O comando bloqueia as imagens elegíveis durante a validação e
+a escrita do registo, verifica novamente loja, hash, estado `ACTIVE` e ausência
+de legal hold, e inclui o hash do sidecar na fingerprint do release. O
+sidecar incompleto ou uma imagem operacionalmente inelegível impede a criação.
+
+O registry é um registo local imutável de metadados; não copia nem publica as
+imagens e não inicia treino ou inferência. A elegibilidade pode mudar depois
+do comando terminar. Qualquer consumidor/treinador tem de revalidar e manter a
+proteção durante a utilização efetiva dos dados.
