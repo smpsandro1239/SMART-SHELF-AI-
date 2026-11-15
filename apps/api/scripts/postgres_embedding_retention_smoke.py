@@ -363,13 +363,86 @@ def main() -> None:
             models.ShelfImageFusedEvidence.ocr_run_id == ocr_run_id
         ).count() == 1
 
+    # Human decisions and every OCR-derived artifact are immutable at
+    # database level: direct UPDATE and DELETE must both be rejected.
+    immutable_records = (
+        (
+            models.DetectionSkuReview,
+            "notes",
+            "PostgreSQL lineage smoke",
+            "tampered human review",
+            "human review",
+        ),
+        (
+            models.ShelfImageOCRRun,
+            "provider",
+            "smoke",
+            "tampered provider",
+            "OCR run",
+        ),
+        (
+            models.ShelfImageOCREvidence,
+            "text",
+            "SKU-123",
+            "TAMPERED",
+            "OCR text evidence",
+        ),
+        (
+            models.ShelfImageOCRMatch,
+            "observed_text",
+            "SKU-123",
+            "TAMPERED",
+            "OCR catalogue match",
+        ),
+        (
+            models.ShelfImageFusedEvidence,
+            "reason",
+            "PostgreSQL lineage smoke",
+            "tampered fusion",
+            "fused evidence",
+        ),
+    )
+    for model, field, original_value, tampered_value, label in immutable_records:
+        with SessionLocal() as db:
+            record = db.query(model).filter(
+                getattr(model, field) == original_value
+            ).one()
+            record_id = record.id
+            try:
+                db.query(model).filter(model.id == record_id).update(
+                    {field: tampered_value},
+                    synchronize_session=False,
+                )
+                db.commit()
+            except IntegrityError:
+                db.rollback()
+            else:
+                raise AssertionError(f"{label} UPDATE was not blocked")
+            assert db.query(model).filter(
+                model.id == record_id,
+                getattr(model, field) == original_value,
+            ).count() == 1
+
+        with SessionLocal() as db:
+            try:
+                db.query(model).filter(model.id == record_id).delete(
+                    synchronize_session=False
+                )
+                db.commit()
+            except IntegrityError:
+                db.rollback()
+            else:
+                raise AssertionError(f"{label} DELETE was not blocked")
+            assert db.query(model).filter(model.id == record_id).count() == 1
+
     print(
         "PostgreSQL embedding-retention concurrency smoke passed: "
         "retention was observed waiting on the matching row lock, "
         "completed after matching committed, and the restricted exemplar "
         "was excluded from the next registry, and direct source deletion "
         "was blocked to preserve embedding, detection, human-review, OCR, "
-        "matching and fused-evidence lineage."
+        "matching and fused-evidence lineage; direct UPDATE and DELETE were "
+        "rejected for human reviews, OCR runs, OCR regions, matches and fusions."
     )
 
 
