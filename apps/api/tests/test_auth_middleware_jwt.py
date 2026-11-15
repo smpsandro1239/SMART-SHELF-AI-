@@ -2306,3 +2306,65 @@ def test_product_packaging_read_is_global_for_supervisors_and_denied_to_employee
         headers=bearer(ids["employee_a"], "EMPLOYEE"),
     )
     assert employee_response.status_code == 403
+
+
+def test_shelf_observation_consensus_is_scoped_to_supervisor_store(auth_client):
+    client, ids, store_ids = auth_client
+
+    with main_module.SessionLocal() as db:
+        now = datetime.now(timezone.utc)
+        observations = []
+        for shelf_id, status in (
+            (ids["shelf_a_assigned"], "LOW_STOCK"),
+            (ids["shelf_b"], "EMPTY"),
+        ):
+            observations.extend(
+                models.Observation(
+                    shelf_id=shelf_id,
+                    product_id=ids["product"],
+                    source="simulation",
+                    status=status,
+                    confidence=0.95,
+                    observed_at=now - timedelta(seconds=seconds_ago),
+                )
+                for seconds_ago in (60, 40, 20)
+            )
+        db.add_all(observations)
+        db.commit()
+        before_count = db.query(models.Observation).count()
+
+    own_response = client.get(
+        f"/api/v1/shelves/{ids['shelf_a_assigned']}/observation-consensus",
+        params={"product_id": ids["product"]},
+        headers=bearer(ids["supervisor_a"], "SUPERVISOR"),
+    )
+    assert own_response.status_code == 200, own_response.text
+    assert own_response.json()["store_id"] == store_ids["a"]
+    assert own_response.json()["shelf_id"] == ids["shelf_a_assigned"]
+    assert own_response.json()["product_id"] == ids["product"]
+    assert own_response.json()["scope"] == "SHELF_SKU"
+
+    foreign_response = client.get(
+        f"/api/v1/shelves/{ids['shelf_b']}/observation-consensus",
+        params={"product_id": ids["product"]},
+        headers=bearer(ids["supervisor_a"], "SUPERVISOR"),
+    )
+    assert foreign_response.status_code == 403
+
+    employee_response = client.get(
+        f"/api/v1/shelves/{ids['shelf_a_assigned']}/observation-consensus",
+        params={"product_id": ids["product"]},
+        headers=bearer(ids["employee_a"], "EMPLOYEE"),
+    )
+    assert employee_response.status_code == 403
+
+    admin_response = client.get(
+        f"/api/v1/shelves/{ids['shelf_b']}/observation-consensus",
+        params={"product_id": ids["product"]},
+        headers=bearer(ids["admin"], "ADMIN"),
+    )
+    assert admin_response.status_code == 200, admin_response.text
+    assert admin_response.json()["store_id"] == store_ids["b"]
+
+    with main_module.SessionLocal() as db:
+        assert db.query(models.Observation).count() == before_count
