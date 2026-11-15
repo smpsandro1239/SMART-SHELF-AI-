@@ -858,3 +858,7 @@ Foi acrescentado o teste JWT `test_reviewed_training_candidates_are_scoped_to_su
 
 Foi acrescentado o teste JWT `test_reviewed_sku_evaluation_is_scoped_to_supervisor_store`. Confirma que o SUPERVISOR recebe apenas o âmbito da sua loja, não pode forçar outra loja através de `store_id`, ADMIN pode consultar outra loja e EMPLOYEE recebe 403. O teste valida a fronteira HTTP e os filtros transmitidos ao agregador; não substitui testes do cálculo estatístico/SQL. Commit `26f3afe`; CI pendente.
 
+### Listagem de exemplares de embedding — isolamento multi-loja
+
+O teste JWT `test_product_embedding_exemplar_listing_is_scoped_to_source_image_store` confirma que SUPERVISOR só consulta exemplares associados a imagens da própria loja, ADMIN pode consultar ambas as lojas e EMPLOYEE recebe 403. Commit `07f46a43`; CI pendente. A integração HTTP usa SQLite isolado e não substitui validação PostgreSQL individual.
+
