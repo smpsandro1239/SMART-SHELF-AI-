@@ -393,3 +393,45 @@ def test_worker_discards_result_when_processing_lease_changes_during_inference(
     assert db.query(models.ShelfImageDetection).filter_by(
         shelf_image_id=image_id
     ).count() == 0
+
+
+def test_worker_records_ocr_failure_without_losing_visual_detections(db, monkeypatch):
+    import app.vision_worker as worker
+
+    image_id = db.info["image_id"]
+    detections = (
+        db.query(models.ShelfImageDetection)
+        .filter_by(shelf_image_id=image_id)
+        .order_by(models.ShelfImageDetection.id.asc())
+        .all()
+    )
+    detection_ids = [row.id for row in detections]
+
+    class BrokenOCR:
+        def recognize(self, path):
+            raise RuntimeError("simulated OCR provider outage")
+
+    worker.persist_ocr_evidence(
+        db,
+        image_id,
+        __import__("pathlib").Path("/tmp/not-read-by-provider.jpg"),
+        detections,
+        BrokenOCR(),
+    )
+
+    failed_run = db.query(models.ShelfImageOCRRun).filter_by(
+        shelf_image_id=image_id,
+        status="FAILED",
+    ).one()
+    assert failed_run.provider == worker.settings.ocr_provider_name
+    assert failed_run.model_version == worker.settings.ocr_model_version
+    assert db.query(models.ShelfImageOCREvidence).filter_by(
+        run_id=failed_run.id
+    ).count() == 0
+    assert [
+        row.id
+        for row in db.query(models.ShelfImageDetection)
+        .filter_by(shelf_image_id=image_id)
+        .order_by(models.ShelfImageDetection.id.asc())
+        .all()
+    ] == detection_ids
