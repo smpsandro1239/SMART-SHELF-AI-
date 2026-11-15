@@ -592,6 +592,53 @@ class ShelfImageArtifactReference(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
 
 
+class ShelfImageArtifactDispositionEvent(Base):
+    """Append-only two-person approval and evidence trail for external artifact disposition."""
+    __tablename__ = "shelf_image_artifact_disposition_events"
+    __table_args__ = (
+        CheckConstraint(
+            "event_type IN ('PROPOSED', 'APPROVED', 'REJECTED', 'DISPOSAL_ATTESTED')",
+            name="ck_shelf_image_artifact_disposition_event_type",
+        ),
+        CheckConstraint(
+            "evidence_sha256 IS NULL OR length(evidence_sha256) = 64",
+            name="ck_shelf_image_artifact_disposition_evidence_sha256_length",
+        ),
+        Index(
+            "ix_shelf_image_artifact_disposition_artifact_created",
+            "artifact_reference_id", "created_at",
+        ),
+        Index(
+            "ix_shelf_image_artifact_disposition_store_image",
+            "store_id", "shelf_image_id",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    artifact_reference_id: Mapped[int] = mapped_column(
+        ForeignKey("shelf_image_artifact_references.id", ondelete="RESTRICT"),
+        nullable=False, index=True,
+    )
+    shelf_image_id: Mapped[int] = mapped_column(
+        ForeignKey("shelf_images.id", ondelete="RESTRICT"),
+        nullable=False, index=True,
+    )
+    store_id: Mapped[int] = mapped_column(
+        ForeignKey("stores.id", ondelete="RESTRICT"),
+        nullable=False, index=True,
+    )
+    event_type: Mapped[str] = mapped_column(String(24), nullable=False)
+    actor_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True,
+    )
+    evidence_reference: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    evidence_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False,
+    )
+
+
 class ShelfImageRetentionEvent(Base):
     """Append-only audit trail for shelf-image retention state changes."""
     __tablename__ = "shelf_image_retention_events"
