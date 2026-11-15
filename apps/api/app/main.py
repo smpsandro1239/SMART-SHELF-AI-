@@ -1189,6 +1189,8 @@ def register_shelf_image_artifact_reference(
     ).with_for_update().first()
     if image is None:
         raise HTTPException(status_code=404, detail="Shelf image not found")
+    if image.retention_status == "PURGED":
+        raise HTTPException(status_code=409, detail="Cannot register a new artifact against a purged image")
     store_id = _shelf_image_store_id(db, image_id)
     if store_id is None:
         raise HTTPException(status_code=409, detail="Shelf image has no valid store lineage")
