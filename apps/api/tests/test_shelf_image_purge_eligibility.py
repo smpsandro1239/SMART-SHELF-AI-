@@ -245,3 +245,30 @@ def test_artifact_reference_is_visible_in_purge_preview_but_never_authorizes_del
     assert preview["declared_external_artifact_references"] == 1
     assert preview["deletion_performed"] is False
     assert (tmp_path / "1" / "restricted.jpg").exists()
+
+
+
+def test_external_artifact_registration_rejects_purged_image(db_session, tmp_path):
+    from fastapi import HTTPException
+    from app.schemas import ShelfImageArtifactReferenceCreate
+
+    image_id, admin_id = build_restricted_image(
+        db_session, tmp_path, with_detection=False
+    )
+    image = db_session.get(models.ShelfImage, image_id)
+    image.retention_status = "PURGED"
+    db_session.commit()
+    request = SimpleNamespace(state=SimpleNamespace(user_id=admin_id))
+    payload = ShelfImageArtifactReferenceCreate(
+        artifact_type="BACKUP",
+        external_system="backup-vault",
+        external_reference="backup/object-after-purge",
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        main_module.register_shelf_image_artifact_reference(
+            image_id, payload, request, db_session
+        )
+
+    assert exc.value.status_code == 409
+    assert db_session.query(models.ShelfImageArtifactReference).count() == 0
