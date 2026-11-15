@@ -214,7 +214,7 @@ A cobertura acrescentada não fecha a auditoria global de autorização, nem sub
 
 Foi acrescentado `test_reviewed_training_candidates_are_scoped_to_supervisor_store` à suite JWT HTTP. O teste cria decisões humanas elegíveis para deteções de duas lojas, ativa ambas as imagens e confirma que o SUPERVISOR da loja A recebe apenas o candidato da loja A, ADMIN recebe os dois e EMPLOYEE recebe HTTP 403. A preparação evita que a imagem local seja excluída por já possuir um exemplar de embedding, isolando assim o comportamento do endpoint de candidatos.
 
-O teste foi publicado no commit `895adcee93699ab56b7bec202ce88d554593f214`. A execução CI está pendente; o teste usa SQLite isolado e não representa validação PostgreSQL individual. A listagem de candidatos não inicia treino nem substitui a aprovação humana de exemplares. A auditoria global permanece aberta.
+O teste foi publicado no commit `895adcee93699ab56b7bec202ce88d554593f214`. API CI [43668452686](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/43668452686) e Quality Gates [43668471717](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/43668471717) passaram. O teste usa SQLite isolado e não representa validação PostgreSQL individual. A listagem de candidatos não inicia treino nem substitui a aprovação humana de exemplares. A auditoria global permanece aberta.
 
 ## Avaliação histórica de previsões SKU — controlo do âmbito do relatório
 
