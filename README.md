@@ -931,3 +931,10 @@ Este inventário é um primeiro passo de proveniência, não uma atestação de 
 Os jobs de GitHub Actions observados falharam antes de qualquer passo: não disponibilizam `logs_url`, a API devolve `steps: null`/lista vazia e o download dos logs devolve `BlobNotFound`. Foi adicionado o workflow mínimo `.github/workflows/runner-diagnostics.yml`, sem checkout, actions de terceiros, serviços ou instalação de dependências, para isolar a inicialização do runner. Até este workflow conseguir executar o primeiro passo, não há evidência de falha de compilação Python/TypeScript.
 
 Os checks Vercel também reportaram `build-rate-limit`. Este estado indica limitação de deployments no fornecedor, não uma falha de compilação comprovada. O histórico, IDs dos runs e procedimento de diagnóstico estão em [docs/operations/github-actions-diagnostics.md](docs/operations/github-actions-diagnostics.md). Não considerar CI ou deployment aprovados enquanto não houver execução e logs verificáveis.
+
+
+### Aprovação de disposição de artefactos externos
+
+A migração `0034_shelf_image_artifact_disposition_events` e os endpoints `POST/GET /api/v1/shelf-images/{image_id}/artifacts/{artifact_id}/disposition-events` registam propostas, aprovação/rejeição e atestação de disposição por referência externa. A proposta e a aprovação têm de ser realizadas por administradores diferentes; a atestação final também tem de ser feita por alguém diferente do aprovador e exige referência de evidência e SHA-256. O histórico é append-only.
+
+A pré-validação de purge mostra quantas referências estão propostas, aprovadas, rejeitadas ou atestadas, mas **continua bloqueada**: as declarações e evidências humanas não provam que o inventário externo está completo nem que a remoção foi verificada no fornecedor. Não existe eliminação externa nem física. Foi acrescentado o smoke test PostgreSQL `postgres_shelf_image_artifact_disposition_smoke.py` ao workflow API CI para verificar os triggers de imutabilidade.
