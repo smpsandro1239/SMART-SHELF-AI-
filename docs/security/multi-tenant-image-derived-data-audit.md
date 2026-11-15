@@ -222,3 +222,9 @@ Foi acrescentado o teste JWT `test_reviewed_sku_evaluation_is_scoped_to_supervis
 
 O teste valida a autorização HTTP e o encaminhamento dos filtros, não a precisão do cálculo SQL; o agregador é substituído no teste. Commit `26f3afe93122a7539ca02dc1c718449b2da72c4d`; CI pendente. A auditoria multi-loja dos dados derivados de imagem continua aberta.
 
+## Exemplares de embedding — isolamento multi-loja na listagem
+
+Foi acrescentado `test_product_embedding_exemplar_listing_is_scoped_to_source_image_store` à suite JWT HTTP. O teste cria um exemplar elegível associado à imagem da loja B e confirma que o SUPERVISOR da loja A continua a ver apenas exemplares da loja A; ADMIN recebe ambos os âmbitos e EMPLOYEE recebe HTTP 403. A imagem estrangeira é explicitamente ativada, isolando o controlo multi-loja do controlo de retenção.
+
+Commit `07f46a43c17a9f617aea8b55a242b3d3f7426106`. A validação CI está pendente; o teste usa SQLite isolado e não representa validação PostgreSQL individual do endpoint. A auditoria permanece aberta.
+
