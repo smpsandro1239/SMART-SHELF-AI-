@@ -1214,6 +1214,29 @@ def get_shelf_image_purge_eligibility(
     exemplar_count = db.query(models.ProductEmbeddingExemplar).filter(
         models.ProductEmbeddingExemplar.shelf_image_id == image_id
     ).count()
+    ocr_evidence_count = db.query(models.ShelfImageOCREvidence).filter(
+        models.ShelfImageOCREvidence.run_id.in_(ocr_run_ids)
+    ).count()
+    ocr_match_count = db.query(models.ShelfImageOCRMatch).filter(
+        models.ShelfImageOCRMatch.run_id.in_(ocr_run_ids)
+    ).count()
+    fused_evidence_count = db.query(models.ShelfImageFusedEvidence).filter(
+        models.ShelfImageFusedEvidence.ocr_run_id.in_(ocr_run_ids)
+    ).count()
+
+    # A positive preview must never imply that the image can be physically
+    # deleted while protected lineage still depends on it. The current schema
+    # intentionally blocks these deletes; a separate approved disposition
+    # workflow is required before any purge executor can proceed.
+    if any((
+        detection_count,
+        ocr_run_count,
+        ocr_evidence_count,
+        ocr_match_count,
+        fused_evidence_count,
+        exemplar_count,
+    )):
+        blockers.append("derived_records_require_approved_disposition")
 
     return {
         "image_id": item.id,
@@ -1227,15 +1250,9 @@ def get_shelf_image_purge_eligibility(
         "derived_records": {
             "detections": detection_count,
             "ocr_runs": ocr_run_count,
-            "ocr_evidence": db.query(models.ShelfImageOCREvidence).filter(
-                models.ShelfImageOCREvidence.run_id.in_(ocr_run_ids)
-            ).count(),
-            "ocr_matches": db.query(models.ShelfImageOCRMatch).filter(
-                models.ShelfImageOCRMatch.run_id.in_(ocr_run_ids)
-            ).count(),
-            "fused_evidence": db.query(models.ShelfImageFusedEvidence).filter(
-                models.ShelfImageFusedEvidence.ocr_run_id.in_(ocr_run_ids)
-            ).count(),
+            "ocr_evidence": ocr_evidence_count,
+            "ocr_matches": ocr_match_count,
+            "fused_evidence": fused_evidence_count,
             "embedding_exemplars": exemplar_count,
         },
         "deletion_performed": False,
