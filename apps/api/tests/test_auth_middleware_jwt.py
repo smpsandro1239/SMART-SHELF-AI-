@@ -1115,6 +1115,66 @@ def test_supervisor_jwt_cannot_access_foreign_ocr_or_retry_restricted_image(auth
     assert foreign_derived_data_counts() == before
 
 
+def test_restricted_own_store_image_rejects_ocr_writes_and_retry(auth_client):
+    client, ids, _ = auth_client
+    admin_headers = bearer(ids["admin"], "ADMIN")
+    supervisor_headers = bearer(ids["supervisor_a"], "SUPERVISOR")
+    image_id = ids["image_a"]
+
+    with main_module.SessionLocal() as db:
+        image = db.get(models.ShelfImage, image_id)
+        image.analysis_status = "FAILED"
+        db.commit()
+
+    restricted = client.post(
+        f"/api/v1/shelf-images/{image_id}/retention/restrict",
+        json={"reason": "Auditoria de retenção"},
+        headers=admin_headers,
+    )
+    assert restricted.status_code == 200
+
+    def derived_counts():
+        with main_module.SessionLocal() as db:
+            run_ids = select(models.ShelfImageOCRRun.id).where(
+                models.ShelfImageOCRRun.shelf_image_id == image_id
+            )
+            return (
+                db.query(models.ShelfImageOCRRun).filter(
+                    models.ShelfImageOCRRun.shelf_image_id == image_id
+                ).count(),
+                db.query(models.ShelfImageOCREvidence).filter(
+                    models.ShelfImageOCREvidence.run_id.in_(run_ids)
+                ).count(),
+                db.query(models.ShelfImageOCRMatch).filter(
+                    models.ShelfImageOCRMatch.run_id.in_(run_ids)
+                ).count(),
+            )
+
+    before = derived_counts()
+    ocr_create = client.post(
+        f"/api/v1/shelf-images/{image_id}/ocr-runs",
+        json={"provider": "test-provider", "model_version": "test-v1", "regions": []},
+        headers=supervisor_headers,
+    )
+    ocr_match = client.post(
+        f"/api/v1/shelf-images/{image_id}/ocr-matches",
+        headers=supervisor_headers,
+    )
+    retry = client.post(
+        f"/api/v1/shelf-images/{image_id}/retry",
+        headers=supervisor_headers,
+    )
+
+    assert ocr_create.status_code == 410
+    assert ocr_match.status_code == 410
+    assert retry.status_code == 410
+    assert derived_counts() == before
+    with main_module.SessionLocal() as db:
+        image = db.get(models.ShelfImage, image_id)
+        assert image.retention_status == "RESTRICTED"
+        assert image.analysis_status == "FAILED"
+
+
 def test_employee_jwt_cannot_start_ocr_or_submit_human_sku_reviews(auth_client):
     client, ids, _ = auth_client
     headers = bearer(ids["employee_a"], "EMPLOYEE")
