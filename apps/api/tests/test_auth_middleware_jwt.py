@@ -2368,3 +2368,60 @@ def test_shelf_observation_consensus_is_scoped_to_supervisor_store(auth_client):
 
     with main_module.SessionLocal() as db:
         assert db.query(models.Observation).count() == before_count
+
+def test_reviewed_training_candidates_are_scoped_to_supervisor_store(auth_client):
+    client, ids, store_ids = auth_client
+
+    with main_module.SessionLocal() as db:
+        image_a = db.get(models.ShelfImage, ids["image_a"])
+        image_b = db.get(models.ShelfImage, ids["image_b"])
+        # Keep the candidate eligible and avoid the fixture's pre-existing exemplar.
+        image_a.sha256 = "f" * 64
+        image_b.retention_status = "ACTIVE"
+        db.add_all([
+            models.DetectionSkuReview(
+                detection_id=ids["detection_a"],
+                selected_product_id=ids["product"],
+                decision="CONFIRMED",
+                reviewer_user_id=ids["admin"],
+                notes="Confirmação de teste na loja A",
+            ),
+            models.DetectionSkuReview(
+                detection_id=ids["detection_b"],
+                selected_product_id=ids["product"],
+                decision="CORRECTED",
+                reviewer_user_id=ids["admin"],
+                notes="Correção de teste na loja B",
+            ),
+        ])
+        db.commit()
+
+    supervisor_response = client.get(
+        "/api/v1/training-candidates/reviewed",
+        headers=bearer(ids["supervisor_a"], "SUPERVISOR"),
+    )
+    assert supervisor_response.status_code == 200, supervisor_response.text
+    supervisor_candidates = supervisor_response.json()
+    assert len(supervisor_candidates) == 1
+    assert supervisor_candidates[0]["shelf_image_id"] == ids["image_a"]
+    assert supervisor_candidates[0]["store_id"] == store_ids["a"]
+
+    admin_response = client.get(
+        "/api/v1/training-candidates/reviewed",
+        headers=bearer(ids["admin"], "ADMIN"),
+    )
+    assert admin_response.status_code == 200, admin_response.text
+    admin_candidates = admin_response.json()
+    assert {item["shelf_image_id"] for item in admin_candidates} == {
+        ids["image_a"], ids["image_b"]
+    }
+    assert {item["store_id"] for item in admin_candidates} == {
+        store_ids["a"], store_ids["b"]
+    }
+
+    employee_response = client.get(
+        "/api/v1/training-candidates/reviewed",
+        headers=bearer(ids["employee_a"], "EMPLOYEE"),
+    )
+    assert employee_response.status_code == 403
+
