@@ -265,3 +265,9 @@ uma assinatura criptográfica nem prova de autoria. Para resistência a um
 atacante com capacidade de modificar o registry e os seus controlos, será
 necessário armazenamento com permissões adequadas e assinatura/chave
 protegida fora do diretório do registry.
+
+## Bloqueio de elegibilidade quando existem dados derivados
+
+A pré-visualização `GET /api/v1/shelf-images/{image_id}/retention/purge-eligibility` não pode declarar uma imagem elegível para purga física enquanto existirem deteções, execuções OCR, regiões OCR, matches, fusões de evidência ou exemplares de embedding ligados à imagem. Nestes casos acrescenta o bloqueio `derived_records_require_approved_disposition` e mantém a contagem dos registos na resposta. Esta verificação é deliberadamente conservadora: não elimina nem altera evidência e não substitui a futura política de disposição/anonimização dos dados derivados.
+
+Os testes `test_purge_preview_blocks_images_with_derived_evidence` e `test_purge_preview_allows_only_clean_scheduled_candidate` cobrem o bloqueio e o caso sem dependências derivadas. Mesmo quando a pré-visualização indica elegibilidade, `deletion_performed` permanece `false`: não existe executor de purge ativo nem política formal aprovada.
