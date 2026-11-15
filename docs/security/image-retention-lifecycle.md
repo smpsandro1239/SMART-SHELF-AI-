@@ -271,3 +271,15 @@ protegida fora do diretório do registry.
 A pré-visualização `GET /api/v1/shelf-images/{image_id}/retention/purge-eligibility` não pode declarar uma imagem elegível para purga física enquanto existirem deteções, execuções OCR, regiões OCR, matches, fusões de evidência ou exemplares de embedding ligados à imagem. Nestes casos acrescenta o bloqueio `derived_records_require_approved_disposition` e mantém a contagem dos registos na resposta. Esta verificação é deliberadamente conservadora: não elimina nem altera evidência e não substitui a futura política de disposição/anonimização dos dados derivados.
 
 Os testes `test_purge_preview_blocks_images_with_derived_evidence` e `test_purge_preview_allows_only_clean_scheduled_candidate` cobrem o bloqueio e o caso sem dependências derivadas. Mesmo quando a pré-visualização indica elegibilidade, `deletion_performed` permanece `false`: não existe executor de purge ativo nem política formal aprovada.
+
+## Pré-validação fail-closed e integridade do ficheiro
+
+A pré-validação verifica agora também o tamanho e o SHA-256 do ficheiro persistido, comparando-os com os metadados imutáveis do upload. Um ficheiro ausente, inseguro, com tamanho divergente ou hash divergente bloqueia a operação. A leitura do hash é feita em blocos de 1 MiB para não carregar a imagem inteira em memória.
+
+A resposta distingue:
+- `stored_file_available`: o caminho existe e passou a validação de contenção/ficheiro regular;
+- `stored_file_integrity_verified`: tamanho e SHA-256 coincidem com os metadados;
+- `internal_checks_passed`: as verificações internas de estado, prazo, legal hold, processamento, ficheiro e dependências derivadas passaram;
+- `eligible`: permanece sempre `false` enquanto o inventário de releases externas, backups, caches e réplicas de object storage não estiver ligado e verificado.
+
+O bloqueio `external_artifact_disposition_not_verified` é intencional e fail-closed. Uma imagem sem dependências internas não é, por si só, prova de que não existem cópias ou derivados fora da base de dados. Não existe ainda executor de purge nem qualquer eliminação física.
