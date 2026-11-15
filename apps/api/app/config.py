@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     ocr_provider_factory: str = ""
     ocr_provider_name: str = "paddleocr"
     ocr_model_version: str = "PP-OCRv5-pt"
+    vision_processing_timeout_seconds: int = Field(default=86400, ge=60, le=604800)
     product_matching_min_similarity: float = Field(default=0.90, ge=0.0, le=1.0)
     product_matching_min_margin: float = Field(default=0.05, ge=0.0, le=2.0)
 
