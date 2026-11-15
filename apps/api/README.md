@@ -1261,3 +1261,14 @@ Endpoints:
 - `GET /api/v1/shelf-images/{image_id}/retention/purge-eligibility`
 
 A migração `0032_shelf_image_purge_schedule_events` alarga a restrição dos tipos de evento para incluir os dois eventos de agendamento. O executor de purge continua por implementar; a data agendada não dispara qualquer eliminação automática.
+
+### Inventário de referências a artefactos externos
+
+A migração `0033_shelf_image_artifact_references` cria um inventário append-only para referências externas derivadas de imagens. ADMIN pode registar e consultar referências dentro do âmbito da loja:
+
+- `POST /api/v1/shelf-images/{image_id}/artifacts`
+- `GET /api/v1/shelf-images/{image_id}/artifacts`
+
+O corpo de criação inclui `artifact_type`, `external_system`, `external_reference`, e opcionalmente `release_id` e `sha256`. Os tipos aceites são `DATASET_COPY`, `DATASET_RELEASE`, `CROP`, `REPORT`, `BACKUP`, `CACHE`, `OBJECT_REPLICA` e `OTHER`. A loja é sempre derivada da imagem; o cliente não pode escolher o `store_id`. A mesma referência é idempotente, mas metadados divergentes devolvem HTTP 409.
+
+O registo é uma declaração e não comprova a existência, integridade, cobertura ou disposição do artefacto. Por isso, o purge permanece sempre inelegível até existir um processo independente de inventário completo e aprovação de disposição.
