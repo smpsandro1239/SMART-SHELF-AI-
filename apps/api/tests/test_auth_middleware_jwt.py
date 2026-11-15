@@ -2472,3 +2472,58 @@ def test_reviewed_sku_evaluation_is_scoped_to_supervisor_store(auth_client, monk
     assert employee_response.status_code == 403
     assert len(calls) == 2, "EMPLOYEE requests must be rejected before report generation"
 
+def test_product_embedding_exemplar_listing_is_scoped_to_source_image_store(auth_client):
+    client, ids, store_ids = auth_client
+
+    with main_module.SessionLocal() as db:
+        image_b = db.get(models.ShelfImage, ids["image_b"])
+        image_b.retention_status = "ACTIVE"
+        foreign_exemplar = models.ProductEmbeddingExemplar(
+            product_id=ids["product"],
+            shelf_image_id=image_b.id,
+            embedding=[0.75, 0.25, 0.5],
+            embedding_dimension=3,
+            model_version="auth-embedding-store-b-v1",
+            image_sha256=image_b.sha256,
+            licence="store-owned-reference-image",
+            review_status="PENDING",
+            created_by_user_id=ids["employee_b"],
+        )
+        db.add(foreign_exemplar)
+        db.commit()
+        db.refresh(foreign_exemplar)
+        foreign_exemplar_id = foreign_exemplar.id
+
+    supervisor_response = client.get(
+        "/api/v1/product-embedding-exemplars",
+        headers=bearer(ids["supervisor_a"], "SUPERVISOR"),
+    )
+    assert supervisor_response.status_code == 200, supervisor_response.text
+    supervisor_exemplars = supervisor_response.json()
+    assert {item["id"] for item in supervisor_exemplars} == {
+        ids["embedding_exemplar_a"], ids["embedding_exemplar_admin"]
+    }
+    assert {item["shelf_image_id"] for item in supervisor_exemplars} == {
+        ids["image_a"]
+    }
+    assert all(item.get("shelf_image_id") != ids["image_b"] for item in supervisor_exemplars)
+
+    admin_response = client.get(
+        "/api/v1/product-embedding-exemplars",
+        headers=bearer(ids["admin"], "ADMIN"),
+    )
+    assert admin_response.status_code == 200, admin_response.text
+    admin_exemplars = admin_response.json()
+    assert {item["id"] for item in admin_exemplars} == {
+        ids["embedding_exemplar_a"], ids["embedding_exemplar_admin"], foreign_exemplar_id
+    }
+    assert {item["shelf_image_id"] for item in admin_exemplars} == {
+        ids["image_a"], ids["image_b"]
+    }
+
+    employee_response = client.get(
+        "/api/v1/product-embedding-exemplars",
+        headers=bearer(ids["employee_a"], "EMPLOYEE"),
+    )
+    assert employee_response.status_code == 403
+
