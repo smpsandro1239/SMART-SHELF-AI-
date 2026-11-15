@@ -242,5 +242,6 @@ def test_artifact_reference_is_visible_in_purge_preview_but_never_authorizes_del
 
     assert preview["eligible"] is False
     assert "external_artifact_disposition_not_verified" in preview["blockers"]
+    assert preview["declared_external_artifact_references"] == 1
     assert preview["deletion_performed"] is False
     assert (tmp_path / "1" / "restricted.jpg").exists()
