@@ -9,11 +9,12 @@ depends_on = None
 
 
 def upgrade() -> None:
-    with op.batch_alter_table("shelf_image_artifact_references") as batch_op:
-        batch_op.create_unique_constraint(
-            "uq_shelf_image_artifact_reference_lineage",
-            ["id", "shelf_image_id", "store_id"],
-        )
+    op.create_index(
+        "uq_shelf_image_artifact_reference_lineage",
+        "shelf_image_artifact_references",
+        ["id", "shelf_image_id", "store_id"],
+        unique=True,
+    )
     op.create_table(
         "shelf_image_artifact_disposition_events",
         sa.Column("id", sa.Integer(), primary_key=True),
@@ -141,8 +142,7 @@ def downgrade() -> None:
         table_name="shelf_image_artifact_disposition_events",
     )
     op.drop_table("shelf_image_artifact_disposition_events")
-    with op.batch_alter_table("shelf_image_artifact_references") as batch_op:
-        batch_op.drop_constraint(
-            "uq_shelf_image_artifact_reference_lineage",
-            type_="unique",
-        )
+    op.drop_index(
+        "uq_shelf_image_artifact_reference_lineage",
+        table_name="shelf_image_artifact_references",
+    )
