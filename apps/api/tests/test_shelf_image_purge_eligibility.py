@@ -150,3 +150,97 @@ def test_purge_preview_allows_only_clean_scheduled_candidate(db_session, tmp_pat
     assert result["derived_records"]["embedding_exemplars"] == 0
     assert result["deletion_performed"] is False
     assert (tmp_path / "1" / "restricted.jpg").exists()
+
+
+
+def test_external_artifact_reference_registration_is_idempotent(db_session, tmp_path, monkeypatch):
+    from app.schemas import ShelfImageArtifactReferenceCreate
+
+    image_id, admin_id = build_restricted_image(
+        db_session, tmp_path, with_detection=False
+    )
+    request = SimpleNamespace(state=SimpleNamespace(user_id=admin_id))
+    payload = ShelfImageArtifactReferenceCreate(
+        artifact_type="DATASET_RELEASE",
+        external_system="offline-dataset-registry",
+        external_reference="releases/ds-2026-11-15",
+        release_id="ds-2026-11-15",
+        sha256="a" * 64,
+    )
+
+    first = main_module.register_shelf_image_artifact_reference(
+        image_id, payload, request, db_session
+    )
+    second = main_module.register_shelf_image_artifact_reference(
+        image_id, payload, request, db_session
+    )
+
+    assert first.id == second.id
+    assert first.store_id == 1
+    assert first.artifact_type == "DATASET_RELEASE"
+    assert first.sha256 == "a" * 64
+    assert db_session.query(models.ShelfImageArtifactReference).count() == 1
+
+
+def test_external_artifact_reference_rejects_conflicting_duplicate(db_session, tmp_path):
+    from fastapi import HTTPException
+    from app.schemas import ShelfImageArtifactReferenceCreate
+
+    image_id, admin_id = build_restricted_image(
+        db_session, tmp_path, with_detection=False
+    )
+    request = SimpleNamespace(state=SimpleNamespace(user_id=admin_id))
+    first_payload = ShelfImageArtifactReferenceCreate(
+        artifact_type="BACKUP",
+        external_system="backup-vault",
+        external_reference="backup/object/123",
+        sha256="a" * 64,
+    )
+    conflicting_payload = ShelfImageArtifactReferenceCreate(
+        artifact_type="BACKUP",
+        external_system="backup-vault",
+        external_reference="backup/object/123",
+        sha256="b" * 64,
+    )
+
+    main_module.register_shelf_image_artifact_reference(
+        image_id, first_payload, request, db_session
+    )
+    with pytest.raises(HTTPException) as exc:
+        main_module.register_shelf_image_artifact_reference(
+            image_id, conflicting_payload, request, db_session
+        )
+
+    assert exc.value.status_code == 409
+    assert db_session.query(models.ShelfImageArtifactReference).count() == 1
+
+
+def test_artifact_reference_is_visible_in_purge_preview_but_never_authorizes_deletion(
+    db_session, tmp_path, monkeypatch
+):
+    from app.schemas import ShelfImageArtifactReferenceCreate
+
+    image_id, admin_id = build_restricted_image(
+        db_session, tmp_path, with_detection=False
+    )
+    request = SimpleNamespace(state=SimpleNamespace(user_id=admin_id))
+    main_module.register_shelf_image_artifact_reference(
+        image_id,
+        ShelfImageArtifactReferenceCreate(
+            artifact_type="OBJECT_REPLICA",
+            external_system="object-storage",
+            external_reference="bucket-a/object-987",
+        ),
+        request,
+        db_session,
+    )
+    monkeypatch.setattr(main_module.settings, "image_storage_path", str(tmp_path))
+
+    preview = main_module.get_shelf_image_purge_eligibility(
+        image_id, request, db_session
+    )
+
+    assert preview["eligible"] is False
+    assert "external_artifact_disposition_not_verified" in preview["blockers"]
+    assert preview["deletion_performed"] is False
+    assert (tmp_path / "1" / "restricted.jpg").exists()
