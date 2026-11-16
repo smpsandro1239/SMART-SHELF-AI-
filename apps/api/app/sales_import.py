@@ -51,6 +51,8 @@ def parse_daily_sales_csv(payload: bytes) -> list[ParsedSalesRow]:
             raise ValueError(f"CSV exceeds the maximum of {MAX_IMPORT_ROWS} data rows")
         row = {(key.strip() if key else ""): (value.strip() if value else "") for key, value in raw.items()}
         try:
+            if re.fullmatch(r"[0-9]+", row["product_id"]) is None:
+                raise ValueError
             product_id = int(row["product_id"])
             if product_id <= 0 or product_id > 2**63 - 1:
                 raise ValueError
