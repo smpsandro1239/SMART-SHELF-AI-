@@ -164,3 +164,13 @@ def test_artifact_without_valid_sha256_is_never_approved(sha256, expected_reason
 
     assert decision.allowed is False
     assert expected_reason in decision.reasons
+
+def test_inventory_verification_cannot_precede_generation():
+    kwargs = approved_kwargs()
+    kwargs["inventory_generated_at"] = NOW - timedelta(minutes=1)
+    kwargs["inventory_verified_at"] = NOW - timedelta(minutes=2)
+
+    decision = evaluate_artifact_access(**kwargs)
+
+    assert decision.allowed is False
+    assert "inventory_verification_precedes_generation" in decision.reasons
