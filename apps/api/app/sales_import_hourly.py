@@ -7,6 +7,7 @@ from datetime import date
 from decimal import Decimal, InvalidOperation
 
 MAX_HOURLY_IMPORT_ROWS = 5000
+MAX_HOURLY_IMPORT_BYTES = 5 * 1024 * 1024
 
 @dataclass(frozen=True)
 class ParsedHourlySalesRow:
@@ -26,6 +27,8 @@ class ParsedHourlyTrafficRow:
 def _read_csv(payload: bytes, required_columns: tuple[str, ...]):
     if not payload:
         raise ValueError("CSV file is empty")
+    if len(payload) > MAX_HOURLY_IMPORT_BYTES:
+        raise ValueError(f"CSV exceeds the maximum file size of {MAX_HOURLY_IMPORT_BYTES} bytes")
     if b"\x00" in payload:
         raise ValueError("CSV must not contain NUL bytes")
     try:
