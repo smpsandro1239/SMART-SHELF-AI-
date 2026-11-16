@@ -124,3 +124,13 @@ def test_inventory_must_match_exact_declared_artifact(field, reason):
     decision = evaluate_artifact_access(**kwargs)
     assert decision.allowed is False
     assert reason in decision.reasons
+
+
+def test_inventory_timestamp_equal_to_disposition_is_not_current():
+    kwargs = approved_kwargs()
+    kwargs["latest_disposition_event"] = "REJECTED"
+    kwargs["latest_disposition_at"] = NOW - timedelta(minutes=2)
+    kwargs["inventory_generated_at"] = NOW - timedelta(minutes=2)
+    decision = evaluate_artifact_access(**kwargs)
+    assert decision.allowed is False
+    assert "inventory_predates_disposition" in decision.reasons
