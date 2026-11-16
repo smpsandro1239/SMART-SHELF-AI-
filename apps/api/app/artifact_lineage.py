@@ -45,7 +45,7 @@ def resolve_artifact_parent_chain(
 
         parent_id = getattr(current, "parent_reference_id", None)
         if parent_id is not None and (
-            not isinstance(parent_id, int) or parent_id < 1 or parent_id == current_id
+            not isinstance(parent_id, int) or parent_id < 1
         ):
             raise ArtifactLineageError("artifact_parent_reference_invalid")
 
