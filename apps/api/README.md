@@ -1288,3 +1288,6 @@ The evidence is a human declaration and is not independently verified against an
 PostgreSQL CI includes `scripts/postgres_shelf_image_artifact_disposition_smoke.py` to verify UPDATE/DELETE protection on the event history after migrations.
 
 The disposition state machine is enforced by PostgreSQL and SQLite triggers as well as by the API. Database inserts require an active ADMIN actor, a valid prior state, distinct proposer/reviewer/attestor identities, and a valid SHA-256 evidence digest for final attestation. PostgreSQL locks the artifact reference while validating a new event to serialize concurrent decisions. The event ID is the authoritative sequence for history ordering. The PostgreSQL smoke script exercises invalid transitions and append-only protections; execution remains pending until CI runners start successfully.
+
+
+Os eventos incluem `sequence_number`, uma sequência monotónica única por referência externa, validada pela base de dados. A ordenação da API usa este número, não o ID global. O ator é obrigatório e não pode ser eliminado enquanto for referenciado pelo histórico (`ON DELETE RESTRICT`), preservando a autoria dos eventos.
