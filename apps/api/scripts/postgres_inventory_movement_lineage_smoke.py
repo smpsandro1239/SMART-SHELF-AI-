@@ -171,9 +171,29 @@ def main() -> None:
         ).scalar_one()
         assert count == 1, count
 
+        for statement in (
+            "UPDATE inventory_movements SET quantity = 99 WHERE task_id = :task_id",
+            "DELETE FROM inventory_movements WHERE task_id = :task_id",
+        ):
+            try:
+                db.execute(text(statement), {"task_id": task_id})
+                db.commit()
+            except DBAPIError:
+                db.rollback()
+            else:
+                raise AssertionError(
+                    "PostgreSQL allowed an approved inventory movement to be mutated"
+                )
+
+        count = db.execute(
+            "SELECT COUNT(*) FROM inventory_movements WHERE task_id = :task_id",
+            {"task_id": task_id},
+        ).scalar_one()
+        assert count == 1, count
+
     print(
-        "PostgreSQL inventory movement lineage smoke passed: valid reconciliation "
-        "persisted; cross-store and non-conserving duplicate movements were rejected."
+        "PostgreSQL inventory movement smoke passed: valid reconciliation persisted; "
+        "invalid lineage, non-conserving duplicates, UPDATE and DELETE were rejected."
     )
 
 
