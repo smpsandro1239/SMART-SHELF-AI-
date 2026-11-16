@@ -45,3 +45,5 @@ After the final database-lineage hardening, API CI run `43777686506` and quality
 The database-enforced store-lineage hardening was included in API CI run `43777743145`; that job again failed with `steps: []` and `logs_url: null`, so the new PostgreSQL smoke script has not yet executed in CI.
 
 On 2026-11-16, after the database-enforced disposition state machine and PostgreSQL smoke-test updates, API CI run `43778281274` and quality-gates run `43778281369` again completed as failures with empty step lists and `logs_url: null` for every job. This confirms that neither the new migration trigger nor the PostgreSQL smoke test has been executed by Actions in these runs.
+
+A execução do API CI `43778382827` e do quality-gates `43778382853`, já sobre o commit `0672dc9f04eaac1a357bb9902c1b671126b25fa6`, voltou a terminar sem executar passos (`steps: []`, `logs_url: null`). A migração 0034 inclui agora também a remoção dos triggers de validação no downgrade; esta alteração ainda não foi executada num PostgreSQL real devido à falha de inicialização do runner.
