@@ -1,7 +1,6 @@
 """Database-level tenant lineage for shelf-scoped operational records."""
 
 import importlib.util
-import sqlite3
 from pathlib import Path
 
 import pytest
@@ -40,12 +39,12 @@ def test_shelf_scoped_records_require_the_shelf_tenant_and_block_upstream_moves(
             connection.exec_driver_sql(f"INSERT INTO {table} VALUES (1, 11, 10)")
             with pytest.raises(IntegrityError, match="shelf record store"):
                 connection.exec_driver_sql(f"INSERT INTO {table} VALUES (2, 11, 20)")
-            with pytest.raises(sqlite3.IntegrityError, match="shelf record store"):
+            with pytest.raises(IntegrityError, match="shelf record store"):
                 connection.exec_driver_sql(f"UPDATE {table} SET store_id = 20 WHERE id = 1")
 
-        with pytest.raises(sqlite3.IntegrityError, match="cannot move shelf hierarchy"):
+        with pytest.raises(IntegrityError, match="cannot move shelf hierarchy"):
             connection.exec_driver_sql("UPDATE shelves SET zone_id = 22 WHERE id = 11")
-        with pytest.raises(sqlite3.IntegrityError, match="cannot move shelf hierarchy"):
+        with pytest.raises(IntegrityError, match="cannot move shelf hierarchy"):
             connection.exec_driver_sql("UPDATE zones SET store_id = 20 WHERE id = 1")
 
         # Same-tenant assignments are harmless.
