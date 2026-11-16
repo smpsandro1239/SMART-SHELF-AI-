@@ -2203,6 +2203,8 @@ def get_shelf_image_purge_eligibility(
             purge_at = purge_at.replace(tzinfo=timezone.utc)
         if purge_at > now:
             blockers.append("retention_period_not_elapsed")
+    if not item.retention_policy_version or not item.retention_policy_version.strip():
+        blockers.append("purge_policy_version_missing")
     if item.analysis_status == "PROCESSING":
         blockers.append("analysis_still_processing")
 
