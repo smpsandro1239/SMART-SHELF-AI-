@@ -30,8 +30,11 @@ def canonical_inventory_payload(
     snapshot_id: str,
     generated_at: datetime,
     entries: list[dict[str, Any]],
+    inventory_complete: bool,
 ) -> bytes:
     """Return deterministic UTF-8 bytes signed by the trusted source connector."""
+    if inventory_complete is not True:
+        raise ValueError("Source must explicitly attest complete inventory coverage")
     normalized_entries = []
     seen: set[tuple[str, str]] = set()
     for entry in entries:
@@ -64,6 +67,7 @@ def canonical_inventory_payload(
         "external_system": external_system.strip(),
         "snapshot_id": snapshot_id.strip(),
         "generated_at": _utc_timestamp(generated_at),
+        "inventory_complete": True,
         "entries": normalized_entries,
     }
     if payload["image_id"] <= 0 or payload["store_id"] <= 0:
@@ -84,6 +88,7 @@ def inventory_signature(
     generated_at: datetime,
     entries: list[dict[str, Any]],
     secret: str,
+    inventory_complete: bool = True,
 ) -> str:
     """Create a lowercase SHA-256 HMAC for connector-side tests and integrations."""
     if len(secret.encode("utf-8")) < 32:
@@ -95,6 +100,7 @@ def inventory_signature(
         snapshot_id=snapshot_id,
         generated_at=generated_at,
         entries=entries,
+        inventory_complete=inventory_complete,
     )
     return hmac.new(secret.encode("utf-8"), canonical, hashlib.sha256).hexdigest()
 
@@ -109,6 +115,7 @@ def verify_inventory_signature(
     entries: list[dict[str, Any]],
     signature: str,
     configured_keys_json: str,
+    inventory_complete: bool = True,
 ) -> str:
     """Verify a source signature and return the canonical manifest SHA-256."""
     try:
@@ -131,6 +138,7 @@ def verify_inventory_signature(
         snapshot_id=snapshot_id,
         generated_at=generated_at,
         entries=entries,
+        inventory_complete=inventory_complete,
     )
     expected = hmac.new(secret.encode("utf-8"), canonical, hashlib.sha256).hexdigest()
     if not hmac.compare_digest(expected, signature):
