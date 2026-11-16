@@ -186,7 +186,7 @@ def main() -> None:
                 )
 
         count = db.execute(
-            "SELECT COUNT(*) FROM inventory_movements WHERE task_id = :task_id",
+            text("SELECT COUNT(*) FROM inventory_movements WHERE task_id = :task_id"),
             {"task_id": task_id},
         ).scalar_one()
         assert count == 1, count
