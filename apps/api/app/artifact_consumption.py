@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from app import models
 from app.artifact_access_policy import ArtifactAccessDecision, evaluate_artifact_access
 from app.config import settings
+from app.artifact_inventory_signing import verify_inventory_snapshot_record
 from app.database import SessionLocal
 
 
@@ -126,6 +127,25 @@ def consume_external_artifact_bytes(
             .populate_existing()
             .first()
         )
+        inventory_references = (
+            db.query(models.ShelfImageArtifactReference)
+            .filter(
+                models.ShelfImageArtifactReference.shelf_image_id == image_id,
+                models.ShelfImageArtifactReference.store_id == store_id,
+                models.ShelfImageArtifactReference.external_system == artifact.external_system,
+            )
+            .order_by(models.ShelfImageArtifactReference.id)
+            .all()
+        )
+        inventory_integrity_verified = bool(
+            snapshot is not None
+            and verify_inventory_snapshot_record(
+                snapshot=snapshot,
+                expected_references=inventory_references,
+                configured_keys_json=settings.artifact_inventory_hmac_keys_json,
+            )
+        )
+
         latest_event = (
             db.query(models.ShelfImageArtifactDispositionEvent)
             .filter(
@@ -159,6 +179,7 @@ def consume_external_artifact_bytes(
             source_legal_hold=image.legal_hold,
             integration_status=integration.status if integration is not None else "MISSING",
             inventory_complete=bool(snapshot and snapshot.inventory_complete),
+            inventory_integrity_verified=inventory_integrity_verified,
             inventory_generated_at=snapshot.generated_at if snapshot is not None else None,
             inventory_verified_at=snapshot.verified_at if snapshot is not None else None,
             inventory_max_age_seconds=settings.artifact_inventory_max_age_minutes * 60,
