@@ -33,7 +33,7 @@ def db_session():
 
 
 def build_restricted_image(db, storage_root: Path, *, with_detection: bool):
-    store_number = db_session.query(models.Store).count() + 1
+    store_number = db.query(models.Store).count() + 1
     store = models.Store(code=f"PURGE-TEST-{store_number}", name="Purge test store")
     db.add(store)
     db.flush()
