@@ -89,6 +89,29 @@ def build_restricted_image(db, storage_root: Path, *, with_detection: bool):
     return image.id, admin.id
 
 
+def register_test_external_integration(db_session, image_id, admin_id, external_system):
+    image = db_session.get(models.ShelfImage, image_id)
+    store_id = (
+        db_session.query(models.Zone.store_id)
+        .join(models.Shelf, models.Shelf.zone_id == models.Zone.id)
+        .filter(models.Shelf.id == image.shelf_id)
+        .scalar()
+    )
+    db_session.add(models.StoreExternalIntegration(
+        store_id=store_id,
+        external_system=external_system,
+        provider="test-provider",
+        status="ACTIVE",
+        required_for_retention=False,
+        capabilities=["inventory"],
+        last_seen_at=models.utc_now(),
+        created_by_user_id=admin_id,
+        updated_by_user_id=admin_id,
+    ))
+    db_session.commit()
+    return store_id
+
+
 def test_purge_preview_blocks_images_with_derived_evidence(db_session, tmp_path, monkeypatch):
     image_id, admin_id = build_restricted_image(
         db_session, tmp_path, with_detection=True
@@ -544,6 +567,9 @@ def test_signed_inventory_snapshot_verifies_exact_coverage_and_keeps_purge_disab
     db_session.commit()
     first_request = SimpleNamespace(state=SimpleNamespace(user_id=first_admin_id))
     second_request = SimpleNamespace(state=SimpleNamespace(user_id=second_admin.id))
+    register_test_external_integration(
+        db_session, image_id, first_admin_id, "backup-vault"
+    )
 
     artifact = main_module.register_shelf_image_artifact_reference(
         image_id,
@@ -670,6 +696,9 @@ def test_signed_inventory_snapshot_rejects_incomplete_or_invalid_source_evidence
         db_session, tmp_path, with_detection=False
     )
     request = SimpleNamespace(state=SimpleNamespace(user_id=admin_id))
+    register_test_external_integration(
+        db_session, image_id, admin_id, "edge-cache"
+    )
     artifact = main_module.register_shelf_image_artifact_reference(
         image_id,
         ShelfImageArtifactReferenceCreate(
