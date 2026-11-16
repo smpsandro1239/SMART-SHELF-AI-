@@ -1178,3 +1178,29 @@ def test_detection_review_history_locks_source_image_before_returning_reviews(mo
         "Detection review history must lock and refresh its source image "
         "before returning derived review data"
     )
+
+
+
+def test_reviewed_training_candidates_lock_source_images(monkeypatch):
+    from sqlalchemy.orm import Query
+
+    original_with_for_update = Query.with_for_update
+    source_image_locks = []
+
+    def record_source_image_lock(query, *args, **kwargs):
+        locked_entities = kwargs.get("of", ())
+        if not isinstance(locked_entities, (tuple, list, set)):
+            locked_entities = (locked_entities,)
+        if models.ShelfImage in locked_entities:
+            source_image_locks.append(True)
+        return original_with_for_update(query, *args, **kwargs)
+
+    monkeypatch.setattr(Query, "with_for_update", record_source_image_lock)
+    with TestClient(app) as client:
+        response = client.get("/api/v1/training-candidates/reviewed")
+
+    assert response.status_code == 200, response.text
+    assert source_image_locks, (
+        "Training candidate selection must lock source images against "
+        "concurrent retention transitions"
+    )
