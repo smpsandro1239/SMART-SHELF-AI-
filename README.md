@@ -1065,3 +1065,8 @@ A coluna JSON dos embeddings não consegue impor por si só a correspondência e
 
 
 **Estabilidade numérica do matching:** a normalização dos vetores usa agora `math.hypot`, evitando overflow intermédio ao calcular normas de vetores grandes mas finitos. A similaridade cosseno é calculada sobre componentes normalizadas e limitada ao intervalo matemático [-1, 1] para neutralizar pequenos desvios de arredondamento. O registry rejeita também uma versão de modelo vazia antes de consultar a base de dados. Os testes adicionados cobrem vetores finitos de grande magnitude e versão de modelo em branco.
+
+
+### Consistência dimensional por versão do modelo
+
+Uma versão de embedding identifica um contrato de representação: os exemplares aprovados dessa versão têm de partilhar a mesma dimensão. Se o carregamento detetar dimensões diferentes dentro da mesma versão, o serviço não escolhe uma dimensão por maioria nem mistura vetores: regista um erro e constrói um registry vazio, levando o matching a abster-se com `UNKNOWN`. Esta decisão é intencionalmente conservadora até existir uma migração/reconciliação explícita dos dados inconsistentes. A validação de domínio também rejeita booleanos como componentes numéricas, apesar de Python os tratar como subclasses de `int`.
