@@ -337,6 +337,7 @@ def test_review_queue_revalidates_fused_products_after_catalogue_deactivation():
         initial = client.get("/api/v1/shelf-image-review-queue")
         assert initial.status_code == 200
         assert initial.json()[0]["status"] == "CONSENSUS"
+        fused_id = initial.json()[0]["fused_evidence_id"]
 
         with TestingSession() as db:
             db.get(models.Product, product_id).is_active = False
@@ -347,7 +348,7 @@ def test_review_queue_revalidates_fused_products_after_catalogue_deactivation():
         assert refreshed.status_code == 200
         assert filtered.status_code == 200
         assert filtered.json() == []
-        item = next(item for item in refreshed.json() if item["fused_evidence_id"] == 1)
+        item = next(item for item in refreshed.json() if item["fused_evidence_id"] == fused_id)
         assert item["status"] == "UNKNOWN"
         assert item["suggested_product_id"] is None
         assert item["visual_product_id"] is None
