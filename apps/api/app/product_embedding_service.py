@@ -112,6 +112,7 @@ def build_approved_product_registry(
             .filter(models.ShelfImage.id.in_(source_image_ids))
             .order_by(models.ShelfImage.id)
             .with_for_update()
+            .populate_existing()
             .all()
         )
         active_source_image_ids = {
@@ -151,6 +152,7 @@ def build_approved_product_registry(
             models.ProductEmbeddingExemplar.id,
         )
         .with_for_update(of=models.ProductEmbeddingExemplar)
+        .populate_existing()
         .all()
     )
 
