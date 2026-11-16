@@ -7,7 +7,7 @@ product exemplars and abstains whenever evidence is insufficient.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from math import isfinite, sqrt
+from math import hypot, isfinite
 from typing import Iterable, Sequence
 
 
@@ -56,7 +56,7 @@ def _validated_vector(values: Sequence[float]) -> tuple[float, ...]:
         raise ValueError("embedding cannot be empty")
     if any(not isfinite(value) for value in vector):
         raise ValueError("embedding values must be finite")
-    if sqrt(sum(value * value for value in vector)) == 0:
+    if hypot(*vector) == 0:
         raise ValueError("embedding cannot be a zero vector")
     return vector
 
@@ -64,9 +64,15 @@ def _validated_vector(values: Sequence[float]) -> tuple[float, ...]:
 def _cosine_similarity(left: Sequence[float], right: Sequence[float]) -> float:
     if len(left) != len(right):
         raise ValueError("embedding dimensions do not match")
-    left_norm = sqrt(sum(value * value for value in left))
-    right_norm = sqrt(sum(value * value for value in right))
-    return sum(a * b for a, b in zip(left, right)) / (left_norm * right_norm)
+    left_norm = hypot(*left)
+    right_norm = hypot(*right)
+    # Normalize before multiplying to avoid overflow for large but finite
+    # provider values. Clamp rounding drift to the cosine domain.
+    similarity = sum(
+        (a / left_norm) * (b / right_norm)
+        for a, b in zip(left, right)
+    )
+    return max(-1.0, min(1.0, similarity))
 
 
 class ProductEmbeddingRegistry:
