@@ -421,3 +421,82 @@ def test_disposition_database_conflict_rolls_back_and_returns_conflict(db_sessio
     assert conflict.value.status_code == 409
     assert rollback_called == [True]
     assert db_session.query(models.ShelfImageArtifactDispositionEvent).count() == 0
+
+
+def test_signed_inventory_must_strictly_postdate_disposition_event(db_session, monkeypatch):
+    from app.artifact_inventory_signing import inventory_signature
+
+    store_id, image_id, admin_id = build_store_image(db_session)
+    request = SimpleNamespace(state=SimpleNamespace(user_id=admin_id))
+    secret = "strict-time-ordering-test-secret-32-bytes"
+    monkeypatch.setattr(
+        main_module.settings,
+        "artifact_inventory_hmac_keys_json",
+        json.dumps({"backup-vault": secret}),
+    )
+    main_module.create_store_external_integration(
+        store_id,
+        StoreExternalIntegrationCreate(
+            external_system="backup-vault",
+            provider="s3-compatible",
+            required_for_retention=True,
+        ),
+        request,
+        db_session,
+    )
+    reference = models.ShelfImageArtifactReference(
+        shelf_image_id=image_id,
+        store_id=store_id,
+        artifact_type="BACKUP",
+        external_system="backup-vault",
+        external_reference="backup/equal-time",
+        sha256=None,
+        declared_by_user_id=admin_id,
+    )
+    db_session.add(reference)
+    db_session.flush()
+    disposition_time = models.utc_now()
+    db_session.add(models.ShelfImageArtifactDispositionEvent(
+        artifact_reference_id=reference.id,
+        sequence_number=1,
+        shelf_image_id=image_id,
+        store_id=store_id,
+        event_type="REJECTED",
+        actor_user_id=admin_id,
+        reason="Temporal boundary test",
+        created_at=disposition_time,
+    ))
+    db_session.commit()
+
+    entries = [{
+        "artifact_type": "BACKUP",
+        "external_reference": "backup/equal-time",
+        "sha256": None,
+        "state": "PRESENT",
+    }]
+    signature = inventory_signature(
+        image_id=image_id,
+        store_id=store_id,
+        external_system="backup-vault",
+        snapshot_id="snapshot-equal-disposition-time",
+        generated_at=disposition_time,
+        entries=entries,
+        secret=secret,
+        inventory_complete=True,
+    )
+    payload = ShelfImageArtifactInventorySnapshotCreate(
+        external_system="backup-vault",
+        snapshot_id="snapshot-equal-disposition-time",
+        generated_at=disposition_time,
+        inventory_complete=True,
+        entries=entries,
+        signature=signature,
+    )
+
+    with pytest.raises(HTTPException) as conflict:
+        main_module.create_shelf_image_artifact_inventory_snapshot(
+            image_id, payload, request, db_session
+        )
+    assert conflict.value.status_code == 409
+    assert "predates the latest disposition event" in conflict.value.detail
+    assert db_session.query(models.ShelfImageArtifactInventorySnapshot).count() == 0
