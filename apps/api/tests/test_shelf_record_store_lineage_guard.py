@@ -1,13 +1,13 @@
 """Database-level tenant lineage for shelf-scoped operational records."""
 
 import importlib.util
-import sqlite3
 from pathlib import Path
 
 import pytest
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
 from sqlalchemy import create_engine
+from sqlalchemy.exc import IntegrityError
 
 
 def _migration():
@@ -37,7 +37,7 @@ def test_shelf_scoped_records_require_the_shelf_tenant_and_block_upstream_moves(
 
         for table in ("observation_alerts", "capture_sessions", "replenishment_tasks"):
             connection.exec_driver_sql(f"INSERT INTO {table} VALUES (1, 11, 10)")
-            with pytest.raises(sqlite3.IntegrityError, match="shelf record store"):
+            with pytest.raises(IntegrityError, match="shelf record store"):
                 connection.exec_driver_sql(f"INSERT INTO {table} VALUES (2, 11, 20)")
             with pytest.raises(sqlite3.IntegrityError, match="shelf record store"):
                 connection.exec_driver_sql(f"UPDATE {table} SET store_id = 20 WHERE id = 1")
