@@ -134,6 +134,38 @@ def register_test_artifact_reference(image_id, payload, request, db_session):
     )
 
 
+def test_restore_cancels_existing_purge_schedule_and_records_audit(db_session, tmp_path):
+    from app.schemas import ShelfImageRetentionRequest
+
+    image_id, admin_id = build_restricted_image(
+        db_session, tmp_path, with_detection=False
+    )
+    request = SimpleNamespace(state=SimpleNamespace(user_id=admin_id))
+    image = db_session.get(models.ShelfImage, image_id)
+    previous_purge_date = image.purge_not_before
+    assert previous_purge_date is not None
+    assert image.retention_policy_version == "test-policy-v1"
+
+    restored = main_module.restore_shelf_image(
+        image_id,
+        ShelfImageRetentionRequest(reason="Restore image for renewed operational use"),
+        request,
+        db_session,
+    )
+
+    assert restored.retention_status == "ACTIVE"
+    assert restored.purge_not_before is None
+    assert restored.retention_policy_version is None
+    events = db_session.query(models.ShelfImageRetentionEvent).filter_by(
+        shelf_image_id=image_id
+    ).order_by(models.ShelfImageRetentionEvent.id).all()
+    assert [event.event_type for event in events] == ["PURGE_CANCELLED", "RESTORED"]
+    assert previous_purge_date.isoformat() in events[0].reason
+    assert events[0].from_status == events[0].to_status == "RESTRICTED"
+    assert events[1].from_status == "RESTRICTED"
+    assert events[1].to_status == "ACTIVE"
+
+
 def test_purge_preview_blocks_images_with_derived_evidence(db_session, tmp_path, monkeypatch):
     image_id, admin_id = build_restricted_image(
         db_session, tmp_path, with_detection=True
