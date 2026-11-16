@@ -3106,3 +3106,77 @@ def test_sales_csv_import_rejects_non_csv_filename(auth_client, endpoint):
         headers=bearer(ids["supervisor_a"], "SUPERVISOR"),
     )
     assert response.status_code == 415, response.text
+
+@pytest.mark.parametrize(
+    ("endpoint", "csv_header", "existing_row", "new_row", "model_name"),
+    [
+        (
+            "/api/v1/sales/import-csv",
+            "product_id,sales_date,quantity,external_reference",
+            "{product_id},2026-11-16,3,ATOMIC-DAILY-EXISTING",
+            "{product_id},2026-11-16,4,ATOMIC-DAILY-NEW",
+            "DailySalesRecord",
+        ),
+        (
+            "/api/v1/sales/hourly/import-csv",
+            "product_id,business_date,hour_of_day,quantity,external_reference",
+            "{product_id},2026-11-16,10,3,ATOMIC-HOURLY-EXISTING",
+            "{product_id},2026-11-16,11,4,ATOMIC-HOURLY-NEW",
+            "HourlySalesRecord",
+        ),
+        (
+            "/api/v1/sales/traffic/hourly/import-csv",
+            "business_date,hour_of_day,customer_count,external_reference",
+            "2026-11-16,10,12,ATOMIC-TRAFFIC-EXISTING",
+            "2026-11-16,11,14,ATOMIC-TRAFFIC-NEW",
+            "HourlyStoreTrafficRecord",
+        ),
+    ],
+)
+def test_sales_csv_import_rolls_back_all_rows_on_existing_reference_conflict(
+    auth_client, endpoint, csv_header, existing_row, new_row, model_name
+):
+    """A conflict on a later CSV row must not persist earlier new rows."""
+    client, ids, store_ids = auth_client
+    headers = bearer(ids["supervisor_a"], "SUPERVISOR")
+    request_data = {"store_id": str(store_ids["a"]), "source": "IMPORT"}
+    existing = existing_row.format(product_id=ids["product"])
+    new = new_row.format(product_id=ids["product"])
+
+    seed = client.post(
+        endpoint,
+        data=request_data,
+        files={
+            "file": (
+                "seed.csv",
+                (csv_header + chr(10) + existing + chr(10)).encode("utf-8"),
+                "text/csv",
+            )
+        },
+        headers=headers,
+    )
+    assert seed.status_code == 200, seed.text
+
+    conflicting_payload = (
+        csv_header + chr(10) + new + chr(10) + existing + chr(10)
+    ).encode("utf-8")
+    response = client.post(
+        endpoint,
+        data=request_data,
+        files={"file": ("atomic.csv", conflicting_payload, "text/csv")},
+        headers=headers,
+    )
+    assert response.status_code == 409, response.text
+    assert "no rows were saved" in response.json()["detail"].lower()
+
+    record_model = getattr(models, model_name)
+    with main_module.SessionLocal() as db:
+        assert db.query(record_model).filter(
+            record_model.store_id == store_ids["a"],
+            record_model.external_reference == new.split(",")[-1],
+        ).count() == 0
+        assert db.query(record_model).filter(
+            record_model.store_id == store_ids["a"],
+            record_model.external_reference == existing.split(",")[-1],
+        ).count() == 1
+
