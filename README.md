@@ -999,6 +999,10 @@ As rotas de consulta de deteções, execuções OCR, evidência OCR, correspond�
 
 
 
+### Revalidação de evidência combinada após alterações no catálogo
+
+A evidência visual/OCR combinada persistida é tratada como histórico imutável, não como uma sugestão permanentemente válida. A listagem `GET /api/v1/shelf-images/{image_id}/evidence-fusion` e a via de cache de `POST` voltam a calcular a projeção servida com base no estado atual do catálogo. Se um produto associado à evidência visual ou OCR for desativado ou eliminado, deixa de ser exposto como candidato atual e o estado combinado é recalculado conservadoramente (podendo passar a `UNKNOWN`). O filtro `status` do GET é aplicado depois desta revalidação para não devolver estados históricos obsoletos. Os registos persistidos e a sua proveniência não são reescritos. O teste `test_cached_fused_evidence_is_recomputed_when_catalogue_product_is_deactivated` cobre GET, cache do POST, filtro de estado e preservação do histórico.
+
 ### Serialização da geração de evidência combinada
 
 O endpoint `POST /api/v1/shelf-images/{image_id}/evidence-fusion` bloqueia agora a imagem de origem antes de consultar execuções OCR, correspondências, deteções ou evidência combinada existente. Os produtos candidatos são bloqueados posteriormente por ordem crescente de ID. Esta ordem evita que a fusão utilize deteções antigas caso um worker esteja a substituir resultados em simultâneo com a geração da evidência. O teste `test_evidence_fusion_locks_source_image_before_loading_derived_rows` verifica a aquisição do bloqueio na camada ORM.
