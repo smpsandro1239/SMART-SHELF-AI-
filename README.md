@@ -981,3 +981,6 @@ O endpoint não deve ser usado como único controlo de autorização por consumi
 
 
 **Verificação PostgreSQL da imutabilidade do inventário externo:** o smoke test `postgres_artifact_immutability_smoke.py` tenta executar `UPDATE` e `DELETE` sobre declarações de artefactos e snapshots de inventário. Cada operação tem de ser rejeitada pelos triggers append-only, e os registos têm de permanecer presentes. O teste é executado na API CI depois das migrações; a sua inclusão no workflow não significa que já tenha passado numa execução real.
+
+
+**Linhagem imutável dos embeddings SKU:** a migração `0037_embedding_exemplar_lineage_immutable` acrescenta validação na base de dados. Um exemplar associado a uma imagem só pode ser inserido quando a imagem existe, está `ACTIVE` e o SHA-256 coincide. Depois da criação, a origem, o produto, o vetor, a dimensão, a versão do modelo, o digest, a licença e os metadados de criação não podem ser alterados; os campos de revisão humana continuam atualizáveis pelo fluxo de revisão. O smoke test PostgreSQL `postgres_embedding_lineage_smoke.py` verifica tentativas de desassociação, alteração do digest/vetor, inserção com digest incorreto, inserção a partir de imagem restrita e a atualização legítima do estado de revisão. A inclusão no workflow não constitui prova de execução aprovada.
