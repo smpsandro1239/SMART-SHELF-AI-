@@ -90,7 +90,7 @@ def _fixture(suffix: str) -> dict[str, int]:
         pending = models.ProductEmbeddingExemplar(
             product_id=product.id, shelf_image_id=source.id,
             embedding=[0.0, 1.0, 0.0], embedding_dimension=3,
-            model_version="pg-four-way-v2", image_sha256="f" * 64,
+            model_version="pg-four-way-v2", image_sha256="d" * 64,
             licence="store-owned-smoke-reference", review_status="PENDING",
             created_by_user_id=creator.id,
         )
