@@ -641,6 +641,7 @@ class ShelfImageArtifactInventorySnapshotRead(BaseModel):
     inventory_complete: bool
     manifest_sha256: str
     source_signature: str
+    key_id: str
     inventory_manifest: list[dict]
     artifact_count: int
     present_count: int
