@@ -1166,3 +1166,8 @@ O smoke test PostgreSQL `postgres_shelf_image_artifact_disposition_smoke.py` pas
 ### Ordenação estrita entre inventário e disposição — 2026-11-16
 
 A validação temporal dos artefactos exige agora que `generated_at` do snapshot seja **estritamente posterior** a `created_at` do último evento de disposição. A igualdade temporal deixa de ser aceite: com timestamps iguais não existe prova de qual operação ocorreu primeiro. A regra é aplicada na ingestão de snapshots (`main.py`), na política de consumo (`artifact_access_policy.py`) e na avaliação de retenção. Foram acrescentados testes unitários para a política e para o bloqueio do consumo, além de um teste de integração que submete um snapshot assinado com o mesmo timestamp do evento e espera HTTP 409. A validação desta alteração foi estática; a execução depende de runner CI disponível.
+
+
+### Validação da linhagem antes do bloqueio de eventos — 2026-11-16
+
+A migration `0041_disposition_lock_lineage_guard` reforça a ordem de bloqueios dos eventos de disposição. Antes de bloquear a imagem, o trigger lê a referência imutável e confirma que `shelf_image_id` e `store_id` do evento correspondem à referência real. Só depois bloqueia a imagem; o trigger de validação existente bloqueia a referência em seguida. Isto evita que um evento malformado tente bloquear uma imagem arbitrária antes de obter o lock da referência e reduz o risco de inversão de locks em inserções directas. O SQLite recebe a validação equivalente da linhagem. O smoke test PostgreSQL verifica também eventos com loja e imagem incompatíveis. A alteração é estática nesta sessão; depende de runner PostgreSQL para execução.
