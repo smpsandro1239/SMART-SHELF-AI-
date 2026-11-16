@@ -1307,3 +1307,9 @@ A migration `0050_shelf_record_store_lineage_guard` estende a validação à inf
 - Validação CI no commit `1a78fc0dfe476a1a892d8dba0797c0bb3468b5a1`: [Smart Shelf Quality Gates — sucesso](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/43905650511) e [API CI — sucesso](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/43905650360).
 
 **Limite de validação:** o CI confirma testes automatizados, compilação, build web e os smokes PostgreSQL definidos nos workflows. Não substitui ainda a execução manual de Docker Compose num ambiente externo nem um ensaio ponta-a-ponta com POS/ERP real.
+
+### Movimentos de inventário como evidência append-only — 2026-11-16
+
+A migration `0053_inventory_movement_append_only` protege os movimentos de inventário aprovados contra alterações e eliminações directas na base de dados. A API já trata estes movimentos como transferências imutáveis; a nova defesa aplica essa regra também em PostgreSQL e SQLite, independentemente do caminho de escrita. O downgrade remove explicitamente os triggers e a função PostgreSQL.
+
+A suite SQLite verifica UPDATE e DELETE rejeitados, preservação dos valores originais e remoção das protecções no downgrade. O smoke PostgreSQL de reconciliação foi alargado para tentar adulterar e eliminar o movimento criado pela API, exigindo que ambas as operações falhem e que o registo original permaneça. A execução integral do CI deste commit é a validação necessária para confirmar a migration em PostgreSQL 16 e a suite API.
