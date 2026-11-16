@@ -99,7 +99,7 @@ def resolve_inventory_secret(
     source_config = store_config.get(external_system) if isinstance(store_config, dict) else None
     if not isinstance(source_config, dict):
         raise InventorySignatureConfigurationError(
-            f"No inventory HMAC keyring is configured for store {store_id} and source '{external_system}'"
+            f"Inventory HMAC keyring is not configured for store {store_id} and source '{external_system}'"
         )
     active_key_id = source_config.get("active_key_id")
     keys = source_config.get("keys")
