@@ -1280,3 +1280,7 @@ A compatibilidade do formato HMAC `legacy` deixou de ser implicitamente aceite e
 ### Registo de artefactos limitado a integrações activas — 2026-11-16
 
 O endpoint de declaração de referências externas exige agora que o fornecedor esteja registado e activo na loja proprietária da imagem. A verificação é feita sob bloqueio da linha da integração, mantendo a ordem de locks usada pelo inventário e pelos fluxos de retenção. Isto impede declarar artefactos para origens desconhecidas ou revogadas. Foram acrescentados testes para origem não registada/revogada, tentativa de actualizar uma integração através do caminho de outra loja e tentativa de usar um artefacto pai pertencente a outra imagem/loja. Os testes ainda não foram executados nesta ronda.
+
+### Integridade da loja na base de dados para artefactos — 2026-11-16
+
+A migration `0048_artifact_store_lineage_guard` acrescenta triggers em PostgreSQL e SQLite para garantir que o `store_id` de cada referência de artefacto e snapshot de inventário corresponde à loja obtida pela relação imagem → prateleira → zona. A migration verifica primeiro os registos existentes e aborta se encontrar inconsistências, em vez de as perpetuar. Foram acrescentados testes SQLite para INSERT, UPDATE, rollback e detecção de dados antigos inconsistentes. A execução da migration e os testes ainda não foram confirmados nesta sessão.
