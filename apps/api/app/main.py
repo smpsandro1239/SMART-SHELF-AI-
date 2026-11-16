@@ -2508,7 +2508,13 @@ def fuse_shelf_image_evidence(image_id: int, request: Request, db: Session = Dep
     from app.product_matching import ProductCandidate, ProductMatch
     from app.product_text import OCRText, TextCandidate, TextMatch
 
-    image_record = db.get(models.ShelfImage, image_id)
+    image_record = (
+        db.query(models.ShelfImage)
+        .filter(models.ShelfImage.id == image_id)
+        .with_for_update()
+        .populate_existing()
+        .first()
+    )
     if image_record is None:
         raise HTTPException(status_code=404, detail="Shelf image not found")
     actor = _request_user(db, request)
@@ -2558,18 +2564,8 @@ def fuse_shelf_image_evidence(image_id: int, request: Request, db: Session = Dep
             for candidate in (text_row.candidates or [])
             if isinstance(candidate, dict) and candidate.get("product_id") is not None
         )
-    # The worker and retention lifecycle lock source images before products.
-    # Revalidate the image first, then lock candidate catalogue rows in ID order.
-    image_record = (
-        db.query(models.ShelfImage)
-        .filter(models.ShelfImage.id == image_id)
-        .with_for_update()
-        .populate_existing()
-        .first()
-    )
-    if image_record is None:
-        raise HTTPException(status_code=404, detail="Shelf image not found")
-    _require_active_shelf_image(image_record)
+    # The source image is already locked before any derived evidence was read.
+    # Lock candidate catalogue rows next, in stable ID order.
     active_products = (
         db.query(models.Product)
         .filter(models.Product.id.in_(sorted(candidate_product_ids)))
