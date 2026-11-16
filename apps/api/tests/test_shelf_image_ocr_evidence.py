@@ -1708,3 +1708,81 @@ def test_jwt_middleware_and_store_scope_protect_ocr_routes(monkeypatch):
             },
         )
         assert employee_write.status_code == 403
+
+def test_ocr_pipeline_locks_catalogue_after_source_image_and_suppresses_inactive_visual():
+    from sqlalchemy.orm import Query
+    from app.product_pipeline import process_completed_ocr_run
+
+    image_id, detection_id = create_image_with_detection()
+    with TestingSession() as db:
+        product = models.Product(
+            sku="PIPELINE-RETIRED-01",
+            name="Produto desativado durante pipeline",
+            is_active=False,
+        )
+        db.add(product)
+        db.flush()
+        detection = db.get(models.ShelfImageDetection, detection_id)
+        detection.product_id = product.id
+        detection.sku_match_status = "MATCHED"
+        detection.sku_similarity = 0.99
+        run = models.ShelfImageOCRRun(
+            shelf_image_id=image_id,
+            provider="pipeline-test",
+            model_version="pipeline-v1",
+            status="COMPLETED",
+        )
+        db.add(run)
+        db.flush()
+        db.add(models.ShelfImageOCREvidence(
+            run_id=run.id,
+            detection_id=detection_id,
+            text="Produto desativado durante pipeline",
+            normalized_text="produto desativado durante pipeline",
+            confidence=0.99,
+            x_min=0.1,
+            y_min=0.1,
+            x_max=0.5,
+            y_max=0.3,
+            association_status="ASSIGNED",
+        ))
+        db.commit()
+
+    original_with_for_update = Query.with_for_update
+    lock_order = []
+
+    def record_lock_order(query, *args, **kwargs):
+        entities = query.column_descriptions
+        if entities and entities[0].get("entity") is models.ShelfImage:
+            lock_order.append("image")
+        elif entities and entities[0].get("entity") is models.Product:
+            lock_order.append("product")
+        return original_with_for_update(query, *args, **kwargs)
+
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setattr(Query, "with_for_update", record_lock_order)
+    try:
+        with TestingSession() as db:
+            db.query(models.ShelfImage).filter(
+                models.ShelfImage.id == image_id
+            ).with_for_update().populate_existing().one()
+            counts = process_completed_ocr_run(db, image_id)
+            db.commit()
+            assert counts == {"ocr_matches_created": 1, "fused_evidence_created": 1}
+
+            match = db.query(models.ShelfImageOCRMatch).one()
+            assert match.suggested_product_id is None
+            assert match.status == "UNKNOWN"
+
+            fused = db.query(models.ShelfImageFusedEvidence).one()
+            assert fused.status == "UNKNOWN"
+            assert fused.suggested_product_id is None
+            assert fused.visual_product_id is None
+            assert fused.text_product_id is None
+    finally:
+        monkeypatch.undo()
+
+    assert "image" in lock_order
+    assert "product" in lock_order
+    assert lock_order.index("image") < lock_order.index("product")
+
