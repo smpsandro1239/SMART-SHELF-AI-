@@ -3180,3 +3180,42 @@ def test_sales_csv_import_rolls_back_all_rows_on_existing_reference_conflict(
             record_model.external_reference == existing.split(",")[-1],
         ).count() == 1
 
+@pytest.mark.parametrize(
+    ("endpoint", "csv_header", "csv_row"),
+    [
+        (
+            "/api/v1/sales/import-csv",
+            "product_id,sales_date,quantity,external_reference",
+            "{product_id},2026-11-16,3,STORE-SCOPED-DAILY-REF",
+        ),
+        (
+            "/api/v1/sales/hourly/import-csv",
+            "product_id,business_date,hour_of_day,quantity,external_reference",
+            "{product_id},2026-11-16,10,3,STORE-SCOPED-HOURLY-REF",
+        ),
+        (
+            "/api/v1/sales/traffic/hourly/import-csv",
+            "business_date,hour_of_day,customer_count,external_reference",
+            "2026-11-16,10,12,STORE-SCOPED-TRAFFIC-REF",
+        ),
+    ],
+)
+def test_csv_external_reference_uniqueness_is_scoped_to_store(
+    auth_client, endpoint, csv_header, csv_row
+):
+    """The same upstream reference may legitimately exist in two different stores."""
+    client, ids, store_ids = auth_client
+    headers = bearer(ids["admin"], "ADMIN")
+    row = csv_row.format(product_id=ids["product"])
+    payload = (csv_header + chr(10) + row + chr(10)).encode("utf-8")
+
+    for store_key in ("a", "b"):
+        response = client.post(
+            endpoint,
+            data={"store_id": str(store_ids[store_key]), "source": "IMPORT"},
+            files={"file": (f"{store_key}.csv", payload, "text/csv")},
+            headers=headers,
+        )
+        assert response.status_code == 200, response.text
+        assert response.json()["rows_imported"] == 1
+
