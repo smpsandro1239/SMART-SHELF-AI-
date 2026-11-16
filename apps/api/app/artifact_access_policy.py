@@ -80,6 +80,8 @@ def evaluate_artifact_access(
         generated = _utc(inventory_generated_at)
         verified = _utc(inventory_verified_at)
         current_utc = _utc(current)
+        if verified < generated:
+            reasons.append("inventory_verification_precedes_generation")
         age = (current_utc - generated).total_seconds()
         verification_age = (current_utc - verified).total_seconds()
         if age < -120 or verification_age < -120:
