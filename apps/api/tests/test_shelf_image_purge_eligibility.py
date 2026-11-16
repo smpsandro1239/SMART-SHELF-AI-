@@ -166,6 +166,36 @@ def test_restore_cancels_existing_purge_schedule_and_records_audit(db_session, t
     assert events[1].to_status == "ACTIVE"
 
 
+def test_restore_clears_orphaned_purge_policy_without_scheduled_date(db_session, tmp_path):
+    from app.schemas import ShelfImageRetentionRequest
+
+    image_id, admin_id = build_restricted_image(
+        db_session, tmp_path, with_detection=False
+    )
+    image = db_session.get(models.ShelfImage, image_id)
+    image.purge_not_before = None
+    image.retention_policy_version = "stale-policy-v0"
+    db_session.commit()
+
+    request = SimpleNamespace(state=SimpleNamespace(user_id=admin_id))
+    restored = main_module.restore_shelf_image(
+        image_id,
+        ShelfImageRetentionRequest(reason="Restore image after metadata repair"),
+        request,
+        db_session,
+    )
+
+    assert restored.retention_status == "ACTIVE"
+    assert restored.purge_not_before is None
+    assert restored.retention_policy_version is None
+    events = db_session.query(models.ShelfImageRetentionEvent).filter_by(
+        shelf_image_id=image_id
+    ).order_by(models.ShelfImageRetentionEvent.id).all()
+    assert [event.event_type for event in events] == ["PURGE_CANCELLED", "RESTORED"]
+    assert "date=missing" in events[0].reason
+    assert "policy=stale-policy-v0" in events[0].reason
+
+
 def test_purge_preview_blocks_images_with_derived_evidence(db_session, tmp_path, monkeypatch):
     image_id, admin_id = build_restricted_image(
         db_session, tmp_path, with_detection=True
