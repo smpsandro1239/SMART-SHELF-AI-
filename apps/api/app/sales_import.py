@@ -23,7 +23,7 @@ def parse_daily_sales_csv(payload: bytes) -> list[ParsedSalesRow]:
     """Parse a bounded UTF-8 CSV; reject malformed rows instead of silently skipping them."""
     if not payload:
         raise ValueError("CSV file is empty")
-    if b"\\x00" in payload:
+    if b"\x00" in payload:
         raise ValueError("CSV must not contain NUL bytes")
     try:
         decoded = payload.decode("utf-8-sig")
