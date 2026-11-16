@@ -15,6 +15,7 @@ from typing import Any
 
 from app.dataset_provenance import validate_provenance_manifest
 from app.dataset_operational_eligibility import validate_internal_image_eligibility
+from app.dataset_paths import is_safe_dataset_relative_path
 
 REQUIRED_SPLITS = {"train", "val", "test"}
 REQUIRED_COLUMNS = {"split", "file_name", "size_bytes", "sha256"}
@@ -45,7 +46,7 @@ def load_manifest(path: Path) -> list[dict[str, Any]]:
                 raise ValueError(f"invalid size_bytes at CSV line {line_number}") from exc
             if split not in REQUIRED_SPLITS:
                 raise ValueError(f"unsupported split at CSV line {line_number}: {split}")
-            if not file_name or Path(file_name).is_absolute() or ".." in Path(file_name).parts:
+            if not is_safe_dataset_relative_path(file_name):
                 raise ValueError(f"unsafe file_name at CSV line {line_number}: {file_name}")
             if size <= 0:
                 raise ValueError(f"size_bytes must be positive at CSV line {line_number}")
