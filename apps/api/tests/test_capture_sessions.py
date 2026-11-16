@@ -146,6 +146,45 @@ def test_upload_links_image_to_open_capture_session(tmp_path, monkeypatch):
         assert rejected.json()["detail"] == "Capture session is closed"
 
 
+def test_upload_and_close_both_request_capture_session_row_lock(tmp_path, monkeypatch):
+    from sqlalchemy.orm import Query
+
+    shelf_id, _ = seed_shelves()
+    monkeypatch.setattr(main_module.settings, "image_storage_path", str(tmp_path))
+    locked_models = []
+    original_with_for_update = Query.with_for_update
+
+    def recording_with_for_update(query, *args, **kwargs):
+        locked_models.extend(
+            description.get("entity")
+            for description in query.column_descriptions
+        )
+        return original_with_for_update(query, *args, **kwargs)
+
+    monkeypatch.setattr(Query, "with_for_update", recording_with_for_update)
+
+    with TestClient(app) as client:
+        created = client.post("/api/v1/capture-sessions", json={
+            "shelf_id": shelf_id,
+            "source_type": "mobile",
+            "capture_mode": "single",
+        })
+        assert created.status_code == 201
+        session_id = created.json()["id"]
+
+        uploaded = client.post(
+            "/api/v1/shelf-images",
+            data={"shelf_id": str(shelf_id), "capture_session_id": str(session_id)},
+            files={"image": ("frame.jpg", _valid_image_bytes(), "image/jpeg")},
+        )
+        assert uploaded.status_code == 201
+
+        closed = client.post(f"/api/v1/capture-sessions/{session_id}/close")
+        assert closed.status_code == 200
+
+    assert locked_models.count(models.CaptureSession) == 2
+
+
 def test_reviewed_training_candidates_group_by_capture_session():
     shelf_id, _ = seed_shelves()
     db = Session()
