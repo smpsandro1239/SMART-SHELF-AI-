@@ -301,3 +301,15 @@ def test_accepted_signed_snapshot_updates_integration_last_seen(db_session, monk
     assert snapshot.store_id == store_id
     assert integration.last_seen_at is not None
     assert integration.last_seen_at.replace(tzinfo=generated_at.tzinfo) == generated_at
+
+
+
+def test_integration_update_rejects_explicit_null_values():
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError):
+        StoreExternalIntegrationUpdate(status=None)
+    with pytest.raises(ValidationError):
+        StoreExternalIntegrationUpdate(required_for_retention=None)
+    with pytest.raises(ValidationError):
+        StoreExternalIntegrationUpdate(capabilities=None)
