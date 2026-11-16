@@ -196,12 +196,19 @@ def verify_inventory_snapshot_record(
         if actual != expected:
             return False
 
+        # SQLite does not preserve timezone metadata for DateTime(timezone=True).
+        # Values read back from this table are therefore interpreted as UTC,
+        # matching the UTC-normalized ingestion contract.
+        generated_at = snapshot.generated_at
+        if generated_at.tzinfo is None or generated_at.utcoffset() is None:
+            generated_at = generated_at.replace(tzinfo=timezone.utc)
+
         digest = verify_inventory_signature(
             image_id=snapshot.shelf_image_id,
             store_id=snapshot.store_id,
             external_system=snapshot.external_system,
             snapshot_id=snapshot.snapshot_id,
-            generated_at=snapshot.generated_at,
+            generated_at=generated_at,
             entries=manifest,
             signature=snapshot.source_signature,
             configured_keys_json=configured_keys_json,
