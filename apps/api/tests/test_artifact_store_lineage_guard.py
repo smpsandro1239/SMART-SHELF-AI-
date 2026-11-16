@@ -1,6 +1,7 @@
 """Database-level tenant lineage guards for external artifact records."""
 
 import importlib.util
+import sqlite3
 from pathlib import Path
 
 import pytest
