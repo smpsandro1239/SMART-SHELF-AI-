@@ -374,7 +374,10 @@ def main() -> None:
 
         exemplar = (
             db.query(models.ProductEmbeddingExemplar)
-            .filter(models.ProductEmbeddingExemplar.image_sha256 == "a" * 64)
+            .filter(
+                models.ProductEmbeddingExemplar.image_sha256 == "a" * 64,
+                models.ProductEmbeddingExemplar.shelf_image_id == source_image_id,
+            )
             .one()
         )
         assert exemplar.shelf_image_id == source_image_id
