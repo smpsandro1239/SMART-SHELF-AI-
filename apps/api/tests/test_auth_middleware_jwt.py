@@ -724,10 +724,26 @@ def test_supervisor_cannot_access_foreign_retention_or_use_admin_restore(auth_cl
         json={"reason": "Tentativa de restauro cross-store"},
         headers=headers,
     )
+    purge_schedule = client.post(
+        f"/api/v1/shelf-images/{image_id}/retention/purge-schedule",
+        json={
+            "purge_not_before": (datetime.now(timezone.utc) + timedelta(days=10)).isoformat(),
+            "policy_version": "auth-test-policy",
+            "reason": "Tentativa de agendamento cross-store",
+        },
+        headers=headers,
+    )
+    purge_cancel = client.post(
+        f"/api/v1/shelf-images/{image_id}/retention/purge-schedule/cancel",
+        json={"reason": "Tentativa de cancelamento cross-store"},
+        headers=headers,
+    )
 
     assert history.status_code == 403
     assert restrict.status_code == 403
     assert restore.status_code == 403
+    assert purge_schedule.status_code == 403
+    assert purge_cancel.status_code == 403
 
     admin_history = client.get(
         f"/api/v1/shelf-images/{image_id}/retention/events",
