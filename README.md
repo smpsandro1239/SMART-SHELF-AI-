@@ -943,3 +943,5 @@ A pré-validação de purge mostra quantas referências estão propostas, aprova
 
 
 **Integridade adicional do histórico de disposição:** cada referência externa tem agora uma sequência monotónica própria (`sequence_number`), atribuída sob bloqueio da referência e validada por trigger e restrição única. A ordem do histórico deixa de depender dos IDs globais ou de timestamps, que podem não refletir a ordem de serialização em transações concorrentes. Os triggers rejeitam números em falta/repetidos; a identidade do administrador é preservada com FK `RESTRICT`, impedindo que a eliminação de uma conta reescreva o histórico append-only. O smoke test PostgreSQL inclui sequência não contígua e tentativa de eliminação do ator.
+
+O smoke test PostgreSQL também disputa duas propostas simultâneas para a mesma referência, esperando exatamente um evento aceite e um rejeitado, com uma única sequência `1` persistida. Isto verifica a serialização pelo bloqueio da linha do artefacto, para além das validações funcionais isoladas.
