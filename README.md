@@ -1284,3 +1284,8 @@ O endpoint de declaração de referências externas exige agora que o fornecedor
 ### Integridade da loja na base de dados para artefactos — 2026-11-16
 
 A migration `0048_artifact_store_lineage_guard` acrescenta triggers em PostgreSQL e SQLite para garantir que o `store_id` de cada referência de artefacto e snapshot de inventário corresponde à loja obtida pela relação imagem → prateleira → zona. A migration verifica primeiro os registos existentes e aborta se encontrar inconsistências, em vez de as perpetuar. Foram acrescentados testes SQLite para INSERT, UPDATE, rollback e detecção de dados antigos inconsistentes. A execução da migration e os testes ainda não foram confirmados nesta sessão.
+
+
+### Protecção da hierarquia de origem dos artefactos — 2026-11-16
+
+A migration `0049_artifact_upstream_store_lineage_guard` fecha a alteração indirecta de tenant: zonas, prateleiras e imagens não podem ser movidas para outra loja quando existem referências ou snapshots de inventário históricos que ficariam associados a uma loja diferente. A regra é aplicada por triggers PostgreSQL/SQLite, preservando movimentos sem histórico de artefactos e alterações sem mudança efectiva de loja. Foram adicionados testes para movimentos bloqueados, operações permitidas e downgrade. Execução local/CI ainda por confirmar.
