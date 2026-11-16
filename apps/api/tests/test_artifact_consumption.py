@@ -133,6 +133,11 @@ def fixture_session(*, retention_status="ACTIVE", legal_hold=False, event=None):
         entries=snapshot.inventory_manifest, inventory_complete=True,
     )).hexdigest()
     integration = SimpleNamespace(status="ACTIVE", external_system="object-store-a", store_id=4)
+    if event is not None:
+        event.artifact_reference_id = getattr(event, "artifact_reference_id", 31)
+        event.shelf_image_id = getattr(event, "shelf_image_id", 7)
+        event.store_id = getattr(event, "store_id", 4)
+        event.sequence_number = getattr(event, "sequence_number", 1)
     records = {
         models.ShelfImage: image,
         models.ShelfImageArtifactReference: artifact,
