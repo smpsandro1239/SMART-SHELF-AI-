@@ -190,3 +190,32 @@ def test_inventory_key_configuration_must_be_a_json_object(configuration):
             entries=ENTRIES, signature="a" * 64,
             configured_keys_json=configuration, inventory_complete=True,
         )
+
+
+@pytest.mark.parametrize(
+    "identity_override",
+    [
+        {"image_id": 11},
+        {"store_id": 3},
+        {"external_system": "another-vault"},
+        {"snapshot_id": "another-snapshot"},
+    ],
+)
+def test_inventory_signature_is_bound_to_image_store_and_source_identity(identity_override):
+    identity = {
+        "image_id": 10,
+        "store_id": 2,
+        "external_system": "backup-vault",
+        "snapshot_id": "snapshot-1",
+        "generated_at": GENERATED_AT,
+        "entries": ENTRIES,
+        "inventory_complete": True,
+    }
+    signature = inventory_signature(**identity, secret=SECRET)
+    altered_identity = {**identity, **identity_override}
+    with pytest.raises(ValueError, match="signature is invalid"):
+        verify_inventory_signature(
+            **altered_identity,
+            signature=signature,
+            configured_keys_json=json.dumps({"backup-vault": SECRET, "another-vault": SECRET}),
+        )
