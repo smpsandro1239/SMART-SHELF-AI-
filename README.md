@@ -1228,3 +1228,12 @@ Foram acrescentados testes para resolução de pai declarada, pai ausente e cicl
 
 
 **Robustez da validação de linhagem (2026-11-16):** a deteção de ciclos no grafo de imagens derivadas deixou de usar recursão Python. A travessia é iterativa, evitando que uma cadeia legítima com mais elementos do que o limite de recursão do interpretador provoque RecursionError durante a criação de releases. Foi acrescentado um teste com 1 200 imagens encadeadas. O teste foi adicionado, mas não executado nesta sessão. Esta alteração melhora a robustez do gate de proveniência; não substitui a integração de relações pai/filho na tabela operacional de referências externas, que continua a exigir uma migração e um fluxo de registo próprio.
+
+
+### Herança de restrições na linhagem de artefactos externos — 2026-11-16
+
+O consumo de um artefacto derivado passou a avaliar cada referência da cadeia pai/filho, e não apenas o objecto pedido. Para cada antecessor, o serviço verifica a integração externa correspondente, o snapshot de inventário assinado e completo, a presença exacta da referência e o evento de disposição mais recente. Qualquer integração ausente/revogada, inventário ausente, inválido ou desactualizado, disposição pendente/aprovada/atestada ou estado desconhecido bloqueia a leitura do artefacto descendente antes de chamar o fornecedor. Os bloqueios herdados são devolvidos com o prefixo `ancestor_` para distinguir a origem da restrição.
+
+A ordem de bloqueio foi preservada: imagem → integrações externas ordenadas pelo identificador do sistema → referências da imagem ordenadas por ID → snapshots/eventos. A descoberta inicial das referências serve apenas para determinar o conjunto de integrações a bloquear; a decisão usa as referências novamente carregadas sob lock. As verificações HMAC e de cobertura são repetidas por sistema externo, pelo que um snapshot do sistema do descendente não pode validar o inventário do antecessor noutro fornecedor.
+
+**Limitações e validação:** esta alteração integra a herança no consumidor síncrono de bytes; não cria automaticamente relações pai/filho nem altera o processo de registo dessas relações. A herança de retenção/legal hold da imagem é comum a toda a cadeia porque as referências estão limitadas à mesma imagem e loja. Não foram executados pytest, migrações ou smoke tests nesta sessão; a implementação foi revista estaticamente e requer validação CI/PostgreSQL antes de ser considerada operacionalmente certificada. A purga física continua desactivada.
