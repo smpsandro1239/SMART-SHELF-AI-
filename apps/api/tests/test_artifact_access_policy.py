@@ -145,8 +145,17 @@ def test_unverified_inventory_integrity_blocks_access():
     assert "inventory_integrity_unverified" in decision.reasons
 
 
-@pytest.mark.parametrize("sha256", [None, "", "not-a-hash", "a" * 63, "g" * 64])
-def test_artifact_without_valid_sha256_is_never_approved(sha256):
+@pytest.mark.parametrize(
+    ("sha256", "expected_reason"),
+    [
+        (None, "artifact_sha256_not_declared"),
+        ("", "artifact_sha256_not_declared"),
+        ("not-a-hash", "artifact_sha256_missing_or_invalid"),
+        ("a" * 63, "artifact_sha256_missing_or_invalid"),
+        ("g" * 64, "artifact_sha256_missing_or_invalid"),
+    ],
+)
+def test_artifact_without_valid_sha256_is_never_approved(sha256, expected_reason):
     kwargs = approved_kwargs()
     kwargs["expected_sha256"] = sha256
     kwargs["inventory_entry"]["sha256"] = sha256
@@ -154,4 +163,4 @@ def test_artifact_without_valid_sha256_is_never_approved(sha256):
     decision = evaluate_artifact_access(**kwargs)
 
     assert decision.allowed is False
-    assert "artifact_sha256_missing_or_invalid" in decision.reasons
+    assert expected_reason in decision.reasons
