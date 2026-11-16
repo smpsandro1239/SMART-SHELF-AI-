@@ -83,3 +83,19 @@ def test_store_scope_allows_employee_access_to_own_store():
 
     employee = SimpleNamespace(role="EMPLOYEE", store_id=12)
     _enforce_store_scope(employee, 12)
+
+
+@pytest.mark.parametrize(
+    "claims",
+    [
+        {"sub": "17", "iat": 1},
+        {"sub": "17", "exp": 2_000_000_000},
+        {"iat": 1, "exp": 2_000_000_000},
+    ],
+)
+def test_access_token_requires_subject_issue_time_and_expiration(claims):
+    from app.config import settings
+
+    token = jwt.encode(claims, settings.jwt_secret_key, algorithm="HS256")
+    with pytest.raises(jwt.MissingRequiredClaimError):
+        decode_access_token(token)
