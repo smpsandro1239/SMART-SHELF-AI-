@@ -406,17 +406,34 @@ def main() -> None:
         assert db.query(models.ShelfImageOCRRun).filter(
             models.ShelfImageOCRRun.shelf_image_id == target_image_id
         ).count() == 1
-        assert db.query(models.ShelfImageOCREvidence).filter(
-            models.ShelfImageOCREvidence.text == "SKU-123"
+        assert db.query(models.ShelfImageOCREvidence).join(
+            models.ShelfImageOCRRun,
+            models.ShelfImageOCREvidence.run_id == models.ShelfImageOCRRun.id,
+        ).filter(
+            models.ShelfImageOCRRun.shelf_image_id == target_image_id,
+            models.ShelfImageOCREvidence.text == "SKU-123",
         ).count() == 1
-        assert db.query(models.DetectionSkuReview).filter(
-            models.DetectionSkuReview.notes == "PostgreSQL lineage smoke"
+        assert db.query(models.DetectionSkuReview).join(
+            models.ShelfImageDetection,
+            models.DetectionSkuReview.detection_id == models.ShelfImageDetection.id,
+        ).filter(
+            models.ShelfImageDetection.shelf_image_id == target_image_id,
+            models.DetectionSkuReview.notes == "PostgreSQL lineage smoke",
         ).count() == 1
         assert db.query(models.ShelfImageOCRMatch).filter(
-            models.ShelfImageOCRMatch.observed_text == "SKU-123"
+            models.ShelfImageOCRMatch.run_id.in_(
+                db.query(models.ShelfImageOCRRun.id).filter(
+                    models.ShelfImageOCRRun.shelf_image_id == target_image_id
+                )
+            ),
+            models.ShelfImageOCRMatch.observed_text == "SKU-123",
         ).count() == 1
-        assert db.query(models.ShelfImageFusedEvidence).filter(
-            models.ShelfImageFusedEvidence.reason == "PostgreSQL lineage smoke"
+        assert db.query(models.ShelfImageFusedEvidence).join(
+            models.ShelfImageDetection,
+            models.ShelfImageFusedEvidence.detection_id == models.ShelfImageDetection.id,
+        ).filter(
+            models.ShelfImageDetection.shelf_image_id == target_image_id,
+            models.ShelfImageFusedEvidence.reason == "PostgreSQL lineage smoke",
         ).count() == 1
 
     # Direct deletion of a detection must not cascade away its human review,
@@ -514,7 +531,41 @@ def main() -> None:
     )
     for model, field, original_value, tampered_value, label in immutable_records:
         with SessionLocal() as db:
-            record = db.query(model).filter(
+            record_query = db.query(model)
+            if model is models.DetectionSkuReview:
+                record_query = record_query.join(
+                    models.ShelfImageDetection,
+                    model.detection_id == models.ShelfImageDetection.id,
+                ).filter(
+                    models.ShelfImageDetection.shelf_image_id == target_image_id
+                )
+            elif model is models.ShelfImageOCRRun:
+                record_query = record_query.filter(
+                    model.shelf_image_id == target_image_id
+                )
+            elif model is models.ShelfImageOCREvidence:
+                record_query = record_query.join(
+                    models.ShelfImageOCRRun,
+                    model.run_id == models.ShelfImageOCRRun.id,
+                ).filter(
+                    models.ShelfImageOCRRun.shelf_image_id == target_image_id
+                )
+            elif model is models.ShelfImageOCRMatch:
+                record_query = record_query.filter(
+                    model.run_id.in_(
+                        db.query(models.ShelfImageOCRRun.id).filter(
+                            models.ShelfImageOCRRun.shelf_image_id == target_image_id
+                        )
+                    )
+                )
+            elif model is models.ShelfImageFusedEvidence:
+                record_query = record_query.join(
+                    models.ShelfImageDetection,
+                    model.detection_id == models.ShelfImageDetection.id,
+                ).filter(
+                    models.ShelfImageDetection.shelf_image_id == target_image_id
+                )
+            record = record_query.filter(
                 getattr(model, field) == original_value
             ).one()
             record_id = record.id
