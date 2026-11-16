@@ -78,7 +78,7 @@ def test_review_rejects_path_traversal_and_missing_files(tmp_path):
     invalid = document()
     invalid["images"][0]["file_name"] = "../../outside.jpg"
 
-    with pytest.raises(ValueError, match="escapes image root"):
+    with pytest.raises(ValueError, match="unsafe relative file_name"):
         build_review_html(invalid, root, report_dir=tmp_path / "review")
 
     windows_path = document()
