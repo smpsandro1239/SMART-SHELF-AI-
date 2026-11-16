@@ -67,6 +67,13 @@ def _valid_secret(secret: Any) -> bool:
     return isinstance(secret, str) and len(secret.encode("utf-8")) >= 32
 
 
+def legacy_inventory_ingestion_is_allowed(*, app_env: str, configured_override: bool | None) -> bool:
+    """Resolve the legacy-ingestion cutover policy without affecting historical verification."""
+    if configured_override is not None:
+        return configured_override
+    return app_env.strip().lower() != "production"
+
+
 def resolve_inventory_secret(
     *,
     configured_keys_json: str,
