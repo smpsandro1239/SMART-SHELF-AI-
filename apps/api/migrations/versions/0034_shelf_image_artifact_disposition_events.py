@@ -235,100 +235,6 @@ def upgrade() -> None:
             END
         """)
         op.execute("""
-            CREATE TRIGGER trg_shelf_image_artifact_disposition_events_no_update
-            BEFORE UPDATE ON shelf_image_artifact_disposition_events
-            BEGIN SELECT RAISE(ABORT, 'shelf_image_artifact_disposition_events is append-only'); END
-        """)
-        op.execute("""
-            CREATE TRIGGER trg_shelf_image_artifact_disposition_events_no_delete
-            BEFORE DELETE ON shelf_image_artifact_disposition_events
-            BEGIN SELECT RAISE(ABORT, 'shelf_image_artifact_disposition_events is append-only'); END
-        """)
-
-
-def downgrade() -> None:
-    bind = op.get_bind()
-    if bind.dialect.name == "postgresql":
-        op.execute("DROP TRIGGER IF EXISTS trg_shelf_image_artifact_disposition_event_validate ON shelf_image_artifact_disposition_events")
-        op.execute("DROP FUNCTION IF EXISTS validate_shelf_image_artifact_disposition_event()")
-        op.execute("DROP TRIGGER IF EXISTS trg_shelf_image_artifact_reference_store ON shelf_image_artifact_references")
-        op.execute("DROP FUNCTION IF EXISTS validate_shelf_image_artifact_reference_store()")
-        op.execute("DROP TRIGGER IF EXISTS trg_shelf_image_artifact_disposition_events_append_only ON shelf_image_artifact_disposition_events")
-        op.execute("DROP FUNCTION IF EXISTS prevent_shelf_image_artifact_disposition_event_mutation()")
-    elif bind.dialect.name == "sqlite":
-        op.execute("DROP TRIGGER IF EXISTS trg_shelf_image_artifact_disposition_event_validate")
-        op.execute("DROP TRIGGER IF EXISTS trg_shelf_image_artifact_reference_store")
-        op.execute("DROP TRIGGER IF EXISTS trg_shelf_image_artifact_disposition_events_no_update")
-        op.execute("DROP TRIGGER IF EXISTS trg_shelf_image_artifact_disposition_events_no_delete")
-
-    op.drop_index(
-        "ix_shelf_image_artifact_disposition_store_image",
-        table_name="shelf_image_artifact_disposition_events",
-    )
-    op.drop_index(
-        "ix_shelf_image_artifact_disposition_artifact_created",
-        table_name="shelf_image_artifact_disposition_events",
-    )
-    op.drop_index(
-        "ix_shelf_image_artifact_disposition_events_store_id",
-        table_name="shelf_image_artifact_disposition_events",
-    )
-    op.drop_index(
-        "ix_shelf_image_artifact_disposition_events_shelf_image_id",
-        table_name="shelf_image_artifact_disposition_events",
-    )
-    op.drop_table("shelf_image_artifact_disposition_events")
-    op.drop_index(
-        "uq_shelf_image_artifact_reference_lineage",
-        table_name="shelf_image_artifact_references",
-    )
- THEN
-                        RAISE EXCEPTION 'disposition attestation requires evidence reference and SHA-256'
-                            USING ERRCODE = '23514';
-                    END IF;
-                ELSE
-                    RAISE EXCEPTION 'unsupported artifact disposition event type'
-                        USING ERRCODE = '23514';
-                END IF;
-                RETURN NEW;
-            END;
-            $function$
-        """)
-        op.execute("""
-            CREATE TRIGGER trg_shelf_image_artifact_disposition_event_validate
-            BEFORE INSERT ON shelf_image_artifact_disposition_events
-            FOR EACH ROW EXECUTE FUNCTION validate_shelf_image_artifact_disposition_event()
-        """)
-        op.execute("""
-            CREATE FUNCTION prevent_shelf_image_artifact_disposition_event_mutation() LANGUAGE plpgsql AS $function$
-            BEGIN
-                RAISE EXCEPTION 'shelf_image_artifact_disposition_events is append-only'
-                    USING ERRCODE = '23514';
-            END;
-            $function$
-        """)
-        op.execute("""
-            CREATE TRIGGER trg_shelf_image_artifact_disposition_events_append_only
-            BEFORE UPDATE OR DELETE ON shelf_image_artifact_disposition_events
-            FOR EACH ROW EXECUTE FUNCTION prevent_shelf_image_artifact_disposition_event_mutation()
-        """)
-    elif bind.dialect.name == "sqlite":
-        op.execute("""
-            CREATE TRIGGER trg_shelf_image_artifact_reference_store
-            BEFORE INSERT ON shelf_image_artifact_references
-            WHEN NOT EXISTS (
-                SELECT 1
-                FROM shelf_images si
-                JOIN shelves sh ON sh.id = si.shelf_id
-                JOIN zones z ON z.id = sh.zone_id
-                WHERE si.id = NEW.shelf_image_id
-                  AND z.store_id = NEW.store_id
-            )
-            BEGIN
-                SELECT RAISE(ABORT, 'artifact reference store does not match shelf image lineage');
-            END
-        """)
-        op.execute("""
             CREATE TRIGGER trg_shelf_image_artifact_disposition_event_validate
             BEFORE INSERT ON shelf_image_artifact_disposition_events
             BEGIN
@@ -405,109 +311,18 @@ def downgrade() -> None:
         """)
 
 
+
 def downgrade() -> None:
     bind = op.get_bind()
     if bind.dialect.name == "postgresql":
-        op.execute("DROP TRIGGER IF EXISTS trg_shelf_image_artifact_reference_store ON shelf_image_artifact_references")
-        op.execute("DROP FUNCTION IF EXISTS validate_shelf_image_artifact_reference_store()")
         op.execute("DROP TRIGGER IF EXISTS trg_shelf_image_artifact_disposition_event_validate ON shelf_image_artifact_disposition_events")
         op.execute("DROP FUNCTION IF EXISTS validate_shelf_image_artifact_disposition_event()")
-        op.execute("DROP TRIGGER IF EXISTS trg_shelf_image_artifact_disposition_events_append_only ON shelf_image_artifact_disposition_events")
-        op.execute("DROP FUNCTION IF EXISTS prevent_shelf_image_artifact_disposition_event_mutation()")
-    elif bind.dialect.name == "sqlite":
-        op.execute("DROP TRIGGER IF EXISTS trg_shelf_image_artifact_reference_store")
-        op.execute("DROP TRIGGER IF EXISTS trg_shelf_image_artifact_disposition_event_validate")
-        op.execute("DROP TRIGGER IF EXISTS trg_shelf_image_artifact_disposition_events_no_update")
-        op.execute("DROP TRIGGER IF EXISTS trg_shelf_image_artifact_disposition_events_no_delete")
-
-    op.drop_index(
-        "ix_shelf_image_artifact_disposition_store_image",
-        table_name="shelf_image_artifact_disposition_events",
-    )
-    op.drop_index(
-        "ix_shelf_image_artifact_disposition_artifact_created",
-        table_name="shelf_image_artifact_disposition_events",
-    )
-    op.drop_index(
-        "ix_shelf_image_artifact_disposition_events_store_id",
-        table_name="shelf_image_artifact_disposition_events",
-    )
-    op.drop_index(
-        "ix_shelf_image_artifact_disposition_events_shelf_image_id",
-        table_name="shelf_image_artifact_disposition_events",
-    )
-    op.drop_table("shelf_image_artifact_disposition_events")
-    op.drop_index(
-        "uq_shelf_image_artifact_reference_lineage",
-        table_name="shelf_image_artifact_references",
-    )
- THEN
-                        RAISE EXCEPTION 'disposition attestation requires evidence reference and SHA-256'
-                            USING ERRCODE = '23514';
-                    END IF;
-                ELSE
-                    RAISE EXCEPTION 'unsupported artifact disposition event type'
-                        USING ERRCODE = '23514';
-                END IF;
-                RETURN NEW;
-            END;
-            $function$
-        """)
-        op.execute("""
-            CREATE TRIGGER trg_shelf_image_artifact_disposition_event_validate
-            BEFORE INSERT ON shelf_image_artifact_disposition_events
-            FOR EACH ROW EXECUTE FUNCTION validate_shelf_image_artifact_disposition_event()
-        """)
-        op.execute("""
-            CREATE FUNCTION prevent_shelf_image_artifact_disposition_event_mutation()
-            RETURNS trigger LANGUAGE plpgsql AS $function$
-            BEGIN
-                RAISE EXCEPTION 'shelf_image_artifact_disposition_events is append-only'
-                    USING ERRCODE = '23514';
-            END;
-            $function$
-        """)
-        op.execute("""
-            CREATE TRIGGER trg_shelf_image_artifact_disposition_events_append_only
-            BEFORE UPDATE OR DELETE ON shelf_image_artifact_disposition_events
-            FOR EACH ROW EXECUTE FUNCTION prevent_shelf_image_artifact_disposition_event_mutation()
-        """)
-    elif bind.dialect.name == "sqlite":
-        op.execute("""
-            CREATE TRIGGER trg_shelf_image_artifact_reference_store
-            BEFORE INSERT ON shelf_image_artifact_references
-            WHEN NOT EXISTS (
-                SELECT 1
-                FROM shelf_images si
-                JOIN shelves sh ON sh.id = si.shelf_id
-                JOIN zones z ON z.id = sh.zone_id
-                WHERE si.id = NEW.shelf_image_id
-                  AND z.store_id = NEW.store_id
-            )
-            BEGIN
-                SELECT RAISE(ABORT, 'artifact reference store does not match shelf image lineage');
-            END
-        """)
-        op.execute("""
-            CREATE TRIGGER trg_shelf_image_artifact_disposition_events_no_update
-            BEFORE UPDATE ON shelf_image_artifact_disposition_events
-            BEGIN SELECT RAISE(ABORT, 'shelf_image_artifact_disposition_events is append-only'); END
-        """)
-        op.execute("""
-            CREATE TRIGGER trg_shelf_image_artifact_disposition_events_no_delete
-            BEFORE DELETE ON shelf_image_artifact_disposition_events
-            BEGIN SELECT RAISE(ABORT, 'shelf_image_artifact_disposition_events is append-only'); END
-        """)
-
-
-def downgrade() -> None:
-    bind = op.get_bind()
-    if bind.dialect.name == "postgresql":
         op.execute("DROP TRIGGER IF EXISTS trg_shelf_image_artifact_reference_store ON shelf_image_artifact_references")
         op.execute("DROP FUNCTION IF EXISTS validate_shelf_image_artifact_reference_store()")
         op.execute("DROP TRIGGER IF EXISTS trg_shelf_image_artifact_disposition_events_append_only ON shelf_image_artifact_disposition_events")
         op.execute("DROP FUNCTION IF EXISTS prevent_shelf_image_artifact_disposition_event_mutation()")
     elif bind.dialect.name == "sqlite":
+        op.execute("DROP TRIGGER IF EXISTS trg_shelf_image_artifact_disposition_event_validate")
         op.execute("DROP TRIGGER IF EXISTS trg_shelf_image_artifact_reference_store")
         op.execute("DROP TRIGGER IF EXISTS trg_shelf_image_artifact_disposition_events_no_update")
         op.execute("DROP TRIGGER IF EXISTS trg_shelf_image_artifact_disposition_events_no_delete")
