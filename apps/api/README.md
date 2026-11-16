@@ -1298,3 +1298,17 @@ Os eventos incluem `sequence_number`, uma sequência monotónica única por refe
 Configure `ARTIFACT_INVENTORY_HMAC_KEYS_JSON` no ambiente da API como um objeto JSON de pares `external_system: secret`. Cada segredo deve ter pelo menos 32 bytes UTF-8. Não colocar segredos no repositório, nos manifests, nos pedidos ou nos logs. O endpoint `POST /api/v1/shelf-images/{image_id}/artifact-inventory-snapshots` só aceita fontes configuradas e exige um manifesto HMAC-SHA-256 recente, com cobertura exata das referências da imagem/sistema. A idade máxima é controlada por `ARTIFACT_INVENTORY_MAX_AGE_MINUTES` (15 minutos por omissão).
 
 O manifesto tem de incluir `inventory_complete: true`, dentro do conteúdo assinado. Cada entrada inclui `artifact_type`, `external_reference`, `sha256` (ou null) e `state` (`PRESENT`/`ABSENT`). O estado ausente exige disposição previamente atestada por dois administradores. A pré-validação revalida assinatura, hash, frescura, cobertura e timestamp após a última decisão. Mesmo com verificação completa, a eliminação continua desativada até existir um executor de purge formalmente aprovado.
+
+
+## Integrações externas por loja
+
+Antes de aceitar um snapshot assinado, a API exige uma integração `ACTIVE` registada para a combinação exata de `store_id` e `external_system`. Os administradores podem gerir metadados e estado através de:
+
+- `POST /api/v1/stores/{store_id}/external-integrations`
+- `GET /api/v1/stores/{store_id}/external-integrations`
+- `PATCH /api/v1/stores/{store_id}/external-integrations/{integration_id}`
+- `GET /api/v1/stores/{store_id}/external-integrations/coverage`
+
+A propriedade `required_for_retention` define as fontes que entram no relatório de cobertura. O relatório distingue fontes revogadas, ainda não observadas e cujo último snapshot ultrapassou a janela de frescura. `last_seen_at` só avança com snapshots novos aceites, não com reenvios idempotentes. A revogação bloqueia ingestões futuras, preservando snapshots e declarações históricas.
+
+O registo não armazena chaves nem tokens. As chaves HMAC permanecem em `ARTIFACT_INVENTORY_HMAC_KEYS_JSON` e ainda são partilhadas por identificador de sistema entre lojas; o isolamento criptográfico por loja e rotação por `key_id` continuam pendentes. A cobertura também depende da configuração administrativa correta das integrações obrigatórias. Estes dados não autorizam purga.
