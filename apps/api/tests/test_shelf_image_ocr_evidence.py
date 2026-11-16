@@ -135,6 +135,63 @@ def test_ocr_run_and_region_evidence_are_persisted_with_provenance():
         assert runs.json()[0]["model_version"] == "PP-OCRv5-pt"
 
 
+def test_cached_ocr_matches_are_reranked_when_catalogue_product_is_deactivated():
+    image_id, detection_id = create_image_with_detection()
+    with TestingSession() as db:
+        product = models.Product(sku="OCR-CACHE-01", name="Leite Meio Gordo", is_active=True)
+        db.add(product)
+        db.flush()
+        product_id = product.id
+        run = models.ShelfImageOCRRun(
+            shelf_image_id=image_id,
+            provider="mock-ocr",
+            model_version="mock-v1",
+            status="COMPLETED",
+        )
+        db.add(run)
+        db.flush()
+        db.add(models.ShelfImageOCRMatch(
+            run_id=run.id,
+            detection_id=detection_id,
+            suggested_product_id=product_id,
+            observed_text="Leite Meio Gordo",
+            ocr_confidence=0.98,
+            status="SUGGESTED",
+            top_score=1.0,
+            margin=0.5,
+            candidates=[{"product_id": product_id, "score": 1.0, "reasons": ["name"]}],
+        ))
+        db.commit()
+        run_id = run.id
+
+    with TestClient(app) as client:
+        initial = client.get(f"/api/v1/shelf-images/{image_id}/ocr-matches")
+        assert initial.status_code == 200
+        assert initial.json()[0]["suggested_product_id"] == product_id
+
+        with TestingSession() as db:
+            product = db.get(models.Product, product_id)
+            product.is_active = False
+            db.commit()
+
+        listed = client.get(f"/api/v1/shelf-images/{image_id}/ocr-matches")
+        repeated = client.post(f"/api/v1/shelf-images/{image_id}/ocr-matches")
+        assert listed.status_code == 200
+        assert repeated.status_code == 200
+        for response in (listed, repeated):
+            result = response.json()[0]
+            assert result["suggested_product_id"] is None
+            assert result["status"] == "UNKNOWN"
+            assert result["top_score"] is None
+            assert result["candidates"] == []
+
+    with TestingSession() as db:
+        # Historical inference remains immutable; only the served view is refreshed.
+        stored = db.query(models.ShelfImageOCRMatch).filter_by(run_id=run_id).one()
+        assert stored.suggested_product_id == product_id
+        assert stored.candidates[0]["product_id"] == product_id
+
+
 def test_ocr_run_rejects_detection_from_another_image():
     image_id, _ = create_image_with_detection()
     other_image_id, other_detection_id = create_image_with_detection()
