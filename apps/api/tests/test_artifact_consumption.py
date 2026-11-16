@@ -184,3 +184,41 @@ def test_provider_failure_still_releases_transaction():
         call(session, fail)
 
     assert session.rolled_back and session.closed
+
+
+def test_revoked_external_integration_never_reaches_provider():
+    session, _ = fixture_session()
+    session.records[models.StoreExternalIntegration].status = "REVOKED"
+    fetched = []
+
+    with pytest.raises(ArtifactAccessDenied) as error:
+        call(session, lambda *args: fetched.append(args) or b"unexpected")
+
+    assert "external_integration_not_active" in error.value.decision.reasons
+    assert fetched == []
+    assert session.rolled_back and session.closed
+
+
+def test_missing_inventory_snapshot_never_reaches_provider():
+    session, _ = fixture_session()
+    session.records[models.ShelfImageArtifactInventorySnapshot] = None
+    fetched = []
+
+    with pytest.raises(ArtifactAccessDenied) as error:
+        call(session, lambda *args: fetched.append(args) or b"unexpected")
+
+    assert "inventory_missing" in error.value.decision.reasons
+    assert fetched == []
+
+
+def test_artifact_without_declared_digest_is_not_consumed():
+    session, _ = fixture_session()
+    session.records[models.ShelfImageArtifactReference].sha256 = None
+    session.records[models.ShelfImageArtifactInventorySnapshot].inventory_manifest[0]["sha256"] = None
+    fetched = []
+
+    with pytest.raises(ArtifactAccessDenied) as error:
+        call(session, lambda *args: fetched.append(args) or b"unexpected")
+
+    assert "artifact_sha256_not_declared" in error.value.decision.reasons
+    assert fetched == []
