@@ -1093,3 +1093,16 @@ Os runs Quality Gates `43827105541` e `43827114985`, associados aos commits ante
 O commit `0e4e6628d88686610b8c7f33b29216be4039e7f2` acrescenta a cobertura do contrato de matching. A execução CI desencadeada por este commit deve ser verificada assim que o GitHub disponibilizar um runner. Não marcar a cobertura como validada até existir execução real.
 
 **Próximas prioridades:** restaurar a execução dos runners; executar os smoke tests PostgreSQL de autorização e retenção já integrados; continuar a revisão sistemática do isolamento multi-loja; fechar a integração atómica de artefactos externos.
+
+
+### Isolamento multi-loja do registry de embeddings SKU — 2026-11-16
+
+A construção do registry usada pelo worker de visão computacional passou a receber o `store_id` da captura em processamento. Quando esse âmbito é fornecido, o carregamento só considera exemplares aprovados cuja imagem de origem pertence à mesma loja, através da relação `ProductEmbeddingExemplar -> ShelfImage -> Shelf -> Zone`. Exemplares sem imagem de origem não entram num registry com âmbito de loja; não existe uma atribuição de loja segura que permita incluí-los.
+
+O worker determina a loja da captura e bloqueia, por ordem crescente de ID, a imagem alvo e apenas as imagens de origem dos exemplares aprovados dessa mesma loja e versão de modelo. Assim, o conjunto bloqueado e o conjunto usado no matching respeitam o mesmo limite de tenant. O catálogo de produtos permanece global; apenas os vetores de referência são isolados por loja.
+
+Foi adicionada a regressão `apps/api/tests/test_product_embedding_store_scope.py`, que cria duas lojas, dois produtos e exemplares ortogonais e confirma que cada registry só reconhece o exemplar da sua própria loja. A API mantém o argumento `store_id` opcional no construtor do registry para compatibilidade com chamadas de avaliação e testes legados; o worker operacional fornece sempre o âmbito da captura.
+
+**Validação pendente:** os workflows desencadeados pelos commits `32eb035`, `21dbd56` e `cdf70bb` continuam a terminar antes da execução, com `runner_id=0`, sem runner atribuído e sem passos. Não declarar os testes aprovados até o GitHub Actions executar efetivamente os jobs.
+
+**Próximas verificações:** validar que todos os caminhos de produção para matching passam `store_id`; adicionar uma verificação PostgreSQL de concorrência/locks por tenant; rever os exemplares legados sem imagem de origem e decidir uma migração controlada para os associar a capturas auditáveis ou mantê-los fora do matching operacional.
