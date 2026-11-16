@@ -72,3 +72,10 @@ def test_parse_daily_sales_csv_rejects_nonportable_or_out_of_range_values(csv_te
 def test_parse_daily_sales_csv_rejects_nul_bytes():
     with pytest.raises(ValueError, match="NUL"):
         parse_daily_sales_csv((HEADER + "12,2026-11-12,1,REF-1\n").encode("utf-8") + b"\x00")
+
+
+@pytest.mark.parametrize("product_id", ["+12", "1_2", " 12x"])
+def test_parse_daily_sales_csv_requires_decimal_product_id(product_id):
+    payload = (HEADER + f"{product_id},2026-11-12,1,REF-1\n").encode("utf-8")
+    with pytest.raises(ValueError, match="product_id"):
+        parse_daily_sales_csv(payload)
