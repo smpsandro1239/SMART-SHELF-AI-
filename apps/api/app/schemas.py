@@ -481,6 +481,8 @@ class StoreExternalIntegrationUpdate(BaseModel):
     def require_an_update(self):
         if not self.model_fields_set:
             raise ValueError("At least one integration setting must be supplied")
+        if any(getattr(self, field) is None for field in self.model_fields_set):
+            raise ValueError("Integration settings cannot be explicitly null")
         return self
 
 
