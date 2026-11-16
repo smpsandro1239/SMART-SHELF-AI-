@@ -577,9 +577,10 @@ class ShelfImageArtifactReference(Base):
             "shelf_image_id", "artifact_type", "external_system", "external_reference",
             name="uq_shelf_image_artifact_reference",
         ),
-        UniqueConstraint(
+        Index(
+            "uq_shelf_image_artifact_reference_lineage",
             "id", "shelf_image_id", "store_id",
-            name="uq_shelf_image_artifact_reference_lineage",
+            unique=True,
         ),
         Index("ix_shelf_image_artifacts_store_image", "store_id", "shelf_image_id"),
     )
