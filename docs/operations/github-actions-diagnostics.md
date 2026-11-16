@@ -70,3 +70,16 @@ A implementação foi reforçada com a declaração assinada obrigatória `inven
 Os runs mais recentes `43780986800` (API CI) e `43780986819` (Quality Gates), para `c3debd8dc107bf70522e69f63917ba104afa6d04`, continuam sem executar passos (`steps: []`, `logs_url: null`). O estado dos dois checks Vercel para esse commit continua a apontar para `build-rate-limit`. Não há confirmação de execução dos testes, migrações, compilação ou build nesta revisão.
 
 O run seguinte, `43781100724`, associado ao commit `3729c529f3f2fe77cc8a258f3f5204561ca61373`, também terminou em falha com ambos os jobs (`Web TypeScript and production build` e `API tests and Python compilation`) sem passos (`steps: []`). Confirma-se que não foi executado qualquer comando de teste/build neste run.
+
+
+## Runner provisioning isolated from workflow code (2026-11-16, 00:39 UTC)
+
+A nova notificação do run `43781135963` foi investigada ao nível dos jobs. Os dois jobs iniciaram e terminaram em aproximadamente 1–2 segundos, mas a API do GitHub devolve `runner_id: 0`, `runner_name: ""`, `runner_group_name: ""`, `steps: []` e `logs_url: null`. Isto significa que nenhum runner foi atribuído e nenhum step foi iniciado; não é evidência de falha dos testes Python ou da compilação TypeScript.
+
+Foi introduzido um workflow mínimo de diagnóstico independente de checkout, dependências e código da aplicação. O run `43781531179`, com `runs-on: ubuntu-latest`, falhou no mesmo estado: runner ID zero, sem nome e sem steps. Para excluir um problema específico da etiqueta `ubuntu-latest`, o diagnóstico foi repetido com `runs-on: ubuntu-24.04`; o run `43781577353` voltou a falhar antes do primeiro step, também com runner ID zero. Os quality gates `43781531099` e `43781577446` tiveram o mesmo resultado.
+
+Os refs `actions/checkout@v7`, `actions/setup-python@v7` e `actions/setup-node@v7` foram confirmados como tags existentes no GitHub; portanto, não são refs inexistentes. A evidência disponível aponta para falha de provisionamento/atribuição de GitHub-hosted runners ou política/limite da conta/repositório. A integração disponível não expõe as definições administrativas de Actions, billing ou runner groups; não é possível determinar qual dessas causas se aplica sem a anotação interna do check-run ou acesso às definições administrativas.
+
+A sonda fica agora acionável manualmente (`workflow_dispatch`) e também corre quando o próprio ficheiro é alterado, evitando acrescentar uma execução de diagnóstico a cada push normal. Não foi alterada a etiqueta dos workflows de produção/CI com base numa causa que ainda não está provada.
+
+Na ligação Vercel atualmente disponível, a equipa `smpsandro1239's projects` é identificada como plano Hobby, mas a listagem de projetos acessível não devolve projetos ligados. O estado GitHub continua a mostrar o check `Vercel – smart-shelf-ai-r5gl` como `build-rate-limit`; sem acesso ao projeto e aos eventos de deployment não é possível inspecionar os logs de build nem corrigir a quota a partir desta integração.
