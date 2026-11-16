@@ -21,7 +21,21 @@ def main() -> None:
             role="ADMIN",
             is_active=True,
         )
-        db.add_all([store, admin])
+        reviewer = models.User(
+            email=f"pg-artifact-reviewer-{suffix}@example.test",
+            full_name="Independent artifact reviewer",
+            password_hash="smoke-test-only",
+            role="ADMIN",
+            is_active=True,
+        )
+        employee = models.User(
+            email=f"pg-artifact-employee-{suffix}@example.test",
+            full_name="Non-admin artifact operator",
+            password_hash="smoke-test-only",
+            role="EMPLOYEE",
+            is_active=True,
+        )
+        db.add_all([store, admin, reviewer, employee])
         db.flush()
 
         zone = models.Zone(store_id=store.id, name="Disposition smoke zone")
@@ -69,6 +83,74 @@ def main() -> None:
         image_id = image.id
         store_id = store.id
         admin_id = admin.id
+        reviewer_id = reviewer.id
+        employee_id = employee.id
+
+    with SessionLocal() as db:
+        invalid_self_approval = models.ShelfImageArtifactDispositionEvent(
+            artifact_reference_id=artifact_id,
+            shelf_image_id=image_id,
+            store_id=store_id,
+            event_type="APPROVED",
+            actor_user_id=admin_id,
+            reason="Direct SQL self-approval must be rejected",
+        )
+        db.add(invalid_self_approval)
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+        else:
+            raise AssertionError("PostgreSQL accepted self-approval of an artifact disposition")
+
+    with SessionLocal() as db:
+        invalid_non_admin = models.ShelfImageArtifactDispositionEvent(
+            artifact_reference_id=artifact_id,
+            shelf_image_id=image_id,
+            store_id=store_id,
+            event_type="APPROVED",
+            actor_user_id=employee_id,
+            reason="Non-admin approval must be rejected",
+        )
+        db.add(invalid_non_admin)
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+        else:
+            raise AssertionError("PostgreSQL accepted a disposition action by a non-admin")
+
+    with SessionLocal() as db:
+        independent_approval = models.ShelfImageArtifactDispositionEvent(
+            artifact_reference_id=artifact_id,
+            shelf_image_id=image_id,
+            store_id=store_id,
+            event_type="APPROVED",
+            actor_user_id=reviewer_id,
+            reason="Independent administrator approval",
+        )
+        db.add(independent_approval)
+        db.commit()
+        approval_id = independent_approval.id
+
+    with SessionLocal() as db:
+        invalid_attestation = models.ShelfImageArtifactDispositionEvent(
+            artifact_reference_id=artifact_id,
+            shelf_image_id=image_id,
+            store_id=store_id,
+            event_type="DISPOSAL_ATTESTED",
+            actor_user_id=reviewer_id,
+            evidence_reference="ticket/smoke",
+            evidence_sha256="not-a-sha256",
+            reason="Invalid evidence digest must be rejected",
+        )
+        db.add(invalid_attestation)
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+        else:
+            raise AssertionError("PostgreSQL accepted an invalid disposition evidence SHA-256")
 
     with SessionLocal() as db:
         other_store = models.Store(
@@ -137,7 +219,7 @@ def main() -> None:
 
     print(
         "PostgreSQL artifact disposition smoke passed: "
-        "artifact references and disposition events reject cross-store lineage; disposition events also reject UPDATE and DELETE."
+        "artifact references and events reject cross-store lineage; event triggers reject self-approval, non-admin actions and invalid evidence; event history rejects UPDATE and DELETE."
     )
 
 
