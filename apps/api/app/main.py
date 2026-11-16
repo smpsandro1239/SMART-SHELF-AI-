@@ -1325,6 +1325,7 @@ def create_shelf_image_artifact_inventory_snapshot(
             generated_at=payload.generated_at,
             entries=entries,
             signature=payload.signature,
+            inventory_complete=payload.inventory_complete,
             configured_keys_json=settings.artifact_inventory_hmac_keys_json,
         )
     except InventorySignatureConfigurationError as exc:
@@ -1424,6 +1425,7 @@ def create_shelf_image_artifact_inventory_snapshot(
         external_system=payload.external_system,
         snapshot_id=payload.snapshot_id,
         generated_at=generated_at,
+        inventory_complete=payload.inventory_complete,
         manifest_sha256=manifest_sha256,
         source_signature=payload.signature,
         inventory_manifest=canonical_entries,
@@ -1808,8 +1810,14 @@ def get_shelf_image_purge_eligibility(
                 -120 <= snapshot_age <= settings.artifact_inventory_max_age_minutes * 60
             )
             snapshot_covers_current_references = (
-                len(stored_manifest) == len(system_references)
+                snapshot.inventory_complete is True
+                and len(stored_manifest) == len(system_references)
                 and actual_inventory == expected_inventory
+            )
+            manifest_counts_match = (
+                snapshot.artifact_count == len(stored_manifest)
+                and snapshot.present_count == sum(entry.get("state") == "PRESENT" for entry in stored_manifest)
+                and snapshot.absent_count == sum(entry.get("state") == "ABSENT" for entry in stored_manifest)
             )
             signature_is_valid = False
             try:
@@ -1822,6 +1830,7 @@ def get_shelf_image_purge_eligibility(
                     entries=stored_manifest,
                     signature=snapshot.source_signature,
                     configured_keys_json=settings.artifact_inventory_hmac_keys_json,
+                    inventory_complete=snapshot.inventory_complete,
                 )
                 signature_is_valid = verified_digest == snapshot.manifest_sha256
             except (InventorySignatureConfigurationError, ValueError, TypeError, KeyError):
@@ -1855,6 +1864,7 @@ def get_shelf_image_purge_eligibility(
             if not (
                 snapshot_is_fresh
                 and snapshot_covers_current_references
+                and manifest_counts_match
                 and signature_is_valid
                 and events_are_current
             ):
