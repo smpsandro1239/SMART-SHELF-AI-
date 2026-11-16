@@ -12,6 +12,42 @@ def upgrade() -> None:
     bind = op.get_bind()
     if bind.dialect.name == "postgresql":
         op.execute("""
+            CREATE FUNCTION lock_artifact_lineage_before_insert()
+            RETURNS trigger LANGUAGE plpgsql AS $function$
+            BEGIN
+                PERFORM 1
+                FROM shelf_images si
+                JOIN shelves sh ON sh.id = si.shelf_id
+                JOIN zones z ON z.id = sh.zone_id
+                WHERE si.id = NEW.shelf_image_id
+                FOR UPDATE OF si, sh, z;
+
+                IF NOT EXISTS (
+                    SELECT 1
+                    FROM shelf_images si
+                    JOIN shelves sh ON sh.id = si.shelf_id
+                    JOIN zones z ON z.id = sh.zone_id
+                    WHERE si.id = NEW.shelf_image_id
+                      AND z.store_id = NEW.store_id
+                ) THEN
+                    RAISE EXCEPTION 'artifact record store does not match locked shelf image lineage'
+                        USING ERRCODE = '23514';
+                END IF;
+                RETURN NEW;
+            END;
+            $function$
+        """)
+        op.execute("""
+            CREATE TRIGGER trg_artifact_reference_lock_lineage
+            BEFORE INSERT ON shelf_image_artifact_references
+            FOR EACH ROW EXECUTE FUNCTION lock_artifact_lineage_before_insert()
+        """)
+        op.execute("""
+            CREATE TRIGGER trg_artifact_snapshot_lock_lineage
+            BEFORE INSERT ON shelf_image_artifact_inventory_snapshots
+            FOR EACH ROW EXECUTE FUNCTION lock_artifact_lineage_before_insert()
+        """)
+        op.execute("""
             CREATE FUNCTION prevent_zone_store_change_with_artifacts()
             RETURNS trigger LANGUAGE plpgsql AS $function$
             BEGIN
@@ -145,6 +181,9 @@ def downgrade() -> None:
             op.execute(f"DROP TRIGGER IF EXISTS {trigger}")
 
     if bind.dialect.name == "postgresql":
+        op.execute("DROP TRIGGER IF EXISTS trg_artifact_snapshot_lock_lineage ON shelf_image_artifact_inventory_snapshots")
+        op.execute("DROP TRIGGER IF EXISTS trg_artifact_reference_lock_lineage ON shelf_image_artifact_references")
+        op.execute("DROP FUNCTION IF EXISTS lock_artifact_lineage_before_insert()")
         op.execute("DROP FUNCTION IF EXISTS prevent_image_shelf_change_with_artifacts()")
         op.execute("DROP FUNCTION IF EXISTS prevent_shelf_zone_change_with_artifacts()")
         op.execute("DROP FUNCTION IF EXISTS prevent_zone_store_change_with_artifacts()")
