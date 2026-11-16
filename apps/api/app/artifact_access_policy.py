@@ -87,7 +87,7 @@ def evaluate_artifact_access(
         reasons.append("artifact_disposition_state_unknown")
 
     if latest_disposition_at is not None and inventory_generated_at is not None:
-        if _utc(inventory_generated_at) < _utc(latest_disposition_at):
+        if _utc(inventory_generated_at) <= _utc(latest_disposition_at):
             reasons.append("inventory_predates_disposition")
 
     if not isinstance(inventory_entry, dict):
