@@ -94,6 +94,10 @@ class ProductEmbeddingExemplarCreate(BaseModel):
             raise ValueError("embedding values must be finite")
         if not any(value != 0 for value in self.embedding):
             raise ValueError("embedding cannot be a zero vector")
+        if not self.model_version.strip():
+            raise ValueError("model_version cannot be blank")
+        if not self.licence.strip():
+            raise ValueError("licence cannot be blank")
         return self
 
 
