@@ -7,6 +7,11 @@ from pathlib import Path
 from uuid import uuid4
 import hashlib
 
+from app.artifact_inventory_signing import (
+    InventorySignatureConfigurationError,
+    verify_inventory_signature,
+)
+
 from PIL import Image, UnidentifiedImageError
 
 from fastapi import Depends, FastAPI, HTTPException, Request, UploadFile, File, Form
@@ -72,6 +77,7 @@ from app.schemas import (
     ShelfImageReviewQueueItem, ShelfImageTrainingCandidateRead, CaptureSessionCreate, CaptureSessionRead,
     ShelfImageArtifactReferenceCreate, ShelfImageArtifactReferenceRead,
     ShelfImageArtifactDispositionActionRequest, ShelfImageArtifactDispositionEventRead,
+    ShelfImageArtifactInventorySnapshotCreate, ShelfImageArtifactInventorySnapshotRead,
     WarehouseLocationCreate, WarehouseProductProfileCreate, WarehousePlacementCreate,
     ProductPackagingLevelCreate, StorePalletCreate, StorePalletRead,
     PalletRotationPolicyCreate, PalletRotationPolicyRead, PalletRotationPolicyUpdate, PalletRotationEventRead, PalletLifecycleUpdate, PalletRotationSimulationRequest,
@@ -1265,6 +1271,188 @@ def list_shelf_image_artifact_references(
         .limit(max(1, min(limit, 500)))
         .all()
     )
+
+
+@app.post(
+    "/api/v1/shelf-images/{image_id}/artifact-inventory-snapshots",
+    response_model=ShelfImageArtifactInventorySnapshotRead,
+    status_code=201,
+    tags=["computer-vision"],
+)
+def create_shelf_image_artifact_inventory_snapshot(
+    image_id: int,
+    payload: ShelfImageArtifactInventorySnapshotCreate,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Accept a source-signed, exact inventory snapshot; never performs external deletion."""
+    actor = _request_user(db, request)
+    if actor is None or actor.role != "ADMIN":
+        raise HTTPException(status_code=403, detail="Administrator role required")
+
+    image = (
+        db.query(models.ShelfImage)
+        .filter(models.ShelfImage.id == image_id)
+        .with_for_update()
+        .populate_existing()
+        .first()
+    )
+    if image is None:
+        raise HTTPException(status_code=404, detail="Shelf image not found")
+    if image.retention_status == "PURGED":
+        raise HTTPException(status_code=409, detail="Cannot attest inventory for a purged image")
+
+    store_id = _shelf_image_store_id(db, image_id)
+    if store_id is None:
+        raise HTTPException(status_code=409, detail="Shelf image has no valid store lineage")
+    _enforce_store_scope(actor, store_id)
+
+    now = models.utc_now()
+    generated_at = payload.generated_at.astimezone(timezone.utc)
+    age_seconds = (now - generated_at).total_seconds()
+    if age_seconds < -120:
+        raise HTTPException(status_code=422, detail="Inventory snapshot timestamp is in the future")
+    if age_seconds > settings.artifact_inventory_max_age_minutes * 60:
+        raise HTTPException(status_code=409, detail="Inventory snapshot is too old")
+
+    entries = [entry.model_dump() for entry in payload.entries]
+    try:
+        manifest_sha256 = verify_inventory_signature(
+            image_id=image_id,
+            store_id=store_id,
+            external_system=payload.external_system,
+            snapshot_id=payload.snapshot_id,
+            generated_at=payload.generated_at,
+            entries=entries,
+            signature=payload.signature,
+            configured_keys_json=settings.artifact_inventory_hmac_keys_json,
+        )
+    except InventorySignatureConfigurationError as exc:
+        raise HTTPException(status_code=503, detail="Trusted inventory source is not configured") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=401, detail="External inventory signature or manifest is invalid") from exc
+
+    references = (
+        db.query(models.ShelfImageArtifactReference)
+        .filter(
+            models.ShelfImageArtifactReference.shelf_image_id == image_id,
+            models.ShelfImageArtifactReference.store_id == store_id,
+            models.ShelfImageArtifactReference.external_system == payload.external_system,
+        )
+        .order_by(models.ShelfImageArtifactReference.id)
+        .all()
+    )
+    if not references:
+        raise HTTPException(status_code=409, detail="No declared artifact references exist for this source and image")
+
+    expected = {
+        (reference.artifact_type, reference.external_reference, reference.sha256)
+        for reference in references
+    }
+    submitted = {
+        (entry["artifact_type"], entry["external_reference"], entry.get("sha256"))
+        for entry in entries
+    }
+    if len(submitted) != len(entries) or submitted != expected:
+        raise HTTPException(
+            status_code=409,
+            detail="Signed inventory does not exactly cover the currently declared artifact references",
+        )
+
+    reference_ids = [reference.id for reference in references]
+    events = (
+        db.query(models.ShelfImageArtifactDispositionEvent)
+        .filter(
+            models.ShelfImageArtifactDispositionEvent.artifact_reference_id.in_(reference_ids)
+        )
+        .order_by(
+            models.ShelfImageArtifactDispositionEvent.artifact_reference_id,
+            models.ShelfImageArtifactDispositionEvent.sequence_number.desc(),
+        )
+        .all()
+    )
+    latest_by_reference = {}
+    for event in events:
+        latest_by_reference.setdefault(event.artifact_reference_id, event)
+
+    reference_by_identity = {
+        (reference.artifact_type, reference.external_reference, reference.sha256): reference
+        for reference in references
+    }
+    for entry in entries:
+        identity = (entry["artifact_type"], entry["external_reference"], entry.get("sha256"))
+        reference = reference_by_identity[identity]
+        latest_event = latest_by_reference.get(reference.id)
+        if latest_event is not None:
+            event_time = latest_event.created_at
+            if event_time.tzinfo is None:
+                event_time = event_time.replace(tzinfo=timezone.utc)
+            if generated_at < event_time.astimezone(timezone.utc):
+                raise HTTPException(
+                    status_code=409,
+                    detail="Inventory snapshot predates the latest disposition event",
+                )
+        if entry["state"] == "ABSENT" and (
+            latest_event is None or latest_event.event_type != "DISPOSAL_ATTESTED"
+        ):
+            raise HTTPException(
+                status_code=409,
+                detail="An artifact can only be reported absent after an approved two-person disposal attestation",
+            )
+
+    canonical_entries = sorted(
+        entries,
+        key=lambda entry: (entry["artifact_type"], entry["external_reference"]),
+    )
+    existing = (
+        db.query(models.ShelfImageArtifactInventorySnapshot)
+        .filter(
+            models.ShelfImageArtifactInventorySnapshot.store_id == store_id,
+            models.ShelfImageArtifactInventorySnapshot.external_system == payload.external_system,
+            models.ShelfImageArtifactInventorySnapshot.snapshot_id == payload.snapshot_id,
+        )
+        .first()
+    )
+    if existing is not None:
+        if existing.shelf_image_id != image_id or existing.manifest_sha256 != manifest_sha256:
+            raise HTTPException(status_code=409, detail="Snapshot ID already exists with different inventory content")
+        return existing
+
+    snapshot = models.ShelfImageArtifactInventorySnapshot(
+        shelf_image_id=image_id,
+        store_id=store_id,
+        external_system=payload.external_system,
+        snapshot_id=payload.snapshot_id,
+        generated_at=generated_at,
+        manifest_sha256=manifest_sha256,
+        source_signature=payload.signature,
+        inventory_manifest=canonical_entries,
+        artifact_count=len(canonical_entries),
+        present_count=sum(entry["state"] == "PRESENT" for entry in canonical_entries),
+        absent_count=sum(entry["state"] == "ABSENT" for entry in canonical_entries),
+        verified_at=now,
+        created_by_user_id=actor.id,
+        created_at=now,
+    )
+    db.add(snapshot)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        existing = (
+            db.query(models.ShelfImageArtifactInventorySnapshot)
+            .filter(
+                models.ShelfImageArtifactInventorySnapshot.store_id == store_id,
+                models.ShelfImageArtifactInventorySnapshot.external_system == payload.external_system,
+                models.ShelfImageArtifactInventorySnapshot.snapshot_id == payload.snapshot_id,
+            )
+            .first()
+        )
+        if existing is None or existing.shelf_image_id != image_id or existing.manifest_sha256 != manifest_sha256:
+            raise HTTPException(status_code=409, detail="Snapshot ID conflicts with an existing inventory record")
+        return existing
+    db.refresh(snapshot)
+    return snapshot
 
 
 @app.post(
