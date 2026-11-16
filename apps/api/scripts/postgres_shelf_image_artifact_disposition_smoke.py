@@ -95,6 +95,36 @@ def main() -> None:
         employee_id = employee.id
 
     with SessionLocal() as db:
+        unproposed_artifact = models.ShelfImageArtifactReference(
+            shelf_image_id=image_id,
+            store_id=store_id,
+            artifact_type="REPORT",
+            external_system="postgres-smoke",
+            external_reference=f"unproposed/{suffix}",
+            declared_by_user_id=admin_id,
+        )
+        db.add(unproposed_artifact)
+        db.commit()
+        unproposed_artifact_id = unproposed_artifact.id
+
+    with SessionLocal() as db:
+        approval_without_proposal = models.ShelfImageArtifactDispositionEvent(
+            artifact_reference_id=unproposed_artifact_id,
+            shelf_image_id=image_id,
+            store_id=store_id,
+            event_type="APPROVED",
+            actor_user_id=reviewer_id,
+            reason="An approval without a proposal must be rejected",
+        )
+        db.add(approval_without_proposal)
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+        else:
+            raise AssertionError("PostgreSQL accepted approval without a proposal")
+
+    with SessionLocal() as db:
         invalid_self_approval = models.ShelfImageArtifactDispositionEvent(
             artifact_reference_id=artifact_id,
             shelf_image_id=image_id,
