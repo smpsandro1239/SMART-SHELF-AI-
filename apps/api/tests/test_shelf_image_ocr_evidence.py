@@ -1270,7 +1270,6 @@ def test_review_queue_is_scoped_to_supervisor_store_and_admin_is_global(monkeypa
         own_image = db.get(models.ShelfImage, own_image_id)
         foreign_image = db.get(models.ShelfImage, foreign_image_id)
         own_zone = db.get(models.Zone, db.get(models.Shelf, own_image.shelf_id).zone_id)
-        foreign_zone = db.get(models.Zone, db.get(models.Shelf, foreign_image.shelf_id).zone_id)
 
         supervisor = models.User(
             email="review-queue-scope-supervisor@test.local",
