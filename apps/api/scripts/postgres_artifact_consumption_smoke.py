@@ -192,6 +192,23 @@ def main() -> None:
         image = db.get(models.ShelfImage, image_id)
         assert image is not None and image.retention_status == "RESTRICTED"
 
+    # A mismatched store scope must be rejected before the provider callback.
+    # This is exercised against PostgreSQL rather than the permissive unit-test
+    # query doubles, which do not evaluate SQLAlchemy filter expressions.
+    provider_calls = []
+    try:
+        consume_external_artifact_bytes(
+            image_id=image_id,
+            artifact_id=artifact_id,
+            store_id=store_id + 1,
+            fetch_bytes=lambda *args: provider_calls.append(args) or payload,
+        )
+    except LookupError:
+        pass
+    else:
+        raise AssertionError("cross-store artifact consumption was not rejected")
+    assert provider_calls == [], "provider was called for a cross-store request"
+
 
 if __name__ == "__main__":
     main()
