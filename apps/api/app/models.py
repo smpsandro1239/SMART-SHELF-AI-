@@ -642,8 +642,8 @@ class ShelfImageArtifactDispositionEvent(Base):
         nullable=False, index=True,
     )
     event_type: Mapped[str] = mapped_column(String(24), nullable=False)
-    actor_user_id: Mapped[int | None] = mapped_column(
-        ForeignKey("users.id", ondelete="SET NULL"), nullable=True,
+    actor_user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="RESTRICT"), nullable=False,
     )
     evidence_reference: Mapped[str | None] = mapped_column(String(500), nullable=True)
     evidence_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
