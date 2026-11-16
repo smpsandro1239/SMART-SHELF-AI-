@@ -18,6 +18,7 @@ def upgrade() -> None:
     op.create_table(
         "shelf_image_artifact_disposition_events",
         sa.Column("id", sa.Integer(), primary_key=True),
+        sa.Column("sequence_number", sa.Integer(), nullable=False),
         sa.Column(
             "artifact_reference_id",
             sa.Integer(),
@@ -47,6 +48,10 @@ def upgrade() -> None:
         sa.Column("evidence_sha256", sa.String(length=64), nullable=True),
         sa.Column("reason", sa.Text(), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+        sa.UniqueConstraint(
+            "artifact_reference_id", "sequence_number",
+            name="uq_shelf_image_artifact_disposition_sequence",
+        ),
         sa.ForeignKeyConstraint(
             ["artifact_reference_id", "shelf_image_id", "store_id"],
             [
