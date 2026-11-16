@@ -173,7 +173,7 @@ def test_inventory_key_configuration_rejects_duplicate_source_identifiers():
         '{"backup-vault":"' + SECRET + '","backup-vault":"'
         + ("x" * 40) + '"}'
     )
-    with pytest.raises(InventorySignatureConfigurationError, match="duplicate source identifier"):
+    with pytest.raises(InventorySignatureConfigurationError, match="duplicate identifier"):
         verify_inventory_signature(
             image_id=10, store_id=2, external_system="backup-vault",
             snapshot_id="snapshot-duplicate-key", generated_at=GENERATED_AT,
