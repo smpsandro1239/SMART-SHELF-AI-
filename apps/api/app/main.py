@@ -1311,10 +1311,7 @@ def create_shelf_image_artifact_disposition_event(
         .filter(
             models.ShelfImageArtifactDispositionEvent.artifact_reference_id == artifact_id
         )
-        .order_by(
-            models.ShelfImageArtifactDispositionEvent.created_at.desc(),
-            models.ShelfImageArtifactDispositionEvent.id.desc(),
-        )
+        .order_by(models.ShelfImageArtifactDispositionEvent.id.desc())
         .first()
     )
     action = payload.action
@@ -1394,10 +1391,7 @@ def list_shelf_image_artifact_disposition_events(
             models.ShelfImageArtifactDispositionEvent.artifact_reference_id == artifact_id,
             models.ShelfImageArtifactDispositionEvent.store_id == store_id,
         )
-        .order_by(
-            models.ShelfImageArtifactDispositionEvent.created_at,
-            models.ShelfImageArtifactDispositionEvent.id,
-        )
+        .order_by(models.ShelfImageArtifactDispositionEvent.id)
         .limit(max(1, min(limit, 500)))
         .all()
     )
@@ -1513,10 +1507,7 @@ def get_shelf_image_purge_eligibility(
             .filter(
                 models.ShelfImageArtifactDispositionEvent.artifact_reference_id == artifact_reference.id
             )
-            .order_by(
-                models.ShelfImageArtifactDispositionEvent.created_at.desc(),
-                models.ShelfImageArtifactDispositionEvent.id.desc(),
-            )
+            .order_by(models.ShelfImageArtifactDispositionEvent.id.desc())
             .first()
         )
         if latest_disposition is None:
