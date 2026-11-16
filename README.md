@@ -1276,3 +1276,7 @@ Foram acrescentados testes para isolamento entre lojas, binding criptográfico d
 ### Cutover seguro da ingestão HMAC legada — 2026-11-16
 
 A compatibilidade do formato HMAC `legacy` deixou de ser implicitamente aceite em produção para novos snapshots. A variável `ARTIFACT_INVENTORY_ALLOW_LEGACY_INGESTION` permite uma janela de migração explicitamente autorizada; por omissão, produção bloqueia novas ingestões legadas, enquanto ambientes não produtivos mantêm compatibilidade. Exact retries de snapshots já persistidos e a verificação histórica continuam permitidos, evitando quebrar idempotência ou auditoria durante a rotação. Foi acrescentada cobertura unitária para a matriz de política por ambiente e override. A documentação de cutover está em `docs/security/artifact-inventory-hmac-key-rotation.md`. Testes e CI ainda não executados nesta ronda.
+
+### Registo de artefactos limitado a integrações activas — 2026-11-16
+
+O endpoint de declaração de referências externas exige agora que o fornecedor esteja registado e activo na loja proprietária da imagem. A verificação é feita sob bloqueio da linha da integração, mantendo a ordem de locks usada pelo inventário e pelos fluxos de retenção. Isto impede declarar artefactos para origens desconhecidas ou revogadas. Foram acrescentados testes para origem não registada/revogada, tentativa de actualizar uma integração através do caminho de outra loja e tentativa de usar um artefacto pai pertencente a outra imagem/loja. Os testes ainda não foram executados nesta ronda.
