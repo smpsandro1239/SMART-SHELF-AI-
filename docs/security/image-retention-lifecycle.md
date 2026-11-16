@@ -330,3 +330,16 @@ Cada artefacto tem uma sequência de eventos própria, monotónica e única (`se
 O ator é obrigatório e a FK para utilizadores usa `ON DELETE RESTRICT`: uma conta referenciada no histórico não pode ser eliminada e provocar uma alteração implícita de um evento imutável. A desativação da conta continua a ser a opção de gestão compatível com a preservação da auditoria. O smoke test PostgreSQL verifica a rejeição de sequência não contígua e da eliminação do ator.
 
 O smoke test PostgreSQL também disputa duas propostas simultâneas para a mesma referência, esperando exatamente um evento aceite e um rejeitado, com uma única sequência `1` persistida. Isto verifica a serialização pelo bloqueio da linha do artefacto, para além das validações funcionais isoladas.
+
+
+## Snapshots assinados de inventário externo
+
+A migração `0035_shelf_image_artifact_inventory_snapshots` cria um registo append-only por imagem, loja, sistema externo e ID de snapshot. O endpoint administrativo `POST /api/v1/shelf-images/{image_id}/artifact-inventory-snapshots` recebe um manifesto assinado pela origem. A chave HMAC nunca é enviada pelo cliente nem armazenada na tabela: é configurada no servidor através de `ARTIFACT_INVENTORY_HMAC_KEYS_JSON`, um objeto JSON que mapeia o nome exato do sistema para um segredo UTF-8 com pelo menos 32 bytes. Fonte não configurada, chave fraca ou assinatura inválida bloqueiam o pedido.
+
+O conteúdo canónico usa JSON UTF-8, chaves ordenadas, separadores compactos e os campos `schema_version`, `image_id`, `store_id`, `external_system`, `snapshot_id`, `generated_at` em UTC ISO-8601 com microssegundos e `entries`. As entradas são ordenadas por `artifact_type` e `external_reference` e contêm `artifact_type`, `external_reference`, `sha256` e `state`. A assinatura é o HMAC-SHA-256 hexadecimal minúsculo desses bytes. O digest SHA-256 do mesmo conteúdo é guardado para identificação do manifesto.
+
+A API exige cobertura exata das referências atualmente declaradas para a imagem e o sistema: entradas em falta, duplicadas, inesperadas ou com SHA-256 divergente são rejeitadas. O snapshot tem de ter timestamp com timezone, não pode estar mais de dois minutos no futuro e tem de respeitar a idade máxima configurada (15 minutos por omissão). O estado `ABSENT` só é aceite depois de a referência ter um evento `DISPOSAL_ATTESTED`; o timestamp do snapshot tem de ser posterior ao evento de disposição mais recente.
+
+A pré-validação volta a verificar a assinatura HMAC, o digest, a frescura, a cobertura exata e os estados face às referências/eventos atuais. Uma nova declaração de artefacto, uma decisão posterior, um snapshot expirado, uma chave removida/rotacionada ou um artefacto ainda `PRESENT` impede a confirmação. O snapshot não prova por si só que o conector descobriu recursos sem metadados de origem: a integração externa tem de inventariar todos os objetos associados ao ID da imagem no respetivo âmbito. A ausência de referências declaradas continua a bloquear, pois não existe um sistema de origem identificado para atestar a cobertura.
+
+Mesmo quando todos os sistemas declarados apresentam inventário assinado recente e todos os artefactos estão ausentes, a API continua a devolver `eligible: false` com `purge_executor_not_implemented`. A funcionalidade valida evidência; não executa eliminação física.
