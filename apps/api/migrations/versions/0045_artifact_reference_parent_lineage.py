@@ -19,6 +19,15 @@ def upgrade() -> None:
         "shelf_image_artifact_references",
         sa.Column("parent_reference_id", sa.Integer(), nullable=True),
     )
+    # PostgreSQL requires a unique target for the composite self-FK.
+    # The leading id is already unique, but the full referenced tuple must
+    # have an explicit unique index for portable constraint validation.
+    op.create_index(
+        "uq_shelf_image_artifact_reference_lineage",
+        "shelf_image_artifact_references",
+        ["id", "shelf_image_id", "store_id"],
+        unique=True,
+    )
     op.create_index(
         "ix_artifact_reference_parent_reference_id",
         "shelf_image_artifact_references",
@@ -82,6 +91,10 @@ def downgrade() -> None:
 
     op.drop_index(
         "ix_artifact_reference_parent_reference_id",
+        table_name="shelf_image_artifact_references",
+    )
+    op.drop_index(
+        "uq_shelf_image_artifact_reference_lineage",
         table_name="shelf_image_artifact_references",
     )
     op.drop_column("shelf_image_artifact_references", "parent_reference_id")
