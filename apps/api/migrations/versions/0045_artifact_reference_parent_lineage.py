@@ -6,6 +6,7 @@ source image and store. Existing declarations remain roots (NULL parent).
 from alembic import op
 import sqlalchemy as sa
 
+
 revision = "0045_artifact_reference_parent_lineage"
 down_revision = "0044_fix_manifest_json_null_check"
 branch_labels = None
@@ -13,22 +14,10 @@ depends_on = None
 
 
 def upgrade() -> None:
+    bind = op.get_bind()
     op.add_column(
         "shelf_image_artifact_references",
         sa.Column("parent_reference_id", sa.Integer(), nullable=True),
-    )
-    op.create_foreign_key(
-        "fk_artifact_reference_parent_lineage",
-        "shelf_image_artifact_references",
-        "shelf_image_artifact_references",
-        ["parent_reference_id", "shelf_image_id", "store_id"],
-        ["id", "shelf_image_id", "store_id"],
-        ondelete="RESTRICT",
-    )
-    op.create_check_constraint(
-        "ck_artifact_reference_parent_not_self",
-        "shelf_image_artifact_references",
-        "parent_reference_id IS NULL OR parent_reference_id <> id",
     )
     op.create_index(
         "ix_artifact_reference_parent_reference_id",
@@ -36,20 +25,63 @@ def upgrade() -> None:
         ["parent_reference_id"],
     )
 
+    if bind.dialect.name == "postgresql":
+        op.create_foreign_key(
+            "fk_artifact_reference_parent_lineage",
+            "shelf_image_artifact_references",
+            "shelf_image_artifact_references",
+            ["parent_reference_id", "shelf_image_id", "store_id"],
+            ["id", "shelf_image_id", "store_id"],
+            ondelete="RESTRICT",
+        )
+        op.create_check_constraint(
+            "ck_artifact_reference_parent_not_self",
+            "shelf_image_artifact_references",
+            "parent_reference_id IS NULL OR parent_reference_id <> id",
+        )
+    elif bind.dialect.name == "sqlite":
+        # SQLite cannot add a composite FK to an existing table without a
+        # table rebuild. Triggers preserve equivalent insert-time guarantees
+        # without rebuilding the table and losing its append-only triggers.
+        op.execute("""
+            CREATE TRIGGER trg_artifact_reference_parent_lineage_insert
+            BEFORE INSERT ON shelf_image_artifact_references
+            WHEN NEW.parent_reference_id IS NOT NULL
+            BEGIN
+                SELECT CASE
+                    WHEN NEW.parent_reference_id = NEW.id
+                    THEN RAISE(ABORT, 'artifact reference cannot be its own parent')
+                    WHEN NOT EXISTS (
+                        SELECT 1
+                        FROM shelf_image_artifact_references parent
+                        WHERE parent.id = NEW.parent_reference_id
+                          AND parent.shelf_image_id = NEW.shelf_image_id
+                          AND parent.store_id = NEW.store_id
+                    )
+                    THEN RAISE(ABORT, 'artifact parent must belong to the same image and store')
+                END;
+            END
+        """)
+
 
 def downgrade() -> None:
+    bind = op.get_bind()
+    if bind.dialect.name == "postgresql":
+        op.drop_constraint(
+            "ck_artifact_reference_parent_not_self",
+            "shelf_image_artifact_references",
+            type_="check",
+        )
+        op.drop_constraint(
+            "fk_artifact_reference_parent_lineage",
+            "shelf_image_artifact_references",
+            type_="foreignkey",
+        )
+    elif bind.dialect.name == "sqlite":
+        op.execute("DROP TRIGGER IF EXISTS trg_artifact_reference_parent_lineage_insert")
+
     op.drop_index(
         "ix_artifact_reference_parent_reference_id",
         table_name="shelf_image_artifact_references",
-    )
-    op.drop_constraint(
-        "ck_artifact_reference_parent_not_self",
-        "shelf_image_artifact_references",
-        type_="check",
-    )
-    op.drop_constraint(
-        "fk_artifact_reference_parent_lineage",
-        "shelf_image_artifact_references",
-        type_="foreignkey",
     )
     op.drop_column("shelf_image_artifact_references", "parent_reference_id")
