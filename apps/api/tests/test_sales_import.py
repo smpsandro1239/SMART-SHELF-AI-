@@ -99,3 +99,12 @@ def test_parse_daily_sales_csv_rejects_extra_columns():
     payload = (HEADER + "12,2026-11-12,1,REF-1,EXTRA\n").encode("utf-8")
     with pytest.raises(ValueError, match="Too many columns"):
         parse_daily_sales_csv(payload)
+
+
+
+def test_parse_daily_sales_csv_rejects_unterminated_quoted_field():
+    payload = (
+        HEADER + '12,2026-11-12,1,"UNTERMINATED-REFERENCE' + chr(10)
+    ).encode("utf-8")
+    with pytest.raises(ValueError, match="malformed quoting"):
+        parse_daily_sales_csv(payload)
