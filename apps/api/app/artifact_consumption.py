@@ -158,30 +158,64 @@ def consume_external_artifact_bytes(
         # child snapshot must never mask a revoked integration, missing inventory,
         # or pending/completed disposition on a parent in another external system.
         now_utc = now or models.utc_now()
+        # Lock all relevant snapshots and disposition events in two bounded
+        # queries rather than issuing two queries per lineage node. Ordering is
+        # deterministic and every row remains locked until the provider read ends.
+        locked_snapshots = (
+            db.query(models.ShelfImageArtifactInventorySnapshot)
+            .filter(
+                models.ShelfImageArtifactInventorySnapshot.shelf_image_id == image_id,
+                models.ShelfImageArtifactInventorySnapshot.store_id == store_id,
+                models.ShelfImageArtifactInventorySnapshot.external_system.in_(external_systems),
+            )
+            .order_by(
+                models.ShelfImageArtifactInventorySnapshot.external_system,
+                models.ShelfImageArtifactInventorySnapshot.generated_at.desc(),
+                models.ShelfImageArtifactInventorySnapshot.id.desc(),
+            )
+            .with_for_update()
+            .populate_existing()
+            .all()
+        )
+        latest_snapshots_by_system = {}
+        for snapshot in locked_snapshots:
+            latest_snapshots_by_system.setdefault(snapshot.external_system, snapshot)
+
+        lineage_reference_ids = [reference.id for reference in lineage]
+        locked_events = (
+            db.query(models.ShelfImageArtifactDispositionEvent)
+            .filter(
+                models.ShelfImageArtifactDispositionEvent.artifact_reference_id.in_(lineage_reference_ids),
+                models.ShelfImageArtifactDispositionEvent.shelf_image_id == image_id,
+                models.ShelfImageArtifactDispositionEvent.store_id == store_id,
+            )
+            .order_by(
+                models.ShelfImageArtifactDispositionEvent.artifact_reference_id,
+                models.ShelfImageArtifactDispositionEvent.sequence_number.desc(),
+            )
+            .with_for_update()
+            .populate_existing()
+            .all()
+        )
+        latest_events_by_reference = {}
+        for event in locked_events:
+            latest_events_by_reference.setdefault(event.artifact_reference_id, event)
+
+        references_by_system = {}
+        for reference in locked_references:
+            references_by_system.setdefault(reference.external_system, []).append(reference)
+
         decisions = []
         for lineage_reference in lineage:
             ancestor_integration = integrations_by_system.get(
                 lineage_reference.external_system
             )
-            ancestor_snapshot = (
-                db.query(models.ShelfImageArtifactInventorySnapshot)
-                .filter(
-                    models.ShelfImageArtifactInventorySnapshot.shelf_image_id == image_id,
-                    models.ShelfImageArtifactInventorySnapshot.store_id == store_id,
-                    models.ShelfImageArtifactInventorySnapshot.external_system == lineage_reference.external_system,
-                )
-                .order_by(
-                    models.ShelfImageArtifactInventorySnapshot.generated_at.desc(),
-                    models.ShelfImageArtifactInventorySnapshot.id.desc(),
-                )
-                .with_for_update()
-                .populate_existing()
-                .first()
+            ancestor_snapshot = latest_snapshots_by_system.get(
+                lineage_reference.external_system
             )
-            ancestor_references = [
-                reference for reference in locked_references
-                if reference.external_system == lineage_reference.external_system
-            ]
+            ancestor_references = references_by_system.get(
+                lineage_reference.external_system, []
+            )
             inventory_integrity_verified = bool(
                 ancestor_snapshot is not None
                 and verify_inventory_snapshot_record(
@@ -190,18 +224,7 @@ def consume_external_artifact_bytes(
                     configured_keys_json=settings.artifact_inventory_hmac_keys_json,
                 )
             )
-            latest_event = (
-                db.query(models.ShelfImageArtifactDispositionEvent)
-                .filter(
-                    models.ShelfImageArtifactDispositionEvent.artifact_reference_id == lineage_reference.id,
-                    models.ShelfImageArtifactDispositionEvent.shelf_image_id == image_id,
-                    models.ShelfImageArtifactDispositionEvent.store_id == store_id,
-                )
-                .order_by(models.ShelfImageArtifactDispositionEvent.sequence_number.desc())
-                .with_for_update()
-                .populate_existing()
-                .first()
-            )
+            latest_event = latest_events_by_reference.get(lineage_reference.id)
             inventory_entry = None
             if ancestor_snapshot is not None:
                 inventory_entry = next(
