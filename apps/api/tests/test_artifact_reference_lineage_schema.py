@@ -72,11 +72,11 @@ def test_artifact_reference_read_schema_exposes_parent_lineage():
 def test_sqlite_migration_rejects_parent_lineage_mutation(tmp_path):
     import importlib.util
     from pathlib import Path
-    import sqlite3
-
+    
     from alembic.migration import MigrationContext
     from alembic.operations import Operations
     from sqlalchemy import create_engine
+    from sqlalchemy.exc import IntegrityError
 
     migration_path = (
         Path(__file__).parents[1]
@@ -110,7 +110,7 @@ def test_sqlite_migration_rejects_parent_lineage_mutation(tmp_path):
             "(id, shelf_image_id, store_id, parent_reference_id) VALUES "
             "(1, 7, 4, NULL), (2, 7, 4, 1), (3, 7, 4, NULL)"
         )
-        with pytest.raises(sqlite3.IntegrityError, match="artifact parent lineage is immutable"):
+        with pytest.raises(IntegrityError, match="artifact parent lineage is immutable"):
             connection.exec_driver_sql(
                 "UPDATE shelf_image_artifact_references "
                 "SET parent_reference_id = 3 WHERE id = 2"
