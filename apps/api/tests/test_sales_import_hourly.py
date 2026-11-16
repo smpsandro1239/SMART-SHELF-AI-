@@ -74,23 +74,23 @@ def test_hourly_import_enforces_byte_limit():
     [
         (
             (SALES_HEADER.replace("product_id", "product_id,product_id", 1)
-             + "42,43,2026-11-12,8,1,REF-1\\n").encode(),
+             + "42,43,2026-11-12,8,1,REF-1" + chr(10)).encode(),
             parse_hourly_sales_csv,
             "duplicate column",
         ),
         (
             (TRAFFIC_HEADER.replace("business_date", "business_date,business_date", 1)
-             + "2026-11-12,2026-11-13,8,1,REF-1\\n").encode(),
+             + "2026-11-12,2026-11-13,8,1,REF-1" + chr(10)).encode(),
             parse_hourly_traffic_csv,
             "duplicate column",
         ),
         (
-            (SALES_HEADER + "42,2026-11-12,8,1,REF-1,EXTRA\\n").encode(),
+            (SALES_HEADER + "42,2026-11-12,8,1,REF-1,EXTRA" + chr(10)).encode(),
             parse_hourly_sales_csv,
             "Too many columns",
         ),
         (
-            (TRAFFIC_HEADER + "2026-11-12,8,1,REF-1,EXTRA\\n").encode(),
+            (TRAFFIC_HEADER + "2026-11-12,8,1,REF-1,EXTRA" + chr(10)).encode(),
             parse_hourly_traffic_csv,
             "Too many columns",
         ),
