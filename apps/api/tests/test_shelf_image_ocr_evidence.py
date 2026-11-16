@@ -1411,28 +1411,46 @@ def test_reviewed_training_candidates_recheck_active_catalogue_product():
         assert refreshed.status_code == 200, refreshed.text
         assert all(item["product_id"] != product_id for item in refreshed.json())
 
-def test_reviewed_training_candidates_lock_source_images(monkeypatch):
+def test_reviewed_training_candidates_lock_images_before_catalogue_products(monkeypatch):
     from sqlalchemy.orm import Query
 
-    original_with_for_update = Query.with_for_update
-    source_image_locks = []
+    image_id, detection_id = create_image_with_detection()
+    with TestingSession() as db:
+        product = models.Product(sku="TRAIN-LOCK-01", name="Produto Lock", is_active=True)
+        db.add(product)
+        db.flush()
+        db.add(models.DetectionSkuReview(
+            detection_id=detection_id,
+            previous_product_id=None,
+            selected_product_id=product.id,
+            decision="CONFIRMED",
+            reviewer_user_id=None,
+            notes="lock-order regression",
+        ))
+        db.commit()
 
-    def record_source_image_lock(query, *args, **kwargs):
+    original_with_for_update = Query.with_for_update
+    lock_order = []
+
+    def record_lock_order(query, *args, **kwargs):
         locked_entities = kwargs.get("of", ())
         if not isinstance(locked_entities, (tuple, list, set)):
             locked_entities = (locked_entities,)
         if models.ShelfImage in locked_entities:
-            source_image_locks.append(True)
+            lock_order.append("image")
+        elif query.column_descriptions and query.column_descriptions[0].get("entity") is models.Product:
+            lock_order.append("product")
         return original_with_for_update(query, *args, **kwargs)
 
-    monkeypatch.setattr(Query, "with_for_update", record_source_image_lock)
+    monkeypatch.setattr(Query, "with_for_update", record_lock_order)
     with TestClient(app) as client:
         response = client.get("/api/v1/training-candidates/reviewed")
 
     assert response.status_code == 200, response.text
-    assert source_image_locks, (
-        "Training candidate selection must lock source images against "
-        "concurrent retention transitions"
+    assert "image" in lock_order, "Training candidate selection must lock source images"
+    assert "product" in lock_order, "Training candidate selection must lock catalogue products"
+    assert lock_order.index("image") < lock_order.index("product"), (
+        "Training candidates must follow the global image -> product lock order"
     )
 
 def test_review_queue_locks_source_images_before_returning_derived_evidence(monkeypatch):
