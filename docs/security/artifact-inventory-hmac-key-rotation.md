@@ -88,3 +88,8 @@ A API só aceita novas referências de artefactos quando a origem externa corres
 ## Integridade multi-loja na base de dados
 
 A migration `0048_artifact_store_lineage_guard` aplica uma verificação ao nível da base de dados, não apenas na API: o `store_id` de referências e snapshots tem de coincidir com a loja da imagem, calculada através da prateleira e zona. A migration faz uma verificação prévia dos dados existentes e falha de forma explícita se encontrar linhas inconsistentes. Os triggers protegem INSERT e alterações de `shelf_image_id`/`store_id`; os eventos de disposição herdam a identidade validada da referência através da chave estrangeira composta.
+
+
+## Imutabilidade da hierarquia com proveniência registada
+
+A protecção multi-loja também cobre alterações aos registos ancestrais. Depois de existirem referências ou snapshots assinados, a zona, prateleira ou imagem não pode ser transferida para outra loja se isso alterar a identidade de tenant dos artefactos. Esta protecção é aplicada na base de dados e não depende de todos os clientes usarem a API. Movimentos sem artefactos históricos continuam permitidos.
