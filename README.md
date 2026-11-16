@@ -1147,3 +1147,10 @@ A ingestão de inventário assinado passou a impor monotonicidade por imagem e s
 A procura de um `snapshot_id` já existente foi antecipada para depois da verificação HMAC e antes das regras de frescura e da comparação com as referências atuais. Assim, uma repetição com o mesmo ID, imagem, manifesto assinado e assinatura devolve o registo original mesmo depois de este envelhecer ou de o conjunto de referências mudar. A reutilização do ID com conteúdo, timestamp assinado ou assinatura divergente continua a receber HTTP 409. A assinatura HMAC inclui `generated_at`, pelo que o digest identifica também a versão temporal do manifesto.
 
 Foi alargado `test_accepted_signed_snapshot_updates_integration_last_seen` para cobrir repetição exata após expiração da janela, conflito de ID com timestamp/conteúdo assinado divergente e rejeição de snapshot fora de ordem, confirmando que só existe um registo e que `last_seen_at` não recua. Validação estática do fluxo; a execução pytest e a concorrência real PostgreSQL permanecem por confirmar através de runners funcionais.
+
+
+### Monotonicidade temporal imposta pela base de dados — 2026-11-16
+
+A migration `0039_inventory_snapshot_monotonicity` acrescenta uma segunda linha de defesa para a ordenação temporal dos inventários. Em PostgreSQL, o trigger `BEFORE INSERT` bloqueia a linha de `shelf_images` antes de consultar o maior `generated_at` para a mesma imagem, loja e sistema externo; timestamps iguais ou anteriores são rejeitados com SQLSTATE `23514`. O bloqueio da imagem serializa também inserções concorrentes que não passem pela API. Em SQLite, um trigger equivalente compara os instantes com `julianday()`.
+
+O smoke test `apps/api/scripts/postgres_artifact_inventory_monotonicity_smoke.py` verifica inserções directas antigas e iguais, bem como o isolamento entre sistemas externos. O workflow API CI executa-o depois de aplicar todas as migrations. A validação desta alteração foi estática; a execução do smoke test depende de um runner PostgreSQL funcional.
