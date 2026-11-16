@@ -43,7 +43,7 @@ def test_shelf_scoped_records_require_the_shelf_tenant_and_block_upstream_moves(
                 connection.exec_driver_sql(f"UPDATE {table} SET store_id = 20 WHERE id = 1")
 
         with pytest.raises(IntegrityError, match="cannot move shelf hierarchy"):
-            connection.exec_driver_sql("UPDATE shelves SET zone_id = 22 WHERE id = 11")
+            connection.exec_driver_sql("UPDATE shelves SET zone_id = 2 WHERE id = 11")
         with pytest.raises(IntegrityError, match="cannot move shelf hierarchy"):
             connection.exec_driver_sql("UPDATE zones SET store_id = 20 WHERE id = 1")
 
