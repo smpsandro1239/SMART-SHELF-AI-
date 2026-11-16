@@ -15,7 +15,7 @@ def lock_matching_source_images(
     *,
     target_image_id: int,
     model_versions,
-) -> None:
+) -> int | None:
     """Lock target and approved exemplar source images in one stable ID order.
 
     The worker acquires this image lock set before loading the registry. All
@@ -23,11 +23,27 @@ def lock_matching_source_images(
     source-image -> product -> exemplar. Sorting each resource class prevents
     two workers from taking the same rows in opposite orders.
     """
+    target_store_id = (
+        db.query(models.Zone.store_id)
+        .join(models.Shelf, models.Shelf.zone_id == models.Zone.id)
+        .join(models.ShelfImage, models.ShelfImage.shelf_id == models.Shelf.id)
+        .filter(models.ShelfImage.id == target_image_id)
+        .scalar()
+    )
+    if target_store_id is None:
+        return None
+
     versions = sorted({version for version in model_versions if version})
     image_ids = {target_image_id}
     if versions:
         source_rows = (
             db.query(models.ProductEmbeddingExemplar.shelf_image_id)
+            .join(
+                models.ShelfImage,
+                models.ProductEmbeddingExemplar.shelf_image_id == models.ShelfImage.id,
+            )
+            .join(models.Shelf, models.ShelfImage.shelf_id == models.Shelf.id)
+            .join(models.Zone, models.Shelf.zone_id == models.Zone.id)
             .join(
                 models.User,
                 models.ProductEmbeddingExemplar.reviewed_by_user_id == models.User.id,
@@ -37,11 +53,11 @@ def lock_matching_source_images(
                 models.ProductEmbeddingExemplar.product_id == models.Product.id,
             )
             .filter(
+                models.Zone.store_id == target_store_id,
                 models.Product.is_active.is_(True),
                 models.ProductEmbeddingExemplar.review_status == "APPROVED",
                 models.ProductEmbeddingExemplar.model_version.in_(versions),
                 models.ProductEmbeddingExemplar.reviewed_at.is_not(None),
-                models.ProductEmbeddingExemplar.shelf_image_id.is_not(None),
             )
             .distinct()
             .all()
@@ -55,12 +71,14 @@ def lock_matching_source_images(
         .with_for_update()
         .all()
     )
+    return target_store_id
 
 
 def build_approved_product_registry(
     db: Session,
     *,
     model_version: str,
+    store_id: int | None = None,
     minimum_similarity: float = 0.90,
     minimum_margin: float = 0.05,
 ) -> ProductEmbeddingRegistry:
@@ -77,7 +95,7 @@ def build_approved_product_registry(
     if not model_version:
         raise ValueError("model_version is required")
 
-    candidates = (
+    candidate_query = (
         db.query(
             models.ProductEmbeddingExemplar.id,
             models.ProductEmbeddingExemplar.product_id,
@@ -93,6 +111,20 @@ def build_approved_product_registry(
             models.ProductEmbeddingExemplar.model_version == model_version,
             models.ProductEmbeddingExemplar.reviewed_at.is_not(None),
         )
+    )
+    if store_id is not None:
+        candidate_query = (
+            candidate_query
+            .join(
+                models.ShelfImage,
+                models.ProductEmbeddingExemplar.shelf_image_id == models.ShelfImage.id,
+            )
+            .join(models.Shelf, models.ShelfImage.shelf_id == models.Shelf.id)
+            .join(models.Zone, models.Shelf.zone_id == models.Zone.id)
+            .filter(models.Zone.store_id == store_id)
+        )
+    candidates = (
+        candidate_query
         .order_by(
             models.ProductEmbeddingExemplar.product_id,
             models.ProductEmbeddingExemplar.id,
