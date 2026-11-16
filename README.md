@@ -1171,3 +1171,10 @@ A validação temporal dos artefactos exige agora que `generated_at` do snapshot
 ### Validação da linhagem antes do bloqueio de eventos — 2026-11-16
 
 A migration `0041_disposition_lock_lineage_guard` reforça a ordem de bloqueios dos eventos de disposição. Antes de bloquear a imagem, o trigger lê a referência imutável e confirma que `shelf_image_id` e `store_id` do evento correspondem à referência real. Só depois bloqueia a imagem; o trigger de validação existente bloqueia a referência em seguida. Isto evita que um evento malformado tente bloquear uma imagem arbitrária antes de obter o lock da referência e reduz o risco de inversão de locks em inserções directas. O SQLite recebe a validação equivalente da linhagem. O smoke test PostgreSQL verifica também eventos com loja e imagem incompatíveis. A alteração é estática nesta sessão; depende de runner PostgreSQL para execução.
+
+
+### Integridade temporal dos snapshots ao nível da base de dados — 2026-11-16
+
+A migration `0042_snapshot_after_disposition` fecha a possibilidade de contornar a regra temporal através de inserções directas. O trigger executado depois dos triggers de bloqueio da imagem consulta o último evento de disposição de cada referência da mesma imagem, loja e sistema externo. Rejeita qualquer snapshot cujo `generated_at` seja igual ou anterior ao evento mais recente. A regra existe em PostgreSQL e SQLite e usa a mesma ordem de bloqueio por imagem dos restantes fluxos.
+
+O smoke test `postgres_artifact_inventory_monotonicity_smoke.py` passou a criar um evento de disposição sem snapshot prévio e a verificar que snapshots com timestamp igual ou anterior são rejeitados pela base de dados. Mantém também a verificação de monotonicidade entre snapshots e de isolamento entre sistemas. Validação estática nesta sessão; a execução requer runner PostgreSQL.
