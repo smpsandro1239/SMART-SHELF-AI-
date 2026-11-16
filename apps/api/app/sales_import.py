@@ -57,7 +57,7 @@ def parse_daily_sales_csv(payload: bytes) -> list[ParsedSalesRow]:
         except (TypeError, ValueError) as exc:
             raise ValueError(f"Invalid product_id at CSV line {line_number}") from exc
         try:
-            if re.fullmatch(r"\\d{4}-\\d{2}-\\d{2}", row["sales_date"]) is None:
+            if re.fullmatch(r"\d{4}-\d{2}-\d{2}", row["sales_date"]) is None:
                 raise ValueError
             sales_date = date.fromisoformat(row["sales_date"])
         except (TypeError, ValueError) as exc:
