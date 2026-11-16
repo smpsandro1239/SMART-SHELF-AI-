@@ -51,6 +51,11 @@ class ProductMatch:
 
 
 def _validated_vector(values: Sequence[float]) -> tuple[float, ...]:
+    if any(
+        isinstance(value, bool) or not isinstance(value, (int, float))
+        for value in values
+    ):
+        raise ValueError("embedding values must be numeric (booleans are not valid)")
     vector = tuple(float(value) for value in values)
     if not vector:
         raise ValueError("embedding cannot be empty")
