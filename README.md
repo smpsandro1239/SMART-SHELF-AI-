@@ -1185,3 +1185,8 @@ A migration `0043_artifact_inventory_manifest_integrity` acrescenta validação 
 
 A validação HMAC continua deliberadamente na API: a base de dados não possui nem deve receber as chaves secretas dos conectores. Por isso, estes triggers não transformam uma inserção directa por um utilizador com privilégios de escrita na base de dados numa prova criptográfica de origem; impedem, contudo, manifestos inconsistentes de serem tratados como inventários completos. O smoke test PostgreSQL verifica coberturas falsas, contadores divergentes e ausência sem atestação. Validação estática nesta sessão; execução pendente de runner PostgreSQL funcional.
 
+### Revalidação de snapshots no consumo de artefactos — 2026-11-16
+
+O serviço de consumo já não confia apenas na presença de uma entrada `PRESENT`. Antes de chamar o fornecedor externo, volta a validar a assinatura HMAC persistida, o SHA-256 canónico do manifesto, os contadores e a cobertura exacta das referências actuais da imagem/loja/sistema. Se a chave do conector estiver ausente, a assinatura não corresponder, o digest divergir ou a cobertura estiver incompleta, o acesso é bloqueado com `inventory_integrity_unverified`. A validação de elegibilidade de purge já efectuava a revalidação HMAC e dos contadores; o consumo passa agora a aplicar a mesma fronteira criptográfica e relacional.
+
+O coverage unitário inclui assinatura persistida adulterada, digest divergente e cobertura de referências divergente. Os testes foram adicionados, mas não executados: os workflows do GitHub Actions estão bloqueados antes do arranque por um problema de faturação/limite de gastos da conta.
