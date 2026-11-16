@@ -522,6 +522,7 @@ class ShelfImageArtifactReferenceCreate(BaseModel):
     artifact_type: ArtifactType
     external_system: str = Field(min_length=1, max_length=120)
     external_reference: str = Field(min_length=1, max_length=500)
+    parent_reference_id: int | None = Field(default=None, gt=0)
     release_id: str | None = Field(default=None, max_length=160)
     sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
 
@@ -541,6 +542,7 @@ class ShelfImageArtifactReferenceRead(BaseModel):
     artifact_type: ArtifactType
     external_system: str
     external_reference: str
+    parent_reference_id: int | None
     release_id: str | None
     sha256: str | None
     declared_by_user_id: int | None
