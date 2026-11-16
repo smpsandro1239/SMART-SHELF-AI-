@@ -1047,3 +1047,8 @@ As execuções `43795760972` (API CI) e `43795779073` (Quality Gates) terminaram
 
 
 **Atualização de validação (03:10 UTC):** os novos runs `43796567684` (API CI) e `43796581619` (Quality Gates), disparados pelos commits do smoke test e da sua integração, repetiram exatamente o mesmo padrão: jobs com `runner_id: 0`, `runner_name: ""`, duração de cerca de dois segundos, `steps: []` e logs indisponíveis (`BlobNotFound`). Assim, o novo smoke test PostgreSQL está integrado no workflow mas **ainda não foi executado**. A falha de provisionamento do runner continua a bloquear a validação de todo o código.
+
+### Concorrência do pipeline OCR com alterações ao catálogo
+
+O worker executa a geração de correspondências OCR e a fusão de evidência enquanto mantém bloqueada a imagem de origem. O pipeline bloqueia depois, por ordem crescente de ID, os produtos ativos do catálogo e os produtos já referenciados pelas deteções. A consulta é atualizada após a aquisição dos bloqueios; produtos entretanto desativados deixam de ser candidatos OCR e uma associação visual a produto inativo é convertida em estado conservador `UNKNOWN`. Os bloqueios mantêm-se até ao commit/rollback da transação do worker. O teste `test_ocr_pipeline_locks_catalogue_after_source_image_and_suppresses_inactive_visual` verifica a ordem imagem → produto e a supressão de sugestões inativas. A execução do teste e a semântica de bloqueio concorrente em PostgreSQL dependem de CI/ambiente PostgreSQL efetivamente executado.
+
