@@ -153,8 +153,8 @@ def upgrade() -> None:
                             USING ERRCODE = '23514';
                     END IF;
                 ELSIF NEW.event_type IN ('APPROVED', 'REJECTED') THEN
-                    IF previous_event_type <> 'PROPOSED'
-                       OR previous_actor_user_id = NEW.actor_user_id THEN
+                    IF previous_event_type IS DISTINCT FROM 'PROPOSED'
+                       OR previous_actor_user_id IS NOT DISTINCT FROM NEW.actor_user_id THEN
                         RAISE EXCEPTION 'artifact disposition review requires a pending proposal and a different administrator'
                             USING ERRCODE = '23514';
                     END IF;
@@ -163,8 +163,8 @@ def upgrade() -> None:
                             USING ERRCODE = '23514';
                     END IF;
                 ELSIF NEW.event_type = 'DISPOSAL_ATTESTED' THEN
-                    IF previous_event_type <> 'APPROVED'
-                       OR previous_actor_user_id = NEW.actor_user_id THEN
+                    IF previous_event_type IS DISTINCT FROM 'APPROVED'
+                       OR previous_actor_user_id IS NOT DISTINCT FROM NEW.actor_user_id THEN
                         RAISE EXCEPTION 'disposition attestation requires approval by a different administrator'
                             USING ERRCODE = '23514';
                     END IF;
