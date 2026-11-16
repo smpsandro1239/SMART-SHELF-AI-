@@ -217,10 +217,10 @@ def test_external_artifact_reference_registration_is_idempotent(db_session, tmp_
         sha256="a" * 64,
     )
 
-    first = main_module.register_shelf_image_artifact_reference(
+    first = register_test_artifact_reference(
         image_id, payload, request, db_session
     )
-    second = main_module.register_shelf_image_artifact_reference(
+    second = register_test_artifact_reference(
         image_id, payload, request, db_session
     )
 
@@ -252,11 +252,11 @@ def test_external_artifact_reference_rejects_conflicting_duplicate(db_session, t
         sha256="b" * 64,
     )
 
-    main_module.register_shelf_image_artifact_reference(
+    register_test_artifact_reference(
         image_id, first_payload, request, db_session
     )
     with pytest.raises(HTTPException) as exc:
-        main_module.register_shelf_image_artifact_reference(
+        register_test_artifact_reference(
             image_id, conflicting_payload, request, db_session
         )
 
@@ -273,7 +273,7 @@ def test_artifact_reference_is_visible_in_purge_preview_but_never_authorizes_del
         db_session, tmp_path, with_detection=False
     )
     request = SimpleNamespace(state=SimpleNamespace(user_id=admin_id))
-    main_module.register_shelf_image_artifact_reference(
+    register_test_artifact_reference(
         image_id,
         ShelfImageArtifactReferenceCreate(
             artifact_type="OBJECT_REPLICA",
@@ -315,7 +315,7 @@ def test_external_artifact_registration_rejects_purged_image(db_session, tmp_pat
     )
 
     with pytest.raises(HTTPException) as exc:
-        main_module.register_shelf_image_artifact_reference(
+        register_test_artifact_reference(
             image_id, payload, request, db_session
         )
 
@@ -345,7 +345,7 @@ def test_artifact_disposition_requires_two_person_approval_and_evidence(db_sessi
     db_session.commit()
     second_admin_id = second_admin.id
 
-    artifact = main_module.register_shelf_image_artifact_reference(
+    artifact = register_test_artifact_reference(
         image_id,
         ShelfImageArtifactReferenceCreate(
             artifact_type="BACKUP",
@@ -451,7 +451,7 @@ def test_artifact_disposition_requires_two_person_approval_and_evidence(db_sessi
 
     # A second artifact deliberately starts at sequence 1. The purge preview
     # must join latest events by both artifact ID and sequence, never sequence alone.
-    second_artifact = main_module.register_shelf_image_artifact_reference(
+    second_artifact = register_test_artifact_reference(
         image_id,
         ShelfImageArtifactReferenceCreate(
             artifact_type="CACHE",
@@ -506,7 +506,7 @@ def test_rejected_artifact_disposition_can_be_reproposed(db_session, tmp_path, m
     db_session.commit()
     first_request = SimpleNamespace(state=SimpleNamespace(user_id=first_admin_id))
     second_request = SimpleNamespace(state=SimpleNamespace(user_id=second_admin.id))
-    artifact = main_module.register_shelf_image_artifact_reference(
+    artifact = register_test_artifact_reference(
         image_id,
         ShelfImageArtifactReferenceCreate(
             artifact_type="CACHE",
@@ -542,7 +542,7 @@ def test_rejected_artifact_disposition_can_be_reproposed(db_session, tmp_path, m
     )
     assert reproposed.event_type == "PROPOSED"
 
-    unreviewed = main_module.register_shelf_image_artifact_reference(
+    unreviewed = register_test_artifact_reference(
         image_id,
         ShelfImageArtifactReferenceCreate(
             artifact_type="REPORT",
@@ -593,7 +593,7 @@ def test_signed_inventory_snapshot_verifies_exact_coverage_and_keeps_purge_disab
         db_session, image_id, first_admin_id, "backup-vault"
     )
 
-    artifact = main_module.register_shelf_image_artifact_reference(
+    artifact = register_test_artifact_reference(
         image_id,
         ShelfImageArtifactReferenceCreate(
             artifact_type="BACKUP",
@@ -684,7 +684,7 @@ def test_signed_inventory_snapshot_verifies_exact_coverage_and_keeps_purge_disab
     assert (tmp_path / "1" / "restricted.jpg").exists()
 
     # A reference added after the signed snapshot invalidates exact coverage.
-    main_module.register_shelf_image_artifact_reference(
+    register_test_artifact_reference(
         image_id,
         ShelfImageArtifactReferenceCreate(
             artifact_type="CACHE",
@@ -721,7 +721,7 @@ def test_signed_inventory_snapshot_rejects_incomplete_or_invalid_source_evidence
     register_test_external_integration(
         db_session, image_id, admin_id, "edge-cache"
     )
-    artifact = main_module.register_shelf_image_artifact_reference(
+    artifact = register_test_artifact_reference(
         image_id,
         ShelfImageArtifactReferenceCreate(
             artifact_type="CACHE",
@@ -822,7 +822,7 @@ def test_purge_preview_requires_every_retention_integration_to_be_covered(
     db_session.commit()
 
     request = SimpleNamespace(state=SimpleNamespace(user_id=admin_id))
-    main_module.register_shelf_image_artifact_reference(
+    register_test_artifact_reference(
         image_id,
         ShelfImageArtifactReferenceCreate(
             artifact_type="CACHE", external_system="optional-cache",
@@ -859,7 +859,7 @@ def test_purge_preview_rejects_revoked_declared_artifact_integration(
     db_session.commit()
 
     request = SimpleNamespace(state=SimpleNamespace(user_id=admin_id))
-    main_module.register_shelf_image_artifact_reference(
+    register_test_artifact_reference(
         image_id,
         ShelfImageArtifactReferenceCreate(
             artifact_type="BACKUP", external_system="revoked-storage",
@@ -867,6 +867,11 @@ def test_purge_preview_rejects_revoked_declared_artifact_integration(
         ),
         request, db_session,
     )
+    integration = db_session.query(models.StoreExternalIntegration).filter_by(
+        store_id=store_id, external_system="revoked-storage"
+    ).one()
+    integration.status = "REVOKED"
+    db_session.commit()
     integration = db_session.query(models.StoreExternalIntegration).filter_by(
         store_id=store_id, external_system="revoked-storage"
     ).one()
@@ -887,7 +892,7 @@ def test_artifact_lineage_registration_persists_same_image_parent(db_session, tm
         db_session, tmp_path, with_detection=False
     )
     request = SimpleNamespace(state=SimpleNamespace(user_id=admin_id))
-    parent = main_module.register_shelf_image_artifact_reference(
+    parent = register_test_artifact_reference(
         image_id,
         ShelfImageArtifactReferenceCreate(
             artifact_type="BACKUP",
@@ -898,7 +903,7 @@ def test_artifact_lineage_registration_persists_same_image_parent(db_session, tm
         request,
         db_session,
     )
-    child = main_module.register_shelf_image_artifact_reference(
+    child = register_test_artifact_reference(
         image_id,
         ShelfImageArtifactReferenceCreate(
             artifact_type="DATASET_RELEASE",
@@ -932,7 +937,7 @@ def test_artifact_lineage_registration_rejects_missing_parent(db_session, tmp_pa
     )
 
     with pytest.raises(HTTPException) as exc:
-        main_module.register_shelf_image_artifact_reference(
+        register_test_artifact_reference(
             image_id, payload, request, db_session
         )
 
@@ -953,7 +958,7 @@ def test_artifact_lineage_registration_rejects_parent_from_another_image_or_stor
         db_session, tmp_path / "second", with_detection=False
     )
     request = SimpleNamespace(state=SimpleNamespace(user_id=first_admin_id))
-    parent = main_module.register_shelf_image_artifact_reference(
+    parent = register_test_artifact_reference(
         first_image_id,
         ShelfImageArtifactReferenceCreate(
             artifact_type="BACKUP",
@@ -965,7 +970,7 @@ def test_artifact_lineage_registration_rejects_parent_from_another_image_or_stor
     )
 
     with pytest.raises(HTTPException) as exc:
-        main_module.register_shelf_image_artifact_reference(
+        register_test_artifact_reference(
             second_image_id,
             ShelfImageArtifactReferenceCreate(
                 artifact_type="DATASET_RELEASE",
@@ -991,7 +996,7 @@ def test_artifact_lineage_registration_is_idempotent_only_for_same_parent(
         db_session, tmp_path, with_detection=False
     )
     request = SimpleNamespace(state=SimpleNamespace(user_id=admin_id))
-    parent_a = main_module.register_shelf_image_artifact_reference(
+    parent_a = register_test_artifact_reference(
         image_id,
         ShelfImageArtifactReferenceCreate(
             artifact_type="BACKUP",
@@ -1001,7 +1006,7 @@ def test_artifact_lineage_registration_is_idempotent_only_for_same_parent(
         request,
         db_session,
     )
-    parent_b = main_module.register_shelf_image_artifact_reference(
+    parent_b = register_test_artifact_reference(
         image_id,
         ShelfImageArtifactReferenceCreate(
             artifact_type="BACKUP",
@@ -1018,10 +1023,10 @@ def test_artifact_lineage_registration_is_idempotent_only_for_same_parent(
         parent_reference_id=parent_a.id,
         sha256="c" * 64,
     )
-    first = main_module.register_shelf_image_artifact_reference(
+    first = register_test_artifact_reference(
         image_id, child_payload, request, db_session
     )
-    replay = main_module.register_shelf_image_artifact_reference(
+    replay = register_test_artifact_reference(
         image_id, child_payload, request, db_session
     )
 
@@ -1036,7 +1041,7 @@ def test_artifact_lineage_registration_is_idempotent_only_for_same_parent(
         sha256="c" * 64,
     )
     with pytest.raises(HTTPException) as exc:
-        main_module.register_shelf_image_artifact_reference(
+        register_test_artifact_reference(
             image_id, conflicting_lineage, request, db_session
         )
 
