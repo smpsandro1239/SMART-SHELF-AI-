@@ -186,5 +186,7 @@ def consume_external_artifact_bytes(
     finally:
         # The dedicated session owns this read-only transaction. Rollback
         # releases locks on both success and failure before closing the session.
-        db.rollback()
-        db.close()
+        try:
+            db.rollback()
+        finally:
+            db.close()
