@@ -155,7 +155,7 @@ def call(session, fetcher, **overrides):
     }
     args.update(overrides)
     original_keys = consumption.settings.artifact_inventory_hmac_keys_json
-    consumption.settings.artifact_inventory_hmac_keys_json = '{"object-store-a":"test-inventory-signing-secret-which-is-long-enough"}'
+    consumption.settings.artifact_inventory_hmac_keys_json = '{"object-store-a":"test-inventory-signing-secret-which-is-long-enough","archive-store-b":"test-inventory-signing-secret-which-is-long-enough"}'
     try:
         return consume_external_artifact_bytes(**args)
     finally:
