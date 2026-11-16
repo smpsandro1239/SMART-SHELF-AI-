@@ -996,3 +996,9 @@ As rotas de consulta de deteções, execuções OCR, evidência OCR, correspond�
 ### Serialização da geração de evidência combinada
 
 O endpoint `POST /api/v1/shelf-images/{image_id}/evidence-fusion` bloqueia agora a imagem de origem antes de consultar execuções OCR, correspondências, deteções ou evidência combinada existente. Os produtos candidatos são bloqueados posteriormente por ordem crescente de ID. Esta ordem evita que a fusão utilize deteções antigas caso um worker esteja a substituir resultados em simultâneo com a geração da evidência. O teste `test_evidence_fusion_locks_source_image_before_loading_derived_rows` verifica a aquisição do bloqueio na camada ORM.
+
+
+
+### Histórico de revisão de deteções e retenção
+
+A consulta do histórico de revisões de uma deteção resolve primeiro a imagem de origem, bloqueia essa imagem e volta a carregar a deteção antes de devolver o histórico. Se o worker tiver substituído a deteção enquanto o pedido aguardava, a consulta responde com conflito e exige nova leitura; se a imagem tiver sido restringida, o histórico não é exposto. O teste `test_detection_review_history_locks_source_image_before_returning_reviews` verifica o bloqueio na camada ORM.
