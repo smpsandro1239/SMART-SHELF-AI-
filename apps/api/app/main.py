@@ -1479,12 +1479,6 @@ def create_shelf_image_artifact_inventory_snapshot(
 
     now = models.utc_now()
     generated_at = payload.generated_at.astimezone(timezone.utc)
-    age_seconds = (now - generated_at).total_seconds()
-    if age_seconds < -120:
-        raise HTTPException(status_code=422, detail="Inventory snapshot timestamp is in the future")
-    if age_seconds > settings.artifact_inventory_max_age_minutes * 60:
-        raise HTTPException(status_code=409, detail="Inventory snapshot is too old")
-
     entries = [entry.model_dump() for entry in payload.entries]
     try:
         manifest_sha256 = verify_inventory_signature(
@@ -1502,6 +1496,33 @@ def create_shelf_image_artifact_inventory_snapshot(
         raise HTTPException(status_code=503, detail="Trusted inventory source is not configured") from exc
     except ValueError as exc:
         raise HTTPException(status_code=401, detail="External inventory signature or manifest is invalid") from exc
+
+    # Resolve exact retries before freshness and current-reference checks: an
+    # immutable snapshot remains idempotent even after it ages out or the
+    # declared artifact set changes. The signed digest includes generated_at.
+    existing = (
+        db.query(models.ShelfImageArtifactInventorySnapshot)
+        .filter(
+            models.ShelfImageArtifactInventorySnapshot.store_id == store_id,
+            models.ShelfImageArtifactInventorySnapshot.external_system == payload.external_system,
+            models.ShelfImageArtifactInventorySnapshot.snapshot_id == payload.snapshot_id,
+        )
+        .first()
+    )
+    if existing is not None:
+        if (
+            existing.shelf_image_id != image_id
+            or existing.manifest_sha256 != manifest_sha256
+            or existing.source_signature != payload.signature
+        ):
+            raise HTTPException(status_code=409, detail="Snapshot ID already exists with different content or signature")
+        return existing
+
+    age_seconds = (now - generated_at).total_seconds()
+    if age_seconds < -120:
+        raise HTTPException(status_code=422, detail="Inventory snapshot timestamp is in the future")
+    if age_seconds > settings.artifact_inventory_max_age_minutes * 60:
+        raise HTTPException(status_code=409, detail="Inventory snapshot is too old")
 
     references = (
         db.query(models.ShelfImageArtifactReference)
@@ -1575,24 +1596,6 @@ def create_shelf_image_artifact_inventory_snapshot(
         entries,
         key=lambda entry: (entry["artifact_type"], entry["external_reference"]),
     )
-    existing = (
-        db.query(models.ShelfImageArtifactInventorySnapshot)
-        .filter(
-            models.ShelfImageArtifactInventorySnapshot.store_id == store_id,
-            models.ShelfImageArtifactInventorySnapshot.external_system == payload.external_system,
-            models.ShelfImageArtifactInventorySnapshot.snapshot_id == payload.snapshot_id,
-        )
-        .first()
-    )
-    if existing is not None:
-        if (
-            existing.shelf_image_id != image_id
-            or existing.manifest_sha256 != manifest_sha256
-            or existing.source_signature != payload.signature
-        ):
-            raise HTTPException(status_code=409, detail="Snapshot ID already exists with different content or signature")
-        return existing
-
     latest_snapshot = (
         db.query(models.ShelfImageArtifactInventorySnapshot)
         .filter(
