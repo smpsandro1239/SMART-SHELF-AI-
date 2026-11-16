@@ -93,7 +93,7 @@ def create_fixture(suffix: str) -> tuple[int, int]:
 
 def main() -> None:
     suffix = uuid4().hex[:10]
-    image_id, _detection_id = create_fixture(suffix)
+    image_id, _detection_id, supervisor_id = create_fixture(suffix)
     application_name = f"ss-review-queue-{suffix}"
     image_locked = Event()
     allow_retention_commit = Event()
@@ -133,66 +133,81 @@ def main() -> None:
         app.dependency_overrides[main_module.get_db] = scoped_get_db
         try:
             with TestClient(app) as client:
-                response = client.get("/api/v1/shelf-image-review-queue")
+                response = client.get(
+                    "/api/v1/shelf-image-review-queue",
+                    headers=_bearer(supervisor_id),
+                )
             request_result["status_code"] = response.status_code
             request_result["body"] = response.json()
         finally:
             app.dependency_overrides.pop(main_module.get_db, None)
             request_finished.set()
 
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        retention_future = executor.submit(retention_transaction)
-        assert image_locked.wait(timeout=10), "retention transaction did not lock source image"
+    original_settings = main_module.settings
+    main_module.settings = original_settings.model_copy(update={"app_env": "production"})
+    try:
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            retention_future = executor.submit(retention_transaction)
+            queue_future = None
+            try:
+                assert image_locked.wait(timeout=10), (
+                    "retention transaction did not lock source image"
+                )
+                queue_future = executor.submit(request_review_queue)
+                assert request_started.wait(timeout=10), (
+                    "review queue request did not start"
+                )
 
-        queue_future = executor.submit(request_review_queue)
-        assert request_started.wait(timeout=10), "review queue request did not start"
+                deadline = monotonic() + 12
+                observed_blocker = False
+                while monotonic() < deadline:
+                    with SessionLocal() as monitor:
+                        activity = monitor.execute(
+                            text(
+                                "SELECT wait_event_type, pg_blocking_pids(pid) "
+                                "FROM pg_stat_activity WHERE application_name = :name"
+                            ),
+                            {"name": application_name},
+                        ).first()
+                    if activity is not None and activity[0] == "Lock" and activity[1]:
+                        observed_blocker = True
+                        break
+                    if request_finished.is_set():
+                        break
+                    sleep(0.05)
 
-        deadline = monotonic() + 12
-        observed_blocker = False
-        while monotonic() < deadline:
-            with SessionLocal() as monitor:
-                activity = monitor.execute(
-                    text(
-                        "SELECT wait_event_type, pg_blocking_pids(pid) "
-                        "FROM pg_stat_activity WHERE application_name = :name"
-                    ),
-                    {"name": application_name},
-                ).first()
-            if activity is not None and activity[0] == "Lock" and activity[1]:
-                observed_blocker = True
-                break
-            if request_finished.is_set():
-                break
-            sleep(0.05)
+                assert observed_blocker, (
+                    "review queue request did not wait on the source-image row lock"
+                )
+                assert not request_finished.is_set(), (
+                    "review queue returned before the retention transaction released its lock"
+                )
+            finally:
+                allow_retention_commit.set()
 
-        try:
-            assert observed_blocker, (
-                "review queue request did not wait on the source-image row lock"
-            )
-            assert not request_finished.is_set(), (
-                "review queue returned before the retention transaction released its lock"
-            )
-        finally:
-            allow_retention_commit.set()
+            retention_future.result(timeout=15)
+            if queue_future is not None:
+                queue_future.result(timeout=15)
 
-        retention_future.result(timeout=15)
-        queue_future.result(timeout=15)
+        assert request_result.get("status_code") == 200, request_result
+        assert request_result.get("body") == [], (
+            "review queue exposed derived evidence after the source image was restricted: "
+            f"{request_result}"
+        )
 
-    assert request_result.get("status_code") == 200, request_result
-    assert request_result.get("body") == [], (
-        "review queue exposed derived evidence after the source image was restricted: "
-        f"{request_result}"
-    )
+        with SessionLocal() as db:
+            image = db.get(models.ShelfImage, image_id)
+            assert image is not None
+            assert image.retention_status == "RESTRICTED"
 
-    with SessionLocal() as db:
-        image = db.get(models.ShelfImage, image_id)
-        assert image is not None
-        assert image.retention_status == "RESTRICTED"
+    finally:
+        app.dependency_overrides.pop(main_module.get_db, None)
+        main_module.settings = original_settings
 
     print(
-        "PostgreSQL review-queue retention smoke passed: the HTTP queue request "
-        "waited on the source-image lock, refreshed eligibility after retention "
-        "committed, and returned no derived evidence for the restricted image."
+        "PostgreSQL review-queue retention smoke passed: the store-scoped HTTP "
+        "request waited on the source-image lock, refreshed eligibility after "
+        "retention committed, and returned no derived evidence for the restricted image."
     )
 
 
