@@ -619,6 +619,7 @@ class ShelfImageArtifactInventorySnapshot(Base):
     external_system: Mapped[str] = mapped_column(String(120), nullable=False)
     snapshot_id: Mapped[str] = mapped_column(String(160), nullable=False)
     generated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    inventory_complete: Mapped[bool] = mapped_column(Boolean, nullable=False)
     manifest_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
     source_signature: Mapped[str] = mapped_column(String(64), nullable=False)
     inventory_manifest: Mapped[list] = mapped_column(JSON, nullable=False)
