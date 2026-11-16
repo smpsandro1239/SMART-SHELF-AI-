@@ -615,6 +615,10 @@ class ShelfImageArtifactDispositionEvent(Base):
             ondelete="RESTRICT",
         ),
         CheckConstraint(
+            "sequence_number > 0",
+            name="ck_shelf_image_artifact_disposition_sequence_positive",
+        ),
+        CheckConstraint(
             "event_type IN ('PROPOSED', 'APPROVED', 'REJECTED', 'DISPOSAL_ATTESTED')",
             name="ck_shelf_image_artifact_disposition_event_type",
         ),
