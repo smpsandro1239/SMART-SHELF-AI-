@@ -90,6 +90,8 @@ Foi acrescentada cobertura JWT cross-store para sete operações de inventário/
   - [x] Proteger também a auditoria humana e os resultados derivados contra eliminação direta dos seus registos-pai: a migração `0030_detection_ocr_audit_restrict` bloqueia a eliminação de deteções com revisões humanas, associação OCR, matching ou fusão, e de execuções OCR com evidência, matching ou fusão. O smoke PostgreSQL `postgres_embedding_retention_smoke.py` verifica a preservação de cada relação. Validado no API CI [43709842751](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/43709842751).
   - [x] Tornar a proveniência visual/OCR append-only: a migração `0031_visual_ocr_evidence_append_only` bloqueia `UPDATE` e `DELETE` diretos em revisões humanas, execuções OCR, regiões OCR, matches e fusões. O smoke PostgreSQL `postgres_embedding_retention_smoke.py` tenta ambas as operações em cada tabela e confirma que os registos originais permanecem. Validado no API CI [43710660312](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/43710660312) e Quality Gates [43710660309](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/43710660309): **778 testes aprovados, 1 ignorado**, migrações PostgreSQL 16, smoke tests operacionais, compilação Python e build web aprovados.
 
+- [ ] Serializar a leitura da fila de revisão de evidência combinada (`GET /api/v1/shelf-image-review-queue`) com as transições de retenção: bloquear imagens de origem em ordem crescente de ID, revalidar o estado após aquisição dos locks e preservar a ordenação por prioridade/paginação.
+
 #### P1 — Motor central de inteligência
 
 - [ ] Separar formalmente stock de exposição, retaguarda, reservas, stock em trânsito, encomendas e unidades em picking.
@@ -1008,3 +1010,10 @@ A consulta do histórico de revisões de uma deteção resolve primeiro a imagem
 ### Elegibilidade concorrente de candidatos de treino
 
 A listagem `GET /api/v1/training-candidates/reviewed` bloqueia as imagens de origem das linhas selecionadas, em ordem crescente de ID, e atualiza os objetos ORM antes de produzir candidatos. A ordenação cronológica é aplicada depois da aquisição dos bloqueios. Isto serializa a seleção com as transições de retenção e evita promover para curadoria uma imagem que foi restringida enquanto a consulta aguardava. O teste `test_reviewed_training_candidates_lock_source_images` verifica que a consulta solicita o bloqueio específico das imagens de origem.
+
+### Estado de validação — 2026-11-16
+
+A implementação recente de bloqueios no histórico de revisão, fusão de evidências e listagem de candidatos de treino foi identificada na branch `main`. Os workflows API CI `43794980825` e Quality Gates `43794992992` falharam no commit `be1938f25bf0f0d3436991acc0058b6ecebf1d4a`; a repetição dos jobs também falhou. A API do GitHub não disponibilizou os logs dos jobs (resposta `BlobNotFound`), pelo que a causa permanece indeterminada. **Não considerar estas alterações validadas por CI** até uma execução completa com logs e conclusão verde.
+
+A revisão do código identificou ainda que a listagem da fila de revisão de evidência combinada não adquire atualmente os mesmos bloqueios de imagem de origem. Esta lacuna foi acrescentada ao P0. A próxima implementação deve preservar a ordenação por prioridade e a semântica de paginação enquanto serializa a leitura com a retenção.
+
