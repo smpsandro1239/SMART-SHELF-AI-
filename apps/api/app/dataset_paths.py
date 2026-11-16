@@ -4,15 +4,17 @@ Dataset paths are serialized and may be consumed on hosts with different path
 semantics. Accept only relative POSIX-style paths so Windows drive, UNC,
 alternate-stream and backslash traversal forms cannot change meaning later.
 """
-from pathlib import PurePosixPath, PureWindowsPath
 import re
+from pathlib import PurePosixPath, PureWindowsPath
 
 
 def is_safe_dataset_relative_path(value: object) -> bool:
     """Return whether value is a portable, non-traversing relative dataset path."""
     if not isinstance(value, str) or not value or value != value.strip():
         return False
-    if "\x00" in value or "\\" in value or ":" in value:
+    if any(ord(character) < 32 or 127 <= ord(character) < 160 for character in value):
+        return False
+    if any(character in value for character in '\\:*?"<>|'):
         return False
 
     posix = PurePosixPath(value)
@@ -22,7 +24,7 @@ def is_safe_dataset_relative_path(value: object) -> bool:
     parts = value.split("/")
     if any(part in {"", ".", ".."} for part in parts):
         return False
-    reserved = re.compile(r"^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\\..*)?$", re.IGNORECASE)
+    reserved = re.compile(r"^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\..*)?$", re.IGNORECASE)
     if any(part.endswith((".", " ")) or reserved.fullmatch(part) for part in parts):
         return False
     return True
