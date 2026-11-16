@@ -502,6 +502,8 @@ class StoreExternalIntegrationRead(BaseModel):
 
 class StoreExternalIntegrationCoverageRead(BaseModel):
     store_id: int
+    coverage_configured: bool
+    coverage_complete: bool
     required_integrations: int
     active_required_integrations: int
     missing_or_revoked_integrations: list[str]
