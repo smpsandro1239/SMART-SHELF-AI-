@@ -18,6 +18,7 @@ def approved_kwargs():
         "source_legal_hold": False,
         "integration_status": "ACTIVE",
         "inventory_complete": True,
+        "inventory_integrity_verified": True,
         "inventory_generated_at": NOW - timedelta(minutes=2),
         "inventory_verified_at": NOW - timedelta(minutes=1),
         "inventory_max_age_seconds": 900,
@@ -134,3 +135,11 @@ def test_inventory_timestamp_equal_to_disposition_is_not_current():
     decision = evaluate_artifact_access(**kwargs)
     assert decision.allowed is False
     assert "inventory_predates_disposition" in decision.reasons
+
+
+def test_unverified_inventory_integrity_blocks_access():
+    kwargs = approved_kwargs()
+    kwargs["inventory_integrity_verified"] = False
+    decision = evaluate_artifact_access(**kwargs)
+    assert decision.allowed is False
+    assert "inventory_integrity_unverified" in decision.reasons
