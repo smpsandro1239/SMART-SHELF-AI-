@@ -31,4 +31,9 @@ def create_access_token(*, user_id: int, role: str) -> tuple[str, int]:
 
 
 def decode_access_token(token: str) -> dict:
-    return jwt.decode(token, settings.jwt_secret_key, algorithms=[ALGORITHM])
+    return jwt.decode(
+        token,
+        settings.jwt_secret_key,
+        algorithms=[ALGORITHM],
+        options={"require": ["sub", "iat", "exp"]},
+    )
