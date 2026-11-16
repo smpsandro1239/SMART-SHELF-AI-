@@ -1,6 +1,7 @@
 """Strict CSV parsing for hourly sales and store traffic imports."""
 import csv
 import io
+import re
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal, InvalidOperation
@@ -25,6 +26,8 @@ class ParsedHourlyTrafficRow:
 def _read_csv(payload: bytes, required_columns: tuple[str, ...]):
     if not payload:
         raise ValueError("CSV file is empty")
+    if b"\x00" in payload:
+        raise ValueError("CSV must not contain NUL bytes")
     try:
         decoded = payload.decode("utf-8-sig")
     except UnicodeDecodeError as exc:
@@ -53,6 +56,8 @@ def _read_csv(payload: bytes, required_columns: tuple[str, ...]):
 
 def _hour(row: dict, line: int) -> int:
     try:
+        if re.fullmatch(r"[0-9]+", row["hour_of_day"]) is None:
+            raise ValueError
         value = int(row["hour_of_day"])
         if not 0 <= value <= 23:
             raise ValueError
@@ -62,13 +67,15 @@ def _hour(row: dict, line: int) -> int:
 
 def _business_date(row: dict, line: int) -> date:
     try:
+        if re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", row["business_date"]) is None:
+            raise ValueError
         return date.fromisoformat(row["business_date"])
     except (TypeError, ValueError) as exc:
         raise ValueError(f"Invalid business_date at CSV line {line}; expected YYYY-MM-DD") from exc
 
 def _reference(row: dict, line: int, seen: set[str]) -> str:
     value = row["external_reference"]
-    if not value or len(value) > 120:
+    if not value or len(value) > 120 or any(ord(char) < 32 or 127 <= ord(char) < 160 for char in value):
         raise ValueError(f"Invalid external_reference at CSV line {line}")
     if value in seen:
         raise ValueError(f"Duplicate external_reference in CSV at line {line}: {value}")
@@ -80,8 +87,10 @@ def parse_hourly_sales_csv(payload: bytes) -> list[ParsedHourlySalesRow]:
     result, seen = [], set()
     for line, row in _read_csv(payload, required):
         try:
+            if re.fullmatch(r"[0-9]+", row["product_id"]) is None:
+                raise ValueError
             product_id = int(row["product_id"])
-            if product_id <= 0:
+            if product_id <= 0 or product_id > 2**63 - 1:
                 raise ValueError
         except (TypeError, ValueError) as exc:
             raise ValueError(f"Invalid product_id at CSV line {line}") from exc
@@ -99,6 +108,8 @@ def parse_hourly_traffic_csv(payload: bytes) -> list[ParsedHourlyTrafficRow]:
     result, seen = [], set()
     for line, row in _read_csv(payload, required):
         try:
+            if re.fullmatch(r"[0-9]+", row["customer_count"]) is None:
+                raise ValueError
             count = int(row["customer_count"])
             if not 0 <= count <= 2_000_000:
                 raise ValueError
