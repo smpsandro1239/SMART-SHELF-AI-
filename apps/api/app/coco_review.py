@@ -78,6 +78,14 @@ def build_review_html(
     report_dir: Path | None = None,
 ) -> tuple[str, dict[str, int]]:
     """Build an offline review page after validating COCO and image paths."""
+    # Give platform-specific path violations a precise error before the generic
+    # COCO schema validator classifies backslashes as unsafe separators.
+    if isinstance(document, dict) and isinstance(document.get("images"), list):
+        for image in document["images"]:
+            if isinstance(image, dict):
+                file_name = image.get("file_name")
+                if isinstance(file_name, str) and "\\\\" in file_name:
+                    raise ValueError(f"non-portable image path: {file_name}")
     errors = validate_coco_document(document)
     if errors:
         raise ValueError("invalid COCO document: " + "; ".join(errors[:10]))
