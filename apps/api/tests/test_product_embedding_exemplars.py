@@ -840,3 +840,84 @@ def test_registry_abstains_when_one_model_version_has_conflicting_dimensions():
             assert registry._exemplars == ()
             assert result.status == "UNKNOWN"
             assert result.product_id is None
+
+
+
+def test_matching_registry_skips_exemplar_when_source_image_hash_changes():
+    from app.product_embedding_service import build_approved_product_registry
+
+    with TestClient(app) as client:
+        product_id = create_product(client)
+        store = client.post(
+            "/api/v1/stores",
+            json={"code": "EMB-HASH-CHANGE", "name": "Loja hash alterado"},
+        ).json()
+        zone = client.post(
+            "/api/v1/zones",
+            json={"store_id": store["id"], "name": "Zona"},
+        ).json()
+        shelf = client.post(
+            "/api/v1/shelves",
+            json={"zone_id": zone["id"], "code": "S-HASH"},
+        ).json()
+
+        original_hash = "a" * 64
+        with TestingSession() as setup_db:
+            image = models.ShelfImage(
+                shelf_id=shelf["id"],
+                original_filename="source-hash.jpg",
+                storage_path="/tmp/source-hash.jpg",
+                mime_type="image/jpeg",
+                file_size_bytes=10,
+                sha256=original_hash,
+                retention_status="ACTIVE",
+            )
+            reviewer = models.User(
+                email="hash-change-reviewer@example.test",
+                full_name="Embedding reviewer",
+                password_hash="test-only-not-used",
+                role="ADMIN",
+                is_active=True,
+            )
+            setup_db.add_all([image, reviewer])
+            setup_db.commit()
+            image_id, reviewer_id = image.id, reviewer.id
+
+        created = client.post(
+            "/api/v1/product-embedding-exemplars",
+            json=exemplar_payload(
+                product_id,
+                shelf_image_id=image_id,
+                image_sha256=original_hash,
+            ),
+        )
+        assert created.status_code == 201, created.text
+
+        with TestingSession() as setup_db:
+            row = setup_db.get(
+                models.ProductEmbeddingExemplar,
+                created.json()["id"],
+            )
+            row.review_status = "APPROVED"
+            row.reviewed_by_user_id = reviewer_id
+            row.reviewed_at = models.utc_now()
+            setup_db.commit()
+
+        with TestingSession() as db:
+            db.query(models.ShelfImage).filter(
+                models.ShelfImage.id == image_id
+            ).update(
+                {models.ShelfImage.sha256: "b" * 64},
+                synchronize_session=False,
+            )
+
+            registry = build_approved_product_registry(
+                db,
+                model_version="embedding-model-v1",
+                minimum_similarity=0.8,
+            )
+            result = registry.match([0.25, 0.5, 0.75])
+
+            assert registry._exemplars == ()
+            assert result.status == "UNKNOWN"
+            assert result.product_id is None
