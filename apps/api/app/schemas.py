@@ -495,6 +495,76 @@ class ShelfImageArtifactDispositionActionRequest(BaseModel):
         return normalized
 
 
+ArtifactInventoryState = Literal["PRESENT", "ABSENT"]
+
+
+class ShelfImageArtifactInventoryEntryCreate(BaseModel):
+    artifact_type: ArtifactType
+    external_reference: str = Field(min_length=1, max_length=500)
+    sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    state: ArtifactInventoryState
+
+    @field_validator("external_reference")
+    @classmethod
+    def normalize_inventory_reference(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("Inventory external_reference cannot be blank")
+        return normalized
+
+
+class ShelfImageArtifactInventorySnapshotCreate(BaseModel):
+    external_system: str = Field(min_length=1, max_length=120)
+    snapshot_id: str = Field(min_length=1, max_length=160)
+    generated_at: datetime
+    entries: list[ShelfImageArtifactInventoryEntryCreate] = Field(min_length=1, max_length=5000)
+    signature: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+    @field_validator("external_system", "snapshot_id")
+    @classmethod
+    def normalize_inventory_identity(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("Inventory identity cannot be blank")
+        return normalized
+
+    @field_validator("generated_at")
+    @classmethod
+    def require_inventory_timezone(cls, value: datetime) -> datetime:
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("Inventory generated_at must include a timezone")
+        return value
+
+    @model_validator(mode="after")
+    def reject_duplicate_inventory_entries(self):
+        identities = [
+            (entry.artifact_type, entry.external_reference)
+            for entry in self.entries
+        ]
+        if len(identities) != len(set(identities)):
+            raise ValueError("Inventory entries cannot contain duplicate artifact identities")
+        return self
+
+
+class ShelfImageArtifactInventorySnapshotRead(BaseModel):
+    id: int
+    shelf_image_id: int
+    store_id: int
+    external_system: str
+    snapshot_id: str
+    generated_at: datetime
+    manifest_sha256: str
+    source_signature: str
+    inventory_manifest: list[dict]
+    artifact_count: int
+    present_count: int
+    absent_count: int
+    verified_at: datetime
+    created_by_user_id: int
+    created_at: datetime
+    model_config = ConfigDict(from_attributes=True)
+
+
 class ShelfImageArtifactDispositionEventRead(BaseModel):
     id: int
     sequence_number: int
