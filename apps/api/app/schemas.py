@@ -497,6 +497,7 @@ class ShelfImageArtifactDispositionActionRequest(BaseModel):
 
 class ShelfImageArtifactDispositionEventRead(BaseModel):
     id: int
+    sequence_number: int
     artifact_reference_id: int
     shelf_image_id: int
     store_id: int
