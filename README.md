@@ -1154,3 +1154,10 @@ Foi alargado `test_accepted_signed_snapshot_updates_integration_last_seen` para 
 A migration `0039_inventory_snapshot_monotonicity` acrescenta uma segunda linha de defesa para a ordenação temporal dos inventários. Em PostgreSQL, o trigger `BEFORE INSERT` bloqueia a linha de `shelf_images` antes de consultar o maior `generated_at` para a mesma imagem, loja e sistema externo; timestamps iguais ou anteriores são rejeitados com SQLSTATE `23514`. O bloqueio da imagem serializa também inserções concorrentes que não passem pela API. Em SQLite, um trigger equivalente compara os instantes com `julianday()`.
 
 O smoke test `apps/api/scripts/postgres_artifact_inventory_monotonicity_smoke.py` verifica inserções directas antigas e iguais, bem como o isolamento entre sistemas externos. O workflow API CI executa-o depois de aplicar todas as migrations. A validação desta alteração foi estática; a execução do smoke test depende de um runner PostgreSQL funcional.
+
+
+### Serialização dos eventos de disposição com a ingestão de inventário — 2026-11-16
+
+A migration `0040_disposition_image_lock_order` fecha uma diferença entre os fluxos da API e inserções directas na base de dados. O trigger PostgreSQL `trg_00_artifact_disposition_lock_image` bloqueia a imagem de origem antes do trigger de validação existente bloquear a referência do artefacto. O prefixo `trg_00` garante a ordem alfabética de execução dos triggers `BEFORE INSERT`: imagem primeiro, referência depois, histórico por fim. Esta ordem coincide com a ingestão de snapshots, registo de referências, avaliação de retenção e operações de disposição da API.
+
+O smoke test PostgreSQL `postgres_shelf_image_artifact_disposition_smoke.py` passou a verificar que uma inserção directa de evento fica bloqueada enquanto outra transacção detém o lock da imagem. O SQLite recebe também uma validação explícita da existência da imagem; a serialização dos escritores é assegurada pelo mecanismo de escrita da própria base de dados. A migration e o teste estão integrados no workflow API CI. Validação estática nesta sessão; a execução depende de um runner funcional.
