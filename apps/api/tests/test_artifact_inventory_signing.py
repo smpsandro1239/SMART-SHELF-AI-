@@ -164,3 +164,29 @@ def test_canonical_inventory_rejects_duplicates_and_naive_timestamps():
             entries=ENTRIES,
             inventory_complete=True,
         )
+
+
+
+def test_inventory_key_configuration_rejects_duplicate_source_identifiers():
+    duplicated = (
+        '{"backup-vault":"' + SECRET + '","backup-vault":"'
+        + ("x" * 40) + '"}'
+    )
+    with pytest.raises(InventorySignatureConfigurationError, match="duplicate source identifier"):
+        verify_inventory_signature(
+            image_id=10, store_id=2, external_system="backup-vault",
+            snapshot_id="snapshot-duplicate-key", generated_at=GENERATED_AT,
+            entries=ENTRIES, signature="a" * 64,
+            configured_keys_json=duplicated, inventory_complete=True,
+        )
+
+
+@pytest.mark.parametrize("configuration", ["[]", '"not-an-object"', "{invalid-json"])
+def test_inventory_key_configuration_must_be_a_json_object(configuration):
+    with pytest.raises(InventorySignatureConfigurationError, match="JSON object"):
+        verify_inventory_signature(
+            image_id=10, store_id=2, external_system="backup-vault",
+            snapshot_id="snapshot-invalid-config", generated_at=GENERATED_AT,
+            entries=ENTRIES, signature="a" * 64,
+            configured_keys_json=configuration, inventory_complete=True,
+        )
