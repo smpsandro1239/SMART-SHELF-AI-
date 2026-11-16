@@ -662,6 +662,7 @@ class ShelfImageArtifactInventorySnapshot(Base):
     inventory_complete: Mapped[bool] = mapped_column(Boolean, nullable=False)
     manifest_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
     source_signature: Mapped[str] = mapped_column(String(64), nullable=False)
+    key_id: Mapped[str] = mapped_column(String(64), default="legacy", nullable=False)
     inventory_manifest: Mapped[list] = mapped_column(JSON, nullable=False)
     artifact_count: Mapped[int] = mapped_column(Integer, nullable=False)
     present_count: Mapped[int] = mapped_column(Integer, nullable=False)
