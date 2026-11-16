@@ -1,6 +1,7 @@
 """Verify append-only external artifact disposition history on PostgreSQL."""
 from concurrent.futures import ThreadPoolExecutor
-from threading import Barrier
+from threading import Barrier, Event
+from time import sleep
 from uuid import uuid4
 
 from sqlalchemy.exc import IntegrityError
@@ -106,9 +107,52 @@ def main() -> None:
             external_reference=f"concurrent/{suffix}",
             declared_by_user_id=admin_id,
         )
-        db.add(concurrent_artifact)
+        serialized_artifact = models.ShelfImageArtifactReference(
+            shelf_image_id=image_id,
+            store_id=store_id,
+            artifact_type="OTHER",
+            external_system="postgres-smoke",
+            external_reference=f"image-lock/{suffix}",
+            declared_by_user_id=admin_id,
+        )
+        db.add_all([concurrent_artifact, serialized_artifact])
         db.commit()
         concurrent_artifact_id = concurrent_artifact.id
+        serialized_artifact_id = serialized_artifact.id
+
+    # A direct SQLAlchemy insert must acquire the image lock before the
+    # existing validation trigger locks the artifact-reference row.
+    insert_started = Event()
+
+    def insert_disposition_while_image_is_locked() -> str:
+        with SessionLocal() as db:
+            candidate = models.ShelfImageArtifactDispositionEvent(
+                artifact_reference_id=serialized_artifact_id,
+                sequence_number=1,
+                shelf_image_id=image_id,
+                store_id=store_id,
+                event_type="PROPOSED",
+                actor_user_id=admin_id,
+                reason="Verify image-first database lock order",
+            )
+            db.add(candidate)
+            insert_started.set()
+            db.commit()
+            return "committed"
+
+    with SessionLocal() as image_lock_db:
+        image_lock_db.query(models.ShelfImage).filter(
+            models.ShelfImage.id == image_id
+        ).with_for_update().one()
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            blocked_insert = executor.submit(insert_disposition_while_image_is_locked)
+            assert insert_started.wait(timeout=5), "Disposition insert did not start"
+            sleep(0.25)
+            assert not blocked_insert.done(), (
+                "Direct disposition insert did not wait for the source image lock"
+            )
+            image_lock_db.commit()
+            assert blocked_insert.result(timeout=5) == "committed"
 
     barrier = Barrier(2)
 
@@ -362,7 +406,7 @@ def main() -> None:
 
     print(
         "PostgreSQL artifact disposition smoke passed: "
-        "artifact references and events reject cross-store lineage; concurrent proposals serialize to one event; event triggers reject self-approval, non-admin actions, invalid evidence and non-contiguous sequences; event history rejects actor deletion, UPDATE and DELETE."
+        "artifact references and events reject cross-store lineage; concurrent proposals serialize to one event; event triggers acquire the source-image lock before artifact locks, reject self-approval, non-admin actions, invalid evidence and non-contiguous sequences; event history rejects actor deletion, UPDATE and DELETE."
     )
 
 
