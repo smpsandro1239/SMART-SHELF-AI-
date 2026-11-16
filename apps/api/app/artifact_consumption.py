@@ -143,7 +143,9 @@ def consume_external_artifact_bytes(
         now_utc = now or models.utc_now()
         decisions = []
         for lineage_reference in lineage:
-            ancestor_integration = (
+            ancestor_integration = integration if (
+                lineage_reference.external_system == artifact_hint.external_system
+            ) else (
                 db.query(models.StoreExternalIntegration)
                 .filter(
                     models.StoreExternalIntegration.store_id == store_id,
