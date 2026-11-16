@@ -1802,6 +1802,9 @@ def get_shelf_image_purge_eligibility(
                 isinstance(stored_manifest, list)
                 and all(isinstance(entry, dict) for entry in stored_manifest)
             )
+            if not manifest_shape_valid:
+                inventory_summary["unverified_systems"].append(external_system)
+                continue
             actual_inventory = (
                 {
                     (
