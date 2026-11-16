@@ -84,3 +84,7 @@ A suite `apps/api/tests/test_artifact_inventory_signing.py` inclui cobertura par
 ## Limites de registo de referências
 
 A API só aceita novas referências de artefactos quando a origem externa correspondente está registada e activa na loja da imagem. A revogação de uma integração impede novas declarações e novas ingestões, sem apagar referências ou snapshots históricos. Relações pai/filho permanecem limitadas à mesma imagem e loja.
+
+## Integridade multi-loja na base de dados
+
+A migration `0048_artifact_store_lineage_guard` aplica uma verificação ao nível da base de dados, não apenas na API: o `store_id` de referências e snapshots tem de coincidir com a loja da imagem, calculada através da prateleira e zona. A migration faz uma verificação prévia dos dados existentes e falha de forma explícita se encontrar linhas inconsistentes. Os triggers protegem INSERT e alterações de `shelf_image_id`/`store_id`; os eventos de disposição herdam a identidade validada da referência através da chave estrangeira composta.
