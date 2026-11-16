@@ -1002,3 +1002,9 @@ O endpoint `POST /api/v1/shelf-images/{image_id}/evidence-fusion` bloqueia agora
 ### Histórico de revisão de deteções e retenção
 
 A consulta do histórico de revisões de uma deteção resolve primeiro a imagem de origem, bloqueia essa imagem e volta a carregar a deteção antes de devolver o histórico. Se o worker tiver substituído a deteção enquanto o pedido aguardava, a consulta responde com conflito e exige nova leitura; se a imagem tiver sido restringida, o histórico não é exposto. O teste `test_detection_review_history_locks_source_image_before_returning_reviews` verifica o bloqueio na camada ORM.
+
+
+
+### Elegibilidade concorrente de candidatos de treino
+
+A listagem `GET /api/v1/training-candidates/reviewed` bloqueia as imagens de origem das linhas selecionadas, em ordem crescente de ID, e atualiza os objetos ORM antes de produzir candidatos. A ordenação cronológica é aplicada depois da aquisição dos bloqueios. Isto serializa a seleção com as transições de retenção e evita promover para curadoria uma imagem que foi restringida enquanto a consulta aguardava. O teste `test_reviewed_training_candidates_lock_source_images` verifica que a consulta solicita o bloqueio específico das imagens de origem.
