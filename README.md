@@ -1057,3 +1057,8 @@ O worker executa a geração de correspondências OCR e a fusão de evidência e
 
 Depois de bloquear as imagens de origem e os exemplares aprovados, o serviço força a atualização das entidades SQLAlchemy com `populate_existing()`. Isto evita que uma instância previamente carregada na mesma sessão conserve estado antigo (por exemplo, `retention_status=ACTIVE`) depois de a base de dados já ter registado uma restrição. A leitura final dos exemplares também atualiza vetor, proveniência e metadados de revisão após o lock. O teste `test_matching_registry_refreshes_source_image_state_after_lock` cobre a regressão de estado obsoleto; usa SQLite para validar a identity map, não a concorrência de locks PostgreSQL.
 
+
+
+### Integridade dos vetores no carregamento do registry SKU
+
+A coluna JSON dos embeddings não consegue impor por si só a correspondência entre o comprimento do vetor e `embedding_dimension`, nem garantir que dados históricos foram inseridos através da API validada. Ao construir o registry, cada exemplar aprovado é agora verificado novamente: dimensão declarada igual ao comprimento real, vetor não vazio, valores numéricos finitos e não nulos (validação adicional no modelo de domínio). Registos históricos inconsistentes são ignorados e registados em log, sem interromper a disponibilidade de outros exemplares válidos. A criação via API rejeita também versões de modelo e licenças compostas apenas por espaços. O teste `test_registry_skips_approved_exemplars_with_inconsistent_stored_dimension` cobre a exclusão fail-closed de um exemplar com dimensão adulterada; a execução permanece dependente de CI.
