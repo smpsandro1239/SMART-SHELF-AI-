@@ -78,6 +78,8 @@ from app.schemas import (
     ShelfImageArtifactReferenceCreate, ShelfImageArtifactReferenceRead,
     ShelfImageArtifactDispositionActionRequest, ShelfImageArtifactDispositionEventRead,
     ShelfImageArtifactInventorySnapshotCreate, ShelfImageArtifactInventorySnapshotRead,
+    StoreExternalIntegrationCreate, StoreExternalIntegrationUpdate,
+    StoreExternalIntegrationRead, StoreExternalIntegrationCoverageRead,
     WarehouseLocationCreate, WarehouseProductProfileCreate, WarehousePlacementCreate,
     ProductPackagingLevelCreate, StorePalletCreate, StorePalletRead,
     PalletRotationPolicyCreate, PalletRotationPolicyRead, PalletRotationPolicyUpdate, PalletRotationEventRead, PalletLifecycleUpdate, PalletRotationSimulationRequest,
@@ -1173,6 +1175,155 @@ def cancel_shelf_image_purge_schedule(
     db.commit()
     db.refresh(item)
     return item
+
+
+@app.post(
+    "/api/v1/stores/{store_id}/external-integrations",
+    response_model=StoreExternalIntegrationRead,
+    status_code=201,
+    tags=["integrations"],
+)
+def create_store_external_integration(
+    store_id: int,
+    payload: StoreExternalIntegrationCreate,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Register an external source for one store; secret material remains outside the database."""
+    actor = _request_user(db, request)
+    if actor is None or actor.role != "ADMIN":
+        raise HTTPException(status_code=403, detail="Administrator role required")
+    if db.get(models.Store, store_id) is None:
+        raise HTTPException(status_code=404, detail="Store not found")
+
+    record = models.StoreExternalIntegration(
+        store_id=store_id,
+        external_system=payload.external_system,
+        provider=payload.provider,
+        status="ACTIVE",
+        required_for_retention=payload.required_for_retention,
+        capabilities=payload.capabilities,
+        created_by_user_id=actor.id,
+        updated_by_user_id=actor.id,
+        created_at=models.utc_now(),
+        updated_at=models.utc_now(),
+    )
+    db.add(record)
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        existing = db.query(models.StoreExternalIntegration).filter(
+            models.StoreExternalIntegration.store_id == store_id,
+            models.StoreExternalIntegration.external_system == payload.external_system,
+        ).first()
+        if existing is not None:
+            raise HTTPException(status_code=409, detail="External system is already registered for this store") from exc
+        raise
+    db.refresh(record)
+    return record
+
+
+@app.get(
+    "/api/v1/stores/{store_id}/external-integrations",
+    response_model=list[StoreExternalIntegrationRead],
+    tags=["integrations"],
+)
+def list_store_external_integrations(
+    store_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """List store-scoped external integrations without exposing signing secrets."""
+    actor = _request_user(db, request)
+    if actor is None or actor.role != "ADMIN":
+        raise HTTPException(status_code=403, detail="Administrator role required")
+    if db.get(models.Store, store_id) is None:
+        raise HTTPException(status_code=404, detail="Store not found")
+    return (
+        db.query(models.StoreExternalIntegration)
+        .filter(models.StoreExternalIntegration.store_id == store_id)
+        .order_by(models.StoreExternalIntegration.external_system)
+        .all()
+    )
+
+
+@app.patch(
+    "/api/v1/stores/{store_id}/external-integrations/{integration_id}",
+    response_model=StoreExternalIntegrationRead,
+    tags=["integrations"],
+)
+def update_store_external_integration(
+    store_id: int,
+    integration_id: int,
+    payload: StoreExternalIntegrationUpdate,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Change integration activation and retention coverage policy for one store."""
+    actor = _request_user(db, request)
+    if actor is None or actor.role != "ADMIN":
+        raise HTTPException(status_code=403, detail="Administrator role required")
+    record = db.query(models.StoreExternalIntegration).filter(
+        models.StoreExternalIntegration.id == integration_id,
+        models.StoreExternalIntegration.store_id == store_id,
+    ).with_for_update().first()
+    if record is None:
+        raise HTTPException(status_code=404, detail="External integration not found")
+    changes = payload.model_dump(exclude_unset=True)
+    for field, value in changes.items():
+        setattr(record, field, value)
+    record.updated_by_user_id = actor.id
+    record.updated_at = models.utc_now()
+    db.commit()
+    db.refresh(record)
+    return record
+
+
+@app.get(
+    "/api/v1/stores/{store_id}/external-integrations/coverage",
+    response_model=StoreExternalIntegrationCoverageRead,
+    tags=["integrations"],
+)
+def get_store_external_integration_coverage(
+    store_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Report missing, revoked, never-seen and stale required inventory sources."""
+    actor = _request_user(db, request)
+    if actor is None or actor.role != "ADMIN":
+        raise HTTPException(status_code=403, detail="Administrator role required")
+    if db.get(models.Store, store_id) is None:
+        raise HTTPException(status_code=404, detail="Store not found")
+
+    now = models.utc_now()
+    required = db.query(models.StoreExternalIntegration).filter(
+        models.StoreExternalIntegration.store_id == store_id,
+        models.StoreExternalIntegration.required_for_retention.is_(True),
+    ).order_by(models.StoreExternalIntegration.external_system).all()
+    active = [item for item in required if item.status == "ACTIVE"]
+    missing_or_revoked = [item.external_system for item in required if item.status != "ACTIVE"]
+    never_seen = [item.external_system for item in active if item.last_seen_at is None]
+    stale = []
+    for item in active:
+        if item.last_seen_at is None:
+            continue
+        last_seen = item.last_seen_at
+        if last_seen.tzinfo is None:
+            last_seen = last_seen.replace(tzinfo=timezone.utc)
+        if (now - last_seen.astimezone(timezone.utc)).total_seconds() > settings.artifact_inventory_max_age_minutes * 60:
+            stale.append(item.external_system)
+
+    return StoreExternalIntegrationCoverageRead(
+        store_id=store_id,
+        required_integrations=len(required),
+        active_required_integrations=len(active),
+        missing_or_revoked_integrations=missing_or_revoked,
+        never_seen_integrations=never_seen,
+        stale_integrations=stale,
+        checked_at=now,
+    )
 
 
 @app.post(
