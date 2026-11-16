@@ -112,3 +112,20 @@ def test_registry_rejects_dimension_mismatch():
     )
     with pytest.raises(ValueError, match="dimension"):
         registry.match([1, 0, 0])
+
+
+@pytest.mark.parametrize("value", [True, False, float("nan"), float("inf"), -float("inf"), "0.9", None])
+@pytest.mark.parametrize("parameter", ["minimum_similarity", "minimum_margin"])
+def test_registry_rejects_non_finite_or_non_numeric_thresholds(parameter, value):
+    with pytest.raises(ValueError, match=parameter):
+        ProductEmbeddingRegistry(
+            [],
+            model_version="embed-v1",
+            **{parameter: value},
+        )
+
+
+def test_registry_normalizes_model_version_whitespace():
+    registry = ProductEmbeddingRegistry([], model_version="  embed-v1  ")
+
+    assert registry.model_version == "embed-v1"
