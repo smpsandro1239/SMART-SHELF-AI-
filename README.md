@@ -1249,3 +1249,7 @@ Foram acrescentados testes de contrato dos schemas e cenários de consumo com pa
 
 A suite de integração SQLite cobre agora o registo de uma referência derivada com pai na mesma imagem/loja, a rejeição de pai inexistente, a rejeição de pai pertencente a outra imagem/loja, a repetição idempotente com a mesma linhagem e o conflito quando uma declaração existente é reapresentada com outro pai. Estes testes exercitam directamente a função de endpoint e verificam também a persistência e a contagem de referências, complementando os testes de contrato dos schemas e os testes unitários do consumidor. Foram adicionados, mas ainda não executados nesta sessão; a validação continua dependente de um runner funcional.
 
+### Consumo de linhagem com bloqueios em lote — 2026-11-16
+
+A autorização de consumo bloqueia agora, numa sequência determinística, os snapshots de inventário de todos os sistemas externos envolvidos e os eventos de disposição de todos os nós da linhagem. Em vez de consultar snapshot e evento individualmente para cada antecessor, usa duas consultas bloqueantes em lote, mantendo as linhas bloqueadas até à conclusão da leitura remota e verificação SHA-256. A política continua a exigir inventário íntegro, completo, recente e com cobertura exata para cada nó; qualquer disposição atestada ou inventário ausente num antecessor bloqueia o descendente. Foram acrescentados testes para esses casos e para garantir que o número de consultas de bloqueio não cresce com a profundidade da linhagem. Os testes foram adicionados, mas não executados nesta sessão.
+
