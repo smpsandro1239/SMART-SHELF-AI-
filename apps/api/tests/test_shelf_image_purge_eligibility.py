@@ -852,3 +852,167 @@ def test_purge_preview_rejects_revoked_declared_artifact_integration(
     assert "artifact_integration_inactive_or_missing:revoked-storage" in preview["external_artifact_inventory"]["unverified_systems"]
     assert "external_artifact_disposition_not_verified" in preview["blockers"]
     assert preview["deletion_performed"] is False
+
+def test_artifact_lineage_registration_persists_same_image_parent(db_session, tmp_path):
+    from app.schemas import ShelfImageArtifactReferenceCreate
+
+    image_id, admin_id = build_restricted_image(
+        db_session, tmp_path, with_detection=False
+    )
+    request = SimpleNamespace(state=SimpleNamespace(user_id=admin_id))
+    parent = main_module.register_shelf_image_artifact_reference(
+        image_id,
+        ShelfImageArtifactReferenceCreate(
+            artifact_type="BACKUP",
+            external_system="primary-store",
+            external_reference="objects/source.zip",
+            sha256="a" * 64,
+        ),
+        request,
+        db_session,
+    )
+    child = main_module.register_shelf_image_artifact_reference(
+        image_id,
+        ShelfImageArtifactReferenceCreate(
+            artifact_type="DATASET_RELEASE",
+            external_system="archive-store",
+            external_reference="releases/derived.zip",
+            parent_reference_id=parent.id,
+            sha256="b" * 64,
+        ),
+        request,
+        db_session,
+    )
+
+    assert child.parent_reference_id == parent.id
+    assert child.shelf_image_id == parent.shelf_image_id == image_id
+    assert child.store_id == parent.store_id
+
+
+def test_artifact_lineage_registration_rejects_missing_parent(db_session, tmp_path):
+    from fastapi import HTTPException
+    from app.schemas import ShelfImageArtifactReferenceCreate
+
+    image_id, admin_id = build_restricted_image(
+        db_session, tmp_path, with_detection=False
+    )
+    request = SimpleNamespace(state=SimpleNamespace(user_id=admin_id))
+    payload = ShelfImageArtifactReferenceCreate(
+        artifact_type="DATASET_RELEASE",
+        external_system="archive-store",
+        external_reference="releases/orphan.zip",
+        parent_reference_id=999999,
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        main_module.register_shelf_image_artifact_reference(
+            image_id, payload, request, db_session
+        )
+
+    assert exc.value.status_code == 422
+    assert db_session.query(models.ShelfImageArtifactReference).count() == 0
+
+
+def test_artifact_lineage_registration_rejects_parent_from_another_image_or_store(
+    db_session, tmp_path
+):
+    from fastapi import HTTPException
+    from app.schemas import ShelfImageArtifactReferenceCreate
+
+    first_image_id, first_admin_id = build_restricted_image(
+        db_session, tmp_path / "first", with_detection=False
+    )
+    second_image_id, _ = build_restricted_image(
+        db_session, tmp_path / "second", with_detection=False
+    )
+    request = SimpleNamespace(state=SimpleNamespace(user_id=first_admin_id))
+    parent = main_module.register_shelf_image_artifact_reference(
+        first_image_id,
+        ShelfImageArtifactReferenceCreate(
+            artifact_type="BACKUP",
+            external_system="primary-store",
+            external_reference="objects/other-image.zip",
+        ),
+        request,
+        db_session,
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        main_module.register_shelf_image_artifact_reference(
+            second_image_id,
+            ShelfImageArtifactReferenceCreate(
+                artifact_type="DATASET_RELEASE",
+                external_system="archive-store",
+                external_reference="releases/cross-image.zip",
+                parent_reference_id=parent.id,
+            ),
+            request,
+            db_session,
+        )
+
+    assert exc.value.status_code == 422
+    assert db_session.query(models.ShelfImageArtifactReference).count() == 1
+
+
+def test_artifact_lineage_registration_is_idempotent_only_for_same_parent(
+    db_session, tmp_path
+):
+    from fastapi import HTTPException
+    from app.schemas import ShelfImageArtifactReferenceCreate
+
+    image_id, admin_id = build_restricted_image(
+        db_session, tmp_path, with_detection=False
+    )
+    request = SimpleNamespace(state=SimpleNamespace(user_id=admin_id))
+    parent_a = main_module.register_shelf_image_artifact_reference(
+        image_id,
+        ShelfImageArtifactReferenceCreate(
+            artifact_type="BACKUP",
+            external_system="primary-store",
+            external_reference="objects/source-a.zip",
+        ),
+        request,
+        db_session,
+    )
+    parent_b = main_module.register_shelf_image_artifact_reference(
+        image_id,
+        ShelfImageArtifactReferenceCreate(
+            artifact_type="BACKUP",
+            external_system="primary-store",
+            external_reference="objects/source-b.zip",
+        ),
+        request,
+        db_session,
+    )
+    child_payload = ShelfImageArtifactReferenceCreate(
+        artifact_type="DATASET_RELEASE",
+        external_system="archive-store",
+        external_reference="releases/shared.zip",
+        parent_reference_id=parent_a.id,
+        sha256="c" * 64,
+    )
+    first = main_module.register_shelf_image_artifact_reference(
+        image_id, child_payload, request, db_session
+    )
+    replay = main_module.register_shelf_image_artifact_reference(
+        image_id, child_payload, request, db_session
+    )
+
+    assert replay.id == first.id
+    assert replay.parent_reference_id == parent_a.id
+
+    conflicting_lineage = ShelfImageArtifactReferenceCreate(
+        artifact_type="DATASET_RELEASE",
+        external_system="archive-store",
+        external_reference="releases/shared.zip",
+        parent_reference_id=parent_b.id,
+        sha256="c" * 64,
+    )
+    with pytest.raises(HTTPException) as exc:
+        main_module.register_shelf_image_artifact_reference(
+            image_id, conflicting_lineage, request, db_session
+        )
+
+    assert exc.value.status_code == 409
+    assert db_session.query(models.ShelfImageArtifactReference).count() == 3
+
