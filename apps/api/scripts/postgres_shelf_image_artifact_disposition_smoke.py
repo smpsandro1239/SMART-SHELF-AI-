@@ -111,6 +111,7 @@ def main() -> None:
     with SessionLocal() as db:
         approval_without_proposal = models.ShelfImageArtifactDispositionEvent(
             artifact_reference_id=unproposed_artifact_id,
+            sequence_number=1,
             shelf_image_id=image_id,
             store_id=store_id,
             event_type="APPROVED",
@@ -128,6 +129,7 @@ def main() -> None:
     with SessionLocal() as db:
         invalid_self_approval = models.ShelfImageArtifactDispositionEvent(
             artifact_reference_id=artifact_id,
+            sequence_number=2,
             shelf_image_id=image_id,
             store_id=store_id,
             event_type="APPROVED",
@@ -145,6 +147,7 @@ def main() -> None:
     with SessionLocal() as db:
         invalid_non_admin = models.ShelfImageArtifactDispositionEvent(
             artifact_reference_id=artifact_id,
+            sequence_number=2,
             shelf_image_id=image_id,
             store_id=store_id,
             event_type="APPROVED",
@@ -162,6 +165,7 @@ def main() -> None:
     with SessionLocal() as db:
         independent_approval = models.ShelfImageArtifactDispositionEvent(
             artifact_reference_id=artifact_id,
+            sequence_number=2,
             shelf_image_id=image_id,
             store_id=store_id,
             event_type="APPROVED",
@@ -175,6 +179,7 @@ def main() -> None:
     with SessionLocal() as db:
         invalid_attestation = models.ShelfImageArtifactDispositionEvent(
             artifact_reference_id=artifact_id,
+            sequence_number=3,
             shelf_image_id=image_id,
             store_id=store_id,
             event_type="DISPOSAL_ATTESTED",
@@ -234,6 +239,7 @@ def main() -> None:
     with SessionLocal() as db:
         mismatched_event = models.ShelfImageArtifactDispositionEvent(
             artifact_reference_id=artifact_id,
+            sequence_number=4,
             shelf_image_id=image_id,
             store_id=other_store_id,
             event_type="PROPOSED",
