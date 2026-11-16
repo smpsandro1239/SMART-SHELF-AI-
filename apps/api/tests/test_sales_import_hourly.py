@@ -1,7 +1,7 @@
 from datetime import date
 from decimal import Decimal
 import pytest
-from app.sales_import_hourly import MAX_HOURLY_IMPORT_ROWS, parse_hourly_sales_csv, parse_hourly_traffic_csv
+from app.sales_import_hourly import MAX_HOURLY_IMPORT_BYTES, MAX_HOURLY_IMPORT_ROWS, parse_hourly_sales_csv, parse_hourly_traffic_csv
 
 SALES_HEADER = "product_id,business_date,hour_of_day,quantity,external_reference\n"
 TRAFFIC_HEADER = "business_date,hour_of_day,customer_count,external_reference\n"
@@ -62,3 +62,8 @@ def test_hourly_import_rejects_noncanonical_dates_numbers_and_controls(payload, 
 def test_hourly_import_rejects_nul_bytes():
     with pytest.raises(ValueError, match="NUL"):
         parse_hourly_sales_csv((SALES_HEADER + "42,2026-11-12,8,1,REF\n").encode() + b"\x00")
+
+
+def test_hourly_import_enforces_byte_limit():
+    with pytest.raises(ValueError, match="maximum file size"):
+        parse_hourly_sales_csv(b"x" * (MAX_HOURLY_IMPORT_BYTES + 1))
