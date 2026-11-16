@@ -73,5 +73,21 @@ def downgrade() -> None:
         op.execute(
             "DROP TRIGGER IF EXISTS trg_00_artifact_disposition_validate_reference_lineage"
         )
-    # PostgreSQL function replacement is removed by the preceding migration
-    # when the complete 0041 -> 0040 chain is downgraded.
+    if bind.dialect.name == "postgresql":
+        op.execute("""
+            CREATE OR REPLACE FUNCTION lock_shelf_image_before_artifact_disposition_event()
+            RETURNS trigger LANGUAGE plpgsql AS $function$
+            BEGIN
+                PERFORM 1
+                FROM shelf_images
+                WHERE id = NEW.shelf_image_id
+                FOR UPDATE;
+
+                IF NOT FOUND THEN
+                    RAISE EXCEPTION 'artifact disposition source image does not exist'
+                        USING ERRCODE = '23503';
+                END IF;
+                RETURN NEW;
+            END;
+            $function$
+        """)
