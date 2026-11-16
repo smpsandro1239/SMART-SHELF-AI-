@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 
-from app import models
+from app import main as main_module, models
 from app.database import SessionLocal
 from app.main import app
 from app.security import create_access_token
@@ -102,11 +102,16 @@ def main() -> None:
             response = client.patch(f"/api/v1/tasks/{task_id}/status", json=payload)
             assert response.status_code == 200, response.text
 
-        reconciled = client.post(
-            f"/api/v1/tasks/{task_id}/reconcile-inventory",
-            json={"reason": "PostgreSQL movement lineage guard smoke"},
-            headers=headers,
-        )
+        original_settings = main_module.settings
+        main_module.settings = original_settings.model_copy(update={"app_env": "production"})
+        try:
+            reconciled = client.post(
+                f"/api/v1/tasks/{task_id}/reconcile-inventory",
+                json={"reason": "PostgreSQL movement lineage guard smoke"},
+                headers=headers,
+            )
+        finally:
+            main_module.settings = original_settings
         assert reconciled.status_code == 201, reconciled.text
         movement = reconciled.json()
         assert movement["source_snapshot_id"] == source_snapshot_id
