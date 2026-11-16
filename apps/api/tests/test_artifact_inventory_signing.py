@@ -46,6 +46,7 @@ def test_canonical_inventory_is_order_independent_and_timezone_normalized():
         snapshot_id="snapshot-1",
         generated_at=GENERATED_AT.astimezone(timezone(timedelta(hours=2))),
         entries=list(reversed(ENTRIES)),
+        inventory_complete=True,
     )
     assert first == second
 
@@ -145,6 +146,7 @@ def test_canonical_inventory_rejects_duplicates_and_naive_timestamps():
             snapshot_id="snapshot-1",
             generated_at=GENERATED_AT,
             entries=duplicate_entries,
+            inventory_complete=True,
         )
     with pytest.raises(ValueError, match="timezone"):
         canonical_inventory_payload(
