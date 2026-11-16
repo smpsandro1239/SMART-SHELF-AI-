@@ -2088,13 +2088,52 @@ def get_shelf_image_purge_eligibility(
         "present_artifact_count": 0,
         "absent_artifact_count": 0,
     }
+    references_by_system: dict[str, list] = {}
+    for reference in artifact_references:
+        references_by_system.setdefault(reference.external_system, []).append(reference)
+
+    # A per-image snapshot for one source is not proof that every retention-
+    # critical source configured for the store has been covered. Likewise, a
+    # signed snapshot must not override a subsequently revoked integration.
+    required_integrations = (
+        db.query(models.StoreExternalIntegration)
+        .filter(
+            models.StoreExternalIntegration.store_id == store_id,
+            models.StoreExternalIntegration.required_for_retention.is_(True),
+        )
+        .order_by(models.StoreExternalIntegration.external_system)
+        .all()
+    )
+    integration_by_system = {
+        integration.external_system: integration
+        for integration in db.query(models.StoreExternalIntegration)
+        .filter(models.StoreExternalIntegration.store_id == store_id)
+        .all()
+    }
+    for integration in required_integrations:
+        system = integration.external_system
+        if integration.status != "ACTIVE":
+            inventory_summary["unverified_systems"].append(f"required_integration_inactive:{system}")
+        last_seen = integration.last_seen_at
+        if last_seen is None:
+            inventory_summary["unverified_systems"].append(f"required_integration_never_seen:{system}")
+        else:
+            if last_seen.tzinfo is None:
+                last_seen = last_seen.replace(tzinfo=timezone.utc)
+            last_seen_age = (now - last_seen.astimezone(timezone.utc)).total_seconds()
+            if last_seen_age < -120 or last_seen_age > settings.artifact_inventory_max_age_minutes * 60:
+                inventory_summary["unverified_systems"].append(f"required_integration_stale:{system}")
+        if system not in references_by_system:
+            inventory_summary["unverified_systems"].append(f"required_integration_missing_image_artifacts:{system}")
+
+    for external_system in references_by_system:
+        integration = integration_by_system.get(external_system)
+        if integration is None or integration.status != "ACTIVE":
+            inventory_summary["unverified_systems"].append(f"artifact_integration_inactive_or_missing:{external_system}")
+
     if not artifact_references:
         inventory_summary["unverified_systems"].append("no_declared_inventory_scope")
     else:
-        references_by_system: dict[str, list] = {}
-        for reference in artifact_references:
-            references_by_system.setdefault(reference.external_system, []).append(reference)
-
         for external_system, system_references in references_by_system.items():
             snapshot = (
                 db.query(models.ShelfImageArtifactInventorySnapshot)
