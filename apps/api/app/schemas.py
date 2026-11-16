@@ -437,6 +437,79 @@ class ShelfImageRetentionRequest(BaseModel):
 ArtifactType = Literal["DATASET_COPY", "DATASET_RELEASE", "CROP", "REPORT", "BACKUP", "CACHE", "OBJECT_REPLICA", "OTHER"]
 
 
+class StoreExternalIntegrationCreate(BaseModel):
+    external_system: str = Field(min_length=1, max_length=120)
+    provider: str = Field(min_length=1, max_length=120)
+    required_for_retention: bool = False
+    capabilities: list[str] = Field(default_factory=list, max_length=30)
+
+    @field_validator("external_system", "provider")
+    @classmethod
+    def normalize_integration_identity(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("Integration identity cannot be blank")
+        return normalized
+
+    @field_validator("capabilities")
+    @classmethod
+    def normalize_integration_capabilities(cls, values: list[str]) -> list[str]:
+        normalized = [value.strip() for value in values]
+        if any(not value for value in normalized):
+            raise ValueError("Integration capabilities cannot be blank")
+        if len(normalized) != len(set(normalized)):
+            raise ValueError("Integration capabilities cannot contain duplicates")
+        return normalized
+
+
+class StoreExternalIntegrationUpdate(BaseModel):
+    status: Literal["ACTIVE", "REVOKED"] | None = None
+    required_for_retention: bool | None = None
+    capabilities: list[str] | None = Field(default=None, max_length=30)
+
+    @field_validator("capabilities")
+    @classmethod
+    def normalize_updated_capabilities(cls, values: list[str] | None) -> list[str] | None:
+        if values is None:
+            return None
+        normalized = [value.strip() for value in values]
+        if any(not value for value in normalized) or len(normalized) != len(set(normalized)):
+            raise ValueError("Integration capabilities must be non-blank and unique")
+        return normalized
+
+    @model_validator(mode="after")
+    def require_an_update(self):
+        if not self.model_fields_set:
+            raise ValueError("At least one integration setting must be supplied")
+        return self
+
+
+class StoreExternalIntegrationRead(BaseModel):
+    id: int
+    store_id: int
+    external_system: str
+    provider: str
+    status: Literal["ACTIVE", "REVOKED"]
+    required_for_retention: bool
+    capabilities: list[str]
+    last_seen_at: datetime | None
+    created_by_user_id: int
+    updated_by_user_id: int
+    created_at: datetime
+    updated_at: datetime
+    model_config = ConfigDict(from_attributes=True)
+
+
+class StoreExternalIntegrationCoverageRead(BaseModel):
+    store_id: int
+    required_integrations: int
+    active_required_integrations: int
+    missing_or_revoked_integrations: list[str]
+    never_seen_integrations: list[str]
+    stale_integrations: list[str]
+    checked_at: datetime
+
+
 class ShelfImageArtifactReferenceCreate(BaseModel):
     artifact_type: ArtifactType
     external_system: str = Field(min_length=1, max_length=120)
