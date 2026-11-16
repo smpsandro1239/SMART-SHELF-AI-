@@ -1287,6 +1287,8 @@ def update_store_external_integration(
     actor = _request_user(db, request)
     if actor is None or actor.role != "ADMIN":
         raise HTTPException(status_code=403, detail="Administrator role required")
+    # Keep the same parent-row lock order as retention evaluation and creation.
+    _lock_store_for_external_inventory(db, store_id)
     record = db.query(models.StoreExternalIntegration).filter(
         models.StoreExternalIntegration.id == integration_id,
         models.StoreExternalIntegration.store_id == store_id,
@@ -2573,6 +2575,7 @@ def _refresh_ocr_match_view(db: Session, rows: list[models.ShelfImageOCRMatch]):
         .order_by(models.Product.id)
         .all()
     )
+    active_ids = {product.id for product in products}
     catalogue = [
         CatalogueProduct(product.id, product.sku, product.name, product.brand, product.unit)
         for product in products
