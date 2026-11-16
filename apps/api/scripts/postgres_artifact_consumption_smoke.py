@@ -180,6 +180,7 @@ def main() -> None:
 
         deadline = monotonic() + 10
         observed_blocker = False
+        observed_integration_blocker = False
         while monotonic() < deadline:
             with SessionLocal() as monitor:
                 activity = monitor.execute(
@@ -191,8 +192,23 @@ def main() -> None:
                 ).first()
             if activity is not None and activity[0] == "Lock" and activity[1]:
                 observed_blocker = True
+            with SessionLocal() as monitor:
+                integration_activity = monitor.execute(
+                    text(
+                        "SELECT wait_event_type, pg_blocking_pids(pid) "
+                        "FROM pg_stat_activity WHERE application_name = :name"
+                    ),
+                    {"name": f"{app_name}-integration"},
+                ).first()
+            if (
+                integration_activity is not None
+                and integration_activity[0] == "Lock"
+                and integration_activity[1]
+            ):
+                observed_integration_blocker = True
+            if observed_blocker and observed_integration_blocker:
                 break
-            if retention_finished.is_set():
+            if retention_finished.is_set() or integration_update_finished.is_set():
                 break
             sleep(0.05)
 
@@ -200,8 +216,14 @@ def main() -> None:
             assert observed_blocker, (
                 "retention did not wait on the active artifact-consumption transaction"
             )
+            assert observed_integration_blocker, (
+                "integration revocation did not wait on the active artifact-consumption transaction"
+            )
             assert not retention_finished.is_set(), (
                 "retention completed while provider read still held source-image lock"
+            )
+            assert not integration_update_finished.is_set(), (
+                "integration revocation completed while provider read still held integration lock"
             )
         finally:
             allow_fetch_finish.set()
