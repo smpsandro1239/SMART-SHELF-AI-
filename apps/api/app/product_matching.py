@@ -115,7 +115,7 @@ class ProductEmbeddingRegistry:
         self.minimum_similarity = minimum_similarity
         self.minimum_margin = minimum_margin
         self._exemplars = tuple(exemplars)
-        if any(item.model_version != model_version for item in self._exemplars):
+        if any(item.model_version != self.model_version for item in self._exemplars):
             raise ValueError("all exemplars must use the registry model_version")
         dimensions = {len(item.embedding) for item in self._exemplars}
         if len(dimensions) > 1:
