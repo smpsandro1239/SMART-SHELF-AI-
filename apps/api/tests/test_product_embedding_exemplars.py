@@ -741,3 +741,36 @@ def test_exemplar_rejects_blank_model_version_and_licence():
 
         assert blank_version.status_code == 422
         assert blank_licence.status_code == 422
+
+
+
+def test_cosine_similarity_handles_large_finite_vectors_without_overflow():
+    from app.product_matching import ProductEmbeddingRegistry, ProductExemplar
+
+    exemplar = ProductExemplar(
+        product_id=1,
+        embedding=(1e308, 1e308, 1e308),
+        model_version="embedding-model-v1",
+        image_sha256="a" * 64,
+        reviewed_by="reviewer@example.test",
+        reviewed_at="2026-11-16T00:00:00+00:00",
+        licence="store-owned-reference-image",
+    )
+    registry = ProductEmbeddingRegistry(
+        [exemplar],
+        model_version="embedding-model-v1",
+        minimum_similarity=0.99,
+    )
+
+    result = registry.match([1e308, 1e308, 1e308])
+
+    assert result.status == "MATCHED"
+    assert result.similarity == pytest.approx(1.0)
+
+
+def test_registry_builder_rejects_blank_model_version():
+    from app.product_embedding_service import build_approved_product_registry
+
+    with TestingSession() as db:
+        with pytest.raises(ValueError, match="model_version is required"):
+            build_approved_product_registry(db, model_version="   ")
