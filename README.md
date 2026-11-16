@@ -1253,3 +1253,7 @@ A suite de integração SQLite cobre agora o registo de uma referência derivada
 
 A autorização de consumo bloqueia agora, numa sequência determinística, os snapshots de inventário de todos os sistemas externos envolvidos e os eventos de disposição de todos os nós da linhagem. Em vez de consultar snapshot e evento individualmente para cada antecessor, usa duas consultas bloqueantes em lote, mantendo as linhas bloqueadas até à conclusão da leitura remota e verificação SHA-256. A política continua a exigir inventário íntegro, completo, recente e com cobertura exata para cada nó; qualquer disposição atestada ou inventário ausente num antecessor bloqueia o descendente. Foram acrescentados testes para esses casos e para garantir que o número de consultas de bloqueio não cresce com a profundidade da linhagem. Os testes foram adicionados, mas não executados nesta sessão.
 
+### Inventários persistidos malformados no consumo de artefactos — 2026-11-16
+
+O consumo de artefactos passou a filtrar entradas do manifesto por tipo antes de consultar os campos de identidade. Um registo JSON persistido com uma entrada que não seja um objeto deixa, assim, de poder provocar uma exceção inesperada durante a procura da entrada: a verificação criptográfica/estrutural continua a falhar de forma fechada e o provider não é chamado. A suite de consumo inclui cenários para manifesto malformado tanto no artefacto pedido como num antecessor noutra integração. Os testes foram adicionados, mas não executados nesta sessão.
+
