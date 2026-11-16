@@ -20,6 +20,8 @@ class Settings(BaseSettings):
     product_matching_min_similarity: float = Field(default=0.90, ge=0.0, le=1.0)
     product_matching_min_margin: float = Field(default=0.05, ge=0.0, le=2.0)
     artifact_inventory_hmac_keys_json: str = ""
+    # None means secure-by-default in production, compatibility in non-production.
+    artifact_inventory_allow_legacy_ingestion: bool | None = None
     artifact_inventory_max_age_minutes: int = Field(default=15, ge=1, le=1440)
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
