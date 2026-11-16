@@ -1271,3 +1271,8 @@ A assinatura de inventários externos passa a suportar keyrings por loja e siste
 
 Foram acrescentados testes para isolamento entre lojas, binding criptográfico do identificador, rotação com verificação histórica e rejeição de chaves antigas na ingestão. **Os testes, a migration PostgreSQL 16 e o CI ainda não foram executados/confirmados nesta ronda.** A compatibilidade `legacy` é deliberadamente transitória e não oferece isolamento por loja; a migração dos conectores para o keyring versionado continua necessária.
 
+
+
+### Cutover seguro da ingestão HMAC legada — 2026-11-16
+
+A compatibilidade do formato HMAC `legacy` deixou de ser implicitamente aceite em produção para novos snapshots. A variável `ARTIFACT_INVENTORY_ALLOW_LEGACY_INGESTION` permite uma janela de migração explicitamente autorizada; por omissão, produção bloqueia novas ingestões legadas, enquanto ambientes não produtivos mantêm compatibilidade. Exact retries de snapshots já persistidos e a verificação histórica continuam permitidos, evitando quebrar idempotência ou auditoria durante a rotação. Foi acrescentada cobertura unitária para a matriz de política por ambiente e override. A documentação de cutover está em `docs/security/artifact-inventory-hmac-key-rotation.md`. Testes e CI ainda não executados nesta ronda.
