@@ -93,3 +93,10 @@ A migration `0048_artifact_store_lineage_guard` aplica uma verificação ao nív
 ## Imutabilidade da hierarquia com proveniência registada
 
 A protecção multi-loja também cobre alterações aos registos ancestrais. Depois de existirem referências ou snapshots assinados, a zona, prateleira ou imagem não pode ser transferida para outra loja se isso alterar a identidade de tenant dos artefactos. Esta protecção é aplicada na base de dados e não depende de todos os clientes usarem a API. Movimentos sem artefactos históricos continuam permitidos.
+
+
+## Integridade dos registos operacionais associados a prateleiras
+
+A migration `0050_shelf_record_store_lineage_guard` protege `observation_alerts`, `capture_sessions` e `replenishment_tasks`. O campo `store_id` destes registos tem de corresponder à loja obtida pela relação `shelf_id → shelves.zone_id → zones.store_id`. A regra aplica-se a inserções e alterações directas na base de dados, não apenas aos endpoints da API.
+
+A migration verifica os dados existentes antes de instalar os triggers. Também impede alterações à loja de uma zona ou à zona de uma prateleira quando existirem registos operacionais descendentes cuja loja ficaria incorrecta. Movimentos que preservem a mesma loja e movimentos sem registos dependentes continuam permitidos. Os testes SQLite cobrem estas condições e o rollback; a validação em PostgreSQL e a execução integral da suite continuam pendentes.
