@@ -1031,3 +1031,6 @@ Foi acrescentado `apps/api/scripts/postgres_review_queue_retention_smoke.py` e i
 ### Diagnóstico de runners GitHub Actions — 2026-11-16
 
 As execuções `43795760972` (API CI) e `43795779073` (Quality Gates) terminaram em cerca de dois segundos. Os jobs reportaram `runner_id: 0`, `runner_name: ""` e `steps: []`; não houve atribuição de runner nem execução de qualquer passo. Os logs não existem para estes jobs. Isto indica uma falha anterior à execução do pipeline, não uma falha demonstrada do código Python ou TypeScript. Verificar nas definições do repositório/organização se GitHub Actions está permitido, se os runners hospedados estão disponíveis e se existem limites de utilização/billing ou políticas de execução. Não desativar gates nem marcar CI como verde sem uma execução real.
+
+
+**Atualização de validação (03:10 UTC):** os novos runs `43796567684` (API CI) e `43796581619` (Quality Gates), disparados pelos commits do smoke test e da sua integração, repetiram exatamente o mesmo padrão: jobs com `runner_id: 0`, `runner_name: ""`, duração de cerca de dois segundos, `steps: []` e logs indisponíveis (`BlobNotFound`). Assim, o novo smoke test PostgreSQL está integrado no workflow mas **ainda não foi executado**. A falha de provisionamento do runner continua a bloquear a validação de todo o código.
