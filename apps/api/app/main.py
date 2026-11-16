@@ -1656,10 +1656,14 @@ def get_shelf_image_artifact_access_decision(
     request: Request,
     db: Session = Depends(get_db),
 ):
-    """Return a fail-closed access decision backed by locked lineage records.
+    """Return a fail-closed administrative assessment of external artifact access.
 
-    External-artifact consumers must check this authorization boundary
-    immediately before reading an object. It never fetches or deletes objects.
+    This endpoint is diagnostic only: its transaction and row locks end before
+    the HTTP response reaches the caller. It does not provide an atomic
+    authorization-and-fetch operation and must not be treated as the sole
+    authorization gate for a later external read. It never fetches or deletes
+    objects; consumers need an integrated operation that revalidates policy
+    and reads the object while holding the required locks.
     """
     actor = _request_user(db, request)
     if actor is None or actor.role != "ADMIN":
