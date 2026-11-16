@@ -105,17 +105,17 @@ import pytest
 
 @pytest.mark.parametrize("file_name", [
     "../outside.jpg",
-    "..\\\\outside.jpg",
+    "..\\outside.jpg",
     "C:/outside.jpg",
-    "C:\\\\outside.jpg",
+    "C:\\outside.jpg",
     "//server/share/image.jpg",
     "folder/image.jpg:stream",
 ])
 def test_read_manifest_rejects_non_portable_paths(tmp_path, file_name):
     path = tmp_path / "manifest.csv"
     path.write_text(
-        "split,file_name,size_bytes,sha256\\n"
-        f"train,{file_name},3,{'a' * 64}\\n",
+        "split,file_name,size_bytes,sha256\n"
+        f"train,{file_name},3,{'a' * 64}\n",
         encoding="utf-8",
     )
     rows, errors = read_manifest(path)
