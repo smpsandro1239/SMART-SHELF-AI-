@@ -103,19 +103,35 @@ def consume_external_artifact_bytes(
             .first()
         )
 
-        artifact = (
+        # Lock every declaration in deterministic primary-key order. This
+        # gives the complete same-image/store parent graph a stable view and
+        # avoids acquiring parent locks in request-dependent order.
+        locked_references = (
             db.query(models.ShelfImageArtifactReference)
             .filter(
-                models.ShelfImageArtifactReference.id == artifact_id,
                 models.ShelfImageArtifactReference.shelf_image_id == image_id,
                 models.ShelfImageArtifactReference.store_id == store_id,
             )
+            .order_by(models.ShelfImageArtifactReference.id)
             .with_for_update()
             .populate_existing()
-            .first()
+            .all()
         )
-        if artifact is None:
-            raise LookupError("Artifact reference not found")
+        from app.artifact_lineage import ArtifactLineageError, resolve_artifact_parent_chain
+
+        references_by_id = {reference.id: reference for reference in locked_references}
+        try:
+            lineage = resolve_artifact_parent_chain(
+                artifact_id=artifact_id,
+                references=references_by_id,
+                expected_image_id=image_id,
+                expected_store_id=store_id,
+            )
+        except ArtifactLineageError as exc:
+            raise ArtifactAccessDenied(
+                ArtifactAccessDecision(False, "BLOCKED", (str(exc),), artifact_id)
+            ) from exc
+        artifact = lineage[0]
         if artifact.external_system != artifact_hint.external_system:
             raise ArtifactAccessDenied(
                 ArtifactAccessDecision(False, "BLOCKED", ("artifact_identity_changed",), artifact_id)
