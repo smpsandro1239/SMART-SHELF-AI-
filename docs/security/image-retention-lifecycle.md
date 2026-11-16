@@ -320,7 +320,7 @@ A migração também cria um índice único composto sobre a referência, imagem
 
 A revisão desta migração reforçou também a máquina de estados na própria base de dados: triggers PostgreSQL e SQLite rejeitam aprovação sem proposta, ações de utilizadores que não sejam administradores ativos, autoaprovação, atestação pelo aprovador, evidência final ausente/inválida e transições fora da sequência. No PostgreSQL, a referência do artefacto é bloqueada durante a validação do evento para serializar decisões concorrentes. A ordem autoritativa do histórico e da API é a sequência imutável do ID do evento, não um timestamp fornecido pelo cliente.
 
-A pré-validação agrega agora os últimos estados de todas as referências com uma consulta agrupada pelo maior ID de evento, evitando uma consulta SQL por artefacto quando uma imagem tem muitas cópias declaradas. A contagem continua a ser apenas informativa e não altera o bloqueio fail-closed.
+A pré-validação agrega os últimos estados numa única consulta, agrupando pelo maior `sequence_number` de cada referência e fazendo o join pela chave composta (referência do artefacto, sequência). Assim, eventos de artefactos diferentes que partilham o mesmo número de sequência nunca se misturam. A contagem continua a ser apenas informativa e não altera o bloqueio fail-closed.
 
 
 ### Ordenação e preservação da identidade do histórico
