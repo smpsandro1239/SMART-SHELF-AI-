@@ -69,6 +69,9 @@ def fixture_session(*, retention_status="ACTIVE", legal_hold=False, event=None):
     image = SimpleNamespace(retention_status=retention_status, legal_hold=legal_hold)
     artifact = SimpleNamespace(
         id=31,
+        parent_reference_id=None,
+        shelf_image_id=7,
+        store_id=4,
         external_system="object-store-a",
         artifact_type="CROP",
         external_reference="bucket/crops/31.jpg",
