@@ -1311,7 +1311,7 @@ def create_shelf_image_artifact_disposition_event(
         .filter(
             models.ShelfImageArtifactDispositionEvent.artifact_reference_id == artifact_id
         )
-        .order_by(models.ShelfImageArtifactDispositionEvent.id.desc())
+        .order_by(models.ShelfImageArtifactDispositionEvent.sequence_number.desc())
         .first()
     )
     action = payload.action
@@ -1341,8 +1341,20 @@ def create_shelf_image_artifact_disposition_event(
             raise HTTPException(status_code=422, detail="Completed disposition requires an evidence reference and SHA-256")
         event_type = "DISPOSAL_ATTESTED"
 
+    next_sequence = (
+        db.query(models.ShelfImageArtifactDispositionEvent.sequence_number)
+        .filter(
+            models.ShelfImageArtifactDispositionEvent.artifact_reference_id == artifact_id
+        )
+        .order_by(models.ShelfImageArtifactDispositionEvent.sequence_number.desc())
+        .limit(1)
+        .scalar()
+        or 0
+    ) + 1
+
     event = models.ShelfImageArtifactDispositionEvent(
         artifact_reference_id=artifact_id,
+        sequence_number=next_sequence,
         shelf_image_id=image_id,
         store_id=store_id,
         event_type=event_type,
@@ -1391,7 +1403,7 @@ def list_shelf_image_artifact_disposition_events(
             models.ShelfImageArtifactDispositionEvent.artifact_reference_id == artifact_id,
             models.ShelfImageArtifactDispositionEvent.store_id == store_id,
         )
-        .order_by(models.ShelfImageArtifactDispositionEvent.id)
+        .order_by(models.ShelfImageArtifactDispositionEvent.sequence_number)
         .limit(max(1, min(limit, 500)))
         .all()
     )
