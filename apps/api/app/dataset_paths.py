@@ -5,6 +5,7 @@ semantics. Accept only relative POSIX-style paths so Windows drive, UNC,
 alternate-stream and backslash traversal forms cannot change meaning later.
 """
 from pathlib import PurePosixPath, PureWindowsPath
+import re
 
 
 def is_safe_dataset_relative_path(value: object) -> bool:
@@ -18,6 +19,10 @@ def is_safe_dataset_relative_path(value: object) -> bool:
     windows = PureWindowsPath(value)
     if posix.is_absolute() or windows.is_absolute() or windows.drive or windows.root:
         return False
-    if any(part in {"", ".", ".."} for part in value.split("/")):
+    parts = value.split("/")
+    if any(part in {"", ".", ".."} for part in parts):
+        return False
+    reserved = re.compile(r"^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\\..*)?$", re.IGNORECASE)
+    if any(part.endswith((".", " ")) or reserved.fullmatch(part) for part in parts):
         return False
     return True
