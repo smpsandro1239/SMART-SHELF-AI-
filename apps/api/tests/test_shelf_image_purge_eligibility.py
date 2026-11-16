@@ -144,7 +144,10 @@ def test_purge_preview_allows_only_clean_scheduled_candidate(db_session, tmp_pat
 
     assert result["eligible"] is False
     assert result["internal_checks_passed"] is True
-    assert result["blockers"] == ["external_artifact_disposition_not_verified"]
+    assert result["blockers"] == [
+        "external_artifact_disposition_not_verified",
+        "purge_executor_not_implemented",
+    ]
     assert result["stored_file_integrity_verified"] is True
     assert result["derived_records"]["detections"] == 0
     assert result["derived_records"]["ocr_runs"] == 0
@@ -624,6 +627,7 @@ def test_signed_inventory_snapshot_verifies_exact_coverage_and_keeps_purge_disab
     )
     assert preview["external_artifact_inventory"]["verified_systems"] == ["backup-vault"]
     assert preview["external_artifact_inventory"]["unverified_systems"] == []
+    assert preview["internal_checks_passed"] is True
     assert "external_artifact_disposition_not_verified" not in preview["blockers"]
     assert "purge_executor_not_implemented" in preview["blockers"]
     assert preview["eligible"] is False
