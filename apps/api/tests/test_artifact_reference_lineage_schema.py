@@ -68,3 +68,58 @@ def test_artifact_reference_read_schema_exposes_parent_lineage():
 
     assert "parent_reference_id" in payload
     assert payload["parent_reference_id"].annotation == int | None
+
+def test_sqlite_migration_rejects_parent_lineage_mutation(tmp_path):
+    import importlib.util
+    from pathlib import Path
+    import sqlite3
+
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+    from sqlalchemy import create_engine
+
+    migration_path = (
+        Path(__file__).parents[1]
+        / "migrations"
+        / "versions"
+        / "0046_artifact_parent_lineage_immutable.py"
+    )
+    spec = importlib.util.spec_from_file_location(
+        "artifact_parent_lineage_immutable_migration", migration_path
+    )
+    migration = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(migration)
+
+    engine = create_engine(f"sqlite:///{tmp_path / 'lineage.db'}")
+    with engine.begin() as connection:
+        connection.exec_driver_sql(
+            """
+            CREATE TABLE shelf_image_artifact_references (
+                id INTEGER PRIMARY KEY,
+                shelf_image_id INTEGER NOT NULL,
+                store_id INTEGER NOT NULL,
+                parent_reference_id INTEGER
+            )
+            """
+        )
+        with Operations.context(MigrationContext.configure(connection)):
+            migration.upgrade()
+
+        connection.exec_driver_sql(
+            "INSERT INTO shelf_image_artifact_references "
+            "(id, shelf_image_id, store_id, parent_reference_id) VALUES "
+            "(1, 7, 4, NULL), (2, 7, 4, 1), (3, 7, 4, NULL)"
+        )
+        with pytest.raises(Exception, match="artifact parent lineage is immutable"):
+            connection.exec_driver_sql(
+                "UPDATE shelf_image_artifact_references "
+                "SET parent_reference_id = 3 WHERE id = 2"
+            )
+
+        # No-op updates remain valid and do not rewrite the lineage.
+        connection.exec_driver_sql(
+            "UPDATE shelf_image_artifact_references "
+            "SET parent_reference_id = 1 WHERE id = 2"
+        )
+    engine.dispose()
+
