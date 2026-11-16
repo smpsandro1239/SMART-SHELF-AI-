@@ -65,7 +65,9 @@ def evaluate_artifact_access(
         reasons.append("source_image_under_legal_hold")
     if integration_status != "ACTIVE":
         reasons.append("external_integration_not_active")
-    if not isinstance(expected_sha256, str) or re.fullmatch(r"[0-9a-fA-F]{64}", expected_sha256) is None:
+    if expected_sha256 is None or expected_sha256 == "":
+        reasons.append("artifact_sha256_not_declared")
+    elif not isinstance(expected_sha256, str) or re.fullmatch(r"[0-9a-fA-F]{64}", expected_sha256) is None:
         reasons.append("artifact_sha256_missing_or_invalid")
 
     if not inventory_complete:
