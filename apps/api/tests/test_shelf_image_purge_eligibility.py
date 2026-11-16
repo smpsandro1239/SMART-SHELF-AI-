@@ -602,6 +602,7 @@ def test_signed_inventory_snapshot_verifies_exact_coverage_and_keeps_purge_disab
         generated_at=generated_at,
         entries=entries,
         secret=secret,
+        inventory_complete=True,
     )
     snapshot = main_module.create_shelf_image_artifact_inventory_snapshot(
         image_id,
@@ -680,6 +681,7 @@ def test_signed_inventory_snapshot_rejects_incomplete_or_invalid_source_evidence
         generated_at=generated_at,
         entries=incomplete_entries,
         secret=secret,
+        inventory_complete=True,
     )
     with pytest.raises(HTTPException) as incomplete:
         main_module.create_shelf_image_artifact_inventory_snapshot(
@@ -711,6 +713,7 @@ def test_signed_inventory_snapshot_rejects_incomplete_or_invalid_source_evidence
         generated_at=generated_at,
         entries=exact_entries,
         secret=secret,
+        inventory_complete=True,
     )
     with pytest.raises(HTTPException) as invalid_signature:
         main_module.create_shelf_image_artifact_inventory_snapshot(
