@@ -1236,9 +1236,10 @@ def cancel_shelf_image_purge_schedule(
     _enforce_store_scope(actor, _shelf_image_store_id(db, image_id))
     if item.retention_status != "RESTRICTED":
         raise HTTPException(status_code=409, detail="Only restricted images can have a purge schedule cancelled")
-    if item.purge_not_before is None:
+    if item.purge_not_before is None and item.retention_policy_version is None:
         raise HTTPException(status_code=409, detail="Image has no scheduled purge")
-    previous_date = item.purge_not_before.isoformat()
+    previous_date = item.purge_not_before.isoformat() if item.purge_not_before else None
+    previous_policy_version = item.retention_policy_version
     item.purge_not_before = None
     item.retention_policy_version = None
     db.add(models.ShelfImageRetentionEvent(
@@ -1247,7 +1248,10 @@ def cancel_shelf_image_purge_schedule(
         from_status=item.retention_status,
         to_status=item.retention_status,
         actor_user_id=actor.id,
-        reason=f"{payload.reason.strip()} | cancelled_date={previous_date}",
+        reason=(
+            f"{payload.reason.strip()} | cancelled_date={previous_date or 'missing'} | "
+            f"policy={previous_policy_version or 'missing'}"
+        ),
     ))
     db.commit()
     db.refresh(item)
