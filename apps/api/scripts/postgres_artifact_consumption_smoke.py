@@ -14,6 +14,8 @@ from sqlalchemy import text
 
 from app import models
 from app.artifact_consumption import consume_external_artifact_bytes
+from app.artifact_inventory_signing import canonical_inventory_payload, inventory_signature
+from app.config import settings
 from app.database import SessionLocal
 
 
@@ -73,21 +75,44 @@ def create_fixture(suffix: str, payload: bytes) -> tuple[int, int, int, int]:
         db.add_all([integration, artifact])
         db.flush()
 
+        snapshot_id = f"snapshot-{suffix}"
+        generated_at = models.utc_now()
+        manifest = [{
+            "artifact_type": "BACKUP",
+            "external_reference": f"smoke/{suffix}",
+            "sha256": digest,
+            "state": "PRESENT",
+        }]
+        signing_secret = "postgres-artifact-smoke-signing-secret-long-enough"
+        signature = inventory_signature(
+            image_id=image.id,
+            store_id=store.id,
+            external_system="postgres-artifact-smoke",
+            snapshot_id=snapshot_id,
+            generated_at=generated_at,
+            entries=manifest,
+            secret=signing_secret,
+            inventory_complete=True,
+        )
+        manifest_digest = sha256(canonical_inventory_payload(
+            image_id=image.id,
+            store_id=store.id,
+            external_system="postgres-artifact-smoke",
+            snapshot_id=snapshot_id,
+            generated_at=generated_at,
+            entries=manifest,
+            inventory_complete=True,
+        )).hexdigest()
         db.add(models.ShelfImageArtifactInventorySnapshot(
             shelf_image_id=image.id,
             store_id=store.id,
             external_system="postgres-artifact-smoke",
-            snapshot_id=f"snapshot-{suffix}",
-            generated_at=models.utc_now(),
+            snapshot_id=snapshot_id,
+            generated_at=generated_at,
             inventory_complete=True,
-            manifest_sha256="b" * 64,
-            source_signature="c" * 64,
-            inventory_manifest=[{
-                "artifact_type": "BACKUP",
-                "external_reference": f"smoke/{suffix}",
-                "sha256": digest,
-                "state": "PRESENT",
-            }],
+            manifest_sha256=manifest_digest,
+            source_signature=signature,
+            inventory_manifest=manifest,
             artifact_count=1,
             present_count=1,
             absent_count=0,
@@ -100,6 +125,10 @@ def create_fixture(suffix: str, payload: bytes) -> tuple[int, int, int, int]:
 def main() -> None:
     suffix = uuid4().hex[:8]
     payload = f"external artifact smoke payload {suffix}".encode()
+    original_keys = settings.artifact_inventory_hmac_keys_json
+    settings.artifact_inventory_hmac_keys_json = (
+        '{"postgres-artifact-smoke":"postgres-artifact-smoke-signing-secret-long-enough"}'
+    )
     image_id, artifact_id, store_id, integration_id = create_fixture(suffix, payload)
 
     app_name = f"ss-artifact-read-{suffix}"
@@ -257,6 +286,7 @@ def main() -> None:
     else:
         raise AssertionError("cross-store artifact consumption was not rejected")
     assert provider_calls == [], "provider was called for a cross-store request"
+    settings.artifact_inventory_hmac_keys_json = original_keys
 
 
 if __name__ == "__main__":
