@@ -2411,6 +2411,57 @@ def list_shelf_image_detections(
     )
 
 
+def _refresh_ocr_match_view(db: Session, rows: list[models.ShelfImageOCRMatch]):
+    """Re-rank cached OCR observations against the currently active catalogue.
+
+    Persisted OCR matches are immutable inference history; their product
+    suggestions must not remain actionable after a catalogue product is retired.
+    """
+    if not rows:
+        return []
+    products = (
+        db.query(models.Product)
+        .filter(models.Product.is_active.is_(True))
+        .order_by(models.Product.id)
+        .all()
+    )
+    catalogue = [
+        CatalogueProduct(product.id, product.sku, product.name, product.brand, product.unit)
+        for product in products
+    ]
+    active_ids = {product.id for product in products}
+    refreshed = []
+    for row in rows:
+        if row.ocr_confidence >= 0.65 and (row.observed_text or "").strip():
+            match = rank_product_catalogue_candidates(row.observed_text, catalogue)
+            status = match.status
+            suggested_id = match.product_id if match.product_id in active_ids else None
+            top_score = match.score if suggested_id is not None else None
+            margin = match.margin if suggested_id is not None else None
+            candidates = [
+                {"product_id": item.product_id, "score": item.score, "reasons": list(item.reasons)}
+                for item in match.candidates if item.product_id in active_ids
+            ]
+            if suggested_id is None and status == "SUGGESTED":
+                status = "UNKNOWN"
+        else:
+            status, suggested_id, top_score, margin, candidates = "UNKNOWN", None, None, None, []
+        refreshed.append({
+            "id": row.id,
+            "run_id": row.run_id,
+            "detection_id": row.detection_id,
+            "suggested_product_id": suggested_id,
+            "observed_text": row.observed_text,
+            "ocr_confidence": row.ocr_confidence,
+            "status": status,
+            "top_score": top_score,
+            "margin": margin,
+            "candidates": candidates,
+            "created_at": row.created_at,
+        })
+    return refreshed
+
+
 @app.post("/api/v1/shelf-images/{image_id}/ocr-matches", response_model=list[ShelfImageOCRMatchRead], tags=["computer-vision"])
 def match_shelf_image_ocr_to_catalogue(image_id: int, request: Request, db: Session = Depends(get_db)):
     """Rank active catalogue candidates for OCR text grouped by product detection."""
@@ -2444,7 +2495,7 @@ def match_shelf_image_ocr_to_catalogue(image_id: int, request: Request, db: Sess
         .all()
     )
     if existing:
-        return existing
+        return _refresh_ocr_match_view(db, existing)
 
     evidence = (
         db.query(models.ShelfImageOCREvidence)
@@ -2513,13 +2564,14 @@ def list_shelf_image_ocr_matches(image_id: int, request: Request, limit: int = 5
         raise HTTPException(status_code=404, detail="Shelf image not found")
     _enforce_store_scope(_request_user(db, request), _shelf_image_store_id(db, image_id))
     _require_active_shelf_image(image_record)
-    return (
+    rows = (
         db.query(models.ShelfImageOCRMatch)
         .join(models.ShelfImageOCRRun, models.ShelfImageOCRMatch.run_id == models.ShelfImageOCRRun.id)
         .filter(models.ShelfImageOCRRun.shelf_image_id == image_id)
         .order_by(models.ShelfImageOCRMatch.id.desc())
         .limit(max(1, min(limit, 1000))).all()
     )
+    return _refresh_ocr_match_view(db, rows)
 
 
 
