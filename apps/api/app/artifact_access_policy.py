@@ -29,6 +29,7 @@ def evaluate_artifact_access(
     source_legal_hold: bool,
     integration_status: str,
     inventory_complete: bool,
+    inventory_integrity_verified: bool = False,
     inventory_generated_at: datetime | None,
     inventory_verified_at: datetime | None,
     inventory_max_age_seconds: int,
@@ -66,6 +67,8 @@ def evaluate_artifact_access(
 
     if not inventory_complete:
         reasons.append("inventory_not_complete")
+    if not inventory_integrity_verified:
+        reasons.append("inventory_integrity_unverified")
     if inventory_generated_at is None or inventory_verified_at is None:
         reasons.append("inventory_missing")
     else:
