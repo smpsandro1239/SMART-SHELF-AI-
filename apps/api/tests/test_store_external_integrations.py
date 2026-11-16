@@ -302,6 +302,35 @@ def test_accepted_signed_snapshot_updates_integration_last_seen(db_session, monk
     assert integration.last_seen_at is not None
     assert integration.last_seen_at.replace(tzinfo=generated_at.tzinfo) == generated_at
 
+    older_generated_at = generated_at - timedelta(seconds=1)
+    older_signature = inventory_signature(
+        image_id=image_id,
+        store_id=store_id,
+        external_system="backup-vault",
+        snapshot_id="snapshot-out-of-order",
+        generated_at=older_generated_at,
+        entries=entries,
+        secret=secret,
+        inventory_complete=True,
+    )
+    older_payload = ShelfImageArtifactInventorySnapshotCreate(
+        external_system="backup-vault",
+        snapshot_id="snapshot-out-of-order",
+        generated_at=older_generated_at,
+        inventory_complete=True,
+        entries=entries,
+        signature=older_signature,
+    )
+    with pytest.raises(HTTPException) as out_of_order:
+        main_module.create_shelf_image_artifact_inventory_snapshot(
+            image_id, older_payload, request, db_session
+        )
+
+    assert out_of_order.value.status_code == 409
+    assert "newer than the latest accepted snapshot" in out_of_order.value.detail
+    db_session.refresh(integration)
+    assert integration.last_seen_at.replace(tzinfo=generated_at.tzinfo) == generated_at
+    assert db_session.query(models.ShelfImageArtifactInventorySnapshot).count() == 1
 
 
 def test_integration_update_rejects_explicit_null_values():
