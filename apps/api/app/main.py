@@ -1391,10 +1391,20 @@ def register_shelf_image_artifact_reference(
 
     # Keep registration in the same lock order as inventory and consumption:
     # image -> external integration -> artifact references.
-    db.query(models.StoreExternalIntegration).filter(
-        models.StoreExternalIntegration.store_id == store_id,
-        models.StoreExternalIntegration.external_system == payload.external_system,
-    ).with_for_update().populate_existing().first()
+    integration = (
+        db.query(models.StoreExternalIntegration)
+        .filter(
+            models.StoreExternalIntegration.store_id == store_id,
+            models.StoreExternalIntegration.external_system == payload.external_system,
+        )
+        .with_for_update()
+        .populate_existing()
+        .first()
+    )
+    if integration is None:
+        raise HTTPException(status_code=409, detail="External artifact source is not registered for this store")
+    if integration.status != "ACTIVE":
+        raise HTTPException(status_code=409, detail="External artifact source is revoked for this store")
 
     if payload.parent_reference_id is not None:
         parent = (
