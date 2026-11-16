@@ -2660,7 +2660,17 @@ def match_shelf_image_ocr_to_catalogue(image_id: int, request: Request, db: Sess
     for item in evidence:
         grouped.setdefault(item.detection_id, []).append(item)
 
-    products = db.query(models.Product).filter(models.Product.is_active.is_(True)).all()
+    # Keep the same image -> catalogue lock order used by cached OCR refresh,
+    # evidence fusion and the vision worker. Without FOR UPDATE, a concurrent
+    # product retirement could commit while this inference is being persisted.
+    products = (
+        db.query(models.Product)
+        .filter(models.Product.is_active.is_(True))
+        .order_by(models.Product.id)
+        .with_for_update()
+        .populate_existing()
+        .all()
+    )
     catalogue = [
         CatalogueProduct(product.id, product.sku, product.name, product.brand, product.unit)
         for product in products
