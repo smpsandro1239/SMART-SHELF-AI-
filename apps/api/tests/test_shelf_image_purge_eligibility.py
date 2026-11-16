@@ -407,7 +407,7 @@ def test_artifact_disposition_requires_two_person_approval_and_evidence(db_sessi
     assert preview["deletion_performed"] is False
 
 
-def test_rejected_artifact_disposition_can_be_reproposed(db_session, tmp_path):
+def test_rejected_artifact_disposition_can_be_reproposed(db_session, tmp_path, monkeypatch):
     from app.schemas import (
         ShelfImageArtifactReferenceCreate,
         ShelfImageArtifactDispositionActionRequest,
@@ -462,3 +462,25 @@ def test_rejected_artifact_disposition_can_be_reproposed(db_session, tmp_path):
         first_request, db_session,
     )
     assert reproposed.event_type == "PROPOSED"
+
+    unreviewed = main_module.register_shelf_image_artifact_reference(
+        image_id,
+        ShelfImageArtifactReferenceCreate(
+            artifact_type="REPORT",
+            external_system="audit-system",
+            external_reference="reports/retention-audit-2",
+        ),
+        first_request,
+        db_session,
+    )
+    assert unreviewed.id != artifact.id
+
+    monkeypatch.setattr(main_module.settings, "image_storage_path", str(tmp_path))
+    preview = main_module.get_shelf_image_purge_eligibility(
+        image_id, first_request, db_session
+    )
+    assert preview["declared_external_artifact_references"] == 2
+    assert preview["external_artifact_disposition"]["proposed"] == 1
+    assert preview["external_artifact_disposition"]["without_final_disposition"] == 2
+    assert preview["eligible"] is False
+    assert "external_artifact_disposition_not_verified" in preview["blockers"]
