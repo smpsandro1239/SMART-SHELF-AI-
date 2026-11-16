@@ -2768,11 +2768,47 @@ def list_shelf_image_review_queue(
         (models.ShelfImageFusedEvidence.status == "VISUAL_ONLY", 4),
         else_=5,
     )
-    rows = query.order_by(
-        priority.asc(),
-        models.ShelfImageFusedEvidence.created_at.asc(),
-        models.ShelfImageFusedEvidence.id.asc(),
-    ).offset(max(0, offset)).limit(max(1, min(limit, 250))).all()
+    page_limit = max(1, min(limit, 250))
+    page_offset = max(0, offset)
+
+    # Preserve priority-based pagination, but acquire source-image locks in a
+    # deterministic ID order. The second read rechecks ACTIVE after any lock
+    # wait, so a retention transition committed first removes the item.
+    page_evidence_ids = [
+        row[0]
+        for row in query.with_entities(models.ShelfImageFusedEvidence.id)
+        .order_by(
+            priority.asc(),
+            models.ShelfImageFusedEvidence.created_at.asc(),
+            models.ShelfImageFusedEvidence.id.asc(),
+        )
+        .offset(page_offset)
+        .limit(page_limit)
+        .all()
+    ]
+    if not page_evidence_ids:
+        return []
+
+    (
+        db.query(models.ShelfImage.id)
+        .join(models.ShelfImageDetection, models.ShelfImageDetection.shelf_image_id == models.ShelfImage.id)
+        .join(models.ShelfImageFusedEvidence, models.ShelfImageFusedEvidence.detection_id == models.ShelfImageDetection.id)
+        .filter(models.ShelfImageFusedEvidence.id.in_(page_evidence_ids))
+        .order_by(models.ShelfImage.id.asc())
+        .with_for_update(of=models.ShelfImage)
+        .all()
+    )
+
+    rows = (
+        query.filter(models.ShelfImageFusedEvidence.id.in_(page_evidence_ids))
+        .order_by(
+            priority.asc(),
+            models.ShelfImageFusedEvidence.created_at.asc(),
+            models.ShelfImageFusedEvidence.id.asc(),
+        )
+        .populate_existing()
+        .all()
+    )
     return [
         {
             "fused_evidence_id": evidence.id,
