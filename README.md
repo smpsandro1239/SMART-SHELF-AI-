@@ -1006,7 +1006,7 @@ A evidência visual/OCR combinada persistida é tratada como histórico imutáve
 
 A mesma projeção revalidada é usada na fila `GET /api/v1/shelf-image-review-queue`: os IDs e estados apresentados já não incluem produtos inativos, e o filtro `status` é aplicado ao estado recalculado. A prioridade de ordenação é novamente calculada para os itens da página. O teste `test_review_queue_revalidates_fused_products_after_catalogue_deactivation` cobre a remoção da sugestão desativada na fila.
 
-**Candidatos de treino e desativação de catálogo:** a listagem `GET /api/v1/training-candidates/reviewed` volta a bloquear e atualizar os produtos depois de bloquear as imagens de origem, respeitando a ordem global imagem → produto. Assim, uma decisão humana antiga não torna um produto inativo elegível para curadoria de novos exemplares. O histórico da revisão permanece preservado. O teste `test_reviewed_training_candidates_recheck_active_catalogue_product` verifica que o candidato desaparece após a desativação.
+**Candidatos de treino e desativação de catálogo:** a listagem `GET /api/v1/training-candidates/reviewed` volta a bloquear e atualizar os produtos depois de bloquear as imagens de origem, respeitando a ordem global imagem → produto. Assim, uma decisão humana antiga não torna um produto inativo elegível para curadoria de novos exemplares. O histórico da revisão permanece preservado. Os testes `test_reviewed_training_candidates_recheck_active_catalogue_product` e `test_reviewed_training_candidates_lock_images_before_catalogue_products` verificam a exclusão de produtos inativos e a ordem de bloqueio imagem → produto.
 
 ### Serialização da geração de evidência combinada
 
