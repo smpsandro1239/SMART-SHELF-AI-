@@ -1,5 +1,7 @@
 """Verify recorded external artifacts prevent later cross-store lineage changes."""
 
+from uuid import uuid4
+
 from sqlalchemy.exc import IntegrityError
 
 from app import models
@@ -19,7 +21,7 @@ def expect_rejected(db, statement, description: str) -> None:
 
 def main() -> None:
     with SessionLocal() as db:
-        suffix = "artifact-lineage-smoke"
+        suffix = uuid4().hex[:12]
         store_a = models.Store(code=f"PG-LINEAGE-A-{suffix}", name="Lineage store A")
         store_b = models.Store(code=f"PG-LINEAGE-B-{suffix}", name="Lineage store B")
         db.add_all([store_a, store_b])
