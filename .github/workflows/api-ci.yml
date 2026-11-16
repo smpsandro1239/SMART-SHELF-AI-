@@ -125,6 +125,11 @@ jobs:
           APP_ENV: test
           JWT_SECRET_KEY: test-only-secret-not-for-production
         run: python scripts/postgres_sku_evaluation_authorization_smoke.py
+      - name: Verify PostgreSQL concurrent CSV import idempotency
+        env:
+          DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/smart_shelf_ci
+          APP_ENV: test
+        run: python scripts/postgres_csv_import_concurrency_smoke.py
       - name: Verify PostgreSQL capture-session tenant authorization
         env:
           DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/smart_shelf_ci
