@@ -1,5 +1,6 @@
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 import hashlib
+import json
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -514,3 +515,208 @@ def test_rejected_artifact_disposition_can_be_reproposed(db_session, tmp_path, m
     assert preview["external_artifact_disposition"]["without_final_disposition"] == 2
     assert preview["eligible"] is False
     assert "external_artifact_disposition_not_verified" in preview["blockers"]
+
+
+def test_signed_inventory_snapshot_verifies_exact_coverage_and_keeps_purge_disabled(
+    db_session, tmp_path, monkeypatch
+):
+    from app.artifact_inventory_signing import inventory_signature
+    from app.schemas import (
+        ShelfImageArtifactReferenceCreate,
+        ShelfImageArtifactDispositionActionRequest,
+        ShelfImageArtifactInventorySnapshotCreate,
+    )
+
+    image_id, first_admin_id = build_restricted_image(
+        db_session, tmp_path, with_detection=False
+    )
+    second_admin = models.User(
+        email="inventory-reviewer@example.test",
+        full_name="Inventory reviewer",
+        password_hash="test-only",
+        role="ADMIN",
+        is_active=True,
+    )
+    db_session.add(second_admin)
+    db_session.commit()
+    first_request = SimpleNamespace(state=SimpleNamespace(user_id=first_admin_id))
+    second_request = SimpleNamespace(state=SimpleNamespace(user_id=second_admin.id))
+
+    artifact = main_module.register_shelf_image_artifact_reference(
+        image_id,
+        ShelfImageArtifactReferenceCreate(
+            artifact_type="BACKUP",
+            external_system="backup-vault",
+            external_reference="backup/image-1",
+            sha256="a" * 64,
+        ),
+        first_request,
+        db_session,
+    )
+    main_module.create_shelf_image_artifact_disposition_event(
+        image_id, artifact.id,
+        ShelfImageArtifactDispositionActionRequest(
+            action="PROPOSE", reason="Request verified backup removal",
+        ),
+        first_request, db_session,
+    )
+    main_module.create_shelf_image_artifact_disposition_event(
+        image_id, artifact.id,
+        ShelfImageArtifactDispositionActionRequest(
+            action="APPROVE", reason="Independent approval of backup removal",
+        ),
+        second_request, db_session,
+    )
+    main_module.create_shelf_image_artifact_disposition_event(
+        image_id, artifact.id,
+        ShelfImageArtifactDispositionActionRequest(
+            action="ATTEST_DISPOSED",
+            reason="Backup provider confirms object removal",
+            evidence_reference="ticket/backup-removal-1",
+            evidence_sha256="b" * 64,
+        ),
+        first_request, db_session,
+    )
+
+    secret = "test-backup-vault-inventory-secret-32-bytes"
+    monkeypatch.setattr(
+        main_module.settings,
+        "artifact_inventory_hmac_keys_json",
+        json.dumps({"backup-vault": secret}),
+    )
+    generated_at = datetime.now(timezone.utc)
+    entries = [{
+        "artifact_type": "BACKUP",
+        "external_reference": "backup/image-1",
+        "sha256": "a" * 64,
+        "state": "ABSENT",
+    }]
+    signature = inventory_signature(
+        image_id=image_id,
+        store_id=artifact.store_id,
+        external_system="backup-vault",
+        snapshot_id="snapshot-image-1",
+        generated_at=generated_at,
+        entries=entries,
+        secret=secret,
+    )
+    snapshot = main_module.create_shelf_image_artifact_inventory_snapshot(
+        image_id,
+        ShelfImageArtifactInventorySnapshotCreate(
+            external_system="backup-vault",
+            snapshot_id="snapshot-image-1",
+            generated_at=generated_at,
+            entries=entries,
+            signature=signature,
+        ),
+        first_request,
+        db_session,
+    )
+    assert snapshot.artifact_count == 1
+    assert snapshot.present_count == 0
+    assert snapshot.absent_count == 1
+    assert len(snapshot.manifest_sha256) == 64
+
+    monkeypatch.setattr(main_module.settings, "image_storage_path", str(tmp_path))
+    preview = main_module.get_shelf_image_purge_eligibility(
+        image_id, first_request, db_session
+    )
+    assert preview["external_artifact_inventory"]["verified_systems"] == ["backup-vault"]
+    assert preview["external_artifact_inventory"]["unverified_systems"] == []
+    assert "external_artifact_disposition_not_verified" not in preview["blockers"]
+    assert "purge_executor_not_implemented" in preview["blockers"]
+    assert preview["eligible"] is False
+    assert preview["deletion_performed"] is False
+    assert (tmp_path / "1" / "restricted.jpg").exists()
+
+
+def test_signed_inventory_snapshot_rejects_incomplete_or_invalid_source_evidence(
+    db_session, tmp_path, monkeypatch
+):
+    from fastapi import HTTPException
+    from app.artifact_inventory_signing import inventory_signature
+    from app.schemas import (
+        ShelfImageArtifactReferenceCreate,
+        ShelfImageArtifactInventorySnapshotCreate,
+    )
+
+    image_id, admin_id = build_restricted_image(
+        db_session, tmp_path, with_detection=False
+    )
+    request = SimpleNamespace(state=SimpleNamespace(user_id=admin_id))
+    artifact = main_module.register_shelf_image_artifact_reference(
+        image_id,
+        ShelfImageArtifactReferenceCreate(
+            artifact_type="CACHE",
+            external_system="edge-cache",
+            external_reference="cache/image-1",
+        ),
+        request,
+        db_session,
+    )
+    secret = "test-edge-cache-inventory-secret-32-bytes"
+    monkeypatch.setattr(
+        main_module.settings,
+        "artifact_inventory_hmac_keys_json",
+        json.dumps({"edge-cache": secret}),
+    )
+    generated_at = datetime.now(timezone.utc)
+    incomplete_entries = [{
+        "artifact_type": "CACHE",
+        "external_reference": "cache/unknown-object",
+        "sha256": None,
+        "state": "PRESENT",
+    }]
+    signature = inventory_signature(
+        image_id=image_id,
+        store_id=artifact.store_id,
+        external_system="edge-cache",
+        snapshot_id="snapshot-incomplete",
+        generated_at=generated_at,
+        entries=incomplete_entries,
+        secret=secret,
+    )
+    with pytest.raises(HTTPException) as incomplete:
+        main_module.create_shelf_image_artifact_inventory_snapshot(
+            image_id,
+            ShelfImageArtifactInventorySnapshotCreate(
+                external_system="edge-cache",
+                snapshot_id="snapshot-incomplete",
+                generated_at=generated_at,
+                entries=incomplete_entries,
+                signature=signature,
+            ),
+            request,
+            db_session,
+        )
+    assert incomplete.value.status_code == 409
+
+    exact_entries = [{
+        "artifact_type": "CACHE",
+        "external_reference": "cache/image-1",
+        "sha256": None,
+        "state": "PRESENT",
+    }]
+    valid_signature = inventory_signature(
+        image_id=image_id,
+        store_id=artifact.store_id,
+        external_system="edge-cache",
+        snapshot_id="snapshot-invalid-signature",
+        generated_at=generated_at,
+        entries=exact_entries,
+        secret=secret,
+    )
+    with pytest.raises(HTTPException) as invalid_signature:
+        main_module.create_shelf_image_artifact_inventory_snapshot(
+            image_id,
+            ShelfImageArtifactInventorySnapshotCreate(
+                external_system="edge-cache",
+                snapshot_id="snapshot-invalid-signature",
+                generated_at=generated_at,
+                entries=exact_entries,
+                signature="0" * 64 if valid_signature != "0" * 64 else "1" * 64,
+            ),
+            request,
+            db_session,
+        )
+    assert invalid_signature.value.status_code == 401
