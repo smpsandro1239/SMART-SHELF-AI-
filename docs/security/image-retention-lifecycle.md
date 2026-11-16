@@ -321,3 +321,10 @@ A migração também cria um índice único composto sobre a referência, imagem
 A revisão desta migração reforçou também a máquina de estados na própria base de dados: triggers PostgreSQL e SQLite rejeitam aprovação sem proposta, ações de utilizadores que não sejam administradores ativos, autoaprovação, atestação pelo aprovador, evidência final ausente/inválida e transições fora da sequência. No PostgreSQL, a referência do artefacto é bloqueada durante a validação do evento para serializar decisões concorrentes. A ordem autoritativa do histórico e da API é a sequência imutável do ID do evento, não um timestamp fornecido pelo cliente.
 
 A pré-validação agrega agora os últimos estados de todas as referências com uma consulta agrupada pelo maior ID de evento, evitando uma consulta SQL por artefacto quando uma imagem tem muitas cópias declaradas. A contagem continua a ser apenas informativa e não altera o bloqueio fail-closed.
+
+
+### Ordenação e preservação da identidade do histórico
+
+Cada artefacto tem uma sequência de eventos própria, monotónica e única (`sequence_number`). A API calcula o próximo valor enquanto mantém a referência do artefacto bloqueada; os triggers PostgreSQL/SQLite validam que o evento seguinte é exatamente o número esperado. A consulta da história e a máquina de estados usam esta sequência, não o ID global nem o timestamp. Isto evita que IDs atribuídos por transações concorrentes sejam confundidos com a ordem efetiva das decisões.
+
+O ator é obrigatório e a FK para utilizadores usa `ON DELETE RESTRICT`: uma conta referenciada no histórico não pode ser eliminada e provocar uma alteração implícita de um evento imutável. A desativação da conta continua a ser a opção de gestão compatível com a preservação da auditoria. O smoke test PostgreSQL verifica a rejeição de sequência não contígua e da eliminação do ator.
