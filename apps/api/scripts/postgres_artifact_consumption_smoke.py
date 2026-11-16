@@ -287,7 +287,6 @@ def main() -> None:
         else:
             raise AssertionError("cross-store artifact consumption was not rejected")
         assert provider_calls == [], "provider was called for a cross-store request"
-        settings.artifact_inventory_hmac_keys_json = original_keys
 
     finally:
         settings.artifact_inventory_hmac_keys_json = original_keys
