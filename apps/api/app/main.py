@@ -12,6 +12,7 @@ from app.artifact_inventory_signing import (
     InventorySignatureConfigurationError,
     verify_inventory_signature,
     verify_inventory_snapshot_record,
+    resolve_inventory_secret,
 )
 
 from PIL import Image, UnidentifiedImageError
@@ -1550,7 +1551,7 @@ def create_shelf_image_artifact_inventory_snapshot(
             inventory_complete=payload.inventory_complete,
             configured_keys_json=settings.artifact_inventory_hmac_keys_json,
             key_id=payload.key_id,
-            require_active_key=True,
+            require_active_key=False,
         )
     except InventorySignatureConfigurationError as exc:
         raise HTTPException(status_code=503, detail="Trusted inventory source is not configured") from exc
@@ -1578,6 +1579,20 @@ def create_shelf_image_artifact_inventory_snapshot(
         ):
             raise HTTPException(status_code=409, detail="Snapshot ID already exists with different content or signature")
         return existing
+
+    # An exact retry of an already-persisted snapshot may legitimately use a
+    # key that has since been rotated out of the active slot. New snapshot IDs
+    # must always use the currently active key for this store and source.
+    try:
+        resolve_inventory_secret(
+            configured_keys_json=settings.artifact_inventory_hmac_keys_json,
+            store_id=store_id,
+            external_system=payload.external_system,
+            key_id=payload.key_id,
+            require_active=True,
+        )
+    except InventorySignatureConfigurationError as exc:
+        raise HTTPException(status_code=503, detail="Inventory source must sign new snapshots with its active key") from exc
 
     age_seconds = (now - generated_at).total_seconds()
     if age_seconds < -120:
