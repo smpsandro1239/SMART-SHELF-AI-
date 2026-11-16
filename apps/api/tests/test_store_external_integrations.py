@@ -313,3 +313,49 @@ def test_integration_update_rejects_explicit_null_values():
         StoreExternalIntegrationUpdate(required_for_retention=None)
     with pytest.raises(ValidationError):
         StoreExternalIntegrationUpdate(capabilities=None)
+
+
+
+def test_disposition_database_conflict_rolls_back_and_returns_conflict(db_session, monkeypatch):
+    from sqlalchemy.exc import IntegrityError
+    from app.schemas import ShelfImageArtifactDispositionActionRequest
+
+    store_id, image_id, admin_id = build_store_image(db_session)
+    artifact = models.ShelfImageArtifactReference(
+        shelf_image_id=image_id,
+        store_id=store_id,
+        artifact_type="BACKUP",
+        external_system="backup-vault",
+        external_reference="backup/conflict-test",
+        declared_by_user_id=admin_id,
+    )
+    db_session.add(artifact)
+    db_session.commit()
+    request = SimpleNamespace(state=SimpleNamespace(user_id=admin_id))
+
+    original_rollback = db_session.rollback
+    rollback_called = []
+    def fail_commit():
+        raise IntegrityError("INSERT disposition event", {}, Exception("unique conflict"))
+    def tracked_rollback():
+        rollback_called.append(True)
+        original_rollback()
+
+    monkeypatch.setattr(db_session, "commit", fail_commit)
+    monkeypatch.setattr(db_session, "rollback", tracked_rollback)
+
+    with pytest.raises(HTTPException) as conflict:
+        main_module.create_shelf_image_artifact_disposition_event(
+            image_id,
+            artifact.id,
+            ShelfImageArtifactDispositionActionRequest(
+                action="PROPOSE",
+                reason="Concurrent sequence conflict",
+            ),
+            request,
+            db_session,
+        )
+
+    assert conflict.value.status_code == 409
+    assert rollback_called == [True]
+    assert db_session.query(models.ShelfImageArtifactDispositionEvent).count() == 0
