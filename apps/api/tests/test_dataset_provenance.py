@@ -234,3 +234,30 @@ def test_derived_parent_reference_rejects_cycles():
         {"schema_version": 1, "images": [first, second]}, rows
     )
     assert any("cyclic derivative lineage" in error for error in errors)
+
+
+def test_long_derivative_chain_does_not_depend_on_python_recursion_limit():
+    image_count = 1200
+    rows = []
+    entries = []
+    for index in range(image_count):
+        file_name = f"derived-{index}.jpg"
+        rows.append(manifest_row(name=file_name, sha=digest("a")))
+        entry = external_entry()
+        entry["file_name"] = file_name
+        if index:
+            entry["transformation"] = {
+                "type": "derived",
+                "parent_sha256": digest("a"),
+                "parent_split": "train",
+                "parent_file_name": f"derived-{index - 1}.jpg",
+                "operation": "deterministic transform",
+            }
+        entries.append(entry)
+
+    errors, report = validate_provenance_manifest(
+        {"schema_version": 1, "images": entries}, rows
+    )
+
+    assert errors == []
+    assert report["status"] == "APPROVED"
