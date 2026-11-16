@@ -1257,3 +1257,7 @@ A autorização de consumo bloqueia agora, numa sequência determinística, os s
 
 O consumo de artefactos passou a filtrar entradas do manifesto por tipo antes de consultar os campos de identidade. Um registo JSON persistido com uma entrada que não seja um objeto deixa, assim, de poder provocar uma exceção inesperada durante a procura da entrada: a verificação criptográfica/estrutural continua a falhar de forma fechada e o provider não é chamado. A suite de consumo inclui cenários para manifesto malformado tanto no artefacto pedido como num antecessor noutra integração. Os testes foram adicionados, mas não executados nesta sessão.
 
+### Imutabilidade da linhagem pai/filho na base de dados — 2026-11-16
+
+A migration `0046_artifact_parent_lineage_immutable` acrescenta uma proteção de base de dados contra alterações posteriores de `parent_reference_id`. O pai é definido no INSERT e não pode ser reescrito por UPDATE, impedindo que uma declaração já persistida seja reencaminhada para outro ramo ou que se introduzam ciclos por alteração directa à base de dados. A regra é implementada por trigger em PostgreSQL e SQLite; actualizações que não alterem o valor do pai continuam permitidas. Foi acrescentado um teste que executa a migration num SQLite temporário e verifica a rejeição de uma alteração efectiva. A migration e o teste ainda não foram executados nesta sessão.
+
