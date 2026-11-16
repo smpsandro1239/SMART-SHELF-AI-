@@ -192,6 +192,81 @@ def test_cached_ocr_matches_are_reranked_when_catalogue_product_is_deactivated()
         assert stored.candidates[0]["product_id"] == product_id
 
 
+
+def test_cached_fused_evidence_is_recomputed_when_catalogue_product_is_deactivated():
+    image_id, detection_id = create_image_with_detection()
+    with TestingSession() as db:
+        product = models.Product(sku="FUSION-CACHE-01", name="Produto Fusion", is_active=True)
+        db.add(product)
+        db.flush()
+        product_id = product.id
+        detection = db.get(models.ShelfImageDetection, detection_id)
+        detection.sku_match_status = "MATCHED"
+        detection.product_id = product_id
+        detection.sku_similarity = 0.96
+        detection.sku_match_margin = 0.12
+        run = models.ShelfImageOCRRun(
+            shelf_image_id=image_id, provider="mock-ocr", model_version="mock-v1", status="COMPLETED"
+        )
+        db.add(run)
+        db.flush()
+        db.add(models.ShelfImageOCRMatch(
+            run_id=run.id, detection_id=detection_id, suggested_product_id=product_id,
+            observed_text="Produto Fusion", ocr_confidence=0.98, status="SUGGESTED",
+            top_score=1.0, margin=0.5,
+            candidates=[{"product_id": product_id, "score": 1.0, "reasons": ["name"]}],
+        ))
+        db.commit()
+        run_id = run.id
+        fused = models.ShelfImageFusedEvidence(
+            ocr_run_id=run_id, detection_id=detection_id, status=
+            "CONSENSUS", suggested_product_id=product_id, visual_product_id=product_id,
+            text_product_id=product_id, visual_status=
+            "MATCHED", text_status="SUGGESTED", visual_similarity=0.96,
+            text_score=1.0, ocr_confidence=0.98, visual_model_version=
+            "visual-v1", ocr_provider="mock-ocr", ocr_model_version="mock-v1",
+            reason="historical consensus",
+        )
+        db.add(fused)
+        db.commit()
+
+    with TestClient(app) as client:
+        initial = client.get(f"/api/v1/shelf-images/{image_id}/evidence-fusion")
+        assert initial.status_code == 200
+        assert initial.json()[0]["status"] == "CONSENSUS"
+        assert initial.json()[0]["suggested_product_id"] == product_id
+
+        with TestingSession() as db:
+            db.get(models.Product, product_id).is_active = False
+            db.commit()
+
+        listed = client.get(f"/api/v1/shelf-images/{image_id}/evidence-fusion")
+        cached = client.post(f"/api/v1/shelf-images/{image_id}/evidence-fusion")
+        stale_status_filter = client.get(
+            f"/api/v1/shelf-images/{image_id}/evidence-fusion?status=CONSENSUS"
+        )
+        assert listed.status_code == 200
+        assert cached.status_code == 200
+        assert stale_status_filter.status_code == 200
+        assert stale_status_filter.json() == []
+        for response in (listed, cached):
+            result = response.json()[0]
+            assert result["status"] == "UNKNOWN"
+            assert result["suggested_product_id"] is None
+            assert result["visual_product_id"] is None
+            assert result["text_product_id"] is None
+            assert result["visual_status"] == "UNKNOWN"
+            assert result["text_status"] == "UNKNOWN"
+
+    with TestingSession() as db:
+        stored = db.query(models.ShelfImageFusedEvidence).filter_by(
+            ocr_run_id=run_id, detection_id=detection_id
+        ).one()
+        assert stored.status == "CONSENSUS"
+        assert stored.suggested_product_id == product_id
+        assert stored.visual_product_id == product_id
+        assert stored.text_product_id == product_id
+
 def test_ocr_run_rejects_detection_from_another_image():
     image_id, _ = create_image_with_detection()
     other_image_id, other_detection_id = create_image_with_detection()
