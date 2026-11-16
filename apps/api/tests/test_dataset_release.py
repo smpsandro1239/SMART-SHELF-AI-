@@ -213,3 +213,21 @@ def test_release_registry_rejects_symlinked_release_record(tmp_path):
         create_release(
             manifest, split, visual, registry, provenance_path=provenance
         )
+
+
+@pytest.mark.parametrize("file_name", [
+    "..\\\\outside.jpg",
+    "C:/outside.jpg",
+    "C:\\\\outside.jpg",
+    "//server/share/image.jpg",
+    "folder/image.jpg:stream",
+])
+def test_release_manifest_rejects_non_portable_paths(tmp_path, file_name):
+    path = tmp_path / "manifest.csv"
+    with path.open("w", encoding="utf-8", newline="") as stream:
+        writer = csv.DictWriter(stream, fieldnames=["split", "file_name", "size_bytes", "sha256"])
+        writer.writeheader()
+        for split, name in [("train", file_name), ("val", "b.jpg"), ("test", "c.jpg")]:
+            writer.writerow({"split": split, "file_name": name, "size_bytes": 1, "sha256": "a" * 64})
+    with pytest.raises(ValueError, match="unsafe file_name"):
+        load_manifest(path)
