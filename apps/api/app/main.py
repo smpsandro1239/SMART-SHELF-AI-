@@ -2371,6 +2371,8 @@ def list_shelf_image_detections(
         .join(models.Shelf, models.ShelfImage.shelf_id == models.Shelf.id)
         .join(models.Zone, models.Shelf.zone_id == models.Zone.id)
         .filter(models.ShelfImage.id == image_id)
+        .with_for_update()
+        .populate_existing()
         .first()
     )
     if image_record is None:
@@ -2478,7 +2480,13 @@ def match_shelf_image_ocr_to_catalogue(image_id: int, request: Request, db: Sess
 @app.get("/api/v1/shelf-images/{image_id}/ocr-matches", response_model=list[ShelfImageOCRMatchRead], tags=["computer-vision"])
 def list_shelf_image_ocr_matches(image_id: int, request: Request, limit: int = 500, db: Session = Depends(get_db)):
     """List persisted OCR catalogue suggestions for an image."""
-    image_record = db.get(models.ShelfImage, image_id)
+    image_record = (
+        db.query(models.ShelfImage)
+        .filter(models.ShelfImage.id == image_id)
+        .with_for_update()
+        .populate_existing()
+        .first()
+    )
     if image_record is None:
         raise HTTPException(status_code=404, detail="Shelf image not found")
     _enforce_store_scope(_request_user(db, request), _shelf_image_store_id(db, image_id))
@@ -2906,7 +2914,13 @@ def list_shelf_image_fused_evidence(
     allowed_statuses = {"CONSENSUS", "VISUAL_ONLY", "TEXT_ONLY", "CONFLICT", "AMBIGUOUS", "UNKNOWN"}
     if status is not None and status not in allowed_statuses:
         raise HTTPException(status_code=422, detail="Unsupported evidence-fusion status")
-    image_record = db.get(models.ShelfImage, image_id)
+    image_record = (
+        db.query(models.ShelfImage)
+        .filter(models.ShelfImage.id == image_id)
+        .with_for_update()
+        .populate_existing()
+        .first()
+    )
     if image_record is None:
         raise HTTPException(status_code=404, detail="Shelf image not found")
     _enforce_store_scope(_request_user(db, request), _shelf_image_store_id(db, image_id))
@@ -2983,7 +2997,13 @@ def create_shelf_image_ocr_run(image_id: int, payload: ShelfImageOCRRunCreate, r
 @app.get("/api/v1/shelf-images/{image_id}/ocr-evidence", response_model=list[ShelfImageOCREvidenceRead], tags=["computer-vision"])
 def list_shelf_image_ocr_evidence(image_id: int, request: Request, limit: int = 500, db: Session = Depends(get_db)):
     """List OCR evidence for an image, newest inference run first."""
-    image_record = db.get(models.ShelfImage, image_id)
+    image_record = (
+        db.query(models.ShelfImage)
+        .filter(models.ShelfImage.id == image_id)
+        .with_for_update()
+        .populate_existing()
+        .first()
+    )
     if image_record is None:
         raise HTTPException(status_code=404, detail="Shelf image not found")
     _enforce_store_scope(_request_user(db, request), _shelf_image_store_id(db, image_id))
@@ -3000,7 +3020,13 @@ def list_shelf_image_ocr_evidence(image_id: int, request: Request, limit: int = 
 @app.get("/api/v1/shelf-images/{image_id}/ocr-runs", response_model=list[ShelfImageOCRRunRead], tags=["computer-vision"])
 def list_shelf_image_ocr_runs(image_id: int, request: Request, limit: int = 100, db: Session = Depends(get_db)):
     """List OCR inference provenance for a shelf image."""
-    image_record = db.get(models.ShelfImage, image_id)
+    image_record = (
+        db.query(models.ShelfImage)
+        .filter(models.ShelfImage.id == image_id)
+        .with_for_update()
+        .populate_existing()
+        .first()
+    )
     if image_record is None:
         raise HTTPException(status_code=404, detail="Shelf image not found")
     _enforce_store_scope(_request_user(db, request), _shelf_image_store_id(db, image_id))
