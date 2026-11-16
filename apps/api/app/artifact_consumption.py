@@ -54,8 +54,13 @@ def consume_external_artifact_bytes(
     try:
         image = (
             db.query(models.ShelfImage)
-            .filter(models.ShelfImage.id == image_id)
-            .with_for_update()
+            .join(models.Shelf, models.ShelfImage.shelf_id == models.Shelf.id)
+            .join(models.Zone, models.Shelf.zone_id == models.Zone.id)
+            .filter(
+                models.ShelfImage.id == image_id,
+                models.Zone.store_id == store_id,
+            )
+            .with_for_update(of=models.ShelfImage)
             .populate_existing()
             .first()
         )
