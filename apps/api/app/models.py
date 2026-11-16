@@ -605,10 +605,26 @@ class ShelfImageArtifactReference(Base):
             "id", "shelf_image_id", "store_id",
             unique=True,
         ),
+        ForeignKeyConstraint(
+            ["parent_reference_id", "shelf_image_id", "store_id"],
+            [
+                "shelf_image_artifact_references.id",
+                "shelf_image_artifact_references.shelf_image_id",
+                "shelf_image_artifact_references.store_id",
+            ],
+            name="fk_artifact_reference_parent_lineage",
+            ondelete="RESTRICT",
+        ),
+        CheckConstraint(
+            "parent_reference_id IS NULL OR parent_reference_id <> id",
+            name="ck_artifact_reference_parent_not_self",
+        ),
+        Index("ix_artifact_reference_parent_reference_id", "parent_reference_id"),
         Index("ix_shelf_image_artifacts_store_image", "store_id", "shelf_image_id"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    parent_reference_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     shelf_image_id: Mapped[int] = mapped_column(ForeignKey("shelf_images.id", ondelete="RESTRICT"), nullable=False, index=True)
     store_id: Mapped[int] = mapped_column(ForeignKey("stores.id", ondelete="RESTRICT"), nullable=False, index=True)
     artifact_type: Mapped[str] = mapped_column(String(24), nullable=False)
