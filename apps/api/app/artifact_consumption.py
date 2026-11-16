@@ -92,16 +92,35 @@ def consume_external_artifact_bytes(
         if artifact_hint is None:
             raise LookupError("Artifact reference not found")
 
-        integration = (
+        # Discover the complete set of external systems before taking locks,
+        # then lock integrations in deterministic system-name order. This keeps
+        # the global order image -> integrations -> artifact references.
+        reference_hints = (
+            db.query(models.ShelfImageArtifactReference)
+            .filter(
+                models.ShelfImageArtifactReference.shelf_image_id == image_id,
+                models.ShelfImageArtifactReference.store_id == store_id,
+            )
+            .all()
+        )
+        external_systems = sorted({
+            reference.external_system for reference in reference_hints
+        } | {artifact_hint.external_system})
+        locked_integrations = (
             db.query(models.StoreExternalIntegration)
             .filter(
                 models.StoreExternalIntegration.store_id == store_id,
-                models.StoreExternalIntegration.external_system == artifact_hint.external_system,
+                models.StoreExternalIntegration.external_system.in_(external_systems),
             )
+            .order_by(models.StoreExternalIntegration.external_system)
             .with_for_update()
             .populate_existing()
-            .first()
+            .all()
         )
+        integrations_by_system = {
+            item.external_system: item for item in locked_integrations
+        }
+        integration = integrations_by_system.get(artifact_hint.external_system)
 
         # Lock every declaration in deterministic primary-key order. This
         # gives the complete same-image/store parent graph a stable view and
@@ -143,17 +162,8 @@ def consume_external_artifact_bytes(
         now_utc = now or models.utc_now()
         decisions = []
         for lineage_reference in lineage:
-            ancestor_integration = integration if (
-                lineage_reference.external_system == artifact_hint.external_system
-            ) else (
-                db.query(models.StoreExternalIntegration)
-                .filter(
-                    models.StoreExternalIntegration.store_id == store_id,
-                    models.StoreExternalIntegration.external_system == lineage_reference.external_system,
-                )
-                .with_for_update()
-                .populate_existing()
-                .first()
+            ancestor_integration = integrations_by_system.get(
+                lineage_reference.external_system
             )
             ancestor_snapshot = (
                 db.query(models.ShelfImageArtifactInventorySnapshot)
