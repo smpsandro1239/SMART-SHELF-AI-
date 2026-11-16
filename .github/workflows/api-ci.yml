@@ -62,6 +62,11 @@ jobs:
           DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/smart_shelf_ci
           APP_ENV: test
         run: python scripts/postgres_shelf_image_artifact_disposition_smoke.py
+      - name: Verify PostgreSQL external artifact reference and inventory immutability
+        env:
+          DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/smart_shelf_ci
+          APP_ENV: test
+        run: python scripts/postgres_artifact_immutability_smoke.py
       - name: Verify PostgreSQL external artifact read and retention lock serialization
         env:
           DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/smart_shelf_ci
