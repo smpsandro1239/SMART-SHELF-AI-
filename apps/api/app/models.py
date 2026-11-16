@@ -19,6 +19,29 @@ class Store(Base):
     zones: Mapped[list["Zone"]] = relationship(back_populates="store", cascade="all, delete-orphan")
 
 
+class StoreExternalIntegration(Base):
+    """Store-scoped allow-list and operational policy for an external system."""
+    __tablename__ = "store_external_integrations"
+    __table_args__ = (
+        UniqueConstraint("store_id", "external_system", name="uq_store_external_integration_system"),
+        CheckConstraint("status IN ('ACTIVE', 'REVOKED')", name="ck_store_external_integration_status"),
+        Index("ix_store_external_integrations_store_status", "store_id", "status"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    store_id: Mapped[int] = mapped_column(ForeignKey("stores.id", ondelete="RESTRICT"), nullable=False)
+    external_system: Mapped[str] = mapped_column(String(120), nullable=False)
+    provider: Mapped[str] = mapped_column(String(120), nullable=False)
+    status: Mapped[str] = mapped_column(String(12), default="ACTIVE", nullable=False)
+    required_for_retention: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    capabilities: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_by_user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
+    updated_by_user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+
 class Zone(Base):
     __tablename__ = "zones"
     id: Mapped[int] = mapped_column(primary_key=True)
