@@ -2887,9 +2887,11 @@ def test_employee_upload_sanitizes_client_filename(
     assert response.status_code == 201, response.text
     payload = response.json()
     assert payload["original_filename"] == "renamed.png"
-    stored_path = __import__("pathlib").Path(payload["storage_path"])
-    assert stored_path.parent == tmp_path / str(store_ids["a"])
-    assert stored_path.exists()
+    # Internal storage paths must not be exposed by the public API schema.
+    assert "storage_path" not in payload
+    stored_files = list((tmp_path / str(store_ids["a"])).glob("*"))
+    assert len(stored_files) == 1
+    assert stored_files[0].is_file()
 
 
 
