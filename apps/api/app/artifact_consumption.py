@@ -9,7 +9,7 @@ responses and deferred iterators are deliberately unsupported.
 from __future__ import annotations
 
 import hashlib
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Callable
 
 from sqlalchemy.orm import Session
@@ -29,6 +29,15 @@ class ArtifactAccessDenied(RuntimeError):
 
 class ArtifactIntegrityError(RuntimeError):
     """The bytes returned by the provider do not match the declared SHA-256."""
+
+
+def _persisted_datetime_utc(value: datetime | None) -> datetime | None:
+    """Normalize DB timestamps; SQLite drops timezone metadata from UTC values."""
+    if value is None:
+        return None
+    if value.tzinfo is None or value.utcoffset() is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
 
 
 def consume_external_artifact_bytes(
@@ -180,12 +189,12 @@ def consume_external_artifact_bytes(
             integration_status=integration.status if integration is not None else "MISSING",
             inventory_complete=bool(snapshot and snapshot.inventory_complete),
             inventory_integrity_verified=inventory_integrity_verified,
-            inventory_generated_at=snapshot.generated_at if snapshot is not None else None,
-            inventory_verified_at=snapshot.verified_at if snapshot is not None else None,
+            inventory_generated_at=_persisted_datetime_utc(snapshot.generated_at) if snapshot is not None else None,
+            inventory_verified_at=_persisted_datetime_utc(snapshot.verified_at) if snapshot is not None else None,
             inventory_max_age_seconds=settings.artifact_inventory_max_age_minutes * 60,
             inventory_entry=inventory_entry,
             latest_disposition_event=latest_event.event_type if latest_event is not None else None,
-            latest_disposition_at=latest_event.created_at if latest_event is not None else None,
+            latest_disposition_at=_persisted_datetime_utc(latest_event.created_at) if latest_event is not None else None,
             now=now or models.utc_now(),
         )
         if not decision.allowed:
