@@ -21,8 +21,9 @@ def resolve_artifact_parent_chain(
     The caller is responsible for loading the mapping in a transaction with
     suitable row locks. This helper is intentionally pure and fail-closed.
     """
-    if artifact_id < 1 or expected_image_id < 1 or expected_store_id < 1:
-        raise ValueError("artifact and lineage scope identifiers must be positive")
+    identifiers = (artifact_id, expected_image_id, expected_store_id)
+    if any(type(value) is not int or value < 1 for value in identifiers):
+        raise ValueError("artifact and lineage scope identifiers must be positive integers")
 
     chain: list[Any] = []
     visited: set[int] = set()
@@ -45,7 +46,7 @@ def resolve_artifact_parent_chain(
 
         parent_id = getattr(current, "parent_reference_id", None)
         if parent_id is not None and (
-            not isinstance(parent_id, int) or parent_id < 1
+            type(parent_id) is not int or parent_id < 1
         ):
             raise ArtifactLineageError("artifact_parent_reference_invalid")
 
