@@ -395,6 +395,10 @@ def test_artifact_disposition_requires_two_person_approval_and_evidence(db_sessi
     assert [event.event_type for event in history] == [
         "PROPOSED", "APPROVED", "DISPOSAL_ATTESTED"
     ]
+    assert [event.sequence_number for event in history] == [1, 2, 3]
+    assert [event.actor_user_id for event in history] == [
+        first_admin_id, second_admin_id, first_admin_id
+    ]
 
     monkeypatch.setattr(main_module.settings, "image_storage_path", str(tmp_path))
     preview = main_module.get_shelf_image_purge_eligibility(
