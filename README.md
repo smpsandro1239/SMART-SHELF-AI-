@@ -1015,8 +1015,19 @@ A listagem `GET /api/v1/training-candidates/reviewed` bloqueia as imagens de ori
 
 A implementação recente de bloqueios no histórico de revisão, fusão de evidências e listagem de candidatos de treino foi identificada na branch `main`. Os workflows API CI `43794980825` e Quality Gates `43794992992` falharam no commit `be1938f25bf0f0d3436991acc0058b6ecebf1d4a`; a repetição dos jobs também falhou. A API do GitHub não disponibilizou os logs dos jobs (resposta `BlobNotFound`), pelo que a causa permanece indeterminada. **Não considerar estas alterações validadas por CI** até uma execução completa com logs e conclusão verde.
 
-A revisão do código identificou ainda que a listagem da fila de revisão de evidência combinada não adquire atualmente os mesmos bloqueios de imagem de origem. Esta lacuna foi acrescentada ao P0. A próxima implementação deve preservar a ordenação por prioridade e a semântica de paginação enquanto serializa a leitura com a retenção.
+A revisão do código identificou uma lacuna na fila de revisão de evidência combinada. Essa lacuna foi entretanto corrigida em `apps/api/app/main.py`: a página é selecionada pela prioridade original, as imagens de origem são bloqueadas por ID crescente e a consulta final volta a validar a retenção. A ordenação e a paginação são preservadas.
 
 
 
 **Continuação técnica (2026-11-16):** a leitura de `GET /api/v1/shelf-image-review-queue` foi protegida contra corridas com retenção. A implementação preserva a seleção da página por prioridade/ordem temporal, bloqueia as imagens de origem em ordem crescente de ID e volta a consultar os registos depois dos locks para excluir evidência cuja imagem tenha sido restringida durante a espera. Foi acrescentado o teste `test_review_queue_locks_source_images_before_returning_derived_evidence`. Commits: `d5445e1` (implementação) e `fba205f` (teste). **Validação pendente:** os runs anteriores `43794992992` e `43794980825` falharam sem logs disponíveis; os novos commits irão gerar novas execuções, que têm de terminar com sucesso antes de marcar esta tarefa como concluída.
+
+
+### Smoke test PostgreSQL da fila de revisão e retenção
+
+Foi acrescentado `apps/api/scripts/postgres_review_queue_retention_smoke.py` e integrado no workflow `.github/workflows/api-ci.yml`. O teste usa duas sessões PostgreSQL independentes e o endpoint HTTP real: uma transação mantém o bloqueio da imagem, a chamada à fila tem de ficar à espera, a imagem é marcada como `RESTRICTED` e, depois da libertação do bloqueio, a fila tem de devolver uma lista vazia. O teste observa `pg_stat_activity` e `pg_blocking_pids`, pelo que valida serialização real no PostgreSQL e não apenas a chamada ORM.
+
+**Commits adicionais:** `eb5b15b` (smoke test) e `579284a` (integração no API CI).
+
+### Diagnóstico de runners GitHub Actions — 2026-11-16
+
+As execuções `43795760972` (API CI) e `43795779073` (Quality Gates) terminaram em cerca de dois segundos. Os jobs reportaram `runner_id: 0`, `runner_name: ""` e `steps: []`; não houve atribuição de runner nem execução de qualquer passo. Os logs não existem para estes jobs. Isto indica uma falha anterior à execução do pipeline, não uma falha demonstrada do código Python ou TypeScript. Verificar nas definições do repositório/organização se GitHub Actions está permitido, se os runners hospedados estão disponíveis e se existem limites de utilização/billing ou políticas de execução. Não desativar gates nem marcar CI como verde sem uma execução real.
