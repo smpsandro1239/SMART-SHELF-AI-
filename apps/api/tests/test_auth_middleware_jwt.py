@@ -3038,3 +3038,71 @@ def test_supervisor_cannot_import_csv_into_another_store(auth_client, endpoint):
     )
 
     assert response.status_code == 403, response.text
+
+
+@pytest.mark.parametrize(
+    ("endpoint", "csv_header", "row_template"),
+    [
+        (
+            "/api/v1/sales/import-csv",
+            "product_id,sales_date,quantity,external_reference",
+            "{product_id},2026-11-16,3,CSV-DUPLICATE-DAILY",
+        ),
+        (
+            "/api/v1/sales/hourly/import-csv",
+            "product_id,business_date,hour_of_day,quantity,external_reference",
+            "{product_id},2026-11-16,10,3,CSV-DUPLICATE-HOURLY",
+        ),
+        (
+            "/api/v1/sales/traffic/hourly/import-csv",
+            "business_date,hour_of_day,customer_count,external_reference",
+            "2026-11-16,10,12,CSV-DUPLICATE-TRAFFIC",
+        ),
+    ],
+)
+def test_sales_csv_import_rejects_existing_external_reference(
+    auth_client, endpoint, csv_header, row_template
+):
+    client, ids, store_ids = auth_client
+    payload = (
+        csv_header + chr(10)
+        + row_template.format(product_id=ids["product"]) + chr(10)
+    ).encode("utf-8")
+    request_data = {"store_id": str(store_ids["a"]), "source": "IMPORT"}
+    headers = bearer(ids["supervisor_a"], "SUPERVISOR")
+
+    first = client.post(
+        endpoint,
+        data=request_data,
+        files={"file": ("sales.csv", payload, "text/csv")},
+        headers=headers,
+    )
+    assert first.status_code == 200, first.text
+
+    duplicate = client.post(
+        endpoint,
+        data=request_data,
+        files={"file": ("sales.csv", payload, "text/csv")},
+        headers=headers,
+    )
+    assert duplicate.status_code == 409, duplicate.text
+    assert "no rows were saved" in duplicate.json()["detail"].lower()
+
+
+@pytest.mark.parametrize(
+    "endpoint",
+    [
+        "/api/v1/sales/import-csv",
+        "/api/v1/sales/hourly/import-csv",
+        "/api/v1/sales/traffic/hourly/import-csv",
+    ],
+)
+def test_sales_csv_import_rejects_non_csv_filename(auth_client, endpoint):
+    client, ids, store_ids = auth_client
+    response = client.post(
+        endpoint,
+        data={"store_id": str(store_ids["a"]), "source": "IMPORT"},
+        files={"file": ("sales.txt", b"not a csv", "text/plain")},
+        headers=bearer(ids["supervisor_a"], "SUPERVISOR"),
+    )
+    assert response.status_code == 415, response.text
