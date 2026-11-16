@@ -27,6 +27,7 @@ def upgrade() -> None:
         sa.Column("external_system", sa.String(length=120), nullable=False),
         sa.Column("snapshot_id", sa.String(length=160), nullable=False),
         sa.Column("generated_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("inventory_complete", sa.Boolean(), nullable=False),
         sa.Column("manifest_sha256", sa.String(length=64), nullable=False),
         sa.Column("source_signature", sa.String(length=64), nullable=False),
         sa.Column("inventory_manifest", sa.JSON(), nullable=False),
