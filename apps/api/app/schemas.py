@@ -502,7 +502,7 @@ class ShelfImageArtifactDispositionEventRead(BaseModel):
     shelf_image_id: int
     store_id: int
     event_type: Literal["PROPOSED", "APPROVED", "REJECTED", "DISPOSAL_ATTESTED"]
-    actor_user_id: int | None
+    actor_user_id: int
     evidence_reference: str | None
     evidence_sha256: str | None
     reason: str
