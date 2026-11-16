@@ -1,9 +1,13 @@
 """Build a SKU matching registry from human-approved database exemplars."""
 
+import logging
+
 from sqlalchemy.orm import Session
 
 from app import models
 from app.product_matching import ProductEmbeddingRegistry, ProductExemplar
+
+logger = logging.getLogger(__name__)
 
 
 def lock_matching_source_images(
@@ -156,20 +160,43 @@ def build_approved_product_registry(
         .all()
     )
 
-    exemplars = [
-        ProductExemplar(
-            product_id=exemplar.product_id,
-            embedding=tuple(exemplar.embedding),
-            model_version=exemplar.model_version,
-            image_sha256=exemplar.image_sha256,
-            reviewed_by=reviewer_email,
-            reviewed_at=exemplar.reviewed_at.isoformat(),
-            licence=exemplar.licence,
-        )
-        for exemplar, reviewer_email in rows
-        if exemplar.shelf_image_id is None
-        or exemplar.shelf_image_id in active_source_image_ids
-    ]
+    exemplars = []
+    for exemplar, reviewer_email in rows:
+        if (
+            exemplar.shelf_image_id is not None
+            and exemplar.shelf_image_id not in active_source_image_ids
+        ):
+            continue
+
+        # JSON columns do not enforce vector shape or finiteness. Treat legacy
+        # or manually-corrupted rows as ineligible rather than failing the
+        # entire registry (or allowing inconsistent metadata into matching).
+        try:
+            vector = tuple(exemplar.embedding)
+            if (
+                exemplar.embedding_dimension != len(vector)
+                or not vector
+                or any(not isinstance(value, (int, float)) or isinstance(value, bool)
+                       for value in vector)
+            ):
+                raise ValueError("stored embedding dimension or values are invalid")
+            exemplars.append(
+                ProductExemplar(
+                    product_id=exemplar.product_id,
+                    embedding=vector,
+                    model_version=exemplar.model_version,
+                    image_sha256=exemplar.image_sha256,
+                    reviewed_by=reviewer_email,
+                    reviewed_at=exemplar.reviewed_at.isoformat(),
+                    licence=exemplar.licence,
+                )
+            )
+        except (TypeError, ValueError, OverflowError) as exc:
+            logger.warning(
+                "Skipping invalid approved embedding exemplar id=%s: %s",
+                exemplar.id,
+                exc,
+            )
     return ProductEmbeddingRegistry(
         exemplars,
         model_version=model_version,
