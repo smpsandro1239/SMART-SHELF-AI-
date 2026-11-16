@@ -2429,7 +2429,6 @@ def _refresh_ocr_match_view(db: Session, rows: list[models.ShelfImageOCRMatch]):
         CatalogueProduct(product.id, product.sku, product.name, product.brand, product.unit)
         for product in products
     ]
-    active_ids = {product.id for product in products}
     refreshed = []
     for row in rows:
         if row.ocr_confidence >= 0.65 and (row.observed_text or "").strip():
