@@ -1315,8 +1315,16 @@ def get_store_external_integration_coverage(
         if (now - last_seen.astimezone(timezone.utc)).total_seconds() > settings.artifact_inventory_max_age_minutes * 60:
             stale.append(item.external_system)
 
+    coverage_complete = (
+        bool(required)
+        and len(active) == len(required)
+        and not never_seen
+        and not stale
+    )
     return StoreExternalIntegrationCoverageRead(
         store_id=store_id,
+        coverage_configured=bool(required),
+        coverage_complete=coverage_complete,
         required_integrations=len(required),
         active_required_integrations=len(active),
         missing_or_revoked_integrations=missing_or_revoked,
