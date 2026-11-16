@@ -2435,9 +2435,9 @@ def _refresh_ocr_match_view(db: Session, rows: list[models.ShelfImageOCRMatch]):
         if row.ocr_confidence >= 0.65 and (row.observed_text or "").strip():
             match = rank_product_catalogue_candidates(row.observed_text, catalogue)
             status = match.status
-            suggested_id = match.product_id if match.product_id in active_ids else None
-            top_score = match.score if suggested_id is not None else None
-            margin = match.margin if suggested_id is not None else None
+            suggested_id = match.product_id
+            top_score = match.score
+            margin = match.margin
             candidates = [
                 {"product_id": item.product_id, "score": item.score, "reasons": list(item.reasons)}
                 for item in match.candidates if item.product_id in active_ids
