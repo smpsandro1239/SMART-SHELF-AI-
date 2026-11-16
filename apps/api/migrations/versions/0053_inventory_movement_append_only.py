@@ -13,7 +13,7 @@ def upgrade() -> None:
     bind = op.get_bind()
     if bind.dialect.name == "postgresql":
         op.execute("""
-            CREATE FUNCTION prevent_inventory_movement_mutation()
+            CREATE OR REPLACE FUNCTION prevent_inventory_movement_append_only_mutation_0053()
             RETURNS trigger
             LANGUAGE plpgsql
             AS $function$
@@ -24,12 +24,18 @@ def upgrade() -> None:
             $function$
         """)
         op.execute("""
+            DROP TRIGGER IF EXISTS trg_inventory_movements_append_only
+            ON inventory_movements
+        """)
+        op.execute("""
             CREATE TRIGGER trg_inventory_movements_append_only
             BEFORE UPDATE OR DELETE ON inventory_movements
             FOR EACH ROW
-            EXECUTE FUNCTION prevent_inventory_movement_mutation()
+            EXECUTE FUNCTION prevent_inventory_movement_append_only_mutation_0053()
         """)
     elif bind.dialect.name == "sqlite":
+        op.execute("DROP TRIGGER IF EXISTS trg_inventory_movements_no_update")
+        op.execute("DROP TRIGGER IF EXISTS trg_inventory_movements_no_delete")
         op.execute("""
             CREATE TRIGGER trg_inventory_movements_no_update
             BEFORE UPDATE ON inventory_movements
@@ -53,7 +59,10 @@ def downgrade() -> None:
             "DROP TRIGGER IF EXISTS trg_inventory_movements_append_only "
             "ON inventory_movements"
         )
-        op.execute("DROP FUNCTION IF EXISTS prevent_inventory_movement_mutation()")
+        op.execute(
+            "DROP FUNCTION IF EXISTS "
+            "prevent_inventory_movement_append_only_mutation_0053()"
+        )
     elif bind.dialect.name == "sqlite":
         op.execute("DROP TRIGGER IF EXISTS trg_inventory_movements_no_update")
         op.execute("DROP TRIGGER IF EXISTS trg_inventory_movements_no_delete")
