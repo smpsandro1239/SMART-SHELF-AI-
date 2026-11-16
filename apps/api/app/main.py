@@ -11,6 +11,7 @@ import hashlib
 from app.artifact_inventory_signing import (
     InventorySignatureConfigurationError,
     verify_inventory_signature,
+    verify_inventory_snapshot_record,
 )
 
 from PIL import Image, UnidentifiedImageError
@@ -1711,6 +1712,31 @@ def get_shelf_image_artifact_access_decision(
         raise HTTPException(status_code=409, detail="Shelf image has no valid store lineage")
     _enforce_store_scope(actor, store_id)
 
+    # Resolve the source key without locking, then acquire rows in the same
+    # image -> integration -> artifact order used by the atomic consumer.
+    artifact_hint = (
+        db.query(models.ShelfImageArtifactReference)
+        .filter(
+            models.ShelfImageArtifactReference.id == artifact_id,
+            models.ShelfImageArtifactReference.shelf_image_id == image_id,
+            models.ShelfImageArtifactReference.store_id == store_id,
+        )
+        .first()
+    )
+    if artifact_hint is None:
+        raise HTTPException(status_code=404, detail="Artifact reference not found")
+
+    integration = (
+        db.query(models.StoreExternalIntegration)
+        .filter(
+            models.StoreExternalIntegration.store_id == store_id,
+            models.StoreExternalIntegration.external_system == artifact_hint.external_system,
+        )
+        .with_for_update()
+        .populate_existing()
+        .first()
+    )
+
     artifact = (
         db.query(models.ShelfImageArtifactReference)
         .filter(
@@ -1722,19 +1748,8 @@ def get_shelf_image_artifact_access_decision(
         .populate_existing()
         .first()
     )
-    if artifact is None:
-        raise HTTPException(status_code=404, detail="Artifact reference not found")
-
-    integration = (
-        db.query(models.StoreExternalIntegration)
-        .filter(
-            models.StoreExternalIntegration.store_id == store_id,
-            models.StoreExternalIntegration.external_system == artifact.external_system,
-        )
-        .with_for_update()
-        .populate_existing()
-        .first()
-    )
+    if artifact is None or artifact.external_system != artifact_hint.external_system:
+        raise HTTPException(status_code=409, detail="Artifact reference changed during access evaluation")
 
     snapshot = (
         db.query(models.ShelfImageArtifactInventorySnapshot)
@@ -1765,16 +1780,43 @@ def get_shelf_image_artifact_access_decision(
         .first()
     )
 
+    inventory_references = (
+        db.query(models.ShelfImageArtifactReference)
+        .filter(
+            models.ShelfImageArtifactReference.shelf_image_id == image_id,
+            models.ShelfImageArtifactReference.store_id == store_id,
+            models.ShelfImageArtifactReference.external_system == artifact.external_system,
+        )
+        .order_by(models.ShelfImageArtifactReference.id)
+        .all()
+    )
+    inventory_integrity_verified = bool(
+        snapshot is not None
+        and verify_inventory_snapshot_record(
+            snapshot=snapshot,
+            expected_references=inventory_references,
+            configured_keys_json=settings.artifact_inventory_hmac_keys_json,
+        )
+    )
+
     inventory_entry = None
-    if snapshot is not None:
+    if snapshot is not None and isinstance(snapshot.inventory_manifest, list):
         inventory_entry = next(
             (
-                entry for entry in (snapshot.inventory_manifest or [])
-                if entry.get("artifact_type") == artifact.artifact_type
+                entry for entry in snapshot.inventory_manifest
+                if isinstance(entry, dict)
+                and entry.get("artifact_type") == artifact.artifact_type
                 and entry.get("external_reference") == artifact.external_reference
             ),
             None,
         )
+
+    def _persisted_utc(value):
+        if value is None:
+            return None
+        if value.tzinfo is None or value.utcoffset() is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc)
 
     decision = evaluate_artifact_access(
         artifact_reference_id=artifact.id,
@@ -1785,12 +1827,13 @@ def get_shelf_image_artifact_access_decision(
         source_legal_hold=image.legal_hold,
         integration_status=integration.status if integration is not None else "MISSING",
         inventory_complete=bool(snapshot and snapshot.inventory_complete),
-        inventory_generated_at=snapshot.generated_at if snapshot is not None else None,
-        inventory_verified_at=snapshot.verified_at if snapshot is not None else None,
+        inventory_integrity_verified=inventory_integrity_verified,
+        inventory_generated_at=_persisted_utc(snapshot.generated_at) if snapshot is not None else None,
+        inventory_verified_at=_persisted_utc(snapshot.verified_at) if snapshot is not None else None,
         inventory_max_age_seconds=settings.artifact_inventory_max_age_minutes * 60,
         inventory_entry=inventory_entry,
         latest_disposition_event=latest_event.event_type if latest_event is not None else None,
-        latest_disposition_at=latest_event.created_at if latest_event is not None else None,
+        latest_disposition_at=_persisted_utc(latest_event.created_at) if latest_event is not None else None,
         now=models.utc_now(),
     )
 
