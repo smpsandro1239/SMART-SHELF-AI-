@@ -88,14 +88,14 @@ def test_parse_daily_sales_csv_enforces_byte_limit():
 
 def test_parse_daily_sales_csv_rejects_duplicate_headers():
     payload = (
-        "product_id,product_id,sales_date,quantity,external_reference\\n"
-        "12,13,2026-11-12,1,REF-1\\n"
+        "product_id,product_id,sales_date,quantity,external_reference\n"
+        "12,13,2026-11-12,1,REF-1\n"
     ).encode("utf-8")
     with pytest.raises(ValueError, match="duplicate column"):
         parse_daily_sales_csv(payload)
 
 
 def test_parse_daily_sales_csv_rejects_extra_columns():
-    payload = (HEADER + "12,2026-11-12,1,REF-1,EXTRA\\n").encode("utf-8")
+    payload = (HEADER + "12,2026-11-12,1,REF-1,EXTRA\n").encode("utf-8")
     with pytest.raises(ValueError, match="Too many columns"):
         parse_daily_sales_csv(payload)
