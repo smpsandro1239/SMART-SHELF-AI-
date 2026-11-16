@@ -602,6 +602,7 @@ class ShelfImageArtifactInventorySnapshotCreate(BaseModel):
     generated_at: datetime
     inventory_complete: Literal[True]
     entries: list[ShelfImageArtifactInventoryEntryCreate] = Field(min_length=1, max_length=5000)
+    key_id: str = Field(default="legacy", min_length=1, max_length=64, pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
     signature: str = Field(pattern=r"^[0-9a-f]{64}$")
 
     @field_validator("external_system", "snapshot_id")
