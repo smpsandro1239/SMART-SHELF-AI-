@@ -954,3 +954,12 @@ A migração `0035_shelf_image_artifact_inventory_snapshots` e o endpoint `POST 
 O manifesto assinado inclui versão do esquema, imagem, loja, sistema, ID do snapshot, timestamp com timezone e a declaração obrigatória `inventory_complete: true`, além das entradas ordenadas por tipo/referência, cada uma com SHA-256 opcional e estado `PRESENT` ou `ABSENT`. A API verifica a assinatura em tempo constante, exige snapshot recente (15 minutos por omissão), compara a cobertura exatamente com todas as referências declaradas para aquela imagem/sistema e rejeita duplicados, omissões, referências inesperadas ou hashes divergentes. Uma entrada `ABSENT` só é aceite depois de existir uma atestação de disposição aprovada por duas pessoas e o snapshot tem de ser posterior ao último evento.
 
 A pré-validação volta a verificar assinatura, frescura, cobertura e estado face às referências e eventos atuais. Um snapshot antigo ou uma nova referência posterior invalida a cobertura. Mesmo com todos os artefactos externos confirmados como ausentes, a resposta mantém `eligible: false` e o bloqueio `purge_executor_not_implemented`: não existe executor de eliminação física.
+
+
+## Registo operacional de integrações externas por loja
+
+A migração `0036_store_external_integrations` introduz o registo de integrações externas por loja. Os endpoints `POST/GET /api/v1/stores/{store_id}/external-integrations`, `PATCH /api/v1/stores/{store_id}/external-integrations/{integration_id}` e `GET /api/v1/stores/{store_id}/external-integrations/coverage` permitem aos administradores registar conectores, ativar/revogar origens, declarar capacidades e identificar quais são obrigatórias para a cobertura de retenção.
+
+A receção de snapshots HMAC exige agora que o par loja/sistema externo esteja registado e ativo. Cada snapshot aceite atualiza `last_seen_at`; a cobertura reporta integrações obrigatórias em falta/revogadas, nunca observadas ou desatualizadas, usando `ARTIFACT_INVENTORY_MAX_AGE_MINUTES`. A revogação impede novos snapshots, sem apagar o histórico já recebido.
+
+O registo guarda apenas metadados operacionais e nunca segredos. **Limitação deliberada:** a configuração HMAC continua indexada globalmente por `external_system`, não por loja/`key_id`; portanto, o registo não equivale ainda a isolamento criptográfico de credenciais por loja. A assinatura não demonstra por si só que o catálogo de integrações obrigatórias foi configurado de forma completa. A purga permanece bloqueada e nenhum endpoint elimina artefactos externos ou imagens.
