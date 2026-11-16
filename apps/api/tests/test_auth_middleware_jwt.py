@@ -3018,3 +3018,23 @@ def test_sales_csv_upload_endpoints_reject_payloads_over_five_mib(
 
     assert response.status_code == 413, response.text
     assert "5 MB" in response.json()["detail"]
+
+
+@pytest.mark.parametrize(
+    "endpoint",
+    [
+        "/api/v1/sales/import-csv",
+        "/api/v1/sales/hourly/import-csv",
+        "/api/v1/sales/traffic/hourly/import-csv",
+    ],
+)
+def test_supervisor_cannot_import_csv_into_another_store(auth_client, endpoint):
+    client, ids, store_ids = auth_client
+    response = client.post(
+        endpoint,
+        data={"store_id": str(store_ids["b"]), "source": "IMPORT"},
+        files={"file": ("foreign-store.csv", b"untrusted,payload" + bytes([10]), "text/csv")},
+        headers=bearer(ids["supervisor_a"], "SUPERVISOR"),
+    )
+
+    assert response.status_code == 403, response.text
