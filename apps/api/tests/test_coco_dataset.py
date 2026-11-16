@@ -65,4 +65,22 @@ def test_coco_validator_prevents_image_path_traversal(tmp_path):
     document = valid_document()
     document["images"][0]["file_name"] = "../../outside.jpg"
     errors = validate_coco_document(document, tmp_path)
-    assert any("escapes image root" in error for error in errors)
+    assert any("unsafe relative file_name" in error or "escapes image root" in error for error in errors)
+
+
+import pytest
+
+@pytest.mark.parametrize("file_name", [
+    "../outside.jpg",
+    "..\\\\outside.jpg",
+    "C:/outside.jpg",
+    "C:\\\\outside.jpg",
+    "//server/share/image.jpg",
+    "folder/image.jpg:stream",
+    "folder//image.jpg",
+])
+def test_coco_validator_rejects_non_portable_or_unsafe_image_paths(file_name):
+    document = valid_document()
+    document["images"][0]["file_name"] = file_name
+    errors = validate_coco_document(document)
+    assert any("unsafe relative file_name" in error for error in errors)
