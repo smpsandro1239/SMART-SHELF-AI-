@@ -29,7 +29,7 @@ def evaluate_artifact_access(
     source_legal_hold: bool,
     integration_status: str,
     inventory_complete: bool,
-    inventory_integrity_verified: bool = False,
+    inventory_integrity_verified: bool,
     inventory_generated_at: datetime | None,
     inventory_verified_at: datetime | None,
     inventory_max_age_seconds: int,
