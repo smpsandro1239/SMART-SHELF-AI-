@@ -1072,3 +1072,5 @@ A coluna JSON dos embeddings não consegue impor por si só a correspondência e
 ### Consistência dimensional por versão do modelo
 
 Uma versão de embedding identifica um contrato de representação: os exemplares aprovados dessa versão têm de partilhar a mesma dimensão. Se o carregamento detetar dimensões diferentes dentro da mesma versão, o serviço não escolhe uma dimensão por maioria nem mistura vetores: regista um erro e constrói um registry vazio, levando o matching a abster-se com `UNKNOWN`. Esta decisão é intencionalmente conservadora até existir uma migração/reconciliação explícita dos dados inconsistentes. A validação de domínio também rejeita booleanos como componentes numéricas, apesar de Python os tratar como subclasses de `int`.
+
+- [x] Revalidar a proveniência SHA-256 de cada exemplar ligado a uma imagem interna durante a construção do registry: a imagem é bloqueada e refrescada, e exemplares com imagem ausente/inativa ou hash divergente são excluídos do matching sem apagar o histórico. Ver `docs/architecture/sku-embedding-matching.md`.
