@@ -60,6 +60,7 @@ def test_inventory_signature_verifies_and_returns_manifest_digest():
         generated_at=GENERATED_AT,
         entries=ENTRIES,
         secret=SECRET,
+        inventory_complete=True,
     )
     digest = verify_inventory_signature(
         image_id=10,
@@ -70,6 +71,7 @@ def test_inventory_signature_verifies_and_returns_manifest_digest():
         entries=ENTRIES,
         signature=signature,
         configured_keys_json=json.dumps({"backup-vault": SECRET}),
+        inventory_complete=True,
     )
     assert len(digest) == 64
 
@@ -83,6 +85,7 @@ def test_inventory_signature_rejects_tampered_manifest():
         generated_at=GENERATED_AT,
         entries=ENTRIES,
         secret=SECRET,
+        inventory_complete=True,
     )
     altered = [dict(ENTRIES[0]), dict(ENTRIES[1])]
     altered[0]["state"] = "PRESENT"
@@ -96,6 +99,7 @@ def test_inventory_signature_rejects_tampered_manifest():
             entries=altered,
             signature=signature,
             configured_keys_json=json.dumps({"backup-vault": SECRET}),
+            inventory_complete=True,
         )
 
 
@@ -110,6 +114,7 @@ def test_inventory_signature_rejects_unknown_source_and_weak_key():
             entries=ENTRIES,
             signature="a" * 64,
             configured_keys_json=json.dumps({"backup-vault": SECRET}),
+            inventory_complete=True,
         )
     with pytest.raises(InventorySignatureConfigurationError):
         inventory_signature(
@@ -120,6 +125,7 @@ def test_inventory_signature_rejects_unknown_source_and_weak_key():
             generated_at=GENERATED_AT,
             entries=ENTRIES,
             secret="weak",
+            inventory_complete=True,
         )
 
 
