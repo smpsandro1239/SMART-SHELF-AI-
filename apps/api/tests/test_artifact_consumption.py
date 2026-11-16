@@ -21,13 +21,16 @@ class FakeQuery:
         self.session = session
         self.model = model
 
+    def join(self, *args, **kwargs):
+        return self
+
     def filter(self, *conditions):
         return self
 
     def order_by(self, *ordering):
         return self
 
-    def with_for_update(self):
+    def with_for_update(self, *args, **kwargs):
         self.session.locked_queries += 1
         return self
 
