@@ -3200,7 +3200,7 @@ def list_shelf_image_review_queue(
             .with_for_update(of=models.ShelfImage)
             .all()
         )
-    )
+    ]
     if not locked_page_evidence_ids:
         return []
 
