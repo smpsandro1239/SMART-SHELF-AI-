@@ -212,6 +212,24 @@ def main() -> None:
         db.commit()
 
     with SessionLocal() as db:
+        invalid_sequence = models.ShelfImageArtifactDispositionEvent(
+            artifact_reference_id=artifact_id,
+            sequence_number=5,
+            shelf_image_id=image_id,
+            store_id=store_id,
+            event_type="PROPOSED",
+            actor_user_id=admin_id,
+            reason="Sequence gaps must be rejected",
+        )
+        db.add(invalid_sequence)
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+        else:
+            raise AssertionError("PostgreSQL accepted a non-contiguous disposition sequence")
+
+    with SessionLocal() as db:
         other_store = models.Store(
             code=f"PG-ARTIFACT-OTHER-{suffix}",
             name="Other store for lineage violation",
@@ -290,7 +308,7 @@ def main() -> None:
 
     print(
         "PostgreSQL artifact disposition smoke passed: "
-        "artifact references and events reject cross-store lineage; event triggers reject self-approval, non-admin actions and invalid evidence; event history rejects UPDATE and DELETE."
+        "artifact references and events reject cross-store lineage; event triggers reject self-approval, non-admin actions, invalid evidence and non-contiguous sequences; event history rejects actor deletion, UPDATE and DELETE."
     )
 
 
