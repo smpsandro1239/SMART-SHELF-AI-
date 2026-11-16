@@ -3180,6 +3180,7 @@ def list_shelf_image_review_queue(
         row[0]
         for row in (
             db.query(models.ShelfImageFusedEvidence.id)
+            .select_from(models.ShelfImage)
             .join(
                 models.ShelfImageDetection,
                 models.ShelfImageDetection.shelf_image_id == models.ShelfImage.id,
