@@ -165,3 +165,72 @@ def test_provenance_validator_reports_unhashable_json_values_without_crashing():
     assert any("source_type must be internal or external" in error for error in errors)
     assert any("transformation.type must be original, crop or derived" in error for error in errors)
     assert report["status"] == "BLOCKED"
+
+
+def test_derived_parent_reference_resolves_hash_and_source_identity():
+    parent = external_entry()
+    parent["file_name"] = "original.jpg"
+    child = external_entry()
+    child["file_name"] = "crop.jpg"
+    child["image_sha256"] = digest("c")
+    child["source_image_sha256"] = digest("a")
+    child["transformation"] = {
+        "type": "crop",
+        "parent_sha256": digest("a"),
+        "parent_split": "train",
+        "parent_file_name": "original.jpg",
+        "operation": "crop v2",
+    }
+    rows = [
+        manifest_row(name="original.jpg", sha=digest("a")),
+        manifest_row(name="crop.jpg", sha=digest("c")),
+    ]
+    errors, report = validate_provenance_manifest(
+        {"schema_version": 1, "images": [child, parent]}, rows
+    )
+    assert errors == []
+    assert report["status"] == "APPROVED"
+
+
+def test_derived_parent_reference_rejects_missing_or_mismatched_parent():
+    child = external_entry()
+    child["transformation"] = {
+        "type": "derived",
+        "parent_sha256": digest("b"),
+        "parent_split": "train",
+        "parent_file_name": "missing.jpg",
+        "operation": "resize v1",
+    }
+    errors, _ = validate_provenance_manifest(
+        {"schema_version": 1, "images": [child]}, [manifest_row()]
+    )
+    assert any("declared parent is absent" in error for error in errors)
+
+
+def test_derived_parent_reference_rejects_cycles():
+    first = external_entry()
+    first["file_name"] = "first.jpg"
+    first["image_sha256"] = digest("a")
+    first["source_image_sha256"] = digest("b")
+    first["transformation"] = {
+        "type": "derived", "parent_sha256": digest("b"),
+        "parent_split": "train", "parent_file_name": "second.jpg",
+        "operation": "transform first",
+    }
+    second = external_entry()
+    second["file_name"] = "second.jpg"
+    second["image_sha256"] = digest("b")
+    second["source_image_sha256"] = digest("a")
+    second["transformation"] = {
+        "type": "derived", "parent_sha256": digest("a"),
+        "parent_split": "train", "parent_file_name": "first.jpg",
+        "operation": "transform second",
+    }
+    rows = [
+        manifest_row(name="first.jpg", sha=digest("a")),
+        manifest_row(name="second.jpg", sha=digest("b")),
+    ]
+    errors, _ = validate_provenance_manifest(
+        {"schema_version": 1, "images": [first, second]}, rows
+    )
+    assert any("cyclic derivative lineage" in error for error in errors)
