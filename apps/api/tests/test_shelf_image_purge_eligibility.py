@@ -228,6 +228,45 @@ def test_retention_state_transitions_refresh_locked_image_rows(db_session, tmp_p
     assert len(refreshed_image_locks) == 5
 
 
+def test_legal_hold_blocks_overdue_purge_until_hold_is_released(db_session, tmp_path, monkeypatch):
+    from app.schemas import ShelfImageRetentionRequest
+
+    image_id, admin_id = build_restricted_image(
+        db_session, tmp_path, with_detection=False
+    )
+    monkeypatch.setattr(main_module.settings, "image_storage_path", str(tmp_path))
+    request = SimpleNamespace(state=SimpleNamespace(user_id=admin_id))
+    payload = ShelfImageRetentionRequest(reason="Preserve image for legal review")
+
+    held = main_module.apply_shelf_image_legal_hold(
+        image_id, payload, request, db_session
+    )
+    assert held.legal_hold is True
+
+    held_preview = main_module.get_shelf_image_purge_eligibility(
+        image_id, request, db_session
+    )
+    assert held_preview["eligible"] is False
+    assert "legal_hold_active" in held_preview["blockers"]
+    assert held_preview["deletion_performed"] is False
+
+    released = main_module.release_shelf_image_legal_hold(
+        image_id,
+        ShelfImageRetentionRequest(reason="Legal review completed"),
+        request,
+        db_session,
+    )
+    assert released.legal_hold is False
+
+    released_preview = main_module.get_shelf_image_purge_eligibility(
+        image_id, request, db_session
+    )
+    assert "legal_hold_active" not in released_preview["blockers"]
+    assert released_preview["eligible"] is False
+    assert released_preview["deletion_performed"] is False
+    assert (tmp_path / "1" / "restricted.jpg").exists()
+
+
 def test_purge_preview_blocks_images_with_derived_evidence(db_session, tmp_path, monkeypatch):
     image_id, admin_id = build_restricted_image(
         db_session, tmp_path, with_detection=True
