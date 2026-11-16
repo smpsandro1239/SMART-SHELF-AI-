@@ -517,6 +517,7 @@ class ShelfImageArtifactInventorySnapshotCreate(BaseModel):
     external_system: str = Field(min_length=1, max_length=120)
     snapshot_id: str = Field(min_length=1, max_length=160)
     generated_at: datetime
+    inventory_complete: Literal[True]
     entries: list[ShelfImageArtifactInventoryEntryCreate] = Field(min_length=1, max_length=5000)
     signature: str = Field(pattern=r"^[0-9a-f]{64}$")
 
@@ -553,6 +554,7 @@ class ShelfImageArtifactInventorySnapshotRead(BaseModel):
     external_system: str
     snapshot_id: str
     generated_at: datetime
+    inventory_complete: bool
     manifest_sha256: str
     source_signature: str
     inventory_manifest: list[dict]
