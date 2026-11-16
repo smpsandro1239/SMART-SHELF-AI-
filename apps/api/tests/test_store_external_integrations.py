@@ -155,6 +155,11 @@ def test_registry_is_store_scoped_and_duplicate_system_is_rejected(db_session):
 def test_signed_inventory_rejects_unregistered_or_revoked_store_source(db_session):
     store_id, image_id, admin_id = build_store_image(db_session)
     request = SimpleNamespace(state=SimpleNamespace(user_id=admin_id))
+    empty_coverage = main_module.get_store_external_integration_coverage(
+        store_id, request, db_session
+    )
+    assert empty_coverage.coverage_configured is False
+    assert empty_coverage.coverage_complete is False
     payload = ShelfImageArtifactInventorySnapshotCreate(
         external_system="backup-vault",
         snapshot_id="snapshot-unregistered",
