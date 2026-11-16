@@ -1,6 +1,7 @@
 """Prevent moving upstream shelf hierarchy across tenants after artifacts exist."""
 
 import importlib.util
+import sqlite3
 from pathlib import Path
 
 import pytest
