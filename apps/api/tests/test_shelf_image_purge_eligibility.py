@@ -134,6 +134,81 @@ def register_test_artifact_reference(image_id, payload, request, db_session):
     )
 
 
+def test_cancel_scheduled_purge_records_audit_without_restoring_image(db_session, tmp_path):
+    from app.schemas import ShelfImagePurgeScheduleRequest, ShelfImageRetentionRequest
+
+    image_id, admin_id = build_restricted_image(
+        db_session, tmp_path, with_detection=False
+    )
+    request = SimpleNamespace(state=SimpleNamespace(user_id=admin_id))
+    scheduled = main_module.schedule_shelf_image_purge(
+        image_id,
+        ShelfImagePurgeScheduleRequest(
+            purge_not_before=models.utc_now() + timedelta(days=5),
+            policy_version="retention-policy-v2",
+            reason="Approved retention schedule",
+        ),
+        request,
+        db_session,
+    )
+    assert scheduled.purge_not_before is not None
+    assert scheduled.retention_policy_version == "retention-policy-v2"
+
+    cancelled = main_module.cancel_shelf_image_purge_schedule(
+        image_id,
+        ShelfImageRetentionRequest(reason="Cancel scheduled purge"),
+        request,
+        db_session,
+    )
+
+    assert cancelled.retention_status == "RESTRICTED"
+    assert cancelled.purge_not_before is None
+    assert cancelled.retention_policy_version is None
+    events = db_session.query(models.ShelfImageRetentionEvent).filter_by(
+        shelf_image_id=image_id
+    ).order_by(models.ShelfImageRetentionEvent.id).all()
+    assert [event.event_type for event in events] == ["PURGE_SCHEDULED", "PURGE_CANCELLED"]
+    assert "cancelled_date=" in events[-1].reason
+
+
+def test_purge_schedule_is_rejected_while_legal_hold_is_active(db_session, tmp_path):
+    from fastapi import HTTPException
+    from app.schemas import ShelfImagePurgeScheduleRequest, ShelfImageRetentionRequest
+
+    image_id, admin_id = build_restricted_image(
+        db_session, tmp_path, with_detection=False
+    )
+    request = SimpleNamespace(state=SimpleNamespace(user_id=admin_id))
+    main_module.apply_shelf_image_legal_hold(
+        image_id,
+        ShelfImageRetentionRequest(reason="Preserve for legal review"),
+        request,
+        db_session,
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        main_module.schedule_shelf_image_purge(
+            image_id,
+            ShelfImagePurgeScheduleRequest(
+                purge_not_before=models.utc_now() + timedelta(days=5),
+                policy_version="retention-policy-v2",
+                reason="Attempted purge under legal hold",
+            ),
+            request,
+            db_session,
+        )
+
+    assert exc.value.status_code == 409
+    image = db_session.get(models.ShelfImage, image_id)
+    assert image.legal_hold is True
+    assert image.purge_not_before is not None
+    assert image.retention_policy_version == "test-policy-v1"
+    event_types = db_session.query(models.ShelfImageRetentionEvent.event_type).filter_by(
+        shelf_image_id=image_id
+    ).all()
+    assert [row[0] for row in event_types] == ["LEGAL_HOLD_APPLIED"]
+
+
 def test_cancel_purge_schedule_clears_orphaned_policy_metadata(db_session, tmp_path):
     from app.schemas import ShelfImageRetentionRequest
 
