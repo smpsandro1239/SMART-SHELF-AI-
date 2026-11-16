@@ -43,3 +43,5 @@ The final implementation revision checked in this session, `866f75087b17920b1b57
 After the final database-lineage hardening, API CI run `43777686506` and quality-gates run `43777694940` again failed before any step; the API job and both quality jobs expose empty step lists. This confirms that the latest revisions still have no CI execution evidence.
 
 The database-enforced store-lineage hardening was included in API CI run `43777743145`; that job again failed with `steps: []` and `logs_url: null`, so the new PostgreSQL smoke script has not yet executed in CI.
+
+On 2026-11-16, after the database-enforced disposition state machine and PostgreSQL smoke-test updates, API CI run `43778281274` and quality-gates run `43778281369` again completed as failures with empty step lists and `logs_url: null` for every job. This confirms that neither the new migration trigger nor the PostgreSQL smoke test has been executed by Actions in these runs.
