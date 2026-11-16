@@ -1501,27 +1501,49 @@ def get_shelf_image_purge_eligibility(
         "disposal_attested": 0,
         "without_final_disposition": 0,
     }
-    for artifact_reference in artifact_references:
-        latest_disposition = (
-            db.query(models.ShelfImageArtifactDispositionEvent)
-            .filter(
-                models.ShelfImageArtifactDispositionEvent.artifact_reference_id == artifact_reference.id
+    artifact_ids = [reference.id for reference in artifact_references]
+    latest_dispositions_by_artifact: dict[int, str] = {}
+    if artifact_ids:
+        latest_event_ids = (
+            db.query(
+                func.max(models.ShelfImageArtifactDispositionEvent.id).label("event_id")
             )
-            .order_by(models.ShelfImageArtifactDispositionEvent.id.desc())
-            .first()
+            .filter(
+                models.ShelfImageArtifactDispositionEvent.artifact_reference_id.in_(artifact_ids)
+            )
+            .group_by(models.ShelfImageArtifactDispositionEvent.artifact_reference_id)
+            .subquery()
         )
-        if latest_disposition is None:
+        latest_dispositions = (
+            db.query(
+                models.ShelfImageArtifactDispositionEvent.artifact_reference_id,
+                models.ShelfImageArtifactDispositionEvent.event_type,
+            )
+            .join(
+                latest_event_ids,
+                models.ShelfImageArtifactDispositionEvent.id == latest_event_ids.c.event_id,
+            )
+            .all()
+        )
+        latest_dispositions_by_artifact = {
+            artifact_id: event_type
+            for artifact_id, event_type in latest_dispositions
+        }
+
+    for artifact_reference in artifact_references:
+        latest_event_type = latest_dispositions_by_artifact.get(artifact_reference.id)
+        if latest_event_type is None:
             disposition_counts["without_final_disposition"] += 1
-        elif latest_disposition.event_type == "PROPOSED":
+        elif latest_event_type == "PROPOSED":
             disposition_counts["proposed"] += 1
             disposition_counts["without_final_disposition"] += 1
-        elif latest_disposition.event_type == "APPROVED":
+        elif latest_event_type == "APPROVED":
             disposition_counts["approved"] += 1
             disposition_counts["without_final_disposition"] += 1
-        elif latest_disposition.event_type == "REJECTED":
+        elif latest_event_type == "REJECTED":
             disposition_counts["rejected"] += 1
             disposition_counts["without_final_disposition"] += 1
-        elif latest_disposition.event_type == "DISPOSAL_ATTESTED":
+        elif latest_event_type == "DISPOSAL_ATTESTED":
             disposition_counts["disposal_attested"] += 1
 
     # Human declarations and two-person approvals improve traceability but do
