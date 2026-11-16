@@ -17,7 +17,7 @@ from app.artifact_consumption import consume_external_artifact_bytes
 from app.database import SessionLocal
 
 
-def create_fixture(suffix: str, payload: bytes) -> tuple[int, int, int]:
+def create_fixture(suffix: str, payload: bytes) -> tuple[int, int, int, int]:
     digest = sha256(payload).hexdigest()
     with SessionLocal() as db:
         store = models.Store(code=f"PG-ART-CONSUME-{suffix}", name="Artifact consume lock smoke")
@@ -94,19 +94,21 @@ def create_fixture(suffix: str, payload: bytes) -> tuple[int, int, int]:
             created_by_user_id=admin.id,
         ))
         db.commit()
-        return image.id, artifact.id, store.id
+        return image.id, artifact.id, store.id, integration.id
 
 
 def main() -> None:
     suffix = uuid4().hex[:8]
     payload = f"external artifact smoke payload {suffix}".encode()
-    image_id, artifact_id, store_id = create_fixture(suffix, payload)
+    image_id, artifact_id, store_id, integration_id = create_fixture(suffix, payload)
 
     app_name = f"ss-artifact-read-{suffix}"
     fetch_started = Event()
     allow_fetch_finish = Event()
     retention_started = Event()
     retention_finished = Event()
+    integration_update_started = Event()
+    integration_update_finished = Event()
 
     def dedicated_session():
         db = SessionLocal()
@@ -150,11 +152,31 @@ def main() -> None:
             db.commit()
             retention_finished.set()
 
-    with ThreadPoolExecutor(max_workers=2) as executor:
+    def revoke_integration() -> None:
+        with SessionLocal() as db:
+            db.execute(
+                text("SELECT set_config('application_name', :name, false)"),
+                {"name": f"{app_name}-integration"},
+            )
+            integration_update_started.set()
+            integration = (
+                db.query(models.StoreExternalIntegration)
+                .filter(models.StoreExternalIntegration.id == integration_id)
+                .with_for_update()
+                .one()
+            )
+            integration.status = "REVOKED"
+            integration.updated_at = models.utc_now()
+            db.commit()
+            integration_update_finished.set()
+
+    with ThreadPoolExecutor(max_workers=3) as executor:
         consume_future = executor.submit(consume)
         assert fetch_started.wait(timeout=10), "provider callback did not start"
         retention_future = executor.submit(restrict_source)
+        integration_future = executor.submit(revoke_integration)
         assert retention_started.wait(timeout=10), "retention transaction did not start"
+        assert integration_update_started.wait(timeout=10), "integration revocation did not start"
 
         deadline = monotonic() + 10
         observed_blocker = False
@@ -186,8 +208,13 @@ def main() -> None:
 
         assert consume_future.result(timeout=10) == payload
         retention_future.result(timeout=10)
+        integration_future.result(timeout=10)
 
     assert retention_finished.is_set(), "retention did not resume after provider read"
+    assert integration_update_finished.is_set(), "integration revocation did not resume after provider read"
+    with SessionLocal() as db:
+        integration = db.get(models.StoreExternalIntegration, integration_id)
+        assert integration is not None and integration.status == "REVOKED"
     with SessionLocal() as db:
         image = db.get(models.ShelfImage, image_id)
         assert image is not None and image.retention_status == "RESTRICTED"
