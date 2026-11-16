@@ -1518,7 +1518,7 @@ def get_shelf_image_purge_eligibility(
     if artifact_ids:
         latest_event_ids = (
             db.query(
-                func.max(models.ShelfImageArtifactDispositionEvent.id).label("event_id")
+                func.max(models.ShelfImageArtifactDispositionEvent.sequence_number).label("event_sequence")
             )
             .filter(
                 models.ShelfImageArtifactDispositionEvent.artifact_reference_id.in_(artifact_ids)
@@ -1533,7 +1533,7 @@ def get_shelf_image_purge_eligibility(
             )
             .join(
                 latest_event_ids,
-                models.ShelfImageArtifactDispositionEvent.id == latest_event_ids.c.event_id,
+                models.ShelfImageArtifactDispositionEvent.sequence_number == latest_event_ids.c.event_sequence,
             )
             .all()
         )
