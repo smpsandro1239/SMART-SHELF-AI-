@@ -40,8 +40,8 @@ def upgrade() -> None:
         sa.Column(
             "actor_user_id",
             sa.Integer(),
-            sa.ForeignKey("users.id", ondelete="SET NULL"),
-            nullable=True,
+            sa.ForeignKey("users.id", ondelete="RESTRICT"),
+            nullable=False,
         ),
         sa.Column("evidence_reference", sa.String(length=500), nullable=True),
         sa.Column("evidence_sha256", sa.String(length=64), nullable=True),
