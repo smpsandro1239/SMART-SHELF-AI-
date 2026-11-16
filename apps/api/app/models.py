@@ -600,6 +600,10 @@ class ShelfImageArtifactDispositionEvent(Base):
     """Append-only two-person approval and evidence trail for external artifact disposition."""
     __tablename__ = "shelf_image_artifact_disposition_events"
     __table_args__ = (
+        UniqueConstraint(
+            "artifact_reference_id", "sequence_number",
+            name="uq_shelf_image_artifact_disposition_sequence",
+        ),
         ForeignKeyConstraint(
             ["artifact_reference_id", "shelf_image_id", "store_id"],
             [
@@ -629,6 +633,7 @@ class ShelfImageArtifactDispositionEvent(Base):
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    sequence_number: Mapped[int] = mapped_column(Integer, nullable=False)
     artifact_reference_id: Mapped[int] = mapped_column(
         ForeignKey("shelf_image_artifact_references.id", ondelete="RESTRICT"),
         nullable=False,
