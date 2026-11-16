@@ -596,6 +596,40 @@ class ShelfImageArtifactReference(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
 
 
+class ShelfImageArtifactInventorySnapshot(Base):
+    """Append-only, source-signed inventory snapshot for one image and external system."""
+    __tablename__ = "shelf_image_artifact_inventory_snapshots"
+    __table_args__ = (
+        UniqueConstraint(
+            "store_id", "external_system", "snapshot_id",
+            name="uq_shelf_image_artifact_inventory_snapshot_source_id",
+        ),
+        CheckConstraint("artifact_count >= 0", name="ck_artifact_inventory_count_nonnegative"),
+        CheckConstraint("present_count >= 0 AND absent_count >= 0", name="ck_artifact_inventory_state_counts_nonnegative"),
+        CheckConstraint("present_count + absent_count = artifact_count", name="ck_artifact_inventory_state_counts_total"),
+        CheckConstraint("length(manifest_sha256) = 64", name="ck_artifact_inventory_manifest_sha256_length"),
+        CheckConstraint("length(source_signature) = 64", name="ck_artifact_inventory_signature_length"),
+        Index("ix_artifact_inventory_snapshot_image_source_time", "shelf_image_id", "external_system", "generated_at"),
+        Index("ix_artifact_inventory_snapshot_store_source_time", "store_id", "external_system", "generated_at"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    shelf_image_id: Mapped[int] = mapped_column(ForeignKey("shelf_images.id", ondelete="RESTRICT"), nullable=False, index=True)
+    store_id: Mapped[int] = mapped_column(ForeignKey("stores.id", ondelete="RESTRICT"), nullable=False, index=True)
+    external_system: Mapped[str] = mapped_column(String(120), nullable=False)
+    snapshot_id: Mapped[str] = mapped_column(String(160), nullable=False)
+    generated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    manifest_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    source_signature: Mapped[str] = mapped_column(String(64), nullable=False)
+    inventory_manifest: Mapped[list] = mapped_column(JSON, nullable=False)
+    artifact_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    present_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    absent_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    verified_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    created_by_user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+
 class ShelfImageArtifactDispositionEvent(Base):
     """Append-only two-person approval and evidence trail for external artifact disposition."""
     __tablename__ = "shelf_image_artifact_disposition_events"
