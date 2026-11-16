@@ -29,7 +29,16 @@ def main() -> None:
         )
         db.add_all([product, supervisor])
         db.commit()
-        store_id, product_id = store.id, product.id\n        actor = type("Actor", (), {"id": supervisor.id, "role": supervisor.role, "store_id": supervisor.store_id})()
+        store_id, product_id = store.id, product.id
+        actor = type(
+            "Actor",
+            (),
+            {
+                "id": supervisor.id,
+                "role": supervisor.role,
+                "store_id": supervisor.store_id,
+            },
+        )()
     finally:
         db.close()
 
