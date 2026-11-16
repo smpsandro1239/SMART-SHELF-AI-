@@ -52,3 +52,12 @@ A execução do API CI `43778382827` e do quality-gates `43778382853`, já sobre
 ## Follow-up: sequência imutável de disposição (2026-11-16)
 
 A revisão que introduziu `sequence_number` por referência de artefacto, a preservação obrigatória do ator e a ordenação da pré-validação foi publicada na `main`. O Quality Gates run `43779001311` voltou a falhar antes de executar qualquer passo: os jobs API e Web têm `steps: []` e `logs_url: null`. O API CI `43778982758` também terminou com a mesma ausência de passos. Assim, a alteração está publicada, mas a migração, os triggers e o smoke test PostgreSQL ainda não têm resultado de execução CI. Não interpretar estes X como falha de teste do código.
+
+
+## Signed inventory and migration repair (2026-11-16)
+
+A revisão posterior encontrou e corrigiu dois problemas de implementação antes de continuar: a consulta de pré-validação agora associa o último evento pela chave composta (artefacto, sequência), e a migração `0034` foi reconstruída porque continha blocos duplicados/dangling e mais de uma definição de `downgrade`. A versão corrigida tem uma única função `upgrade`, uma única `downgrade` e cria os triggers SQLite de validação de estado e append-only.
+
+Foi acrescentado o contrato de inventário externo assinado: helper HMAC-SHA-256 canónico, configuração `ARTIFACT_INVENTORY_HMAC_KEYS_JSON`, migração `0035`, modelo append-only, endpoint de ingestão com cobertura exata, validação de frescura e comparação no purge preview. Os testes novos cobrem canonicalização, assinatura, adulteração, cobertura e o facto de o executor de purge continuar desativado.
+
+Os runs `43780304352` (API CI) e `43780304344` (Quality Gates), para o commit `46b16343f1c62c0e60a0565d978cad0f561d3c54`, voltaram a terminar com falha antes de iniciar qualquer step: job API `steps: []`, jobs Web/API `steps: []`, `logs_url: null`. Nenhum teste, compilação Python ou build TypeScript foi executado nesses runs. A implementação está publicada, mas a validação runtime continua pendente.
