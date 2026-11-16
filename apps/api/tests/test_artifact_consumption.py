@@ -643,3 +643,17 @@ def test_lineage_depth_does_not_increase_inventory_or_event_lock_query_count():
     # Image, integrations, declarations, snapshots and events: fixed five locks.
     assert session.locked_queries == 5
 
+def test_parent_with_invalid_inventory_signature_blocks_child():
+    session, _ = fixture_session()
+    _add_cross_system_parent(session)
+    parent_snapshot = session.records[models.ShelfImageArtifactInventorySnapshot][1]
+    parent_snapshot.source_signature = "0" * 64
+    fetched = []
+
+    with pytest.raises(ArtifactAccessDenied) as error:
+        call(session, lambda *args: fetched.append(args) or b"unexpected")
+
+    assert "ancestor_inventory_integrity_unverified" in error.value.decision.reasons
+    assert fetched == []
+    assert session.rolled_back and session.closed
+
