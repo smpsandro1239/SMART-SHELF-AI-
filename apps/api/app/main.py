@@ -3171,18 +3171,40 @@ def list_shelf_image_review_queue(
     if not page_evidence_ids:
         return []
 
-    (
-        db.query(models.ShelfImage.id)
-        .join(models.ShelfImageDetection, models.ShelfImageDetection.shelf_image_id == models.ShelfImage.id)
-        .join(models.ShelfImageFusedEvidence, models.ShelfImageFusedEvidence.detection_id == models.ShelfImageDetection.id)
-        .filter(models.ShelfImageFusedEvidence.id.in_(page_evidence_ids))
-        .order_by(models.ShelfImage.id.asc())
-        .with_for_update(of=models.ShelfImage)
-        .all()
+    # Put the eligibility predicate on the locking read itself. Under
+    # PostgreSQL READ COMMITTED, SELECT FOR UPDATE rechecks WHERE against the
+    # committed row version after a lock wait. Without this predicate, a row
+    # that became RESTRICTED while the request waited could still be locked and
+    # accidentally survive into the response page.
+    locked_page_evidence_ids = [
+        row[0]
+        for row in (
+            db.query(models.ShelfImageFusedEvidence.id)
+            .join(
+                models.ShelfImageDetection,
+                models.ShelfImageDetection.shelf_image_id == models.ShelfImage.id,
+            )
+            .join(
+                models.ShelfImageFusedEvidence,
+                models.ShelfImageFusedEvidence.detection_id == models.ShelfImageDetection.id,
+            )
+            .filter(
+                models.ShelfImageFusedEvidence.id.in_(page_evidence_ids),
+                models.ShelfImage.retention_status == "ACTIVE",
+            )
+            .order_by(
+                models.ShelfImage.id.asc(),
+                models.ShelfImageFusedEvidence.id.asc(),
+            )
+            .with_for_update(of=models.ShelfImage)
+            .all()
+        )
     )
+    if not locked_page_evidence_ids:
+        return []
 
     rows = (
-        query.filter(models.ShelfImageFusedEvidence.id.in_(page_evidence_ids))
+        query.filter(models.ShelfImageFusedEvidence.id.in_(locked_page_evidence_ids))
         .order_by(
             priority.asc(),
             models.ShelfImageFusedEvidence.created_at.asc(),
