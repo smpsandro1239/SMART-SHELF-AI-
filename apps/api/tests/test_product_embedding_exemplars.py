@@ -774,3 +774,69 @@ def test_registry_builder_rejects_blank_model_version():
     with TestingSession() as db:
         with pytest.raises(ValueError, match="model_version is required"):
             build_approved_product_registry(db, model_version="   ")
+
+
+
+def test_embedding_domain_rejects_boolean_components():
+    from app.product_matching import ProductExemplar
+
+    with pytest.raises(ValueError, match="booleans are not valid"):
+        ProductExemplar(
+            product_id=1,
+            embedding=(True, 0.5, 0.75),
+            model_version="embedding-model-v1",
+            image_sha256="a" * 64,
+            reviewed_by="reviewer@example.test",
+            reviewed_at="2026-11-16T00:00:00+00:00",
+            licence="store-owned-reference-image",
+        )
+
+
+def test_registry_abstains_when_one_model_version_has_conflicting_dimensions():
+    from app.product_embedding_service import build_approved_product_registry
+
+    with TestClient(app) as client:
+        product_id = create_product(client)
+        first = client.post(
+            "/api/v1/product-embedding-exemplars",
+            json=exemplar_payload(product_id),
+        )
+        second = client.post(
+            "/api/v1/product-embedding-exemplars",
+            json=exemplar_payload(
+                product_id,
+                embedding=[0.5, 0.5],
+                image_sha256="e" * 64,
+            ),
+        )
+        assert first.status_code == 201
+        assert second.status_code == 201
+
+        with TestingSession() as db:
+            reviewer = models.User(
+                email="dimension-reviewer@example.test",
+                full_name="Revisor dimensões",
+                password_hash="test-hash",
+                role="ADMIN",
+                is_active=True,
+            )
+            db.add(reviewer)
+            db.commit()
+            db.refresh(reviewer)
+            for item_id in (first.json()["id"], second.json()["id"]):
+                row = db.get(models.ProductEmbeddingExemplar, item_id)
+                row.review_status = "APPROVED"
+                row.reviewed_by_user_id = reviewer.id
+                row.reviewed_at = models.utc_now()
+            db.commit()
+
+            registry = build_approved_product_registry(
+                db,
+                model_version="embedding-model-v1",
+                minimum_similarity=0.8,
+            )
+            result = registry.match([0.25, 0.5, 0.75])
+
+            assert registry._exemplars == ()
+            assert result.status == "UNKNOWN"
+            assert result.product_id is None
