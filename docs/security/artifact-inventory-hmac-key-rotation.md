@@ -80,3 +80,7 @@ Sequência recomendada: (1) distribuir keyrings por loja/fornecedor, (2) atualiz
 ## Validação
 
 A suite `apps/api/tests/test_artifact_inventory_signing.py` inclui cobertura para isolamento entre lojas, associação criptográfica do `key_id`, retenção de chaves antigas para verificação histórica e rejeição de chaves antigas em novas ingestões. A execução de pytest, migration em PostgreSQL 16 e CI deste bloco ainda precisa de confirmação.
+
+## Limites de registo de referências
+
+A API só aceita novas referências de artefactos quando a origem externa correspondente está registada e activa na loja da imagem. A revogação de uma integração impede novas declarações e novas ingestões, sem apagar referências ou snapshots históricos. Relações pai/filho permanecem limitadas à mesma imagem e loja.
