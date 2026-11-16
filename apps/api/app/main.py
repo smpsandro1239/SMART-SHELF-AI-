@@ -2104,21 +2104,26 @@ def get_shelf_image_purge_eligibility(
     # A per-image snapshot for one source is not proof that every retention-
     # critical source configured for the store has been covered. Likewise, a
     # signed snapshot must not override a subsequently revoked integration.
-    required_integrations = (
+    # Keep integration status stable for the entire eligibility calculation.
+    # This follows the operational lock order: image first, then integrations
+    # in deterministic external-system order. Revocation/update transactions
+    # cannot change a source halfway through this preview.
+    locked_integrations = (
         db.query(models.StoreExternalIntegration)
-        .filter(
-            models.StoreExternalIntegration.store_id == store_id,
-            models.StoreExternalIntegration.required_for_retention.is_(True),
-        )
+        .filter(models.StoreExternalIntegration.store_id == store_id)
         .order_by(models.StoreExternalIntegration.external_system)
+        .with_for_update()
+        .populate_existing()
         .all()
     )
     integration_by_system = {
         integration.external_system: integration
-        for integration in db.query(models.StoreExternalIntegration)
-        .filter(models.StoreExternalIntegration.store_id == store_id)
-        .all()
+        for integration in locked_integrations
     }
+    required_integrations = [
+        integration for integration in locked_integrations
+        if integration.required_for_retention
+    ]
     for integration in required_integrations:
         system = integration.external_system
         if integration.status != "ACTIVE":
