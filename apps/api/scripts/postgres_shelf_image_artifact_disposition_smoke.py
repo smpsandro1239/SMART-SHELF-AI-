@@ -199,6 +199,7 @@ def main() -> None:
     with SessionLocal() as db:
         valid_attestation = models.ShelfImageArtifactDispositionEvent(
             artifact_reference_id=artifact_id,
+            sequence_number=3,
             shelf_image_id=image_id,
             store_id=store_id,
             event_type="DISPOSAL_ATTESTED",
