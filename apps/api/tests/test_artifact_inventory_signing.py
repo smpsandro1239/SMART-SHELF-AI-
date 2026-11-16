@@ -37,6 +37,7 @@ def test_canonical_inventory_is_order_independent_and_timezone_normalized():
         snapshot_id="snapshot-1",
         generated_at=GENERATED_AT,
         entries=ENTRIES,
+        inventory_complete=True,
     )
     second = canonical_inventory_payload(
         image_id=10,
@@ -140,4 +141,5 @@ def test_canonical_inventory_rejects_duplicates_and_naive_timestamps():
             snapshot_id="snapshot-1",
             generated_at=datetime(2026, 11, 16),
             entries=ENTRIES,
+            inventory_complete=True,
         )
