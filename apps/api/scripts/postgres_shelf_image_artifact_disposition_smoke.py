@@ -372,6 +372,24 @@ def main() -> None:
             raise AssertionError("PostgreSQL accepted an artifact disposition with mismatched store lineage")
 
     with SessionLocal() as db:
+        mismatched_image_event = models.ShelfImageArtifactDispositionEvent(
+            artifact_reference_id=artifact_id,
+            sequence_number=4,
+            shelf_image_id=image_id + 999999,
+            store_id=store_id,
+            event_type="PROPOSED",
+            actor_user_id=admin_id,
+            reason="A mismatched image identifier must be rejected before locking",
+        )
+        db.add(mismatched_image_event)
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+        else:
+            raise AssertionError("PostgreSQL accepted a disposition event with mismatched image lineage")
+
+    with SessionLocal() as db:
         actor = db.get(models.User, admin_id)
         assert actor is not None
         db.delete(actor)
