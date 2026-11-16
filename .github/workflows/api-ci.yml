@@ -82,6 +82,11 @@ jobs:
           DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/smart_shelf_ci
           APP_ENV: test
         run: python scripts/postgres_observation_alert_smoke.py
+      - name: Verify PostgreSQL SKU embedding source lineage immutability
+        env:
+          DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/smart_shelf_ci
+          APP_ENV: test
+        run: python scripts/postgres_embedding_lineage_smoke.py
       - name: Verify PostgreSQL SKU embedding and image-retention lock serialization
         env:
           DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/smart_shelf_ci
