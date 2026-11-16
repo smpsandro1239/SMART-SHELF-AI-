@@ -13,6 +13,7 @@ from app import models
 from app.database import Base
 from app.schemas import (
     ShelfImageArtifactInventorySnapshotCreate,
+    ShelfImageArtifactReferenceCreate,
     StoreExternalIntegrationCreate,
     StoreExternalIntegrationUpdate,
 )
@@ -537,3 +538,84 @@ def test_signed_inventory_must_strictly_postdate_disposition_event(db_session, m
     assert conflict.value.status_code == 409
     assert "predates the latest disposition event" in conflict.value.detail
     assert db_session.query(models.ShelfImageArtifactInventorySnapshot).count() == 0
+
+
+def test_artifact_reference_requires_active_store_registered_source(db_session):
+    store_id, image_id, admin_id = build_store_image(db_session)
+    request = SimpleNamespace(state=SimpleNamespace(user_id=admin_id))
+    payload = ShelfImageArtifactReferenceCreate(
+        artifact_type="BACKUP",
+        external_system="unregistered-vault",
+        external_reference="backup/image-1",
+    )
+
+    with pytest.raises(HTTPException) as missing:
+        main_module.register_shelf_image_artifact_reference(image_id, payload, request, db_session)
+    assert missing.value.status_code == 409
+    assert "not registered" in missing.value.detail
+
+    integration = main_module.create_store_external_integration(
+        store_id, StoreExternalIntegrationCreate(external_system="unregistered-vault", provider="s3-compatible"), request, db_session
+    )
+    main_module.update_store_external_integration(
+        store_id, integration.id, StoreExternalIntegrationUpdate(status="REVOKED"), request, db_session
+    )
+    with pytest.raises(HTTPException) as revoked:
+        main_module.register_shelf_image_artifact_reference(image_id, payload, request, db_session)
+    assert revoked.value.status_code == 409
+    assert "revoked" in revoked.value.detail
+    assert db_session.query(models.ShelfImageArtifactReference).count() == 0
+
+
+def test_external_integration_id_cannot_be_updated_through_another_store_path(db_session):
+    store_a, _, admin_id = build_store_image(db_session)
+    store_b = models.Store(code="INTEGRATION-STORE-C", name="Third integration store")
+    db_session.add(store_b)
+    db_session.commit()
+    request = SimpleNamespace(state=SimpleNamespace(user_id=admin_id))
+    integration_b = main_module.create_store_external_integration(
+        store_b.id, StoreExternalIntegrationCreate(external_system="backup-vault", provider="s3-compatible"), request, db_session
+    )
+    with pytest.raises(HTTPException) as cross_store:
+        main_module.update_store_external_integration(
+            store_a, integration_b.id, StoreExternalIntegrationUpdate(status="REVOKED"), request, db_session
+        )
+    assert cross_store.value.status_code == 404
+    db_session.refresh(integration_b)
+    assert integration_b.status == "ACTIVE"
+
+
+def test_artifact_reference_rejects_parent_from_another_image_or_store(db_session):
+    store_a, image_a, admin_id = build_store_image(db_session)
+    store_b = models.Store(code="PARENT-STORE-B", name="Parent isolation store")
+    db_session.add(store_b)
+    db_session.flush()
+    zone_b = models.Zone(store_id=store_b.id, name="Parent zone")
+    db_session.add(zone_b)
+    db_session.flush()
+    shelf_b = models.Shelf(zone_id=zone_b.id, code="PARENT-SHELF-B")
+    db_session.add(shelf_b)
+    db_session.flush()
+    image_b = models.ShelfImage(
+        shelf_id=shelf_b.id, original_filename="parent.jpg", storage_path=f"/tmp/{store_b.id}/parent.jpg",
+        mime_type="image/jpeg", file_size_bytes=10, sha256="c" * 64, analysis_status="COMPLETED", retention_status="RESTRICTED"
+    )
+    db_session.add(image_b)
+    db_session.flush()
+    parent = models.ShelfImageArtifactReference(
+        shelf_image_id=image_b.id, store_id=store_b.id, artifact_type="BACKUP", external_system="backup-vault",
+        external_reference="backup/foreign-parent", declared_by_user_id=admin_id
+    )
+    db_session.add(parent)
+    db_session.commit()
+    request = SimpleNamespace(state=SimpleNamespace(user_id=admin_id))
+    main_module.create_store_external_integration(
+        store_a, StoreExternalIntegrationCreate(external_system="backup-vault", provider="s3-compatible"), request, db_session
+    )
+    payload = ShelfImageArtifactReferenceCreate(
+        artifact_type="BACKUP", external_system="backup-vault", external_reference="backup/child", parent_reference_id=parent.id
+    )
+    with pytest.raises(HTTPException) as cross_store_parent:
+        main_module.register_shelf_image_artifact_reference(image_a, payload, request, db_session)
+    assert cross_store_parent.value.status_code == 422
+    assert "same image and store" in cross_store_parent.value.detail
