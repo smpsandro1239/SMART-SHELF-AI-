@@ -670,3 +670,74 @@ def test_matching_registry_refreshes_source_image_state_after_lock():
             assert result.status == "UNKNOWN"
             assert result.product_id is None
 
+
+
+
+def test_registry_skips_approved_exemplars_with_inconsistent_stored_dimension():
+    from app.product_embedding_service import build_approved_product_registry
+
+    with TestClient(app) as client:
+        product_id = create_product(client)
+        valid = client.post(
+            "/api/v1/product-embedding-exemplars",
+            json=exemplar_payload(product_id),
+        )
+        corrupt = client.post(
+            "/api/v1/product-embedding-exemplars",
+            json=exemplar_payload(
+                product_id,
+                image_sha256="b" * 64,
+                embedding=[0.75, 0.5, 0.25],
+            ),
+        )
+        assert valid.status_code == 201
+        assert corrupt.status_code == 201
+
+        with TestingSession() as db:
+            reviewer = models.User(
+                email="embedding-integrity-reviewer@example.test",
+                full_name="Revisor integridade",
+                password_hash="test-hash",
+                role="ADMIN",
+                is_active=True,
+            )
+            db.add(reviewer)
+            db.commit()
+            db.refresh(reviewer)
+
+            for exemplar_id in (valid.json()["id"], corrupt.json()["id"]):
+                row = db.get(models.ProductEmbeddingExemplar, exemplar_id)
+                row.review_status = "APPROVED"
+                row.reviewed_by_user_id = reviewer.id
+                row.reviewed_at = models.utc_now()
+            db.get(
+                models.ProductEmbeddingExemplar, corrupt.json()["id"]
+            ).embedding_dimension = 128
+            db.commit()
+
+            registry = build_approved_product_registry(
+                db,
+                model_version="embedding-model-v1",
+                minimum_similarity=0.8,
+            )
+            result = registry.match([0.25, 0.5, 0.75])
+
+            assert result.status == "MATCHED"
+            assert result.product_id == product_id
+            assert len(registry._exemplars) == 1
+
+
+def test_exemplar_rejects_blank_model_version_and_licence():
+    with TestClient(app) as client:
+        product_id = create_product(client)
+        blank_version = client.post(
+            "/api/v1/product-embedding-exemplars",
+            json=exemplar_payload(product_id, model_version="   "),
+        )
+        blank_licence = client.post(
+            "/api/v1/product-embedding-exemplars",
+            json=exemplar_payload(product_id, licence="   "),
+        )
+
+        assert blank_version.status_code == 422
+        assert blank_licence.status_code == 422
