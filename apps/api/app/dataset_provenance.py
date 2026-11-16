@@ -52,6 +52,8 @@ def validate_provenance_manifest(
         expected[key] = row
 
     seen: set[tuple[str, str]] = set()
+    entries_by_key: dict[tuple[str, str], dict[str, Any]] = {}
+    parent_links: dict[tuple[str, str], tuple[str, str]] = {}
     for index, item in enumerate(entries):
         label = f"images[{index}]"
         if not isinstance(item, dict):
@@ -66,6 +68,7 @@ def validate_provenance_manifest(
             errors.append(f"{label}: duplicate provenance entry for {split}/{file_name}")
             continue
         seen.add(key)
+        entries_by_key[key] = item
         manifest_row = expected.get(key)
         if manifest_row is None:
             errors.append(f"{label}: image is absent from the SHA-256 manifest: {split}/{file_name}")
@@ -120,6 +123,61 @@ def validate_provenance_manifest(
                     errors.append(f"{label}.transformation.parent_sha256 must match source_image_sha256")
                 if not isinstance(transformation.get("operation"), str) or not transformation.get("operation", "").strip():
                     errors.append(f"{label}.transformation.operation is required for crop/derived images")
+
+                parent_file_name = transformation.get("parent_file_name")
+                parent_split = transformation.get("parent_split")
+                if (parent_file_name is None) != (parent_split is None):
+                    errors.append(f"{label}.transformation.parent_file_name and parent_split must be supplied together")
+                elif parent_file_name is not None:
+                    if not isinstance(parent_file_name, str) or not parent_file_name:
+                        errors.append(f"{label}.transformation.parent_file_name must be a non-empty string")
+                    elif parent_split not in SPLITS:
+                        errors.append(f"{label}.transformation.parent_split must be train, val or test")
+                    else:
+                        parent_links[key] = (parent_split, parent_file_name)
+
+    # Resolve explicit parent links after collecting all rows so manifest order
+    # cannot affect validation. A hash alone is not a unique lineage identifier.
+    for child_key, parent_key in parent_links.items():
+        child = entries_by_key[child_key]
+        parent = entries_by_key.get(parent_key)
+        label = f"images[{child_key[0]}/{child_key[1]}]"
+        if parent is None:
+            errors.append(f"{label}: declared parent is absent from provenance manifest")
+            continue
+        transformation = child.get("transformation", {})
+        parent_hash = transformation.get("parent_sha256")
+        if parent.get("image_sha256") != parent_hash:
+            errors.append(f"{label}: declared parent image hash does not match parent manifest entry")
+        if parent.get("source_type") != child.get("source_type"):
+            errors.append(f"{label}: parent and child source_type must match")
+        if child.get("source_type") == "internal":
+            if parent.get("shelf_image_id") != child.get("shelf_image_id") or parent.get("store_id") != child.get("store_id"):
+                errors.append(f"{label}: internal parent must belong to the same source image and store")
+        elif child.get("source_type") == "external":
+            for field in ("source_name", "license", "rights_reference"):
+                if parent.get(field) != child.get(field):
+                    errors.append(f"{label}: external parent and child {field} must match")
+
+    # Reject cycles in the declared derivation graph.
+    visiting: set[tuple[str, str]] = set()
+    visited: set[tuple[str, str]] = set()
+
+    def visit(node: tuple[str, str]) -> None:
+        if node in visiting:
+            errors.append(f"cyclic derivative lineage detected at {node[0]}/{node[1]}")
+            return
+        if node in visited:
+            return
+        visiting.add(node)
+        parent = parent_links.get(node)
+        if parent in parent_links:
+            visit(parent)
+        visiting.remove(node)
+        visited.add(node)
+
+    for node in parent_links:
+        visit(node)
 
     for split, file_name in sorted(set(expected) - seen):
         errors.append(f"missing provenance entry for {split}/{file_name}")
