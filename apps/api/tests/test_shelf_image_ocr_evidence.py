@@ -1262,3 +1262,99 @@ def test_review_queue_locks_source_images_before_returning_derived_evidence(monk
         "evidence so retention transitions cannot race the response"
     )
 
+def test_review_queue_is_scoped_to_supervisor_store_and_admin_is_global(monkeypatch):
+    own_image_id, own_detection_id = create_image_with_detection()
+    foreign_image_id, foreign_detection_id = create_image_with_detection()
+
+    with TestingSession() as db:
+        own_image = db.get(models.ShelfImage, own_image_id)
+        foreign_image = db.get(models.ShelfImage, foreign_image_id)
+        own_zone = db.get(models.Zone, db.get(models.Shelf, own_image.shelf_id).zone_id)
+        foreign_zone = db.get(models.Zone, db.get(models.Shelf, foreign_image.shelf_id).zone_id)
+
+        supervisor = models.User(
+            email="review-queue-scope-supervisor@test.local",
+            full_name="Review Queue Supervisor",
+            password_hash="test-hash",
+            role="SUPERVISOR",
+            store_id=own_zone.store_id,
+            is_active=True,
+        )
+        admin = models.User(
+            email="review-queue-scope-admin@test.local",
+            full_name="Review Queue Admin",
+            password_hash="test-hash",
+            role="ADMIN",
+            store_id=None,
+            is_active=True,
+        )
+        employee = models.User(
+            email="review-queue-scope-employee@test.local",
+            full_name="Review Queue Employee",
+            password_hash="test-hash",
+            role="EMPLOYEE",
+            store_id=own_zone.store_id,
+            is_active=True,
+        )
+        db.add_all([supervisor, admin, employee])
+        db.flush()
+
+        for image_id, detection_id in (
+            (own_image_id, own_detection_id),
+            (foreign_image_id, foreign_detection_id),
+        ):
+            run = models.ShelfImageOCRRun(
+                shelf_image_id=image_id,
+                provider="scope-test",
+                model_version="scope-test-v1",
+                status="COMPLETED",
+            )
+            db.add(run)
+            db.flush()
+            db.add(models.ShelfImageFusedEvidence(
+                ocr_run_id=run.id,
+                detection_id=detection_id,
+                status="CONFLICT",
+                suggested_product_id=None,
+                visual_product_id=None,
+                text_product_id=None,
+                visual_status="MATCHED",
+                text_status="SUGGESTED",
+                visual_similarity=0.9,
+                text_score=0.91,
+                ocr_confidence=0.95,
+                visual_model_version="scope-test-v1",
+                ocr_provider="scope-test",
+                ocr_model_version="scope-test-v1",
+                reason="review queue tenant isolation regression",
+            ))
+        db.commit()
+        supervisor_id, admin_id, employee_id = supervisor.id, admin.id, employee.id
+
+    monkeypatch.setattr(main_module, "SessionLocal", TestingSession)
+    supervisor_token, _ = create_access_token(user_id=supervisor_id, role="SUPERVISOR")
+    admin_token, _ = create_access_token(user_id=admin_id, role="ADMIN")
+    employee_token, _ = create_access_token(user_id=employee_id, role="EMPLOYEE")
+
+    with TestClient(app) as client:
+        supervisor_response = client.get(
+            "/api/v1/shelf-image-review-queue",
+            headers={"Authorization": f"Bearer {supervisor_token}"},
+        )
+        assert supervisor_response.status_code == 200
+        assert [item["shelf_image_id"] for item in supervisor_response.json()] == [own_image_id]
+
+        admin_response = client.get(
+            "/api/v1/shelf-image-review-queue",
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+        assert admin_response.status_code == 200
+        assert {item["shelf_image_id"] for item in admin_response.json()} == {
+            own_image_id, foreign_image_id
+        }
+
+        employee_response = client.get(
+            "/api/v1/shelf-image-review-queue",
+            headers={"Authorization": f"Bearer {employee_token}"},
+        )
+        assert employee_response.status_code == 403
