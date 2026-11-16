@@ -7,9 +7,9 @@ import argparse
 import json
 import math
 from pathlib import Path
+from typing import Any
 
 from app.dataset_paths import is_safe_dataset_relative_path
-from typing import Any
 
 
 def _is_integer(value: Any) -> bool:
