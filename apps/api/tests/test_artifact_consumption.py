@@ -618,6 +618,8 @@ def test_lineage_depth_does_not_increase_inventory_or_event_lock_query_count():
         "sha256": grandparent.sha256,
         "state": "PRESENT",
     })
+    parent_snapshot.artifact_count = 2
+    parent_snapshot.present_count = 2
     secret = "test-inventory-signing-secret-which-is-long-enough"
     parent_snapshot.source_signature = inventory_signature(
         image_id=7, store_id=4, external_system="archive-store-b",
