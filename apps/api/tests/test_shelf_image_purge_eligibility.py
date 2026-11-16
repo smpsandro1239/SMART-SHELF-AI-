@@ -33,12 +33,13 @@ def db_session():
 
 
 def build_restricted_image(db, storage_root: Path, *, with_detection: bool):
-    store = models.Store(code="PURGE-TEST", name="Purge test store")
+    store_number = db_session.query(models.Store).count() + 1
+    store = models.Store(code=f"PURGE-TEST-{store_number}", name="Purge test store")
     db.add(store)
     db.flush()
 
     admin = models.User(
-        email="purge-admin@example.test",
+        email=f"purge-admin-{store_number}@example.test",
         full_name="Purge administrator",
         password_hash="test-only",
         role="ADMIN",
@@ -110,6 +111,27 @@ def register_test_external_integration(db_session, image_id, admin_id, external_
     ))
     db_session.commit()
     return store_id
+
+
+def register_test_artifact_reference(image_id, payload, request, db_session):
+    """Register the store-scoped test connector before exercising the API."""
+    image = db_session.get(models.ShelfImage, image_id)
+    store_id = (
+        db_session.query(models.Zone.store_id)
+        .join(models.Shelf, models.Shelf.zone_id == models.Zone.id)
+        .filter(models.Shelf.id == image.shelf_id)
+        .scalar()
+    )
+    integration = db_session.query(models.StoreExternalIntegration).filter_by(
+        store_id=store_id, external_system=payload.external_system
+    ).first()
+    if integration is None:
+        register_test_external_integration(
+            db_session, image_id, request.state.user_id, payload.external_system
+        )
+    return main_module.register_shelf_image_artifact_reference(
+        image_id, payload, request, db_session
+    )
 
 
 def test_purge_preview_blocks_images_with_derived_evidence(db_session, tmp_path, monkeypatch):
@@ -830,7 +852,7 @@ def test_purge_preview_rejects_revoked_declared_artifact_integration(
     ).filter(models.Shelf.id == image.shelf_id).scalar()
     db_session.add(models.StoreExternalIntegration(
         store_id=store_id, external_system="revoked-storage",
-        provider="test-provider", status="REVOKED", required_for_retention=False,
+        provider="test-provider", status="ACTIVE", required_for_retention=False,
         capabilities=["inventory"], created_by_user_id=admin_id,
         updated_by_user_id=admin_id,
     ))
@@ -845,6 +867,11 @@ def test_purge_preview_rejects_revoked_declared_artifact_integration(
         ),
         request, db_session,
     )
+    integration = db_session.query(models.StoreExternalIntegration).filter_by(
+        store_id=store_id, external_system="revoked-storage"
+    ).one()
+    integration.status = "REVOKED"
+    db_session.commit()
     monkeypatch.setattr(main_module.settings, "image_storage_path", str(tmp_path))
     preview = main_module.get_shelf_image_purge_eligibility(image_id, request, db_session)
 
