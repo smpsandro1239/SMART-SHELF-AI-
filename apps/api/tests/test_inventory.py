@@ -121,9 +121,9 @@ def test_inventory_snapshot_rejects_non_finite_and_out_of_range_quantities():
             "source": "ERP",
         }
         invalid_payloads = [
-            {**base, "on_hand_quantity": float("nan")},
-            {**base, "on_hand_quantity": float("inf")},
-            {**base, "reserved_quantity": float("inf")},
+            {**base, "on_hand_quantity": "NaN"},
+            {**base, "on_hand_quantity": "Infinity"},
+            {**base, "reserved_quantity": "Infinity"},
             {**base, "on_hand_quantity": 1_000_000_000},
             {**base, "reserved_quantity": 1_000_000_000},
         ]

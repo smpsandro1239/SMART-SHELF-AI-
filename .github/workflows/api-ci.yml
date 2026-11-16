@@ -57,6 +57,11 @@ jobs:
           DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/smart_shelf_ci
           APP_ENV: test
         run: alembic upgrade head
+      - name: Verify PostgreSQL inventory snapshot append-only protection
+        env:
+          DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/smart_shelf_ci
+          APP_ENV: test
+        run: python scripts/postgres_inventory_snapshot_immutability_smoke.py
       - name: Verify PostgreSQL external artifact disposition audit immutability
         env:
           DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/smart_shelf_ci
