@@ -97,11 +97,21 @@ class ProductEmbeddingRegistry:
     ) -> None:
         if not model_version.strip():
             raise ValueError("model_version is required")
-        if not 0 <= minimum_similarity <= 1:
-            raise ValueError("minimum_similarity must be between 0 and 1")
-        if not 0 <= minimum_margin <= 2:
-            raise ValueError("minimum_margin must be between 0 and 2")
-        self.model_version = model_version
+        if (
+            isinstance(minimum_similarity, bool)
+            or not isinstance(minimum_similarity, (int, float))
+            or not isfinite(minimum_similarity)
+            or not 0 <= minimum_similarity <= 1
+        ):
+            raise ValueError("minimum_similarity must be a finite number between 0 and 1")
+        if (
+            isinstance(minimum_margin, bool)
+            or not isinstance(minimum_margin, (int, float))
+            or not isfinite(minimum_margin)
+            or not 0 <= minimum_margin <= 2
+        ):
+            raise ValueError("minimum_margin must be a finite number between 0 and 2")
+        self.model_version = model_version.strip()
         self.minimum_similarity = minimum_similarity
         self.minimum_margin = minimum_margin
         self._exemplars = tuple(exemplars)
