@@ -731,7 +731,6 @@ def test_cross_store_restricted_image_returns_forbidden_before_retention_state(m
             store_id=own_zone.store_id,
             is_active=True,
         )
-        foreign_image = db.get(models.ShelfImage, foreign_image_id)
         foreign_image.retention_status = "RESTRICTED"
         db.add(actor)
         db.commit()
@@ -1331,6 +1330,7 @@ def test_review_queue_is_scoped_to_supervisor_store_and_admin_is_global(monkeypa
         supervisor_id, admin_id, employee_id = supervisor.id, admin.id, employee.id
 
     monkeypatch.setattr(main_module, "SessionLocal", TestingSession)
+    monkeypatch.setattr(main_module.settings, "app_env", "production")
     supervisor_token, _ = create_access_token(user_id=supervisor_id, role="SUPERVISOR")
     admin_token, _ = create_access_token(user_id=admin_id, role="ADMIN")
     employee_token, _ = create_access_token(user_id=employee_id, role="EMPLOYEE")
