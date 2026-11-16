@@ -118,8 +118,23 @@ def verify_inventory_signature(
     inventory_complete: bool,
 ) -> str:
     """Verify a source signature and return the canonical manifest SHA-256."""
+    def reject_duplicate_keys(pairs):
+        parsed = {}
+        for key, value in pairs:
+            if key in parsed:
+                raise InventorySignatureConfigurationError(
+                    "Inventory HMAC key configuration contains a duplicate source identifier"
+                )
+            parsed[key] = value
+        return parsed
+
     try:
-        keys = json.loads(configured_keys_json or "{}")
+        keys = json.loads(
+            configured_keys_json or "{}",
+            object_pairs_hook=reject_duplicate_keys,
+        )
+    except InventorySignatureConfigurationError:
+        raise
     except (TypeError, json.JSONDecodeError) as exc:
         raise InventorySignatureConfigurationError("Inventory HMAC key configuration must be a JSON object") from exc
     if not isinstance(keys, dict):
