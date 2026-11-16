@@ -3,12 +3,14 @@ name: Runner diagnostics
 on:
   push:
     branches: [main]
-    paths:
-      - ".github/workflows/runner-diagnostics.yml"
   workflow_dispatch:
 
 permissions:
   contents: read
+
+concurrency:
+  group: runner-diagnostics-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   runner-smoke:
