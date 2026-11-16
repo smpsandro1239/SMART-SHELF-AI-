@@ -41,6 +41,10 @@ class FakeQuery:
     def first(self):
         return self.session.records.get(self.model)
 
+    def all(self):
+        record = self.session.records.get(self.model)
+        return [record] if record is not None else []
+
 
 class FakeSession:
     def __init__(self, records):
@@ -240,7 +244,19 @@ def test_missing_inventory_snapshot_never_reaches_provider():
 def test_artifact_without_declared_digest_is_not_consumed():
     session, _ = fixture_session()
     session.records[models.ShelfImageArtifactReference].sha256 = None
-    session.records[models.ShelfImageArtifactInventorySnapshot].inventory_manifest[0]["sha256"] = None
+    snapshot = session.records[models.ShelfImageArtifactInventorySnapshot]
+    snapshot.inventory_manifest[0]["sha256"] = None
+    secret = "test-inventory-signing-secret-which-is-long-enough"
+    snapshot.source_signature = inventory_signature(
+        image_id=7, store_id=4, external_system="object-store-a",
+        snapshot_id="snapshot-31", generated_at=snapshot.generated_at,
+        entries=snapshot.inventory_manifest, secret=secret, inventory_complete=True,
+    )
+    snapshot.manifest_sha256 = sha256(canonical_inventory_payload(
+        image_id=7, store_id=4, external_system="object-store-a",
+        snapshot_id="snapshot-31", generated_at=snapshot.generated_at,
+        entries=snapshot.inventory_manifest, inventory_complete=True,
+    )).hexdigest()
     fetched = []
 
     with pytest.raises(ArtifactAccessDenied) as error:
