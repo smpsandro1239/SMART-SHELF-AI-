@@ -113,7 +113,7 @@ def build_approved_product_registry(
         for _exemplar_id, _product_id, shelf_image_id in candidates
         if shelf_image_id is not None
     })
-    active_source_image_ids: set[int] = set()
+    active_source_image_hashes: dict[int, str] = {}
     if source_image_ids:
         source_images = (
             db.query(models.ShelfImage)
@@ -123,9 +123,10 @@ def build_approved_product_registry(
             .populate_existing()
             .all()
         )
-        active_source_image_ids = {
-            image.id for image in source_images
-            if image.retention_status == "ACTIVE"
+        active_source_image_hashes = {
+            image.id: image.sha256.lower()
+            for image in source_images
+            if image.retention_status == "ACTIVE" and image.sha256
         }
 
     product_ids = sorted({product_id for _eid, product_id, _sid in candidates})
@@ -166,11 +167,18 @@ def build_approved_product_registry(
 
     exemplars = []
     for exemplar, reviewer_email in rows:
-        if (
-            exemplar.shelf_image_id is not None
-            and exemplar.shelf_image_id not in active_source_image_ids
-        ):
-            continue
+        if exemplar.shelf_image_id is not None:
+            current_source_hash = active_source_image_hashes.get(exemplar.shelf_image_id)
+            if (
+                current_source_hash is None
+                or not exemplar.image_sha256
+                or exemplar.image_sha256.lower() != current_source_hash
+            ):
+                logger.warning(
+                    "Skipping embedding exemplar id=%s: source image is missing, inactive, or has changed SHA-256",
+                    exemplar.id,
+                )
+                continue
 
         # JSON columns do not enforce vector shape or finiteness. Treat legacy
         # or manually-corrupted rows as ineligible rather than failing the
