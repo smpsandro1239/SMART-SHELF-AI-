@@ -1106,3 +1106,12 @@ Foi adicionada a regressão `apps/api/tests/test_product_embedding_store_scope.p
 **Validação pendente:** os workflows desencadeados pelos commits `32eb035`, `21dbd56` e `cdf70bb` continuam a terminar antes da execução, com `runner_id=0`, sem runner atribuído e sem passos. Não declarar os testes aprovados até o GitHub Actions executar efetivamente os jobs.
 
 **Próximas verificações:** validar que todos os caminhos de produção para matching passam `store_id`; adicionar uma verificação PostgreSQL de concorrência/locks por tenant; rever os exemplares legados sem imagem de origem e decidir uma migração controlada para os associar a capturas auditáveis ou mantê-los fora do matching operacional.
+
+
+### Cobertura obrigatória de integrações no gate de retenção — 2026-11-16
+
+A auditoria da pré-validação de purge identificou uma lacuna: os snapshots assinados eram verificados por cada sistema com referências declaradas para a imagem, mas o gate não cruzava esse conjunto com as integrações da loja. Assim, um sistema marcado como obrigatório para retenção podia ficar fora da avaliação por não ter referências declaradas para aquela captura; uma integração associada a referências também podia ter sido revogada depois da recolha do snapshot.
+
+A pré-validação foi reforçada para exigir que cada integração obrigatória da loja esteja ativa, tenha sido observada dentro da janela de frescura configurada e tenha referências declaradas para a imagem avaliada. Também bloqueia sistemas associados a referências quando não existe integração registada ou esta está revogada. As razões específicas são expostas em external_artifact_inventory.unverified_systems, mantendo o bloqueio global external_artifact_disposition_not_verified.
+
+Foram acrescentados testes de regressão para integração obrigatória sem referências por imagem e integração revogada associada a um artefacto. A pré-validação continua a ser apenas consultiva: eligible permanece falso e nenhum ficheiro ou registo é eliminado. Validação pendente: inspeção estática concluída; execução pytest e CI dependem de um runner GitHub Actions funcional.
