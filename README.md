@@ -1261,3 +1261,7 @@ O consumo de artefactos passou a filtrar entradas do manifesto por tipo antes de
 
 A migration `0046_artifact_parent_lineage_immutable` acrescenta uma proteção de base de dados contra alterações posteriores de `parent_reference_id`. O pai é definido no INSERT e não pode ser reescrito por UPDATE, impedindo que uma declaração já persistida seja reencaminhada para outro ramo ou que se introduzam ciclos por alteração directa à base de dados. A regra é implementada por trigger em PostgreSQL e SQLite; actualizações que não alterem o valor do pai continuam permitidas. Foi acrescentado um teste que executa a migration num SQLite temporário e verifica a rejeição de uma alteração efectiva. A migration e o teste ainda não foram executados nesta sessão.
 
+### Teste de rollback da imutabilidade da linhagem — 2026-11-16
+
+O teste SQLite da migration `0046_artifact_parent_lineage_immutable` cobre agora também o downgrade: confirma que uma alteração efectiva do pai é rejeitada após o upgrade, que uma actualização sem mudança do valor continua permitida e que, depois do downgrade, o trigger é removido e a alteração volta a ser aceite. Isto verifica o ciclo de vida completo da protecção e evita que o rollback deixe uma restrição residual. A alteração foi publicada no commit `a27959ee7c3f918b08aaf20e75871c958f8fca74`. **A execução pytest e a validação PostgreSQL/CI continuam pendentes; não se declara o teste aprovado.**
+
