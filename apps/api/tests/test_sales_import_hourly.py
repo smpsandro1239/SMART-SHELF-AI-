@@ -67,3 +67,35 @@ def test_hourly_import_rejects_nul_bytes():
 def test_hourly_import_enforces_byte_limit():
     with pytest.raises(ValueError, match="maximum file size"):
         parse_hourly_sales_csv(b"x" * (MAX_HOURLY_IMPORT_BYTES + 1))
+
+
+@pytest.mark.parametrize(
+    ("payload", "parser", "message"),
+    [
+        (
+            (SALES_HEADER.replace("product_id", "product_id,product_id", 1)
+             + "42,43,2026-11-12,8,1,REF-1\\n").encode(),
+            parse_hourly_sales_csv,
+            "duplicate column",
+        ),
+        (
+            (TRAFFIC_HEADER.replace("business_date", "business_date,business_date", 1)
+             + "2026-11-12,2026-11-13,8,1,REF-1\\n").encode(),
+            parse_hourly_traffic_csv,
+            "duplicate column",
+        ),
+        (
+            (SALES_HEADER + "42,2026-11-12,8,1,REF-1,EXTRA\\n").encode(),
+            parse_hourly_sales_csv,
+            "Too many columns",
+        ),
+        (
+            (TRAFFIC_HEADER + "2026-11-12,8,1,REF-1,EXTRA\\n").encode(),
+            parse_hourly_traffic_csv,
+            "Too many columns",
+        ),
+    ],
+)
+def test_hourly_import_rejects_duplicate_headers_and_extra_columns(payload, parser, message):
+    with pytest.raises(ValueError, match=message):
+        parser(payload)
