@@ -2993,3 +2993,28 @@ def test_admin_can_schedule_cancel_and_audit_future_purge(auth_client):
         headers=admin_headers,
     )
     assert blocked.status_code == 409
+
+
+@pytest.mark.parametrize(
+    "endpoint",
+    [
+        "/api/v1/sales/import-csv",
+        "/api/v1/sales/hourly/import-csv",
+        "/api/v1/sales/traffic/hourly/import-csv",
+    ],
+)
+def test_sales_csv_upload_endpoints_reject_payloads_over_five_mib(
+    auth_client, endpoint
+):
+    client, ids, store_ids = auth_client
+    payload = b"x" * (5 * 1024 * 1024 + 1)
+
+    response = client.post(
+        endpoint,
+        data={"store_id": str(store_ids["a"]), "source": "IMPORT"},
+        files={"file": ("oversized.csv", payload, "text/csv")},
+        headers=bearer(ids["supervisor_a"], "SUPERVISOR"),
+    )
+
+    assert response.status_code == 413, response.text
+    assert "5 MB" in response.json()["detail"]
