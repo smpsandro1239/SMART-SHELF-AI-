@@ -58,15 +58,40 @@ def process_completed_ocr_run(db: Session, image_id: int) -> dict[str, int]:
         .filter(models.ShelfImageOCRMatch.run_id == run.id)
         .all()
     }
-    products = (
-        db.query(models.Product)
-        .filter(models.Product.is_active.is_(True))
-        .order_by(models.Product.id.asc())
+    # The caller must hold the source ShelfImage row lock before entering
+    # this pipeline. Lock catalogue rows only afterwards, in ascending ID
+    # order, so product deactivation cannot race suggestion/fusion persistence.
+    detections = (
+        db.query(models.ShelfImageDetection)
+        .filter(models.ShelfImageDetection.shelf_image_id == image_id)
+        .order_by(models.ShelfImageDetection.id.asc())
         .all()
     )
+    referenced_product_ids = {
+        detection.product_id for detection in detections
+        if detection.product_id is not None
+    }
+    active_product_ids = {
+        product_id for (product_id,) in (
+            db.query(models.Product.id)
+            .filter(models.Product.is_active.is_(True))
+            .all()
+        )
+    }
+    product_ids = sorted(active_product_ids | referenced_product_ids)
+    locked_products = (
+        db.query(models.Product)
+        .filter(models.Product.id.in_(product_ids))
+        .order_by(models.Product.id.asc())
+        .with_for_update()
+        .populate_existing()
+        .all()
+    )
+    active_products = [product for product in locked_products if product.is_active]
+    active_product_ids = {product.id for product in active_products}
     catalogue = [
         CatalogueProduct(product.id, product.sku, product.name, product.brand, product.unit)
-        for product in products
+        for product in active_products
     ]
 
     matches_created = 0
@@ -112,12 +137,6 @@ def process_completed_ocr_run(db: Session, image_id: int) -> dict[str, int]:
 
     db.flush()
 
-    detections = (
-        db.query(models.ShelfImageDetection)
-        .filter(models.ShelfImageDetection.shelf_image_id == image_id)
-        .order_by(models.ShelfImageDetection.id.asc())
-        .all()
-    )
     existing_fused = {
         row.detection_id: row
         for row in db.query(models.ShelfImageFusedEvidence)
@@ -131,9 +150,17 @@ def process_completed_ocr_run(db: Session, image_id: int) -> dict[str, int]:
             continue
 
         visual_status = detection.sku_match_status or "UNKNOWN"
+        visual_product_id = (
+            detection.product_id
+            if visual_status == "MATCHED"
+            and detection.product_id in active_product_ids
+            else None
+        )
+        if visual_status == "MATCHED" and visual_product_id is None:
+            visual_status = "UNKNOWN"
         visual = ProductMatch(
             status=visual_status,
-            product_id=detection.product_id if visual_status == "MATCHED" else None,
+            product_id=visual_product_id,
             similarity=detection.sku_similarity,
             margin=detection.sku_match_margin,
             candidates=(),
