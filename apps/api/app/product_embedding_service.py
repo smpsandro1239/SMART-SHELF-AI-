@@ -73,6 +73,10 @@ def build_approved_product_registry(
     back, so a concurrent retention/review cannot invalidate the registry
     between validation and use.
     """
+    model_version = model_version.strip()
+    if not model_version:
+        raise ValueError("model_version is required")
+
     candidates = (
         db.query(
             models.ProductEmbeddingExemplar.id,
