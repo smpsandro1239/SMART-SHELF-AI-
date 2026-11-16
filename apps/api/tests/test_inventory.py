@@ -147,7 +147,7 @@ def test_inventory_snapshot_rejects_blank_or_control_character_external_referenc
             "source": "ERP",
         }
 
-        for reference in ("", "   ", "ERP-\\n-001", "ERP-\\t-001", "ERP-\\x7f-001"):
+        for reference in ("", "   ", "ERP-" + chr(10) + "-001", "ERP-" + chr(9) + "-001", "ERP-" + chr(127) + "-001"):
             response = client.post(
                 "/api/v1/inventory/snapshots",
                 json={**base, "external_reference": reference},
