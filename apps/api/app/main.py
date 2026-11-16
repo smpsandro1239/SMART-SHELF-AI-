@@ -1043,7 +1043,8 @@ def restore_shelf_image(image_id: int, payload: ShelfImageRetentionRequest, requ
     if item.retention_status != "RESTRICTED":
         raise HTTPException(status_code=409, detail="Only restricted images can be restored")
     previous_purge_date = item.purge_not_before.isoformat() if item.purge_not_before else None
-    if item.purge_not_before is not None:
+    previous_policy_version = item.retention_policy_version
+    if previous_purge_date is not None or previous_policy_version is not None:
         item.purge_not_before = None
         item.retention_policy_version = None
         db.add(models.ShelfImageRetentionEvent(
@@ -1052,7 +1053,11 @@ def restore_shelf_image(image_id: int, payload: ShelfImageRetentionRequest, requ
             from_status="RESTRICTED",
             to_status="RESTRICTED",
             actor_user_id=actor.id if actor else None,
-            reason=f"{payload.reason.strip()} | restore cancelled scheduled purge: {previous_purge_date}",
+            reason=(
+                f"{payload.reason.strip()} | restore cancelled scheduled purge: "
+                f"date={previous_purge_date or 'missing'} | "
+                f"policy={previous_policy_version or 'missing'}"
+            ),
         ))
     item.retention_status = "ACTIVE"
     item.retention_reason = payload.reason.strip()
