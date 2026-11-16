@@ -657,3 +657,27 @@ def test_parent_with_invalid_inventory_signature_blocks_child():
     assert fetched == []
     assert session.rolled_back and session.closed
 
+@pytest.mark.parametrize("scope", ["target", "ancestor"])
+def test_malformed_persisted_inventory_entry_fails_closed_without_provider_error(scope):
+    session, _ = fixture_session()
+    if scope == "target":
+        snapshot = session.records[models.ShelfImageArtifactInventorySnapshot]
+        snapshot.inventory_manifest = ["not-an-object"]
+    else:
+        _add_cross_system_parent(session)
+        parent_snapshot = session.records[models.ShelfImageArtifactInventorySnapshot][1]
+        parent_snapshot.inventory_manifest = ["not-an-object"]
+
+    fetched = []
+    with pytest.raises(ArtifactAccessDenied) as error:
+        call(session, lambda *args: fetched.append(args) or b"unexpected")
+
+    expected_reason = (
+        "inventory_integrity_unverified"
+        if scope == "target"
+        else "ancestor_inventory_integrity_unverified"
+    )
+    assert expected_reason in error.value.decision.reasons
+    assert fetched == []
+    assert session.rolled_back and session.closed
+
