@@ -172,7 +172,7 @@ def retry_failed_ocr_for_image(db: Session, image_id: int, provider) -> bool:
     db.commit()
     return new_run is not None and new_run.status == "COMPLETED"
 
-def resolve_sku_match(db: Session, detection, registry_cache=None):
+def resolve_sku_match(db: Session, detection, registry_cache=None, *, store_id: int | None = None):
     """Match only against approved exemplars; reuse one registry per model version."""
     if detection.embedding is None or not detection.embedding_model_version:
         return {"product_id": None, "status": "UNKNOWN", "similarity": None, "margin": None}
@@ -183,6 +183,7 @@ def resolve_sku_match(db: Session, detection, registry_cache=None):
             cache[version] = build_approved_product_registry(
                 db,
                 model_version=version,
+                store_id=store_id,
                 minimum_similarity=settings.product_matching_min_similarity,
                 minimum_margin=settings.product_matching_min_margin,
             )
@@ -309,7 +310,7 @@ def process_next_image(db: Session, provider, ocr_provider=None) -> int | None:
 
         # Linearize retention against derived processing: if restriction committed
         # while inference was running, do not start OCR or persist any detections.
-        lock_matching_source_images(
+        store_id = lock_matching_source_images(
             db,
             target_image_id=image_id,
             model_versions={
@@ -358,7 +359,9 @@ def process_next_image(db: Session, provider, ocr_provider=None) -> int | None:
         registry_cache = {}
         detection_rows = []
         for detection in result.detections:
-            sku_match = resolve_sku_match(db, detection, registry_cache)
+            sku_match = resolve_sku_match(
+                db, detection, registry_cache, store_id=store_id
+            )
             row = models.ShelfImageDetection(
                 shelf_image_id=image_id,
                 product_id=sku_match["product_id"],
