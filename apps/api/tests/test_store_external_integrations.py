@@ -36,6 +36,43 @@ def db_session():
         engine.dispose()
 
 
+
+
+def test_external_inventory_store_lock_targets_stable_parent_row():
+    store = SimpleNamespace(id=42)
+
+    class Query:
+        locked = False
+        refreshed = False
+
+        def filter(self, *_args):
+            return self
+
+        def with_for_update(self):
+            self.locked = True
+            return self
+
+        def populate_existing(self):
+            self.refreshed = True
+            return self
+
+        def first(self):
+            return store
+
+    class DB:
+        def __init__(self):
+            self.query_object = Query()
+
+        def query(self, model):
+            assert model is models.Store
+            return self.query_object
+
+    db = DB()
+    assert main_module._lock_store_for_external_inventory(db, 42) is store
+    assert db.query_object.locked is True
+    assert db.query_object.refreshed is True
+
+
 def build_store_image(db):
     store = models.Store(code="INTEGRATION-STORE", name="Integration test store")
     db.add(store)
