@@ -13,6 +13,26 @@ branch_labels = None
 depends_on = None
 
 
+def _ensure_index(name: str, table: str, columns: list[str], *, unique: bool = False) -> None:
+    """Create an index unless an identical index already exists.
+
+    Reuse a pre-provisioned index only when its definition matches exactly.
+    A conflicting relation with the same name is a migration error.
+    """
+    bind = op.get_bind()
+    existing = {
+        index["name"]: index
+        for index in sa.inspect(bind).get_indexes(table)
+        if index.get("name")
+    }.get(name)
+    if existing is not None:
+        if existing.get("column_names") != columns or bool(existing.get("unique")) != unique:
+            raise RuntimeError(
+                f"existing index {name} on {table} has an unexpected definition"
+            )
+        return
+    op.create_index(name, table, columns, unique=unique)
+
 def upgrade() -> None:
     bind = op.get_bind()
     op.add_column(
@@ -22,13 +42,13 @@ def upgrade() -> None:
     # PostgreSQL requires a unique target for the composite self-FK.
     # The leading id is already unique, but the full referenced tuple must
     # have an explicit unique index for portable constraint validation.
-    op.create_index(
+    _ensure_index(
         "uq_shelf_image_artifact_reference_lineage",
         "shelf_image_artifact_references",
         ["id", "shelf_image_id", "store_id"],
         unique=True,
     )
-    op.create_index(
+    _ensure_index(
         "ix_artifact_reference_parent_reference_id",
         "shelf_image_artifact_references",
         ["parent_reference_id"],
