@@ -88,7 +88,7 @@ def inventory_signature(
     generated_at: datetime,
     entries: list[dict[str, Any]],
     secret: str,
-    inventory_complete: bool = True,
+    inventory_complete: bool,
 ) -> str:
     """Create a lowercase SHA-256 HMAC for connector-side tests and integrations."""
     if len(secret.encode("utf-8")) < 32:
