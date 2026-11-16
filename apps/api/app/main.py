@@ -19,7 +19,7 @@ from alembic.config import Config as AlembicConfig
 from alembic.runtime.migration import MigrationContext
 from alembic.script import ScriptDirectory
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse, FileResponse
+from fastapi.responses import JSONResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text, case, or_
 from sqlalchemy.exc import IntegrityError
@@ -2298,23 +2298,44 @@ def list_shelf_images(
 
 @app.get("/api/v1/shelf-images/{image_id}/content", tags=["computer-vision"])
 def get_shelf_image_content(image_id: int, request: Request, db: Session = Depends(get_db)):
+    # Lock the source row before checking retention so a concurrent restriction
+    # cannot pass the policy check while this request is preparing the response.
     item = (
         db.query(models.ShelfImage)
         .join(models.Shelf, models.ShelfImage.shelf_id == models.Shelf.id)
         .join(models.Zone, models.Shelf.zone_id == models.Zone.id)
         .filter(models.ShelfImage.id == image_id)
+        .with_for_update(of=models.ShelfImage)
+        .populate_existing()
         .first()
     )
     if item is None:
         raise HTTPException(status_code=404, detail="Shelf image not found")
     actor = _request_user(db, request)
-    _enforce_store_scope(actor, _shelf_image_store_id(db, image_id))
     store_id = _shelf_image_store_id(db, image_id)
     if store_id is None:
         raise HTTPException(status_code=404, detail="Shelf image not found")
+    _enforce_store_scope(actor, store_id)
     _require_active_shelf_image(item)
     path = _resolve_shelf_image_storage_path(item.storage_path, store_id)
-    return FileResponse(path, media_type=item.mime_type, filename=item.original_filename, content_disposition_type="inline")
+
+    # Read and verify the exact bytes returned. Returning an in-memory Response
+    # avoids reopening the path later, after the database lock has been released.
+    try:
+        content = path.read_bytes()
+    except OSError:
+        raise HTTPException(status_code=404, detail="Stored image file is unavailable")
+    if (
+        len(content) != item.file_size_bytes
+        or hashlib.sha256(content).hexdigest() != item.sha256
+    ):
+        raise HTTPException(status_code=409, detail="Stored image failed integrity verification")
+
+    return Response(
+        content=content,
+        media_type=item.mime_type,
+        headers={"Content-Disposition": f'inline; filename="{item.original_filename}"'},
+    )
 
 
 @app.post(
