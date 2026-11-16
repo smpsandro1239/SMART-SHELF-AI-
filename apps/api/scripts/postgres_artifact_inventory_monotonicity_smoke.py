@@ -9,7 +9,7 @@ from app import models
 from app.database import SessionLocal
 
 
-def snapshot(*, image_id: int, store_id: int, actor_id: int, suffix: str, generated_at, source: str = "pg-monotonicity-smoke"):
+def snapshot(*, image_id: int, store_id: int, actor_id: int, suffix: str, generated_at, source: str = "pg-monotonicity-smoke", manifest=None, artifact_count: int = 0, present_count: int = 0, absent_count: int = 0):
     return models.ShelfImageArtifactInventorySnapshot(
         shelf_image_id=image_id,
         store_id=store_id,
@@ -19,10 +19,10 @@ def snapshot(*, image_id: int, store_id: int, actor_id: int, suffix: str, genera
         inventory_complete=True,
         manifest_sha256="a" * 64,
         source_signature="b" * 64,
-        inventory_manifest=[],
-        artifact_count=0,
-        present_count=0,
-        absent_count=0,
+        inventory_manifest=manifest if manifest is not None else [],
+        artifact_count=artifact_count,
+        present_count=present_count,
+        absent_count=absent_count,
         verified_at=models.utc_now(),
         created_by_user_id=actor_id,
     )
@@ -121,6 +121,68 @@ def main() -> None:
         ))
         db.commit()
 
+        # Direct SQLAlchemy inserts must not bypass manifest/reference integrity.
+        valid_identity = {
+            "artifact_type": "BACKUP",
+            "external_reference": reference.external_reference,
+            "sha256": None,
+        }
+        for label, manifest, present_count, absent_count in (
+            (
+                "wrong-reference",
+                [{**valid_identity, "external_reference": "backup/not-the-declared-object", "state": "PRESENT"}],
+                1,
+                0,
+            ),
+            (
+                "absent-without-attestation",
+                [{**valid_identity, "state": "ABSENT"}],
+                0,
+                1,
+            ),
+        ):
+            try:
+                db.add(snapshot(
+                    image_id=image_id,
+                    store_id=store_id,
+                    actor_id=actor_id,
+                    suffix=f"manifest-{label}",
+                    generated_at=disposition_at + timedelta(seconds=20),
+                    source=disposition_source,
+                    manifest=manifest,
+                    artifact_count=1,
+                    present_count=present_count,
+                    absent_count=absent_count,
+                ))
+                db.commit()
+            except IntegrityError:
+                db.rollback()
+            else:
+                db.rollback()
+                raise AssertionError(
+                    f"PostgreSQL accepted an invalid direct inventory manifest: {label}"
+                )
+
+        try:
+            db.add(snapshot(
+                image_id=image_id,
+                store_id=store_id,
+                actor_id=actor_id,
+                suffix="manifest-counter-mismatch",
+                generated_at=disposition_at + timedelta(seconds=21),
+                source=disposition_source,
+                manifest=[{**valid_identity, "state": "PRESENT"}],
+                artifact_count=1,
+                present_count=0,
+                absent_count=0,
+            ))
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+        else:
+            db.rollback()
+            raise AssertionError("PostgreSQL accepted inconsistent artifact inventory counters")
+
         for label, generated_at in (
             ("equal-to-disposition", disposition_at),
             ("older-than-disposition", disposition_at - timedelta(seconds=1)),
@@ -141,8 +203,7 @@ def main() -> None:
                 )
 
     print(
-        "PostgreSQL artifact inventory monotonicity smoke passed: older and "
-        "equal timestamps are rejected, independent sources remain isolated, and snapshots cannot predate or equal disposition events."
+        "PostgreSQL artifact inventory integrity smoke passed: temporal ordering, exact reference coverage, manifest counters, and disposal-attested absence are enforced."
     )
 
 
