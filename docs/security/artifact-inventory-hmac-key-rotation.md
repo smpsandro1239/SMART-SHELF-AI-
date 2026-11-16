@@ -60,7 +60,7 @@ A migration `0047_artifact_inventory_key_id` adiciona `key_id` com o valor `lega
 }
 ```
 
-Esta compatibilidade é transitória: não oferece isolamento por loja aos snapshots legados. As integrações devem migrar para o keyring versionado e deixar de assinar novos inventários no formato legado. Não remover a chave legada enquanto existirem snapshots antigos que dela dependam.
+Esta compatibilidade é transitória: não oferece isolamento por loja aos snapshots legados. Em `APP_ENV=production`, a API rejeita novas ingestões `legacy` por omissão; para uma janela de migração explicitamente controlada, `ARTIFACT_INVENTORY_ALLOW_LEGACY_INGESTION=true` permite temporariamente esse tráfego. O valor `false` bloqueia-o em qualquer ambiente. Quando a variável não está definida, ambientes não produtivos mantêm compatibilidade e produção aplica o bloqueio. Exact retries de snapshots legados já persistidos continuam idempotentes, e a verificação/leitura histórica não é afectada. As integrações devem migrar para o keyring versionado e deixar de assinar novos inventários no formato legado. Não remover a chave legada enquanto existirem snapshots antigos que dela dependam.
 
 ## Limites operacionais
 
@@ -70,6 +70,12 @@ Esta compatibilidade é transitória: não oferece isolamento por loja aos snaps
 - Não registar o segredo nem a configuração completa em mensagens de erro.
 - A rotação de configuração deve ser coordenada entre API e conector; não é uma rotação automática nem uma gestão de segredos remota.
 - A remoção de uma chave antiga torna os snapshots correspondentes não verificáveis e bloqueia o consumo de artefactos que dependam deles.
+
+## Política de cutover do formato legado
+
+A variável `ARTIFACT_INVENTORY_ALLOW_LEGACY_INGESTION` controla a aceitação de novos snapshots com `key_id="legacy"`. Em produção, o valor por omissão é `false`; fora de produção, a ausência da variável mantém a compatibilidade. Definir explicitamente `true` apenas durante uma janela de transição aprovada e removê-la depois de todos os conectores enviarem um `key_id` versionado. Definir `false` bloqueia o formato legado em qualquer ambiente. A política não invalida snapshots históricos nem impede retries exactos de registos já persistidos.
+
+Sequência recomendada: (1) distribuir keyrings por loja/fornecedor, (2) atualizar conectores para enviar `key_id` activo, (3) observar métricas/logs sem expor segredos, (4) manter o override legado desligado em produção, e (5) remover a configuração plana quando a verificação histórica já não depender dela.
 
 ## Validação
 
