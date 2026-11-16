@@ -302,6 +302,39 @@ def test_accepted_signed_snapshot_updates_integration_last_seen(db_session, monk
     assert integration.last_seen_at is not None
     assert integration.last_seen_at.replace(tzinfo=generated_at.tzinfo) == generated_at
 
+    # An exact retry remains idempotent after the snapshot has aged out.
+    monkeypatch.setattr(main_module.settings, "artifact_inventory_max_age_minutes", 0)
+    replay = main_module.create_shelf_image_artifact_inventory_snapshot(
+        image_id, payload, request, db_session
+    )
+    assert replay.id == snapshot.id
+
+    conflicting_generated_at = generated_at + timedelta(seconds=1)
+    conflicting_signature = inventory_signature(
+        image_id=image_id,
+        store_id=store_id,
+        external_system="backup-vault",
+        snapshot_id="snapshot-accepted",
+        generated_at=conflicting_generated_at,
+        entries=entries,
+        secret=secret,
+        inventory_complete=True,
+    )
+    conflicting_payload = ShelfImageArtifactInventorySnapshotCreate(
+        external_system="backup-vault",
+        snapshot_id="snapshot-accepted",
+        generated_at=conflicting_generated_at,
+        inventory_complete=True,
+        entries=entries,
+        signature=conflicting_signature,
+    )
+    with pytest.raises(HTTPException) as conflicting_retry:
+        main_module.create_shelf_image_artifact_inventory_snapshot(
+            image_id, conflicting_payload, request, db_session
+        )
+    assert conflicting_retry.value.status_code == 409
+
+    monkeypatch.setattr(main_module.settings, "artifact_inventory_max_age_minutes", 15)
     older_generated_at = generated_at - timedelta(seconds=1)
     older_signature = inventory_signature(
         image_id=image_id,
