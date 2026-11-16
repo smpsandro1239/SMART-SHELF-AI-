@@ -174,3 +174,39 @@ def test_inventory_verification_cannot_precede_generation():
 
     assert decision.allowed is False
     assert "inventory_verification_precedes_generation" in decision.reasons
+
+@pytest.mark.parametrize(
+    ("future_seconds", "blocked"),
+    [(120, False), (121, True)],
+)
+def test_inventory_verification_clock_skew_uses_two_minute_boundary(
+    future_seconds, blocked
+):
+    kwargs = approved_kwargs()
+    kwargs["inventory_generated_at"] = NOW - timedelta(minutes=5)
+    kwargs["inventory_verified_at"] = NOW + timedelta(seconds=future_seconds)
+
+    decision = evaluate_artifact_access(**kwargs)
+
+    assert ("inventory_timestamp_in_future" in decision.reasons) is blocked
+    assert decision.allowed is (not blocked)
+
+
+@pytest.mark.parametrize(
+    ("field", "future_seconds"),
+    [
+        ("inventory_generated_at", 121),
+        ("inventory_verified_at", 121),
+    ],
+)
+def test_each_inventory_timestamp_is_independently_checked_for_future_skew(
+    field, future_seconds
+):
+    kwargs = approved_kwargs()
+    kwargs[field] = NOW + timedelta(seconds=future_seconds)
+
+    decision = evaluate_artifact_access(**kwargs)
+
+    assert decision.allowed is False
+    assert "inventory_timestamp_in_future" in decision.reasons
+
