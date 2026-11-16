@@ -135,6 +135,34 @@ def call(session, fetcher, **overrides):
         consumption.settings.artifact_inventory_hmac_keys_json = original_keys
 
 
+def test_sqlite_style_naive_persisted_timestamps_are_interpreted_as_utc():
+    session, payload = fixture_session()
+    snapshot = session.records[models.ShelfImageArtifactInventorySnapshot]
+    snapshot.generated_at = snapshot.generated_at.replace(tzinfo=None)
+    snapshot.verified_at = snapshot.verified_at.replace(tzinfo=None)
+    fetched = []
+
+    result = call(session, lambda *args: fetched.append(args) or payload)
+
+    assert result == payload
+    assert fetched == [("object-store-a", "bucket/crops/31.jpg")]
+    assert session.rolled_back and session.closed
+
+
+def test_naive_persisted_disposition_timestamp_is_interpreted_as_utc():
+    event = SimpleNamespace(
+        event_type="REJECTED",
+        created_at=(NOW - timedelta(minutes=3)).replace(tzinfo=None),
+    )
+    session, payload = fixture_session(event=event)
+    fetched = []
+
+    result = call(session, lambda *args: fetched.append(args) or payload)
+
+    assert result == payload
+    assert fetched == [("object-store-a", "bucket/crops/31.jpg")]
+
+
 def test_fetch_completes_while_all_required_rows_are_locked():
     session, payload = fixture_session()
     observed = []
