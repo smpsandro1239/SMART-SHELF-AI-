@@ -232,11 +232,14 @@ def upgrade() -> None:
 def downgrade() -> None:
     bind = op.get_bind()
     if bind.dialect.name == "postgresql":
+        op.execute("DROP TRIGGER IF EXISTS trg_shelf_image_artifact_disposition_event_validate ON shelf_image_artifact_disposition_events")
+        op.execute("DROP FUNCTION IF EXISTS validate_shelf_image_artifact_disposition_event()")
         op.execute("DROP TRIGGER IF EXISTS trg_shelf_image_artifact_reference_store ON shelf_image_artifact_references")
         op.execute("DROP FUNCTION IF EXISTS validate_shelf_image_artifact_reference_store()")
         op.execute("DROP TRIGGER IF EXISTS trg_shelf_image_artifact_disposition_events_append_only ON shelf_image_artifact_disposition_events")
         op.execute("DROP FUNCTION IF EXISTS prevent_shelf_image_artifact_disposition_event_mutation()")
     elif bind.dialect.name == "sqlite":
+        op.execute("DROP TRIGGER IF EXISTS trg_shelf_image_artifact_disposition_event_validate")
         op.execute("DROP TRIGGER IF EXISTS trg_shelf_image_artifact_reference_store")
         op.execute("DROP TRIGGER IF EXISTS trg_shelf_image_artifact_disposition_events_no_update")
         op.execute("DROP TRIGGER IF EXISTS trg_shelf_image_artifact_disposition_events_no_delete")
