@@ -1134,3 +1134,9 @@ A auditoria das migrações 0033–0035 identificou que a loja era validada quan
 A migração 0038_artifact_lineage_immutable acrescenta triggers PostgreSQL e SQLite que rejeitam essas três alterações sempre que existam referências de artefactos ou snapshots para qualquer imagem afetada. A proteção atua nas tabelas de origem (shelf_images, shelves e zones), preservando a linhagem histórica sem bloquear alterações de localização que não tenham artefactos externos registados. O downgrade remove os três triggers e as funções PostgreSQL correspondentes.
 
 Foi acrescentado apps/api/scripts/postgres_artifact_lineage_immutability_smoke.py para verificar em PostgreSQL as três tentativas de alteração. Validação pendente: o script foi integrado no repositório, mas não foi executado nesta sessão; a confirmação depende de um runner/ambiente PostgreSQL funcional.
+
+### Serialização da avaliação de retenção — 2026-11-16
+
+A avaliação de elegibilidade de purge já bloqueava a linha da imagem, mas consultava o estado das integrações externas sem bloqueio. Uma revogação concorrente podia, portanto, ocorrer durante a construção do resultado e produzir uma avaliação com estados de integração lidos em momentos diferentes. A consulta foi consolidada: todas as integrações da loja são agora bloqueadas com `FOR UPDATE`, ordenadas por identificador do sistema externo e carregadas com `populate_existing()`. A ordem mantém-se imagem → integrações, compatível com o fluxo de consumo e com a ingestão de snapshots. A avaliação continua a ser apenas uma pré-visualização; o executor de purge permanece explicitamente desativado.
+
+Validação estática efetuada sobre os fluxos de registo de referências, snapshots, eventos de disposição, consumo e retenção. Os testes automáticos e o smoke test PostgreSQL continuam dependentes de runners funcionais; não foram declarados como executados nesta alteração.
