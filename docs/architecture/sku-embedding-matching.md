@@ -185,3 +185,8 @@ associados. O bloqueio preserva a relação de proveniência e não executa
 eliminação dos vetores nem define prazos de retenção. A validação concorrente
 e funcional é executada pelo smoke PostgreSQL
 `postgres_embedding_retention_smoke.py`.
+
+
+## Revalidação do hash da imagem de origem no carregamento
+
+A construção do registry volta a comparar, sob lock da imagem e depois de refrescar o estado ORM, o image_sha256 imutável do exemplar com o SHA-256 atual registado em shelf_images. Um exemplar associado a uma captura é excluído se a imagem estiver ausente, não estiver ACTIVE ou se o hash tiver mudado. O histórico e a decisão humana permanecem intactos; apenas deixam de contribuir para o matching. Referências sem shelf_image_id continuam a representar fontes externas e dependem da validação de licença/proveniência externa definida no respetivo processo de ingestão.
