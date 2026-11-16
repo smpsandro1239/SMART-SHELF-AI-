@@ -2893,6 +2893,15 @@ def list_shelf_image_review_queue(
     ))
     if actor is not None and actor.role != "ADMIN":
         query = query.filter(models.Zone.store_id == actor.store_id)
+    if status is not None:
+        # Include rows that may change into the requested status after catalogue
+        # revalidation, not only rows whose immutable stored status already matches.
+        query = query.filter(or_(
+            models.ShelfImageFusedEvidence.status == status,
+            models.ShelfImageFusedEvidence.suggested_product_id.isnot(None),
+            models.ShelfImageFusedEvidence.visual_product_id.isnot(None),
+            models.ShelfImageFusedEvidence.text_product_id.isnot(None),
+        ))
     priority = case(
         (models.ShelfImageFusedEvidence.status == "CONFLICT", 0),
         (models.ShelfImageFusedEvidence.status == "AMBIGUOUS", 1),
