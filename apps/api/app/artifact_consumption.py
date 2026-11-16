@@ -230,7 +230,8 @@ def consume_external_artifact_bytes(
                 inventory_entry = next(
                     (
                         entry for entry in (ancestor_snapshot.inventory_manifest or [])
-                        if entry.get("artifact_type") == lineage_reference.artifact_type
+                        if isinstance(entry, dict)
+                        and entry.get("artifact_type") == lineage_reference.artifact_type
                         and entry.get("external_reference") == lineage_reference.external_reference
                     ),
                     None,
