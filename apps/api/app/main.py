@@ -30,6 +30,7 @@ from jwt import InvalidTokenError
 from app.config import settings
 from app.database import get_db, SessionLocal
 from app import models
+from app.artifact_access_policy import evaluate_artifact_access
 from app.operational_decision_engine import evaluate_shelf_decision
 from app.observation_consensus import evaluate_observation_consensus
 from app.security import hash_password, verify_password, create_access_token, decode_access_token
@@ -1641,6 +1642,138 @@ def create_shelf_image_artifact_inventory_snapshot(
         return existing
     db.refresh(snapshot)
     return snapshot
+
+
+
+
+@app.get(
+    "/api/v1/shelf-images/{image_id}/artifacts/{artifact_id}/access",
+    tags=["computer-vision"],
+)
+def get_shelf_image_artifact_access_decision(
+    image_id: int,
+    artifact_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Return a fail-closed access decision backed by locked lineage records.
+
+    External-artifact consumers must check this authorization boundary
+    immediately before reading an object. It never fetches or deletes objects.
+    """
+    actor = _request_user(db, request)
+    if actor is None or actor.role != "ADMIN":
+        raise HTTPException(status_code=403, detail="Administrator role required")
+
+    image = (
+        db.query(models.ShelfImage)
+        .filter(models.ShelfImage.id == image_id)
+        .with_for_update()
+        .populate_existing()
+        .first()
+    )
+    if image is None:
+        raise HTTPException(status_code=404, detail="Shelf image not found")
+
+    store_id = _shelf_image_store_id(db, image_id)
+    if store_id is None:
+        raise HTTPException(status_code=409, detail="Shelf image has no valid store lineage")
+    _enforce_store_scope(actor, store_id)
+
+    artifact = (
+        db.query(models.ShelfImageArtifactReference)
+        .filter(
+            models.ShelfImageArtifactReference.id == artifact_id,
+            models.ShelfImageArtifactReference.shelf_image_id == image_id,
+            models.ShelfImageArtifactReference.store_id == store_id,
+        )
+        .with_for_update()
+        .populate_existing()
+        .first()
+    )
+    if artifact is None:
+        raise HTTPException(status_code=404, detail="Artifact reference not found")
+
+    integration = (
+        db.query(models.StoreExternalIntegration)
+        .filter(
+            models.StoreExternalIntegration.store_id == store_id,
+            models.StoreExternalIntegration.external_system == artifact.external_system,
+        )
+        .with_for_update()
+        .populate_existing()
+        .first()
+    )
+
+    snapshot = (
+        db.query(models.ShelfImageArtifactInventorySnapshot)
+        .filter(
+            models.ShelfImageArtifactInventorySnapshot.shelf_image_id == image_id,
+            models.ShelfImageArtifactInventorySnapshot.store_id == store_id,
+            models.ShelfImageArtifactInventorySnapshot.external_system == artifact.external_system,
+        )
+        .order_by(
+            models.ShelfImageArtifactInventorySnapshot.generated_at.desc(),
+            models.ShelfImageArtifactInventorySnapshot.id.desc(),
+        )
+        .with_for_update()
+        .populate_existing()
+        .first()
+    )
+
+    latest_event = (
+        db.query(models.ShelfImageArtifactDispositionEvent)
+        .filter(
+            models.ShelfImageArtifactDispositionEvent.artifact_reference_id == artifact.id,
+            models.ShelfImageArtifactDispositionEvent.shelf_image_id == image_id,
+            models.ShelfImageArtifactDispositionEvent.store_id == store_id,
+        )
+        .order_by(models.ShelfImageArtifactDispositionEvent.sequence_number.desc())
+        .with_for_update()
+        .populate_existing()
+        .first()
+    )
+
+    inventory_entry = None
+    if snapshot is not None:
+        inventory_entry = next(
+            (
+                entry for entry in (snapshot.inventory_manifest or [])
+                if entry.get("artifact_type") == artifact.artifact_type
+                and entry.get("external_reference") == artifact.external_reference
+            ),
+            None,
+        )
+
+    decision = evaluate_artifact_access(
+        artifact_reference_id=artifact.id,
+        expected_artifact_type=artifact.artifact_type,
+        expected_external_reference=artifact.external_reference,
+        expected_sha256=artifact.sha256,
+        source_retention_status=image.retention_status,
+        source_legal_hold=image.legal_hold,
+        integration_status=integration.status if integration is not None else "MISSING",
+        inventory_complete=bool(snapshot and snapshot.inventory_complete),
+        inventory_generated_at=snapshot.generated_at if snapshot is not None else None,
+        inventory_verified_at=snapshot.verified_at if snapshot is not None else None,
+        inventory_max_age_seconds=settings.artifact_inventory_max_age_minutes * 60,
+        inventory_entry=inventory_entry,
+        latest_disposition_event=latest_event.event_type if latest_event is not None else None,
+        latest_disposition_at=latest_event.created_at if latest_event is not None else None,
+        now=models.utc_now(),
+    )
+
+    return {
+        "artifact_reference_id": decision.artifact_reference_id,
+        "shelf_image_id": image_id,
+        "store_id": store_id,
+        "external_system": artifact.external_system,
+        "allowed": decision.allowed,
+        "status": decision.status,
+        "reasons": list(decision.reasons),
+        "inventory_snapshot_id": snapshot.id if snapshot is not None else None,
+        "checked_at": models.utc_now(),
+    }
 
 
 @app.post(
