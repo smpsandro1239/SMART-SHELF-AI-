@@ -99,3 +99,25 @@ def test_enrich_coco_fails_when_manifest_entry_is_missing():
     enriched, errors = enrich_coco_document(coco("missing.jpg"), [], "train")
     assert enriched is None
     assert any("missing from manifest" in error for error in errors)
+
+
+import pytest
+
+@pytest.mark.parametrize("file_name", [
+    "../outside.jpg",
+    "..\\\\outside.jpg",
+    "C:/outside.jpg",
+    "C:\\\\outside.jpg",
+    "//server/share/image.jpg",
+    "folder/image.jpg:stream",
+])
+def test_read_manifest_rejects_non_portable_paths(tmp_path, file_name):
+    path = tmp_path / "manifest.csv"
+    path.write_text(
+        "split,file_name,size_bytes,sha256\\n"
+        f"train,{file_name},3,{'a' * 64}\\n",
+        encoding="utf-8",
+    )
+    rows, errors = read_manifest(path)
+    assert rows == []
+    assert any("safe portable relative path" in error for error in errors)
