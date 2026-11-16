@@ -90,7 +90,7 @@ class FakeSession:
 def fixture_session(*, retention_status="ACTIVE", legal_hold=False, event=None):
     payload = b"external artifact bytes"
     digest = sha256(payload).hexdigest()
-    image = SimpleNamespace(retention_status=retention_status, legal_hold=legal_hold)
+    image = SimpleNamespace(id=7, store_id=4, retention_status=retention_status, legal_hold=legal_hold)
     artifact = SimpleNamespace(
         id=31,
         parent_reference_id=None,
@@ -132,7 +132,7 @@ def fixture_session(*, retention_status="ACTIVE", legal_hold=False, event=None):
         snapshot_id="snapshot-31", generated_at=snapshot.generated_at,
         entries=snapshot.inventory_manifest, inventory_complete=True,
     )).hexdigest()
-    integration = SimpleNamespace(status="ACTIVE", external_system="object-store-a")
+    integration = SimpleNamespace(status="ACTIVE", external_system="object-store-a", store_id=4)
     records = {
         models.ShelfImage: image,
         models.ShelfImageArtifactReference: artifact,
@@ -437,7 +437,7 @@ def test_parent_in_another_external_system_blocks_child_before_provider_fetch():
     session.records[models.ShelfImageArtifactReference] = [child, parent]
     session.records[models.StoreExternalIntegration] = [
         session.records[models.StoreExternalIntegration],
-        SimpleNamespace(status="ACTIVE", external_system="archive-store-b"),
+        SimpleNamespace(status="ACTIVE", external_system="archive-store-b", store_id=4),
     ]
     session.records[models.ShelfImageArtifactInventorySnapshot] = [
         session.records[models.ShelfImageArtifactInventorySnapshot],
@@ -480,7 +480,7 @@ def test_parent_in_another_external_system_with_revoked_integration_blocks_child
     session.records[models.ShelfImageArtifactReference] = [child, parent]
     session.records[models.StoreExternalIntegration] = [
         session.records[models.StoreExternalIntegration],
-        SimpleNamespace(status="REVOKED", external_system="archive-store-b"),
+        SimpleNamespace(status="REVOKED", external_system="archive-store-b", store_id=4),
     ]
     fetched = []
 
