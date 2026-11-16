@@ -1,4 +1,6 @@
 """Verify append-only external artifact disposition history on PostgreSQL."""
+from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier
 from uuid import uuid4
 
 from sqlalchemy.exc import IntegrityError
@@ -94,6 +96,58 @@ def main() -> None:
         reviewer_id = reviewer.id
         attestor_id = attestor.id
         employee_id = employee.id
+
+    with SessionLocal() as db:
+        concurrent_artifact = models.ShelfImageArtifactReference(
+            shelf_image_id=image_id,
+            store_id=store_id,
+            artifact_type="CACHE",
+            external_system="postgres-smoke",
+            external_reference=f"concurrent/{suffix}",
+            declared_by_user_id=admin_id,
+        )
+        db.add(concurrent_artifact)
+        db.commit()
+        concurrent_artifact_id = concurrent_artifact.id
+
+    barrier = Barrier(2)
+
+    def propose_concurrently(actor_id: int) -> str:
+        with SessionLocal() as db:
+            candidate = models.ShelfImageArtifactDispositionEvent(
+                artifact_reference_id=concurrent_artifact_id,
+                sequence_number=1,
+                shelf_image_id=image_id,
+                store_id=store_id,
+                event_type="PROPOSED",
+                actor_user_id=actor_id,
+                reason="Concurrent proposal serialization check",
+            )
+            db.add(candidate)
+            barrier.wait(timeout=10)
+            try:
+                db.commit()
+                return "committed"
+            except IntegrityError:
+                db.rollback()
+                return "rejected"
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        outcomes = list(executor.map(propose_concurrently, [admin_id, reviewer_id]))
+    assert outcomes.count("committed") == 1, outcomes
+    assert outcomes.count("rejected") == 1, outcomes
+
+    with SessionLocal() as db:
+        concurrent_events = (
+            db.query(models.ShelfImageArtifactDispositionEvent)
+            .filter(
+                models.ShelfImageArtifactDispositionEvent.artifact_reference_id
+                == concurrent_artifact_id
+            )
+            .all()
+        )
+        assert len(concurrent_events) == 1
+        assert concurrent_events[0].sequence_number == 1
 
     with SessionLocal() as db:
         unproposed_artifact = models.ShelfImageArtifactReference(
@@ -308,7 +362,7 @@ def main() -> None:
 
     print(
         "PostgreSQL artifact disposition smoke passed: "
-        "artifact references and events reject cross-store lineage; event triggers reject self-approval, non-admin actions, invalid evidence and non-contiguous sequences; event history rejects actor deletion, UPDATE and DELETE."
+        "artifact references and events reject cross-store lineage; concurrent proposals serialize to one event; event triggers reject self-approval, non-admin actions, invalid evidence and non-contiguous sequences; event history rejects actor deletion, UPDATE and DELETE."
     )
 
 
