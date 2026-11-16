@@ -137,82 +137,127 @@ def consume_external_artifact_bytes(
                 ArtifactAccessDecision(False, "BLOCKED", ("artifact_identity_changed",), artifact_id)
             )
 
-        snapshot = (
-            db.query(models.ShelfImageArtifactInventorySnapshot)
-            .filter(
-                models.ShelfImageArtifactInventorySnapshot.shelf_image_id == image_id,
-                models.ShelfImageArtifactInventorySnapshot.store_id == store_id,
-                models.ShelfImageArtifactInventorySnapshot.external_system == artifact.external_system,
+        # Every ancestor is an independently governed external object. A valid
+        # child snapshot must never mask a revoked integration, missing inventory,
+        # or pending/completed disposition on a parent in another external system.
+        now_utc = now or models.utc_now()
+        decisions = []
+        for lineage_reference in lineage:
+            ancestor_integration = (
+                db.query(models.StoreExternalIntegration)
+                .filter(
+                    models.StoreExternalIntegration.store_id == store_id,
+                    models.StoreExternalIntegration.external_system == lineage_reference.external_system,
+                )
+                .with_for_update()
+                .populate_existing()
+                .first()
             )
-            .order_by(
-                models.ShelfImageArtifactInventorySnapshot.generated_at.desc(),
-                models.ShelfImageArtifactInventorySnapshot.id.desc(),
+            ancestor_snapshot = (
+                db.query(models.ShelfImageArtifactInventorySnapshot)
+                .filter(
+                    models.ShelfImageArtifactInventorySnapshot.shelf_image_id == image_id,
+                    models.ShelfImageArtifactInventorySnapshot.store_id == store_id,
+                    models.ShelfImageArtifactInventorySnapshot.external_system == lineage_reference.external_system,
+                )
+                .order_by(
+                    models.ShelfImageArtifactInventorySnapshot.generated_at.desc(),
+                    models.ShelfImageArtifactInventorySnapshot.id.desc(),
+                )
+                .with_for_update()
+                .populate_existing()
+                .first()
             )
-            .with_for_update()
-            .populate_existing()
-            .first()
-        )
-        inventory_references = (
-            db.query(models.ShelfImageArtifactReference)
-            .filter(
-                models.ShelfImageArtifactReference.shelf_image_id == image_id,
-                models.ShelfImageArtifactReference.store_id == store_id,
-                models.ShelfImageArtifactReference.external_system == artifact.external_system,
+            ancestor_references = [
+                reference for reference in locked_references
+                if reference.external_system == lineage_reference.external_system
+            ]
+            inventory_integrity_verified = bool(
+                ancestor_snapshot is not None
+                and verify_inventory_snapshot_record(
+                    snapshot=ancestor_snapshot,
+                    expected_references=ancestor_references,
+                    configured_keys_json=settings.artifact_inventory_hmac_keys_json,
+                )
             )
-            .order_by(models.ShelfImageArtifactReference.id)
-            .all()
-        )
-        inventory_integrity_verified = bool(
-            snapshot is not None
-            and verify_inventory_snapshot_record(
-                snapshot=snapshot,
-                expected_references=inventory_references,
-                configured_keys_json=settings.artifact_inventory_hmac_keys_json,
+            latest_event = (
+                db.query(models.ShelfImageArtifactDispositionEvent)
+                .filter(
+                    models.ShelfImageArtifactDispositionEvent.artifact_reference_id == lineage_reference.id,
+                    models.ShelfImageArtifactDispositionEvent.shelf_image_id == image_id,
+                    models.ShelfImageArtifactDispositionEvent.store_id == store_id,
+                )
+                .order_by(models.ShelfImageArtifactDispositionEvent.sequence_number.desc())
+                .with_for_update()
+                .populate_existing()
+                .first()
             )
-        )
-
-        latest_event = (
-            db.query(models.ShelfImageArtifactDispositionEvent)
-            .filter(
-                models.ShelfImageArtifactDispositionEvent.artifact_reference_id == artifact.id,
-                models.ShelfImageArtifactDispositionEvent.shelf_image_id == image_id,
-                models.ShelfImageArtifactDispositionEvent.store_id == store_id,
-            )
-            .order_by(models.ShelfImageArtifactDispositionEvent.sequence_number.desc())
-            .with_for_update()
-            .populate_existing()
-            .first()
-        )
-
-        inventory_entry = None
-        if snapshot is not None:
-            inventory_entry = next(
-                (
-                    entry for entry in (snapshot.inventory_manifest or [])
-                    if entry.get("artifact_type") == artifact.artifact_type
-                    and entry.get("external_reference") == artifact.external_reference
+            inventory_entry = None
+            if ancestor_snapshot is not None:
+                inventory_entry = next(
+                    (
+                        entry for entry in (ancestor_snapshot.inventory_manifest or [])
+                        if entry.get("artifact_type") == lineage_reference.artifact_type
+                        and entry.get("external_reference") == lineage_reference.external_reference
+                    ),
+                    None,
+                )
+            ancestor_decision = evaluate_artifact_access(
+                artifact_reference_id=lineage_reference.id,
+                expected_artifact_type=lineage_reference.artifact_type,
+                expected_external_reference=lineage_reference.external_reference,
+                expected_sha256=lineage_reference.sha256,
+                source_retention_status=image.retention_status,
+                source_legal_hold=image.legal_hold,
+                integration_status=(
+                    ancestor_integration.status if ancestor_integration is not None else "MISSING"
                 ),
-                None,
+                inventory_complete=bool(
+                    ancestor_snapshot and ancestor_snapshot.inventory_complete
+                ),
+                inventory_integrity_verified=inventory_integrity_verified,
+                inventory_generated_at=(
+                    _persisted_datetime_utc(ancestor_snapshot.generated_at)
+                    if ancestor_snapshot is not None else None
+                ),
+                inventory_verified_at=(
+                    _persisted_datetime_utc(ancestor_snapshot.verified_at)
+                    if ancestor_snapshot is not None else None
+                ),
+                inventory_max_age_seconds=settings.artifact_inventory_max_age_minutes * 60,
+                inventory_entry=inventory_entry,
+                latest_disposition_event=(
+                    latest_event.event_type if latest_event is not None else None
+                ),
+                latest_disposition_at=(
+                    _persisted_datetime_utc(latest_event.created_at)
+                    if latest_event is not None else None
+                ),
+                now=now_utc,
             )
+            decisions.append(ancestor_decision)
 
-        decision = evaluate_artifact_access(
-            artifact_reference_id=artifact.id,
-            expected_artifact_type=artifact.artifact_type,
-            expected_external_reference=artifact.external_reference,
-            expected_sha256=artifact.sha256,
-            source_retention_status=image.retention_status,
-            source_legal_hold=image.legal_hold,
-            integration_status=integration.status if integration is not None else "MISSING",
-            inventory_complete=bool(snapshot and snapshot.inventory_complete),
-            inventory_integrity_verified=inventory_integrity_verified,
-            inventory_generated_at=_persisted_datetime_utc(snapshot.generated_at) if snapshot is not None else None,
-            inventory_verified_at=_persisted_datetime_utc(snapshot.verified_at) if snapshot is not None else None,
-            inventory_max_age_seconds=settings.artifact_inventory_max_age_minutes * 60,
-            inventory_entry=inventory_entry,
-            latest_disposition_event=latest_event.event_type if latest_event is not None else None,
-            latest_disposition_at=_persisted_datetime_utc(latest_event.created_at) if latest_event is not None else None,
-            now=now or models.utc_now(),
+        # Preserve the requested artifact's decision as the public decision,
+        # while adding explicit ancestor blockers to the same fail-closed result.
+        target_decision = next(
+            decision for decision in decisions
+            if decision.artifact_reference_id == artifact.id
         )
+        inherited_reasons = tuple(
+            "ancestor_" + reason
+            for decision in decisions
+            if decision.artifact_reference_id != artifact.id and not decision.allowed
+            for reason in decision.reasons
+        )
+        if inherited_reasons:
+            decision = ArtifactAccessDecision(
+                False,
+                "BLOCKED",
+                tuple(dict.fromkeys(target_decision.reasons + inherited_reasons)),
+                artifact.id,
+            )
+        else:
+            decision = target_decision
         if not decision.allowed:
             raise ArtifactAccessDenied(decision)
         if not artifact.sha256:
