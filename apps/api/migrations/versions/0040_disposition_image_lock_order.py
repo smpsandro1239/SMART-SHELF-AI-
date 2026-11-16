@@ -30,9 +30,9 @@ def upgrade() -> None:
             END;
             $function$
         """)
-        /* PostgreSQL orders same-timing triggers by name. This must run before
-           trg_shelf_image_artifact_disposition_event_validate, which locks the
-           artifact-reference row and validates the event sequence. */
+        # PostgreSQL orders same-timing triggers by name. This must run before
+        # trg_shelf_image_artifact_disposition_event_validate, which locks the
+        # artifact-reference row and validates the event sequence.
         op.execute("""
             CREATE TRIGGER trg_00_artifact_disposition_lock_image
             BEFORE INSERT ON shelf_image_artifact_disposition_events
