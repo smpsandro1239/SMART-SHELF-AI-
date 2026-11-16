@@ -1107,3 +1107,47 @@ def test_ocr_read_endpoints_lock_source_image_during_retention_check(monkeypatch
         "Every OCR/detection read must lock and refresh the source image "
         "before checking retention and returning derived evidence"
     )
+
+
+
+def test_evidence_fusion_locks_source_image_before_loading_derived_rows(monkeypatch):
+    from sqlalchemy.orm import Query
+
+    image_id, detection_id = create_image_with_detection()
+    with TestClient(app) as client:
+        created = client.post(
+            f"/api/v1/shelf-images/{image_id}/ocr-runs",
+            json={
+                "provider": "mock-ocr",
+                "model_version": "mock-v1",
+                "regions": [{
+                    "detection_id": detection_id,
+                    "text": "Produto de teste",
+                    "confidence": 0.95,
+                    "x_min": 0.2,
+                    "y_min": 0.2,
+                    "x_max": 0.6,
+                    "y_max": 0.3,
+                }],
+            },
+        )
+        assert created.status_code == 201
+
+    original_with_for_update = Query.with_for_update
+    locked_image_queries = []
+
+    def record_image_lock(query, *args, **kwargs):
+        descriptions = query.column_descriptions
+        if descriptions and descriptions[0].get("entity") is models.ShelfImage:
+            locked_image_queries.append(True)
+        return original_with_for_update(query, *args, **kwargs)
+
+    monkeypatch.setattr(Query, "with_for_update", record_image_lock)
+    with TestClient(app) as client:
+        response = client.post(f"/api/v1/shelf-images/{image_id}/evidence-fusion")
+
+    assert response.status_code == 200, response.text
+    assert locked_image_queries, (
+        "Evidence fusion must lock the source image before reading OCR "
+        "matches or visual detections"
+    )
