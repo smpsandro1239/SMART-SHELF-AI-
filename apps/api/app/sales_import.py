@@ -8,6 +8,7 @@ from decimal import Decimal, InvalidOperation
 
 
 MAX_IMPORT_ROWS = 5000
+MAX_IMPORT_BYTES = 5 * 1024 * 1024
 REQUIRED_COLUMNS = ("product_id", "sales_date", "quantity", "external_reference")
 
 
@@ -23,6 +24,8 @@ def parse_daily_sales_csv(payload: bytes) -> list[ParsedSalesRow]:
     """Parse a bounded UTF-8 CSV; reject malformed rows instead of silently skipping them."""
     if not payload:
         raise ValueError("CSV file is empty")
+    if len(payload) > MAX_IMPORT_BYTES:
+        raise ValueError(f"CSV exceeds the maximum file size of {MAX_IMPORT_BYTES} bytes")
     if b"\x00" in payload:
         raise ValueError("CSV must not contain NUL bytes")
     try:
