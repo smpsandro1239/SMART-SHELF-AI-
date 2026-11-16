@@ -1,6 +1,7 @@
 """Strict CSV parsing for daily sales imports."""
 import csv
 import io
+import re
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal, InvalidOperation
@@ -22,6 +23,8 @@ def parse_daily_sales_csv(payload: bytes) -> list[ParsedSalesRow]:
     """Parse a bounded UTF-8 CSV; reject malformed rows instead of silently skipping them."""
     if not payload:
         raise ValueError("CSV file is empty")
+    if b"\\x00" in payload:
+        raise ValueError("CSV must not contain NUL bytes")
     try:
         decoded = payload.decode("utf-8-sig")
     except UnicodeDecodeError as exc:
@@ -49,11 +52,13 @@ def parse_daily_sales_csv(payload: bytes) -> list[ParsedSalesRow]:
         row = {(key.strip() if key else ""): (value.strip() if value else "") for key, value in raw.items()}
         try:
             product_id = int(row["product_id"])
-            if product_id <= 0:
+            if product_id <= 0 or product_id > 2**63 - 1:
                 raise ValueError
         except (TypeError, ValueError) as exc:
             raise ValueError(f"Invalid product_id at CSV line {line_number}") from exc
         try:
+            if re.fullmatch(r"\\d{4}-\\d{2}-\\d{2}", row["sales_date"]) is None:
+                raise ValueError
             sales_date = date.fromisoformat(row["sales_date"])
         except (TypeError, ValueError) as exc:
             raise ValueError(f"Invalid sales_date at CSV line {line_number}; expected YYYY-MM-DD") from exc
@@ -68,7 +73,7 @@ def parse_daily_sales_csv(payload: bytes) -> list[ParsedSalesRow]:
         except (InvalidOperation, TypeError, ValueError) as exc:
             raise ValueError(f"Invalid quantity at CSV line {line_number}") from exc
         reference = row["external_reference"]
-        if not reference or len(reference) > 120:
+        if not reference or len(reference) > 120 or any(ord(char) < 32 or 127 <= ord(char) < 160 for char in reference):
             raise ValueError(f"Invalid external_reference at CSV line {line_number}")
         if reference in seen_references:
             raise ValueError(f"Duplicate external_reference in CSV at line {line_number}: {reference}")
