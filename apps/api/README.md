@@ -1312,3 +1312,6 @@ Antes de aceitar um snapshot assinado, a API exige uma integração `ACTIVE` reg
 A propriedade `required_for_retention` define as fontes que entram no relatório de cobertura. O relatório distingue fontes revogadas, ainda não observadas e cujo último snapshot ultrapassou a janela de frescura. `last_seen_at` só avança com snapshots novos aceites, não com reenvios idempotentes. A revogação bloqueia ingestões futuras, preservando snapshots e declarações históricas.
 
 O registo não armazena chaves nem tokens. As chaves HMAC permanecem em `ARTIFACT_INVENTORY_HMAC_KEYS_JSON` e ainda são partilhadas por identificador de sistema entre lojas; o isolamento criptográfico por loja e rotação por `key_id` continuam pendentes. A cobertura também depende da configuração administrativa correta das integrações obrigatórias. Estes dados não autorizam purga.
+
+
+A resposta de cobertura devolve `coverage_configured=false` e `coverage_complete=false` quando não existem fontes obrigatórias registadas. Quando existem, `coverage_complete=true` cobre apenas o conjunto configurado e exige todas as fontes ativas, observadas e dentro da janela de frescura. Não é prova da inexistência de conectores externos não declarados pelo administrador.
