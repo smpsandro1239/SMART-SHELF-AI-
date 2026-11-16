@@ -1516,9 +1516,10 @@ def get_shelf_image_purge_eligibility(
     artifact_ids = [reference.id for reference in artifact_references]
     latest_dispositions_by_artifact: dict[int, str] = {}
     if artifact_ids:
-        latest_event_ids = (
+        latest_event_sequences = (
             db.query(
-                func.max(models.ShelfImageArtifactDispositionEvent.sequence_number).label("event_sequence")
+                models.ShelfImageArtifactDispositionEvent.artifact_reference_id.label("artifact_reference_id"),
+                func.max(models.ShelfImageArtifactDispositionEvent.sequence_number).label("event_sequence"),
             )
             .filter(
                 models.ShelfImageArtifactDispositionEvent.artifact_reference_id.in_(artifact_ids)
@@ -1532,8 +1533,15 @@ def get_shelf_image_purge_eligibility(
                 models.ShelfImageArtifactDispositionEvent.event_type,
             )
             .join(
-                latest_event_ids,
-                models.ShelfImageArtifactDispositionEvent.sequence_number == latest_event_ids.c.event_sequence,
+                latest_event_sequences,
+                (
+                    models.ShelfImageArtifactDispositionEvent.artifact_reference_id
+                    == latest_event_sequences.c.artifact_reference_id
+                )
+                & (
+                    models.ShelfImageArtifactDispositionEvent.sequence_number
+                    == latest_event_sequences.c.event_sequence
+                ),
             )
             .all()
         )
