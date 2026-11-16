@@ -1719,6 +1719,7 @@ def get_shelf_image_purge_eligibility(
             db.query(
                 models.ShelfImageArtifactDispositionEvent.artifact_reference_id,
                 models.ShelfImageArtifactDispositionEvent.event_type,
+                models.ShelfImageArtifactDispositionEvent.created_at,
             )
             .join(
                 latest_event_sequences,
@@ -1734,12 +1735,13 @@ def get_shelf_image_purge_eligibility(
             .all()
         )
         latest_dispositions_by_artifact = {
-            artifact_id: event_type
-            for artifact_id, event_type in latest_dispositions
+            artifact_id: (event_type, created_at)
+            for artifact_id, event_type, created_at in latest_dispositions
         }
 
     for artifact_reference in artifact_references:
-        latest_event_type = latest_dispositions_by_artifact.get(artifact_reference.id)
+        latest_event_data = latest_dispositions_by_artifact.get(artifact_reference.id)
+        latest_event_type = latest_event_data[0] if latest_event_data else None
         if latest_event_type is None:
             disposition_counts["without_final_disposition"] += 1
         elif latest_event_type == "PROPOSED":
@@ -1754,10 +1756,123 @@ def get_shelf_image_purge_eligibility(
         elif latest_event_type == "DISPOSAL_ATTESTED":
             disposition_counts["disposal_attested"] += 1
 
-    # Human declarations and two-person approvals improve traceability but do
-    # not prove inventory completeness or independently verify external deletion.
-    # Keep the purge blocked until a trusted inventory attestation exists.
-    blockers.append("external_artifact_disposition_not_verified")
+    inventory_summary = {
+        "verified_systems": [],
+        "unverified_systems": [],
+        "present_artifact_count": 0,
+        "absent_artifact_count": 0,
+    }
+    if not artifact_references:
+        inventory_summary["unverified_systems"].append("no_declared_inventory_scope")
+    else:
+        references_by_system: dict[str, list] = {}
+        for reference in artifact_references:
+            references_by_system.setdefault(reference.external_system, []).append(reference)
+
+        for external_system, system_references in references_by_system.items():
+            snapshot = (
+                db.query(models.ShelfImageArtifactInventorySnapshot)
+                .filter(
+                    models.ShelfImageArtifactInventorySnapshot.shelf_image_id == image_id,
+                    models.ShelfImageArtifactInventorySnapshot.store_id == store_id,
+                    models.ShelfImageArtifactInventorySnapshot.external_system == external_system,
+                )
+                .order_by(
+                    models.ShelfImageArtifactInventorySnapshot.generated_at.desc(),
+                    models.ShelfImageArtifactInventorySnapshot.id.desc(),
+                )
+                .first()
+            )
+            if snapshot is None:
+                inventory_summary["unverified_systems"].append(external_system)
+                continue
+
+            snapshot_time = snapshot.generated_at
+            if snapshot_time.tzinfo is None:
+                snapshot_time = snapshot_time.replace(tzinfo=timezone.utc)
+            snapshot_age = (now - snapshot_time.astimezone(timezone.utc)).total_seconds()
+            expected_inventory = {
+                (ref.artifact_type, ref.external_reference, ref.sha256)
+                for ref in system_references
+            }
+            stored_manifest = snapshot.inventory_manifest or []
+            actual_inventory = {
+                (
+                    entry.get("artifact_type"),
+                    entry.get("external_reference"),
+                    entry.get("sha256"),
+                )
+                for entry in stored_manifest
+            }
+            snapshot_is_fresh = (
+                -120 <= snapshot_age <= settings.artifact_inventory_max_age_minutes * 60
+            )
+            snapshot_covers_current_references = (
+                len(stored_manifest) == len(system_references)
+                and actual_inventory == expected_inventory
+            )
+            signature_is_valid = False
+            try:
+                verified_digest = verify_inventory_signature(
+                    image_id=image_id,
+                    store_id=store_id,
+                    external_system=external_system,
+                    snapshot_id=snapshot.snapshot_id,
+                    generated_at=snapshot_time,
+                    entries=stored_manifest,
+                    signature=snapshot.source_signature,
+                    configured_keys_json=settings.artifact_inventory_hmac_keys_json,
+                )
+                signature_is_valid = verified_digest == snapshot.manifest_sha256
+            except (InventorySignatureConfigurationError, ValueError, TypeError, KeyError):
+                signature_is_valid = False
+
+            events_are_current = True
+            all_artifacts_absent = True
+            for reference in system_references:
+                latest_event_data = latest_dispositions_by_artifact.get(reference.id)
+                if latest_event_data is None or latest_event_data[0] != "DISPOSAL_ATTESTED":
+                    events_are_current = False
+                    all_artifacts_absent = False
+                    continue
+                event_time = latest_event_data[1]
+                if event_time.tzinfo is None:
+                    event_time = event_time.replace(tzinfo=timezone.utc)
+                if snapshot_time.astimezone(timezone.utc) < event_time.astimezone(timezone.utc):
+                    events_are_current = False
+                matching_entry = next(
+                    (
+                        entry for entry in stored_manifest
+                        if entry.get("artifact_type") == reference.artifact_type
+                        and entry.get("external_reference") == reference.external_reference
+                        and entry.get("sha256") == reference.sha256
+                    ),
+                    None,
+                )
+                if matching_entry is None or matching_entry.get("state") != "ABSENT":
+                    all_artifacts_absent = False
+
+            if not (
+                snapshot_is_fresh
+                and snapshot_covers_current_references
+                and signature_is_valid
+                and events_are_current
+            ):
+                inventory_summary["unverified_systems"].append(external_system)
+                continue
+
+            inventory_summary["present_artifact_count"] += snapshot.present_count
+            inventory_summary["absent_artifact_count"] += snapshot.absent_count
+            if all_artifacts_absent and snapshot.present_count == 0:
+                inventory_summary["verified_systems"].append(external_system)
+            else:
+                inventory_summary["unverified_systems"].append(external_system)
+
+    if inventory_summary["unverified_systems"]:
+        blockers.append("external_artifact_disposition_not_verified")
+    # Inventory verification is necessary but not sufficient: no physical purge
+    # executor is deployed, so this endpoint remains preview-only.
+    blockers.append("purge_executor_not_implemented")
     internal_checks_passed = len(blockers) == 1
 
     return {
@@ -1773,6 +1888,7 @@ def get_shelf_image_purge_eligibility(
         "stored_file_integrity_verified": file_integrity_verified,
         "declared_external_artifact_references": len(artifact_references),
         "external_artifact_disposition": disposition_counts,
+        "external_artifact_inventory": inventory_summary,
         "derived_records": {
             "detections": detection_count,
             "ocr_runs": ocr_run_count,
