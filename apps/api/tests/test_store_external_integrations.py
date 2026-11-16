@@ -1,4 +1,5 @@
 from datetime import timedelta
+import json
 from types import SimpleNamespace
 
 import pytest
@@ -226,3 +227,72 @@ def test_integration_management_requires_admin(db_session):
             db_session,
         )
     assert exc.value.status_code == 403
+
+
+
+def test_accepted_signed_snapshot_updates_integration_last_seen(db_session, monkeypatch):
+    from app.artifact_inventory_signing import inventory_signature
+
+    store_id, image_id, admin_id = build_store_image(db_session)
+    request = SimpleNamespace(state=SimpleNamespace(user_id=admin_id))
+    secret = "integration-test-secret-with-at-least-32-bytes"
+    monkeypatch.setattr(
+        main_module.settings,
+        "artifact_inventory_hmac_keys_json",
+        json.dumps({"backup-vault": secret}),
+    )
+    integration = main_module.create_store_external_integration(
+        store_id,
+        StoreExternalIntegrationCreate(
+            external_system="backup-vault",
+            provider="s3-compatible",
+            required_for_retention=True,
+        ),
+        request,
+        db_session,
+    )
+    db_session.add(models.ShelfImageArtifactReference(
+        shelf_image_id=image_id,
+        store_id=store_id,
+        artifact_type="BACKUP",
+        external_system="backup-vault",
+        external_reference="backup/image-1",
+        sha256=None,
+        declared_by_user_id=admin_id,
+    ))
+    db_session.commit()
+
+    generated_at = models.utc_now()
+    entries = [{
+        "artifact_type": "BACKUP",
+        "external_reference": "backup/image-1",
+        "sha256": None,
+        "state": "PRESENT",
+    }]
+    signature = inventory_signature(
+        image_id=image_id,
+        store_id=store_id,
+        external_system="backup-vault",
+        snapshot_id="snapshot-accepted",
+        generated_at=generated_at,
+        entries=entries,
+        secret=secret,
+        inventory_complete=True,
+    )
+    payload = ShelfImageArtifactInventorySnapshotCreate(
+        external_system="backup-vault",
+        snapshot_id="snapshot-accepted",
+        generated_at=generated_at,
+        inventory_complete=True,
+        entries=entries,
+        signature=signature,
+    )
+
+    snapshot = main_module.create_shelf_image_artifact_inventory_snapshot(
+        image_id, payload, request, db_session
+    )
+
+    db_session.refresh(integration)
+    assert snapshot.store_id == store_id
+    assert integration.last_seen_at is not None
+    assert integration.last_seen_at.replace(tzinfo=generated_at.tzinfo) == generated_at
