@@ -7,6 +7,8 @@ import argparse
 import json
 import math
 from pathlib import Path
+
+from app.dataset_paths import is_safe_dataset_relative_path
 from typing import Any
 
 
@@ -57,8 +59,8 @@ def validate_coco_document(document: Any, image_root: Path | None = None) -> lis
                 errors.append(f"image {image_id} has invalid {dimension}")
 
         file_name = item.get("file_name")
-        if not isinstance(file_name, str) or not file_name.strip() or "\x00" in file_name:
-            errors.append(f"image {image_id} has invalid file_name")
+        if not is_safe_dataset_relative_path(file_name):
+            errors.append(f"image {image_id} has unsafe relative file_name")
         elif image_root is not None:
             root = image_root.resolve()
             candidate = (root / file_name).resolve()
