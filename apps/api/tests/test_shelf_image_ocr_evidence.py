@@ -359,10 +359,16 @@ def test_image_content_endpoint_enforces_store_scope_and_file_availability(monke
     foreign_dir.mkdir(parents=True)
     own_file = own_dir / "own-image.jpg"
     foreign_file = foreign_dir / "foreign-image.jpg"
-    own_file.write_bytes(b"own-image-content")
-    foreign_file.write_bytes(b"foreign-image-content")
+    own_content = b"own-image-content"
+    foreign_content = b"foreign-image-content"
+    own_file.write_bytes(own_content)
+    foreign_file.write_bytes(foreign_content)
     own_image.storage_path = str(own_file)
+    own_image.file_size_bytes = len(own_content)
+    own_image.sha256 = __import__("hashlib").sha256(own_content).hexdigest()
     foreign_image.storage_path = str(foreign_file)
+    foreign_image.file_size_bytes = len(foreign_content)
+    foreign_image.sha256 = __import__("hashlib").sha256(foreign_content).hexdigest()
     db.commit()
     db.close()
 
@@ -374,6 +380,24 @@ def test_image_content_endpoint_enforces_store_scope_and_file_availability(monke
         own_response = client.get(f"/api/v1/shelf-images/{own_image_id}/content")
         assert own_response.status_code == 200
         assert own_response.content == b"own-image-content"
+
+        # A file replaced after upload must not be served as trusted content.
+        tampered_file = own_dir / "tampered-image.jpg"
+        tampered_file.write_bytes(b"tampered-content")
+        db = TestingSession()
+        own_image = db.get(models.ShelfImage, own_image_id)
+        own_image.storage_path = str(tampered_file)
+        db.commit()
+        db.close()
+        tampered_response = client.get(f"/api/v1/shelf-images/{own_image_id}/content")
+        assert tampered_response.status_code == 409
+
+        # Restore the valid file metadata before continuing the path checks.
+        db = TestingSession()
+        own_image = db.get(models.ShelfImage, own_image_id)
+        own_image.storage_path = str(own_file)
+        db.commit()
+        db.close()
 
         foreign_response = client.get(f"/api/v1/shelf-images/{foreign_image_id}/content")
         assert foreign_response.status_code == 403
