@@ -2591,13 +2591,15 @@ def _refresh_fused_evidence_view(
     }
     active_ids = set()
     if product_ids:
-        active_ids = {
-            product.id
-            for product in db.query(models.Product)
-            .filter(models.Product.id.in_(sorted(product_ids)), models.Product.is_active.is_(True))
+        catalogue_rows = (
+            db.query(models.Product)
+            .filter(models.Product.id.in_(sorted(product_ids)))
             .order_by(models.Product.id)
+            .with_for_update()
+            .populate_existing()
             .all()
-        }
+        )
+        active_ids = {product.id for product in catalogue_rows if product.is_active}
 
     refreshed = []
     for row in rows:
