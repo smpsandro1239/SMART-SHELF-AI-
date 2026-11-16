@@ -339,3 +339,16 @@ def test_persisted_manifest_reference_coverage_mismatch_blocks_provider_fetch():
         call(session, lambda *args: fetched.append(args) or b"unexpected")
     assert "inventory_integrity_unverified" in error.value.decision.reasons
     assert fetched == []
+
+
+def test_missing_parent_in_locked_artifact_lineage_blocks_provider_fetch():
+    session, _ = fixture_session()
+    session.records[models.ShelfImageArtifactReference].parent_reference_id = 999
+    fetched = []
+
+    with pytest.raises(ArtifactAccessDenied) as error:
+        call(session, lambda *args: fetched.append(args) or b"unexpected")
+
+    assert "artifact_parent_missing" in error.value.decision.reasons
+    assert fetched == []
+    assert session.rolled_back and session.closed
