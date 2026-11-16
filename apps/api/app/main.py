@@ -3064,8 +3064,28 @@ def list_reviewed_training_candidates(
         row[1].id,
     ))
 
+    # Match the global lock order used by exemplar creation and review:
+    # source images first, then catalogue products. Refresh the product rows
+    # after waiting so a concurrent deactivation cannot leak a stale candidate.
+    product_ids = sorted({product.id for _, _, _, _, product, _ in rows})
+    active_product_ids = set()
+    if product_ids:
+        locked_products = (
+            db.query(models.Product)
+            .filter(models.Product.id.in_(product_ids))
+            .order_by(models.Product.id.asc())
+            .with_for_update()
+            .populate_existing()
+            .all()
+        )
+        active_product_ids = {
+            product.id for product in locked_products if product.is_active
+        }
+
     candidates = []
     for review, detection, image, shelf, product, zone in rows:
+        if product.id not in active_product_ids:
+            continue
         existing = (
             db.query(models.ProductEmbeddingExemplar.id)
             .filter(
