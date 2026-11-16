@@ -201,6 +201,18 @@ def build_approved_product_registry(
                 exemplar.id,
                 exc,
             )
+    dimensions = {len(item.embedding) for item in exemplars}
+    if len(dimensions) > 1:
+        # A model version is a contract: all vectors produced by that exact
+        # version must have one dimension. Do not pick a majority dimension,
+        # because that could silently hide a corrupted cohort and bias matches.
+        logger.error(
+            "No SKU embeddings loaded for model_version=%s: conflicting dimensions=%s",
+            model_version,
+            sorted(dimensions),
+        )
+        exemplars = []
+
     return ProductEmbeddingRegistry(
         exemplars,
         model_version=model_version,
