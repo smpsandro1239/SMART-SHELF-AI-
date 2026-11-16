@@ -3880,9 +3880,21 @@ def review_product_embedding_exemplar(
 
 
 @app.post("/api/v1/shelf-products", response_model=ShelfProductRead, status_code=201, tags=["catalog"])
-def assign_product_to_shelf(payload: ShelfProductCreate, db: Session = Depends(get_db)):
-    if not db.get(models.Shelf, payload.shelf_id):
+def assign_product_to_shelf(
+    payload: ShelfProductCreate,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    shelf = (
+        db.query(models.Shelf)
+        .join(models.Zone, models.Shelf.zone_id == models.Zone.id)
+        .filter(models.Shelf.id == payload.shelf_id)
+        .first()
+    )
+    if shelf is None:
         raise HTTPException(status_code=404, detail="Shelf not found")
+    actor = _request_user(db, request)
+    _enforce_store_scope(actor, shelf.zone.store_id)
     if not db.get(models.Product, payload.product_id):
         raise HTTPException(status_code=404, detail="Product not found")
     if db.query(models.ShelfProduct).filter_by(
