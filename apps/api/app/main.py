@@ -1005,7 +1005,13 @@ def restrict_shelf_image(image_id: int, payload: ShelfImageRetentionRequest, req
     actor = _request_user(db, request)
     if actor is not None and actor.role not in {"ADMIN", "SUPERVISOR"}:
         raise HTTPException(status_code=403, detail="Supervisor role required")
-    item = db.query(models.ShelfImage).filter(models.ShelfImage.id == image_id).with_for_update().first()
+    item = (
+        db.query(models.ShelfImage)
+        .filter(models.ShelfImage.id == image_id)
+        .with_for_update()
+        .populate_existing()
+        .first()
+    )
     if item is None:
         raise HTTPException(status_code=404, detail="Shelf image not found")
     _enforce_store_scope(actor, _shelf_image_store_id(db, image_id))
@@ -1036,7 +1042,13 @@ def restore_shelf_image(image_id: int, payload: ShelfImageRetentionRequest, requ
     actor = _request_user(db, request)
     if actor is not None and actor.role != "ADMIN":
         raise HTTPException(status_code=403, detail="Administrator role required to restore an image")
-    item = db.query(models.ShelfImage).filter(models.ShelfImage.id == image_id).with_for_update().first()
+    item = (
+        db.query(models.ShelfImage)
+        .filter(models.ShelfImage.id == image_id)
+        .with_for_update()
+        .populate_existing()
+        .first()
+    )
     if item is None:
         raise HTTPException(status_code=404, detail="Shelf image not found")
     _enforce_store_scope(actor, _shelf_image_store_id(db, image_id))
@@ -1083,7 +1095,13 @@ def apply_shelf_image_legal_hold(
     actor = _request_user(db, request)
     if actor is None or actor.role != "ADMIN":
         raise HTTPException(status_code=403, detail="Administrator role required to apply a legal hold")
-    item = db.query(models.ShelfImage).filter(models.ShelfImage.id == image_id).with_for_update().first()
+    item = (
+        db.query(models.ShelfImage)
+        .filter(models.ShelfImage.id == image_id)
+        .with_for_update()
+        .populate_existing()
+        .first()
+    )
     if item is None:
         raise HTTPException(status_code=404, detail="Shelf image not found")
     _enforce_store_scope(actor, _shelf_image_store_id(db, image_id))
@@ -1114,7 +1132,13 @@ def release_shelf_image_legal_hold(
     actor = _request_user(db, request)
     if actor is None or actor.role != "ADMIN":
         raise HTTPException(status_code=403, detail="Administrator role required to release a legal hold")
-    item = db.query(models.ShelfImage).filter(models.ShelfImage.id == image_id).with_for_update().first()
+    item = (
+        db.query(models.ShelfImage)
+        .filter(models.ShelfImage.id == image_id)
+        .with_for_update()
+        .populate_existing()
+        .first()
+    )
     if item is None:
         raise HTTPException(status_code=404, detail="Shelf image not found")
     _enforce_store_scope(actor, _shelf_image_store_id(db, image_id))
