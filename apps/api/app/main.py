@@ -3142,14 +3142,32 @@ def list_detection_sku_reviews(
     limit: int = 100,
     db: Session = Depends(get_db),
 ):
-    detection = db.get(models.ShelfImageDetection, detection_id)
-    if detection is None:
+    initial_detection = db.get(models.ShelfImageDetection, detection_id)
+    if initial_detection is None:
         raise HTTPException(status_code=404, detail="Detection not found")
-    image_record = db.get(models.ShelfImage, detection.shelf_image_id)
+    source_image_id = initial_detection.shelf_image_id
+    image_record = (
+        db.query(models.ShelfImage)
+        .filter(models.ShelfImage.id == source_image_id)
+        .with_for_update()
+        .populate_existing()
+        .first()
+    )
     if image_record is None:
         raise HTTPException(status_code=404, detail="Shelf image not found")
-    _enforce_store_scope(_request_user(db, request), _shelf_image_store_id(db, detection.shelf_image_id))
+    _enforce_store_scope(_request_user(db, request), _shelf_image_store_id(db, source_image_id))
     _require_active_shelf_image(image_record)
+    detection = (
+        db.query(models.ShelfImageDetection)
+        .filter(
+            models.ShelfImageDetection.id == detection_id,
+            models.ShelfImageDetection.shelf_image_id == source_image_id,
+        )
+        .populate_existing()
+        .first()
+    )
+    if detection is None:
+        raise HTTPException(status_code=409, detail="Detection changed during review-history lookup")
     return (
         db.query(models.DetectionSkuReview)
         .filter(models.DetectionSkuReview.detection_id == detection_id)
