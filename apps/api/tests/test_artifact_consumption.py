@@ -21,15 +21,39 @@ class FakeQuery:
     def __init__(self, session, model):
         self.session = session
         self.model = model
+        self.conditions = []
 
     def join(self, *args, **kwargs):
         return self
 
     def filter(self, *conditions):
+        self.conditions.extend(conditions)
         return self
 
     def order_by(self, *ordering):
         return self
+
+    def _rows(self):
+        value = self.session.records.get(self.model)
+        if value is None:
+            return []
+        return value if isinstance(value, list) else [value]
+
+    def _matches(self, record):
+        from sqlalchemy.sql import operators
+
+        for condition in self.conditions:
+            key = getattr(getattr(condition, "left", None), "key", None)
+            right = getattr(condition, "right", None)
+            expected = getattr(right, "value", object())
+            if key is None or expected.__class__ is object:
+                continue
+            actual = getattr(record, key, None)
+            if condition.operator is operators.eq and actual != expected:
+                return False
+            if condition.operator is operators.in_op and actual not in expected:
+                return False
+        return True
 
     def with_for_update(self, *args, **kwargs):
         self.session.locked_queries += 1
@@ -39,11 +63,11 @@ class FakeQuery:
         return self
 
     def first(self):
-        return self.session.records.get(self.model)
+        rows = [row for row in self._rows() if self._matches(row)]
+        return rows[0] if rows else None
 
     def all(self):
-        record = self.session.records.get(self.model)
-        return [record] if record is not None else []
+        return [row for row in self._rows() if self._matches(row)]
 
 
 class FakeSession:
@@ -108,7 +132,7 @@ def fixture_session(*, retention_status="ACTIVE", legal_hold=False, event=None):
         snapshot_id="snapshot-31", generated_at=snapshot.generated_at,
         entries=snapshot.inventory_manifest, inventory_complete=True,
     )).hexdigest()
-    integration = SimpleNamespace(status="ACTIVE")
+    integration = SimpleNamespace(status="ACTIVE", external_system="object-store-a")
     records = {
         models.ShelfImage: image,
         models.ShelfImageArtifactReference: artifact,
@@ -350,5 +374,119 @@ def test_missing_parent_in_locked_artifact_lineage_blocks_provider_fetch():
         call(session, lambda *args: fetched.append(args) or b"unexpected")
 
     assert "artifact_parent_missing" in error.value.decision.reasons
+    assert fetched == []
+    assert session.rolled_back and session.closed
+
+
+def test_parent_in_another_external_system_blocks_child_before_provider_fetch():
+    session, _ = fixture_session()
+    child = session.records[models.ShelfImageArtifactReference]
+    child.parent_reference_id = 30
+    parent_payload = b"parent artifact bytes"
+    parent_digest = sha256(parent_payload).hexdigest()
+    parent = SimpleNamespace(
+        id=30,
+        parent_reference_id=None,
+        shelf_image_id=7,
+        store_id=4,
+        external_system="archive-store-b",
+        artifact_type="DATASET_COPY",
+        external_reference="archive/datasets/source.zip",
+        sha256=parent_digest,
+    )
+    parent_snapshot = SimpleNamespace(
+        inventory_complete=True,
+        generated_at=NOW - timedelta(minutes=2),
+        verified_at=NOW - timedelta(minutes=1),
+        inventory_manifest=[{
+            "artifact_type": "DATASET_COPY",
+            "external_reference": parent.external_reference,
+            "sha256": parent_digest,
+            "state": "PRESENT",
+        }],
+        artifact_count=1,
+        present_count=1,
+        absent_count=0,
+        shelf_image_id=7,
+        store_id=4,
+        external_system="archive-store-b",
+        snapshot_id="snapshot-parent-30",
+        source_signature="",
+        manifest_sha256="",
+    )
+    secret = "test-inventory-signing-secret-which-is-long-enough"
+    parent_snapshot.source_signature = inventory_signature(
+        image_id=7,
+        store_id=4,
+        external_system="archive-store-b",
+        snapshot_id=parent_snapshot.snapshot_id,
+        generated_at=parent_snapshot.generated_at,
+        entries=parent_snapshot.inventory_manifest,
+        secret=secret,
+        inventory_complete=True,
+    )
+    parent_snapshot.manifest_sha256 = sha256(canonical_inventory_payload(
+        image_id=7,
+        store_id=4,
+        external_system="archive-store-b",
+        snapshot_id=parent_snapshot.snapshot_id,
+        generated_at=parent_snapshot.generated_at,
+        entries=parent_snapshot.inventory_manifest,
+        inventory_complete=True,
+    )).hexdigest()
+    session.records[models.ShelfImageArtifactReference] = [child, parent]
+    session.records[models.StoreExternalIntegration] = [
+        session.records[models.StoreExternalIntegration],
+        SimpleNamespace(status="ACTIVE", external_system="archive-store-b"),
+    ]
+    session.records[models.ShelfImageArtifactInventorySnapshot] = [
+        session.records[models.ShelfImageArtifactInventorySnapshot],
+        parent_snapshot,
+    ]
+    session.records[models.ShelfImageArtifactDispositionEvent] = [
+        SimpleNamespace(
+            artifact_reference_id=30,
+            shelf_image_id=7,
+            store_id=4,
+            sequence_number=1,
+            event_type="PROPOSED",
+            created_at=NOW - timedelta(seconds=30),
+        )
+    ]
+    fetched = []
+
+    with pytest.raises(ArtifactAccessDenied) as error:
+        call(session, lambda *args: fetched.append(args) or b"unexpected")
+
+    assert "ancestor_artifact_disposition_pending_or_approved" in error.value.decision.reasons
+    assert fetched == []
+    assert session.rolled_back and session.closed
+
+
+def test_parent_in_another_external_system_with_revoked_integration_blocks_child():
+    session, _ = fixture_session()
+    child = session.records[models.ShelfImageArtifactReference]
+    child.parent_reference_id = 30
+    parent = SimpleNamespace(
+        id=30,
+        parent_reference_id=None,
+        shelf_image_id=7,
+        store_id=4,
+        external_system="archive-store-b",
+        artifact_type="DATASET_COPY",
+        external_reference="archive/datasets/source.zip",
+        sha256="b" * 64,
+    )
+    session.records[models.ShelfImageArtifactReference] = [child, parent]
+    session.records[models.StoreExternalIntegration] = [
+        session.records[models.StoreExternalIntegration],
+        SimpleNamespace(status="REVOKED", external_system="archive-store-b"),
+    ]
+    fetched = []
+
+    with pytest.raises(ArtifactAccessDenied) as error:
+        call(session, lambda *args: fetched.append(args) or b"unexpected")
+
+    assert "ancestor_external_integration_not_active" in error.value.decision.reasons
     assert fetched == []
     assert session.rolled_back and session.closed
