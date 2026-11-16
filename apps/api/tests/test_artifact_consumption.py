@@ -683,3 +683,16 @@ def test_malformed_persisted_inventory_entry_fails_closed_without_provider_error
     assert fetched == []
     assert session.rolled_back and session.closed
 
+def test_parent_inventory_verification_before_generation_blocks_child_fetch():
+    session, _ = fixture_session()
+    _add_cross_system_parent(session)
+    parent_snapshot = session.records[models.ShelfImageArtifactInventorySnapshot][1]
+    parent_snapshot.verified_at = parent_snapshot.generated_at - timedelta(seconds=1)
+    fetched = []
+
+    with pytest.raises(ArtifactAccessDenied) as error:
+        call(session, lambda *args: fetched.append(args) or b"unexpected")
+
+    assert "ancestor_inventory_verification_precedes_generation" in error.value.decision.reasons
+    assert fetched == []
+    assert session.rolled_back and session.closed
