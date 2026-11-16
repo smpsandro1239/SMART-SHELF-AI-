@@ -1,5 +1,7 @@
 import hashlib
 
+import pytest
+
 from app.dataset_integrity import (
     audit_manifest_against_coco,
     enrich_coco_document,
@@ -100,8 +102,6 @@ def test_enrich_coco_fails_when_manifest_entry_is_missing():
     assert enriched is None
     assert any("missing from manifest" in error for error in errors)
 
-
-import pytest
 
 @pytest.mark.parametrize("file_name", [
     "../outside.jpg",
