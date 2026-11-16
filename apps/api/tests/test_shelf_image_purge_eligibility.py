@@ -134,6 +134,31 @@ def register_test_artifact_reference(image_id, payload, request, db_session):
     )
 
 
+def test_purge_preview_blocks_missing_policy_version(db_session, tmp_path, monkeypatch):
+    image_id, admin_id = build_restricted_image(
+        db_session, tmp_path, with_detection=False
+    )
+    image = db_session.get(models.ShelfImage, image_id)
+    image.retention_policy_version = None
+    db_session.commit()
+
+    monkeypatch.setattr(main_module.settings, "image_storage_path", str(tmp_path))
+    request = SimpleNamespace(state=SimpleNamespace(user_id=admin_id))
+    preview = main_module.get_shelf_image_purge_eligibility(
+        image_id, request, db_session
+    )
+
+    assert preview["eligible"] is False
+    assert "purge_policy_version_missing" in preview["blockers"]
+    assert preview["deletion_performed"] is False
+    assert (tmp_path / str(
+        db_session.query(models.Zone.store_id)
+        .join(models.Shelf, models.Shelf.zone_id == models.Zone.id)
+        .filter(models.Shelf.id == image.shelf_id)
+        .scalar()
+    ) / "restricted.jpg").exists()
+
+
 def test_cancel_scheduled_purge_records_audit_without_restoring_image(db_session, tmp_path):
     from app.schemas import ShelfImagePurgeScheduleRequest, ShelfImageRetentionRequest
 
