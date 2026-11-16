@@ -222,3 +222,17 @@ def test_artifact_without_declared_digest_is_not_consumed():
 
     assert "artifact_sha256_not_declared" in error.value.decision.reasons
     assert fetched == []
+
+
+def test_inventory_timestamp_equal_to_disposition_blocks_provider_fetch():
+    event_time = NOW - timedelta(minutes=2)
+    event = SimpleNamespace(event_type="REJECTED", created_at=event_time)
+    session, _ = fixture_session(event=event)
+    session.records[models.ShelfImageArtifactInventorySnapshot].generated_at = event_time
+    fetched = []
+
+    with pytest.raises(ArtifactAccessDenied) as error:
+        call(session, lambda *args: fetched.append(args) or b"unexpected")
+
+    assert "inventory_predates_disposition" in error.value.decision.reasons
+    assert fetched == []
