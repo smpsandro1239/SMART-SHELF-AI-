@@ -62,6 +62,7 @@ def upgrade() -> None:
             name="fk_shelf_image_artifact_disposition_reference_lineage",
             ondelete="RESTRICT",
         ),
+        sa.CheckConstraint("sequence_number > 0", name="ck_shelf_image_artifact_disposition_sequence_positive"),
         sa.CheckConstraint(
             "event_type IN ('PROPOSED', 'APPROVED', 'REJECTED', 'DISPOSAL_ATTESTED')",
             name="ck_shelf_image_artifact_disposition_event_type",
@@ -125,11 +126,22 @@ def upgrade() -> None:
                 previous_event_type VARCHAR(24);
                 previous_actor_user_id INTEGER;
                 actor_is_admin BOOLEAN;
+                expected_sequence INTEGER;
             BEGIN
                 PERFORM 1
                 FROM shelf_image_artifact_references
                 WHERE id = NEW.artifact_reference_id
                 FOR UPDATE;
+
+                SELECT COALESCE(MAX(sequence_number), 0) + 1
+                INTO expected_sequence
+                FROM shelf_image_artifact_disposition_events
+                WHERE artifact_reference_id = NEW.artifact_reference_id;
+
+                IF NEW.sequence_number <> expected_sequence THEN
+                    RAISE EXCEPTION 'artifact disposition sequence must be the next sequence number'
+                        USING ERRCODE = '23514';
+                END IF;
 
                 SELECT role = 'ADMIN' AND is_active IS TRUE
                 INTO actor_is_admin
@@ -145,7 +157,7 @@ def upgrade() -> None:
                 INTO previous_event_type, previous_actor_user_id
                 FROM shelf_image_artifact_disposition_events
                 WHERE artifact_reference_id = NEW.artifact_reference_id
-                ORDER BY id DESC
+                ORDER BY sequence_number DESC
                 LIMIT 1;
 
                 IF NEW.event_type = 'PROPOSED' THEN
@@ -320,6 +332,12 @@ def downgrade() -> None:
             CREATE TRIGGER trg_shelf_image_artifact_disposition_event_validate
             BEFORE INSERT ON shelf_image_artifact_disposition_events
             BEGIN
+                SELECT CASE WHEN NEW.sequence_number <> (
+                    SELECT COALESCE(MAX(sequence_number), 0) + 1
+                    FROM shelf_image_artifact_disposition_events
+                    WHERE artifact_reference_id = NEW.artifact_reference_id
+                ) THEN RAISE(ABORT, 'artifact disposition sequence must be the next sequence number') END;
+
                 SELECT CASE WHEN NEW.actor_user_id IS NULL OR NOT EXISTS (
                     SELECT 1 FROM users
                     WHERE id = NEW.actor_user_id AND role = 'ADMIN' AND is_active = 1
@@ -332,7 +350,7 @@ def downgrade() -> None:
                     ) AND (
                         SELECT event_type FROM shelf_image_artifact_disposition_events
                         WHERE artifact_reference_id = NEW.artifact_reference_id
-                        ORDER BY id DESC LIMIT 1
+                        ORDER BY sequence_number DESC LIMIT 1
                     ) <> 'REJECTED'
                 ) THEN RAISE(ABORT, 'artifact disposition proposal is not valid in the current state') END;
 
@@ -340,12 +358,12 @@ def downgrade() -> None:
                     COALESCE((
                         SELECT event_type FROM shelf_image_artifact_disposition_events
                         WHERE artifact_reference_id = NEW.artifact_reference_id
-                        ORDER BY id DESC LIMIT 1
+                        ORDER BY sequence_number DESC LIMIT 1
                     ), '') <> 'PROPOSED'
                     OR (
                         SELECT actor_user_id FROM shelf_image_artifact_disposition_events
                         WHERE artifact_reference_id = NEW.artifact_reference_id
-                        ORDER BY id DESC LIMIT 1
+                        ORDER BY sequence_number DESC LIMIT 1
                     ) = NEW.actor_user_id
                 ) THEN RAISE(ABORT, 'artifact disposition review requires a pending proposal and a different administrator') END;
 
@@ -353,12 +371,12 @@ def downgrade() -> None:
                     COALESCE((
                         SELECT event_type FROM shelf_image_artifact_disposition_events
                         WHERE artifact_reference_id = NEW.artifact_reference_id
-                        ORDER BY id DESC LIMIT 1
+                        ORDER BY sequence_number DESC LIMIT 1
                     ), '') <> 'APPROVED'
                     OR (
                         SELECT actor_user_id FROM shelf_image_artifact_disposition_events
                         WHERE artifact_reference_id = NEW.artifact_reference_id
-                        ORDER BY id DESC LIMIT 1
+                        ORDER BY sequence_number DESC LIMIT 1
                     ) = NEW.actor_user_id
                     OR NEW.evidence_reference IS NULL
                     OR trim(NEW.evidence_reference) = ''
