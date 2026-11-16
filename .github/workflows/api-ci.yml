@@ -67,6 +67,11 @@ jobs:
           DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/smart_shelf_ci
           APP_ENV: test
         run: python scripts/postgres_artifact_lineage_immutability_smoke.py
+      - name: Verify PostgreSQL artifact inventory snapshot monotonicity
+        env:
+          DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/smart_shelf_ci
+          APP_ENV: test
+        run: python scripts/postgres_artifact_inventory_monotonicity_smoke.py
       - name: Verify PostgreSQL external artifact reference and inventory immutability
         env:
           DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/smart_shelf_ci
