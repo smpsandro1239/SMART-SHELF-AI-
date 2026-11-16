@@ -2850,11 +2850,25 @@ def list_reviewed_training_candidates(
         query = query.filter(models.Zone.store_id == actor.store_id)
     if product_id is not None:
         query = query.filter(models.Product.id == product_id)
-    rows = query.order_by(
-        models.ShelfImage.captured_at.asc(),
-        models.ShelfImage.id.asc(),
-        models.ShelfImageDetection.id.asc(),
-    ).offset(max(0, offset)).limit(max(1, min(limit, 250))).all()
+    # Lock source images in stable ID order so a concurrent retention
+    # transition cannot invalidate candidate eligibility during this read.
+    rows = (
+        query.order_by(
+            models.ShelfImage.id.asc(),
+            models.ShelfImageDetection.id.asc(),
+        )
+        .offset(max(0, offset))
+        .limit(max(1, min(limit, 250)))
+        .with_for_update(of=models.ShelfImage)
+        .populate_existing()
+        .all()
+    )
+    rows.sort(key=lambda row: (
+        row[2].captured_at is not None,
+        row[2].captured_at,
+        row[2].id,
+        row[1].id,
+    ))
 
     candidates = []
     for review, detection, image, shelf, product, zone in rows:
