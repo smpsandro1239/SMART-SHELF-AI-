@@ -61,3 +61,10 @@ A revisão posterior encontrou e corrigiu dois problemas de implementação ante
 Foi acrescentado o contrato de inventário externo assinado: helper HMAC-SHA-256 canónico, configuração `ARTIFACT_INVENTORY_HMAC_KEYS_JSON`, migração `0035`, modelo append-only, endpoint de ingestão com cobertura exata, validação de frescura e comparação no purge preview. Os testes novos cobrem canonicalização, assinatura, adulteração, cobertura e o facto de o executor de purge continuar desativado.
 
 Os runs `43780304352` (API CI) e `43780304344` (Quality Gates), para o commit `46b16343f1c62c0e60a0565d978cad0f561d3c54`, voltaram a terminar com falha antes de iniciar qualquer step: job API `steps: []`, jobs Web/API `steps: []`, `logs_url: null`. Nenhum teste, compilação Python ou build TypeScript foi executado nesses runs. A implementação está publicada, mas a validação runtime continua pendente.
+
+
+## Estado após a atestação HMAC (2026-11-16, 00:33 UTC)
+
+A implementação foi reforçada com a declaração assinada obrigatória `inventory_complete: true`, validação dos contadores contra o manifesto guardado, rejeição da reutilização de `snapshot_id` com assinatura diferente e invalidação automática da cobertura quando uma nova referência é registada depois do snapshot. O preview revalida a assinatura com a chave atualmente configurada, a idade, a cobertura, os eventos e a ausência de todos os artefactos. Mesmo quando estas condições passam, mantém `purge_executor_not_implemented` e `eligible: false`.
+
+Os runs mais recentes `43780986800` (API CI) e `43780986819` (Quality Gates), para `c3debd8dc107bf70522e69f63917ba104afa6d04`, continuam sem executar passos (`steps: []`, `logs_url: null`). O estado dos dois checks Vercel para esse commit continua a apontar para `build-rate-limit`. Não há confirmação de execução dos testes, migrações, compilação ou build nesta revisão.
