@@ -968,3 +968,10 @@ O registo guarda apenas metadados operacionais e nunca segredos. **Limitação d
 
 
 A resposta de cobertura inclui `coverage_configured` e `coverage_complete`. Sem fontes marcadas como obrigatórias, ambos não podem ser interpretados como sucesso: `coverage_configured=false` e `coverage_complete=false`. Quando existe configuração, `coverage_complete` significa apenas que todas as fontes obrigatórias registadas estão ativas e dentro da janela de frescura. Não prova que o administrador registou todos os sistemas que realmente existem na loja.
+
+
+### Limite de segurança do endpoint de decisão de acesso (2026-11-16)
+
+O endpoint `GET /api/v1/shelf-images/{image_id}/artifacts/{artifact_id}/access` é uma **avaliação administrativa/diagnóstica**, não um proxy de leitura nem uma autorização atómica para uma operação externa posterior. Os bloqueios de linha e a transação da API terminam antes de a resposta HTTP chegar ao cliente; por isso, um consumidor que consulte o endpoint e só depois faça o fetch mantém uma janela TOCTOU entre a decisão e a leitura. A resposta positiva, isoladamente, não garante que a retenção, o legal hold, a integração ou a disposição continuem inalterados durante o fetch.
+
+O endpoint não deve ser usado como único controlo de autorização por consumidores automáticos. Para fechar esta lacuna é necessário integrar a revalidação da política e a leitura do objeto numa única operação de serviço/proxy, mantendo os bloqueios/transação necessários até terminar o consumo, ou usar um mecanismo equivalente de autorização de curta duração validado pelo próprio fornecedor. Essa integração ainda não está implementada; não existe neste momento prova de proteção atómica ponta-a-ponta dos artefactos externos. A política fail-closed e o endpoint reduzem o risco e permitem diagnóstico, mas não substituem essa fronteira de consumo.
