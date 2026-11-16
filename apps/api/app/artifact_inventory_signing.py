@@ -115,7 +115,7 @@ def verify_inventory_signature(
     entries: list[dict[str, Any]],
     signature: str,
     configured_keys_json: str,
-    inventory_complete: bool = True,
+    inventory_complete: bool,
 ) -> str:
     """Verify a source signature and return the canonical manifest SHA-256."""
     try:
