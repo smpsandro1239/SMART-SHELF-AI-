@@ -28,6 +28,13 @@ def main() -> None:
             role="ADMIN",
             is_active=True,
         )
+        attestor = models.User(
+            email=f"pg-artifact-attestor-{suffix}@example.test",
+            full_name="Independent artifact attestor",
+            password_hash="smoke-test-only",
+            role="ADMIN",
+            is_active=True,
+        )
         employee = models.User(
             email=f"pg-artifact-employee-{suffix}@example.test",
             full_name="Non-admin artifact operator",
@@ -35,7 +42,7 @@ def main() -> None:
             role="EMPLOYEE",
             is_active=True,
         )
-        db.add_all([store, admin, reviewer, employee])
+        db.add_all([store, admin, reviewer, attestor, employee])
         db.flush()
 
         zone = models.Zone(store_id=store.id, name="Disposition smoke zone")
@@ -84,6 +91,7 @@ def main() -> None:
         store_id = store.id
         admin_id = admin.id
         reviewer_id = reviewer.id
+        attestor_id = attestor.id
         employee_id = employee.id
 
     with SessionLocal() as db:
@@ -139,7 +147,7 @@ def main() -> None:
             shelf_image_id=image_id,
             store_id=store_id,
             event_type="DISPOSAL_ATTESTED",
-            actor_user_id=reviewer_id,
+            actor_user_id=attestor_id,
             evidence_reference="ticket/smoke",
             evidence_sha256="not-a-sha256",
             reason="Invalid evidence digest must be rejected",
@@ -151,6 +159,20 @@ def main() -> None:
             db.rollback()
         else:
             raise AssertionError("PostgreSQL accepted an invalid disposition evidence SHA-256")
+
+    with SessionLocal() as db:
+        valid_attestation = models.ShelfImageArtifactDispositionEvent(
+            artifact_reference_id=artifact_id,
+            shelf_image_id=image_id,
+            store_id=store_id,
+            event_type="DISPOSAL_ATTESTED",
+            actor_user_id=attestor_id,
+            evidence_reference="ticket/smoke",
+            evidence_sha256="b" * 64,
+            reason="Independent attestation with valid evidence digest",
+        )
+        db.add(valid_attestation)
+        db.commit()
 
     with SessionLocal() as db:
         other_store = models.Store(
