@@ -310,6 +310,49 @@ def test_ocr_run_rejects_text_without_alphanumeric_content():
         )
         assert response.status_code == 422
 
+
+def test_review_queue_revalidates_fused_products_after_catalogue_deactivation():
+    image_id, detection_id = create_image_with_detection()
+    with TestingSession() as db:
+        product = models.Product(sku="QUEUE-FUSION-01", name="Produto Queue", is_active=True)
+        db.add(product)
+        db.flush()
+        product_id = product.id
+        run = models.ShelfImageOCRRun(
+            shelf_image_id=image_id, provider="queue-ocr", model_version="queue-v1", status="COMPLETED"
+        )
+        db.add(run)
+        db.flush()
+        db.add(models.ShelfImageFusedEvidence(
+            ocr_run_id=run.id, detection_id=detection_id, status="CONSENSUS",
+            suggested_product_id=product_id, visual_product_id=product_id,
+            text_product_id=product_id, visual_status="MATCHED", text_status="SUGGESTED",
+            visual_similarity=0.96, text_score=1.0, ocr_confidence=0.98,
+            visual_model_version="visual-v1", ocr_provider="queue-ocr",
+            ocr_model_version="queue-v1", reason="historical consensus",
+        ))
+        db.commit()
+
+    with TestClient(app) as client:
+        initial = client.get("/api/v1/shelf-image-review-queue")
+        assert initial.status_code == 200
+        assert initial.json()[0]["status"] == "CONSENSUS"
+
+        with TestingSession() as db:
+            db.get(models.Product, product_id).is_active = False
+            db.commit()
+
+        refreshed = client.get("/api/v1/shelf-image-review-queue")
+        filtered = client.get("/api/v1/shelf-image-review-queue?status=CONSENSUS")
+        assert refreshed.status_code == 200
+        assert filtered.status_code == 200
+        assert filtered.json() == []
+        item = next(item for item in refreshed.json() if item["fused_evidence_id"] == 1)
+        assert item["status"] == "UNKNOWN"
+        assert item["suggested_product_id"] is None
+        assert item["visual_product_id"] is None
+        assert item["text_product_id"] is None
+
 def test_review_queue_returns_unreviewed_conflicts_and_removes_reviewed_items(monkeypatch):
     image_id, detection_id = create_image_with_detection()
     db = TestingSession()
