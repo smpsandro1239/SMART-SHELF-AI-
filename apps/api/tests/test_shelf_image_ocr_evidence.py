@@ -1204,3 +1204,61 @@ def test_reviewed_training_candidates_lock_source_images(monkeypatch):
         "Training candidate selection must lock source images against "
         "concurrent retention transitions"
     )
+
+def test_review_queue_locks_source_images_before_returning_derived_evidence(monkeypatch):
+    from sqlalchemy.orm import Query
+
+    image_id, detection_id = create_image_with_detection()
+    db = TestingSession()
+    image = db.get(models.ShelfImage, image_id)
+    run = models.ShelfImageOCRRun(
+        shelf_image_id=image_id,
+        provider="mock-ocr",
+        model_version="mock-v1",
+        status="COMPLETED",
+    )
+    db.add(run)
+    db.flush()
+    db.add(models.ShelfImageFusedEvidence(
+        ocr_run_id=run.id,
+        detection_id=detection_id,
+        status="CONFLICT",
+        suggested_product_id=None,
+        visual_product_id=None,
+        text_product_id=None,
+        visual_status="MATCHED",
+        text_status="SUGGESTED",
+        visual_similarity=0.9,
+        text_score=0.91,
+        ocr_confidence=0.95,
+        visual_model_version="visual-v1",
+        ocr_provider="mock-ocr",
+        ocr_model_version="mock-v1",
+        reason="retention lock regression",
+    ))
+    db.commit()
+    db.close()
+
+    original_with_for_update = Query.with_for_update
+    locked_source_images = []
+
+    def record_source_image_lock(query, *args, **kwargs):
+        locked_entities = kwargs.get("of", ())
+        if not isinstance(locked_entities, (tuple, list, set)):
+            locked_entities = (locked_entities,)
+        if models.ShelfImage in locked_entities:
+            locked_source_images.append(True)
+        return original_with_for_update(query, *args, **kwargs)
+
+    monkeypatch.setattr(Query, "with_for_update", record_source_image_lock)
+    with TestClient(app) as client:
+        response = client.get("/api/v1/shelf-image-review-queue")
+
+    assert response.status_code == 200, response.text
+    assert len(response.json()) == 1
+    assert response.json()[0]["shelf_image_id"] == image_id
+    assert locked_source_images, (
+        "Review queue reads must lock source images before returning derived "
+        "evidence so retention transitions cannot race the response"
+    )
+
