@@ -1151,3 +1151,30 @@ def test_evidence_fusion_locks_source_image_before_loading_derived_rows(monkeypa
         "Evidence fusion must lock the source image before reading OCR "
         "matches or visual detections"
     )
+
+
+
+def test_detection_review_history_locks_source_image_before_returning_reviews(monkeypatch):
+    from sqlalchemy.orm import Query
+
+    image_id, detection_id = create_image_with_detection()
+    original_with_for_update = Query.with_for_update
+    locked_image_queries = []
+
+    def record_image_lock(query, *args, **kwargs):
+        descriptions = query.column_descriptions
+        if descriptions and descriptions[0].get("entity") is models.ShelfImage:
+            locked_image_queries.append(True)
+        return original_with_for_update(query, *args, **kwargs)
+
+    monkeypatch.setattr(Query, "with_for_update", record_image_lock)
+    with TestClient(app) as client:
+        response = client.get(
+            f"/api/v1/shelf-image-detections/{detection_id}/reviews"
+        )
+
+    assert response.status_code == 200, response.text
+    assert locked_image_queries, (
+        "Detection review history must lock and refresh its source image "
+        "before returning derived review data"
+    )
