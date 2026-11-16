@@ -2574,6 +2574,66 @@ def list_shelf_image_ocr_matches(image_id: int, request: Request, limit: int = 5
 
 
 
+def _refresh_fused_evidence_view(
+    db: Session,
+    rows: list[models.ShelfImageFusedEvidence],
+) -> list[dict]:
+    """Recompute served fusion against the active catalogue without rewriting history."""
+    from app.product_evidence_fusion import fuse_product_evidence
+    from app.product_matching import ProductMatch
+    from app.product_text import OCRText, TextMatch
+
+    product_ids = {
+        product_id
+        for row in rows
+        for product_id in (row.suggested_product_id, row.visual_product_id, row.text_product_id)
+        if product_id is not None
+    }
+    active_ids = set()
+    if product_ids:
+        active_ids = {
+            product.id
+            for product in db.query(models.Product)
+            .filter(models.Product.id.in_(sorted(product_ids)), models.Product.is_active.is_(True))
+            .order_by(models.Product.id)
+            .all()
+        }
+
+    refreshed = []
+    for row in rows:
+        visual_id = row.visual_product_id if row.visual_product_id in active_ids else None
+        text_id = row.text_product_id if row.text_product_id in active_ids else None
+        visual_status = row.visual_status
+        if visual_status == "MATCHED" and visual_id is None:
+            visual_status = "UNKNOWN"
+        text_status = row.text_status
+        if text_status == "SUGGESTED" and text_id is None:
+            text_status = "UNKNOWN"
+        visual = ProductMatch(
+            status=visual_status, product_id=visual_id,
+            similarity=row.visual_similarity if visual_id is not None else None,
+            margin=None, candidates=(),
+        )
+        text = TextMatch(
+            status=text_status, product_id=text_id,
+            score=row.text_score if text_id is not None else None,
+            margin=None, candidates=(),
+        )
+        ocr = OCRText(text='persisted OCR evidence', confidence=row.ocr_confidence) if row.ocr_confidence is not None else None
+        fused = fuse_product_evidence(visual, text, ocr)
+        refreshed.append({
+            "id": row.id, "ocr_run_id": row.ocr_run_id, "detection_id": row.detection_id,
+            "status": fused.status, "suggested_product_id": fused.suggested_product_id,
+            "visual_product_id": fused.visual_product_id, "text_product_id": fused.text_product_id,
+            "visual_status": visual.status, "text_status": text.status,
+            "visual_similarity": visual.similarity, "text_score": text.score,
+            "ocr_confidence": fused.ocr_confidence,
+            "visual_model_version": row.visual_model_version, "ocr_provider": row.ocr_provider,
+            "ocr_model_version": row.ocr_model_version, "reason": fused.reason,
+            "created_at": row.created_at,
+        })
+    return refreshed
+
 @app.post("/api/v1/shelf-images/{image_id}/evidence-fusion", response_model=list[ShelfImageFusedEvidenceRead], tags=["computer-vision"])
 def fuse_shelf_image_evidence(image_id: int, request: Request, db: Session = Depends(get_db)):
     """Persist conservative visual/OCR fusion for the latest completed OCR run."""
@@ -2611,7 +2671,7 @@ def fuse_shelf_image_evidence(image_id: int, request: Request, db: Session = Dep
         .all()
     )
     if existing:
-        return existing
+        return _refresh_fused_evidence_view(db, existing)
 
     text_rows = {
         row.detection_id: row
@@ -3049,9 +3109,11 @@ def list_shelf_image_fused_evidence(
         .join(models.ShelfImageDetection, models.ShelfImageFusedEvidence.detection_id == models.ShelfImageDetection.id)
         .filter(models.ShelfImageDetection.shelf_image_id == image_id)
     )
+    rows = query.order_by(models.ShelfImageFusedEvidence.id.desc()).limit(max(1, min(limit, 1000))).all()
+    refreshed = _refresh_fused_evidence_view(db, rows)
     if status is not None:
-        query = query.filter(models.ShelfImageFusedEvidence.status == status)
-    return query.order_by(models.ShelfImageFusedEvidence.id.desc()).limit(max(1, min(limit, 1000))).all()
+        refreshed = [row for row in refreshed if row['status'] == status]
+    return refreshed
 
 
 
