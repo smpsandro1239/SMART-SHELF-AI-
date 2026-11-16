@@ -1904,7 +1904,13 @@ def get_shelf_image_purge_eligibility(
     # Inventory verification is necessary but not sufficient: no physical purge
     # executor is deployed, so this endpoint remains preview-only.
     blockers.append("purge_executor_not_implemented")
-    internal_checks_passed = len(blockers) == 1
+    internal_checks_passed = all(
+        blocker in {
+            "external_artifact_disposition_not_verified",
+            "purge_executor_not_implemented",
+        }
+        for blocker in blockers
+    )
 
     return {
         "image_id": item.id,
