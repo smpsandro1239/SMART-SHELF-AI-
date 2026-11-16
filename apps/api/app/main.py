@@ -1549,6 +1549,8 @@ def create_shelf_image_artifact_inventory_snapshot(
             signature=payload.signature,
             inventory_complete=payload.inventory_complete,
             configured_keys_json=settings.artifact_inventory_hmac_keys_json,
+            key_id=payload.key_id,
+            require_active_key=True,
         )
     except InventorySignatureConfigurationError as exc:
         raise HTTPException(status_code=503, detail="Trusted inventory source is not configured") from exc
@@ -1572,6 +1574,7 @@ def create_shelf_image_artifact_inventory_snapshot(
             existing.shelf_image_id != image_id
             or existing.manifest_sha256 != manifest_sha256
             or existing.source_signature != payload.signature
+            or (getattr(existing, "key_id", "legacy") or "legacy") != payload.key_id
         ):
             raise HTTPException(status_code=409, detail="Snapshot ID already exists with different content or signature")
         return existing
@@ -1695,6 +1698,7 @@ def create_shelf_image_artifact_inventory_snapshot(
         inventory_complete=payload.inventory_complete,
         manifest_sha256=manifest_sha256,
         source_signature=payload.signature,
+        key_id=payload.key_id,
         inventory_manifest=canonical_entries,
         artifact_count=len(canonical_entries),
         present_count=sum(entry["state"] == "PRESENT" for entry in canonical_entries),
