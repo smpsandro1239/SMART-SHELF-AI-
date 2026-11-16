@@ -95,9 +95,54 @@ def main() -> None:
         ))
         db.commit()
 
+        # The database must also reject snapshots that are not strictly newer
+        # than disposition history, even when no earlier snapshot exists.
+        disposition_source = "pg-disposition-order-smoke"
+        reference = models.ShelfImageArtifactReference(
+            shelf_image_id=image_id,
+            store_id=store_id,
+            artifact_type="BACKUP",
+            external_system=disposition_source,
+            external_reference=f"backup/{suffix}",
+            declared_by_user_id=actor_id,
+        )
+        db.add(reference)
+        db.flush()
+        disposition_at = accepted_at + timedelta(seconds=10)
+        db.add(models.ShelfImageArtifactDispositionEvent(
+            artifact_reference_id=reference.id,
+            sequence_number=1,
+            shelf_image_id=image_id,
+            store_id=store_id,
+            event_type="PROPOSED",
+            actor_user_id=actor_id,
+            reason="Verify snapshot/disposition chronology trigger",
+            created_at=disposition_at,
+        ))
+        db.commit()
+
+        for label, generated_at in (
+            ("equal-to-disposition", disposition_at),
+            ("older-than-disposition", disposition_at - timedelta(seconds=1)),
+        ):
+            try:
+                db.add(snapshot(
+                    image_id=image_id, store_id=store_id, actor_id=actor_id,
+                    suffix=label, generated_at=generated_at,
+                    source=disposition_source,
+                ))
+                db.commit()
+            except IntegrityError:
+                db.rollback()
+            else:
+                db.rollback()
+                raise AssertionError(
+                    f"PostgreSQL accepted a snapshot {label} for artifact disposition history"
+                )
+
     print(
         "PostgreSQL artifact inventory monotonicity smoke passed: older and "
-        "equal timestamps are rejected, while independent sources remain isolated."
+        "equal timestamps are rejected, independent sources remain isolated, and snapshots cannot predate or equal disposition events."
     )
 
 
