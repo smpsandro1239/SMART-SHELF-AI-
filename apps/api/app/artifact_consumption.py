@@ -120,8 +120,6 @@ def consume_external_artifact_bytes(
         integrations_by_system = {
             item.external_system: item for item in locked_integrations
         }
-        integration = integrations_by_system.get(artifact_hint.external_system)
-
         # Lock every declaration in deterministic primary-key order. This
         # gives the complete same-image/store parent graph a stable view and
         # avoids acquiring parent locks in request-dependent order.
