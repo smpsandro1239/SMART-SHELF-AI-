@@ -159,25 +159,25 @@ def validate_provenance_manifest(
                 if parent.get(field) != child.get(field):
                     errors.append(f"{label}: external parent and child {field} must match")
 
-    # Reject cycles in the declared derivation graph.
-    visiting: set[tuple[str, str]] = set()
+    # Reject cycles without recursive calls: real datasets can contain
+    # derivation chains longer than Python's recursion limit.
     visited: set[tuple[str, str]] = set()
-
-    def visit(node: tuple[str, str]) -> None:
-        if node in visiting:
-            errors.append(f"cyclic derivative lineage detected at {node[0]}/{node[1]}")
-            return
-        if node in visited:
-            return
-        visiting.add(node)
-        parent = parent_links.get(node)
-        if parent in parent_links:
-            visit(parent)
-        visiting.remove(node)
-        visited.add(node)
-
-    for node in parent_links:
-        visit(node)
+    for start in parent_links:
+        if start in visited:
+            continue
+        path: list[tuple[str, str]] = []
+        active: set[tuple[str, str]] = set()
+        node = start
+        while node in parent_links and node not in visited:
+            if node in active:
+                errors.append(
+                    f"cyclic derivative lineage detected at {node[0]}/{node[1]}"
+                )
+                break
+            active.add(node)
+            path.append(node)
+            node = parent_links[node]
+        visited.update(path)
 
     for split, file_name in sorted(set(expected) - seen):
         errors.append(f"missing provenance entry for {split}/{file_name}")
