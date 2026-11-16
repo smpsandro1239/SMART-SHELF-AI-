@@ -159,3 +159,55 @@ def test_shelf_product_listing_is_scoped_to_supervisor_store(monkeypatch):
         admin_rows = client.get("/api/v1/shelf-products")
         assert admin_rows.status_code == 200
         assert {row["shelf_id"] for row in admin_rows.json()} == set(shelves)
+
+def test_shelf_product_assignment_is_scoped_to_supervisor_store(monkeypatch):
+    from types import SimpleNamespace
+
+    with TestClient(app) as client:
+        product = client.post(
+            "/api/v1/products",
+            json={"sku": "SCOPE-ASSIGN-01", "name": "Produto de teste"},
+        )
+        assert product.status_code == 201
+
+        stores = []
+        shelves = []
+        for index in (1, 2):
+            store = client.post(
+                "/api/v1/stores",
+                json={"code": f"ASSIGN-SCOPE-{index}", "name": f"Loja {index}"},
+            )
+            zone = client.post(
+                "/api/v1/zones",
+                json={"store_id": store.json()["id"], "name": "Mercearia"},
+            )
+            shelf = client.post(
+                "/api/v1/shelves",
+                json={"zone_id": zone.json()["id"], "code": f"ASSIGN-{index}"},
+            )
+            stores.append(store.json()["id"])
+            shelves.append(shelf.json()["id"])
+
+        supervisor = SimpleNamespace(role="SUPERVISOR", store_id=stores[0])
+        monkeypatch.setattr(main_module, "_request_user", lambda db, request: supervisor)
+
+        own_assignment = client.post(
+            "/api/v1/shelf-products",
+            json={
+                "shelf_id": shelves[0],
+                "product_id": product.json()["id"],
+                "target_quantity": 10,
+            },
+        )
+        assert own_assignment.status_code == 201
+
+        foreign_assignment = client.post(
+            "/api/v1/shelf-products",
+            json={
+                "shelf_id": shelves[1],
+                "product_id": product.json()["id"],
+                "target_quantity": 10,
+            },
+        )
+        assert foreign_assignment.status_code == 403
+
