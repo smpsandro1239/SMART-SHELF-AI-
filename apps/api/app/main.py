@@ -5,6 +5,7 @@ from decimal import Decimal
 import math
 from pathlib import Path
 from uuid import uuid4
+from urllib.parse import quote
 import hashlib
 
 from app.artifact_inventory_signing import (
@@ -2334,7 +2335,7 @@ def get_shelf_image_content(image_id: int, request: Request, db: Session = Depen
     return Response(
         content=content,
         media_type=item.mime_type,
-        headers={"Content-Disposition": f'inline; filename="{item.original_filename}"'},
+        headers={"Content-Disposition": f"inline; filename*=utf-8''{quote(item.original_filename, safe='')}"},
     )
 
 
