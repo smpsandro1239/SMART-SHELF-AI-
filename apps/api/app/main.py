@@ -1387,6 +1387,31 @@ def register_shelf_image_artifact_reference(
         raise HTTPException(status_code=409, detail="Shelf image has no valid store lineage")
     _enforce_store_scope(actor, store_id)
 
+    # Keep registration in the same lock order as inventory and consumption:
+    # image -> external integration -> artifact references.
+    db.query(models.StoreExternalIntegration).filter(
+        models.StoreExternalIntegration.store_id == store_id,
+        models.StoreExternalIntegration.external_system == payload.external_system,
+    ).with_for_update().populate_existing().first()
+
+    if payload.parent_reference_id is not None:
+        parent = (
+            db.query(models.ShelfImageArtifactReference)
+            .filter(
+                models.ShelfImageArtifactReference.id == payload.parent_reference_id,
+                models.ShelfImageArtifactReference.shelf_image_id == image_id,
+                models.ShelfImageArtifactReference.store_id == store_id,
+            )
+            .with_for_update()
+            .populate_existing()
+            .first()
+        )
+        if parent is None:
+            raise HTTPException(
+                status_code=422,
+                detail="Parent artifact must exist in the same image and store",
+            )
+
     existing = db.query(models.ShelfImageArtifactReference).filter(
         models.ShelfImageArtifactReference.shelf_image_id == image_id,
         models.ShelfImageArtifactReference.artifact_type == payload.artifact_type,
@@ -1394,8 +1419,12 @@ def register_shelf_image_artifact_reference(
         models.ShelfImageArtifactReference.external_reference == payload.external_reference,
     ).first()
     if existing is not None:
-        if existing.sha256 != payload.sha256 or existing.release_id != payload.release_id:
-            raise HTTPException(status_code=409, detail="Artifact reference already exists with different metadata")
+        if (
+            existing.sha256 != payload.sha256
+            or existing.release_id != payload.release_id
+            or existing.parent_reference_id != payload.parent_reference_id
+        ):
+            raise HTTPException(status_code=409, detail="Artifact reference already exists with different metadata or lineage")
         return existing
 
     record = models.ShelfImageArtifactReference(
@@ -1404,6 +1433,7 @@ def register_shelf_image_artifact_reference(
         artifact_type=payload.artifact_type,
         external_system=payload.external_system,
         external_reference=payload.external_reference,
+        parent_reference_id=payload.parent_reference_id,
         release_id=payload.release_id,
         sha256=payload.sha256,
         declared_by_user_id=actor.id,
@@ -1419,7 +1449,12 @@ def register_shelf_image_artifact_reference(
             models.ShelfImageArtifactReference.external_system == payload.external_system,
             models.ShelfImageArtifactReference.external_reference == payload.external_reference,
         ).first()
-        if existing is None or existing.sha256 != payload.sha256 or existing.release_id != payload.release_id:
+        if (
+            existing is None
+            or existing.sha256 != payload.sha256
+            or existing.release_id != payload.release_id
+            or existing.parent_reference_id != payload.parent_reference_id
+        ):
             raise HTTPException(status_code=409, detail="Artifact reference conflicts with an existing declaration")
         return existing
     db.refresh(record)
