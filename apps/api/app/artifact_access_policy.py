@@ -22,6 +22,9 @@ class ArtifactAccessDecision:
 def evaluate_artifact_access(
     *,
     artifact_reference_id: int,
+    expected_artifact_type: str,
+    expected_external_reference: str,
+    expected_sha256: str | None,
     source_retention_status: str,
     source_legal_hold: bool,
     integration_status: str,
@@ -43,6 +46,8 @@ def evaluate_artifact_access(
     """
     if artifact_reference_id < 1:
         raise ValueError("artifact_reference_id must be positive")
+    if not expected_artifact_type.strip() or not expected_external_reference.strip():
+        raise ValueError("artifact identity must be non-empty")
     if inventory_max_age_seconds < 1:
         raise ValueError("inventory_max_age_seconds must be positive")
 
@@ -88,6 +93,12 @@ def evaluate_artifact_access(
     if not isinstance(inventory_entry, dict):
         reasons.append("artifact_missing_from_inventory")
     else:
+        if inventory_entry.get("artifact_type") != expected_artifact_type:
+            reasons.append("inventory_artifact_type_mismatch")
+        if inventory_entry.get("external_reference") != expected_external_reference:
+            reasons.append("inventory_external_reference_mismatch")
+        if inventory_entry.get("sha256") != expected_sha256:
+            reasons.append("inventory_artifact_sha256_mismatch")
         if inventory_entry.get("state") != "PRESENT":
             reasons.append("artifact_not_present")
         if inventory_entry.get("state") not in {"PRESENT", "ABSENT"}:
