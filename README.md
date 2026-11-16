@@ -1265,3 +1265,9 @@ A migration `0046_artifact_parent_lineage_immutable` acrescenta uma proteção d
 
 O teste SQLite da migration `0046_artifact_parent_lineage_immutable` cobre agora também o downgrade: confirma que uma alteração efectiva do pai é rejeitada após o upgrade, que uma actualização sem mudança do valor continua permitida e que, depois do downgrade, o trigger é removido e a alteração volta a ser aceite. Isto verifica o ciclo de vida completo da protecção e evita que o rollback deixe uma restrição residual. A alteração foi publicada no commit `a27959ee7c3f918b08aaf20e75871c958f8fca74`. **A execução pytest e a validação PostgreSQL/CI continuam pendentes; não se declara o teste aprovado.**
 
+### Isolamento e rotação de chaves HMAC dos inventários — 2026-11-16
+
+A assinatura de inventários externos passa a suportar keyrings por loja e sistema externo. O formato canónico versão 2 inclui `key_id` na mensagem assinada; a API exige que novas ingestões usem o `active_key_id` do par loja/fornecedor. A verificação de snapshots históricos resolve a chave exacta persistida, permitindo manter chaves antigas para leitura sem aceitar essas chaves em novas ingestões. A migration `0047_artifact_inventory_key_id` adiciona `key_id` aos snapshots existentes com o valor `legacy`, preservando a verificação do formato versão 1. A configuração e o procedimento de rotação estão documentados em [Chaves HMAC de inventários externos](docs/security/artifact-inventory-hmac-key-rotation.md).
+
+Foram acrescentados testes para isolamento entre lojas, binding criptográfico do identificador, rotação com verificação histórica e rejeição de chaves antigas na ingestão. **Os testes, a migration PostgreSQL 16 e o CI ainda não foram executados/confirmados nesta ronda.** A compatibilidade `legacy` é deliberadamente transitória e não oferece isolamento por loja; a migração dos conectores para o keyring versionado continua necessária.
+
