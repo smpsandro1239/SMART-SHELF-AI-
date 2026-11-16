@@ -3,7 +3,7 @@ from decimal import Decimal
 
 import pytest
 
-from app.sales_import import MAX_IMPORT_ROWS, parse_daily_sales_csv
+from app.sales_import import MAX_IMPORT_BYTES, MAX_IMPORT_ROWS, parse_daily_sales_csv
 
 
 HEADER = "product_id,sales_date,quantity,external_reference\n"
@@ -79,3 +79,8 @@ def test_parse_daily_sales_csv_requires_decimal_product_id(product_id):
     payload = (HEADER + f"{product_id},2026-11-12,1,REF-1\n").encode("utf-8")
     with pytest.raises(ValueError, match="product_id"):
         parse_daily_sales_csv(payload)
+
+
+def test_parse_daily_sales_csv_enforces_byte_limit():
+    with pytest.raises(ValueError, match="maximum file size"):
+        parse_daily_sales_csv(b"x" * (MAX_IMPORT_BYTES + 1))
