@@ -122,6 +122,19 @@ def test_inventory_signature_rejects_unknown_source_and_weak_key():
         )
 
 
+def test_canonical_inventory_rejects_non_complete_source_assertion():
+    with pytest.raises(ValueError, match="complete inventory coverage"):
+        canonical_inventory_payload(
+            image_id=10,
+            store_id=2,
+            external_system="backup-vault",
+            snapshot_id="snapshot-incomplete",
+            generated_at=GENERATED_AT,
+            entries=ENTRIES,
+            inventory_complete=False,
+        )
+
+
 def test_canonical_inventory_rejects_duplicates_and_naive_timestamps():
     duplicate_entries = [dict(ENTRIES[0]), dict(ENTRIES[0])]
     with pytest.raises(ValueError, match="duplicate"):
