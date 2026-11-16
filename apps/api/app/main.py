@@ -1593,6 +1593,29 @@ def create_shelf_image_artifact_inventory_snapshot(
             raise HTTPException(status_code=409, detail="Snapshot ID already exists with different content or signature")
         return existing
 
+    latest_snapshot = (
+        db.query(models.ShelfImageArtifactInventorySnapshot)
+        .filter(
+            models.ShelfImageArtifactInventorySnapshot.shelf_image_id == image_id,
+            models.ShelfImageArtifactInventorySnapshot.store_id == store_id,
+            models.ShelfImageArtifactInventorySnapshot.external_system == payload.external_system,
+        )
+        .order_by(
+            models.ShelfImageArtifactInventorySnapshot.generated_at.desc(),
+            models.ShelfImageArtifactInventorySnapshot.id.desc(),
+        )
+        .first()
+    )
+    if latest_snapshot is not None:
+        latest_generated_at = latest_snapshot.generated_at
+        if latest_generated_at.tzinfo is None:
+            latest_generated_at = latest_generated_at.replace(tzinfo=timezone.utc)
+        if generated_at <= latest_generated_at.astimezone(timezone.utc):
+            raise HTTPException(
+                status_code=409,
+                detail="Inventory snapshot must be newer than the latest accepted snapshot for this image and source",
+            )
+
     if integration.last_seen_at is None:
         integration.last_seen_at = generated_at
     else:
