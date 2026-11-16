@@ -110,7 +110,7 @@ def test_sqlite_migration_rejects_parent_lineage_mutation(tmp_path):
             "(id, shelf_image_id, store_id, parent_reference_id) VALUES "
             "(1, 7, 4, NULL), (2, 7, 4, 1), (3, 7, 4, NULL)"
         )
-        with pytest.raises(Exception, match="artifact parent lineage is immutable"):
+        with pytest.raises(sqlite3.IntegrityError, match="artifact parent lineage is immutable"):
             connection.exec_driver_sql(
                 "UPDATE shelf_image_artifact_references "
                 "SET parent_reference_id = 3 WHERE id = 2"
