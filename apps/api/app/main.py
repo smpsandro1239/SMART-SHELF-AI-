@@ -1458,6 +1458,15 @@ def create_shelf_image_artifact_inventory_snapshot(
         raise HTTPException(status_code=409, detail="Shelf image has no valid store lineage")
     _enforce_store_scope(actor, store_id)
 
+    integration = db.query(models.StoreExternalIntegration).filter(
+        models.StoreExternalIntegration.store_id == store_id,
+        models.StoreExternalIntegration.external_system == payload.external_system,
+    ).with_for_update().first()
+    if integration is None:
+        raise HTTPException(status_code=409, detail="External inventory source is not registered for this store")
+    if integration.status != "ACTIVE":
+        raise HTTPException(status_code=409, detail="External inventory source is revoked for this store")
+
     now = models.utc_now()
     generated_at = payload.generated_at.astimezone(timezone.utc)
     age_seconds = (now - generated_at).total_seconds()
@@ -1573,6 +1582,15 @@ def create_shelf_image_artifact_inventory_snapshot(
         ):
             raise HTTPException(status_code=409, detail="Snapshot ID already exists with different content or signature")
         return existing
+
+    if integration.last_seen_at is None:
+        integration.last_seen_at = generated_at
+    else:
+        previous_seen = integration.last_seen_at
+        if previous_seen.tzinfo is None:
+            previous_seen = previous_seen.replace(tzinfo=timezone.utc)
+        if generated_at > previous_seen.astimezone(timezone.utc):
+            integration.last_seen_at = generated_at
 
     snapshot = models.ShelfImageArtifactInventorySnapshot(
         shelf_image_id=image_id,
