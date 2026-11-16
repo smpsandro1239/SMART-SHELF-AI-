@@ -110,6 +110,58 @@ def test_duplicate_external_reference_is_rejected():
         assert client.post("/api/v1/inventory/snapshots", json=payload).status_code == 409
 
 
+def test_inventory_snapshot_rejects_non_finite_and_out_of_range_quantities():
+    with TestClient(app) as client:
+        store_id, product_id = create_store_and_product(client)
+        base = {
+            "store_id": store_id,
+            "product_id": product_id,
+            "on_hand_quantity": 10,
+            "reserved_quantity": 0,
+            "source": "ERP",
+        }
+        invalid_payloads = [
+            {**base, "on_hand_quantity": float("nan")},
+            {**base, "on_hand_quantity": float("inf")},
+            {**base, "reserved_quantity": float("inf")},
+            {**base, "on_hand_quantity": 1_000_000_000},
+            {**base, "reserved_quantity": 1_000_000_000},
+        ]
+
+        for payload in invalid_payloads:
+            response = client.post("/api/v1/inventory/snapshots", json=payload)
+            assert response.status_code == 422, response.text
+
+        history = client.get("/api/v1/inventory/snapshots", params={"store_id": store_id})
+        assert history.status_code == 200
+        assert history.json() == []
+
+
+def test_inventory_snapshot_rejects_blank_or_control_character_external_reference():
+    with TestClient(app) as client:
+        store_id, product_id = create_store_and_product(client)
+        base = {
+            "store_id": store_id,
+            "product_id": product_id,
+            "on_hand_quantity": 10,
+            "source": "ERP",
+        }
+
+        for reference in ("", "   ", "ERP-\\n-001", "ERP-\\t-001", "ERP-\\x7f-001"):
+            response = client.post(
+                "/api/v1/inventory/snapshots",
+                json={**base, "external_reference": reference},
+            )
+            assert response.status_code == 422, response.text
+
+        normalized = client.post(
+            "/api/v1/inventory/snapshots",
+            json={**base, "external_reference": "  ERP-BATCH-001  "},
+        )
+        assert normalized.status_code == 201, normalized.text
+        assert normalized.json()["external_reference"] == "ERP-BATCH-001"
+
+
 def test_replenishment_recommendation_uses_observation_and_backroom_stock():
     with TestClient(app) as client:
         store_id, product_id = create_store_and_product(client)

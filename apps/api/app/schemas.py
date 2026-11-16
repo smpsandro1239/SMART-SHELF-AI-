@@ -141,11 +141,27 @@ InventorySource = Literal["ERP", "WMS", "POS", "MANUAL", "IMPORT"]
 class InventorySnapshotCreate(BaseModel):
     store_id: int
     product_id: int
-    on_hand_quantity: float = Field(ge=0)
-    reserved_quantity: float = Field(default=0, ge=0)
+    on_hand_quantity: float = Field(
+        ge=0, le=999_999_999.999, allow_inf_nan=False
+    )
+    reserved_quantity: float = Field(
+        default=0, ge=0, le=999_999_999.999, allow_inf_nan=False
+    )
     source: InventorySource
     external_reference: str | None = Field(default=None, max_length=120)
     captured_at: datetime | None = None
+
+    @field_validator("external_reference")
+    @classmethod
+    def validate_external_reference(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("external_reference cannot be blank")
+        if any(ord(character) < 32 or 127 <= ord(character) <= 159 for character in normalized):
+            raise ValueError("external_reference cannot contain control characters")
+        return normalized
 
     @model_validator(mode="after")
     def reserved_must_not_exceed_on_hand(self):
