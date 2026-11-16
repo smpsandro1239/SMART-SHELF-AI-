@@ -1415,8 +1415,12 @@ def create_shelf_image_artifact_inventory_snapshot(
         .first()
     )
     if existing is not None:
-        if existing.shelf_image_id != image_id or existing.manifest_sha256 != manifest_sha256:
-            raise HTTPException(status_code=409, detail="Snapshot ID already exists with different inventory content")
+        if (
+            existing.shelf_image_id != image_id
+            or existing.manifest_sha256 != manifest_sha256
+            or existing.source_signature != payload.signature
+        ):
+            raise HTTPException(status_code=409, detail="Snapshot ID already exists with different content or signature")
         return existing
 
     snapshot = models.ShelfImageArtifactInventorySnapshot(
@@ -1450,7 +1454,12 @@ def create_shelf_image_artifact_inventory_snapshot(
             )
             .first()
         )
-        if existing is None or existing.shelf_image_id != image_id or existing.manifest_sha256 != manifest_sha256:
+        if (
+            existing is None
+            or existing.shelf_image_id != image_id
+            or existing.manifest_sha256 != manifest_sha256
+            or existing.source_signature != payload.signature
+        ):
             raise HTTPException(status_code=409, detail="Snapshot ID conflicts with an existing inventory record")
         return existing
     db.refresh(snapshot)
