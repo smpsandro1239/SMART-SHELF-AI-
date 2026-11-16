@@ -99,3 +99,22 @@ def test_hourly_import_enforces_byte_limit():
 def test_hourly_import_rejects_duplicate_headers_and_extra_columns(payload, parser, message):
     with pytest.raises(ValueError, match=message):
         parser(payload)
+
+
+
+@pytest.mark.parametrize(
+    ("payload", "parser"),
+    [
+        (
+            (SALES_HEADER + '42,2026-11-12,8,1,"UNTERMINATED-REFERENCE' + chr(10)).encode(),
+            parse_hourly_sales_csv,
+        ),
+        (
+            (TRAFFIC_HEADER + '2026-11-12,8,12,"UNTERMINATED-REFERENCE' + chr(10)).encode(),
+            parse_hourly_traffic_csv,
+        ),
+    ],
+)
+def test_hourly_import_rejects_unterminated_quoted_fields(payload, parser):
+    with pytest.raises(ValueError, match="malformed quoting"):
+        parser(payload)
