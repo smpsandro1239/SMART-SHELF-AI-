@@ -1798,24 +1798,33 @@ def get_shelf_image_purge_eligibility(
                 for ref in system_references
             }
             stored_manifest = snapshot.inventory_manifest or []
-            actual_inventory = {
-                (
-                    entry.get("artifact_type"),
-                    entry.get("external_reference"),
-                    entry.get("sha256"),
-                )
-                for entry in stored_manifest
-            }
+            manifest_shape_valid = (
+                isinstance(stored_manifest, list)
+                and all(isinstance(entry, dict) for entry in stored_manifest)
+            )
+            actual_inventory = (
+                {
+                    (
+                        entry.get("artifact_type"),
+                        entry.get("external_reference"),
+                        entry.get("sha256"),
+                    )
+                    for entry in stored_manifest
+                }
+                if manifest_shape_valid else set()
+            )
             snapshot_is_fresh = (
                 -120 <= snapshot_age <= settings.artifact_inventory_max_age_minutes * 60
             )
             snapshot_covers_current_references = (
-                snapshot.inventory_complete is True
+                manifest_shape_valid
+                and snapshot.inventory_complete is True
                 and len(stored_manifest) == len(system_references)
                 and actual_inventory == expected_inventory
             )
             manifest_counts_match = (
-                snapshot.artifact_count == len(stored_manifest)
+                manifest_shape_valid
+                and snapshot.artifact_count == len(stored_manifest)
                 and snapshot.present_count == sum(entry.get("state") == "PRESENT" for entry in stored_manifest)
                 and snapshot.absent_count == sum(entry.get("state") == "ABSENT" for entry in stored_manifest)
             )
@@ -1833,7 +1842,7 @@ def get_shelf_image_purge_eligibility(
                     inventory_complete=snapshot.inventory_complete,
                 )
                 signature_is_valid = verified_digest == snapshot.manifest_sha256
-            except (InventorySignatureConfigurationError, ValueError, TypeError, KeyError):
+            except (InventorySignatureConfigurationError, ValueError, TypeError, KeyError, AttributeError):
                 signature_is_valid = False
 
             events_are_current = True
