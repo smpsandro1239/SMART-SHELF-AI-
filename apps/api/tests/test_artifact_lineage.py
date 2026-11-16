@@ -65,3 +65,27 @@ def test_handles_long_parent_chains_without_recursion():
     assert len(chain) == 1500
     assert chain[0].id == 1500
     assert chain[-1].id == 1
+
+
+@pytest.mark.parametrize(
+    ("artifact_id", "image_id", "store_id"),
+    [(True, 7, 4), (12, True, 4), (12, 7, True)],
+)
+def test_rejects_boolean_scope_identifiers(artifact_id, image_id, store_id):
+    with pytest.raises(ValueError, match="positive integers"):
+        resolve_artifact_parent_chain(
+            artifact_id=artifact_id,
+            references={12: reference(12)},
+            expected_image_id=image_id,
+            expected_store_id=store_id,
+        )
+
+
+def test_rejects_boolean_parent_identifier():
+    with pytest.raises(ArtifactLineageError, match="artifact_parent_reference_invalid"):
+        resolve_artifact_parent_chain(
+            artifact_id=12,
+            references={12: reference(12, True)},
+            expected_image_id=7,
+            expected_store_id=4,
+        )
