@@ -750,3 +750,76 @@ def test_signed_inventory_snapshot_rejects_incomplete_or_invalid_source_evidence
             db_session,
         )
     assert invalid_signature.value.status_code == 401
+
+
+def test_purge_preview_requires_every_retention_integration_to_be_covered(
+    db_session, tmp_path, monkeypatch
+):
+    from app.schemas import ShelfImageArtifactReferenceCreate
+
+    image_id, admin_id = build_restricted_image(db_session, tmp_path, with_detection=False)
+    image = db_session.get(models.ShelfImage, image_id)
+    store_id = db_session.query(models.Zone.store_id).join(
+        models.Shelf, models.Shelf.zone_id == models.Zone.id
+    ).filter(models.Shelf.id == image.shelf_id).scalar()
+    db_session.add(models.StoreExternalIntegration(
+        store_id=store_id, external_system="required-backup-vault",
+        provider="test-provider", status="ACTIVE", required_for_retention=True,
+        capabilities=["inventory"], last_seen_at=models.utc_now(),
+        created_by_user_id=admin_id, updated_by_user_id=admin_id,
+    ))
+    db_session.commit()
+
+    request = SimpleNamespace(state=SimpleNamespace(user_id=admin_id))
+    main_module.register_shelf_image_artifact_reference(
+        image_id,
+        ShelfImageArtifactReferenceCreate(
+            artifact_type="CACHE", external_system="optional-cache",
+            external_reference="cache/object-1",
+        ),
+        request, db_session,
+    )
+    monkeypatch.setattr(main_module.settings, "image_storage_path", str(tmp_path))
+    preview = main_module.get_shelf_image_purge_eligibility(image_id, request, db_session)
+
+    assert preview["eligible"] is False
+    assert "required_integration_missing_image_artifacts:required-backup-vault" in preview["external_artifact_inventory"]["unverified_systems"]
+    assert "external_artifact_disposition_not_verified" in preview["blockers"]
+    assert preview["deletion_performed"] is False
+    assert (tmp_path / str(store_id) / "restricted.jpg").exists()
+
+
+def test_purge_preview_rejects_revoked_declared_artifact_integration(
+    db_session, tmp_path, monkeypatch
+):
+    from app.schemas import ShelfImageArtifactReferenceCreate
+
+    image_id, admin_id = build_restricted_image(db_session, tmp_path, with_detection=False)
+    image = db_session.get(models.ShelfImage, image_id)
+    store_id = db_session.query(models.Zone.store_id).join(
+        models.Shelf, models.Shelf.zone_id == models.Zone.id
+    ).filter(models.Shelf.id == image.shelf_id).scalar()
+    db_session.add(models.StoreExternalIntegration(
+        store_id=store_id, external_system="revoked-storage",
+        provider="test-provider", status="REVOKED", required_for_retention=False,
+        capabilities=["inventory"], created_by_user_id=admin_id,
+        updated_by_user_id=admin_id,
+    ))
+    db_session.commit()
+
+    request = SimpleNamespace(state=SimpleNamespace(user_id=admin_id))
+    main_module.register_shelf_image_artifact_reference(
+        image_id,
+        ShelfImageArtifactReferenceCreate(
+            artifact_type="BACKUP", external_system="revoked-storage",
+            external_reference="bucket/object-2",
+        ),
+        request, db_session,
+    )
+    monkeypatch.setattr(main_module.settings, "image_storage_path", str(tmp_path))
+    preview = main_module.get_shelf_image_purge_eligibility(image_id, request, db_session)
+
+    assert preview["eligible"] is False
+    assert "artifact_integration_inactive_or_missing:revoked-storage" in preview["external_artifact_inventory"]["unverified_systems"]
+    assert "external_artifact_disposition_not_verified" in preview["blockers"]
+    assert preview["deletion_performed"] is False
