@@ -277,6 +277,25 @@ def _lock_store_for_task_creation(db: Session, store_id: int) -> None:
         raise HTTPException(status_code=404, detail="Store not found")
 
 
+def _lock_store_for_external_inventory(db: Session, store_id: int) -> models.Store:
+    """Serialize store integration registration against inventory/retention scans.
+
+    Locking only the integrations already found by a query does not prevent a
+    concurrent INSERT from adding a required integration (a phantom row).
+    Both writers and retention evaluators therefore lock this stable parent.
+    """
+    store = (
+        db.query(models.Store)
+        .filter(models.Store.id == store_id)
+        .with_for_update()
+        .populate_existing()
+        .first()
+    )
+    if store is None:
+        raise HTTPException(status_code=404, detail="Store not found")
+    return store
+
+
 def _record_task_event(db: Session, task: models.ReplenishmentTask, event_type: str, actor: models.User | None, *, from_status: str | None = None, to_status: str | None = None, actual_quantity: float | None = None, reason: str | None = None) -> None:
     db.add(models.ReplenishmentTaskEvent(
         task_id=task.id, event_type=event_type, from_status=from_status,
@@ -1196,18 +1215,9 @@ def create_store_external_integration(
     actor = _request_user(db, request)
     if actor is None or actor.role != "ADMIN":
         raise HTTPException(status_code=403, detail="Administrator role required")
-    # Serialize integration creation with retention evaluations. A row lock
-    # on existing integrations cannot protect against a concurrent INSERT
-    # (phantom) that adds a new required source after the evaluator's scan.
-    store = (
-        db.query(models.Store)
-        .filter(models.Store.id == store_id)
-        .with_for_update()
-        .populate_existing()
-        .first()
-    )
-    if store is None:
-        raise HTTPException(status_code=404, detail="Store not found")
+    # Prevent a concurrent required-integration INSERT from appearing as a
+    # phantom after a retention evaluator has scanned the store's integrations.
+    _lock_store_for_external_inventory(db, store_id)
 
     record = models.StoreExternalIntegration(
         store_id=store_id,
@@ -2037,17 +2047,9 @@ def get_shelf_image_purge_eligibility(
         raise HTTPException(status_code=409, detail="Shelf image has no valid store lineage")
     _enforce_store_scope(actor, store_id)
 
-    # Match integration registration's store-row lock. This prevents a new
-    # required integration from appearing as a phantom after the coverage scan.
-    store = (
-        db.query(models.Store)
-        .filter(models.Store.id == store_id)
-        .with_for_update()
-        .populate_existing()
-        .first()
-    )
-    if store is None:
-        raise HTTPException(status_code=409, detail="Shelf image store is unavailable")
+    # Match integration registration's parent-row lock to prevent phantom
+    # required integrations during the retention coverage scan.
+    _lock_store_for_external_inventory(db, store_id)
 
     now = models.utc_now()
     blockers: list[str] = []
