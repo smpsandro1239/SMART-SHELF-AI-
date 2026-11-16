@@ -495,3 +495,151 @@ def test_parent_in_another_external_system_with_revoked_integration_blocks_child
     assert "ancestor_external_integration_not_active" in error.value.decision.reasons
     assert fetched == []
     assert session.rolled_back and session.closed
+
+def _add_cross_system_parent(session, *, snapshot_present=True, disposition_event=None):
+    child = session.records[models.ShelfImageArtifactReference]
+    child.parent_reference_id = 30
+    parent_payload = b"parent artifact bytes"
+    parent_digest = sha256(parent_payload).hexdigest()
+    parent = SimpleNamespace(
+        id=30,
+        parent_reference_id=None,
+        shelf_image_id=7,
+        store_id=4,
+        external_system="archive-store-b",
+        artifact_type="DATASET_COPY",
+        external_reference="archive/datasets/source.zip",
+        sha256=parent_digest,
+    )
+    session.records[models.ShelfImageArtifactReference] = [child, parent]
+    session.records[models.StoreExternalIntegration] = [
+        session.records[models.StoreExternalIntegration],
+        SimpleNamespace(status="ACTIVE", external_system="archive-store-b", store_id=4),
+    ]
+
+    if snapshot_present:
+        generated_at = NOW - timedelta(minutes=2)
+        entries = [{
+            "artifact_type": parent.artifact_type,
+            "external_reference": parent.external_reference,
+            "sha256": parent_digest,
+            "state": "PRESENT",
+        }]
+        snapshot = SimpleNamespace(
+            inventory_complete=True,
+            generated_at=generated_at,
+            verified_at=NOW - timedelta(minutes=1),
+            inventory_manifest=entries,
+            artifact_count=1,
+            present_count=1,
+            absent_count=0,
+            shelf_image_id=7,
+            store_id=4,
+            external_system="archive-store-b",
+            snapshot_id="snapshot-parent-30",
+            source_signature="",
+            manifest_sha256="",
+        )
+        secret = "test-inventory-signing-secret-which-is-long-enough"
+        snapshot.source_signature = inventory_signature(
+            image_id=7, store_id=4, external_system="archive-store-b",
+            snapshot_id=snapshot.snapshot_id, generated_at=generated_at,
+            entries=entries, secret=secret, inventory_complete=True,
+        )
+        snapshot.manifest_sha256 = sha256(canonical_inventory_payload(
+            image_id=7, store_id=4, external_system="archive-store-b",
+            snapshot_id=snapshot.snapshot_id, generated_at=generated_at,
+            entries=entries, inventory_complete=True,
+        )).hexdigest()
+        session.records[models.ShelfImageArtifactInventorySnapshot] = [
+            session.records[models.ShelfImageArtifactInventorySnapshot],
+            snapshot,
+        ]
+
+    if disposition_event is not None:
+        session.records[models.ShelfImageArtifactDispositionEvent] = [
+            SimpleNamespace(
+                artifact_reference_id=30,
+                shelf_image_id=7,
+                store_id=4,
+                sequence_number=1,
+                event_type=disposition_event,
+                created_at=NOW - timedelta(seconds=30),
+            )
+        ]
+
+
+def test_parent_in_another_external_system_without_inventory_blocks_child():
+    session, _ = fixture_session()
+    _add_cross_system_parent(session, snapshot_present=False)
+    fetched = []
+
+    with pytest.raises(ArtifactAccessDenied) as error:
+        call(session, lambda *args: fetched.append(args) or b"unexpected")
+
+    assert "ancestor_inventory_missing" in error.value.decision.reasons
+    assert fetched == []
+    assert session.rolled_back and session.closed
+
+
+def test_parent_with_attested_disposal_blocks_child_even_with_fresh_inventory():
+    session, _ = fixture_session()
+    _add_cross_system_parent(session, disposition_event="DISPOSAL_ATTESTED")
+    fetched = []
+
+    with pytest.raises(ArtifactAccessDenied) as error:
+        call(session, lambda *args: fetched.append(args) or b"unexpected")
+
+    assert "ancestor_artifact_disposal_attested" in error.value.decision.reasons
+    assert fetched == []
+    assert session.rolled_back and session.closed
+
+
+def test_lineage_depth_does_not_increase_inventory_or_event_lock_query_count():
+    session, payload = fixture_session()
+    _add_cross_system_parent(session)
+    child = session.records[models.ShelfImageArtifactReference][0]
+    parent = session.records[models.ShelfImageArtifactReference][1]
+    grandparent = SimpleNamespace(
+        id=29,
+        parent_reference_id=None,
+        shelf_image_id=7,
+        store_id=4,
+        external_system="archive-store-b",
+        artifact_type="DATASET_COPY",
+        external_reference="archive/datasets/grandparent.zip",
+        sha256="d" * 64,
+    )
+    parent.parent_reference_id = grandparent.id
+    parent_snapshot = session.records[models.ShelfImageArtifactInventorySnapshot][1]
+    parent_snapshot.inventory_manifest.append({
+        "artifact_type": grandparent.artifact_type,
+        "external_reference": grandparent.external_reference,
+        "sha256": grandparent.sha256,
+        "state": "PRESENT",
+    })
+    secret = "test-inventory-signing-secret-which-is-long-enough"
+    parent_snapshot.source_signature = inventory_signature(
+        image_id=7, store_id=4, external_system="archive-store-b",
+        snapshot_id=parent_snapshot.snapshot_id,
+        generated_at=parent_snapshot.generated_at,
+        entries=parent_snapshot.inventory_manifest,
+        secret=secret, inventory_complete=True,
+    )
+    parent_snapshot.manifest_sha256 = sha256(canonical_inventory_payload(
+        image_id=7, store_id=4, external_system="archive-store-b",
+        snapshot_id=parent_snapshot.snapshot_id,
+        generated_at=parent_snapshot.generated_at,
+        entries=parent_snapshot.inventory_manifest,
+        inventory_complete=True,
+    )).hexdigest()
+    session.records[models.ShelfImageArtifactReference].append(grandparent)
+    fetched = []
+
+    result = call(session, lambda *args: fetched.append(args) or payload)
+
+    assert result == payload
+    assert fetched == [("object-store-a", "bucket/crops/31.jpg")]
+    # Image, integrations, declarations, snapshots and events: fixed five locks.
+    assert session.locked_queries == 5
+
