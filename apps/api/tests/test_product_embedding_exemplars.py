@@ -587,3 +587,86 @@ def test_inactive_product_cannot_receive_new_embedding_exemplar():
 
         assert response.status_code == 404
         assert response.json()["detail"] == "Active product not found"
+
+def test_matching_registry_refreshes_source_image_state_after_lock():
+    from app.product_embedding_service import build_approved_product_registry
+
+    with TestClient(app) as client:
+        product_id = create_product(client)
+        store = client.post(
+            "/api/v1/stores",
+            json={"code": "EMB-STALE-IMAGE", "name": "Loja imagem stale"},
+        ).json()
+        zone = client.post(
+            "/api/v1/zones",
+            json={"store_id": store["id"], "name": "Zona"},
+        ).json()
+        shelf = client.post(
+            "/api/v1/shelves",
+            json={"zone_id": zone["id"], "code": "S-STALE"},
+        ).json()
+
+        with TestingSession() as setup_db:
+            image = models.ShelfImage(
+                shelf_id=shelf["id"],
+                original_filename="stale-source.jpg",
+                storage_path="/tmp/stale-source.jpg",
+                mime_type="image/jpeg",
+                file_size_bytes=10,
+                sha256="f" * 64,
+                retention_status="ACTIVE",
+            )
+            reviewer = models.User(
+                email="stale-source-reviewer@example.test",
+                full_name="Embedding reviewer",
+                password_hash="test-only-not-used",
+                role="ADMIN",
+                is_active=True,
+            )
+            setup_db.add_all([image, reviewer])
+            setup_db.commit()
+            image_id, reviewer_id = image.id, reviewer.id
+
+        created = client.post(
+            "/api/v1/product-embedding-exemplars",
+            json=exemplar_payload(
+                product_id,
+                shelf_image_id=image_id,
+                image_sha256="f" * 64,
+            ),
+        )
+        assert created.status_code == 201, created.text
+
+        with TestingSession() as setup_db:
+            exemplar = setup_db.get(
+                models.ProductEmbeddingExemplar,
+                created.json()["id"],
+            )
+            exemplar.review_status = "APPROVED"
+            exemplar.reviewed_by_user_id = reviewer_id
+            exemplar.reviewed_at = models.utc_now()
+            setup_db.commit()
+
+        with TestingSession() as db:
+            stale_identity = db.get(models.ShelfImage, image_id)
+            assert stale_identity.retention_status == "ACTIVE"
+
+            db.query(models.ShelfImage).filter(
+                models.ShelfImage.id == image_id
+            ).update(
+                {models.ShelfImage.retention_status: "RESTRICTED"},
+                synchronize_session=False,
+            )
+
+            registry = build_approved_product_registry(
+                db,
+                model_version="embedding-model-v1",
+                minimum_similarity=0.8,
+                minimum_margin=0.05,
+            )
+
+            assert stale_identity.retention_status == "RESTRICTED"
+            result = registry.match([0.25, 0.5, 0.75])
+            assert result.status == "UNKNOWN"
+            assert result.product_id is None
+
