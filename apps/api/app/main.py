@@ -874,7 +874,13 @@ def list_capture_sessions(request: Request, shelf_id: int | None = None, include
 @app.post("/api/v1/capture-sessions/{session_id}/close", response_model=CaptureSessionRead, tags=["computer-vision"])
 def close_capture_session(session_id: int, request: Request, db: Session = Depends(get_db)):
     actor = _request_user(db, request)
-    item = db.get(models.CaptureSession, session_id)
+    item = (
+        db.query(models.CaptureSession)
+        .filter(models.CaptureSession.id == session_id)
+        .with_for_update()
+        .populate_existing()
+        .first()
+    )
     if item is None:
         raise HTTPException(status_code=404, detail="Capture session not found")
     _enforce_store_scope(actor, item.store_id)
@@ -910,7 +916,13 @@ async def upload_shelf_image(
 
     capture_session = None
     if capture_session_id is not None:
-        capture_session = db.get(models.CaptureSession, capture_session_id)
+        capture_session = (
+            db.query(models.CaptureSession)
+            .filter(models.CaptureSession.id == capture_session_id)
+            .with_for_update()
+            .populate_existing()
+            .first()
+        )
         if capture_session is None:
             raise HTTPException(status_code=404, detail="Capture session not found")
         if capture_session.shelf_id != shelf.id or capture_session.store_id != shelf.zone.store_id:
