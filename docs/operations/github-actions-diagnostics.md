@@ -47,3 +47,8 @@ The database-enforced store-lineage hardening was included in API CI run `437777
 On 2026-11-16, after the database-enforced disposition state machine and PostgreSQL smoke-test updates, API CI run `43778281274` and quality-gates run `43778281369` again completed as failures with empty step lists and `logs_url: null` for every job. This confirms that neither the new migration trigger nor the PostgreSQL smoke test has been executed by Actions in these runs.
 
 A execução do API CI `43778382827` e do quality-gates `43778382853`, já sobre o commit `0672dc9f04eaac1a357bb9902c1b671126b25fa6`, voltou a terminar sem executar passos (`steps: []`, `logs_url: null`). A migração 0034 inclui agora também a remoção dos triggers de validação no downgrade; esta alteração ainda não foi executada num PostgreSQL real devido à falha de inicialização do runner.
+
+
+## Follow-up: sequência imutável de disposição (2026-11-16)
+
+A revisão que introduziu `sequence_number` por referência de artefacto, a preservação obrigatória do ator e a ordenação da pré-validação foi publicada na `main`. O Quality Gates run `43779001311` voltou a falhar antes de executar qualquer passo: os jobs API e Web têm `steps: []` e `logs_url: null`. O API CI `43778982758` também terminou com a mesma ausência de passos. Assim, a alteração está publicada, mas a migração, os triggers e o smoke test PostgreSQL ainda não têm resultado de execução CI. Não interpretar estes X como falha de teste do código.
