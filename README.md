@@ -1289,3 +1289,8 @@ A migration `0048_artifact_store_lineage_guard` acrescenta triggers em PostgreSQ
 ### Protecção da hierarquia de origem dos artefactos — 2026-11-16
 
 A migration `0049_artifact_upstream_store_lineage_guard` fecha a alteração indirecta de tenant: zonas, prateleiras e imagens não podem ser movidas para outra loja quando existem referências ou snapshots de inventário históricos que ficariam associados a uma loja diferente. A regra é aplicada por triggers PostgreSQL/SQLite, preservando movimentos sem histórico de artefactos e alterações sem mudança efectiva de loja. Foram adicionados testes para movimentos bloqueados, operações permitidas e downgrade. Execução local/CI ainda por confirmar.
+
+
+### Integridade multi-loja dos registos operacionais de prateleira — 2026-11-16
+
+A migration `0050_shelf_record_store_lineage_guard` estende a validação à informação operacional que também duplica o `store_id`: alertas de observação, sessões de captura e tarefas de reposição. Em cada INSERT/UPDATE, a loja declarada tem de coincidir com a loja efectiva da prateleira (`shelf → zone → store`). A migration faz preflight e aborta perante registos históricos inconsistentes. Triggers adicionais impedem mover uma prateleira ou zona para outra loja quando isso quebraria a identidade dos registos associados. Foram acrescentados testes SQLite para inserts/updates cruzados, movimentos ancestrais, dados antigos inconsistentes, movimentos sem registos e downgrade. Execução pytest e validação PostgreSQL/CI ainda por confirmar.
