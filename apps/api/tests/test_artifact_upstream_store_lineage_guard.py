@@ -1,7 +1,6 @@
 """Prevent moving upstream shelf hierarchy across tenants after artifacts exist."""
 
 import importlib.util
-import sqlite3
 from pathlib import Path
 
 import pytest
@@ -40,9 +39,9 @@ def test_cannot_move_zone_shelf_or_image_across_stores_with_artifact_history(tmp
             _migration().upgrade()
         with pytest.raises(IntegrityError, match="cannot move zone across stores"):
             connection.exec_driver_sql("UPDATE zones SET store_id = 20 WHERE id = 1")
-        with pytest.raises(sqlite3.IntegrityError, match="cannot move shelf across stores"):
+        with pytest.raises(IntegrityError, match="cannot move shelf across stores"):
             connection.exec_driver_sql("UPDATE shelves SET zone_id = 22 WHERE id = 11")
-        with pytest.raises(sqlite3.IntegrityError, match="cannot move image across stores"):
+        with pytest.raises(IntegrityError, match="cannot move image across stores"):
             connection.exec_driver_sql("UPDATE shelf_images SET shelf_id = 22 WHERE id = 111")
         # Same-tenant metadata changes and no-op assignments remain allowed.
         connection.exec_driver_sql("UPDATE zones SET store_id = 10 WHERE id = 1")
