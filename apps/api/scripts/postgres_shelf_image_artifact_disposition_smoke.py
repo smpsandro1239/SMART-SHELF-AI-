@@ -248,6 +248,17 @@ def main() -> None:
             raise AssertionError("PostgreSQL accepted an artifact disposition with mismatched store lineage")
 
     with SessionLocal() as db:
+        actor = db.get(models.User, admin_id)
+        assert actor is not None
+        db.delete(actor)
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+        else:
+            raise AssertionError("PostgreSQL allowed deletion of an administrator referenced by immutable audit history")
+
+    with SessionLocal() as db:
         event = db.get(models.ShelfImageArtifactDispositionEvent, event_id)
         assert event is not None
         event.reason = "Attempted mutation must fail"
