@@ -2893,8 +2893,6 @@ def list_shelf_image_review_queue(
     ))
     if actor is not None and actor.role != "ADMIN":
         query = query.filter(models.Zone.store_id == actor.store_id)
-    if status is not None:
-        query = query.filter(models.ShelfImageFusedEvidence.status == status)
     priority = case(
         (models.ShelfImageFusedEvidence.status == "CONFLICT", 0),
         (models.ShelfImageFusedEvidence.status == "AMBIGUOUS", 1),
@@ -2944,7 +2942,11 @@ def list_shelf_image_review_queue(
         .populate_existing()
         .all()
     )
-    return [
+    fused_views = {
+        item["id"]: item
+        for item in _refresh_fused_evidence_view(db, [row[0] for row in rows])
+    }
+    queue_items = [
         {
             "fused_evidence_id": evidence.id,
             "detection_id": detection.id,
@@ -2952,27 +2954,39 @@ def list_shelf_image_review_queue(
             "shelf_id": shelf.id,
             "shelf_code": shelf.code,
             "image_filename": image.original_filename,
-            "status": evidence.status,
-            "suggested_product_id": evidence.suggested_product_id,
-            "visual_product_id": evidence.visual_product_id,
-            "text_product_id": evidence.text_product_id,
+            "status": fused_views[evidence.id]["status"],
+            "suggested_product_id": fused_views[evidence.id]["suggested_product_id"],
+            "visual_product_id": fused_views[evidence.id]["visual_product_id"],
+            "text_product_id": fused_views[evidence.id]["text_product_id"],
             "detection_label": detection.label,
             "detection_confidence": detection.confidence,
             "x_min": detection.x_min,
             "y_min": detection.y_min,
             "x_max": detection.x_max,
             "y_max": detection.y_max,
-            "visual_similarity": evidence.visual_similarity,
-            "text_score": evidence.text_score,
-            "ocr_confidence": evidence.ocr_confidence,
+            "visual_similarity": fused_views[evidence.id]["visual_similarity"],
+            "text_score": fused_views[evidence.id]["text_score"],
+            "ocr_confidence": fused_views[evidence.id]["ocr_confidence"],
             "visual_model_version": evidence.visual_model_version,
             "ocr_provider": evidence.ocr_provider,
             "ocr_model_version": evidence.ocr_model_version,
-            "reason": evidence.reason,
+            "reason": fused_views[evidence.id]["reason"],
             "created_at": evidence.created_at,
         }
         for evidence, detection, image, shelf in rows
     ]
+    if status is not None:
+        queue_items = [item for item in queue_items if item["status"] == status]
+    queue_priority = {
+        "CONFLICT": 0, "AMBIGUOUS": 1, "TEXT_ONLY": 2,
+        "UNKNOWN": 3, "VISUAL_ONLY": 4, "CONSENSUS": 5,
+    }
+    queue_items.sort(key=lambda item: (
+        queue_priority[item["status"]],
+        item["created_at"],
+        item["fused_evidence_id"],
+    ))
+    return queue_items
 
 
 @app.get(
