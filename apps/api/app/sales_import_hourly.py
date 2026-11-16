@@ -35,17 +35,22 @@ def _read_csv(payload: bytes, required_columns: tuple[str, ...]):
         decoded = payload.decode("utf-8-sig")
     except UnicodeDecodeError as exc:
         raise ValueError("CSV must use UTF-8 encoding") from exc
-    reader = csv.DictReader(io.StringIO(decoded, newline=""))
-    if reader.fieldnames is None:
+    reader = csv.DictReader(io.StringIO(decoded, newline=""), strict=True)
+    try:
+        fieldnames = reader.fieldnames
+        raw_rows = list(reader)
+    except csv.Error as exc:
+        raise ValueError("CSV contains malformed quoting or syntax") from exc
+    if fieldnames is None:
         raise ValueError("CSV header row is required")
-    headers = [header.strip() if header else "" for header in reader.fieldnames]
+    headers = [header.strip() if header else "" for header in fieldnames]
     if len(headers) != len(set(headers)):
         raise ValueError("CSV contains duplicate column names")
     missing = [column for column in required_columns if column not in headers]
     if missing:
         raise ValueError(f"Missing required CSV columns: {', '.join(missing)}")
     rows = []
-    for line_number, raw in enumerate(reader, start=2):
+    for line_number, raw in enumerate(raw_rows, start=2):
         if None in raw:
             raise ValueError(f"Too many columns at CSV line {line_number}")
         if not raw or all(value is None or not value.strip() for value in raw.values()):
