@@ -1115,3 +1115,14 @@ A auditoria da pré-validação de purge identificou uma lacuna: os snapshots as
 A pré-validação foi reforçada para exigir que cada integração obrigatória da loja esteja ativa, tenha sido observada dentro da janela de frescura configurada e tenha referências declaradas para a imagem avaliada. Também bloqueia sistemas associados a referências quando não existe integração registada ou esta está revogada. As razões específicas são expostas em external_artifact_inventory.unverified_systems, mantendo o bloqueio global external_artifact_disposition_not_verified.
 
 Foram acrescentados testes de regressão para integração obrigatória sem referências por imagem e integração revogada associada a um artefacto. A pré-validação continua a ser apenas consultiva: eligible permanece falso e nenhum ficheiro ou registo é eliminado. Validação pendente: inspeção estática concluída; execução pytest e CI dependem de um runner GitHub Actions funcional.
+
+
+### Concorrência PostgreSQL na disposição de artefactos — 2026-11-16
+
+A revisão confirmou a ordem de bloqueio usada pelos fluxos operacionais: imagem de origem primeiro; depois integração externa (quando aplicável); por fim referência/eventos do artefacto. O consumo externo mantém estes bloqueios durante a leitura síncrona e validação SHA-256. A gestão de integrações bloqueia apenas a linha da integração, pelo que não introduz uma inversão de ordem com os fluxos que começam pela imagem.
+
+Foi reforçada a fronteira HTTP da criação de eventos de disposição: qualquer violação de integridade no commit (incluindo colisão de sequência, restrições de transição ou trigger append-only) provoca rollback explícito e resposta HTTP 409, em vez de propagar um erro interno. A base de dados continua a ser a autoridade final para unicidade e imutabilidade.
+
+Foi adicionado um teste que simula uma colisão de integridade no commit e confirma o rollback, a resposta 409 e a ausência de evento persistido. O smoke test PostgreSQL existente já verifica duas propostas concorrentes diretas, esperando exatamente um commit e uma rejeição, além de validar as restrições append-only e a linhagem multi-loja.
+
+**Limitação de validação:** a suite não foi executada localmente. Os workflows recentes continuam a apresentar falhas sem runner atribuído (`runner_id=0`, sem passos), pelo que os resultados não demonstram falha dos testes nem aprovação do código. O smoke test PostgreSQL exige uma instância PostgreSQL configurada e deve ser executado nesse ambiente.
