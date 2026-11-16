@@ -1,13 +1,13 @@
 """Database-level tenant lineage guards for external artifact records."""
 
 import importlib.util
-import sqlite3
 from pathlib import Path
 
 import pytest
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
 from sqlalchemy import create_engine
+from sqlalchemy.exc import IntegrityError
 
 
 def _load_migration():
@@ -61,7 +61,7 @@ def test_sqlite_artifact_records_must_match_the_store_of_their_image(tmp_path):
             "(id, shelf_image_id, store_id) VALUES (1, 222, 20)"
         )
 
-        with pytest.raises(sqlite3.IntegrityError, match="artifact store does not match shelf image store"):
+        with pytest.raises(IntegrityError, match="artifact store does not match shelf image store"):
             connection.exec_driver_sql(
                 "INSERT INTO shelf_image_artifact_references "
                 "(id, shelf_image_id, store_id) VALUES (2, 111, 20)"
