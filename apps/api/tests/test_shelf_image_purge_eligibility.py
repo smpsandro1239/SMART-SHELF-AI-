@@ -635,6 +635,26 @@ def test_signed_inventory_snapshot_verifies_exact_coverage_and_keeps_purge_disab
     assert preview["deletion_performed"] is False
     assert (tmp_path / "1" / "restricted.jpg").exists()
 
+    # A reference added after the signed snapshot invalidates exact coverage.
+    main_module.register_shelf_image_artifact_reference(
+        image_id,
+        ShelfImageArtifactReferenceCreate(
+            artifact_type="CACHE",
+            external_system="backup-vault",
+            external_reference="backup/new-object-after-snapshot",
+        ),
+        first_request,
+        db_session,
+    )
+    changed_preview = main_module.get_shelf_image_purge_eligibility(
+        image_id, first_request, db_session
+    )
+    assert changed_preview["external_artifact_inventory"]["unverified_systems"] == [
+        "backup-vault"
+    ]
+    assert "external_artifact_disposition_not_verified" in changed_preview["blockers"]
+    assert changed_preview["eligible"] is False
+
 
 def test_signed_inventory_snapshot_rejects_incomplete_or_invalid_source_evidence(
     db_session, tmp_path, monkeypatch
