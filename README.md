@@ -271,6 +271,8 @@ O planeamento de reposição pode acrescentar uma proposta de picking por SKU e 
 
 As quantidades são propostas a partir das colocações registadas. Não são reservas e não garantem que o stock continue disponível no momento da recolha. A funcionalidade não movimenta inventário nem cria tarefas de armazém.
 
+- [x] Validação dos thresholds do matching de embeddings: similaridade e margem só aceitam valores numéricos finitos dentro dos intervalos definidos; booleanos, strings, `NaN` e infinitos são rejeitados. A versão do modelo é normalizada com `strip()` no registo em memória.
+
 ## Avaliação offline das previsões
 
 O módulo `app.forecast_evaluation` calcula MAE, RMSE, WAPE, bias e MAPE a partir de pares alinhados de quantidades reais e previstas, com resultados segmentados por loja e SKU. Períodos sem observação devem ser omitidos e nunca convertidos em zero. A ferramenta é offline e não altera inventário. Ver [documentação e contrato](docs/architecture/forecast-evaluation.md).
