@@ -159,3 +159,54 @@ def verify_inventory_signature(
     if not hmac.compare_digest(expected, signature):
         raise ValueError("External artifact inventory signature is invalid")
     return hashlib.sha256(canonical).hexdigest()
+
+
+def verify_inventory_snapshot_record(
+    *,
+    snapshot: Any,
+    expected_references: list[Any],
+    configured_keys_json: str,
+) -> bool:
+    """Revalidate a persisted snapshot before it can authorize artifact access."""
+    try:
+        manifest = snapshot.inventory_manifest
+        if not isinstance(manifest, list) or not manifest:
+            return False
+        if not all(isinstance(entry, dict) for entry in manifest):
+            return False
+        if snapshot.inventory_complete is not True:
+            return False
+        if snapshot.artifact_count != len(manifest):
+            return False
+        if snapshot.present_count != sum(entry.get("state") == "PRESENT" for entry in manifest):
+            return False
+        if snapshot.absent_count != sum(entry.get("state") == "ABSENT" for entry in manifest):
+            return False
+
+        expected = {
+            (reference.artifact_type, reference.external_reference, reference.sha256)
+            for reference in expected_references
+        }
+        actual = {
+            (entry.get("artifact_type"), entry.get("external_reference"), entry.get("sha256"))
+            for entry in manifest
+        }
+        if len(expected) != len(expected_references) or len(actual) != len(manifest):
+            return False
+        if actual != expected:
+            return False
+
+        digest = verify_inventory_signature(
+            image_id=snapshot.shelf_image_id,
+            store_id=snapshot.store_id,
+            external_system=snapshot.external_system,
+            snapshot_id=snapshot.snapshot_id,
+            generated_at=snapshot.generated_at,
+            entries=manifest,
+            signature=snapshot.source_signature,
+            configured_keys_json=configured_keys_json,
+            inventory_complete=snapshot.inventory_complete,
+        )
+        return hmac.compare_digest(digest, snapshot.manifest_sha256)
+    except (AttributeError, InventorySignatureConfigurationError, KeyError, TypeError, ValueError):
+        return False
