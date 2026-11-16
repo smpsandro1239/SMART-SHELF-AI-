@@ -373,14 +373,21 @@ def test_review_queue_returns_unreviewed_conflicts_and_removes_reviewed_items(mo
         shelf_image_id=image.id, provider="mock-ocr", model_version="mock-v1", status="COMPLETED"
     )
     db.add(run)
+    visual_product = models.Product(
+        sku="QUEUE-VISUAL-01", name="Visual candidate", is_active=True,
+    )
+    text_product = models.Product(
+        sku="QUEUE-TEXT-01", name="Text candidate", is_active=True,
+    )
+    db.add_all([visual_product, text_product])
     db.flush()
     db.add(models.ShelfImageFusedEvidence(
         ocr_run_id=run.id,
         detection_id=detection_id,
         status="CONFLICT",
         suggested_product_id=None,
-        visual_product_id=None,
-        text_product_id=None,
+        visual_product_id=visual_product.id,
+        text_product_id=text_product.id,
         visual_status="MATCHED",
         text_status="SUGGESTED",
         visual_similarity=0.9,
@@ -923,6 +930,8 @@ def test_cross_store_restricted_image_returns_forbidden_before_retention_state(m
         own_image = db.get(models.ShelfImage, own_image_id)
         own_shelf = db.get(models.Shelf, own_image.shelf_id)
         own_zone = db.get(models.Zone, own_shelf.zone_id)
+        foreign_image = db.get(models.ShelfImage, foreign_image_id)
+        foreign_image.retention_status = "RESTRICTED"
         actor = models.User(
             email="retention-scope-supervisor@example.test",
             full_name="Store Supervisor",
@@ -1638,6 +1647,9 @@ def test_jwt_middleware_and_store_scope_protect_ocr_routes(monkeypatch):
         supervisor_id, employee_id = supervisor.id, employee.id
 
     monkeypatch.setattr(main_module.settings, "app_env", "production")
+    # The authentication middleware opens SessionLocal directly rather than
+    # using FastAPI's get_db dependency override.
+    monkeypatch.setattr(main_module, "SessionLocal", TestingSession)
     supervisor_token, _ = create_access_token(
         user_id=supervisor_id, role="SUPERVISOR",
     )
