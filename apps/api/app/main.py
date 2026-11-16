@@ -2573,6 +2573,8 @@ def _refresh_ocr_match_view(db: Session, rows: list[models.ShelfImageOCRMatch]):
         db.query(models.Product)
         .filter(models.Product.is_active.is_(True))
         .order_by(models.Product.id)
+        .with_for_update()
+        .populate_existing()
         .all()
     )
     active_ids = {product.id for product in products}
