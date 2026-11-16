@@ -54,3 +54,21 @@ def test_parse_daily_sales_csv_enforces_row_limit():
     )
     with pytest.raises(ValueError, match="maximum"):
         parse_daily_sales_csv((HEADER + rows).encode("utf-8"))
+
+
+@pytest.mark.parametrize(
+    ("csv_text", "message"),
+    [
+        (HEADER + "9223372036854775808,2026-11-12,1,REF-1\\n", "product_id"),
+        (HEADER + "12,2026-W46-1,1,REF-1\\n", "sales_date"),
+        (HEADER + "12,2026-11-12,1,REF-\\x01-1\\n", "external_reference"),
+    ],
+)
+def test_parse_daily_sales_csv_rejects_nonportable_or_out_of_range_values(csv_text, message):
+    with pytest.raises(ValueError, match=message):
+        parse_daily_sales_csv(csv_text.encode("utf-8"))
+
+
+def test_parse_daily_sales_csv_rejects_nul_bytes():
+    with pytest.raises(ValueError, match="NUL"):
+        parse_daily_sales_csv((HEADER + "12,2026-11-12,1,REF-1\\n").encode("utf-8") + b"\\x00")
