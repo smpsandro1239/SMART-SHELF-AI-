@@ -400,14 +400,40 @@ def test_artifact_disposition_requires_two_person_approval_and_evidence(db_sessi
         first_admin_id, second_admin_id, first_admin_id
     ]
 
+    # A second artifact deliberately starts at sequence 1. The purge preview
+    # must join latest events by both artifact ID and sequence, never sequence alone.
+    second_artifact = main_module.register_shelf_image_artifact_reference(
+        image_id,
+        ShelfImageArtifactReferenceCreate(
+            artifact_type="CACHE",
+            external_system="edge-cache",
+            external_reference="cache/independent-object",
+        ),
+        first_request,
+        db_session,
+    )
+    second_proposal = main_module.create_shelf_image_artifact_disposition_event(
+        image_id,
+        second_artifact.id,
+        ShelfImageArtifactDispositionActionRequest(
+            action="PROPOSE",
+            reason="Request independent cache disposition",
+        ),
+        second_request,
+        db_session,
+    )
+    assert second_proposal.sequence_number == 1
+
     monkeypatch.setattr(main_module.settings, "image_storage_path", str(tmp_path))
     preview = main_module.get_shelf_image_purge_eligibility(
         image_id, first_request, db_session
     )
     assert preview["eligible"] is False
     assert "external_artifact_disposition_not_verified" in preview["blockers"]
+    assert preview["declared_external_artifact_references"] == 2
     assert preview["external_artifact_disposition"]["disposal_attested"] == 1
-    assert preview["external_artifact_disposition"]["without_final_disposition"] == 0
+    assert preview["external_artifact_disposition"]["proposed"] == 1
+    assert preview["external_artifact_disposition"]["without_final_disposition"] == 1
     assert preview["deletion_performed"] is False
 
 
