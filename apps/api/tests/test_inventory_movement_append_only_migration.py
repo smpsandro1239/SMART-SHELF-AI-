@@ -43,6 +43,8 @@ def test_inventory_movements_are_append_only_and_downgrade_removes_guards(tmp_pa
 
         with Operations.context(MigrationContext.configure(connection)):
             migration.upgrade()
+            /* Re-applying the guard must not fail or weaken its behaviour. */
+            migration.upgrade()
 
         with pytest.raises(IntegrityError, match="inventory_movements is append-only"):
             connection.exec_driver_sql(
