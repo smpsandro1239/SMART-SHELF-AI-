@@ -62,6 +62,11 @@ jobs:
           DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/smart_shelf_ci
           APP_ENV: test
         run: python scripts/postgres_inventory_snapshot_immutability_smoke.py
+      - name: Verify PostgreSQL inventory movement lineage guard
+        env:
+          DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/smart_shelf_ci
+          APP_ENV: test
+        run: python scripts/postgres_inventory_movement_lineage_smoke.py
       - name: Verify PostgreSQL external artifact disposition audit immutability
         env:
           DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/smart_shelf_ci
