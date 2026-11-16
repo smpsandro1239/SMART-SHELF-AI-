@@ -1,7 +1,6 @@
 """Database-level tenant lineage guards for external artifact records."""
 
 import importlib.util
-import sqlite3
 from pathlib import Path
 
 import pytest
@@ -67,16 +66,16 @@ def test_sqlite_artifact_records_must_match_the_store_of_their_image(tmp_path):
                 "INSERT INTO shelf_image_artifact_references "
                 "(id, shelf_image_id, store_id) VALUES (2, 111, 20)"
             )
-        with pytest.raises(sqlite3.IntegrityError, match="artifact store does not match shelf image store"):
+        with pytest.raises(IntegrityError, match="artifact store does not match shelf image store"):
             connection.exec_driver_sql(
                 "INSERT INTO shelf_image_artifact_inventory_snapshots "
                 "(id, shelf_image_id, store_id) VALUES (2, 222, 10)"
             )
-        with pytest.raises(sqlite3.IntegrityError, match="artifact store does not match shelf image store"):
+        with pytest.raises(IntegrityError, match="artifact store does not match shelf image store"):
             connection.exec_driver_sql(
                 "UPDATE shelf_image_artifact_references SET store_id = 20 WHERE id = 1"
             )
-        with pytest.raises(sqlite3.IntegrityError, match="artifact store does not match shelf image store"):
+        with pytest.raises(IntegrityError, match="artifact store does not match shelf image store"):
             connection.exec_driver_sql(
                 "UPDATE shelf_image_artifact_inventory_snapshots SET shelf_image_id = 111 WHERE id = 1"
             )
