@@ -1074,3 +1074,22 @@ A coluna JSON dos embeddings não consegue impor por si só a correspondência e
 Uma versão de embedding identifica um contrato de representação: os exemplares aprovados dessa versão têm de partilhar a mesma dimensão. Se o carregamento detetar dimensões diferentes dentro da mesma versão, o serviço não escolhe uma dimensão por maioria nem mistura vetores: regista um erro e constrói um registry vazio, levando o matching a abster-se com `UNKNOWN`. Esta decisão é intencionalmente conservadora até existir uma migração/reconciliação explícita dos dados inconsistentes. A validação de domínio também rejeita booleanos como componentes numéricas, apesar de Python os tratar como subclasses de `int`.
 
 - [x] Revalidar a proveniência SHA-256 de cada exemplar ligado a uma imagem interna durante a construção do registry: a imagem é bloqueada e refrescada, e exemplares com imagem ausente/inativa ou hash divergente são excluídos do matching sem apagar o histórico. Ver `docs/architecture/sku-embedding-matching.md`.
+
+
+### Contrato determinístico do matching SKU — 2026-11-16
+
+Foi acrescentada a suite `apps/api/tests/test_product_matching_contract.py` para fixar três garantias do registry de embeddings:
+
+- Empates de similaridade são resolvidos deterministicamente pelo menor `product_id`, sem depender da ordem de leitura das linhas.
+- O parâmetro `limit` limita apenas os candidatos devolvidos; a decisão continua a considerar todos os SKUs elegíveis, evitando esconder ambiguidades por truncagem.
+- Limites de candidatos não positivos são rejeitados.
+
+A implementação já respeitava estes comportamentos; a alteração acrescenta testes de regressão explícitos sem alterar o algoritmo nem os thresholds operacionais. **Validação pendente:** a suite ainda não foi executada num runner funcional.
+
+### Estado CI atualizado — 2026-11-16 08:05 UTC
+
+Os runs Quality Gates `43827105541` e `43827114985`, associados aos commits anteriores à nova suite, terminaram com falha antes de iniciar qualquer passo. Ambos os jobs reportaram `runner_id=0`, `runner_name` vazio e `steps=[]`. Isto confirma que não houve execução dos testes nem do build web; não constitui evidência de falha do código.
+
+O commit `0e4e6628d88686610b8c7f33b29216be4039e7f2` acrescenta a cobertura do contrato de matching. A execução CI desencadeada por este commit deve ser verificada assim que o GitHub disponibilizar um runner. Não marcar a cobertura como validada até existir execução real.
+
+**Próximas prioridades:** restaurar a execução dos runners; executar os smoke tests PostgreSQL de autorização e retenção já integrados; continuar a revisão sistemática do isolamento multi-loja; fechar a integração atómica de artefactos externos.
