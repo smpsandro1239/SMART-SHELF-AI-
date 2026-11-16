@@ -134,6 +134,36 @@ def register_test_artifact_reference(image_id, payload, request, db_session):
     )
 
 
+def test_cancel_purge_schedule_clears_orphaned_policy_metadata(db_session, tmp_path):
+    from app.schemas import ShelfImageRetentionRequest
+
+    image_id, admin_id = build_restricted_image(
+        db_session, tmp_path, with_detection=False
+    )
+    image = db_session.get(models.ShelfImage, image_id)
+    image.purge_not_before = None
+    image.retention_policy_version = "orphaned-policy-v1"
+    db_session.commit()
+
+    request = SimpleNamespace(state=SimpleNamespace(user_id=admin_id))
+    cancelled = main_module.cancel_shelf_image_purge_schedule(
+        image_id,
+        ShelfImageRetentionRequest(reason="Clear orphaned purge metadata"),
+        request,
+        db_session,
+    )
+
+    assert cancelled.retention_status == "RESTRICTED"
+    assert cancelled.purge_not_before is None
+    assert cancelled.retention_policy_version is None
+    events = db_session.query(models.ShelfImageRetentionEvent).filter_by(
+        shelf_image_id=image_id
+    ).order_by(models.ShelfImageRetentionEvent.id).all()
+    assert [event.event_type for event in events] == ["PURGE_CANCELLED"]
+    assert "cancelled_date=missing" in events[0].reason
+    assert "policy=orphaned-policy-v1" in events[0].reason
+
+
 def test_restore_cancels_existing_purge_schedule_and_records_audit(db_session, tmp_path):
     from app.schemas import ShelfImageRetentionRequest
 
@@ -1000,11 +1030,6 @@ def test_purge_preview_rejects_revoked_declared_artifact_integration(
         ),
         request, db_session,
     )
-    integration = db_session.query(models.StoreExternalIntegration).filter_by(
-        store_id=store_id, external_system="revoked-storage"
-    ).one()
-    integration.status = "REVOKED"
-    db_session.commit()
     integration = db_session.query(models.StoreExternalIntegration).filter_by(
         store_id=store_id, external_system="revoked-storage"
     ).one()
