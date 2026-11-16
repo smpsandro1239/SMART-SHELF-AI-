@@ -1073,3 +1073,37 @@ def test_fusion_suppresses_inactive_visual_and_cached_ocr_candidates():
     assert fused["text_product_id"] is None
     assert fused["visual_status"] == "UNKNOWN"
     assert fused["text_status"] == "UNKNOWN"
+
+
+
+def test_ocr_read_endpoints_lock_source_image_during_retention_check(monkeypatch):
+    from sqlalchemy.orm import Query
+
+    image_id, _detection_id = create_image_with_detection()
+    original_with_for_update = Query.with_for_update
+    locked_image_queries = []
+
+    def record_image_lock(query, *args, **kwargs):
+        descriptions = query.column_descriptions
+        if descriptions and descriptions[0].get("entity") is models.ShelfImage:
+            locked_image_queries.append(True)
+        return original_with_for_update(query, *args, **kwargs)
+
+    monkeypatch.setattr(Query, "with_for_update", record_image_lock)
+
+    endpoints = [
+        f"/api/v1/shelf-images/{image_id}/detections",
+        f"/api/v1/shelf-images/{image_id}/ocr-runs",
+        f"/api/v1/shelf-images/{image_id}/ocr-evidence",
+        f"/api/v1/shelf-images/{image_id}/ocr-matches",
+        f"/api/v1/shelf-images/{image_id}/evidence-fusion",
+    ]
+    with TestClient(app) as client:
+        for endpoint in endpoints:
+            response = client.get(endpoint)
+            assert response.status_code == 200, (endpoint, response.text)
+
+    assert len(locked_image_queries) == len(endpoints), (
+        "Every OCR/detection read must lock and refresh the source image "
+        "before checking retention and returning derived evidence"
+    )
