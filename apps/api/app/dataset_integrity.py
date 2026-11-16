@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from app.coco_dataset import validate_coco_document
+from app.dataset_paths import is_safe_dataset_relative_path
 
 SPLITS = ("train", "val", "test")
 SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
@@ -33,12 +34,11 @@ def read_manifest(path: Path) -> tuple[list[dict[str, str]], list[str]]:
                 if split not in SPLITS:
                     errors.append(f"manifest line {line_number}: invalid split {split!r}")
                     continue
-                if not file_name or file_name.startswith("/") or "\x00" in file_name:
-                    errors.append(f"manifest line {line_number}: invalid relative file_name")
-                    continue
-                parts = Path(file_name).parts
-                if ".." in parts:
-                    errors.append(f"manifest line {line_number}: file_name contains path traversal")
+                if not is_safe_dataset_relative_path(file_name):
+                    errors.append(
+                        f"manifest line {line_number}: file_name contains path traversal "
+                        "or is not a safe portable relative path"
+                    )
                     continue
                 try:
                     size = int(size_text)
