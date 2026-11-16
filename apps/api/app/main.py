@@ -1579,7 +1579,7 @@ def create_shelf_image_artifact_inventory_snapshot(
             event_time = latest_event.created_at
             if event_time.tzinfo is None:
                 event_time = event_time.replace(tzinfo=timezone.utc)
-            if generated_at < event_time.astimezone(timezone.utc):
+            if generated_at <= event_time.astimezone(timezone.utc):
                 raise HTTPException(
                     status_code=409,
                     detail="Inventory snapshot predates the latest disposition event",
@@ -2262,7 +2262,7 @@ def get_shelf_image_purge_eligibility(
                 event_time = latest_event_data[1]
                 if event_time.tzinfo is None:
                     event_time = event_time.replace(tzinfo=timezone.utc)
-                if snapshot_time.astimezone(timezone.utc) < event_time.astimezone(timezone.utc):
+                if snapshot_time.astimezone(timezone.utc) <= event_time.astimezone(timezone.utc):
                     events_are_current = False
                 matching_entry = next(
                     (
