@@ -1196,7 +1196,17 @@ def create_store_external_integration(
     actor = _request_user(db, request)
     if actor is None or actor.role != "ADMIN":
         raise HTTPException(status_code=403, detail="Administrator role required")
-    if db.get(models.Store, store_id) is None:
+    # Serialize integration creation with retention evaluations. A row lock
+    # on existing integrations cannot protect against a concurrent INSERT
+    # (phantom) that adds a new required source after the evaluator's scan.
+    store = (
+        db.query(models.Store)
+        .filter(models.Store.id == store_id)
+        .with_for_update()
+        .populate_existing()
+        .first()
+    )
+    if store is None:
         raise HTTPException(status_code=404, detail="Store not found")
 
     record = models.StoreExternalIntegration(
@@ -2023,7 +2033,21 @@ def get_shelf_image_purge_eligibility(
     if item is None:
         raise HTTPException(status_code=404, detail="Shelf image not found")
     store_id = _shelf_image_store_id(db, image_id)
+    if store_id is None:
+        raise HTTPException(status_code=409, detail="Shelf image has no valid store lineage")
     _enforce_store_scope(actor, store_id)
+
+    # Match integration registration's store-row lock. This prevents a new
+    # required integration from appearing as a phantom after the coverage scan.
+    store = (
+        db.query(models.Store)
+        .filter(models.Store.id == store_id)
+        .with_for_update()
+        .populate_existing()
+        .first()
+    )
+    if store is None:
+        raise HTTPException(status_code=409, detail="Shelf image store is unavailable")
 
     now = models.utc_now()
     blockers: list[str] = []
