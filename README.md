@@ -1126,3 +1126,11 @@ Foi reforçada a fronteira HTTP da criação de eventos de disposição: qualque
 Foi adicionado um teste que simula uma colisão de integridade no commit e confirma o rollback, a resposta 409 e a ausência de evento persistido. O smoke test PostgreSQL existente já verifica duas propostas concorrentes diretas, esperando exatamente um commit e uma rejeição, além de validar as restrições append-only e a linhagem multi-loja.
 
 **Limitação de validação:** a suite não foi executada localmente. Os workflows recentes continuam a apresentar falhas sem runner atribuído (`runner_id=0`, sem passos), pelo que os resultados não demonstram falha dos testes nem aprovação do código. O smoke test PostgreSQL exige uma instância PostgreSQL configurada e deve ser executado nesse ambiente.
+
+### Imutabilidade da linhagem de artefactos externos — 2026-11-16
+
+A auditoria das migrações 0033–0035 identificou que a loja era validada quando uma referência de artefacto ou snapshot era inserida, mas alterações posteriores à hierarquia física podiam invalidar essa associação histórica. Uma imagem podia ser transferida para outra prateleira, uma prateleira para outra zona ou uma zona para outra loja sem modificar os registos append-only.
+
+A migração 0038_artifact_lineage_immutable acrescenta triggers PostgreSQL e SQLite que rejeitam essas três alterações sempre que existam referências de artefactos ou snapshots para qualquer imagem afetada. A proteção atua nas tabelas de origem (shelf_images, shelves e zones), preservando a linhagem histórica sem bloquear alterações de localização que não tenham artefactos externos registados. O downgrade remove os três triggers e as funções PostgreSQL correspondentes.
+
+Foi acrescentado apps/api/scripts/postgres_artifact_lineage_immutability_smoke.py para verificar em PostgreSQL as três tentativas de alteração. Validação pendente: o script foi integrado no repositório, mas não foi executado nesta sessão; a confirmação depende de um runner/ambiente PostgreSQL funcional.
