@@ -17,15 +17,31 @@ from sqlalchemy import text
 from app import main as main_module, models
 from app.database import SessionLocal
 from app.main import app
+from app.security import create_access_token
 
 
-def create_fixture(suffix: str) -> tuple[int, int]:
+def _bearer(user_id: int) -> dict[str, str]:
+    token, _ = create_access_token(user_id=user_id, role="SUPERVISOR")
+    return {"Authorization": f"Bearer {token}"}
+
+
+def create_fixture(suffix: str) -> tuple[int, int, int]:
     with SessionLocal() as db:
         store = models.Store(
             code=f"PG-REVIEW-QUEUE-{suffix}",
             name="PostgreSQL review queue retention smoke",
         )
         db.add(store)
+        db.flush()
+        supervisor = models.User(
+            email=f"pg-review-queue-supervisor-{suffix}@example.test",
+            full_name="Review queue smoke supervisor",
+            password_hash="smoke-test-only",
+            role="SUPERVISOR",
+            store_id=store.id,
+            is_active=True,
+        )
+        db.add(supervisor)
         db.flush()
 
         zone = models.Zone(store_id=store.id, name="Review queue smoke zone")
@@ -88,7 +104,7 @@ def create_fixture(suffix: str) -> tuple[int, int]:
             reason="PostgreSQL review queue retention smoke",
         ))
         db.commit()
-        return image.id, detection.id
+        return image.id, detection.id, supervisor.id
 
 
 def main() -> None:
