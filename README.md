@@ -990,3 +990,9 @@ O endpoint não deve ser usado como único controlo de autorização por consumi
 ### Serialização das leituras de evidência OCR com a retenção
 
 As rotas de consulta de deteções, execuções OCR, evidência OCR, correspondências de catálogo e evidência combinada bloqueiam e atualizam a linha da imagem de origem antes de validar o estado de retenção. Assim, uma leitura concorrente com a restrição da imagem fica serializada: ou termina antes da transição de retenção, ou observa o novo estado e é rejeitada. O teste `test_ocr_read_endpoints_lock_source_image_during_retention_check` verifica que as cinco rotas adquirem o bloqueio da imagem. A cobertura do teste usa SQLite para verificar a aquisição do bloqueio na camada ORM; a semântica real de concorrência depende dos testes PostgreSQL.
+
+
+
+### Serialização da geração de evidência combinada
+
+O endpoint `POST /api/v1/shelf-images/{image_id}/evidence-fusion` bloqueia agora a imagem de origem antes de consultar execuções OCR, correspondências, deteções ou evidência combinada existente. Os produtos candidatos são bloqueados posteriormente por ordem crescente de ID. Esta ordem evita que a fusão utilize deteções antigas caso um worker esteja a substituir resultados em simultâneo com a geração da evidência. O teste `test_evidence_fusion_locks_source_image_before_loading_derived_rows` verifica a aquisição do bloqueio na camada ORM.
