@@ -196,6 +196,38 @@ def test_restore_clears_orphaned_purge_policy_without_scheduled_date(db_session,
     assert "policy=stale-policy-v0" in events[0].reason
 
 
+def test_retention_state_transitions_refresh_locked_image_rows(db_session, tmp_path, monkeypatch):
+    from sqlalchemy.orm import Query
+    from app.schemas import ShelfImageRetentionRequest
+
+    image_id, admin_id = build_restricted_image(
+        db_session, tmp_path, with_detection=False
+    )
+    request = SimpleNamespace(state=SimpleNamespace(user_id=admin_id))
+    refreshed_image_locks = []
+    original_populate_existing = Query.populate_existing
+
+    def recording_populate_existing(query):
+        if any(
+            description.get("entity") is models.ShelfImage
+            for description in query.column_descriptions
+        ):
+            refreshed_image_locks.append(models.ShelfImage)
+        return original_populate_existing(query)
+
+    monkeypatch.setattr(Query, "populate_existing", recording_populate_existing)
+
+    payload = ShelfImageRetentionRequest(reason="Retention transition consistency test")
+    main_module.apply_shelf_image_legal_hold(image_id, payload, request, db_session)
+    main_module.release_shelf_image_legal_hold(image_id, payload, request, db_session)
+    main_module.cancel_shelf_image_purge_schedule(image_id, payload, request, db_session)
+    main_module.restore_shelf_image(image_id, payload, request, db_session)
+    restricted = main_module.restrict_shelf_image(image_id, payload, request, db_session)
+
+    assert restricted.retention_status == "RESTRICTED"
+    assert len(refreshed_image_locks) == 5
+
+
 def test_purge_preview_blocks_images_with_derived_evidence(db_session, tmp_path, monkeypatch):
     image_id, admin_id = build_restricted_image(
         db_session, tmp_path, with_detection=True
