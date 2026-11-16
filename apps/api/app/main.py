@@ -1879,7 +1879,16 @@ def create_shelf_image_artifact_disposition_event(
         created_at=models.utc_now(),
     )
     db.add(event)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        # The database remains the final arbiter for sequence uniqueness and
+        # append-only transition constraints (including concurrent writers).
+        raise HTTPException(
+            status_code=409,
+            detail="Disposition event conflicts with the current artifact history",
+        ) from exc
     db.refresh(event)
     return event
 
