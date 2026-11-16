@@ -7,6 +7,7 @@ interprets an inventory snapshot as permission to delete an external object.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import re
 from datetime import datetime, timezone
 from typing import Any
 
@@ -64,6 +65,8 @@ def evaluate_artifact_access(
         reasons.append("source_image_under_legal_hold")
     if integration_status != "ACTIVE":
         reasons.append("external_integration_not_active")
+    if not isinstance(expected_sha256, str) or re.fullmatch(r"[0-9a-fA-F]{64}", expected_sha256) is None:
+        reasons.append("artifact_sha256_missing_or_invalid")
 
     if not inventory_complete:
         reasons.append("inventory_not_complete")
