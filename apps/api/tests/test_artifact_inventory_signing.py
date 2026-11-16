@@ -7,6 +7,7 @@ from app.artifact_inventory_signing import (
     InventorySignatureConfigurationError,
     canonical_inventory_payload,
     inventory_signature,
+    legacy_inventory_ingestion_is_allowed,
     verify_inventory_signature,
 )
 
@@ -360,3 +361,21 @@ def test_scoped_keyring_rejects_missing_active_key_and_weak_secret():
             key_id="key-old",
         )
 
+
+
+@pytest.mark.parametrize(
+    "app_env, override, expected",
+    [
+        ("production", None, False),
+        ("Production", None, False),
+        ("development", None, True),
+        ("test", None, True),
+        ("production", True, True),
+        ("development", False, False),
+    ],
+)
+def test_legacy_ingestion_cutover_policy(app_env, override, expected):
+    assert legacy_inventory_ingestion_is_allowed(
+        app_env=app_env,
+        configured_override=override,
+    ) is expected
