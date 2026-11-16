@@ -343,3 +343,10 @@ A API exige cobertura exata das referências atualmente declaradas para a imagem
 A pré-validação volta a verificar a assinatura HMAC, o digest, a frescura, a cobertura exata e os estados face às referências/eventos atuais. Uma nova declaração de artefacto, uma decisão posterior, um snapshot expirado, uma chave removida/rotacionada ou um artefacto ainda `PRESENT` impede a confirmação. O snapshot não prova por si só que o conector descobriu recursos sem metadados de origem: a integração externa tem de inventariar todos os objetos associados ao ID da imagem no respetivo âmbito. A ausência de referências declaradas continua a bloquear, pois não existe um sistema de origem identificado para atestar a cobertura.
 
 Mesmo quando todos os sistemas declarados apresentam inventário assinado recente e todos os artefactos estão ausentes, a API continua a devolver `eligible: false` com `purge_executor_not_implemented`. A funcionalidade valida evidência; não executa eliminação física.
+
+
+## Autenticação de inventários externos
+
+A assinatura HMAC-SHA-256 autentica o manifesto e vincula a declaração à imagem, à loja, ao sistema externo e ao identificador do snapshot. A configuração `ARTIFACT_INVENTORY_HMAC_KEYS_JSON` é atualmente indexada por `external_system`, pelo que a mesma chave de um sistema pode ser usada em várias lojas. A assinatura não substitui uma identidade de conector isolada por loja, nem um registo de sistemas esperados por loja; por isso, não prova que todos os sistemas externos relevantes foram inventariados. Não reutilizar esta validação como autorização para purga física.
+
+A configuração rejeita JSON inválido, valores que não sejam um objeto e identificadores de sistema duplicados no mesmo documento. Chaves fracas ou fontes sem chave válida são recusadas. Para produção, os segredos devem ser injetados pelo gestor de segredos do ambiente, nunca versionados no repositório. A rotação deve manter a chave antiga apenas durante uma janela controlada de transição e depois removê-la; até existir suporte explícito a `key_id` e credenciais por loja, a rotação deve ser coordenada para cada sistema externo.
