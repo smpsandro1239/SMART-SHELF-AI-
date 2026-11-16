@@ -77,6 +77,7 @@ def main() -> None:
 
         event = models.ShelfImageArtifactDispositionEvent(
             artifact_reference_id=artifact.id,
+            sequence_number=1,
             shelf_image_id=image.id,
             store_id=store.id,
             event_type="PROPOSED",
