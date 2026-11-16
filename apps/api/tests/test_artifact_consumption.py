@@ -11,6 +11,7 @@ from app.artifact_consumption import (
     consume_external_artifact_bytes,
 )
 from app import models
+from app.artifact_inventory_signing import inventory_signature, canonical_inventory_payload
 
 
 NOW = datetime(2026, 11, 16, 12, 0, tzinfo=timezone.utc)
@@ -79,7 +80,27 @@ def fixture_session(*, retention_status="ACTIVE", legal_hold=False, event=None):
             "sha256": digest,
             "state": "PRESENT",
         }],
+        artifact_count=1,
+        present_count=1,
+        absent_count=0,
+        shelf_image_id=7,
+        store_id=4,
+        external_system="object-store-a",
+        snapshot_id="snapshot-31",
+        source_signature="",
+        manifest_sha256="",
     )
+    secret = "test-inventory-signing-secret-which-is-long-enough"
+    snapshot.source_signature = inventory_signature(
+        image_id=7, store_id=4, external_system="object-store-a",
+        snapshot_id="snapshot-31", generated_at=snapshot.generated_at,
+        entries=snapshot.inventory_manifest, secret=secret, inventory_complete=True,
+    )
+    snapshot.manifest_sha256 = sha256(canonical_inventory_payload(
+        image_id=7, store_id=4, external_system="object-store-a",
+        snapshot_id="snapshot-31", generated_at=snapshot.generated_at,
+        entries=snapshot.inventory_manifest, inventory_complete=True,
+    )).hexdigest()
     integration = SimpleNamespace(status="ACTIVE")
     records = {
         models.ShelfImage: image,
@@ -102,7 +123,12 @@ def call(session, fetcher, **overrides):
         "now": NOW,
     }
     args.update(overrides)
-    return consume_external_artifact_bytes(**args)
+    original_keys = consumption.settings.artifact_inventory_hmac_keys_json
+    consumption.settings.artifact_inventory_hmac_keys_json = '{"object-store-a":"test-inventory-signing-secret-which-is-long-enough"}'
+    try:
+        return consume_external_artifact_bytes(**args)
+    finally:
+        consumption.settings.artifact_inventory_hmac_keys_json = original_keys
 
 
 def test_fetch_completes_while_all_required_rows_are_locked():
@@ -235,4 +261,34 @@ def test_inventory_timestamp_equal_to_disposition_blocks_provider_fetch():
         call(session, lambda *args: fetched.append(args) or b"unexpected")
 
     assert "inventory_predates_disposition" in error.value.decision.reasons
+    assert fetched == []
+
+
+def test_tampered_persisted_manifest_signature_blocks_provider_fetch():
+    session, _ = fixture_session()
+    session.records[models.ShelfImageArtifactInventorySnapshot].source_signature = "0" * 64
+    fetched = []
+    with pytest.raises(ArtifactAccessDenied) as error:
+        call(session, lambda *args: fetched.append(args) or b"unexpected")
+    assert "inventory_integrity_unverified" in error.value.decision.reasons
+    assert fetched == []
+
+
+def test_persisted_manifest_digest_mismatch_blocks_provider_fetch():
+    session, _ = fixture_session()
+    session.records[models.ShelfImageArtifactInventorySnapshot].manifest_sha256 = "0" * 64
+    fetched = []
+    with pytest.raises(ArtifactAccessDenied) as error:
+        call(session, lambda *args: fetched.append(args) or b"unexpected")
+    assert "inventory_integrity_unverified" in error.value.decision.reasons
+    assert fetched == []
+
+
+def test_persisted_manifest_reference_coverage_mismatch_blocks_provider_fetch():
+    session, _ = fixture_session()
+    session.records[models.ShelfImageArtifactInventorySnapshot].inventory_manifest[0]["external_reference"] = "other/path"
+    fetched = []
+    with pytest.raises(ArtifactAccessDenied) as error:
+        call(session, lambda *args: fetched.append(args) or b"unexpected")
+    assert "inventory_integrity_unverified" in error.value.decision.reasons
     assert fetched == []
