@@ -121,5 +121,17 @@ def test_sqlite_migration_rejects_parent_lineage_mutation(tmp_path):
             "UPDATE shelf_image_artifact_references "
             "SET parent_reference_id = 1 WHERE id = 2"
         )
+
+        # Downgrade removes the guard and restores the pre-migration behaviour.
+        with Operations.context(MigrationContext.configure(connection)):
+            migration.downgrade()
+        connection.exec_driver_sql(
+            "UPDATE shelf_image_artifact_references "
+            "SET parent_reference_id = 3 WHERE id = 2"
+        )
+        parent_id = connection.exec_driver_sql(
+            "SELECT parent_reference_id FROM shelf_image_artifact_references WHERE id = 2"
+        ).scalar_one()
+        assert parent_id == 3
     engine.dispose()
 
