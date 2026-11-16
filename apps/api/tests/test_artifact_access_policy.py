@@ -11,6 +11,9 @@ NOW = datetime(2026, 11, 16, 12, 0, tzinfo=timezone.utc)
 def approved_kwargs():
     return {
         "artifact_reference_id": 12,
+        "expected_artifact_type": "CROP",
+        "expected_external_reference": "bucket/crops/12.jpg",
+        "expected_sha256": "a" * 64,
         "source_retention_status": "ACTIVE",
         "source_legal_hold": False,
         "integration_status": "ACTIVE",
@@ -106,3 +109,18 @@ def test_invalid_policy_parameters_are_rejected(artifact_id, max_age):
     kwargs["inventory_max_age_seconds"] = max_age
     with pytest.raises(ValueError):
         evaluate_artifact_access(**kwargs)
+
+@pytest.mark.parametrize(
+    ("field", "reason"),
+    [
+        ("artifact_type", "inventory_artifact_type_mismatch"),
+        ("external_reference", "inventory_external_reference_mismatch"),
+        ("sha256", "inventory_artifact_sha256_mismatch"),
+    ],
+)
+def test_inventory_must_match_exact_declared_artifact(field, reason):
+    kwargs = approved_kwargs()
+    kwargs["inventory_entry"][field] = "different-value"
+    decision = evaluate_artifact_access(**kwargs)
+    assert decision.allowed is False
+    assert reason in decision.reasons
