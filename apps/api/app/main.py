@@ -13,6 +13,7 @@ from app.artifact_inventory_signing import (
     verify_inventory_signature,
     verify_inventory_snapshot_record,
     resolve_inventory_secret,
+    legacy_inventory_ingestion_is_allowed,
 )
 
 from PIL import Image, UnidentifiedImageError
@@ -1579,6 +1580,18 @@ def create_shelf_image_artifact_inventory_snapshot(
         ):
             raise HTTPException(status_code=409, detail="Snapshot ID already exists with different content or signature")
         return existing
+
+    # Legacy v1 signatures remain readable, but production must explicitly
+    # opt in before accepting any new legacy snapshot IDs. Exact retries above
+    # remain idempotent and do not create new attestations.
+    if payload.key_id == "legacy" and not legacy_inventory_ingestion_is_allowed(
+        app_env=settings.app_env,
+        configured_override=settings.artifact_inventory_allow_legacy_ingestion,
+    ):
+        raise HTTPException(
+            status_code=503,
+            detail="Legacy inventory ingestion is disabled; configure a store-scoped active key",
+        )
 
     # An exact retry of an already-persisted snapshot may legitimately use a
     # key that has since been rotated out of the active slot. New snapshot IDs
