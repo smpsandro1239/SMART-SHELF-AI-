@@ -3219,3 +3219,29 @@ def test_csv_external_reference_uniqueness_is_scoped_to_store(
         assert response.status_code == 200, response.text
         assert response.json()["rows_imported"] == 1
 
+def test_employee_cannot_create_inventory_snapshots_but_supervisor_can(auth_client):
+    client, ids, store_ids = auth_client
+    payload = {
+        "store_id": store_ids["a"],
+        "product_id": ids["product"],
+        "on_hand_quantity": 24,
+        "reserved_quantity": 4,
+        "source": "ERP",
+        "external_reference": "AUTH-ROLE-SNAPSHOT-001",
+    }
+
+    employee_response = client.post(
+        "/api/v1/inventory/snapshots",
+        json=payload,
+        headers=bearer(ids["employee_a"], "ADMIN"),
+    )
+    assert employee_response.status_code == 403
+
+    supervisor_response = client.post(
+        "/api/v1/inventory/snapshots",
+        json=payload,
+        headers=bearer(ids["supervisor_a"], "EMPLOYEE"),
+    )
+    assert supervisor_response.status_code == 201, supervisor_response.text
+    assert supervisor_response.json()["available_quantity"] == 20
+
