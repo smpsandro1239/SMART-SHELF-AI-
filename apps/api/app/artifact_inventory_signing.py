@@ -1,4 +1,9 @@
-"""Canonical signing helpers for trusted external artifact inventory snapshots."""
+"""Canonical signing helpers for trusted external artifact inventory snapshots.
+
+Version 1 snapshots retain their historical source-wide key lookup. Version 2
+snapshots bind a key identifier into the signed canonical payload and resolve
+keys inside a store + external-system namespace.
+"""
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -10,6 +15,7 @@ from typing import Any
 
 
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+_KEY_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 
 
 class InventorySignatureConfigurationError(ValueError):
@@ -22,6 +28,95 @@ def _utc_timestamp(value: datetime) -> str:
     return value.astimezone(timezone.utc).isoformat(timespec="microseconds").replace("+00:00", "Z")
 
 
+def _validate_key_id(key_id: str) -> str:
+    if not isinstance(key_id, str) or not _KEY_ID_RE.fullmatch(key_id):
+        raise ValueError("Inventory key_id must be 1-64 safe identifier characters")
+    return key_id
+
+
+def _parse_key_configuration(configured_keys_json: str) -> dict[str, Any]:
+    def reject_duplicate_keys(pairs):
+        parsed = {}
+        for key, value in pairs:
+            if key in parsed:
+                raise InventorySignatureConfigurationError(
+                    "Inventory HMAC key configuration contains a duplicate identifier"
+                )
+            parsed[key] = value
+        return parsed
+
+    try:
+        configuration = json.loads(
+            configured_keys_json or "{}",
+            object_pairs_hook=reject_duplicate_keys,
+        )
+    except InventorySignatureConfigurationError:
+        raise
+    except (TypeError, json.JSONDecodeError) as exc:
+        raise InventorySignatureConfigurationError(
+            "Inventory HMAC key configuration must be a JSON object"
+        ) from exc
+    if not isinstance(configuration, dict):
+        raise InventorySignatureConfigurationError(
+            "Inventory HMAC key configuration must be a JSON object"
+        )
+    return configuration
+
+
+def _valid_secret(secret: Any) -> bool:
+    return isinstance(secret, str) and len(secret.encode("utf-8")) >= 32
+
+
+def resolve_inventory_secret(
+    *,
+    configured_keys_json: str,
+    store_id: int,
+    external_system: str,
+    key_id: str,
+    require_active: bool = False,
+) -> str:
+    """Resolve a key without crossing store/source namespaces.
+
+    Legacy v1 snapshots use the historical flat mapping
+    {"external-system": "secret"}. New v2 snapshots use:
+    {"stores": {"<store-id>": {"<external-system>": {
+        "active_key_id": "key-2026-02",
+        "keys": {"key-2026-01": "old-secret", "key-2026-02": "new-secret"}
+    }}}}
+    """
+    configuration = _parse_key_configuration(configured_keys_json)
+    if key_id == "legacy":
+        secret = configuration.get(external_system)
+        if not _valid_secret(secret):
+            raise InventorySignatureConfigurationError(
+                f"No valid legacy inventory HMAC key is configured for source '{external_system}'"
+            )
+        return secret
+
+    _validate_key_id(key_id)
+    stores = configuration.get("stores")
+    store_config = stores.get(str(store_id)) if isinstance(stores, dict) else None
+    source_config = store_config.get(external_system) if isinstance(store_config, dict) else None
+    if not isinstance(source_config, dict):
+        raise InventorySignatureConfigurationError(
+            f"No inventory HMAC keyring is configured for store {store_id} and source '{external_system}'"
+        )
+    active_key_id = source_config.get("active_key_id")
+    keys = source_config.get("keys")
+    if not isinstance(active_key_id, str) or not _KEY_ID_RE.fullmatch(active_key_id):
+        raise InventorySignatureConfigurationError("Inventory keyring active_key_id is invalid")
+    if require_active and key_id != active_key_id:
+        raise InventorySignatureConfigurationError(
+            "Inventory snapshot must be signed with the active key for this store and source"
+        )
+    secret = keys.get(key_id) if isinstance(keys, dict) else None
+    if not _valid_secret(secret):
+        raise InventorySignatureConfigurationError(
+            f"Inventory HMAC key '{key_id}' is not configured for store {store_id} and source '{external_system}'"
+        )
+    return secret
+
+
 def canonical_inventory_payload(
     *,
     image_id: int,
@@ -31,10 +126,13 @@ def canonical_inventory_payload(
     generated_at: datetime,
     entries: list[dict[str, Any]],
     inventory_complete: bool,
+    key_id: str = "legacy",
 ) -> bytes:
     """Return deterministic UTF-8 bytes signed by the trusted source connector."""
     if inventory_complete is not True:
         raise ValueError("Source must explicitly attest complete inventory coverage")
+    if key_id != "legacy":
+        _validate_key_id(key_id)
     normalized_entries = []
     seen: set[tuple[str, str]] = set()
     for entry in entries:
@@ -61,7 +159,7 @@ def canonical_inventory_payload(
 
     normalized_entries.sort(key=lambda item: (item["artifact_type"], item["external_reference"]))
     payload = {
-        "schema_version": 1,
+        "schema_version": 1 if key_id == "legacy" else 2,
         "image_id": int(image_id),
         "store_id": int(store_id),
         "external_system": external_system.strip(),
@@ -70,6 +168,8 @@ def canonical_inventory_payload(
         "inventory_complete": True,
         "entries": normalized_entries,
     }
+    if key_id != "legacy":
+        payload["key_id"] = key_id
     if payload["image_id"] <= 0 or payload["store_id"] <= 0:
         raise ValueError("Inventory image_id and store_id must be positive")
     if not payload["external_system"] or not payload["snapshot_id"]:
@@ -89,10 +189,13 @@ def inventory_signature(
     entries: list[dict[str, Any]],
     secret: str,
     inventory_complete: bool,
+    key_id: str = "legacy",
 ) -> str:
     """Create a lowercase SHA-256 HMAC for connector-side tests and integrations."""
-    if len(secret.encode("utf-8")) < 32:
-        raise InventorySignatureConfigurationError("Inventory HMAC secrets must contain at least 32 UTF-8 bytes")
+    if not _valid_secret(secret):
+        raise InventorySignatureConfigurationError(
+            "Inventory HMAC secrets must contain at least 32 UTF-8 bytes"
+        )
     canonical = canonical_inventory_payload(
         image_id=image_id,
         store_id=store_id,
@@ -101,6 +204,7 @@ def inventory_signature(
         generated_at=generated_at,
         entries=entries,
         inventory_complete=inventory_complete,
+        key_id=key_id,
     )
     return hmac.new(secret.encode("utf-8"), canonical, hashlib.sha256).hexdigest()
 
@@ -116,34 +220,17 @@ def verify_inventory_signature(
     signature: str,
     configured_keys_json: str,
     inventory_complete: bool,
+    key_id: str = "legacy",
+    require_active_key: bool = False,
 ) -> str:
     """Verify a source signature and return the canonical manifest SHA-256."""
-    def reject_duplicate_keys(pairs):
-        parsed = {}
-        for key, value in pairs:
-            if key in parsed:
-                raise InventorySignatureConfigurationError(
-                    "Inventory HMAC key configuration contains a duplicate source identifier"
-                )
-            parsed[key] = value
-        return parsed
-
-    try:
-        keys = json.loads(
-            configured_keys_json or "{}",
-            object_pairs_hook=reject_duplicate_keys,
-        )
-    except InventorySignatureConfigurationError:
-        raise
-    except (TypeError, json.JSONDecodeError) as exc:
-        raise InventorySignatureConfigurationError("Inventory HMAC key configuration must be a JSON object") from exc
-    if not isinstance(keys, dict):
-        raise InventorySignatureConfigurationError("Inventory HMAC key configuration must be a JSON object")
-    secret = keys.get(external_system)
-    if not isinstance(secret, str) or len(secret.encode("utf-8")) < 32:
-        raise InventorySignatureConfigurationError(
-            f"No valid inventory HMAC key is configured for source '{external_system}'"
-        )
+    secret = resolve_inventory_secret(
+        configured_keys_json=configured_keys_json,
+        store_id=store_id,
+        external_system=external_system,
+        key_id=key_id,
+        require_active=require_active_key,
+    )
     if not isinstance(signature, str) or not _SHA256_RE.fullmatch(signature):
         raise ValueError("Inventory signature must be a lowercase SHA-256 HMAC")
     canonical = canonical_inventory_payload(
@@ -154,6 +241,7 @@ def verify_inventory_signature(
         generated_at=generated_at,
         entries=entries,
         inventory_complete=inventory_complete,
+        key_id=key_id,
     )
     expected = hmac.new(secret.encode("utf-8"), canonical, hashlib.sha256).hexdigest()
     if not hmac.compare_digest(expected, signature):
@@ -196,13 +284,12 @@ def verify_inventory_snapshot_record(
         if actual != expected:
             return False
 
-        # SQLite does not preserve timezone metadata for DateTime(timezone=True).
-        # Values read back from this table are therefore interpreted as UTC,
-        # matching the UTC-normalized ingestion contract.
+        # SQLite drops timezone metadata from DateTime(timezone=True).
         generated_at = snapshot.generated_at
         if generated_at.tzinfo is None or generated_at.utcoffset() is None:
             generated_at = generated_at.replace(tzinfo=timezone.utc)
 
+        key_id = getattr(snapshot, "key_id", "legacy") or "legacy"
         digest = verify_inventory_signature(
             image_id=snapshot.shelf_image_id,
             store_id=snapshot.store_id,
@@ -213,6 +300,7 @@ def verify_inventory_snapshot_record(
             signature=snapshot.source_signature,
             configured_keys_json=configured_keys_json,
             inventory_complete=snapshot.inventory_complete,
+            key_id=key_id,
         )
         return hmac.compare_digest(digest, snapshot.manifest_sha256)
     except (AttributeError, InventorySignatureConfigurationError, KeyError, TypeError, ValueError):
