@@ -1380,6 +1380,37 @@ def test_detection_review_history_locks_source_image_before_returning_reviews(mo
 
 
 
+
+def test_reviewed_training_candidates_recheck_active_catalogue_product():
+    image_id, detection_id = create_image_with_detection()
+    with TestingSession() as db:
+        product = models.Product(sku="TRAIN-CATALOGUE-01", name="Produto Treino", is_active=True)
+        db.add(product)
+        db.flush()
+        product_id = product.id
+        db.add(models.DetectionSkuReview(
+            detection_id=detection_id,
+            previous_product_id=None,
+            selected_product_id=product_id,
+            decision="CONFIRMED",
+            reviewer_user_id=None,
+            notes="approved training label",
+        ))
+        db.commit()
+
+    with TestClient(app) as client:
+        initial = client.get("/api/v1/training-candidates/reviewed")
+        assert initial.status_code == 200, initial.text
+        assert any(item["product_id"] == product_id for item in initial.json())
+
+        with TestingSession() as db:
+            db.get(models.Product, product_id).is_active = False
+            db.commit()
+
+        refreshed = client.get("/api/v1/training-candidates/reviewed")
+        assert refreshed.status_code == 200, refreshed.text
+        assert all(item["product_id"] != product_id for item in refreshed.json())
+
 def test_reviewed_training_candidates_lock_source_images(monkeypatch):
     from sqlalchemy.orm import Query
 
