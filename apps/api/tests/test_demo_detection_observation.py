@@ -133,6 +133,10 @@ def test_demo_detection_requires_human_review_and_is_idempotent(monkeypatch):
             json={"product_id": product_id},
         )
         decisions = client.get(f"/api/v1/operational-decisions?store_id={store_id}")
+        missing_evidence = client.post(
+            "/api/v1/tasks/from-operational-decision?approved=true&demo_evidence_required=true",
+            json={"store_id": store_id, "shelf_id": shelf_id, "product_id": other_product_id},
+        )
         task_payload = {
             "store_id": store_id,
             "shelf_id": shelf_id,
@@ -178,6 +182,8 @@ def test_demo_detection_requires_human_review_and_is_idempotent(monkeypatch):
     assert by_product[product_id]["evidence"]["sha256"] == "a" * 64
     assert by_product[other_product_id]["replenishment_assessment"] is None
     assert by_product[other_product_id]["evidence"] is None
+    assert missing_evidence.status_code == 409
+    assert missing_evidence.json()["detail"]["code"] == "DEMO_EVIDENCE_REQUIRED"
     assert created_task.status_code == 201, created_task.text
     assert created_task.json()["status"] == "ASSIGNED"
     assert created_task.json()["assigned_user_id"] == employee_id
