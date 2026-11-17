@@ -4,6 +4,8 @@
 
 No commit `8648ffcc3cbc4a7aefd69a4e7fe65324f0981dc6` (head da branch integrada), o CI confirmou 1 097 testes API aprovados, 1 teste ignorado, compilação Python, build de produção do frontend e os smokes de migrações, ciclo de tarefas, reconciliação, isolamento e concorrência em PostgreSQL. Continua pendente um ensaio manual de instalação limpa com Docker Compose e a passagem integral pelos três perfis num ambiente local. O mock não é um modelo treinado e não deve ser usado para decisões operacionais reais.
 
+Este guião tem uma checklist de aceitação e critérios de aprovação em [DEMO-ACCEPTANCE.md](DEMO-ACCEPTANCE.md). Regista a execução real antes de considerar o demo validado ponta-a-ponta.
+
 ## Preparação local
 
 Na raiz do repositório:
