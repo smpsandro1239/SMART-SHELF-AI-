@@ -158,5 +158,11 @@ jobs:
           APP_ENV: test
           JWT_SECRET_KEY: test-only-secret-not-for-production
         run: python scripts/postgres_observation_retention_smoke.py
+      - name: Verify PostgreSQL human detection review and image-retention lock serialization
+        env:
+          DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/smart_shelf_ci
+          APP_ENV: test
+          JWT_SECRET_KEY: test-only-secret-not-for-production
+        run: python scripts/postgres_human_review_retention_smoke.py
       - name: Run tests
         run: pytest -q
