@@ -63,6 +63,75 @@ def test_create_store_shelf_and_observation():
         assert len(listed.json()) == 1
 
 
+def test_observation_list_isolated_by_store_and_shelf_filter(monkeypatch):
+    import app.main as main_module
+
+    Base.metadata.drop_all(bind=TEST_ENGINE)
+    Base.metadata.create_all(bind=TEST_ENGINE)
+    with TestClient(app) as client:
+        own_store = client.post(
+            "/api/v1/stores",
+            json={"code": "OBS-SCOPE-OWN", "name": "Loja própria"},
+        )
+        foreign_store = client.post(
+            "/api/v1/stores",
+            json={"code": "OBS-SCOPE-FOREIGN", "name": "Loja externa"},
+        )
+        assert own_store.status_code == foreign_store.status_code == 201
+
+        shelves = {}
+        for key, store in (("own", own_store), ("foreign", foreign_store)):
+            zone = client.post(
+                "/api/v1/zones",
+                json={"store_id": store.json()["id"], "name": f"Zona {key}"},
+            )
+            shelf = client.post(
+                "/api/v1/shelves",
+                json={"zone_id": zone.json()["id"], "code": f"OBS-{key.upper()}"},
+            )
+            assert zone.status_code == shelf.status_code == 201
+            shelves[key] = shelf.json()["id"]
+            observation = client.post(
+                "/api/v1/observations",
+                json={
+                    "shelf_id": shelves[key],
+                    "source": "simulation",
+                    "status": "LOW_STOCK" if key == "own" else "EMPTY",
+                    "confidence": 0.9,
+                },
+            )
+            assert observation.status_code == 201
+
+        monkeypatch.setattr(
+            main_module,
+            "_request_user",
+            lambda db, request: SimpleNamespace(
+                id=7001,
+                role="SUPERVISOR",
+                store_id=own_store.json()["id"],
+            ),
+        )
+
+        all_observations = client.get("/api/v1/observations")
+        assert all_observations.status_code == 200
+        assert len(all_observations.json()) == 1
+        assert all_observations.json()[0]["shelf_id"] == shelves["own"]
+
+        own_shelf = client.get(
+            "/api/v1/observations",
+            params={"shelf_id": shelves["own"]},
+        )
+        assert own_shelf.status_code == 200
+        assert len(own_shelf.json()) == 1
+
+        foreign_shelf = client.get(
+            "/api/v1/observations",
+            params={"shelf_id": shelves["foreign"]},
+        )
+        assert foreign_shelf.status_code == 200
+        assert foreign_shelf.json() == []
+
+
 def test_observation_rejects_confidence_outside_range():
     with TestClient(app) as client:
         response = client.post(
