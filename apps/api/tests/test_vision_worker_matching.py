@@ -613,3 +613,53 @@ def test_worker_excludes_exemplar_when_its_source_image_is_restricted(db):
 
     assert restricted_result["status"] == "UNKNOWN"
     assert restricted_result["product_id"] is None
+
+
+def test_stale_processing_recovery_locks_images_in_stable_id_order(db, tmp_path):
+    from sqlalchemy import event
+    import app.vision_worker as worker
+
+    store = models.Store(code="RECOVERY-ORDER", name="Recovery lock order")
+    db.add(store)
+    db.flush()
+    zone = models.Zone(store_id=store.id, name="Zona")
+    db.add(zone)
+    db.flush()
+    shelf = models.Shelf(zone_id=zone.id, code="RECOVERY-01")
+    db.add(shelf)
+    db.flush()
+
+    stale_at = models.utc_now() - timedelta(minutes=10)
+    images = [
+        models.ShelfImage(
+            shelf_id=shelf.id,
+            original_filename=f"stale-{index}.jpg",
+            storage_path=str(tmp_path / f"stale-{index}.jpg"),
+            mime_type="image/jpeg",
+            file_size_bytes=10,
+            sha256=f"{index}" * 64,
+            analysis_status="PROCESSING",
+            retention_status="ACTIVE",
+            analysis_started_at=stale_at,
+        )
+        for index in range(2)
+    ]
+    db.add_all(images)
+    db.commit()
+
+    statements = []
+    def capture_select(_conn, _cursor, statement, _parameters, _context, _executemany):
+        normalized = " ".join(statement.lower().split())
+        if "from shelf_images" in normalized and "analysis_started_at" in normalized:
+            statements.append(normalized)
+
+    event.listen(db.bind, "before_cursor_execute", capture_select)
+    try:
+        recovered = worker.requeue_stale_processing_images(db, stale_after_seconds=60)
+    finally:
+        event.remove(db.bind, "before_cursor_execute", capture_select)
+
+    assert recovered == 2
+    assert len(statements) == 1
+    assert "order by shelf_images.id asc" in statements[0]
+    assert all(image.analysis_status == "PENDING" for image in images)

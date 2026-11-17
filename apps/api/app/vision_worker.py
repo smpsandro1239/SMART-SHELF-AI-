@@ -258,6 +258,9 @@ def requeue_stale_processing_images(
                 | (models.ShelfImage.analysis_started_at < cutoff)
             ),
         )
+        # Match the global source-image lock order used by embedding and retention
+        # workflows; concurrent recovery workers must claim rows deterministically.
+        .order_by(models.ShelfImage.id.asc())
         .with_for_update(skip_locked=True)
         .all()
     )
