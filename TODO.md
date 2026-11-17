@@ -7,7 +7,7 @@
 - [ ] Audit product and shelf-product catalogue writes for role-based access, tenant ownership and concurrent assignment changes.
 - [ ] Review worker retry, lease expiry and retention transitions under concurrent execution.
 - [ ] Verify production authentication configuration rejects anonymous access to all protected API routes.
-- [ ] Confirm production secret validation passes in CI and deployment environments explicitly set `APP_ENV=production`.
+- [ ] Confirm production secret validation (including whitespace rejection) passes in CI and deployment environments explicitly set `APP_ENV=production`.
 - [ ] Document the production secret generation, storage and rotation procedure.
 - [ ] Review rotation and operational lifecycle for JWT and bootstrap secrets.
 - [ ] Re-run API, frontend, Docker Compose and PostgreSQL smoke suites after backend changes.
