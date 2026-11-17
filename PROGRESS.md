@@ -38,4 +38,6 @@ Production configuration review: `Settings` rejects the development JWT key, JWT
 Worker lease audit found and fixed a race: a worker that loses its processing lease can no longer mark the replacement worker's job FAILED when its own provider call raises. The failure handler now locks and refreshes the image row and changes state only if status and claim timestamp still match. The lease-takeover regression test and the API, quality-gates and Docker Compose workflows passed for 71b3425. Continue reviewing catalogue authorization, derived-image retention races and worker retry behavior; do not mark an item complete until relevant automated checks pass.
 
 
+### Catalogue write authorization — 2026-11-17
 
+Added `test_catalogue_and_warehouse_master_data_writes_are_admin_only` to exercise all four middleware-protected creation routes as both SUPERVISOR and EMPLOYEE. The test uses empty payloads deliberately: HTTP 403 must be returned by the authorization boundary before request-schema validation or route-side effects. This establishes role-gate coverage only; ADMIN ownership validation, store scoping and concurrent shelf-product reassignment remain open. Commit: `df1030a860d517f2cf519b01672218b3b4d82852`. CI validation is pending; no local test execution is claimed.
