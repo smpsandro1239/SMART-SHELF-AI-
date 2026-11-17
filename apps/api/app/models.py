@@ -258,6 +258,20 @@ class ProductPackagingLevel(Base):
     __tablename__ = "product_packaging_levels"
     __table_args__ = (
         UniqueConstraint("product_id", "code", name="uq_product_packaging_product_code"),
+        Index(
+            "uq_product_packaging_active_ordering_unit",
+            "product_id",
+            unique=True,
+            postgresql_where=text("is_active IS TRUE AND is_ordering_unit IS TRUE"),
+            sqlite_where=text("is_active IS TRUE AND is_ordering_unit IS TRUE"),
+        ),
+        Index(
+            "uq_product_packaging_active_replenishment_unit",
+            "product_id",
+            unique=True,
+            postgresql_where=text("is_active IS TRUE AND is_replenishment_unit IS TRUE"),
+            sqlite_where=text("is_active IS TRUE AND is_replenishment_unit IS TRUE"),
+        ),
         CheckConstraint("base_units_per_package > 0", name="ck_packaging_base_units_positive"),
         CheckConstraint("package_type IN ('UNIT', 'CASE', 'PALLET', 'OTHER')", name="ck_packaging_type"),
         CheckConstraint("gross_weight_kg IS NULL OR gross_weight_kg > 0", name="ck_packaging_weight_positive"),
