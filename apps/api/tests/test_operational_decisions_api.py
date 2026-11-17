@@ -402,3 +402,35 @@ def test_task_approval_refuses_status_only_detection_without_measured_shelf_quan
         assert response.status_code == 409
         assert response.json()["detail"]["code"] == "REPLENISHMENT_NOT_APPROVED_BY_EVIDENCE"
         assert client.get("/api/v1/tasks", params={"store_id": store_id}).json() == []
+
+def test_stale_visual_observation_does_not_trigger_action_recommended():
+    from datetime import datetime, timedelta, timezone
+
+    with TestClient(app) as client:
+        store_id, shelf_id, product_id = create_context(client)
+        created = client.post("/api/v1/observations", json={
+            "shelf_id": shelf_id, "source": "simulation",
+            "status": "EMPTY", "confidence": 0.96,
+        })
+        assert created.status_code == 201
+
+        db = TestingSession()
+        try:
+            observation = db.query(models.Observation).filter_by(
+                id=created.json()["id"]
+            ).one()
+            observation.observed_at = datetime.now(timezone.utc) - timedelta(minutes=150)
+            db.commit()
+        finally:
+            db.close()
+
+        response = client.get(
+            "/api/v1/operational-decisions", params={"store_id": store_id}
+        )
+        assert response.status_code == 200
+        item = response.json()["decisions"][0]
+        assert item["product_id"] == product_id
+        assert item["decision"]["status"] == "MONITOR"
+        assert item["decision"]["priority"] == "NONE"
+        assert item["replenishment_assessment"]["status"] == "STALE_OBSERVATION"
+        assert item["decision"]["suggested_replenishment_quantity"] is None
