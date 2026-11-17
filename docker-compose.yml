@@ -24,7 +24,8 @@ services:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-smart_shelf}:${POSTGRES_PASSWORD:-local_only_change_me}@db:5432/${POSTGRES_DB:-smart_shelf}
       IMAGE_STORAGE_PATH: /app/storage/shelf-images
       MAX_IMAGE_UPLOAD_BYTES: ${MAX_IMAGE_UPLOAD_BYTES:-10485760}
-      VISION_PROVIDER_FACTORY: ${VISION_PROVIDER_FACTORY:-}
+      VISION_PROVIDER_FACTORY: ${VISION_PROVIDER_FACTORY:-app.demo.vision:create_provider}
+      MOCK_VISION_DETECTION_LABEL: ${MOCK_VISION_DETECTION_LABEL:-empty_facing}
       VISION_DETECTOR_MODEL_PATH: ${VISION_DETECTOR_MODEL_PATH:-/models/shelf-detector.onnx}
       VISION_EMBEDDING_MODEL_PATH: ${VISION_EMBEDDING_MODEL_PATH:-}
       VISION_MODEL_VERSION: ${VISION_MODEL_VERSION:-shelf-onnx-v1}
@@ -36,13 +37,13 @@ services:
       - "${API_PORT:-8000}:8000"
     volumes:
       - shelf_images:/app/storage
+      - ./apps/api/demo/assets:/app/demo/assets
       - ${VISION_MODELS_DIR:-./models}:/models:ro
     depends_on:
       db:
         condition: service_healthy
 
   vision-worker:
-    profiles: ["vision"]
     build:
       context: ./apps/api
     restart: unless-stopped
@@ -52,7 +53,8 @@ services:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-smart_shelf}:${POSTGRES_PASSWORD:-local_only_change_me}@db:5432/${POSTGRES_DB:-smart_shelf}
       IMAGE_STORAGE_PATH: /app/storage/shelf-images
       VISION_PROCESSING_TIMEOUT_SECONDS: ${VISION_PROCESSING_TIMEOUT_SECONDS:-86400}
-      VISION_PROVIDER_FACTORY: ${VISION_PROVIDER_FACTORY:-}
+      VISION_PROVIDER_FACTORY: ${VISION_PROVIDER_FACTORY:-app.demo.vision:create_provider}
+      MOCK_VISION_DETECTION_LABEL: ${MOCK_VISION_DETECTION_LABEL:-empty_facing}
       VISION_DETECTOR_MODEL_PATH: ${VISION_DETECTOR_MODEL_PATH:-/models/shelf-detector.onnx}
       VISION_EMBEDDING_MODEL_PATH: ${VISION_EMBEDDING_MODEL_PATH:-}
       VISION_MODEL_VERSION: ${VISION_MODEL_VERSION:-shelf-onnx-v1}

@@ -50,6 +50,11 @@ class ObservationCreate(BaseModel):
     model_version: str | None = Field(default=None, max_length=100)
 
 
+class DetectionObservationCreate(BaseModel):
+    """Human-selected SKU for a reviewed demonstration detection."""
+    product_id: int = Field(gt=0)
+
+
 class ObservationRead(BaseModel):
     id: int
     shelf_id: int
@@ -377,6 +382,16 @@ class UserRead(BaseModel):
     role: UserRole
     is_active: bool
     created_at: datetime
+    model_config = ConfigDict(from_attributes=True)
+
+
+class StoreEmployeeRead(BaseModel):
+    """Minimal employee identity returned to store supervisors for assignment."""
+    id: int
+    store_id: int | None
+    full_name: str
+    role: UserRole
+    is_active: bool
     model_config = ConfigDict(from_attributes=True)
 
 

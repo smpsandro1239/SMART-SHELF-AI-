@@ -75,7 +75,7 @@ from app.schemas import (
     BootstrapAdminCreate, LoginRequest, TokenRead, UserRead, UserCreate, ShelfImageRead,
     ShelfImageDetectionRead, ProductEmbeddingExemplarCreate,
     ProductEmbeddingExemplarReview, ProductEmbeddingExemplarRead,
-    DetectionSkuReviewCreate, DetectionSkuReviewRead,
+    DetectionSkuReviewCreate, DetectionSkuReviewRead, DetectionObservationCreate, StoreEmployeeRead,
     ShelfImageOCRRunCreate, ShelfImageOCRRunRead, ShelfImageOCREvidenceRead,
     ShelfImageOCRMatchRead,
     ShelfImageFusedEvidenceRead, ShelfImageRetentionRequest, ShelfImageRetentionEventRead, ShelfImagePurgeScheduleRequest,
@@ -411,6 +411,21 @@ def list_stores(request: Request, db: Session = Depends(get_db)):
     if actor is not None and actor.role != "ADMIN":
         query = query.filter(models.Store.id == actor.store_id)
     return query.order_by(models.Store.id).all()
+
+
+
+@app.get("/api/v1/zones", response_model=list[ZoneRead], tags=["zones"])
+def list_zones(request: Request, store_id: int | None = None, db: Session = Depends(get_db)):
+    """List zones visible to the authenticated user, optionally scoped to one store."""
+    query = db.query(models.Zone)
+    actor = _request_user(db, request)
+    if actor is not None and actor.role != "ADMIN":
+        if actor.store_id is None or (store_id is not None and store_id != actor.store_id):
+            raise HTTPException(status_code=403, detail="Access to this store is not allowed")
+        query = query.filter(models.Zone.store_id == actor.store_id)
+    elif store_id is not None:
+        query = query.filter(models.Zone.store_id == store_id)
+    return query.order_by(models.Zone.store_id, models.Zone.id).all()
 
 
 @app.post("/api/v1/zones", response_model=ZoneRead, status_code=201, tags=["zones"])
@@ -2695,6 +2710,102 @@ def list_shelf_image_detections(
         .limit(max(1, min(limit, 500)))
         .all()
     )
+
+
+
+@app.post(
+    "/api/v1/shelf-image-detections/{detection_id}/observation",
+    response_model=ObservationRead,
+    tags=["observations"],
+)
+def create_observation_from_demo_detection(
+    detection_id: int,
+    payload: DetectionObservationCreate,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Create one idempotent observation from a reviewed mock-provider detection."""
+    actor = _request_user(db, request)
+    if actor is None or actor.role not in {"ADMIN", "SUPERVISOR"}:
+        raise HTTPException(status_code=403, detail="Supervisor role required")
+    detection = (
+        db.query(models.ShelfImageDetection)
+        .filter(models.ShelfImageDetection.id == detection_id)
+        .with_for_update()
+        .first()
+    )
+    if detection is None:
+        raise HTTPException(status_code=404, detail="Detection not found")
+    image = (
+        db.query(models.ShelfImage)
+        .filter(models.ShelfImage.id == detection.shelf_image_id)
+        .with_for_update()
+        .first()
+    )
+    if image is None:
+        raise HTTPException(status_code=404, detail="Shelf image not found")
+    store_id = _shelf_image_store_id(db, image.id)
+    _enforce_store_scope(actor, store_id)
+    _require_active_shelf_image(image)
+    if image.analysis_status != "COMPLETED" or not (detection.model_version or "").startswith("mock-"):
+        raise HTTPException(status_code=409, detail="Only completed mock-provider detections can create demo observations")
+    latest_review = (
+        db.query(models.DetectionSkuReview)
+        .filter(models.DetectionSkuReview.detection_id == detection.id)
+        .order_by(models.DetectionSkuReview.created_at.desc(), models.DetectionSkuReview.id.desc())
+        .first()
+    )
+    if latest_review is None or latest_review.decision == "REJECTED" or latest_review.selected_product_id != payload.product_id:
+        raise HTTPException(status_code=409, detail="A matching human SKU review is required before creating an observation")
+    assignment = (
+        db.query(models.ShelfProduct)
+        .join(models.Product, models.Product.id == models.ShelfProduct.product_id)
+        .filter(
+            models.ShelfProduct.shelf_id == image.shelf_id,
+            models.ShelfProduct.product_id == payload.product_id,
+            models.Product.is_active.is_(True),
+        )
+        .first()
+    )
+    if assignment is None:
+        raise HTTPException(status_code=422, detail="Selected product is not actively assigned to this shelf")
+    marker = f"demo_detection_id={detection.id};"
+    existing = (
+        db.query(models.Observation)
+        .filter(models.Observation.notes.like(f"%{marker}%"))
+        .order_by(models.Observation.id.asc())
+        .first()
+    )
+    if existing is not None:
+        return existing
+    status_by_label = {
+        "empty_facing": "EMPTY",
+        "low_stock": "LOW_STOCK",
+        "wrong_product": "MISPLACED",
+        "product_not_found": "UNKNOWN",
+    }
+    observation_status = status_by_label.get(detection.label.lower())
+    if observation_status is None:
+        raise HTTPException(status_code=422, detail="Detection label is not supported by the demo observation flow")
+    observed_quantity = 0 if observation_status == "EMPTY" else None
+    observation = models.Observation(
+        shelf_id=image.shelf_id,
+        product_id=payload.product_id,
+        source="simulation",
+        status=observation_status,
+        confidence=detection.confidence,
+        observed_quantity=observed_quantity,
+        notes=(
+            f"{marker} shelf_image_id={image.id}; sha256={image.sha256}; "
+            f"human_review_id={latest_review.id}; provider=mock"
+        ),
+        observed_at=models.utc_now(),
+        model_version=detection.model_version,
+    )
+    db.add(observation)
+    db.commit()
+    db.refresh(observation)
+    return observation
 
 
 def _refresh_ocr_match_view(db: Session, rows: list[models.ShelfImageOCRMatch]):
@@ -6939,10 +7050,36 @@ def operational_decisions(
     for link, shelf, zone, product in links:
         observation = (
             db.query(models.Observation)
-            .filter(models.Observation.shelf_id == shelf.id)
+            .filter(
+                models.Observation.shelf_id == shelf.id,
+                models.Observation.product_id == product.id,
+            )
             .order_by(models.Observation.observed_at.desc(), models.Observation.id.desc())
             .first()
         )
+        if observation is None:
+            # Legacy shelf-only observations are safe only when the shelf has
+            # exactly one active SKU association; never fan ambiguous evidence
+            # out across a multi-product shelf.
+            active_shelf_sku_count = (
+                db.query(models.ShelfProduct)
+                .join(models.Product, models.Product.id == models.ShelfProduct.product_id)
+                .filter(
+                    models.ShelfProduct.shelf_id == shelf.id,
+                    models.Product.is_active.is_(True),
+                )
+                .count()
+            )
+            if active_shelf_sku_count == 1:
+                observation = (
+                    db.query(models.Observation)
+                    .filter(
+                        models.Observation.shelf_id == shelf.id,
+                        models.Observation.product_id.is_(None),
+                    )
+                    .order_by(models.Observation.observed_at.desc(), models.Observation.id.desc())
+                    .first()
+                )
         snapshot = (
             db.query(models.InventorySnapshot)
             .filter(
@@ -6995,7 +7132,16 @@ def operational_decisions(
         if snapshot is not None:
             snapshot_at = aware(snapshot.captured_at)
             snapshot_age_minutes = max(0.0, (aware(now) - snapshot_at).total_seconds() / 60)
-            snapshot_is_fresh = snapshot_at <= aware(now) and snapshot_age_minutes <= 240
+            freshness_policy = (
+                db.query(models.InventoryFreshnessPolicy)
+                .filter_by(store_id=zone.store_id, source=snapshot.source)
+                .first()
+            )
+            max_inventory_age_minutes = freshness_policy.max_age_minutes if freshness_policy else 240
+            snapshot_is_fresh = (
+                snapshot_at <= aware(now)
+                and snapshot_age_minutes <= max_inventory_age_minutes
+            )
             backroom_inventory = {
                 "on_hand_quantity": float(snapshot.on_hand_quantity),
                 "reserved_quantity": float(snapshot.reserved_quantity),
@@ -7003,6 +7149,7 @@ def operational_decisions(
                 "source": snapshot.source,
                 "captured_at": snapshot_at.isoformat(),
                 "age_minutes": round(snapshot_age_minutes, 1),
+                "max_age_minutes": max_inventory_age_minutes,
                 "is_fresh": snapshot_is_fresh,
             }
             if snapshot_is_fresh:
@@ -7104,9 +7251,68 @@ def operational_decisions(
                 *result.get("warnings", []),
                 "O stock apresentado separadamente corresponde à retaguarda; não foi usado como quantidade na prateleira nem para calcular cobertura de exposição.",
             ]))
+        demo_evidence = None
+        if observation is not None and observation.notes:
+            evidence_fields = {
+                key.strip(): value.strip()
+                for segment in observation.notes.split(";")
+                if "=" in segment
+                for key, value in [segment.split("=", 1)]
+            }
+            try:
+                evidence_image_id = int(evidence_fields.get("shelf_image_id", ""))
+                evidence_detection_id = int(evidence_fields.get("demo_detection_id", ""))
+                evidence_review_id = int(evidence_fields.get("human_review_id", ""))
+            except (TypeError, ValueError):
+                evidence_image_id = evidence_detection_id = evidence_review_id = 0
+            evidence_image = (
+                db.query(models.ShelfImage)
+                .filter(
+                    models.ShelfImage.id == evidence_image_id,
+                    models.ShelfImage.retention_status == "ACTIVE",
+                )
+                .first()
+                if evidence_image_id > 0 else None
+            )
+            evidence_detection = (
+                db.query(models.ShelfImageDetection)
+                .filter(
+                    models.ShelfImageDetection.id == evidence_detection_id,
+                    models.ShelfImageDetection.shelf_image_id == evidence_image_id,
+                    models.ShelfImageDetection.model_version.like("mock-%"),
+                )
+                .first()
+                if evidence_detection_id > 0 else None
+            )
+            latest_evidence_review = (
+                db.query(models.DetectionSkuReview)
+                .filter(models.DetectionSkuReview.detection_id == evidence_detection_id)
+                .order_by(models.DetectionSkuReview.created_at.desc(), models.DetectionSkuReview.id.desc())
+                .first()
+                if evidence_detection_id > 0 else None
+            )
+            if (
+                evidence_image is not None
+                and evidence_detection is not None
+                and latest_evidence_review is not None
+                and latest_evidence_review.id == evidence_review_id
+                and latest_evidence_review.selected_product_id == product.id
+                and latest_evidence_review.decision in {"CONFIRMED", "CORRECTED"}
+                and evidence_fields.get("provider") == "mock"
+                and evidence_fields.get("sha256") == evidence_image.sha256
+            ):
+                demo_evidence = {
+                    "observation_id": observation.id,
+                    "image_id": evidence_image.id,
+                    "detection_id": evidence_detection.id,
+                    "review_id": latest_evidence_review.id,
+                    "sha256": evidence_image.sha256,
+                }
+
         decisions.append({
             "backroom_inventory": backroom_inventory,
             "replenishment_assessment": replenishment_assessment,
+            "evidence": demo_evidence,
             "store_id": zone.store_id,
             "zone_name": zone.name,
             "shelf_id": shelf.id,
@@ -7448,6 +7654,30 @@ def list_users(limit: int = 100, db: Session = Depends(get_db)):
     return db.query(models.User).order_by(models.User.id).limit(max(1, min(limit, 500))).all()
 
 
+@app.get("/api/v1/store-employees", response_model=list[StoreEmployeeRead], tags=["authentication"])
+def list_store_employees(
+    request: Request,
+    store_id: int | None = None,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+):
+    """Return active employee identities for safe task assignment, scoped by store."""
+    actor = _request_user(db, request)
+    if actor is None or actor.role not in {"ADMIN", "SUPERVISOR"}:
+        raise HTTPException(status_code=403, detail="Supervisor role required")
+    query = db.query(models.User).filter(
+        models.User.role == "EMPLOYEE",
+        models.User.is_active.is_(True),
+    )
+    if actor.role == "SUPERVISOR":
+        if actor.store_id is None or (store_id is not None and store_id != actor.store_id):
+            raise HTTPException(status_code=403, detail="Access to this store is not allowed")
+        query = query.filter(models.User.store_id == actor.store_id)
+    elif store_id is not None:
+        query = query.filter(models.User.store_id == store_id)
+    return query.order_by(models.User.full_name, models.User.id).limit(max(1, min(limit, 500))).all()
+
+
 @app.get("/api/v1/dashboard/summary", tags=["dashboard"])
 def dashboard_summary(
     request: Request,
@@ -7516,6 +7746,7 @@ def create_task_from_operational_decision(
     payload: ReplenishmentTaskCreate,
     request: Request,
     approved: bool = False,
+    demo_evidence_required: bool = False,
     db: Session = Depends(get_db),
 ):
     """Create a replenishment task only after explicit approval and fresh re-evaluation."""
@@ -7551,6 +7782,14 @@ def create_task_from_operational_decision(
     )
     if item is None:
         raise HTTPException(status_code=404, detail="Produto não associado a esta prateleira nesta loja")
+    if demo_evidence_required and not item.get("evidence"):
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "DEMO_EVIDENCE_REQUIRED",
+                "message": "A tarefa de demonstração exige uma imagem ativa, deteção e revisão humana ligadas à observação.",
+            },
+        )
     assessment = item.get("replenishment_assessment") or {}
     if assessment.get("status") != "NEEDS_REPLENISHMENT":
         raise HTTPException(

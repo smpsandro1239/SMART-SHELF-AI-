@@ -263,6 +263,7 @@ def main() -> None:
             "/api/v1/observations",
             json={
                 "shelf_id": shelf_id,
+                "product_id": recommended_product_id,
                 "source": "simulation",
                 "status": "LOW_STOCK",
                 "confidence": 0.99,
@@ -343,6 +344,7 @@ def main() -> None:
             "/api/v1/observations",
             json={
                 "shelf_id": shelf_id,
+                "product_id": decision_product_id,
                 "source": "simulation",
                 "status": "LOW_STOCK",
                 "confidence": 0.99,

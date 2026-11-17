@@ -10,6 +10,11 @@ const API_BASE = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
 type Role = "ADMIN" | "SUPERVISOR" | "EMPLOYEE";
 type TaskStatus = "PENDING" | "ASSIGNED" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
 type User = { id: number; email: string; full_name: string; role: Role; store_id: number | null; is_active: boolean };
+type EmployeeRecord = { id: number; full_name: string; role: Role; store_id: number | null; is_active: boolean };
+type StoreRecord = { id: number; code: string; name: string };
+type ZoneRecord = { id: number; store_id: number; name: string };
+type ShelfRecord = { id: number; zone_id: number; code: string; description: string | null };
+type CaptureSession = { id: number; shelf_id: number; store_id: number; started_at: string };
 type Task = {
   id: number; store_id: number; shelf_id: number; product_id: number;
   priority: "LOW" | "NORMAL" | "HIGH" | "URGENT"; status: TaskStatus;
@@ -29,7 +34,7 @@ type InventoryMovement = {
   source_snapshot_id: number; result_snapshot_id: number;
   actor_user_id: number; reason: string; created_at: string;
 };
-type ShelfImage = { id: number; shelf_id: number; original_filename: string; mime_type: string; file_size_bytes: number; sha256: string; analysis_status: "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED"; analysis_error: string | null; analysis_started_at: string | null; analysis_completed_at: string | null; captured_at: string; created_at: string };
+type ShelfImage = { id: number; shelf_id: number; capture_session_id?: number | null; original_filename: string; mime_type: string; file_size_bytes: number; sha256: string; analysis_status: "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED"; analysis_error: string | null; analysis_started_at: string | null; analysis_completed_at: string | null; captured_at: string; created_at: string };
 type ShelfImageDetection = { id: number; shelf_image_id: number; product_id: number | null; label: string; confidence: number; x_min: number; y_min: number; x_max: number; y_max: number; model_version: string; sku_match_status?: "MATCHED" | "AMBIGUOUS" | "UNKNOWN" | null; sku_similarity?: number | null; sku_match_margin?: number | null; created_at: string };
 type Product = { id: number; sku: string; name: string; is_active: boolean };
 type ShelfProduct = { id: number; shelf_id: number; product_id: number; target_quantity: number; position: number | null };
@@ -104,6 +109,7 @@ type OperationalDecisionRow = {
     available_quantity: number; source: string; captured_at: string;
     age_minutes: number; is_fresh: boolean } | null;
   replenishment_assessment?: ReplenishmentAssessment | null;
+  evidence?: { observation_id: number; image_id: number; detection_id: number; review_id: number; sha256: string } | null;
   decision: OperationalDecision;
 };
 type OperationalZoneSummary = {
@@ -140,6 +146,7 @@ export default function App() {
   const [decisionLoading, setDecisionLoading] = useState(false);
   const [approvalLoadingKey, setApprovalLoadingKey] = useState<string | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [taskUpdatingId, setTaskUpdatingId] = useState<number | null>(null);
   const [taskEvents, setTaskEvents] = useState<Record<number, TaskEvent[]>>({});
   const [taskEventsLoading, setTaskEventsLoading] = useState<number | null>(null);
   const [taskReconcileLoading, setTaskReconcileLoading] = useState<number | null>(null);
@@ -163,6 +170,15 @@ export default function App() {
   const [captureReset, setCaptureReset] = useState(0);
   const [captureLoading, setCaptureLoading] = useState(false);
   const [captureMessage, setCaptureMessage] = useState("");
+  const [stores, setStores] = useState<StoreRecord[]>([]);
+  const [zones, setZones] = useState<ZoneRecord[]>([]);
+  const [shelves, setShelves] = useState<ShelfRecord[]>([]);
+  const [employees, setEmployees] = useState<EmployeeRecord[]>([]);
+  const [selectedStoreId, setSelectedStoreId] = useState("");
+  const [selectedZoneId, setSelectedZoneId] = useState("");
+  const [employeeSelection, setEmployeeSelection] = useState<Record<string, string>>({});
+  const [observationByDetection, setObservationByDetection] = useState<Record<number, number>>({});
+  const [observationLoading, setObservationLoading] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
@@ -204,14 +220,29 @@ export default function App() {
     if (!token) return;
     setLoading(true); setError("");
     try {
+      const me = await request<User>("/api/v1/auth/me");
       const query = storeFilter.trim() ? `?store_id=${encodeURIComponent(storeFilter.trim())}` : "";
-      const [me, kpis, taskList, captureList] = await Promise.all([
-        request<User>("/api/v1/auth/me"),
+      const [kpis, taskList, captureList] = await Promise.all([
         request<Summary>(`/api/v1/dashboard/summary${query}`),
         request<Task[]>("/api/v1/tasks?limit=100"),
         request<ShelfImage[]>("/api/v1/shelf-images?limit=30"),
       ]);
+      let storeList: StoreRecord[] = [];
+      let zoneList: ZoneRecord[] = [];
+      let shelfList: ShelfRecord[] = [];
+      let employeeList: EmployeeRecord[] = [];
+      if (me.role === "ADMIN" || me.role === "SUPERVISOR") {
+        [storeList, zoneList, shelfList, employeeList] = await Promise.all([
+          request<StoreRecord[]>("/api/v1/stores"),
+          request<ZoneRecord[]>("/api/v1/zones"),
+          request<ShelfRecord[]>("/api/v1/shelves"),
+          request<EmployeeRecord[]>("/api/v1/store-employees?limit=500"),
+        ]);
+      }
       setUser(me); setSummary(kpis); setTasks(taskList); setCaptures(captureList); setLastUpdated(new Date());
+      setStores(storeList); setZones(zoneList); setShelves(shelfList);
+      setEmployees(employeeList.filter(person => person.role === "EMPLOYEE" && person.is_active));
+      setSelectedStoreId(current => current || String(me.store_id ?? storeList[0]?.id ?? ""));
       if (me.role === "ADMIN" || me.role === "SUPERVISOR") {
         setDecisionLoading(true);
         try {
@@ -258,6 +289,14 @@ export default function App() {
   }, [token, storeFilter, request, logout]);
 
   useEffect(() => { if (token) void refresh(); }, [token, refresh]);
+  const demoZones = useMemo(() => zones.filter(zone => String(zone.store_id) === selectedStoreId), [zones, selectedStoreId]);
+  const demoShelves = useMemo(() => shelves.filter(shelf => String(shelf.zone_id) === selectedZoneId), [shelves, selectedZoneId]);
+  useEffect(() => {
+    if (!demoZones.some(zone => String(zone.id) === selectedZoneId)) setSelectedZoneId(String(demoZones[0]?.id ?? ""));
+  }, [demoZones, selectedZoneId]);
+  useEffect(() => {
+    if (!demoShelves.some(shelf => String(shelf.id) === captureShelfId)) setCaptureShelfId(String(demoShelves[0]?.id ?? ""));
+  }, [demoShelves, captureShelfId]);
 
   async function login(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setLoading(true); setError("");
@@ -278,6 +317,7 @@ export default function App() {
     completion?: { actual_quantity: number; exception_reason?: string },
     cancellationReason?: string,
   ) {
+    setTaskUpdatingId(task.id);
     setError("");
     try {
       await request<Task>(`/api/v1/tasks/${task.id}/status`, {
@@ -294,6 +334,7 @@ export default function App() {
       await refresh();
       if (taskEvents[task.id] !== undefined) await loadTaskEvents(task.id);
     } catch (err) { setError(err instanceof Error ? err.message : "Não foi possível atualizar a tarefa."); }
+    finally { setTaskUpdatingId(current => current === task.id ? null : current); }
   }
 
   async function loadTaskEvents(taskId: number) {
@@ -356,14 +397,21 @@ export default function App() {
 
   async function uploadCapture(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!captureShelfId.trim() || !captureFile) {
-      setCaptureMessage("Indica o ID da prateleira e seleciona uma fotografia.");
+    if (!captureShelfId.trim() || !captureFile || !user || !["ADMIN", "SUPERVISOR"].includes(user.role)) {
+      setCaptureMessage("Seleciona uma prateleira, uma fotografia e confirma que tens perfil SUPERVISOR/ADMIN.");
       return;
     }
     setCaptureLoading(true); setCaptureMessage("");
+    let sessionId: number | null = null;
     try {
+      const captureSession = await request<CaptureSession>("/api/v1/capture-sessions", {
+        method: "POST",
+        body: JSON.stringify({ shelf_id: Number(captureShelfId), source_type: "mobile", capture_mode: "single" }),
+      });
+      sessionId = captureSession.id;
       const form = new FormData();
       form.append("shelf_id", captureShelfId.trim());
+      form.append("capture_session_id", String(captureSession.id));
       form.append("image", captureFile);
       const response = await fetch(`${API_BASE}/api/v1/shelf-images`, {
         method: "POST",
@@ -372,10 +420,19 @@ export default function App() {
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.detail || `Erro HTTP ${response.status}`);
-      setCaptureMessage(`Fotografia #${payload.id} recebida. Estado: ${payload.analysis_status}.`);
+      let sessionCloseWarning = "";
+      try {
+        await request<CaptureSession>(`/api/v1/capture-sessions/${captureSession.id}/close`, { method: "POST" });
+      } catch {
+        sessionCloseWarning = " A imagem foi guardada, mas a sessão não ficou encerrada; consulta a auditoria.";
+      }
+      setCaptureMessage(`Sessão #${sessionId} · fotografia #${payload.id} · SHA-256 ${String(payload.sha256).slice(0, 12)}… · ${payload.analysis_status}.${sessionCloseWarning}`);
       setCaptureFile(null); setCaptureReset(value => value + 1);
       await refresh();
     } catch (err) {
+      if (sessionId !== null) {
+        try { await request<CaptureSession>(`/api/v1/capture-sessions/${sessionId}/close`, { method: "POST" }); } catch { /* Preserve the original upload error. */ }
+      }
       setCaptureMessage(err instanceof Error ? err.message : "Não foi possível enviar a fotografia.");
     } finally { setCaptureLoading(false); }
   }
@@ -408,7 +465,7 @@ export default function App() {
       return;
     }
     setExpandedDetectionImage(item.id);
-    if (imageDetections[item.id]) return;
+    if (imageDetections[item.id]?.length) return;
     setDetectionLoading(item.id);
     try {
       const [result, imageResponse] = await Promise.all([
@@ -451,6 +508,33 @@ export default function App() {
       setExpandedDetectionImage(null);
     } finally {
       setDetectionLoading(null);
+    }
+  }
+
+
+  async function createObservationFromDetection(image: ShelfImage, detection: ShelfImageDetection) {
+    const history = detectionReviews[detection.id] || [];
+    const latest = history[history.length - 1];
+    const productId = latest?.selected_product_id;
+    if (!latest || latest.decision === "REJECTED" || !productId) {
+      setError("É necessária uma revisão humana válida do SKU antes de criar a observação.");
+      return;
+    }
+    if (!window.confirm(`Registar observação ${detection.label} para o SKU selecionado? A evidência ficará ligada à imagem #${image.id}.`)) return;
+    setObservationLoading(detection.id);
+    setError("");
+    try {
+      const observation = await request<{ id: number }>(`/api/v1/shelf-image-detections/${detection.id}/observation`, {
+        method: "POST",
+        body: JSON.stringify({ product_id: productId }),
+      });
+      setObservationByDetection(current => ({ ...current, [detection.id]: observation.id }));
+      setCaptureMessage(`Observação #${observation.id} registada a partir da deteção #${detection.id}.`);
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Não foi possível criar a observação.");
+    } finally {
+      setObservationLoading(null);
     }
   }
 
@@ -498,13 +582,22 @@ export default function App() {
   async function approveOperationalRefill(item: OperationalDecisionRow) {
     const assessment = item.replenishment_assessment;
     if (!assessment || assessment.status !== "NEEDS_REPLENISHMENT" || assessment.suggested_quantity == null) return;
+    if (!item.evidence) {
+      setError("A aprovação do demo exige evidência visual ativa, deteção e revisão humana ligadas à observação.");
+      return;
+    }
     const quantity = assessment.suggested_quantity;
     const available = item.backroom_inventory?.available_quantity;
+    const key = `${item.store_id}:${item.shelf_id}:${item.product_id}`;
+    const assignedUserId = Number(employeeSelection[key]);
+    if (!Number.isInteger(assignedUserId) || !employees.some(employee => employee.id === assignedUserId && employee.store_id === item.store_id)) {
+      setError("Seleciona um EMPLOYEE ativo da mesma loja antes de aprovar.");
+      return;
+    }
     if (!item.backroom_inventory?.is_fresh || available == null || quantity > available) {
       setError("A proposta deixou de ter stock de retaguarda atualizado e suficiente. Atualiza as decisões antes de aprovar.");
       return;
     }
-    const key = `${item.store_id}:${item.shelf_id}:${item.product_id}`;
     const accepted = window.confirm(
       `Aprovar tarefa de reposição?\\n\\n${item.product_name} (${item.product_sku})\\nPrateleira: ${item.shelf_code}\\nQuantidade: ${quantity}\\nStock disponível na retaguarda: ${available}\\n\\nA tarefa será criada, sem movimentar stock automaticamente.`
     );
@@ -512,7 +605,7 @@ export default function App() {
     setApprovalLoadingKey(key);
     setError("");
     try {
-      await request<Task>("/api/v1/tasks/from-operational-decision?approved=true", {
+      await request<Task>("/api/v1/tasks/from-operational-decision?approved=true&demo_evidence_required=true", {
         method: "POST",
         body: JSON.stringify({
           store_id: item.store_id,
@@ -520,7 +613,13 @@ export default function App() {
           product_id: item.product_id,
           priority: item.decision.priority === "HIGH" ? "HIGH" : "NORMAL",
           requested_quantity: quantity,
-          notes: "Aprovado pelo responsável no dashboard de decisões operacionais.",
+          assigned_user_id: assignedUserId,
+          notes: [
+            "Aprovado pelo responsável no dashboard de decisões operacionais.",
+            item.evidence
+              ? `evidence_image_id=${item.evidence.image_id}; evidence_detection_id=${item.evidence.detection_id}; evidence_observation_id=${item.evidence.observation_id}; evidence_review_id=${item.evidence.review_id}; evidence_sha256=${item.evidence.sha256}`
+              : "",
+          ].filter(Boolean).join("\\n"),
         }),
       });
       await refresh();
@@ -574,7 +673,7 @@ export default function App() {
           </div>
         </header>
         <section className="toolbar">
-          <div><span className="live-dot" /> <strong>Dados operacionais</strong><span className="muted"> · {lastUpdated ? `Atualizado às ${lastUpdated.toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" })}` : "A sincronizar"}</span></div>
+          <div><span className="live-dot" /> <strong>Dados operacionais</strong> <span className="subtle-pill">Demo mode · provider mock quando configurado</span><span className="muted"> · {lastUpdated ? `Atualizado às ${lastUpdated.toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" })}` : "A sincronizar"}</span></div>
           {user?.role === "ADMIN" && <label className="store-filter"><Store size={15} /><input aria-label="Filtrar por ID da loja" placeholder="Todas as lojas · ID opcional" value={storeFilter} onChange={e => setStoreFilter(e.target.value)} onKeyDown={e => { if (e.key === "Enter") void refresh(); }} /><button onClick={() => void refresh()}>Aplicar</button></label>}
         </section>
         {error && <div className="error-banner page-error" role="alert"><AlertTriangle size={17} /> {error}</div>}
@@ -593,6 +692,9 @@ export default function App() {
                 {taskRows.map(task => <TaskRow
                   key={task.id}
                   task={task}
+                  token={token}
+                  evidenceImageId={Number(task.notes?.match(/evidence_image_id=(\d+)/)?.[1] || 0) || null}
+                  updating={taskUpdatingId === task.id}
                   canAssign={user?.role === "ADMIN" || user?.role === "SUPERVISOR"}
                   canProgress={user?.role === "EMPLOYEE" ? task.assigned_user_id === user.id : user?.role === "ADMIN" || user?.role === "SUPERVISOR"}
                   canCancel={user?.role === "ADMIN" || user?.role === "SUPERVISOR"}
@@ -671,9 +773,15 @@ export default function App() {
                       <span>Por cobrir: <strong>{item.replenishment_assessment.remaining_gap_quantity == null ? "—" : item.replenishment_assessment.remaining_gap_quantity}</strong></span>
                     </div>
                     {item.replenishment_assessment.requires_human_review && <p className="decision-method">Requer validação humana antes de criar uma tarefa ou movimentar stock.</p>}
-                    {item.replenishment_assessment.status === "NEEDS_REPLENISHMENT" && item.replenishment_assessment.suggested_quantity != null && <button className="row-action decision-approve" onClick={() => void approveOperationalRefill(item)} disabled={approvalLoadingKey === `${item.store_id}:${item.shelf_id}:${item.product_id}` || !item.backroom_inventory?.is_fresh || item.replenishment_assessment.suggested_quantity > (item.backroom_inventory?.available_quantity ?? 0)}>
+                    {item.replenishment_assessment.status === "NEEDS_REPLENISHMENT" && item.replenishment_assessment.suggested_quantity != null && <><label className="demo-assignee">Atribuir ao funcionário
+                         <select value={employeeSelection[`${item.store_id}:${item.shelf_id}:${item.product_id}`] || ""} onChange={event => setEmployeeSelection(current => ({ ...current, [`${item.store_id}:${item.shelf_id}:${item.product_id}`]: event.target.value }))}>
+                           <option value="">Selecionar EMPLOYEE…</option>
+                           {employees.filter(employee => employee.store_id === item.store_id).map(employee => <option key={employee.id} value={employee.id}>{employee.full_name} · #{employee.id}</option>)}
+                         </select>
+                       </label>
+                       <button className="row-action decision-approve" onClick={() => void approveOperationalRefill(item)} disabled={approvalLoadingKey === `${item.store_id}:${item.shelf_id}:${item.product_id}` || !item.backroom_inventory?.is_fresh || item.replenishment_assessment.suggested_quantity > (item.backroom_inventory?.available_quantity ?? 0)}>
                       {approvalLoadingKey === `${item.store_id}:${item.shelf_id}:${item.product_id}` ? "A criar tarefa…" : "Aprovar e criar tarefa"}
-                    </button>}
+                    </button></>}
                   </div>}
                   {item.decision.warnings.length > 0 && <ul className="decision-warnings">{item.decision.warnings.map((warning, index) => <li key={index}>{warning}</li>)}</ul>}
                 </article>)}
@@ -731,7 +839,25 @@ export default function App() {
             <article className="panel capture-panel">
               <div className="panel-heading"><div><p className="eyebrow">VISÃO COMPUTACIONAL</p><h2>Nova captura de prateleira</h2><p className="muted">Envia uma fotografia para registo e futura análise automática.</p></div><div className="capture-icon"><PackageSearch size={20} /></div></div>
               <form className="capture-form" onSubmit={uploadCapture}>
-                <label>ID da prateleira<input type="number" min="1" value={captureShelfId} onChange={e => setCaptureShelfId(e.target.value)} placeholder="Ex.: 12" required /></label>
+                <label>Loja
+                  <select value={selectedStoreId} onChange={event => setSelectedStoreId(event.target.value)} required>
+                    <option value="">Selecionar loja…</option>
+                    {stores.map(store => <option key={store.id} value={store.id}>{store.name} · {store.code}</option>)}
+                  </select>
+                </label>
+                <label>Zona
+                  <select value={selectedZoneId} onChange={event => setSelectedZoneId(event.target.value)} required>
+                    <option value="">Selecionar zona…</option>
+                    {demoZones.map(zone => <option key={zone.id} value={zone.id}>{zone.name}</option>)}
+                  </select>
+                </label>
+                <label>Prateleira
+                  <select value={captureShelfId} onChange={event => setCaptureShelfId(event.target.value)} required>
+                    <option value="">Selecionar prateleira…</option>
+                    {demoShelves.map(shelf => <option key={shelf.id} value={shelf.id}>{shelf.code} · {shelf.description || `Prateleira #${shelf.id}`}</option>)}
+                  </select>
+                </label>
+                
                 <label>Fotografia (JPEG, PNG ou WebP)<input key={captureReset} type="file" accept="image/jpeg,image/png,image/webp" onChange={e => setCaptureFile(e.target.files?.[0] || null)} required /></label>
                 <div className="capture-submit"><span>{captureFile ? captureFile.name : "Nenhum ficheiro selecionado"}</span><button className="row-action" disabled={captureLoading || !captureFile}>{captureLoading ? "A enviar…" : "Enviar fotografia"} <ArrowUpRight size={14} /></button></div>
                 {captureMessage && <p className="capture-feedback" role="status">{captureMessage}</p>}
@@ -742,7 +868,7 @@ export default function App() {
               <div className="capture-list">
                 {captures.length === 0 && <div className="empty-state"><PackageSearch size={25} /><strong>Sem fotografias registadas</strong><span>As próximas capturas serão apresentadas aqui.</span></div>}
                 {captures.map(item => <div className="capture-item" key={item.id}>
-                  <div className="capture-row"><div className="capture-thumb"><Boxes size={17} /></div><div className="capture-meta"><strong>Prateleira #{item.shelf_id} · {item.original_filename}</strong><span>{(item.file_size_bytes / 1024).toFixed(0)} KB · {new Date(item.created_at).toLocaleString("pt-PT")}</span></div><span className={`task-status ${item.analysis_status.toLowerCase()}`}>{item.analysis_status}</span>{(user?.role === "ADMIN" || user?.role === "SUPERVISOR") && item.analysis_status === "FAILED" && <button className="row-action detection-toggle" disabled={retryLoading === item.id} onClick={() => void retryImageAnalysis(item)}>{retryLoading === item.id ? "A repetir…" : "Repetir análise"}</button>}<button className="row-action detection-toggle" onClick={() => void toggleImageDetections(item)}>{detectionLoading === item.id ? "A consultar…" : expandedDetectionImage === item.id ? "Fechar" : "Deteções"}</button></div>
+                  <div className="capture-row"><div className="capture-thumb"><Boxes size={17} /></div><div className="capture-meta"><strong>Prateleira #{item.shelf_id} · {item.original_filename}</strong><span>{(item.file_size_bytes / 1024).toFixed(0)} KB · SHA-256 {item.sha256.slice(0, 12)}… · Sessão #{item.capture_session_id ?? "—"} · {new Date(item.created_at).toLocaleString("pt-PT")}</span></div><span className={`task-status ${item.analysis_status.toLowerCase()}`}>{item.analysis_status}</span>{(user?.role === "ADMIN" || user?.role === "SUPERVISOR") && item.analysis_status === "FAILED" && <button className="row-action detection-toggle" disabled={retryLoading === item.id} onClick={() => void retryImageAnalysis(item)}>{retryLoading === item.id ? "A repetir…" : "Repetir análise"}</button>}<button className="row-action detection-toggle" onClick={() => void toggleImageDetections(item)}>{detectionLoading === item.id ? "A consultar…" : expandedDetectionImage === item.id ? "Fechar" : "Deteções"}</button></div>
                   {expandedDetectionImage === item.id && <div className="detection-workspace">
                     {imageUrls[item.id] && <div className="detection-image-stage">
                       <img src={imageUrls[item.id]} alt={`Fotografia da prateleira ${item.shelf_id}`} />
@@ -770,6 +896,11 @@ export default function App() {
                             <button className="review-button correct" disabled={reviewLoading === detection.id || !selectedId || Number(selectedId) === detection.product_id} onClick={() => void reviewDetection(detection, "CORRECTED")}><ImageIcon size={14} /> Corrigir</button>
                             <button className="review-button reject" disabled={reviewLoading === detection.id} onClick={() => void reviewDetection(detection, "REJECTED")}><X size={14} /> Rejeitar</button>
                           </div>
+                        </div>}
+                        {canReview && history.length > 0 && history[history.length - 1].decision !== "REJECTED" && <div className="review-actions">
+                          <button className="review-button confirm" disabled={observationLoading === detection.id} onClick={() => void createObservationFromDetection(item, detection)}>
+                            {observationLoading === detection.id ? "A registar…" : observationByDetection[detection.id] ? `Observação #${observationByDetection[detection.id]} registada` : "Criar observação operacional"}
+                          </button>
                         </div>}
                         <div className="review-history">
                           <strong><History size={14} /> Histórico ({history.length})</strong>
@@ -837,11 +968,12 @@ function Metric({ icon, label, value, tone, detail }: { icon: ReactNode; label: 
   return <article className="metric-card"><div className={`metric-icon ${tone}`}>{icon}</div><p>{label}</p><strong>{value.toLocaleString("pt-PT")}</strong><span>{detail}</span></article>;
 }
 function TaskRow({
-  task, canAssign, canProgress, canCancel, canAudit, canReconcile,
+  task, token, evidenceImageId, updating, canAssign, canProgress, canCancel, canAudit, canReconcile,
   events, eventsLoading, reconcileLoading, reconcileMessage,
   onLoadEvents, onReconcile, onUpdate,
 }: {
-  task: Task; canAssign: boolean; canProgress: boolean; canCancel: boolean;
+  task: Task; token: string; evidenceImageId: number | null; updating: boolean;
+  canAssign: boolean; canProgress: boolean; canCancel: boolean;
   canAudit: boolean; canReconcile: boolean; events: TaskEvent[] | null;
   eventsLoading: boolean; reconcileLoading: boolean; reconcileMessage: string;
   onLoadEvents: (taskId: number) => void;
@@ -854,7 +986,30 @@ function TaskRow({
   const [cancellationReason, setCancellationReason] = useState("");
   const [reconciliationReason, setReconciliationReason] = useState("");
   const [showEvents, setShowEvents] = useState(false);
+  const [evidenceImageUrl, setEvidenceImageUrl] = useState<string | null>(null);
   const next = task.status === "ASSIGNED" ? "IN_PROGRESS" : task.status === "IN_PROGRESS" ? "COMPLETED" : null;
+  useEffect(() => {
+    setEvidenceImageUrl(null);
+    if (!evidenceImageId || !token) return;
+    let active = true;
+    let objectUrl: string | null = null;
+    fetch(`${API_BASE}/api/v1/shelf-images/${evidenceImageId}/content`, {
+      headers: { Authorization: `Bearer ${token}` },
+    }).then(async response => {
+      if (!response.ok) throw new Error("Evidência indisponível");
+      const blob = await response.blob();
+      if (active) {
+        objectUrl = URL.createObjectURL(blob);
+        setEvidenceImageUrl(objectUrl);
+      }
+    }).catch(() => {
+      if (active) setEvidenceImageUrl(null);
+    });
+    return () => {
+      active = false;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [evidenceImageId, token]);
   const actual = Number(actualQuantity);
   const isValidCompletion = Number.isFinite(actual) && actual > 0
     && (task.requested_quantity == null || actual <= task.requested_quantity)
@@ -870,19 +1025,31 @@ function TaskRow({
       <span>Produto #{task.product_id} · {task.assigned_to || "Por atribuir"} · #{task.id}</span>
       {task.status === "COMPLETED" && task.actual_quantity != null && <small className="task-outcome">Quantidade reposta: {task.actual_quantity}{task.exception_reason ? ` · ${task.exception_reason}` : ""}</small>}
       {task.status === "CANCELLED" && task.exception_reason && <small className="task-outcome">Cancelada: {task.exception_reason}</small>}
+      {evidenceImageId && <div className="task-evidence">
+        <strong>Evidência visual · imagem #{evidenceImageId}</strong>
+        {evidenceImageUrl ? <img src={evidenceImageUrl} alt={`Evidência visual da reposição na prateleira #${task.shelf_id}`} /> : <span>A carregar evidência ou imagem indisponível pela política de retenção.</span>}
+        {task.notes?.match(/evidence_sha256=([a-f0-9]{64})/)?.[1] && <small>SHA-256 {task.notes.match(/evidence_sha256=([a-f0-9]{64})/)?.[1]}</small>}
+      </div>}
     </div>
     <span className={"priority " + task.priority.toLowerCase()}>{task.priority}</span>
     <span className={"task-status " + task.status.toLowerCase()}>{task.status.replace("_", " ")}</span>
-    {canAssign && task.status === "PENDING" && <div className="assign-control"><input aria-label={"ID do funcionário para a tarefa " + task.id} inputMode="numeric" placeholder="ID funcionário" value={assigneeId} onChange={e => setAssigneeId(e.target.value)} /><button className="row-action" disabled={!/^\d+$/.test(assigneeId) || Number(assigneeId) < 1} onClick={() => onUpdate(task, "ASSIGNED", Number(assigneeId))}>Atribuir</button></div>}
+    {canAssign && task.status === "PENDING" && <div className="assign-control"><input aria-label={"ID do funcionário para a tarefa " + task.id} inputMode="numeric" placeholder="ID funcionário" value={assigneeId} onChange={e => setAssigneeId(e.target.value)} /><button className="row-action" disabled={updating || !/^\d+$/.test(assigneeId) || Number(assigneeId) < 1} onClick={() => onUpdate(task, "ASSIGNED", Number(assigneeId))}>{updating ? "A atualizar…" : "Atribuir"}</button></div>}
     {canProgress && task.status === "IN_PROGRESS" && <div className="assign-control task-completion">
       <input aria-label={"Quantidade efetivamente reposta na tarefa " + task.id} type="number" min="0.001" step="0.001" placeholder={task.requested_quantity == null ? "Qtd. reposta" : "Qtd. reposta (pedido: " + task.requested_quantity + ")"} value={actualQuantity} onChange={e => setActualQuantity(e.target.value)} />
       {task.requested_quantity != null && Number.isFinite(actual) && actual > 0 && actual < task.requested_quantity && <input aria-label={"Motivo da reposição parcial na tarefa " + task.id} placeholder="Motivo da diferença" value={exceptionReason} onChange={e => setExceptionReason(e.target.value)} />}
-      <button className="row-action" disabled={!isValidCompletion} onClick={() => onUpdate(task, "COMPLETED", undefined, { actual_quantity: actual, ...(exceptionReason.trim() ? { exception_reason: exceptionReason.trim() } : {}) })}>Concluir <ArrowUpRight size={14} /></button>
+      <button className="row-action" disabled={updating || !isValidCompletion} onClick={() => {
+        const detail = exceptionReason.trim() ? `\\nMotivo: ${exceptionReason.trim()}` : "";
+        if (!updating && window.confirm(`Confirmar conclusão da tarefa #${task.id}?\\nQuantidade efetivamente reposta: ${actual}${detail}\\nEsta ação será auditada.`)) {
+          onUpdate(task, "COMPLETED", undefined, { actual_quantity: actual, ...(exceptionReason.trim() ? { exception_reason: exceptionReason.trim() } : {}) });
+        }
+      }}>{updating ? "A concluir…" : <>Concluir <ArrowUpRight size={14} /></>}</button>
     </div>}
-    {canProgress && next === "IN_PROGRESS" && <button className="row-action" onClick={() => onUpdate(task, "IN_PROGRESS")}>Iniciar <ArrowUpRight size={14} /></button>}
+    {canProgress && next === "IN_PROGRESS" && <button className="row-action" onClick={() => {
+      if (!updating && window.confirm(`Iniciar a tarefa #${task.id} para a reposição do produto #${task.product_id}?`)) onUpdate(task, "IN_PROGRESS");
+    }} disabled={updating}>{updating ? "A iniciar…" : <>Iniciar <ArrowUpRight size={14} /></>}</button>}
     {canCancelTask && <div className="assign-control task-cancel">
       <input aria-label={"Motivo do cancelamento da tarefa " + task.id} placeholder="Motivo do cancelamento" value={cancellationReason} onChange={event => setCancellationReason(event.target.value)} />
-      <button className="row-action" disabled={cancellationReason.trim().length < 3} onClick={() => onUpdate(task, "CANCELLED", undefined, undefined, cancellationReason.trim())}>Cancelar</button>
+      <button className="row-action" disabled={updating || cancellationReason.trim().length < 3} onClick={() => onUpdate(task, "CANCELLED", undefined, undefined, cancellationReason.trim())}>{updating ? "A cancelar…" : "Cancelar"}</button>
     </div>}
     {canAudit && <div className="task-audit-controls">
       <button className="row-action secondary-action" onClick={() => {
@@ -895,7 +1062,11 @@ function TaskRow({
     </div>}
     {canReconcileTask && <div className="assign-control task-reconcile">
       <input aria-label={"Motivo da reconciliação da tarefa " + task.id} placeholder="Motivo da reconciliação" value={reconciliationReason} onChange={event => setReconciliationReason(event.target.value)} />
-      <button className="row-action" disabled={reconciliationReason.trim().length < 3 || reconcileLoading} onClick={() => onReconcile(task, reconciliationReason.trim())}>
+      <button className="row-action" disabled={reconciliationReason.trim().length < 3 || reconcileLoading} onClick={() => {
+        if (window.confirm(`Reconciliar o inventário da tarefa #${task.id} com ${task.actual_quantity} unidades?\\nMotivo: ${reconciliationReason.trim()}\\nSerá criado um movimento e um snapshot auditáveis.`)) {
+          onReconcile(task, reconciliationReason.trim());
+        }
+      }}>
         {reconcileLoading ? "A reconciliar…" : "Confirmar stock"}
       </button>
     </div>}
