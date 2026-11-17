@@ -52,6 +52,10 @@ def test_demo_seed_is_idempotent_and_generates_synthetic_asset(tmp_path):
             assert db.query(models.User).filter(models.User.email.like("%@demo.smart-shelf.local")).count() == 3
             assert db.query(models.Product).filter(models.Product.sku.like("DEMO-%")).count() == 15
             assert db.query(models.InventorySnapshot).filter_by(store_id=first["store_id"], source="MANUAL").count() == 15
+            first_snapshot = db.query(models.InventorySnapshot).filter_by(
+                store_id=first["store_id"], product_id=first["product_ids"][0], source="MANUAL"
+            ).one()
+            assert float(first_snapshot.on_hand_quantity) == 4
             assert db.query(models.InventoryFreshnessPolicy).filter_by(store_id=first["store_id"], source="MANUAL").count() == 1
     finally:
         Base.metadata.drop_all(engine)

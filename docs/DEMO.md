@@ -15,7 +15,7 @@ docker compose exec api alembic upgrade head
 docker compose exec api python -m app.demo.seed
 ```
 
-A API e o worker usam `app.demo.vision:create_provider` por omissão no Docker Compose. Ambos partilham o volume `shelf_images`. O provider é determinístico para o conteúdo do ficheiro e produz uma caixa de demonstração; não analisa semanticamente a fotografia. Para confirmar o processamento: `docker compose logs -f vision-worker`. A imagem sintética é gerada em `apps/api/demo/assets/synthetic-shelf.png` quando o seed é executado.
+A API e o worker usam `app.demo.vision:create_provider` por omissão no Docker Compose. Ambos partilham o volume `shelf_images`. O provider é determinístico para o conteúdo do ficheiro e produz uma caixa de demonstração; não analisa semanticamente a fotografia. Para confirmar o processamento: `docker compose logs -f vision-worker`. A imagem sintética é gerada em `apps/api/demo/assets/synthetic-shelf.png` no host quando o seed é executado dentro do container (a pasta está montada no Docker Compose).
 
 Frontend: executar `npm ci && npm run dev` em `apps/web` (porta 5173). O Vite encaminha `/api` para `http://127.0.0.1:8000`. API: `http://localhost:8000`; documentação OpenAPI: `http://localhost:8000/docs`.
 
@@ -27,7 +27,7 @@ Frontend: executar `npm ci && npm run dev` em `apps/web` (porta 5173). O Vite en
 | SUPERVISOR | supervisor@demo.smart-shelf.local | DemoSupervisor2026! |
 | EMPLOYEE | employee@demo.smart-shelf.local | DemoEmployee2026! |
 
-Estas credenciais são exclusivamente locais. Altera-as antes de expor o ambiente a qualquer rede não confiável. O seed cria a loja **Demo Store Braga**, uma zona, três prateleiras, quinze produtos, associações SKU–prateleira, snapshots de inventário MANUAL e uma política de frescura de 24 horas.
+Estas credenciais são exclusivamente locais. Altera-as antes de expor o ambiente a qualquer rede não confiável. O seed cria a loja **Demo Store Braga**, uma zona, três prateleiras, quinze produtos, associações SKU–prateleira, snapshots de inventário MANUAL e uma política de frescura de 24 horas. O SKU `DEMO-001` começa com apenas 4 unidades na retaguarda; a reposição sugerida fica limitada a esse stock disponível.
 
 ## Guião de 10 minutos
 
@@ -37,7 +37,7 @@ Estas credenciais são exclusivamente locais. Altera-as antes de expor o ambient
 4. **03:00–04:00 — Análise:** aguardar o worker; o provider mock emite uma deteção `empty_facing` com bounding box e confiança. O resultado é sintético e explicitamente identificado como DEMO.
 5. **04:00–05:00 — Observação:** rever a evidência e selecionar o SKU candidato entre os produtos associados à prateleira. Não aceitar automaticamente uma identidade de produto que o mock não consegue provar.
 6. **05:00–06:00 — Recomendação:** consultar a decisão operacional, inventário disponível e quantidade sugerida.
-7. **06:00–07:00 — Aprovação:** ADMIN/SUPERVISOR confirma quantidade e stock. A tarefa é atribuída ao EMPLOYEE; não há movimento automático de inventário.
+7. **06:00–07:00 — Aprovação:** ADMIN/SUPERVISOR confirma quantidade e stock. A tarefa é atribuída ao EMPLOYEE; a tarefa mostra também a miniatura da imagem de evidência e o SHA-256. Não há movimento automático de inventário.
 8. **07:00–08:30 — Execução:** terminar sessão, entrar como EMPLOYEE, iniciar a tarefa, registar quantidade efetivamente reposta e concluir.
 9. **08:30–09:30 — Reconciliação:** voltar ao SUPERVISOR e aprovar a reconciliação com motivo. Se a evidência de stock estiver desatualizada ou insuficiente, a API bloqueia a operação conforme ADR-008.
 10. **09:30–10:00 — Resultado:** consultar tarefa, evidência, eventos de auditoria, movimento e snapshot resultante no dashboard.
