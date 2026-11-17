@@ -4077,8 +4077,17 @@ def assign_product_to_shelf(
         raise HTTPException(status_code=404, detail="Shelf not found")
     actor = _request_user(db, request)
     _enforce_store_scope(actor, shelf.zone.store_id)
-    if not db.get(models.Product, payload.product_id):
+    product = (
+        db.query(models.Product)
+        .filter(models.Product.id == payload.product_id)
+        .with_for_update()
+        .populate_existing()
+        .first()
+    )
+    if product is None:
         raise HTTPException(status_code=404, detail="Product not found")
+    if not product.is_active:
+        raise HTTPException(status_code=409, detail="Inactive products cannot be assigned to a shelf")
     if db.query(models.ShelfProduct).filter_by(
         shelf_id=payload.shelf_id, product_id=payload.product_id
     ).first():
