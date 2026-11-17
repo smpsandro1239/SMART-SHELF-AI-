@@ -75,7 +75,7 @@ from app.schemas import (
     BootstrapAdminCreate, LoginRequest, TokenRead, UserRead, UserCreate, ShelfImageRead,
     ShelfImageDetectionRead, ProductEmbeddingExemplarCreate,
     ProductEmbeddingExemplarReview, ProductEmbeddingExemplarRead,
-    DetectionSkuReviewCreate, DetectionSkuReviewRead,
+    DetectionSkuReviewCreate, DetectionSkuReviewRead, DetectionObservationCreate,
     ShelfImageOCRRunCreate, ShelfImageOCRRunRead, ShelfImageOCREvidenceRead,
     ShelfImageOCRMatchRead,
     ShelfImageFusedEvidenceRead, ShelfImageRetentionRequest, ShelfImageRetentionEventRead, ShelfImagePurgeScheduleRequest,
