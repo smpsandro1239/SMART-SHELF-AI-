@@ -35,7 +35,7 @@ from app.config import settings
 from app.database import get_db, SessionLocal
 from app import models
 from app.artifact_access_policy import evaluate_artifact_access
-from app.operational_decision_engine import evaluate_shelf_decision
+from app.operational_decision_engine import DecisionPolicy, evaluate_shelf_decision
 from app.observation_consensus import evaluate_observation_consensus
 from app.security import hash_password, verify_password, create_access_token, decode_access_token
 from app.product_text import (
@@ -7233,6 +7233,9 @@ def operational_decisions(
                 inventory=inventory_input,
                 demand_forecast=forecast_input,
                 active_tasks=[{"id": task.id, "status": task.status} for task in active_tasks],
+                # Keep decision eligibility aligned with the stricter refill policy below.
+                # An observation older than 120 minutes must not trigger a fresh action alert.
+                policy=DecisionPolicy(observation_max_age_minutes=120),
             )
         except ValueError as exc:
             result = {
