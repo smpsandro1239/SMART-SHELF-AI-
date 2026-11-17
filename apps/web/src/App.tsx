@@ -209,7 +209,7 @@ export default function App() {
   const [replenishmentPlan, setReplenishmentPlan] = useState<ReplenishmentPlan | null>(null);
   const [planLoading, setPlanLoading] = useState(false);
   const [planError, setPlanError] = useState("");
-  const [taskFocusFilter, setTaskFocusFilter] = useState<"ALL" | "ACTIVE" | "COMPLETED" | "URGENT">("ALL");
+  const [taskFocusFilter, setTaskFocusFilter] = useState<"ALL" | "ACTIVE" | "PENDING" | "ASSIGNED" | "IN_PROGRESS" | "COMPLETED" | "URGENT">("ALL");
   const navigateToSection = useCallback((sectionId: string) => {
     const target = document.getElementById(sectionId);
     if (!target) return;
@@ -665,7 +665,7 @@ export default function App() {
 
   const taskRows = useMemo(() => tasks.filter(task => {
     if (taskFocusFilter === "ACTIVE") return ["PENDING", "ASSIGNED", "IN_PROGRESS"].includes(task.status);
-    if (taskFocusFilter === "COMPLETED") return task.status === "COMPLETED";
+    if (taskFocusFilter === "PENDING" || taskFocusFilter === "ASSIGNED" || taskFocusFilter === "IN_PROGRESS" || taskFocusFilter === "COMPLETED") return task.status === taskFocusFilter;
     if (taskFocusFilter === "URGENT") return task.priority === "URGENT" && !["COMPLETED", "CANCELLED"].includes(task.status);
     return true;
   }), [tasks, taskFocusFilter]);
@@ -723,7 +723,7 @@ export default function App() {
           </section>
           <section className="content-grid">
             <article id="replenishment-tasks" className="panel task-panel">
-              <div className="panel-heading"><div><p className="eyebrow">EXECUÇÃO</p><h2>Tarefas de reposição</h2><p className="muted">Acompanhamento das intervenções registadas na API.</p></div><div className="task-panel-actions"><span className="subtle-pill">{taskRows.length} de {tasks.length} registos</span>{taskFocusFilter !== "ALL" && <button type="button" className="filter-reset" onClick={() => setTaskFocusFilter("ALL")}>Limpar filtro ×</button>}</div></div>
+              <div className="panel-heading"><div><p className="eyebrow">EXECUÇÃO</p><h2>Tarefas de reposição</h2><p className="muted">Acompanhamento das intervenções registadas na API.</p></div><div className="task-panel-actions"><span className="subtle-pill">{taskFocusFilter === "ALL" ? `${taskRows.length} de ${tasks.length} registos` : `${taskRows.length} tarefas · ${taskFocusFilter === "ACTIVE" ? "Ativas" : taskFocusFilter === "URGENT" ? "Urgentes" : taskFocusFilter === "PENDING" ? "Pendentes" : taskFocusFilter === "ASSIGNED" ? "Atribuídas" : taskFocusFilter === "IN_PROGRESS" ? "Em execução" : "Concluídas"}`}</span>{taskFocusFilter !== "ALL" && <button type="button" className="filter-reset" onClick={() => setTaskFocusFilter("ALL")}>Limpar filtro ×</button>}</div></div>
               <div className="task-list">
                 {taskRows.length === 0 && <div className="empty-state"><PackageSearch size={28} /><strong>{tasks.length ? "Sem tarefas neste filtro" : "Sem tarefas registadas"}</strong><span>{tasks.length ? "Altera o filtro para consultar outras tarefas." : "Quando forem criadas tarefas, aparecerão aqui."}</span>{tasks.length > 0 && <button type="button" className="row-action" onClick={() => setTaskFocusFilter("ALL")}>Mostrar todas as tarefas</button>}</div>}
                 {taskRows.map(task => <TaskRow
@@ -750,9 +750,9 @@ export default function App() {
             <article id="task-status-summary" className="panel status-panel">
               <div className="panel-heading"><div><p className="eyebrow">RESUMO</p><h2>Estado das tarefas</h2><p className="muted">Distribuição por estado.</p></div></div>
               <div className="status-total"><strong>{taskTotal}</strong><span>tarefas no total</span></div>
-              <StatusBar label="Pendentes" value={summary.tasks.pending || 0} total={taskTotal} color="amber" onClick={() => { setTaskFocusFilter("ACTIVE"); navigateToSection("replenishment-tasks"); }} />
-              <StatusBar label="Atribuídas" value={summary.tasks.assigned || 0} total={taskTotal} color="violet" onClick={() => { setTaskFocusFilter("ACTIVE"); navigateToSection("replenishment-tasks"); }} />
-              <StatusBar label="Em execução" value={summary.tasks.in_progress || 0} total={taskTotal} color="blue" onClick={() => { setTaskFocusFilter("ACTIVE"); navigateToSection("replenishment-tasks"); }} />
+              <StatusBar label="Pendentes" value={summary.tasks.pending || 0} total={taskTotal} color="amber" onClick={() => { setTaskFocusFilter("PENDING"); navigateToSection("replenishment-tasks"); }} />
+              <StatusBar label="Atribuídas" value={summary.tasks.assigned || 0} total={taskTotal} color="violet" onClick={() => { setTaskFocusFilter("ASSIGNED"); navigateToSection("replenishment-tasks"); }} />
+              <StatusBar label="Em execução" value={summary.tasks.in_progress || 0} total={taskTotal} color="blue" onClick={() => { setTaskFocusFilter("IN_PROGRESS"); navigateToSection("replenishment-tasks"); }} />
               <StatusBar label="Concluídas" value={summary.tasks.completed || 0} total={taskTotal} color="green" onClick={() => { setTaskFocusFilter("COMPLETED"); navigateToSection("replenishment-tasks"); }} />
               <div className="panel-note"><AlertTriangle size={16} /><span>{summary.observations.empty || 0} prateleiras sem stock e {summary.observations.low_stock || 0} com stock baixo, segundo as observações registadas.</span></div>
             </article>
