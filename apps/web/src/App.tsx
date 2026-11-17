@@ -725,7 +725,7 @@ export default function App() {
             <article id="replenishment-tasks" className="panel task-panel">
               <div className="panel-heading"><div><p className="eyebrow">EXECUÇÃO</p><h2>Tarefas de reposição</h2><p className="muted">Acompanhamento das intervenções registadas na API.</p></div><div className="task-panel-actions"><span className="subtle-pill">{taskRows.length} de {tasks.length} registos</span>{taskFocusFilter !== "ALL" && <button type="button" className="filter-reset" onClick={() => setTaskFocusFilter("ALL")}>Limpar filtro ×</button>}</div></div>
               <div className="task-list">
-                {taskRows.length === 0 && <div className="empty-state"><PackageSearch size={28} /><strong>{tasks.length ? "Sem tarefas neste filtro" : "Sem tarefas registadas"}</strong><span>{tasks.length ? "Altera o filtro para consultar outras tarefas." : "Quando forem criadas tarefas, aparecerão aqui."}</span>{tasks.length > 0 && <button type="button" className="row-action" onClick={() => setTaskFocusFilter("ALL")}>Mostrar todas as tarefas</button>}</div>
+                {taskRows.length === 0 && <div className="empty-state"><PackageSearch size={28} /><strong>{tasks.length ? "Sem tarefas neste filtro" : "Sem tarefas registadas"}</strong><span>{tasks.length ? "Altera o filtro para consultar outras tarefas." : "Quando forem criadas tarefas, aparecerão aqui."}</span>{tasks.length > 0 && <button type="button" className="row-action" onClick={() => setTaskFocusFilter("ALL")}>Mostrar todas as tarefas</button>}</div>}
                 {taskRows.map(task => <TaskRow
                   key={task.id}
                   task={task}
