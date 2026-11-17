@@ -7109,7 +7109,16 @@ def operational_decisions(
         if snapshot is not None:
             snapshot_at = aware(snapshot.captured_at)
             snapshot_age_minutes = max(0.0, (aware(now) - snapshot_at).total_seconds() / 60)
-            snapshot_is_fresh = snapshot_at <= aware(now) and snapshot_age_minutes <= 240
+            freshness_policy = (
+                db.query(models.InventoryFreshnessPolicy)
+                .filter_by(store_id=zone.store_id, source=snapshot.source)
+                .first()
+            )
+            max_inventory_age_minutes = freshness_policy.max_age_minutes if freshness_policy else 240
+            snapshot_is_fresh = (
+                snapshot_at <= aware(now)
+                and snapshot_age_minutes <= max_inventory_age_minutes
+            )
             backroom_inventory = {
                 "on_hand_quantity": float(snapshot.on_hand_quantity),
                 "reserved_quantity": float(snapshot.reserved_quantity),
@@ -7117,6 +7126,7 @@ def operational_decisions(
                 "source": snapshot.source,
                 "captured_at": snapshot_at.isoformat(),
                 "age_minutes": round(snapshot_age_minutes, 1),
+                "max_age_minutes": max_inventory_age_minutes,
                 "is_fresh": snapshot_is_fresh,
             }
             if snapshot_is_fresh:
