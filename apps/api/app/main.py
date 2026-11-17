@@ -2694,7 +2694,7 @@ def list_shelf_image_detections(
         .join(models.Shelf, models.ShelfImage.shelf_id == models.Shelf.id)
         .join(models.Zone, models.Shelf.zone_id == models.Zone.id)
         .filter(models.ShelfImage.id == image_id)
-        .with_for_update()
+        .with_for_update(of=models.ShelfImage)
         .populate_existing()
         .first()
     )
