@@ -27,3 +27,10 @@
 - [x] Integrar smoke test de concorrência PostgreSQL no API CI.
 - [ ] Confirmar migração 0054 e todos os pipelines após execução no CI.
 - [ ] Avaliar dados existentes antes de aplicar a migração em ambientes com histórico real; duplicados preexistentes devem ser saneados antes da criação dos índices.
+
+
+## Inventário físico e registo de paletes (17-11-2026)
+- [x] Confirmar que o registo de uma palete física valida produto, embalagem PALLET, capacidade e loja, e cria evento inicial de auditoria.
+- [x] Acrescentar regressão que confirma que registar uma palete não altera snapshots agregados nem movimentos de stock; a palete é um registo físico, não uma recepção automática de inventário.
+- [ ] Validar a nova regressão no API CI e concluir Quality Gates e Demo Docker Compose smoke.
+- [ ] Definir, numa fase própria, uma reconciliação explícita entre paletes físicas e stock agregado; não somar automaticamente estes domínios enquanto não existir regra de negócio para evitar dupla contabilização.
