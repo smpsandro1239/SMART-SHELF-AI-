@@ -27,9 +27,8 @@
 - [x] Suite API completa: 1 097 testes aprovados, 1 ignorado; compilação Python aprovada.
 - [x] Build TypeScript/produção do frontend aprovado.
 - [x] CI PostgreSQL: migrações e smokes de integridade, isolamento, concorrência, ciclo de tarefa e reconciliação aprovados.
-- [ ] Confirmar execução bem-sucedida do novo workflow de validação Bash.
-- [ ] Validar instalação limpa real com Docker Compose, API, PostgreSQL, worker e frontend.
-- [ ] Percorrer manualmente o cenário integral com os três perfis e confirmar movimento/snapshot/auditoria finais.
+- [x] Confirmar execução bem-sucedida do workflow Docker Compose smoke: build e arranque de PostgreSQL/API/worker, readiness após migrações, seed, imagem sintética, worker ativo e autenticação/autorização dos três perfis (PR #4, commit `452583eaec108a176190d19cb097cf3a8a872ede`). Esta validação corre num runner efémero; não equivale a ensaio manual local.
+- [ ] Executar localmente a interface e percorrer manualmente o cenário integral com os três perfis, confirmando movimento/snapshot/auditoria finais (checklist em [DEMO.md](DEMO.md)).
 - [ ] Capturar screenshots reais do percurso; as instruções de captura estão em [DEMO.md](DEMO.md).
 
 ## Fora do âmbito desta fase
