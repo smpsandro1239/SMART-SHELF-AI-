@@ -7171,6 +7171,17 @@ def operational_decisions(
                     "requires_human_review": True,
                     "explanation": "A observação tem uma data futura e não pode suportar uma proposta de reposição.",
                 }
+            elif observation_age_minutes > 120:
+                replenishment_assessment = {
+                    "status": "STALE_OBSERVATION",
+                    "suggested_quantity": None,
+                    "shelf_gap_quantity": None,
+                    "remaining_gap_quantity": None,
+                    "requires_human_review": True,
+                    "explanation": "A observação é demasiado antiga para suportar uma tarefa de reposição, mesmo sem contagem física validada.",
+                    "observation_age_minutes": round(observation_age_minutes, 1),
+                    "max_observation_age_minutes": 120,
+                }
             elif observation.observed_quantity is not None:
                 try:
                     refill = suggest_shelf_refill(ShelfRefillInput(
