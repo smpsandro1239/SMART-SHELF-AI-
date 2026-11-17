@@ -6986,6 +6986,8 @@ def list_replenishment_tasks(
 ):
     limit = max(1, min(limit, 500))
     actor = _request_user(db, request)
+    if actor is not None and actor.role != "ADMIN" and store_id is not None:
+        _enforce_store_scope(actor, store_id)
     query = db.query(models.ReplenishmentTask)
     if actor is not None and actor.role == "EMPLOYEE":
         query = query.filter(models.ReplenishmentTask.assigned_user_id == actor.id)
