@@ -711,6 +711,156 @@ def main() -> None:
         finally:
             retention_db.close()
 
+        # Two different completed tasks must not spend the same backroom
+        # snapshot twice. They deliberately share one product and source
+        # snapshot but belong to separate shelves, so the active-task index
+        # does not serialize their creation.
+        contention_zone = client.post(
+            "/api/v1/zones",
+            json={"store_id": store_id, "name": f"CI contention zone {suffix}"},
+        )
+        assert contention_zone.status_code == 201, contention_zone.text
+        contention_shelves = []
+        for index in (1, 2):
+            shelf_response = client.post(
+                "/api/v1/shelves",
+                json={
+                    "zone_id": contention_zone.json()["id"],
+                    "code": f"CI-CONT-{suffix}-{index}",
+                },
+            )
+            assert shelf_response.status_code == 201, shelf_response.text
+            contention_shelves.append(shelf_response.json()["id"])
+
+        contention_product = client.post(
+            "/api/v1/products",
+            json={"sku": f"CI-CONT-{suffix}", "name": "CI shared-stock contention product"},
+        )
+        assert contention_product.status_code == 201, contention_product.text
+        contention_product_id = contention_product.json()["id"]
+        for contention_shelf_id in contention_shelves:
+            assignment = client.post(
+                "/api/v1/shelf-products",
+                json={
+                    "shelf_id": contention_shelf_id,
+                    "product_id": contention_product_id,
+                    "target_quantity": 8,
+                    "min_display_quantity": 1,
+                },
+            )
+            assert assignment.status_code == 201, assignment.text
+
+        contention_source = client.post(
+            "/api/v1/inventory/snapshots",
+            json={
+                "store_id": store_id,
+                "product_id": contention_product_id,
+                "on_hand_quantity": 5,
+                "reserved_quantity": 0,
+                "source": "WMS",
+                "external_reference": f"CI-CONT-SOURCE-{suffix}",
+            },
+        )
+        assert contention_source.status_code == 201, contention_source.text
+
+        contention_task_ids = []
+        for index, contention_shelf_id in enumerate(contention_shelves, start=1):
+            task_response = client.post(
+                "/api/v1/tasks",
+                json={
+                    "store_id": store_id,
+                    "shelf_id": contention_shelf_id,
+                    "product_id": contention_product_id,
+                    "requested_quantity": 4,
+                },
+            )
+            assert task_response.status_code == 201, task_response.text
+            contention_task_id = task_response.json()["id"]
+            contention_task_ids.append(contention_task_id)
+            assigned_response = client.patch(
+                f"/api/v1/tasks/{contention_task_id}/status",
+                json={"status": "ASSIGNED", "assigned_to": f"CI contention operator {index}"},
+            )
+            assert assigned_response.status_code == 200, assigned_response.text
+            started_response = client.patch(
+                f"/api/v1/tasks/{contention_task_id}/status",
+                json={"status": "IN_PROGRESS"},
+            )
+            assert started_response.status_code == 200, started_response.text
+            completed_response = client.patch(
+                f"/api/v1/tasks/{contention_task_id}/status",
+                json={"status": "COMPLETED", "actual_quantity": 4},
+            )
+            assert completed_response.status_code == 200, completed_response.text
+
+        contention_barrier = Barrier(2)
+
+        def reconcile_distinct_task(task_id: int):
+            contention_barrier.wait(timeout=10)
+            return client.post(
+                f"/api/v1/tasks/{task_id}/reconcile-inventory",
+                json={"reason": "CI shared-stock concurrency verification."},
+            )
+
+        original_request_user_for_contention = main_module._request_user
+        main_module._request_user = lambda db, request: actor
+        try:
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                contention_responses = list(
+                    executor.map(
+                        reconcile_distinct_task,
+                        contention_task_ids,
+                    )
+                )
+        finally:
+            main_module._request_user = original_request_user_for_contention
+
+        contention_created = [
+            response for response in contention_responses
+            if response.status_code == 201
+        ]
+        contention_rejected = [
+            response for response in contention_responses
+            if response.status_code == 409
+        ]
+        assert len(contention_created) == 1, [
+            response.text for response in contention_responses
+        ]
+        assert len(contention_rejected) == 1, [
+            response.text for response in contention_responses
+        ]
+        rejected_code = contention_rejected[0].json()["detail"]["code"]
+        assert rejected_code in {
+            "INVENTORY_EVIDENCE_AFTER_TASK",
+            "INSUFFICIENT_BACKROOM_STOCK",
+        }, contention_rejected[0].text
+
+        contention_db = SessionLocal()
+        try:
+            contention_movements = (
+                contention_db.query(models.InventoryMovement)
+                .filter(
+                    models.InventoryMovement.product_id == contention_product_id,
+                    models.InventoryMovement.store_id == store_id,
+                )
+                .all()
+            )
+            assert len(contention_movements) == 1, len(contention_movements)
+            assert float(contention_movements[0].quantity) == 4
+            contention_snapshots = (
+                contention_db.query(models.InventorySnapshot)
+                .filter(
+                    models.InventorySnapshot.product_id == contention_product_id,
+                    models.InventorySnapshot.store_id == store_id,
+                )
+                .order_by(models.InventorySnapshot.id)
+                .all()
+            )
+            assert len(contention_snapshots) == 2, len(contention_snapshots)
+            assert float(contention_snapshots[-1].on_hand_quantity) == 1
+        finally:
+            contention_db.close()
+
         print(
             "PostgreSQL concurrent task creation: PASS "
             "(three task-creation paths and approved reconciliation each return one 201 and one 409; "
