@@ -19,3 +19,11 @@
 - [ ] Keep ROADMAP.md aligned with implemented and validated capabilities.
 - [x] Implement dashboard UX refinements: human-readable durations, Europe/Lisbon timestamps, stronger contrast palette, non-colour status cues, compact single-task layout and clickable summary cards with exact task-state filters; Web CI and frontend quality build passed.
 - [ ] Complete manual browser/keyboard and full-state contrast audit before claiming formal WCAG AA conformance.
+
+
+## Integridade das unidades logísticas (17-11-2026)
+- [x] Adicionar índices únicos parciais para garantir uma única unidade activa de encomenda e uma única unidade activa de reposição por produto, ao nível da base de dados.
+- [x] Acrescentar teste API para rejeitar configurações duplicadas de unidades logísticas.
+- [x] Integrar smoke test de concorrência PostgreSQL no API CI.
+- [ ] Confirmar migração 0054 e todos os pipelines após execução no CI.
+- [ ] Avaliar dados existentes antes de aplicar a migração em ambientes com histórico real; duplicados preexistentes devem ser saneados antes da criação dos índices.
