@@ -1,4 +1,5 @@
 import pytest
+from datetime import timedelta
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
@@ -343,6 +344,59 @@ def test_worker_stops_before_ocr_when_image_is_restricted_during_inference(db, t
     assert stored_image.analysis_error == "Image restricted during processing"
     assert db.query(models.ShelfImageDetection).filter_by(shelf_image_id=image_id).count() == 0
     assert db.query(models.ShelfImageOCRRun).filter_by(shelf_image_id=image_id).count() == 0
+
+
+
+
+def test_worker_does_not_fail_image_after_losing_processing_lease(db, tmp_path, monkeypatch):
+    import app.vision_worker as worker
+
+    store = models.Store(code="LEASE-LOSS", name="Lease Loss")
+    db.add(store)
+    db.flush()
+    zone = models.Zone(store_id=store.id, name="Zona")
+    db.add(zone)
+    db.flush()
+    shelf = models.Shelf(zone_id=zone.id, code="LEASE-01")
+    db.add(shelf)
+    db.flush()
+
+    storage_root = tmp_path / "storage"
+    monkeypatch.setattr(worker.settings, "image_storage_path", str(storage_root))
+    image_path = storage_root / str(store.id) / "lease.jpg"
+    image_path.parent.mkdir(parents=True)
+    image_path.write_bytes(b"test-image")
+    image = models.ShelfImage(
+        shelf_id=shelf.id,
+        original_filename="lease.jpg",
+        storage_path=str(image_path),
+        mime_type="image/jpeg",
+        file_size_bytes=10,
+        sha256="f" * 64,
+        analysis_status="PENDING",
+        retention_status="ACTIVE",
+    )
+    db.add(image)
+    db.commit()
+    image_id = image.id
+    replacement_lease = models.utc_now() + timedelta(seconds=30)
+
+    class LeaseTakingOverProvider:
+        def analyze(self, path):
+            stored = db.get(models.ShelfImage, image_id)
+            stored.analysis_status = "PROCESSING"
+            stored.analysis_started_at = replacement_lease
+            stored.analysis_error = None
+            db.commit()
+            raise RuntimeError("old worker failed after lease takeover")
+
+    assert worker.process_next_image(db, LeaseTakingOverProvider()) == image_id
+
+    stored_image = db.get(models.ShelfImage, image_id)
+    assert stored_image.analysis_status == "PROCESSING"
+    assert stored_image.analysis_started_at == replacement_lease
+    assert stored_image.analysis_error is None
+    assert stored_image.analysis_completed_at is None
 
 
 def test_worker_rejects_image_path_outside_owning_store_directory(db, tmp_path, monkeypatch):
