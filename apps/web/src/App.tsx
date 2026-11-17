@@ -733,8 +733,11 @@ export default function App() {
                 <div><span>Prioridade alta</span><strong>{operationalDecisions.priority_counts?.HIGH || 0}</strong></div>
                 <div><span>Em acompanhamento</span><strong>{operationalDecisions.status_counts.MONITOR || 0}</strong></div>
                 <div><span>Já em execução</span><strong>{operationalDecisions.status_counts.ALREADY_IN_PROGRESS || 0}</strong></div>
+                <div><span>Observação expirada</span><strong>{operationalDecisions.decisions.filter(item => item.replenishment_assessment?.status === "STALE_OBSERVATION").length}</strong></div>
+                <div><span>Retaguarda desatualizada</span><strong>{operationalDecisions.decisions.filter(item => item.backroom_inventory && !item.backroom_inventory.is_fresh).length}</strong></div>
               </div>
               <p className="decision-method">{operationalDecisions.forecast_policy}</p>
+              {(operationalDecisions.decisions.some(item => item.replenishment_assessment?.status === "STALE_OBSERVATION") || operationalDecisions.decisions.some(item => item.backroom_inventory && !item.backroom_inventory.is_fresh)) && <p className="decision-freshness-notice" role="status">Existem dados operacionais desatualizados. As observações expiradas não sustentam uma nova recomendação de reposição e o inventário de retaguarda desatualizado não deve ser usado para aprovar movimentos.</p>}
               {(operationalDecisions.zone_summaries ?? []).length > 0 && <div className="decision-zone-grid">
                 {(operationalDecisions.zone_summaries ?? []).map(zone => <article className="decision-zone-card" key={`${zone.store_id}-${zone.zone_name}`}>
                   <div className="decision-zone-heading"><strong>{zone.zone_name}</strong><span>{zone.items_evaluated} referências</span></div>
@@ -771,6 +774,7 @@ export default function App() {
                       <span>Quantidade sugerida: <strong>{item.replenishment_assessment.suggested_quantity == null ? "Não calculada" : item.replenishment_assessment.suggested_quantity}</strong></span>
                       <span>Diferença até ao alvo: <strong>{item.replenishment_assessment.shelf_gap_quantity == null ? "—" : item.replenishment_assessment.shelf_gap_quantity}</strong></span>
                       <span>Por cobrir: <strong>{item.replenishment_assessment.remaining_gap_quantity == null ? "—" : item.replenishment_assessment.remaining_gap_quantity}</strong></span>
+                      {item.replenishment_assessment.observation_age_minutes != null && <span>Idade da observação: <strong>{item.replenishment_assessment.observation_age_minutes.toFixed(0)} min</strong></span>}
                     </div>
                     {item.replenishment_assessment.requires_human_review && <p className="decision-method">Requer validação humana antes de criar uma tarefa ou movimentar stock.</p>}
                     {item.replenishment_assessment.status === "NEEDS_REPLENISHMENT" && item.replenishment_assessment.suggested_quantity != null && <><label className="demo-assignee">Atribuir ao funcionário
