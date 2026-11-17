@@ -39,6 +39,7 @@ def test_demo_detection_requires_human_review_and_is_idempotent(monkeypatch):
         db.flush()
         shelf = models.Shelf(zone_id=zone.id, code="DEMO-OBS-01")
         product = models.Product(sku="DEMO-OBS-SKU", name="Demo product")
+        other_product = models.Product(sku="DEMO-OBS-OTHER", name="Other shelf product")
         reviewer = models.User(
             email="supervisor@demo-observation.test",
             full_name="Demo Supervisor",
@@ -47,9 +48,17 @@ def test_demo_detection_requires_human_review_and_is_idempotent(monkeypatch):
             store_id=store.id,
             is_active=True,
         )
-        db.add_all([shelf, product, reviewer])
+        db.add_all([shelf, product, other_product, reviewer])
         db.flush()
-        db.add(models.ShelfProduct(shelf_id=shelf.id, product_id=product.id, target_quantity=8, min_display_quantity=2))
+        db.add_all([
+            models.ShelfProduct(shelf_id=shelf.id, product_id=product.id, target_quantity=8, min_display_quantity=2),
+            models.ShelfProduct(shelf_id=shelf.id, product_id=other_product.id, target_quantity=8, min_display_quantity=2),
+            models.InventorySnapshot(
+                store_id=store.id, product_id=product.id, on_hand_quantity=12,
+                reserved_quantity=0, source="MANUAL", external_reference="demo-observation-test-v1",
+                captured_at=models.utc_now(),
+            ),
+        ])
         image = models.ShelfImage(
             shelf_id=shelf.id,
             original_filename="synthetic.png",
@@ -75,11 +84,11 @@ def test_demo_detection_requires_human_review_and_is_idempotent(monkeypatch):
         )
         db.add(detection)
         db.commit()
-        ids = (reviewer.id, store.id, product.id, detection.id)
+        ids = (reviewer.id, store.id, product.id, other_product.id, detection.id)
     finally:
         db.close()
 
-    reviewer_id, store_id, product_id, detection_id = ids
+    reviewer_id, store_id, product_id, other_product_id, detection_id = ids
     monkeypatch.setattr(
         main_module,
         "_request_user",
@@ -115,6 +124,7 @@ def test_demo_detection_requires_human_review_and_is_idempotent(monkeypatch):
             f"/api/v1/shelf-image-detections/{detection_id}/observation",
             json={"product_id": product_id},
         )
+        decisions = client.get(f"/api/v1/operational-decisions?store_id={store_id}")
 
     assert first.status_code == 200
     assert second.status_code == 200
@@ -122,6 +132,10 @@ def test_demo_detection_requires_human_review_and_is_idempotent(monkeypatch):
     assert first.json()["status"] == "EMPTY"
     assert first.json()["observed_quantity"] == 0
     assert f"sha256={'a' * 64}" in first.json()["notes"]
+    assert decisions.status_code == 200
+    by_product = {row["product_id"]: row for row in decisions.json()["decisions"]}
+    assert by_product[product_id]["replenishment_assessment"] is not None
+    assert by_product[other_product_id]["replenishment_assessment"] is None
 
     db = TestingSession()
     try:
