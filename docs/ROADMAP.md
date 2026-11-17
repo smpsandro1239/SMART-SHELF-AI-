@@ -20,6 +20,7 @@
 - [x] Acrescentar testes do provider, seed, worker, revisão/observação idempotente e isolamento da listagem de funcionários.
 - [x] Criar um pré-validador local read-only para Docker Compose, serviços, readiness da API, frontend e imagem sintética.
 - [x] Criar workflow dedicado para validar a sintaxe Bash do pré-validador.
+- [x] Documentar checklist de aceitação ponta-a-ponta por perfil, proveniência, reconciliação e dashboard.
 
 ### Validação
 
