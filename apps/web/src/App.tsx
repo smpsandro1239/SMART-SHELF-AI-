@@ -133,6 +133,30 @@ type Summary = {
   tasks: Record<string, number>; observations: Record<string, number>; note: string;
 };
 
+function formatDurationMinutes(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value)) return "—";
+  const totalMinutes = Math.max(0, Math.floor(value));
+  const days = Math.floor(totalMinutes / 1440);
+  const hours = Math.floor((totalMinutes % 1440) / 60);
+  const minutes = totalMinutes % 60;
+  return [days ? `${days} d` : "", hours ? `${hours} h` : "", minutes || (!days && !hours) ? `${minutes} min` : ""].filter(Boolean).join(" ");
+}
+
+function formatDateTime(value: string | Date): string {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "Data indisponível";
+  return new Intl.DateTimeFormat("pt-PT", {
+    day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit",
+    timeZone: "Europe/Lisbon", timeZoneName: "short",
+  }).format(date);
+}
+
+function formatTime(value: Date): string {
+  return new Intl.DateTimeFormat("pt-PT", {
+    hour: "2-digit", minute: "2-digit", timeZone: "Europe/Lisbon", timeZoneName: "short",
+  }).format(value);
+}
+
 function apiError(message: string) { throw new Error(message); }
 
 export default function App() {
@@ -185,6 +209,14 @@ export default function App() {
   const [replenishmentPlan, setReplenishmentPlan] = useState<ReplenishmentPlan | null>(null);
   const [planLoading, setPlanLoading] = useState(false);
   const [planError, setPlanError] = useState("");
+  const [taskFocusFilter, setTaskFocusFilter] = useState<"ALL" | "ACTIVE" | "COMPLETED" | "URGENT">("ALL");
+  const navigateToSection = useCallback((sectionId: string) => {
+    const target = document.getElementById(sectionId);
+    if (!target) return;
+    target.scrollIntoView({ behavior: "smooth", block: "start" });
+    target.setAttribute("tabindex", "-1");
+    target.focus({ preventScroll: true });
+  }, []);
 
 
   const request = useCallback(async <T,>(path: string, init: RequestInit = {}): Promise<T> => {
@@ -631,7 +663,12 @@ export default function App() {
     }
   }
 
-  const taskRows = useMemo(() => tasks, [tasks]);
+  const taskRows = useMemo(() => tasks.filter(task => {
+    if (taskFocusFilter === "ACTIVE") return ["PENDING", "ASSIGNED", "IN_PROGRESS"].includes(task.status);
+    if (taskFocusFilter === "COMPLETED") return task.status === "COMPLETED";
+    if (taskFocusFilter === "URGENT") return task.priority === "URGENT" && !["COMPLETED", "CANCELLED"].includes(task.status);
+    return true;
+  }), [tasks, taskFocusFilter]);
   const taskTotal = summary ? Object.values(summary.tasks).reduce((a, b) => a + b, 0) : 0;
 
   if (!token) return (
@@ -658,13 +695,13 @@ export default function App() {
       <aside className="sidebar">
         <div className="sidebar-brand"><div className="brand-mark small"><Warehouse size={20} /></div><div><strong>SMART SHELF</strong><span>INTELLIGENCE PLATFORM</span></div></div>
         <div className="nav-label">ESPAÇO DE TRABALHO</div>
-        <div className="nav-item active"><Activity size={18} /> Visão geral</div>
-        <div className="nav-item"><PackageSearch size={18} /> Tarefas de reposição <span className="nav-count">{summary?.active_tasks ?? "—"}</span></div>
-        <div className="nav-item"><Store size={18} /> Operação da loja</div>
+        <button type="button" className="nav-item active" onClick={() => navigateToSection("dashboard-top")}><Activity size={18} /> Visão geral</button>
+        <button type="button" className="nav-item" onClick={() => { setTaskFocusFilter("ALL"); navigateToSection("replenishment-tasks"); }}><PackageSearch size={18} /> Tarefas de reposição <span className="nav-count">{summary?.active_tasks ?? "—"}</span></button>
+        <button type="button" className="nav-item" onClick={() => navigateToSection("operational-decisions")}><Store size={18} /> Operação da loja</button>
         <div className="sidebar-bottom"><div className="status-dot" /> API ligada por sessão</div>
       </aside>
       <main className="main-area">
-        <header className="topbar">
+        <header id="dashboard-top" className="topbar">
           <div><p className="eyebrow">OPERAÇÕES / DASHBOARD</p><h1>Visão geral</h1></div>
           <div className="top-actions">
             <button className="icon-button" onClick={() => void refresh()} title="Atualizar dados" disabled={loading}><RefreshCw size={17} className={loading ? "spin" : ""} /></button>
@@ -673,22 +710,22 @@ export default function App() {
           </div>
         </header>
         <section className="toolbar">
-          <div><span className="live-dot" /> <strong>Dados operacionais</strong> <span className="subtle-pill">Demo mode · provider mock quando configurado</span><span className="muted"> · {lastUpdated ? `Atualizado às ${lastUpdated.toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" })}` : "A sincronizar"}</span></div>
+          <div><span className="live-dot" /> <strong>Dados operacionais</strong> <span className="subtle-pill">Demo mode · provider mock quando configurado</span><span className="muted"> · {lastUpdated ? `Atualizado às ${formatTime(lastUpdated)}` : "A sincronizar"}</span></div>
           {user?.role === "ADMIN" && <label className="store-filter"><Store size={15} /><input aria-label="Filtrar por ID da loja" placeholder="Todas as lojas · ID opcional" value={storeFilter} onChange={e => setStoreFilter(e.target.value)} onKeyDown={e => { if (e.key === "Enter") void refresh(); }} /><button onClick={() => void refresh()}>Aplicar</button></label>}
         </section>
         {error && <div className="error-banner page-error" role="alert"><AlertTriangle size={17} /> {error}</div>}
         {summary && <>
-          <section className="metric-grid">
-            <Metric icon={<AlertTriangle />} label="Prateleiras a necessitar de atenção" value={summary.shelves_requiring_attention} tone="orange" detail="Rutura ou stock baixo" />
-            <Metric icon={<Clock3 />} label="Tarefas ativas" value={summary.active_tasks} tone="blue" detail="Pendentes, atribuídas ou em curso" />
-            <Metric icon={<CheckCircle2 />} label="Tarefas concluídas" value={summary.tasks.completed || 0} tone="green" detail="No conjunto de registos consultado" />
-            <Metric icon={<Truck />} label="Tarefas urgentes" value={tasks.filter(t => t.priority === "URGENT" && !["COMPLETED", "CANCELLED"].includes(t.status)).length} tone="purple" detail="A aguardar intervenção" />
+          <section id="dashboard-metrics" className="metric-grid">
+            <Metric icon={<AlertTriangle />} label="Prateleiras a necessitar de atenção" value={summary.shelves_requiring_attention} tone="orange" detail="Rutura ou stock baixo" onClick={() => navigateToSection("operational-decisions")} />
+            <Metric icon={<Clock3 />} label="Tarefas ativas" value={summary.active_tasks} tone="blue" detail="Pendentes, atribuídas ou em curso" onClick={() => { setTaskFocusFilter("ACTIVE"); navigateToSection("replenishment-tasks"); }} />
+            <Metric icon={<CheckCircle2 />} label="Tarefas concluídas" value={summary.tasks.completed || 0} tone="green" detail="No conjunto de registos consultado" onClick={() => { setTaskFocusFilter("COMPLETED"); navigateToSection("replenishment-tasks"); }} />
+            <Metric icon={<Truck />} label="Tarefas urgentes" value={tasks.filter(t => t.priority === "URGENT" && !["COMPLETED", "CANCELLED"].includes(t.status)).length} tone="purple" detail="A aguardar intervenção" onClick={() => { setTaskFocusFilter("URGENT"); navigateToSection("replenishment-tasks"); }} />
           </section>
           <section className="content-grid">
-            <article className="panel task-panel">
-              <div className="panel-heading"><div><p className="eyebrow">EXECUÇÃO</p><h2>Tarefas de reposição</h2><p className="muted">Acompanhamento das intervenções registadas na API.</p></div><span className="subtle-pill">{taskRows.length} registos</span></div>
+            <article id="replenishment-tasks" className="panel task-panel">
+              <div className="panel-heading"><div><p className="eyebrow">EXECUÇÃO</p><h2>Tarefas de reposição</h2><p className="muted">Acompanhamento das intervenções registadas na API.</p></div><div className="task-panel-actions"><span className="subtle-pill">{taskRows.length} de {tasks.length} registos</span>{taskFocusFilter !== "ALL" && <button type="button" className="filter-reset" onClick={() => setTaskFocusFilter("ALL")}>Limpar filtro ×</button>}</div></div>
               <div className="task-list">
-                {taskRows.length === 0 && <div className="empty-state"><PackageSearch size={28} /><strong>Sem tarefas registadas</strong><span>Quando forem criadas tarefas, aparecerão aqui.</span></div>}
+                {taskRows.length === 0 && <div className="empty-state"><PackageSearch size={28} /><strong>{tasks.length ? "Sem tarefas neste filtro" : "Sem tarefas registadas"}</strong><span>{tasks.length ? "Altera o filtro para consultar outras tarefas." : "Quando forem criadas tarefas, aparecerão aqui."}</span>{tasks.length > 0 && <button type="button" className="row-action" onClick={() => setTaskFocusFilter("ALL")}>Mostrar todas as tarefas</button>}</div>
                 {taskRows.map(task => <TaskRow
                   key={task.id}
                   task={task}
@@ -710,17 +747,17 @@ export default function App() {
                 />)}
               </div>
             </article>
-            <article className="panel status-panel">
+            <article id="task-status-summary" className="panel status-panel">
               <div className="panel-heading"><div><p className="eyebrow">RESUMO</p><h2>Estado das tarefas</h2><p className="muted">Distribuição por estado.</p></div></div>
               <div className="status-total"><strong>{taskTotal}</strong><span>tarefas no total</span></div>
-              <StatusBar label="Pendentes" value={summary.tasks.pending || 0} total={taskTotal} color="amber" />
-              <StatusBar label="Atribuídas" value={summary.tasks.assigned || 0} total={taskTotal} color="violet" />
-              <StatusBar label="Em execução" value={summary.tasks.in_progress || 0} total={taskTotal} color="blue" />
-              <StatusBar label="Concluídas" value={summary.tasks.completed || 0} total={taskTotal} color="green" />
+              <StatusBar label="Pendentes" value={summary.tasks.pending || 0} total={taskTotal} color="amber" onClick={() => { setTaskFocusFilter("ACTIVE"); navigateToSection("replenishment-tasks"); }} />
+              <StatusBar label="Atribuídas" value={summary.tasks.assigned || 0} total={taskTotal} color="violet" onClick={() => { setTaskFocusFilter("ACTIVE"); navigateToSection("replenishment-tasks"); }} />
+              <StatusBar label="Em execução" value={summary.tasks.in_progress || 0} total={taskTotal} color="blue" onClick={() => { setTaskFocusFilter("ACTIVE"); navigateToSection("replenishment-tasks"); }} />
+              <StatusBar label="Concluídas" value={summary.tasks.completed || 0} total={taskTotal} color="green" onClick={() => { setTaskFocusFilter("COMPLETED"); navigateToSection("replenishment-tasks"); }} />
               <div className="panel-note"><AlertTriangle size={16} /><span>{summary.observations.empty || 0} prateleiras sem stock e {summary.observations.low_stock || 0} com stock baixo, segundo as observações registadas.</span></div>
             </article>
           </section>
-          {(user?.role === "ADMIN" || user?.role === "SUPERVISOR") && <section className="panel decision-panel">
+          {(user?.role === "ADMIN" || user?.role === "SUPERVISOR") && <section id="operational-decisions" className="panel decision-panel">
             <div className="panel-heading">
               <div><p className="eyebrow">INTELIGÊNCIA OPERACIONAL</p><h2>Decisões e alertas por prateleira</h2><p className="muted">Cruza observações, inventário, vendas recentes e tarefas ativas. Apenas recomenda; não cria tarefas nem altera stock.</p></div>
               <button className="row-action" onClick={() => void refresh()} disabled={loading || decisionLoading}>{decisionLoading ? "A atualizar…" : "Atualizar decisões"} <RefreshCw size={14} /></button>
@@ -739,7 +776,7 @@ export default function App() {
               <p className="decision-method">{operationalDecisions.forecast_policy}</p>
               {(operationalDecisions.decisions.some(item => item.replenishment_assessment?.status === "STALE_OBSERVATION") || operationalDecisions.decisions.some(item => item.backroom_inventory && !item.backroom_inventory.is_fresh)) && <p className="decision-freshness-notice" role="status">Existem dados operacionais desatualizados. As observações expiradas não sustentam uma nova recomendação de reposição e o inventário de retaguarda desatualizado não deve ser usado para aprovar movimentos.</p>}
               {(operationalDecisions.zone_summaries ?? []).length > 0 && <div className="decision-zone-grid">
-                {(operationalDecisions.zone_summaries ?? []).map(zone => <article className="decision-zone-card" key={`${zone.store_id}-${zone.zone_name}`}>
+                {(operationalDecisions.zone_summaries ?? []).map(zone => <button type="button" className="decision-zone-card" key={`${zone.store_id}-${zone.zone_name}`} aria-label={`Consultar decisões da zona ${zone.zone_name}`} onClick={() => navigateToSection("decision-list")}>
                   <div className="decision-zone-heading"><strong>{zone.zone_name}</strong><span>{zone.items_evaluated} referências</span></div>
                   <div className="decision-zone-metrics">
                     <span><strong>{zone.high_priority}</strong> prioridade alta</span>
@@ -752,9 +789,9 @@ export default function App() {
                     <span><strong>{item.product_name}</strong><small>{item.product_sku} · {item.shelf_code}</small></span>
                     <b>{item.priority === "HIGH" ? "ALTA" : "NORMAL"}</b>
                   </div>)}
-                </article>)}
+                </button>)}
               </div>}
-              <div className="decision-list">
+              <div id="decision-list" className="decision-list">
                 {operationalDecisions.decisions.length === 0 && <div className="empty-state"><ShieldCheck size={24} /><strong>Sem produtos associados a prateleiras</strong><span>Quando existirem associações e evidência registada, o motor apresentará as decisões aqui.</span></div>}
                 {operationalDecisions.decisions.map(item => <article className="decision-row" key={`${item.shelf_id}-${item.product_id}`}>
                   <div className="decision-product"><strong>{item.product_name}</strong><span>{item.product_sku} · {item.zone_name} · Prateleira {item.shelf_code}</span></div>
@@ -766,7 +803,7 @@ export default function App() {
                     <span>Cobertura estimada: <strong>{item.decision.inventory_coverage_hours == null ? "—" : `${item.decision.inventory_coverage_hours.toFixed(1)} h`}</strong></span><span>Fontes: <strong>{item.decision.evidence.length}</strong></span>
                     {item.backroom_inventory && <span>Retaguarda disponível: <strong>{item.backroom_inventory.available_quantity}</strong></span>}
                   </div>
-                  {item.backroom_inventory && <p className="decision-method">Stock de retaguarda: {item.backroom_inventory.on_hand_quantity} em mão · {item.backroom_inventory.reserved_quantity} reservado · {item.backroom_inventory.available_quantity} disponível · {item.backroom_inventory.is_fresh ? "atualizado" : "desatualizado"} ({item.backroom_inventory.age_minutes} min). Não representa a quantidade física na prateleira.</p>}
+                  {item.backroom_inventory && <p className="decision-method">Stock de retaguarda: {item.backroom_inventory.on_hand_quantity} em mão · {item.backroom_inventory.reserved_quantity} reservado · {item.backroom_inventory.available_quantity} disponível · {item.backroom_inventory.is_fresh ? "atualizado" : "desatualizado"} ({formatDurationMinutes(item.backroom_inventory.age_minutes)}). Não representa a quantidade física na prateleira.</p>}
                   {item.replenishment_assessment && <div className="decision-assessment">
                     <strong>Proposta de reposição: {item.replenishment_assessment.status}</strong>
                     <p>{item.replenishment_assessment.explanation}</p>
@@ -774,7 +811,7 @@ export default function App() {
                       <span>Quantidade sugerida: <strong>{item.replenishment_assessment.suggested_quantity == null ? "Não calculada" : item.replenishment_assessment.suggested_quantity}</strong></span>
                       <span>Diferença até ao alvo: <strong>{item.replenishment_assessment.shelf_gap_quantity == null ? "—" : item.replenishment_assessment.shelf_gap_quantity}</strong></span>
                       <span>Por cobrir: <strong>{item.replenishment_assessment.remaining_gap_quantity == null ? "—" : item.replenishment_assessment.remaining_gap_quantity}</strong></span>
-                      {item.replenishment_assessment.observation_age_minutes != null && <span>Idade da observação: <strong>{item.replenishment_assessment.observation_age_minutes.toFixed(0)} min</strong></span>}
+                      {item.replenishment_assessment.observation_age_minutes != null && <span>Idade da observação: <strong>{formatDurationMinutes(item.replenishment_assessment.observation_age_minutes)}</strong></span>}
                     </div>
                     {item.replenishment_assessment.requires_human_review && <p className="decision-method">Requer validação humana antes de criar uma tarefa ou movimentar stock.</p>}
                     {item.replenishment_assessment.status === "NEEDS_REPLENISHMENT" && item.replenishment_assessment.suggested_quantity != null && <><label className="demo-assignee">Atribuir ao funcionário
@@ -790,10 +827,10 @@ export default function App() {
                   {item.decision.warnings.length > 0 && <ul className="decision-warnings">{item.decision.warnings.map((warning, index) => <li key={index}>{warning}</li>)}</ul>}
                 </article>)}
               </div>
-              <p className="decision-method">Gerado em {new Date(operationalDecisions.generated_at).toLocaleString("pt-PT")}. Todas as recomendações requerem validação humana.</p>
+              <p className="decision-method">Gerado em {formatDateTime(operationalDecisions.generated_at)}. Todas as recomendações requerem validação humana.</p>
             </>}
           </section>}
-          {(user?.role === "ADMIN" || user?.role === "SUPERVISOR") && <section className="panel replenishment-plan-panel">
+          {(user?.role === "ADMIN" || user?.role === "SUPERVISOR") && <section id="replenishment-plan" className="panel replenishment-plan-panel">
             <div className="panel-heading">
               <div><p className="eyebrow">PLANEAMENTO ASSISTIDO</p><h2>Plano inteligente de reposição</h2><p className="muted">Prioriza por risco de rutura e estima esforço quando existe histórico suficiente.</p></div>
               <button className="row-action" onClick={() => void loadReplenishmentPlan()} disabled={planLoading || (user?.role === "ADMIN" && !storeFilter.trim())}>
@@ -807,7 +844,7 @@ export default function App() {
                 <div><span>Candidatos</span><strong>{replenishmentPlan.total_candidates}</strong></div>
                 <div><span>Incluídos no plano</span><strong>{replenishmentPlan.returned_candidates}</strong></div>
                 <div><span>Com estimativa de esforço</span><strong>{replenishmentPlan.effort_estimation.estimated_candidates ?? 0}</strong></div>
-                <div><span>Minutos estimados</span><strong>{replenishmentPlan.effort_estimation.estimated_total_elapsed_minutes == null ? "—" : replenishmentPlan.effort_estimation.estimated_total_elapsed_minutes.toFixed(0)}</strong></div>
+                <div><span>Tempo estimado total</span><strong>{replenishmentPlan.effort_estimation.estimated_total_elapsed_minutes == null ? "—" : formatDurationMinutes(replenishmentPlan.effort_estimation.estimated_total_elapsed_minutes)}</strong></div>
               </div>
               <p className="plan-hint">Risco de rutura baseado em 28 dias de vendas; estimativas de tempo baseadas em tarefas concluídas. Tempo decorrido não equivale a trabalho ativo. Movimentação automática de stock: desativada.</p>
               {replenishmentPlan.warehouse_pick_plan?.enabled && <div className="warehouse-pick-summary">
@@ -832,14 +869,14 @@ export default function App() {
                   {group.tasks.map(item => <div className="plan-task" key={`${item.shelf_id}-${item.product_id}`}>
                     <div><strong>{item.product_name || `Produto #${item.product_id}`}</strong><span>Prateleira {item.shelf_code || `#${item.shelf_id}`} · {item.recommendation_status}</span></div>
                     <span className={`plan-risk ${(item.stockout_risk_level || "UNKNOWN").toLowerCase()}`}>{item.stockout_risk_level || "UNKNOWN"}</span>
-                    <span className="plan-duration">{item.estimated_elapsed_minutes == null ? "Tempo —" : `${item.estimated_elapsed_minutes.toFixed(0)} min`}</span>
+                    <span className="plan-duration">{item.estimated_elapsed_minutes == null ? "Tempo —" : formatDurationMinutes(item.estimated_elapsed_minutes)}</span>
                     {!item.task_creation_allowed && <span className="plan-review">Requer validação</span>}
                   </div>)}
                 </div>)}
               </div>
             </>}
           </section>}
-          <section className="capture-grid">
+          <section id="capture-workspace" className="capture-grid">
             <article className="panel capture-panel">
               <div className="panel-heading"><div><p className="eyebrow">VISÃO COMPUTACIONAL</p><h2>Nova captura de prateleira</h2><p className="muted">Envia uma fotografia para registo e futura análise automática.</p></div><div className="capture-icon"><PackageSearch size={20} /></div></div>
               <form className="capture-form" onSubmit={uploadCapture}>
@@ -867,12 +904,12 @@ export default function App() {
                 {captureMessage && <p className="capture-feedback" role="status">{captureMessage}</p>}
               </form>
             </article>
-            <article className="panel capture-history">
+            <article id="capture-history" className="panel capture-history">
               <div className="panel-heading"><div><p className="eyebrow">REGISTO DE CAPTURAS</p><h2>Fotografias recentes</h2><p className="muted">O estado indica o processamento pelo provider configurado. No demo é usado um provider mock determinístico, não um modelo de visão treinado.</p></div><span className="subtle-pill">{captures.length} capturas</span></div>
               <div className="capture-list">
                 {captures.length === 0 && <div className="empty-state"><PackageSearch size={25} /><strong>Sem fotografias registadas</strong><span>As próximas capturas serão apresentadas aqui.</span></div>}
                 {captures.map(item => <div className="capture-item" key={item.id}>
-                  <div className="capture-row"><div className="capture-thumb"><Boxes size={17} /></div><div className="capture-meta"><strong>Prateleira #{item.shelf_id} · {item.original_filename}</strong><span>{(item.file_size_bytes / 1024).toFixed(0)} KB · SHA-256 {item.sha256.slice(0, 12)}… · Sessão #{item.capture_session_id ?? "—"} · {new Date(item.created_at).toLocaleString("pt-PT")}</span></div><span className={`task-status ${item.analysis_status.toLowerCase()}`}>{item.analysis_status}</span>{(user?.role === "ADMIN" || user?.role === "SUPERVISOR") && item.analysis_status === "FAILED" && <button className="row-action detection-toggle" disabled={retryLoading === item.id} onClick={() => void retryImageAnalysis(item)}>{retryLoading === item.id ? "A repetir…" : "Repetir análise"}</button>}<button className="row-action detection-toggle" onClick={() => void toggleImageDetections(item)}>{detectionLoading === item.id ? "A consultar…" : expandedDetectionImage === item.id ? "Fechar" : "Deteções"}</button></div>
+                  <div className="capture-row"><div className="capture-thumb"><Boxes size={17} /></div><div className="capture-meta"><strong>Prateleira #{item.shelf_id} · {item.original_filename}</strong><span>{(item.file_size_bytes / 1024).toFixed(0)} KB · SHA-256 {item.sha256.slice(0, 12)}… · Sessão #{item.capture_session_id ?? "—"} · {formatDateTime(item.created_at)}</span></div><span className={`task-status ${item.analysis_status.toLowerCase()}`}>{item.analysis_status}</span>{(user?.role === "ADMIN" || user?.role === "SUPERVISOR") && item.analysis_status === "FAILED" && <button className="row-action detection-toggle" disabled={retryLoading === item.id} onClick={() => void retryImageAnalysis(item)}>{retryLoading === item.id ? "A repetir…" : "Repetir análise"}</button>}<button className="row-action detection-toggle" onClick={() => void toggleImageDetections(item)}>{detectionLoading === item.id ? "A consultar…" : expandedDetectionImage === item.id ? "Fechar" : "Deteções"}</button></div>
                   {expandedDetectionImage === item.id && <div className="detection-workspace">
                     {imageUrls[item.id] && <div className="detection-image-stage">
                       <img src={imageUrls[item.id]} alt={`Fotografia da prateleira ${item.shelf_id}`} />
@@ -909,7 +946,7 @@ export default function App() {
                         <div className="review-history">
                           <strong><History size={14} /> Histórico ({history.length})</strong>
                           {history.length === 0 && <span>Sem decisões humanas registadas.</span>}
-                          {history.map(review => <div className="review-history-row" key={review.id}><span>{review.decision === "CONFIRMED" ? "Confirmado" : review.decision === "CORRECTED" ? "Corrigido" : "Rejeitado"}</span><span>{review.selected_product_id ? `Produto #${review.selected_product_id}` : "Sem SKU"}</span><time>{new Date(review.created_at).toLocaleString("pt-PT")}</time>{review.notes && <small>{review.notes}</small>}</div>)}
+                          {history.map(review => <div className="review-history-row" key={review.id}><span>{review.decision === "CONFIRMED" ? "Confirmado" : review.decision === "CORRECTED" ? "Corrigido" : "Rejeitado"}</span><span>{review.selected_product_id ? `Produto #${review.selected_product_id}` : "Sem SKU"}</span><time>{formatDateTime(review.created_at)}</time>{review.notes && <small>{review.notes}</small>}</div>)}
                         </div>
                       </article>;
                     })}
@@ -918,7 +955,7 @@ export default function App() {
               </div>
             </article>
           </section>
-          {(user?.role === "ADMIN" || user?.role === "SUPERVISOR") && <section className="panel review-queue-panel">
+          {(user?.role === "ADMIN" || user?.role === "SUPERVISOR") && <section id="review-queue" className="panel review-queue-panel">
             <div className="panel-heading">
               <div><p className="eyebrow">CONTROLO DE QUALIDADE</p><h2>Fila de revisão de SKU</h2><p className="muted">Sugestões da fusão visual + OCR que aguardam decisão humana.</p></div>
               <span className="subtle-pill">{reviewQueue.length} itens prioritários</span>
@@ -930,7 +967,7 @@ export default function App() {
               {reviewQueue.length === 0 && <div className="empty-state"><ShieldCheck size={25} /><strong>Sem revisões pendentes</strong><span>Quando existirem resultados de OCR e fusão, os casos a validar aparecerão aqui.</span></div>}
               {reviewQueue.map(item => <article className="review-queue-row" key={item.fused_evidence_id}>
                 <div className="review-queue-main">
-                  <div><strong>Prateleira {item.shelf_code} · Deteção #{item.detection_id}</strong><span>{item.image_filename} · {new Date(item.created_at).toLocaleString("pt-PT")}</span></div>
+                  <div><strong>Prateleira {item.shelf_code} · Deteção #{item.detection_id}</strong><span>{item.image_filename} · {formatDateTime(item.created_at)}</span></div>
                   <span className={`review-queue-status ${item.status.toLowerCase()}`}>{item.status}</span>
                 </div>
                 <p>{item.reason}</p>
@@ -968,8 +1005,10 @@ export default function App() {
   );
 }
 
-function Metric({ icon, label, value, tone, detail }: { icon: ReactNode; label: string; value: number; tone: string; detail: string }) {
-  return <article className="metric-card"><div className={`metric-icon ${tone}`}>{icon}</div><p>{label}</p><strong>{value.toLocaleString("pt-PT")}</strong><span>{detail}</span></article>;
+function Metric({ icon, label, value, tone, detail, onClick }: { icon: ReactNode; label: string; value: number; tone: string; detail: string; onClick: () => void }) {
+  return <button type="button" className="metric-card metric-card-action" onClick={onClick} aria-label={`${label}: ${value}. Abrir informação relacionada.`}>
+    <span className={`metric-icon ${tone}`}>{icon}</span><span className="metric-label">{label}</span><strong>{value.toLocaleString("pt-PT")}</strong><span className="metric-detail">{detail}</span><span className="metric-open-hint">Consultar detalhes <ArrowUpRight size={13} /></span>
+  </button>;
 }
 function TaskRow({
   task, token, evidenceImageId, updating, canAssign, canProgress, canCancel, canAudit, canReconcile,
@@ -1082,7 +1121,7 @@ function TaskRow({
       {!eventsLoading && events?.length === 0 && <span>Sem eventos registados.</span>}
       {!eventsLoading && events && events.length > 0 && <ol>
         {events.map(event => <li key={event.id}>
-          <span className="task-event-heading">{event.event_type.replace(/_/g, " ")} · {new Date(event.created_at).toLocaleString("pt-PT")}</span>
+          <span className="task-event-heading">{event.event_type.replace(/_/g, " ")} · {formatDateTime(event.created_at)}</span>
           <span>{event.from_status ? `${event.from_status} → ${event.to_status}` : event.to_status || "Evento registado"} · Ator #{event.actor_user_id ?? "sistema"}</span>
           {event.actual_quantity != null && <span>Quantidade: {event.actual_quantity}</span>}
           {event.reason && <span>Motivo: {event.reason}</span>}
@@ -1091,7 +1130,10 @@ function TaskRow({
     </div>}
   </div>;
 }
-function StatusBar({ label, value, total, color }: { label: string; value: number; total: number; color: string }) {
+function StatusBar({ label, value, total, color, onClick }: { label: string; value: number; total: number; color: string; onClick: () => void }) {
   const percent = total ? Math.round(value / total * 100) : 0;
-  return <div className="status-bar-row"><div><span>{label}</span><strong>{value}</strong></div><div className="bar-track"><div className={`bar-fill ${color}`} style={{ width: `${percent}%` }} /></div></div>;
+  return <button type="button" className="status-bar-row status-bar-action" onClick={onClick} aria-label={`Filtrar tarefas: ${label} (${value})`}>
+    <span className="status-bar-label"><span>{label}</span><strong>{value}</strong></span>
+    <span className="bar-track"><span className={`bar-fill ${color}`} style={{ width: `${percent}%` }} /></span>
+  </button>;
 }
