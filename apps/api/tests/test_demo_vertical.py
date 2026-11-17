@@ -56,3 +56,54 @@ def test_demo_seed_is_idempotent_and_generates_synthetic_asset(tmp_path):
     finally:
         Base.metadata.drop_all(engine)
         engine.dispose()
+
+
+def test_mock_provider_persists_detections_through_existing_worker(tmp_path, monkeypatch):
+    from app.config import settings
+    from app.vision_worker import process_next_image
+
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    try:
+        with Session(engine) as db:
+            store = models.Store(code="DEMO-WORKER", name="Demo worker store")
+            db.add(store)
+            db.flush()
+            zone = models.Zone(store_id=store.id, name="Demo zone")
+            db.add(zone)
+            db.flush()
+            shelf = models.Shelf(zone_id=zone.id, code="DEMO-WORKER-01")
+            db.add(shelf)
+            db.flush()
+            store_root = tmp_path / str(store.id)
+            store_root.mkdir(parents=True)
+            image_path = store_root / "synthetic.png"
+            image_path.write_bytes(b"synthetic-shelf-worker-payload")
+            image = models.ShelfImage(
+                shelf_id=shelf.id,
+                original_filename="synthetic.png",
+                storage_path=str(image_path),
+                mime_type="image/png",
+                file_size_bytes=image_path.stat().st_size,
+                sha256="b" * 64,
+                analysis_status="PENDING",
+                retention_status="ACTIVE",
+            )
+            db.add(image)
+            db.commit()
+            image_id = image.id
+
+            monkeypatch.setattr(settings, "image_storage_path", str(tmp_path))
+            processed = process_next_image(db, MockShelfVisionProvider())
+
+            assert processed == image_id
+            persisted = db.get(models.ShelfImage, image_id)
+            detections = db.query(models.ShelfImageDetection).filter_by(shelf_image_id=image_id).all()
+            assert persisted.analysis_status == "COMPLETED"
+            assert persisted.model_version == "mock-shelf-vision-v1"
+            assert len(detections) == 1
+            assert detections[0].label == "empty_facing"
+            assert detections[0].sku_match_status == "UNKNOWN"
+    finally:
+        Base.metadata.drop_all(engine)
+        engine.dispose()
