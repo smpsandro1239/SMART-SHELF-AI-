@@ -17,4 +17,5 @@
 - [ ] Review pagination, filtering and bounded query costs on image-derived data endpoints.
 - [ ] Verify retention and legal-hold audit trails across restore, purge scheduling and cancellation.
 - [ ] Keep ROADMAP.md aligned with implemented and validated capabilities.
-- [ ] Validate dashboard UX refinements: human-readable durations, Europe/Lisbon timestamps, WCAG AA contrast, non-colour status cues, compact single-task layout and clickable summary cards.
+- [x] Implement dashboard UX refinements: human-readable durations, Europe/Lisbon timestamps, stronger contrast palette, non-colour status cues, compact single-task layout and clickable summary cards with exact task-state filters; Web CI and frontend quality build passed.
+- [ ] Complete manual browser/keyboard and full-state contrast audit before claiming formal WCAG AA conformance.

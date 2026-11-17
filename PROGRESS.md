@@ -2,6 +2,9 @@
 
 ## Latest validated changes
 
+- **2026-11-17 — `554e9df`**: dashboard UX changes passed Web CI (`44198503068`); frontend TypeScript and production build passed the corresponding quality-gates job (`44198503127`). Full quality-gates run's API test job remained in progress at documentation time. See Current focus for the implementation and the remaining manual accessibility audit.
+
+
 - **2026-11-17 — `b982ced` / `0926b94`**: PostgreSQL observation creation versus image retention smoke passed API CI (`44194248812`), including the real HTTP request waiting on the source-image lock, returning HTTP 410 after retention commits, and persisting no observation. Frontend/API quality gates (`44194278316`) and Docker Compose smoke (`44194224077`) also passed.
 
 - **2026-11-17 — `a944e82`**: stale-processing recovery now locks eligible `ShelfImage` rows in ascending ID order, matching the global source-image lock order. The SQL-order regression test passed; API CI (`44159933637`), Smart Shelf quality gates (`44159933623`) and Docker Compose smoke (`44159933607`) all succeeded.
