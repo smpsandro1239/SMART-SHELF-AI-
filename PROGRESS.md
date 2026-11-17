@@ -58,3 +58,11 @@ Added `test_catalogue_and_warehouse_master_data_writes_are_admin_only` to exerci
 - **`7575dac`** adds `apps/api/scripts/postgres_shelf_product_assignment_concurrency_smoke.py`: two simultaneous requests attempt the same shelf/product association; expected result is exactly one HTTP 201, one HTTP 409 and exactly one persisted row.
 - **`050542e`** wires the smoke test into API CI against the PostgreSQL 16 service. This specifically validates the existing product-row lock plus database uniqueness boundary under real PostgreSQL concurrency; it does not claim a general reassignment workflow exists.
 - **`52b0d45`** also added SQLite/API regression coverage for inactive-product and duplicate-assignment rejection. CI status for these latest changes is pending at the time of this note.
+
+
+## 17-11-2026 — Unicidade concorrente de unidades de embalagem
+- Identificado risco de corrida na validação aplicacional de unidades de encomenda/reposição.
+- Adicionados índices únicos parciais no modelo SQLAlchemy e migração 0054 para PostgreSQL/SQLite.
+- Adicionado teste API que confirma HTTP 409 para uma segunda unidade activa do mesmo tipo.
+- Adicionado smoke test PostgreSQL concorrente para tentar duas gravações simultâneas por cada indicador.
+- O resultado só será considerado validado após execução da migração, smoke test e suite completa no CI.
