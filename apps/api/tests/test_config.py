@@ -68,6 +68,30 @@ def test_production_rejects_placeholder_bootstrap_secrets(monkeypatch, secret):
         )
 
 
+@pytest.mark.parametrize("secret", [" " * 40, "j" * 20 + " " * 12])
+def test_production_rejects_whitespace_in_jwt_secret(monkeypatch, secret):
+    _clear_secret_environment(monkeypatch)
+    with pytest.raises(ValidationError, match="JWT_SECRET_KEY"):
+        Settings(
+            _env_file=None,
+            app_env="production",
+            jwt_secret_key=secret,
+            bootstrap_admin_key="b" * 32,
+        )
+
+
+@pytest.mark.parametrize("secret", [" " * 40, "b" * 20 + " " * 12])
+def test_production_rejects_whitespace_in_bootstrap_secret(monkeypatch, secret):
+    _clear_secret_environment(monkeypatch)
+    with pytest.raises(ValidationError, match="BOOTSTRAP_ADMIN_KEY"):
+        Settings(
+            _env_file=None,
+            app_env="production",
+            jwt_secret_key="j" * 32,
+            bootstrap_admin_key=secret,
+        )
+
+
 def test_production_rejects_reused_secrets(monkeypatch):
     _clear_secret_environment(monkeypatch)
     shared_secret = "s" * 40
