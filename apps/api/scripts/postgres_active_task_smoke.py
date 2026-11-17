@@ -863,7 +863,7 @@ def main() -> None:
 
         print(
             "PostgreSQL concurrent task creation: PASS "
-            "(three task-creation paths and approved reconciliation each return one 201 and one 409; "
+            "(three task-creation paths remain single-writer, reconciliation is idempotent, and separate tasks cannot overspend shared stock; "
             "audit is unique, snapshots are preserved, movement UPDATE/DELETE are blocked and failed reconciliation rolls back atomically)"
         )
 
