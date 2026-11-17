@@ -37,6 +37,7 @@ services:
       - "${API_PORT:-8000}:8000"
     volumes:
       - shelf_images:/app/storage
+      - ./apps/api/demo/assets:/app/demo/assets
       - ${VISION_MODELS_DIR:-./models}:/models:ro
     depends_on:
       db:
