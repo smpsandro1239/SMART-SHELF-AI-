@@ -433,13 +433,29 @@ def process_next_image(db: Session, provider, ocr_provider=None) -> int | None:
         db.commit()
     except Exception as exc:
         db.rollback()
-        image = db.get(models.ShelfImage, image_id)
-        if image is not None:
+        image = (
+            db.query(models.ShelfImage)
+            .filter(models.ShelfImage.id == image_id)
+            .with_for_update()
+            .populate_existing()
+            .first()
+        )
+        if (
+            image is not None
+            and image.analysis_status == "PROCESSING"
+            and _same_claim_timestamp(image.analysis_started_at, claimed_started_at)
+        ):
             image.analysis_status = "FAILED"
             image.analysis_error = f"{type(exc).__name__}: processing failed"
             image.analysis_completed_at = models.utc_now()
             db.commit()
-        logger.exception("Image analysis failed for shelf image %s", image_id)
+            logger.exception("Image analysis failed for shelf image %s", image_id)
+        else:
+            db.rollback()
+            logger.warning(
+                "Ignored failure for shelf image %s because the worker no longer owns its processing lease",
+                image_id,
+            )
     return image_id
 
 
