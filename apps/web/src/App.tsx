@@ -146,6 +146,7 @@ export default function App() {
   const [decisionLoading, setDecisionLoading] = useState(false);
   const [approvalLoadingKey, setApprovalLoadingKey] = useState<string | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [taskUpdatingId, setTaskUpdatingId] = useState<number | null>(null);
   const [taskEvents, setTaskEvents] = useState<Record<number, TaskEvent[]>>({});
   const [taskEventsLoading, setTaskEventsLoading] = useState<number | null>(null);
   const [taskReconcileLoading, setTaskReconcileLoading] = useState<number | null>(null);
@@ -316,6 +317,7 @@ export default function App() {
     completion?: { actual_quantity: number; exception_reason?: string },
     cancellationReason?: string,
   ) {
+    setTaskUpdatingId(task.id);
     setError("");
     try {
       await request<Task>(`/api/v1/tasks/${task.id}/status`, {
@@ -332,6 +334,7 @@ export default function App() {
       await refresh();
       if (taskEvents[task.id] !== undefined) await loadTaskEvents(task.id);
     } catch (err) { setError(err instanceof Error ? err.message : "Não foi possível atualizar a tarefa."); }
+    finally { setTaskUpdatingId(current => current === task.id ? null : current); }
   }
 
   async function loadTaskEvents(taskId: number) {
@@ -691,6 +694,7 @@ export default function App() {
                   task={task}
                   token={token}
                   evidenceImageId={Number(task.notes?.match(/evidence_image_id=(\d+)/)?.[1] || 0) || null}
+                  updating={taskUpdatingId === task.id}
                   canAssign={user?.role === "ADMIN" || user?.role === "SUPERVISOR"}
                   canProgress={user?.role === "EMPLOYEE" ? task.assigned_user_id === user.id : user?.role === "ADMIN" || user?.role === "SUPERVISOR"}
                   canCancel={user?.role === "ADMIN" || user?.role === "SUPERVISOR"}
@@ -964,11 +968,11 @@ function Metric({ icon, label, value, tone, detail }: { icon: ReactNode; label: 
   return <article className="metric-card"><div className={`metric-icon ${tone}`}>{icon}</div><p>{label}</p><strong>{value.toLocaleString("pt-PT")}</strong><span>{detail}</span></article>;
 }
 function TaskRow({
-  task, token, evidenceImageId, canAssign, canProgress, canCancel, canAudit, canReconcile,
+  task, token, evidenceImageId, updating, canAssign, canProgress, canCancel, canAudit, canReconcile,
   events, eventsLoading, reconcileLoading, reconcileMessage,
   onLoadEvents, onReconcile, onUpdate,
 }: {
-  task: Task; token: string; evidenceImageId: number | null;
+  task: Task; token: string; evidenceImageId: number | null; updating: boolean;
   canAssign: boolean; canProgress: boolean; canCancel: boolean;
   canAudit: boolean; canReconcile: boolean; events: TaskEvent[] | null;
   eventsLoading: boolean; reconcileLoading: boolean; reconcileMessage: string;
@@ -1029,23 +1033,23 @@ function TaskRow({
     </div>
     <span className={"priority " + task.priority.toLowerCase()}>{task.priority}</span>
     <span className={"task-status " + task.status.toLowerCase()}>{task.status.replace("_", " ")}</span>
-    {canAssign && task.status === "PENDING" && <div className="assign-control"><input aria-label={"ID do funcionário para a tarefa " + task.id} inputMode="numeric" placeholder="ID funcionário" value={assigneeId} onChange={e => setAssigneeId(e.target.value)} /><button className="row-action" disabled={!/^\d+$/.test(assigneeId) || Number(assigneeId) < 1} onClick={() => onUpdate(task, "ASSIGNED", Number(assigneeId))}>Atribuir</button></div>}
+    {canAssign && task.status === "PENDING" && <div className="assign-control"><input aria-label={"ID do funcionário para a tarefa " + task.id} inputMode="numeric" placeholder="ID funcionário" value={assigneeId} onChange={e => setAssigneeId(e.target.value)} /><button className="row-action" disabled={updating || !/^\d+$/.test(assigneeId) || Number(assigneeId) < 1} onClick={() => onUpdate(task, "ASSIGNED", Number(assigneeId))}>{updating ? "A atualizar…" : "Atribuir"}</button></div>}
     {canProgress && task.status === "IN_PROGRESS" && <div className="assign-control task-completion">
       <input aria-label={"Quantidade efetivamente reposta na tarefa " + task.id} type="number" min="0.001" step="0.001" placeholder={task.requested_quantity == null ? "Qtd. reposta" : "Qtd. reposta (pedido: " + task.requested_quantity + ")"} value={actualQuantity} onChange={e => setActualQuantity(e.target.value)} />
       {task.requested_quantity != null && Number.isFinite(actual) && actual > 0 && actual < task.requested_quantity && <input aria-label={"Motivo da reposição parcial na tarefa " + task.id} placeholder="Motivo da diferença" value={exceptionReason} onChange={e => setExceptionReason(e.target.value)} />}
-      <button className="row-action" disabled={!isValidCompletion} onClick={() => {
+      <button className="row-action" disabled={updating || !isValidCompletion} onClick={() => {
         const detail = exceptionReason.trim() ? `\\nMotivo: ${exceptionReason.trim()}` : "";
-        if (window.confirm(`Confirmar conclusão da tarefa #${task.id}?\\nQuantidade efetivamente reposta: ${actual}${detail}\\nEsta ação será auditada.`)) {
+        if (!updating && window.confirm(`Confirmar conclusão da tarefa #${task.id}?\\nQuantidade efetivamente reposta: ${actual}${detail}\\nEsta ação será auditada.`)) {
           onUpdate(task, "COMPLETED", undefined, { actual_quantity: actual, ...(exceptionReason.trim() ? { exception_reason: exceptionReason.trim() } : {}) });
         }
-      }}>Concluir <ArrowUpRight size={14} /></button>
+      }}>{updating ? "A concluir…" : <>Concluir <ArrowUpRight size={14} /></>}</button>
     </div>}
     {canProgress && next === "IN_PROGRESS" && <button className="row-action" onClick={() => {
-      if (window.confirm(`Iniciar a tarefa #${task.id} para a reposição do produto #${task.product_id}?`)) onUpdate(task, "IN_PROGRESS");
-    }}>Iniciar <ArrowUpRight size={14} /></button>}
+      if (!updating && window.confirm(`Iniciar a tarefa #${task.id} para a reposição do produto #${task.product_id}?`)) onUpdate(task, "IN_PROGRESS");
+    }} disabled={updating}>{updating ? "A iniciar…" : <>Iniciar <ArrowUpRight size={14} /></>}</button>}
     {canCancelTask && <div className="assign-control task-cancel">
       <input aria-label={"Motivo do cancelamento da tarefa " + task.id} placeholder="Motivo do cancelamento" value={cancellationReason} onChange={event => setCancellationReason(event.target.value)} />
-      <button className="row-action" disabled={cancellationReason.trim().length < 3} onClick={() => onUpdate(task, "CANCELLED", undefined, undefined, cancellationReason.trim())}>Cancelar</button>
+      <button className="row-action" disabled={updating || cancellationReason.trim().length < 3} onClick={() => onUpdate(task, "CANCELLED", undefined, undefined, cancellationReason.trim())}>{updating ? "A cancelar…" : "Cancelar"}</button>
     </div>}
     {canAudit && <div className="task-audit-controls">
       <button className="row-action secondary-action" onClick={() => {
