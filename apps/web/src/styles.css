@@ -280,3 +280,28 @@
 .plan-risk.unknown::before,.plan-risk.not_assessed::before { content:"?"; }
 #dashboard-top,#dashboard-metrics,#replenishment-tasks,#task-status-summary,#operational-decisions,#decision-list,#replenishment-plan,#capture-workspace,#capture-history,#review-queue { scroll-margin-top:18px; }
 @media(max-width:700px) { .task-panel-actions { justify-content:flex-start; } .task-row { padding:11px; } .task-panel .panel-heading { flex-wrap:wrap; } .metric-open-hint { font-size:10px !important; } }
+
+/* Stronger badge foregrounds for contrast; icons/patterns remain alongside colour. */
+.task-status.pending { color:#80520b; }
+.task-status.assigned { color:#5c3d94; }
+.task-status.in_progress { color:#24598f; }
+.task-status.completed { color:#176342; }
+.task-status.cancelled,.task-status.failed { color:#9f3026; }
+.priority.urgent { color:#a52e20; }
+.priority.high { color:#80500c; }
+.priority.normal { color:#24598f; }
+.priority.low { color:#4b5968; }
+.decision-status.action_recommended { color:#80500c; }
+.decision-status.already_in_progress { color:#24598f; }
+.decision-status.insufficient_evidence { color:#4b5968; }
+.decision-status.monitor { color:#4b5968; }
+.review-queue-status.conflict { color:#9f3026; }
+.review-queue-status.ambiguous { color:#80500c; }
+.review-queue-status.consensus { color:#176342; }
+.review-queue-status.text_only,.review-queue-status.visual_only,.review-queue-status.unknown { color:#4b5968; }
+.plan-risk.critical,.plan-risk.high,.plan-risk.medium { color:#80500c; }
+.plan-risk.low { color:#176342; }
+.plan-risk.unknown,.plan-risk.not_assessed { color:#4b5968; }
+.task-panel:has(.task-row:only-child) .task-list { margin-top:10px; }
+.task-panel:has(.task-row:only-child) .task-row { padding:12px; }
+.decision-zone-card[role="button"] { display:block; border:1px solid var(--border,#e5e7eb); border-radius:12px; padding:14px; background:var(--panel-muted,rgba(127,127,127,.035)); }
