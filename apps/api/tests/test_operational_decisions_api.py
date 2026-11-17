@@ -61,7 +61,7 @@ def test_operational_decisions_use_latest_shelf_evidence_and_do_not_create_tasks
         store_id, shelf_id, product_id = create_context(client)
         created = client.post("/api/v1/observations", json={
             "shelf_id": shelf_id, "source": "simulation",
-            "status": "EMPTY", "confidence": 0.96,
+            "status": "EMPTY", "confidence": 0.96, "observed_quantity": 0,
         })
         assert created.status_code == 201
 
