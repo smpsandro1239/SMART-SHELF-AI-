@@ -7274,18 +7274,39 @@ def operational_decisions(
                 .first()
                 if evidence_image_id > 0 else None
             )
+            evidence_detection = (
+                db.query(models.ShelfImageDetection)
+                .filter(
+                    models.ShelfImageDetection.id == evidence_detection_id,
+                    models.ShelfImageDetection.shelf_image_id == evidence_image_id,
+                    models.ShelfImageDetection.product_id == product.id,
+                    models.ShelfImageDetection.model_version.like("mock-%"),
+                )
+                .first()
+                if evidence_detection_id > 0 else None
+            )
+            latest_evidence_review = (
+                db.query(models.DetectionSkuReview)
+                .filter(models.DetectionSkuReview.detection_id == evidence_detection_id)
+                .order_by(models.DetectionSkuReview.created_at.desc(), models.DetectionSkuReview.id.desc())
+                .first()
+                if evidence_detection_id > 0 else None
+            )
             if (
                 evidence_image is not None
-                and evidence_detection_id > 0
-                and evidence_review_id > 0
+                and evidence_detection is not None
+                and latest_evidence_review is not None
+                and latest_evidence_review.id == evidence_review_id
+                and latest_evidence_review.selected_product_id == product.id
+                and latest_evidence_review.decision in {"CONFIRMED", "CORRECTED"}
                 and evidence_fields.get("provider") == "mock"
                 and evidence_fields.get("sha256") == evidence_image.sha256
             ):
                 demo_evidence = {
                     "observation_id": observation.id,
                     "image_id": evidence_image.id,
-                    "detection_id": evidence_detection_id,
-                    "review_id": evidence_review_id,
+                    "detection_id": evidence_detection.id,
+                    "review_id": latest_evidence_review.id,
                     "sha256": evidence_image.sha256,
                 }
 
