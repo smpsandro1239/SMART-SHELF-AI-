@@ -3358,3 +3358,61 @@ def test_admin_cannot_duplicate_existing_shelf_product_assignment(auth_client):
             shelf_id=ids["shelf_a_assigned"],
             product_id=ids["product"],
         ).count() == 1
+
+
+def test_admin_cannot_create_multiple_active_ordering_or_replenishment_units(auth_client):
+    client, ids, _ = auth_client
+    headers = bearer(ids["admin"], "ADMIN")
+    path = "/api/v1/warehouse/product-packaging"
+
+    first = client.post(
+        path,
+        json={
+            "product_id": ids["product"],
+            "code": "AUTH-UNIQUE-UNIT-1",
+            "name": "Unidade logística principal",
+            "package_type": "CASE",
+            "base_units_per_package": 6,
+            "is_ordering_unit": True,
+            "is_replenishment_unit": True,
+        },
+        headers=headers,
+    )
+    assert first.status_code == 201, first.text
+
+    duplicate_ordering = client.post(
+        path,
+        json={
+            "product_id": ids["product"],
+            "code": "AUTH-UNIQUE-UNIT-2",
+            "name": "Segunda unidade de encomenda",
+            "package_type": "CASE",
+            "base_units_per_package": 12,
+            "is_ordering_unit": True,
+            "is_replenishment_unit": False,
+        },
+        headers=headers,
+    )
+    assert duplicate_ordering.status_code == 409, duplicate_ordering.text
+
+    duplicate_replenishment = client.post(
+        path,
+        json={
+            "product_id": ids["product"],
+            "code": "AUTH-UNIQUE-UNIT-3",
+            "name": "Segunda unidade de reposição",
+            "package_type": "CASE",
+            "base_units_per_package": 24,
+            "is_ordering_unit": False,
+            "is_replenishment_unit": True,
+        },
+        headers=headers,
+    )
+    assert duplicate_replenishment.status_code == 409, duplicate_replenishment.text
+
+    with main_module.SessionLocal() as db:
+        active_levels = db.query(models.ProductPackagingLevel).filter_by(
+            product_id=ids["product"], is_active=True
+        ).all()
+        assert sum(level.is_ordering_unit for level in active_levels) == 1
+        assert sum(level.is_replenishment_unit for level in active_levels) == 1
