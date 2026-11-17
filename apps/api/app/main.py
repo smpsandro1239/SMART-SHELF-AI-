@@ -7057,6 +7057,29 @@ def operational_decisions(
             .order_by(models.Observation.observed_at.desc(), models.Observation.id.desc())
             .first()
         )
+        if observation is None:
+            # Legacy shelf-only observations are safe only when the shelf has
+            # exactly one active SKU association; never fan ambiguous evidence
+            # out across a multi-product shelf.
+            active_shelf_sku_count = (
+                db.query(models.ShelfProduct)
+                .join(models.Product, models.Product.id == models.ShelfProduct.product_id)
+                .filter(
+                    models.ShelfProduct.shelf_id == shelf.id,
+                    models.Product.is_active.is_(True),
+                )
+                .count()
+            )
+            if active_shelf_sku_count == 1:
+                observation = (
+                    db.query(models.Observation)
+                    .filter(
+                        models.Observation.shelf_id == shelf.id,
+                        models.Observation.product_id.is_(None),
+                    )
+                    .order_by(models.Observation.observed_at.desc(), models.Observation.id.desc())
+                    .first()
+                )
         snapshot = (
             db.query(models.InventorySnapshot)
             .filter(
