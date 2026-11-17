@@ -1,0 +1,73 @@
+# SMART SHELF AI — demonstração vertical de 10 minutos
+
+> **Estado desta entrega:** provider mock e seed determinístico em implementação. O mock não é um modelo treinado e não deve ser usado para decisões operacionais reais.
+
+## Preparação local
+
+Na raiz do repositório:
+
+```bash
+docker compose up --build -d
+
+docker compose exec api alembic upgrade head
+docker compose exec api python -m app.demo.seed
+```
+
+O worker de visão usa `app.demo.vision:create_provider` por omissão no perfil local. A API e o worker partilham o volume `shelf_images`. A imagem sintética é gerada em `apps/api/demo/assets/synthetic-shelf.png` quando o seed é executado.
+
+Frontend: executar `npm install && npm run dev` em `apps/web` (porta 5173). API: `http://localhost:8000`; documentação OpenAPI: `http://localhost:8000/docs`.
+
+## Contas locais de demonstração
+
+| Perfil | Email | Palavra-passe |
+|---|---|---|
+| ADMIN | admin@demo.smart-shelf.local | DemoAdmin2026! |
+| SUPERVISOR | supervisor@demo.smart-shelf.local | DemoSupervisor2026! |
+| EMPLOYEE | employee@demo.smart-shelf.local | DemoEmployee2026! |
+
+Estas credenciais são exclusivamente locais. Altera-as antes de expor o ambiente a qualquer rede não confiável. O seed cria a loja **Demo Store Braga**, uma zona, três prateleiras, quinze produtos, associações SKU–prateleira, snapshots de inventário MANUAL e uma política de frescura de 24 horas.
+
+## Guião de 10 minutos
+
+1. **00:00–01:00 — Login:** entrar como SUPERVISOR e confirmar a loja Demo Store Braga.
+2. **01:00–02:00 — Seleção:** escolher a zona e a prateleira `DEMO-A1`.
+3. **02:00–03:00 — Captura:** carregar `synthetic-shelf.png`; a API cria uma sessão e guarda o ficheiro, SHA-256, timestamp e proveniência.
+4. **03:00–04:00 — Análise:** aguardar o worker; o provider mock emite uma deteção `empty_facing` com bounding box e confiança. O resultado é sintético e explicitamente identificado como DEMO.
+5. **04:00–05:00 — Observação:** rever a evidência e selecionar o SKU candidato entre os produtos associados à prateleira. Não aceitar automaticamente uma identidade de produto que o mock não consegue provar.
+6. **05:00–06:00 — Recomendação:** consultar a decisão operacional, inventário disponível e quantidade sugerida.
+7. **06:00–07:00 — Aprovação:** ADMIN/SUPERVISOR confirma quantidade e stock. A tarefa é atribuída ao EMPLOYEE; não há movimento automático de inventário.
+8. **07:00–08:30 — Execução:** terminar sessão, entrar como EMPLOYEE, iniciar a tarefa, registar quantidade efetivamente reposta e concluir.
+9. **08:30–09:30 — Reconciliação:** voltar ao SUPERVISOR e aprovar a reconciliação com motivo. Se a evidência de stock estiver desatualizada ou insuficiente, a API bloqueia a operação conforme ADR-008.
+10. **09:30–10:00 — Resultado:** consultar tarefa, evidência, eventos de auditoria, movimento e snapshot resultante no dashboard.
+
+## Comandos de validação
+
+```bash
+# API tests
+cd apps/api
+pytest -q
+
+# Web checks
+cd ../web
+npm ci
+npm run build
+```
+
+## Capturas de ecrã recomendadas
+
+Guardar capturas locais em `docs/screenshots/demo/` (não incluir tokens, emails pessoais ou dados reais):
+
+- `01-login.png` — login e selo Demo Mode.
+- `02-shelf-upload.png` — loja/zona/prateleira e imagem carregada.
+- `03-detection.png` — bounding box, label, confiança e SHA-256 abreviado.
+- `04-recommendation.png` — observação e recomendação com stock disponível.
+- `05-task.png` — tarefa atribuída e execução pelo funcionário.
+- `06-reconciliation.png` — movimento, snapshots e auditoria.
+- `07-dashboard-final.png` — indicadores finais.
+
+## Limitações conhecidas
+
+- O provider mock não classifica visualmente o conteúdo da imagem: gera uma deteção de demonstração determinística a partir do hash do ficheiro.
+- A deteção não contém SKU. A atribuição do SKU é uma revisão humana explícita, limitada às associações da prateleira.
+- Não existe integração POS/ERP/WMS neste demo. O inventário é local e semeado.
+- A reconciliação não altera snapshots antigos e pode ser recusada por frescura, concorrência ou stock insuficiente.

@@ -1,3 +1,22 @@
+## 10-minute demo
+
+O percurso demonstrativo local usa o provider determinístico `MockShelfVisionProvider` e dados fictícios. Não é um modelo treinado nem uma integração POS/ERP/WMS.
+
+```bash
+docker compose up --build -d
+docker compose exec api alembic upgrade head
+docker compose exec api python -m app.demo.seed
+cd apps/web && npm ci && npm run dev
+```
+
+Contas exclusivamente locais: `supervisor@demo.smart-shelf.local` / `DemoSupervisor2026!` e `employee@demo.smart-shelf.local` / `DemoEmployee2026!`. O seed também cria ADMIN, uma loja, uma zona, três prateleiras, quinze produtos e snapshots de inventário. O worker inicia automaticamente com Docker Compose.
+
+O guião completo, as limitações e a lista de capturas estão em [docs/DEMO.md](docs/DEMO.md). A imagem sintética é gerada localmente pelo seed em `apps/api/demo/assets/synthetic-shelf.png`.
+
+> Segurança: estas credenciais destinam-se apenas a ambientes locais isolados. Substitui-as antes de expor o serviço a qualquer rede não confiável.
+
+---
+
 # SMART SHELF AI
 
 **Plataforma inteligente para operações de retalho: monitorização de prateleiras, inventário, deteção de ruturas e reposição assistida.**
