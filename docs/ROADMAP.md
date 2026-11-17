@@ -19,7 +19,7 @@
 - [x] Disponibilizar listagem de funcionários ativos com isolamento por loja para atribuição por SUPERVISOR.
 - [x] Acrescentar testes do provider, seed, worker, revisão/observação idempotente e isolamento da listagem de funcionários.
 - [x] Criar um pré-validador local read-only para Docker Compose, serviços, readiness da API, frontend e imagem sintética.
-- [x] Criar workflow dedicado para validar a sintaxe Bash e whitespace do pré-validador.
+- [x] Criar workflow dedicado para validar a sintaxe Bash do pré-validador.
 
 ### Validação
 
