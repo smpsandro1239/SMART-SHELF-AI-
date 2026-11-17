@@ -29,10 +29,22 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def validate_production_secrets(self):
         if self.app_env.lower() == "production":
-            if self.jwt_secret_key == "INSECURE-DEVELOPMENT-KEY-CHANGE-ME" or len(self.jwt_secret_key) < 32:
-                raise ValueError("Production requires a unique JWT_SECRET_KEY with at least 32 characters")
-            if len(self.bootstrap_admin_key) < 32:
-                raise ValueError("Production requires a unique BOOTSTRAP_ADMIN_KEY with at least 32 characters")
+            placeholder_markers = (
+                "replace_with",
+                "change_me",
+                "test-only",
+                "placeholder",
+                "example",
+                "insecure",
+                "development",
+            )
+            jwt_secret = self.jwt_secret_key.lower()
+            bootstrap_secret = self.bootstrap_admin_key.lower()
+
+            if len(self.jwt_secret_key) < 32 or any(marker in jwt_secret for marker in placeholder_markers):
+                raise ValueError("Production requires a unique, non-placeholder JWT_SECRET_KEY with at least 32 characters")
+            if len(self.bootstrap_admin_key) < 32 or any(marker in bootstrap_secret for marker in placeholder_markers):
+                raise ValueError("Production requires a unique, non-placeholder BOOTSTRAP_ADMIN_KEY with at least 32 characters")
             if self.jwt_secret_key == self.bootstrap_admin_key:
                 raise ValueError("JWT_SECRET_KEY and BOOTSTRAP_ADMIN_KEY must be different secrets")
         return self
