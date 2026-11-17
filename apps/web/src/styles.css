@@ -196,3 +196,9 @@
   .task-reconcile input{min-width:0;width:100%}
   .task-reconcile .row-action{width:100%;justify-content:center}
 }
+
+/* Demo flow: native selects match the existing compact form controls. */
+.capture-form select,.demo-assignee select,.review-controls select{width:100%;min-width:0;border:1px solid #dfe6ed;border-radius:8px;padding:10px;font-size:11px;background:#fff;color:#26384b}
+.demo-assignee{display:grid;gap:6px;min-width:180px;font-size:10px;font-weight:700;color:#536477}
+.demo-assignee select{min-width:180px}
+@media(max-width:700px){.demo-assignee,.demo-assignee select{width:100%;min-width:0}}
