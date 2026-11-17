@@ -808,6 +808,24 @@ export default function App() {
             <article className="panel capture-panel">
               <div className="panel-heading"><div><p className="eyebrow">VISÃO COMPUTACIONAL</p><h2>Nova captura de prateleira</h2><p className="muted">Envia uma fotografia para registo e futura análise automática.</p></div><div className="capture-icon"><PackageSearch size={20} /></div></div>
               <form className="capture-form" onSubmit={uploadCapture}>
+                <label>Loja
+                  <select value={selectedStoreId} onChange={event => setSelectedStoreId(event.target.value)} required>
+                    <option value="">Selecionar loja…</option>
+                    {stores.map(store => <option key={store.id} value={store.id}>{store.name} · {store.code}</option>)}
+                  </select>
+                </label>
+                <label>Zona
+                  <select value={selectedZoneId} onChange={event => setSelectedZoneId(event.target.value)} required>
+                    <option value="">Selecionar zona…</option>
+                    {demoZones.map(zone => <option key={zone.id} value={zone.id}>{zone.name}</option>)}
+                  </select>
+                </label>
+                <label>Prateleira
+                  <select value={captureShelfId} onChange={event => setCaptureShelfId(event.target.value)} required>
+                    <option value="">Selecionar prateleira…</option>
+                    {demoShelves.map(shelf => <option key={shelf.id} value={shelf.id}>{shelf.code} · {shelf.description || `Prateleira #${shelf.id}`}</option>)}
+                  </select>
+                </label>
                 
                 <label>Fotografia (JPEG, PNG ou WebP)<input key={captureReset} type="file" accept="image/jpeg,image/png,image/webp" onChange={e => setCaptureFile(e.target.files?.[0] || null)} required /></label>
                 <div className="capture-submit"><span>{captureFile ? captureFile.name : "Nenhum ficheiro selecionado"}</span><button className="row-action" disabled={captureLoading || !captureFile}>{captureLoading ? "A enviar…" : "Enviar fotografia"} <ArrowUpRight size={14} /></button></div>
@@ -847,6 +865,11 @@ export default function App() {
                             <button className="review-button correct" disabled={reviewLoading === detection.id || !selectedId || Number(selectedId) === detection.product_id} onClick={() => void reviewDetection(detection, "CORRECTED")}><ImageIcon size={14} /> Corrigir</button>
                             <button className="review-button reject" disabled={reviewLoading === detection.id} onClick={() => void reviewDetection(detection, "REJECTED")}><X size={14} /> Rejeitar</button>
                           </div>
+                        </div>}
+                        {canReview && history.length > 0 && history[history.length - 1].decision !== "REJECTED" && <div className="review-actions">
+                          <button className="review-button confirm" disabled={observationLoading === detection.id} onClick={() => void createObservationFromDetection(item, detection)}>
+                            {observationLoading === detection.id ? "A registar…" : observationByDetection[detection.id] ? `Observação #${observationByDetection[detection.id]} registada` : "Criar observação operacional"}
+                          </button>
                         </div>}
                         <div className="review-history">
                           <strong><History size={14} /> Histórico ({history.length})</strong>
