@@ -413,6 +413,21 @@ def list_stores(request: Request, db: Session = Depends(get_db)):
     return query.order_by(models.Store.id).all()
 
 
+
+@app.get("/api/v1/zones", response_model=list[ZoneRead], tags=["zones"])
+def list_zones(request: Request, store_id: int | None = None, db: Session = Depends(get_db)):
+    """List zones visible to the authenticated user, optionally scoped to one store."""
+    query = db.query(models.Zone)
+    actor = _request_user(db, request)
+    if actor is not None and actor.role != "ADMIN":
+        if actor.store_id is None or (store_id is not None and store_id != actor.store_id):
+            raise HTTPException(status_code=403, detail="Access to this store is not allowed")
+        query = query.filter(models.Zone.store_id == actor.store_id)
+    elif store_id is not None:
+        query = query.filter(models.Zone.store_id == store_id)
+    return query.order_by(models.Zone.store_id, models.Zone.id).all()
+
+
 @app.post("/api/v1/zones", response_model=ZoneRead, status_code=201, tags=["zones"])
 def create_zone(payload: ZoneCreate, db: Session = Depends(get_db)):
     if not db.get(models.Store, payload.store_id):
@@ -2695,6 +2710,102 @@ def list_shelf_image_detections(
         .limit(max(1, min(limit, 500)))
         .all()
     )
+
+
+
+@app.post(
+    "/api/v1/shelf-image-detections/{detection_id}/observation",
+    response_model=ObservationRead,
+    tags=["observations"],
+)
+def create_observation_from_demo_detection(
+    detection_id: int,
+    payload: DetectionObservationCreate,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Create one idempotent observation from a reviewed mock-provider detection."""
+    actor = _request_user(db, request)
+    if actor is None or actor.role not in {"ADMIN", "SUPERVISOR"}:
+        raise HTTPException(status_code=403, detail="Supervisor role required")
+    detection = (
+        db.query(models.ShelfImageDetection)
+        .filter(models.ShelfImageDetection.id == detection_id)
+        .with_for_update()
+        .first()
+    )
+    if detection is None:
+        raise HTTPException(status_code=404, detail="Detection not found")
+    image = (
+        db.query(models.ShelfImage)
+        .filter(models.ShelfImage.id == detection.shelf_image_id)
+        .with_for_update()
+        .first()
+    )
+    if image is None:
+        raise HTTPException(status_code=404, detail="Shelf image not found")
+    store_id = _shelf_image_store_id(db, image.id)
+    _enforce_store_scope(actor, store_id)
+    _require_active_shelf_image(image)
+    if image.analysis_status != "COMPLETED" or not (detection.model_version or "").startswith("mock-"):
+        raise HTTPException(status_code=409, detail="Only completed mock-provider detections can create demo observations")
+    latest_review = (
+        db.query(models.DetectionSkuReview)
+        .filter(models.DetectionSkuReview.detection_id == detection.id)
+        .order_by(models.DetectionSkuReview.created_at.desc(), models.DetectionSkuReview.id.desc())
+        .first()
+    )
+    if latest_review is None or latest_review.decision == "REJECTED" or latest_review.selected_product_id != payload.product_id:
+        raise HTTPException(status_code=409, detail="A matching human SKU review is required before creating an observation")
+    assignment = (
+        db.query(models.ShelfProduct)
+        .join(models.Product, models.Product.id == models.ShelfProduct.product_id)
+        .filter(
+            models.ShelfProduct.shelf_id == image.shelf_id,
+            models.ShelfProduct.product_id == payload.product_id,
+            models.Product.is_active.is_(True),
+        )
+        .first()
+    )
+    if assignment is None:
+        raise HTTPException(status_code=422, detail="Selected product is not actively assigned to this shelf")
+    marker = f"demo_detection_id={detection.id};"
+    existing = (
+        db.query(models.Observation)
+        .filter(models.Observation.notes.like(f"%{marker}%"))
+        .order_by(models.Observation.id.asc())
+        .first()
+    )
+    if existing is not None:
+        return existing
+    status_by_label = {
+        "empty_facing": "EMPTY",
+        "low_stock": "LOW_STOCK",
+        "wrong_product": "MISPLACED",
+        "product_not_found": "UNKNOWN",
+    }
+    observation_status = status_by_label.get(detection.label.lower())
+    if observation_status is None:
+        raise HTTPException(status_code=422, detail="Detection label is not supported by the demo observation flow")
+    observed_quantity = 0 if observation_status == "EMPTY" else None
+    observation = models.Observation(
+        shelf_id=image.shelf_id,
+        product_id=payload.product_id,
+        source="simulation",
+        status=observation_status,
+        confidence=detection.confidence,
+        observed_quantity=observed_quantity,
+        notes=(
+            f"{marker} shelf_image_id={image.id}; sha256={image.sha256}; "
+            f"human_review_id={latest_review.id}; provider=mock"
+        ),
+        observed_at=models.utc_now(),
+        model_version=detection.model_version,
+    )
+    db.add(observation)
+    db.commit()
+    db.refresh(observation)
+    return observation
 
 
 def _refresh_ocr_match_view(db: Session, rows: list[models.ShelfImageOCRMatch]):

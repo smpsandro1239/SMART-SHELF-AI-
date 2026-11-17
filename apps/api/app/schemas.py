@@ -50,6 +50,11 @@ class ObservationCreate(BaseModel):
     model_version: str | None = Field(default=None, max_length=100)
 
 
+class DetectionObservationCreate(BaseModel):
+    """Human-selected SKU for a reviewed demonstration detection."""
+    product_id: int = Field(gt=0)
+
+
 class ObservationRead(BaseModel):
     id: int
     shelf_id: int
