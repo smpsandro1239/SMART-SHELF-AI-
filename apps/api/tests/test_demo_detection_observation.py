@@ -48,7 +48,15 @@ def test_demo_detection_requires_human_review_and_is_idempotent(monkeypatch):
             store_id=store.id,
             is_active=True,
         )
-        db.add_all([shelf, product, other_product, reviewer])
+        employee = models.User(
+            email="employee@demo-observation.test",
+            full_name="Demo Employee",
+            password_hash="not-used-in-this-test",
+            role="EMPLOYEE",
+            store_id=store.id,
+            is_active=True,
+        )
+        db.add_all([shelf, product, other_product, reviewer, employee])
         db.flush()
         db.add_all([
             models.ShelfProduct(shelf_id=shelf.id, product_id=product.id, target_quantity=8, min_display_quantity=2),
@@ -84,11 +92,11 @@ def test_demo_detection_requires_human_review_and_is_idempotent(monkeypatch):
         )
         db.add(detection)
         db.commit()
-        ids = (reviewer.id, store.id, product.id, other_product.id, detection.id)
+        ids = (reviewer.id, employee.id, store.id, shelf.id, product.id, other_product.id, detection.id)
     finally:
         db.close()
 
-    reviewer_id, store_id, product_id, other_product_id, detection_id = ids
+    reviewer_id, employee_id, store_id, shelf_id, product_id, other_product_id, detection_id = ids
     monkeypatch.setattr(
         main_module,
         "_request_user",
@@ -125,6 +133,38 @@ def test_demo_detection_requires_human_review_and_is_idempotent(monkeypatch):
             json={"product_id": product_id},
         )
         decisions = client.get(f"/api/v1/operational-decisions?store_id={store_id}")
+        task_payload = {
+            "store_id": store_id,
+            "shelf_id": shelf_id,
+            "product_id": product_id,
+            "priority": "NORMAL",
+            "requested_quantity": 8,
+            "assigned_user_id": employee_id,
+            "notes": "Demo vertical: evidência revista e aprovada.",
+        }
+        created_task = client.post("/api/v1/tasks/from-operational-decision?approved=true", json=task_payload)
+        duplicate_task = client.post("/api/v1/tasks/from-operational-decision?approved=true", json=task_payload)
+
+        actor["value"] = SimpleNamespace(id=employee_id, role="EMPLOYEE", store_id=store_id)
+        started_task = client.patch(
+            f"/api/v1/tasks/{created_task.json()['id']}/status",
+            json={"status": "IN_PROGRESS"},
+        )
+        completed_task = client.patch(
+            f"/api/v1/tasks/{created_task.json()['id']}/status",
+            json={"status": "COMPLETED", "actual_quantity": 8},
+        )
+
+        actor["value"] = SimpleNamespace(id=reviewer_id, role="SUPERVISOR", store_id=store_id)
+        reconciled = client.post(
+            f"/api/v1/tasks/{created_task.json()['id']}/reconcile-inventory",
+            json={"reason": "Reposição física concluída no cenário de demonstração."},
+        )
+        duplicate_reconciliation = client.post(
+            f"/api/v1/tasks/{created_task.json()['id']}/reconcile-inventory",
+            json={"reason": "Tentativa duplicada de reconciliação."},
+        )
+        task_events = client.get(f"/api/v1/tasks/{created_task.json()['id']}/events")
 
     assert first.status_code == 200
     assert second.status_code == 200
@@ -138,6 +178,22 @@ def test_demo_detection_requires_human_review_and_is_idempotent(monkeypatch):
     assert by_product[product_id]["evidence"]["sha256"] == "a" * 64
     assert by_product[other_product_id]["replenishment_assessment"] is None
     assert by_product[other_product_id]["evidence"] is None
+    assert created_task.status_code == 201, created_task.text
+    assert created_task.json()["status"] == "ASSIGNED"
+    assert created_task.json()["assigned_user_id"] == employee_id
+    assert duplicate_task.status_code == 409
+    assert duplicate_task.json()["detail"]["code"] == "ACTIVE_TASK_EXISTS"
+    assert started_task.status_code == 200, started_task.text
+    assert completed_task.status_code == 200, completed_task.text
+    assert completed_task.json()["status"] == "COMPLETED"
+    assert completed_task.json()["actual_quantity"] == 8
+    assert reconciled.status_code == 201, reconciled.text
+    assert reconciled.json()["quantity"] == 8
+    assert reconciled.json()["result_snapshot_id"] is not None
+    assert duplicate_reconciliation.status_code == 409
+    assert duplicate_reconciliation.json()["detail"]["code"] == "INVENTORY_ALREADY_RECONCILED"
+    assert task_events.status_code == 200
+    assert "INVENTORY_RECONCILED" in {event["event_type"] for event in task_events.json()}
 
     db = TestingSession()
     try:
