@@ -1,8 +1,10 @@
 # SMART SHELF AI — demonstração vertical de 10 minutos
 
-**Estado: implementação integrada na `main`; validação automatizada aprovada.**
+**Estado: implementação integrada na `main`; validação automatizada aprovada; ensaio manual visual ainda pendente.**
 
-No commit `8648ffcc3cbc4a7aefd69a4e7fe65324f0981dc6` (head da branch integrada), o CI confirmou 1 097 testes API aprovados, 1 teste ignorado, compilação Python, build de produção do frontend e os smokes de migrações, ciclo de tarefas, reconciliação, isolamento e concorrência em PostgreSQL. Continua pendente um ensaio manual de instalação limpa com Docker Compose e a passagem integral pelos três perfis num ambiente local. O mock não é um modelo treinado e não deve ser usado para decisões operacionais reais.
+A implementação do Demo Vertical está integrada na `main`. A suite API, a compilação Python, o build de produção do frontend e os smokes PostgreSQL foram aprovados no CI. Adicionalmente, o workflow `Demo Docker Compose smoke` construiu e iniciou PostgreSQL, API e `vision-worker`, aguardou a readiness após as migrações, executou o seed, confirmou a imagem sintética e validou a autenticação/autorização dos três perfis. Esta validação de stack foi aprovada no commit `452583eaec108a176190d19cb097cf3a8a872ede` (PR #4, integrado na `main` pelo merge `8df0950ab4590e41f5efdc0e7de5caf059147dbc`).
+
+**Ainda não foi realizado:** o ensaio manual da interface no computador de um utilizador, incluindo upload no browser e percurso de negócio completo até ao dashboard. O CI confirma a integração dos serviços e os acessos autenticados, mas não substitui esse ensaio visual. O provider mock não é um modelo treinado e não deve ser usado para decisões operacionais reais.
 
 ## Preparação local
 
@@ -60,7 +62,7 @@ npm ci
 npm run build
 ```
 
-O serviço API executa `alembic upgrade head` no arranque. O comando explícito `docker compose exec api alembic upgrade head` é seguro para confirmar/aplicar o estado das migrações antes do seed.
+O serviço API executa `alembic upgrade head` no arranque; o healthcheck `/health/ready` só fica saudável depois desse processo. O worker depende de `api: condition: service_healthy`, evitando consumir tarefas antes das migrações estarem concluídas. O comando explícito `docker compose exec api alembic upgrade head` é seguro para confirmar/aplicar o estado das migrações antes do seed.
 
 ## Capturas de ecrã recomendadas
 
@@ -80,3 +82,23 @@ Guardar capturas locais em `docs/screenshots/demo/` (não incluir tokens, emails
 - A deteção não contém SKU. A atribuição do SKU é uma revisão humana explícita, limitada às associações da prateleira.
 - Não existe integração POS/ERP/WMS neste demo. O inventário é local e semeado.
 - A reconciliação não altera snapshots antigos e pode ser recusada por frescura, concorrência ou stock insuficiente.
+
+
+## Checklist do ensaio manual (pendente)
+
+Executar depois de arrancar o stack e iniciar o frontend. Marcar cada ponto apenas após o observar na interface e, quando aplicável, confirmar o resultado na API/base de dados.
+
+- [ ] Abrir a aplicação em `http://localhost:5173` e autenticar como SUPERVISOR.
+- [ ] Confirmar Demo Store Braga, a zona e a prateleira `DEMO-A1`.
+- [ ] Carregar `synthetic-shelf.png`; confirmar sessão de captura, imagem e hash.
+- [ ] Aguardar o worker e confirmar deteção `empty_facing` identificada como DEMO.
+- [ ] Rever a deteção e selecionar manualmente `DEMO-001`; confirmar que a associação é limitada à prateleira.
+- [ ] Consultar a recomendação e verificar o stock disponível antes da aprovação.
+- [ ] Aprovar a reposição como SUPERVISOR ou ADMIN e atribuir a tarefa ao EMPLOYEE.
+- [ ] Terminar a sessão e entrar como EMPLOYEE; iniciar, executar e concluir a tarefa com a quantidade efetiva.
+- [ ] Voltar a entrar como SUPERVISOR; reconciliar com motivo explícito.
+- [ ] Confirmar movimento, novo snapshot e eventos de auditoria; confirmar que os snapshots anteriores permanecem imutáveis.
+- [ ] Confirmar que o dashboard apresenta o estado final esperado.
+- [ ] Guardar as sete capturas indicadas acima, sem tokens nem dados pessoais.
+
+**Critério de aceitação manual:** todos os passos acima concluídos, sem intervenção direta na base de dados para forçar estados, e com evidência visual dos resultados. Se um passo falhar, registar o perfil, ação, resposta/erro e logs relevantes antes de alterar código.
