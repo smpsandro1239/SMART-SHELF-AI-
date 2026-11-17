@@ -75,7 +75,7 @@ from app.schemas import (
     BootstrapAdminCreate, LoginRequest, TokenRead, UserRead, UserCreate, ShelfImageRead,
     ShelfImageDetectionRead, ProductEmbeddingExemplarCreate,
     ProductEmbeddingExemplarReview, ProductEmbeddingExemplarRead,
-    DetectionSkuReviewCreate, DetectionSkuReviewRead, DetectionObservationCreate,
+    DetectionSkuReviewCreate, DetectionSkuReviewRead, DetectionObservationCreate, StoreEmployeeRead,
     ShelfImageOCRRunCreate, ShelfImageOCRRunRead, ShelfImageOCREvidenceRead,
     ShelfImageOCRMatchRead,
     ShelfImageFusedEvidenceRead, ShelfImageRetentionRequest, ShelfImageRetentionEventRead, ShelfImagePurgeScheduleRequest,
@@ -7601,7 +7601,7 @@ def list_users(limit: int = 100, db: Session = Depends(get_db)):
     return db.query(models.User).order_by(models.User.id).limit(max(1, min(limit, 500))).all()
 
 
-@app.get("/api/v1/store-employees", response_model=list[UserRead], tags=["authentication"])
+@app.get("/api/v1/store-employees", response_model=list[StoreEmployeeRead], tags=["authentication"])
 def list_store_employees(
     request: Request,
     store_id: int | None = None,

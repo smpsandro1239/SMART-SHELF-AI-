@@ -385,6 +385,16 @@ class UserRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class StoreEmployeeRead(BaseModel):
+    """Minimal employee identity returned to store supervisors for assignment."""
+    id: int
+    store_id: int | None
+    full_name: str
+    role: UserRole
+    is_active: bool
+    model_config = ConfigDict(from_attributes=True)
+
+
 class TokenRead(BaseModel):
     access_token: str
     token_type: str = "bearer"

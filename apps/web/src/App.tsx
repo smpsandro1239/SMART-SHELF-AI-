@@ -10,6 +10,7 @@ const API_BASE = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
 type Role = "ADMIN" | "SUPERVISOR" | "EMPLOYEE";
 type TaskStatus = "PENDING" | "ASSIGNED" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
 type User = { id: number; email: string; full_name: string; role: Role; store_id: number | null; is_active: boolean };
+type EmployeeRecord = { id: number; full_name: string; role: Role; store_id: number | null; is_active: boolean };
 type StoreRecord = { id: number; code: string; name: string };
 type ZoneRecord = { id: number; store_id: number; name: string };
 type ShelfRecord = { id: number; zone_id: number; code: string; description: string | null };
@@ -171,7 +172,7 @@ export default function App() {
   const [stores, setStores] = useState<StoreRecord[]>([]);
   const [zones, setZones] = useState<ZoneRecord[]>([]);
   const [shelves, setShelves] = useState<ShelfRecord[]>([]);
-  const [employees, setEmployees] = useState<User[]>([]);
+  const [employees, setEmployees] = useState<EmployeeRecord[]>([]);
   const [selectedStoreId, setSelectedStoreId] = useState("");
   const [selectedZoneId, setSelectedZoneId] = useState("");
   const [employeeSelection, setEmployeeSelection] = useState<Record<string, string>>({});
@@ -228,13 +229,13 @@ export default function App() {
       let storeList: StoreRecord[] = [];
       let zoneList: ZoneRecord[] = [];
       let shelfList: ShelfRecord[] = [];
-      let employeeList: User[] = [];
+      let employeeList: EmployeeRecord[] = [];
       if (me.role === "ADMIN" || me.role === "SUPERVISOR") {
         [storeList, zoneList, shelfList, employeeList] = await Promise.all([
           request<StoreRecord[]>("/api/v1/stores"),
           request<ZoneRecord[]>("/api/v1/zones"),
           request<ShelfRecord[]>("/api/v1/shelves"),
-          request<User[]>("/api/v1/store-employees?limit=500"),
+          request<EmployeeRecord[]>("/api/v1/store-employees?limit=500"),
         ]);
       }
       setUser(me); setSummary(kpis); setTasks(taskList); setCaptures(captureList); setLastUpdated(new Date());
