@@ -1,6 +1,8 @@
 # SMART SHELF AI — demonstração vertical de 10 minutos
 
-> **Estado desta entrega:** provider mock e seed determinístico em implementação. O mock não é um modelo treinado e não deve ser usado para decisões operacionais reais.
+<badge>Fluxo demonstrativo em integração</badge>
+
+O provider mock, o seed idempotente e os principais passos de captura, revisão humana, observação, aprovação, execução e reconciliação estão implementados na branch. A validação final de instalação limpa e do percurso completo em PostgreSQL continua pendente. O mock não é um modelo treinado e não deve ser usado para decisões operacionais reais.
 
 ## Preparação local
 
@@ -13,9 +15,9 @@ docker compose exec api alembic upgrade head
 docker compose exec api python -m app.demo.seed
 ```
 
-O worker de visão usa `app.demo.vision:create_provider` por omissão no perfil local. A API e o worker partilham o volume `shelf_images`. A imagem sintética é gerada em `apps/api/demo/assets/synthetic-shelf.png` quando o seed é executado.
+A API e o worker usam `app.demo.vision:create_provider` por omissão no Docker Compose. Ambos partilham o volume `shelf_images`. O provider é determinístico para o conteúdo do ficheiro e produz uma caixa de demonstração; não analisa semanticamente a fotografia. Para confirmar o processamento: `docker compose logs -f vision-worker`. A imagem sintética é gerada em `apps/api/demo/assets/synthetic-shelf.png` quando o seed é executado.
 
-Frontend: executar `npm install && npm run dev` em `apps/web` (porta 5173). API: `http://localhost:8000`; documentação OpenAPI: `http://localhost:8000/docs`.
+Frontend: executar `npm ci && npm run dev` em `apps/web` (porta 5173). O Vite encaminha `/api` para `http://127.0.0.1:8000`. API: `http://localhost:8000`; documentação OpenAPI: `http://localhost:8000/docs`.
 
 ## Contas locais de demonstração
 
@@ -43,15 +45,22 @@ Estas credenciais são exclusivamente locais. Altera-as antes de expor o ambient
 ## Comandos de validação
 
 ```bash
+# Estado dos serviços e logs do worker
+cd <raiz-do-repositório>
+docker compose ps
+docker compose logs -f vision-worker
+
 # API tests
 cd apps/api
 pytest -q
 
-# Web checks
+# Web TypeScript e build de produção
 cd ../web
 npm ci
 npm run build
 ```
+
+O serviço API executa `alembic upgrade head` no arranque. O comando explícito `docker compose exec api alembic upgrade head` é seguro para confirmar/aplicar o estado das migrações antes do seed.
 
 ## Capturas de ecrã recomendadas
 

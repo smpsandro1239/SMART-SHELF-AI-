@@ -9,9 +9,9 @@ docker compose exec api python -m app.demo.seed
 cd apps/web && npm ci && npm run dev
 ```
 
-Contas exclusivamente locais: `supervisor@demo.smart-shelf.local` / `DemoSupervisor2026!` e `employee@demo.smart-shelf.local` / `DemoEmployee2026!`. O seed também cria ADMIN, uma loja, uma zona, três prateleiras, quinze produtos e snapshots de inventário. O worker inicia automaticamente com Docker Compose.
+Contas exclusivamente locais: `supervisor@demo.smart-shelf.local` / `DemoSupervisor2026!` e `employee@demo.smart-shelf.local` / `DemoEmployee2026!`. O seed também cria ADMIN, uma loja, uma zona, três prateleiras, quinze produtos e snapshots de inventário. O worker inicia automaticamente com Docker Compose e usa o mesmo provider mock configurado na API. Para acompanhar a análise: `docker compose logs -f vision-worker`. O percurso permite rever manualmente o SKU antes de criar a observação, aprovar a reposição e atribuir a tarefa ao funcionário. A conclusão e a reconciliação exigem confirmação e ficam auditadas.
 
-O guião completo, as limitações e a lista de capturas estão em [docs/DEMO.md](docs/DEMO.md). A imagem sintética é gerada localmente pelo seed em `apps/api/demo/assets/synthetic-shelf.png`.
+O guião completo, as limitações, os comandos de teste e a lista de capturas estão em [docs/DEMO.md](docs/DEMO.md). O estado de implementação e validação está em [docs/ROADMAP.md](docs/ROADMAP.md). A imagem sintética é gerada localmente pelo seed em `apps/api/demo/assets/synthetic-shelf.png`.
 
 > Segurança: estas credenciais destinam-se apenas a ambientes locais isolados. Substitui-as antes de expor o serviço a qualquer rede não confiável.
 
