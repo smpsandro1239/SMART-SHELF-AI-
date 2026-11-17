@@ -3305,3 +3305,56 @@ def test_shelf_product_catalogue_listing_is_scoped_to_supervisor_store(auth_clie
     assert {row["shelf_id"] for row in all_stores.json()} >= {
         ids["shelf_a_assigned"], ids["shelf_b"]
     }
+
+def test_admin_cannot_assign_inactive_product_to_shelf(auth_client):
+    client, ids, _ = auth_client
+    with main_module.SessionLocal() as db:
+        inactive_product = models.Product(
+            sku="AUTH-INACTIVE-SKU",
+            name="Produto desativado",
+            is_active=False,
+        )
+        db.add(inactive_product)
+        db.commit()
+        inactive_product_id = inactive_product.id
+
+    response = client.post(
+        "/api/v1/shelf-products",
+        json={
+            "shelf_id": ids["shelf_a_unassigned"],
+            "product_id": inactive_product_id,
+            "target_quantity": 8,
+            "min_display_quantity": 2,
+        },
+        headers=bearer(ids["admin"], "ADMIN"),
+    )
+
+    assert response.status_code == 409, response.text
+    assert "inactive" in response.json()["detail"].lower()
+    with main_module.SessionLocal() as db:
+        assert db.query(models.ShelfProduct).filter_by(
+            shelf_id=ids["shelf_a_unassigned"],
+            product_id=inactive_product_id,
+        ).count() == 0
+
+
+def test_admin_cannot_duplicate_existing_shelf_product_assignment(auth_client):
+    client, ids, _ = auth_client
+    response = client.post(
+        "/api/v1/shelf-products",
+        json={
+            "shelf_id": ids["shelf_a_assigned"],
+            "product_id": ids["product"],
+            "target_quantity": 8,
+            "min_display_quantity": 2,
+        },
+        headers=bearer(ids["admin"], "ADMIN"),
+    )
+
+    assert response.status_code == 409, response.text
+    assert "already assigned" in response.json()["detail"].lower()
+    with main_module.SessionLocal() as db:
+        assert db.query(models.ShelfProduct).filter_by(
+            shelf_id=ids["shelf_a_assigned"],
+            product_id=ids["product"],
+        ).count() == 1
