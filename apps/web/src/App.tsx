@@ -462,7 +462,7 @@ export default function App() {
       return;
     }
     setExpandedDetectionImage(item.id);
-    if (imageDetections[item.id]) return;
+    if (imageDetections[item.id]?.length) return;
     setDetectionLoading(item.id);
     try {
       const [result, imageResponse] = await Promise.all([
