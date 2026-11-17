@@ -33,6 +33,8 @@ class Settings(BaseSettings):
                 raise ValueError("Production requires a unique JWT_SECRET_KEY with at least 32 characters")
             if len(self.bootstrap_admin_key) < 32:
                 raise ValueError("Production requires a unique BOOTSTRAP_ADMIN_KEY with at least 32 characters")
+            if self.jwt_secret_key == self.bootstrap_admin_key:
+                raise ValueError("JWT_SECRET_KEY and BOOTSTRAP_ADMIN_KEY must be different secrets")
         return self
 
 
