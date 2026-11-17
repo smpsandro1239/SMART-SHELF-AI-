@@ -7559,6 +7559,30 @@ def list_users(limit: int = 100, db: Session = Depends(get_db)):
     return db.query(models.User).order_by(models.User.id).limit(max(1, min(limit, 500))).all()
 
 
+@app.get("/api/v1/store-employees", response_model=list[UserRead], tags=["authentication"])
+def list_store_employees(
+    request: Request,
+    store_id: int | None = None,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+):
+    """Return active employee identities for safe task assignment, scoped by store."""
+    actor = _request_user(db, request)
+    if actor is None or actor.role not in {"ADMIN", "SUPERVISOR"}:
+        raise HTTPException(status_code=403, detail="Supervisor role required")
+    query = db.query(models.User).filter(
+        models.User.role == "EMPLOYEE",
+        models.User.is_active.is_(True),
+    )
+    if actor.role == "SUPERVISOR":
+        if actor.store_id is None or (store_id is not None and store_id != actor.store_id):
+            raise HTTPException(status_code=403, detail="Access to this store is not allowed")
+        query = query.filter(models.User.store_id == actor.store_id)
+    elif store_id is not None:
+        query = query.filter(models.User.store_id == store_id)
+    return query.order_by(models.User.full_name, models.User.id).limit(max(1, min(limit, 500))).all()
+
+
 @app.get("/api/v1/dashboard/summary", tags=["dashboard"])
 def dashboard_summary(
     request: Request,
