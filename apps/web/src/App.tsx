@@ -864,7 +864,7 @@ export default function App() {
               </form>
             </article>
             <article className="panel capture-history">
-              <div className="panel-heading"><div><p className="eyebrow">REGISTO DE CAPTURAS</p><h2>Fotografias recentes</h2><p className="muted">As imagens ficam pendentes até existir um modelo de análise.</p></div><span className="subtle-pill">{captures.length} capturas</span></div>
+              <div className="panel-heading"><div><p className="eyebrow">REGISTO DE CAPTURAS</p><h2>Fotografias recentes</h2><p className="muted">O estado indica o processamento pelo provider configurado. No demo é usado um provider mock determinístico, não um modelo de visão treinado.</p></div><span className="subtle-pill">{captures.length} capturas</span></div>
               <div className="capture-list">
                 {captures.length === 0 && <div className="empty-state"><PackageSearch size={25} /><strong>Sem fotografias registadas</strong><span>As próximas capturas serão apresentadas aqui.</span></div>}
                 {captures.map(item => <div className="capture-item" key={item.id}>
