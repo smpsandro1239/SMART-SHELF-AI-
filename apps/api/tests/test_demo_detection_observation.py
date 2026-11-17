@@ -62,8 +62,12 @@ def test_demo_detection_requires_human_review_and_is_idempotent(monkeypatch):
             models.ShelfProduct(shelf_id=shelf.id, product_id=product.id, target_quantity=8, min_display_quantity=2),
             models.ShelfProduct(shelf_id=shelf.id, product_id=other_product.id, target_quantity=8, min_display_quantity=2),
             models.InventorySnapshot(
-                store_id=store.id, product_id=product.id, on_hand_quantity=12,
-                reserved_quantity=0, source="MANUAL", external_reference="demo-observation-test-v1",
+                store_id=store.id,
+                product_id=product.id,
+                on_hand_quantity=12,
+                reserved_quantity=0,
+                source="MANUAL",
+                external_reference="demo-observation-test-v1",
                 captured_at=models.utc_now(),
             ),
         ])
@@ -92,120 +96,138 @@ def test_demo_detection_requires_human_review_and_is_idempotent(monkeypatch):
         )
         db.add(detection)
         db.commit()
-        ids = (reviewer.id, employee.id, store.id, shelf.id, product.id, other_product.id, detection.id)
+        reviewer_id, employee_id = reviewer.id, employee.id
+        store_id, shelf_id = store.id, shelf.id
+        product_id, other_product_id, detection_id = product.id, other_product.id, detection.id
     finally:
         db.close()
 
-    reviewer_id, employee_id, store_id, shelf_id, product_id, other_product_id, detection_id = ids
-    monkeypatch.setattr(
-        main_module,
-        "_request_user",
-        lambda db, request: SimpleNamespace(id=reviewer_id, role="SUPERVISOR", store_id=store_id),
-    )
-
-    with TestClient(app) as client:
-        denied = client.post(
-            f"/api/v1/shelf-image-detections/{detection_id}/observation",
-            json={"product_id": product_id},
+    actor = {
+        "value": SimpleNamespace(
+            id=reviewer_id, role="SUPERVISOR", store_id=store_id, full_name="Demo Supervisor"
         )
-        assert denied.status_code == 409
-        assert "human SKU review" in denied.json()["detail"]
+    }
+    monkeypatch.setattr(main_module, "_request_user", lambda db, request: actor["value"])
+
+    try:
+        with TestClient(app) as client:
+            denied = client.post(
+                f"/api/v1/shelf-image-detections/{detection_id}/observation",
+                json={"product_id": product_id},
+            )
+            assert denied.status_code == 409
+            assert "human SKU review" in denied.json()["detail"]
+
+            db = TestingSession()
+            try:
+                db.add(models.DetectionSkuReview(
+                    detection_id=detection_id,
+                    selected_product_id=product_id,
+                    decision="CORRECTED",
+                    reviewer_user_id=reviewer_id,
+                    notes="SKU escolhido pelo supervisor para o cenário sintético.",
+                ))
+                db.commit()
+            finally:
+                db.close()
+
+            first = client.post(
+                f"/api/v1/shelf-image-detections/{detection_id}/observation",
+                json={"product_id": product_id},
+            )
+            second = client.post(
+                f"/api/v1/shelf-image-detections/{detection_id}/observation",
+                json={"product_id": product_id},
+            )
+            decisions = client.get(f"/api/v1/operational-decisions?store_id={store_id}")
+            missing_evidence = client.post(
+                "/api/v1/tasks/from-operational-decision?approved=true&demo_evidence_required=true",
+                json={"store_id": store_id, "shelf_id": shelf_id, "product_id": other_product_id},
+            )
+            task_payload = {
+                "store_id": store_id,
+                "shelf_id": shelf_id,
+                "product_id": product_id,
+                "priority": "NORMAL",
+                "requested_quantity": 8,
+                "assigned_user_id": employee_id,
+                "notes": "Demo vertical: evidência revista e aprovada.",
+            }
+            created_task = client.post(
+                "/api/v1/tasks/from-operational-decision?approved=true&demo_evidence_required=true",
+                json=task_payload,
+            )
+            duplicate_task = client.post(
+                "/api/v1/tasks/from-operational-decision?approved=true&demo_evidence_required=true",
+                json=task_payload,
+            )
+
+            actor["value"] = SimpleNamespace(
+                id=employee_id, role="EMPLOYEE", store_id=store_id, full_name="Demo Employee"
+            )
+            task_id = created_task.json()["id"]
+            started_task = client.patch(
+                f"/api/v1/tasks/{task_id}/status",
+                json={"status": "IN_PROGRESS"},
+            )
+            completed_task = client.patch(
+                f"/api/v1/tasks/{task_id}/status",
+                json={"status": "COMPLETED", "actual_quantity": 8},
+            )
+
+            actor["value"] = SimpleNamespace(
+                id=reviewer_id, role="SUPERVISOR", store_id=store_id, full_name="Demo Supervisor"
+            )
+            reconciled = client.post(
+                f"/api/v1/tasks/{task_id}/reconcile-inventory",
+                json={"reason": "Reposição física concluída no cenário de demonstração."},
+            )
+            duplicate_reconciliation = client.post(
+                f"/api/v1/tasks/{task_id}/reconcile-inventory",
+                json={"reason": "Tentativa duplicada de reconciliação."},
+            )
+            task_events = client.get(f"/api/v1/tasks/{task_id}/events")
+
+        assert first.status_code == 200
+        assert second.status_code == 200
+        assert first.json()["id"] == second.json()["id"]
+        assert first.json()["status"] == "EMPTY"
+        assert first.json()["observed_quantity"] == 0
+        assert f"sha256={'a' * 64}" in first.json()["notes"]
+        assert decisions.status_code == 200
+        by_product = {row["product_id"]: row for row in decisions.json()["decisions"]}
+        assert by_product[product_id]["replenishment_assessment"] is not None
+        assert by_product[product_id]["evidence"]["sha256"] == "a" * 64
+        assert by_product[other_product_id]["replenishment_assessment"] is None
+        assert by_product[other_product_id]["evidence"] is None
+        assert missing_evidence.status_code == 409
+        assert missing_evidence.json()["detail"]["code"] == "DEMO_EVIDENCE_REQUIRED"
+        assert created_task.status_code == 201, created_task.text
+        assert created_task.json()["status"] == "ASSIGNED"
+        assert created_task.json()["assigned_user_id"] == employee_id
+        assert duplicate_task.status_code == 409
+        assert duplicate_task.json()["detail"]["code"] == "ACTIVE_TASK_EXISTS"
+        assert started_task.status_code == 200, started_task.text
+        assert completed_task.status_code == 200, completed_task.text
+        assert completed_task.json()["status"] == "COMPLETED"
+        assert completed_task.json()["actual_quantity"] == 8
+        assert reconciled.status_code == 201, reconciled.text
+        assert reconciled.json()["quantity"] == 8
+        assert reconciled.json()["result_snapshot_id"] is not None
+        assert duplicate_reconciliation.status_code == 409
+        assert duplicate_reconciliation.json()["detail"]["code"] == "INVENTORY_ALREADY_RECONCILED"
+        assert task_events.status_code == 200
+        assert "INVENTORY_RECONCILED" in {event["event_type"] for event in task_events.json()}
 
         db = TestingSession()
         try:
-            db.add(models.DetectionSkuReview(
-                detection_id=detection_id,
-                selected_product_id=product_id,
-                decision="CORRECTED",
-                reviewer_user_id=reviewer_id,
-                notes="SKU escolhido pelo supervisor para o cenário sintético.",
-            ))
-            db.commit()
+            assert db.query(models.Observation).filter(
+                models.Observation.notes.like(f"%demo_detection_id={detection_id};%")
+            ).count() == 1
+            assert db.query(models.InventoryMovement).filter_by(task_id=task_id).count() == 1
         finally:
             db.close()
-
-        first = client.post(
-            f"/api/v1/shelf-image-detections/{detection_id}/observation",
-            json={"product_id": product_id},
-        )
-        second = client.post(
-            f"/api/v1/shelf-image-detections/{detection_id}/observation",
-            json={"product_id": product_id},
-        )
-        decisions = client.get(f"/api/v1/operational-decisions?store_id={store_id}")
-        missing_evidence = client.post(
-            "/api/v1/tasks/from-operational-decision?approved=true&demo_evidence_required=true",
-            json={"store_id": store_id, "shelf_id": shelf_id, "product_id": other_product_id},
-        )
-        task_payload = {
-            "store_id": store_id,
-            "shelf_id": shelf_id,
-            "product_id": product_id,
-            "priority": "NORMAL",
-            "requested_quantity": 8,
-            "assigned_user_id": employee_id,
-            "notes": "Demo vertical: evidência revista e aprovada.",
-        }
-        created_task = client.post("/api/v1/tasks/from-operational-decision?approved=true&demo_evidence_required=true", json=task_payload)
-        duplicate_task = client.post("/api/v1/tasks/from-operational-decision?approved=true", json=task_payload)
-
-        actor["value"] = SimpleNamespace(id=employee_id, role="EMPLOYEE", store_id=store_id)
-        started_task = client.patch(
-            f"/api/v1/tasks/{created_task.json()['id']}/status",
-            json={"status": "IN_PROGRESS"},
-        )
-        completed_task = client.patch(
-            f"/api/v1/tasks/{created_task.json()['id']}/status",
-            json={"status": "COMPLETED", "actual_quantity": 8},
-        )
-
-        actor["value"] = SimpleNamespace(id=reviewer_id, role="SUPERVISOR", store_id=store_id)
-        reconciled = client.post(
-            f"/api/v1/tasks/{created_task.json()['id']}/reconcile-inventory",
-            json={"reason": "Reposição física concluída no cenário de demonstração."},
-        )
-        duplicate_reconciliation = client.post(
-            f"/api/v1/tasks/{created_task.json()['id']}/reconcile-inventory",
-            json={"reason": "Tentativa duplicada de reconciliação."},
-        )
-        task_events = client.get(f"/api/v1/tasks/{created_task.json()['id']}/events")
-
-    assert first.status_code == 200
-    assert second.status_code == 200
-    assert first.json()["id"] == second.json()["id"]
-    assert first.json()["status"] == "EMPTY"
-    assert first.json()["observed_quantity"] == 0
-    assert f"sha256={'a' * 64}" in first.json()["notes"]
-    assert decisions.status_code == 200
-    by_product = {row["product_id"]: row for row in decisions.json()["decisions"]}
-    assert by_product[product_id]["replenishment_assessment"] is not None
-    assert by_product[product_id]["evidence"]["sha256"] == "a" * 64
-    assert by_product[other_product_id]["replenishment_assessment"] is None
-    assert by_product[other_product_id]["evidence"] is None
-    assert missing_evidence.status_code == 409
-    assert missing_evidence.json()["detail"]["code"] == "DEMO_EVIDENCE_REQUIRED"
-    assert created_task.status_code == 201, created_task.text
-    assert created_task.json()["status"] == "ASSIGNED"
-    assert created_task.json()["assigned_user_id"] == employee_id
-    assert duplicate_task.status_code == 409
-    assert duplicate_task.json()["detail"]["code"] == "ACTIVE_TASK_EXISTS"
-    assert started_task.status_code == 200, started_task.text
-    assert completed_task.status_code == 200, completed_task.text
-    assert completed_task.json()["status"] == "COMPLETED"
-    assert completed_task.json()["actual_quantity"] == 8
-    assert reconciled.status_code == 201, reconciled.text
-    assert reconciled.json()["quantity"] == 8
-    assert reconciled.json()["result_snapshot_id"] is not None
-    assert duplicate_reconciliation.status_code == 409
-    assert duplicate_reconciliation.json()["detail"]["code"] == "INVENTORY_ALREADY_RECONCILED"
-    assert task_events.status_code == 200
-    assert "INVENTORY_RECONCILED" in {event["event_type"] for event in task_events.json()}
-
-    db = TestingSession()
-    try:
-        assert db.query(models.Observation).filter(models.Observation.notes.like(f"%demo_detection_id={detection_id};%")).count() == 1
     finally:
-        db.close()
         app.dependency_overrides.pop(get_db, None)
         Base.metadata.drop_all(bind=ENGINE)
 
