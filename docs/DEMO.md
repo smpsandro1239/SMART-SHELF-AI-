@@ -84,3 +84,24 @@ Guardar capturas locais em `docs/screenshots/demo/` (não incluir tokens, emails
 - A deteção não contém SKU. A atribuição do SKU é uma revisão humana explícita, limitada às associações da prateleira.
 - Não existe integração POS/ERP/WMS neste demo. O inventário é local e semeado.
 - A reconciliação não altera snapshots antigos e pode ser recusada por frescura, concorrência ou stock insuficiente.
+
+
+## Checklist do ensaio manual (pendente)
+
+Executar depois de arrancar o stack e iniciar o frontend. Marcar cada ponto apenas após o observar na interface e, quando aplicável, confirmar o resultado na API/base de dados.
+
+- [ ] Abrir a aplicação em `http://localhost:5173` e autenticar como SUPERVISOR.
+- [ ] Confirmar Demo Store Braga, a zona e a prateleira `DEMO-A1`.
+- [ ] Carregar `synthetic-shelf.png`; confirmar sessão de captura, imagem e hash.
+- [ ] Aguardar o worker e confirmar deteção `empty_facing` identificada como DEMO.
+- [ ] Rever a deteção e selecionar manualmente `DEMO-001`; confirmar que a associação é limitada à prateleira.
+- [ ] Consultar a recomendação e verificar o stock disponível antes da aprovação.
+- [ ] Aprovar a reposição como SUPERVISOR ou ADMIN e atribuir a tarefa ao EMPLOYEE.
+- [ ] Terminar a sessão e entrar como EMPLOYEE; iniciar, executar e concluir a tarefa com a quantidade efetiva.
+- [ ] Voltar a entrar como SUPERVISOR; reconciliar com motivo explícito.
+- [ ] Confirmar movimento, novo snapshot e eventos de auditoria; confirmar que os snapshots anteriores permanecem imutáveis.
+- [ ] Confirmar que o dashboard apresenta o estado final esperado.
+- [ ] Guardar as sete capturas indicadas acima, sem tokens nem dados pessoais.
+
+**Critério de aceitação manual:** todos os passos acima concluídos, sem intervenção direta na base de dados para forçar estados, e com evidência visual dos resultados. Se um passo falhar, registar o perfil, ação, resposta/erro e logs relevantes antes de alterar código.
+
