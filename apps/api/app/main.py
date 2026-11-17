@@ -2728,22 +2728,34 @@ def create_observation_from_demo_detection(
     actor = _request_user(db, request)
     if actor is None or actor.role not in {"ADMIN", "SUPERVISOR"}:
         raise HTTPException(status_code=403, detail="Supervisor role required")
-    detection = (
-        db.query(models.ShelfImageDetection)
-        .filter(models.ShelfImageDetection.id == detection_id)
-        .with_for_update()
-        .first()
-    )
-    if detection is None:
+    # Discover the parent without locking, then follow the global image -> detection
+    # lock order used by the vision worker and retention transitions. Locking the
+    # detection first here could deadlock with a worker holding the image row.
+    initial_detection = db.get(models.ShelfImageDetection, detection_id)
+    if initial_detection is None:
         raise HTTPException(status_code=404, detail="Detection not found")
+    source_image_id = initial_detection.shelf_image_id
     image = (
         db.query(models.ShelfImage)
-        .filter(models.ShelfImage.id == detection.shelf_image_id)
+        .filter(models.ShelfImage.id == source_image_id)
         .with_for_update()
+        .populate_existing()
         .first()
     )
     if image is None:
         raise HTTPException(status_code=404, detail="Shelf image not found")
+    detection = (
+        db.query(models.ShelfImageDetection)
+        .filter(
+            models.ShelfImageDetection.id == detection_id,
+            models.ShelfImageDetection.shelf_image_id == source_image_id,
+        )
+        .with_for_update()
+        .populate_existing()
+        .first()
+    )
+    if detection is None:
+        raise HTTPException(status_code=404, detail="Detection not found")
     store_id = _shelf_image_store_id(db, image.id)
     _enforce_store_scope(actor, store_id)
     _require_active_shelf_image(image)
