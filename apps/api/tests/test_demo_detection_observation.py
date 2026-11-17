@@ -29,7 +29,6 @@ def test_demo_detection_requires_human_review_and_is_idempotent(monkeypatch):
     previous_db_override = app.dependency_overrides.get(get_db)
     Base.metadata.drop_all(bind=ENGINE)
     Base.metadata.create_all(bind=ENGINE)
-    app.dependency_overrides[get_db] = override_get_db
     db = TestingSession()
     try:
         store = models.Store(code="DEMO-OBS-TEST", name="Demo observation test")
@@ -103,6 +102,7 @@ def test_demo_detection_requires_human_review_and_is_idempotent(monkeypatch):
     finally:
         db.close()
 
+    app.dependency_overrides[get_db] = override_get_db
     actor = {
         "value": SimpleNamespace(
             id=reviewer_id, role="SUPERVISOR", store_id=store_id, full_name="Demo Supervisor"
@@ -268,6 +268,7 @@ def test_store_employee_listing_is_role_and_store_scoped(monkeypatch):
     finally:
         db.close()
 
+    app.dependency_overrides[get_db] = override_get_db
     monkeypatch.setattr(main_module, "_request_user", lambda db, request: actor["value"])
     try:
         with TestClient(app) as client:
