@@ -10,6 +10,10 @@ const API_BASE = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
 type Role = "ADMIN" | "SUPERVISOR" | "EMPLOYEE";
 type TaskStatus = "PENDING" | "ASSIGNED" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
 type User = { id: number; email: string; full_name: string; role: Role; store_id: number | null; is_active: boolean };
+type StoreRecord = { id: number; code: string; name: string };
+type ZoneRecord = { id: number; store_id: number; name: string };
+type ShelfRecord = { id: number; zone_id: number; code: string; description: string | null };
+type CaptureSession = { id: number; shelf_id: number; store_id: number; started_at: string };
 type Task = {
   id: number; store_id: number; shelf_id: number; product_id: number;
   priority: "LOW" | "NORMAL" | "HIGH" | "URGENT"; status: TaskStatus;
@@ -29,7 +33,7 @@ type InventoryMovement = {
   source_snapshot_id: number; result_snapshot_id: number;
   actor_user_id: number; reason: string; created_at: string;
 };
-type ShelfImage = { id: number; shelf_id: number; original_filename: string; mime_type: string; file_size_bytes: number; sha256: string; analysis_status: "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED"; analysis_error: string | null; analysis_started_at: string | null; analysis_completed_at: string | null; captured_at: string; created_at: string };
+type ShelfImage = { id: number; shelf_id: number; capture_session_id?: number | null; original_filename: string; mime_type: string; file_size_bytes: number; sha256: string; analysis_status: "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED"; analysis_error: string | null; analysis_started_at: string | null; analysis_completed_at: string | null; captured_at: string; created_at: string };
 type ShelfImageDetection = { id: number; shelf_image_id: number; product_id: number | null; label: string; confidence: number; x_min: number; y_min: number; x_max: number; y_max: number; model_version: string; sku_match_status?: "MATCHED" | "AMBIGUOUS" | "UNKNOWN" | null; sku_similarity?: number | null; sku_match_margin?: number | null; created_at: string };
 type Product = { id: number; sku: string; name: string; is_active: boolean };
 type ShelfProduct = { id: number; shelf_id: number; product_id: number; target_quantity: number; position: number | null };
@@ -163,6 +167,15 @@ export default function App() {
   const [captureReset, setCaptureReset] = useState(0);
   const [captureLoading, setCaptureLoading] = useState(false);
   const [captureMessage, setCaptureMessage] = useState("");
+  const [stores, setStores] = useState<StoreRecord[]>([]);
+  const [zones, setZones] = useState<ZoneRecord[]>([]);
+  const [shelves, setShelves] = useState<ShelfRecord[]>([]);
+  const [employees, setEmployees] = useState<User[]>([]);
+  const [selectedStoreId, setSelectedStoreId] = useState("");
+  const [selectedZoneId, setSelectedZoneId] = useState("");
+  const [employeeSelection, setEmployeeSelection] = useState<Record<string, string>>({});
+  const [observationByDetection, setObservationByDetection] = useState<Record<number, number>>({});
+  const [observationLoading, setObservationLoading] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
@@ -205,13 +218,20 @@ export default function App() {
     setLoading(true); setError("");
     try {
       const query = storeFilter.trim() ? `?store_id=${encodeURIComponent(storeFilter.trim())}` : "";
-      const [me, kpis, taskList, captureList] = await Promise.all([
+      const [me, kpis, taskList, captureList, storeList, zoneList, shelfList, userList] = await Promise.all([
         request<User>("/api/v1/auth/me"),
         request<Summary>(`/api/v1/dashboard/summary${query}`),
         request<Task[]>("/api/v1/tasks?limit=100"),
         request<ShelfImage[]>("/api/v1/shelf-images?limit=30"),
+        request<StoreRecord[]>("/api/v1/stores"),
+        request<ZoneRecord[]>("/api/v1/zones"),
+        request<ShelfRecord[]>("/api/v1/shelves"),
+        request<User[]>("/api/v1/auth/users?limit=500"),
       ]);
       setUser(me); setSummary(kpis); setTasks(taskList); setCaptures(captureList); setLastUpdated(new Date());
+      setStores(storeList); setZones(zoneList); setShelves(shelfList);
+      setEmployees(userList.filter(person => person.role === "EMPLOYEE" && person.is_active));
+      setSelectedStoreId(current => current || String(me.store_id ?? storeList[0]?.id ?? ""));
       if (me.role === "ADMIN" || me.role === "SUPERVISOR") {
         setDecisionLoading(true);
         try {
@@ -258,6 +278,14 @@ export default function App() {
   }, [token, storeFilter, request, logout]);
 
   useEffect(() => { if (token) void refresh(); }, [token, refresh]);
+  const demoZones = useMemo(() => zones.filter(zone => String(zone.store_id) === selectedStoreId), [zones, selectedStoreId]);
+  const demoShelves = useMemo(() => shelves.filter(shelf => String(shelf.zone_id) === selectedZoneId), [shelves, selectedZoneId]);
+  useEffect(() => {
+    if (!demoZones.some(zone => String(zone.id) === selectedZoneId)) setSelectedZoneId(String(demoZones[0]?.id ?? ""));
+  }, [demoZones, selectedZoneId]);
+  useEffect(() => {
+    if (!demoShelves.some(shelf => String(shelf.id) === captureShelfId)) setCaptureShelfId(String(demoShelves[0]?.id ?? ""));
+  }, [demoShelves, captureShelfId]);
 
   async function login(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setLoading(true); setError("");
@@ -356,14 +384,21 @@ export default function App() {
 
   async function uploadCapture(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!captureShelfId.trim() || !captureFile) {
-      setCaptureMessage("Indica o ID da prateleira e seleciona uma fotografia.");
+    if (!captureShelfId.trim() || !captureFile || !user || !["ADMIN", "SUPERVISOR"].includes(user.role)) {
+      setCaptureMessage("Seleciona uma prateleira, uma fotografia e confirma que tens perfil SUPERVISOR/ADMIN.");
       return;
     }
     setCaptureLoading(true); setCaptureMessage("");
+    let sessionId: number | null = null;
     try {
+      const captureSession = await request<CaptureSession>("/api/v1/capture-sessions", {
+        method: "POST",
+        body: JSON.stringify({ shelf_id: Number(captureShelfId), source_type: "mobile", capture_mode: "single" }),
+      });
+      sessionId = captureSession.id;
       const form = new FormData();
       form.append("shelf_id", captureShelfId.trim());
+      form.append("capture_session_id", String(captureSession.id));
       form.append("image", captureFile);
       const response = await fetch(`${API_BASE}/api/v1/shelf-images`, {
         method: "POST",
@@ -372,10 +407,13 @@ export default function App() {
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.detail || `Erro HTTP ${response.status}`);
-      setCaptureMessage(`Fotografia #${payload.id} recebida. Estado: ${payload.analysis_status}.`);
+      setCaptureMessage(`Sessão #${sessionId} · fotografia #${payload.id} · SHA-256 ${String(payload.sha256).slice(0, 12)}… · ${payload.analysis_status}.`);
       setCaptureFile(null); setCaptureReset(value => value + 1);
       await refresh();
     } catch (err) {
+      if (sessionId !== null) {
+        try { await request<CaptureSession>(`/api/v1/capture-sessions/${sessionId}/close`, { method: "POST" }); } catch { /* Preserve the original upload error. */ }
+      }
       setCaptureMessage(err instanceof Error ? err.message : "Não foi possível enviar a fotografia.");
     } finally { setCaptureLoading(false); }
   }
@@ -454,6 +492,33 @@ export default function App() {
     }
   }
 
+
+  async function createObservationFromDetection(image: ShelfImage, detection: ShelfImageDetection) {
+    const history = detectionReviews[detection.id] || [];
+    const latest = history[history.length - 1];
+    const productId = latest?.selected_product_id;
+    if (!latest || latest.decision === "REJECTED" || !productId) {
+      setError("É necessária uma revisão humana válida do SKU antes de criar a observação.");
+      return;
+    }
+    if (!window.confirm(`Registar observação ${detection.label} para o SKU selecionado? A evidência ficará ligada à imagem #${image.id}.`)) return;
+    setObservationLoading(detection.id);
+    setError("");
+    try {
+      const observation = await request<{ id: number }>(`/api/v1/shelf-image-detections/${detection.id}/observation`, {
+        method: "POST",
+        body: JSON.stringify({ product_id: productId }),
+      });
+      setObservationByDetection(current => ({ ...current, [detection.id]: observation.id }));
+      setCaptureMessage(`Observação #${observation.id} registada a partir da deteção #${detection.id}.`);
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Não foi possível criar a observação.");
+    } finally {
+      setObservationLoading(null);
+    }
+  }
+
   function openQueueImage(item: ReviewQueueItem) {
     const capture = captures.find(image => image.id === item.shelf_image_id);
     if (!capture) {
@@ -500,11 +565,16 @@ export default function App() {
     if (!assessment || assessment.status !== "NEEDS_REPLENISHMENT" || assessment.suggested_quantity == null) return;
     const quantity = assessment.suggested_quantity;
     const available = item.backroom_inventory?.available_quantity;
+    const key = `${item.store_id}:${item.shelf_id}:${item.product_id}`;
+    const assignedUserId = Number(employeeSelection[key]);
+    if (!Number.isInteger(assignedUserId) || !employees.some(employee => employee.id === assignedUserId && employee.store_id === item.store_id)) {
+      setError("Seleciona um EMPLOYEE ativo da mesma loja antes de aprovar.");
+      return;
+    }
     if (!item.backroom_inventory?.is_fresh || available == null || quantity > available) {
       setError("A proposta deixou de ter stock de retaguarda atualizado e suficiente. Atualiza as decisões antes de aprovar.");
       return;
     }
-    const key = `${item.store_id}:${item.shelf_id}:${item.product_id}`;
     const accepted = window.confirm(
       `Aprovar tarefa de reposição?\\n\\n${item.product_name} (${item.product_sku})\\nPrateleira: ${item.shelf_code}\\nQuantidade: ${quantity}\\nStock disponível na retaguarda: ${available}\\n\\nA tarefa será criada, sem movimentar stock automaticamente.`
     );
@@ -520,6 +590,7 @@ export default function App() {
           product_id: item.product_id,
           priority: item.decision.priority === "HIGH" ? "HIGH" : "NORMAL",
           requested_quantity: quantity,
+          assigned_user_id: assignedUserId,
           notes: "Aprovado pelo responsável no dashboard de decisões operacionais.",
         }),
       });
@@ -574,7 +645,7 @@ export default function App() {
           </div>
         </header>
         <section className="toolbar">
-          <div><span className="live-dot" /> <strong>Dados operacionais</strong><span className="muted"> · {lastUpdated ? `Atualizado às ${lastUpdated.toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" })}` : "A sincronizar"}</span></div>
+          <div><span className="live-dot" /> <strong>Dados operacionais</strong> <span className="subtle-pill">Demo mode · provider mock quando configurado</span><span className="muted"> · {lastUpdated ? `Atualizado às ${lastUpdated.toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" })}` : "A sincronizar"}</span></div>
           {user?.role === "ADMIN" && <label className="store-filter"><Store size={15} /><input aria-label="Filtrar por ID da loja" placeholder="Todas as lojas · ID opcional" value={storeFilter} onChange={e => setStoreFilter(e.target.value)} onKeyDown={e => { if (e.key === "Enter") void refresh(); }} /><button onClick={() => void refresh()}>Aplicar</button></label>}
         </section>
         {error && <div className="error-banner page-error" role="alert"><AlertTriangle size={17} /> {error}</div>}
@@ -671,7 +742,13 @@ export default function App() {
                       <span>Por cobrir: <strong>{item.replenishment_assessment.remaining_gap_quantity == null ? "—" : item.replenishment_assessment.remaining_gap_quantity}</strong></span>
                     </div>
                     {item.replenishment_assessment.requires_human_review && <p className="decision-method">Requer validação humana antes de criar uma tarefa ou movimentar stock.</p>}
-                    {item.replenishment_assessment.status === "NEEDS_REPLENISHMENT" && item.replenishment_assessment.suggested_quantity != null && <button className="row-action decision-approve" onClick={() => void approveOperationalRefill(item)} disabled={approvalLoadingKey === `${item.store_id}:${item.shelf_id}:${item.product_id}` || !item.backroom_inventory?.is_fresh || item.replenishment_assessment.suggested_quantity > (item.backroom_inventory?.available_quantity ?? 0)}>
+                    {item.replenishment_assessment.status === "NEEDS_REPLENISHMENT" && item.replenishment_assessment.suggested_quantity != null && <label className="demo-assignee">Atribuir ao funcionário
+                         <select value={employeeSelection[`${item.store_id}:${item.shelf_id}:${item.product_id}`] || ""} onChange={event => setEmployeeSelection(current => ({ ...current, [`${item.store_id}:${item.shelf_id}:${item.product_id}`]: event.target.value }))}>
+                           <option value="">Selecionar EMPLOYEE…</option>
+                           {employees.filter(employee => employee.store_id === item.store_id).map(employee => <option key={employee.id} value={employee.id}>{employee.full_name} · #{employee.id}</option>)}
+                         </select>
+                       </label>
+                       <button className="row-action decision-approve" onClick={() => void approveOperationalRefill(item)} disabled={approvalLoadingKey === `${item.store_id}:${item.shelf_id}:${item.product_id}` || !item.backroom_inventory?.is_fresh || item.replenishment_assessment.suggested_quantity > (item.backroom_inventory?.available_quantity ?? 0)}>
                       {approvalLoadingKey === `${item.store_id}:${item.shelf_id}:${item.product_id}` ? "A criar tarefa…" : "Aprovar e criar tarefa"}
                     </button>}
                   </div>}
@@ -731,7 +808,7 @@ export default function App() {
             <article className="panel capture-panel">
               <div className="panel-heading"><div><p className="eyebrow">VISÃO COMPUTACIONAL</p><h2>Nova captura de prateleira</h2><p className="muted">Envia uma fotografia para registo e futura análise automática.</p></div><div className="capture-icon"><PackageSearch size={20} /></div></div>
               <form className="capture-form" onSubmit={uploadCapture}>
-                <label>ID da prateleira<input type="number" min="1" value={captureShelfId} onChange={e => setCaptureShelfId(e.target.value)} placeholder="Ex.: 12" required /></label>
+                
                 <label>Fotografia (JPEG, PNG ou WebP)<input key={captureReset} type="file" accept="image/jpeg,image/png,image/webp" onChange={e => setCaptureFile(e.target.files?.[0] || null)} required /></label>
                 <div className="capture-submit"><span>{captureFile ? captureFile.name : "Nenhum ficheiro selecionado"}</span><button className="row-action" disabled={captureLoading || !captureFile}>{captureLoading ? "A enviar…" : "Enviar fotografia"} <ArrowUpRight size={14} /></button></div>
                 {captureMessage && <p className="capture-feedback" role="status">{captureMessage}</p>}
@@ -742,7 +819,7 @@ export default function App() {
               <div className="capture-list">
                 {captures.length === 0 && <div className="empty-state"><PackageSearch size={25} /><strong>Sem fotografias registadas</strong><span>As próximas capturas serão apresentadas aqui.</span></div>}
                 {captures.map(item => <div className="capture-item" key={item.id}>
-                  <div className="capture-row"><div className="capture-thumb"><Boxes size={17} /></div><div className="capture-meta"><strong>Prateleira #{item.shelf_id} · {item.original_filename}</strong><span>{(item.file_size_bytes / 1024).toFixed(0)} KB · {new Date(item.created_at).toLocaleString("pt-PT")}</span></div><span className={`task-status ${item.analysis_status.toLowerCase()}`}>{item.analysis_status}</span>{(user?.role === "ADMIN" || user?.role === "SUPERVISOR") && item.analysis_status === "FAILED" && <button className="row-action detection-toggle" disabled={retryLoading === item.id} onClick={() => void retryImageAnalysis(item)}>{retryLoading === item.id ? "A repetir…" : "Repetir análise"}</button>}<button className="row-action detection-toggle" onClick={() => void toggleImageDetections(item)}>{detectionLoading === item.id ? "A consultar…" : expandedDetectionImage === item.id ? "Fechar" : "Deteções"}</button></div>
+                  <div className="capture-row"><div className="capture-thumb"><Boxes size={17} /></div><div className="capture-meta"><strong>Prateleira #{item.shelf_id} · {item.original_filename}</strong><span>{(item.file_size_bytes / 1024).toFixed(0)} KB · SHA-256 {item.sha256.slice(0, 12)}… · Sessão #{item.capture_session_id ?? "—"} · {new Date(item.created_at).toLocaleString("pt-PT")}</span></div><span className={`task-status ${item.analysis_status.toLowerCase()}`}>{item.analysis_status}</span>{(user?.role === "ADMIN" || user?.role === "SUPERVISOR") && item.analysis_status === "FAILED" && <button className="row-action detection-toggle" disabled={retryLoading === item.id} onClick={() => void retryImageAnalysis(item)}>{retryLoading === item.id ? "A repetir…" : "Repetir análise"}</button>}<button className="row-action detection-toggle" onClick={() => void toggleImageDetections(item)}>{detectionLoading === item.id ? "A consultar…" : expandedDetectionImage === item.id ? "Fechar" : "Deteções"}</button></div>
                   {expandedDetectionImage === item.id && <div className="detection-workspace">
                     {imageUrls[item.id] && <div className="detection-image-stage">
                       <img src={imageUrls[item.id]} alt={`Fotografia da prateleira ${item.shelf_id}`} />
