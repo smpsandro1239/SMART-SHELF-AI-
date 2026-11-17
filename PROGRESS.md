@@ -18,6 +18,6 @@
 
 ## Current focus
 
-Production configuration review: `Settings` rejects the development JWT key and JWT/bootstrap secrets shorter than 32 characters when `APP_ENV=production`; Vercel deployment guidance explicitly requires `APP_ENV=production` and separate secrets. Added regression tests, pending CI validation.
+Production configuration review: `Settings` rejects the development JWT key and JWT/bootstrap secrets shorter than 32 characters when `APP_ENV=production`; it now also rejects reuse of the same secret for both purposes. Added tests that isolate inherited CI environment variables. Initial CI exposed environment leakage in two tests; corrected the tests and added explicit coverage for reused secrets. Revalidation pending.
 
 Continue reviewing catalogue authorization, derived-image retention races and worker lease/retry behavior. Do not mark an item complete until its relevant automated checks pass.
