@@ -44,3 +44,10 @@ Added `test_catalogue_and_warehouse_master_data_writes_are_admin_only` to exerci
 
 
 - **2026-11-17 — `5ef55ab`**: added a tenant-isolation regression test for `GET /api/v1/shelf-products`: SUPERVISOR sees only the assigned store, an explicit foreign-shelf filter returns an empty list, and ADMIN retains global visibility. The earlier `df1030a` test covers supervisor/employee denial on four catalogue/master-data creation routes. These are regression tests added to the suite; CI is pending and no local execution is claimed. Concurrent shelf-product reassignment remains unvalidated.
+
+
+### Shelf assignment integrity — 2026-11-17
+
+- **`52b0d45`** adds API regression tests proving an ADMIN cannot assign an inactive product to a shelf (HTTP 409; no row persisted) and cannot create a duplicate shelf/product association (HTTP 409; existing row count remains one).
+- The previous CI run for commit `5ef55ab` passed API CI and Demo Docker Compose smoke; Quality Gates passed for `9e9d242`. The new tests have not yet been validated by CI.
+- No application code changed in this pass: current route logic already rejects inactive products and duplicate assignments. PostgreSQL concurrency/unique-constraint race coverage remains open.
