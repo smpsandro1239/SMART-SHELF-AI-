@@ -1,9 +1,9 @@
-"""Verify inventory and warehouse cross-store authorization on PostgreSQL 16.
+"""Verify inventory, warehouse and task cross-store authorization on PostgreSQL 16.
 
 This smoke test runs after Alembic migrations and uses real JWT middleware,
 PostgreSQL-backed sessions, and persisted-state assertions. It intentionally
 creates two stores and checks that a supervisor from store A cannot read or
-mutate store B inventory or warehouse placements.
+mutate store B inventory, warehouse placements or replenishment tasks.
 """
 from datetime import timedelta
 from uuid import uuid4
