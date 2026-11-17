@@ -702,8 +702,7 @@ def test_task_event_and_transition_endpoints_reject_cross_store_access(monkeypat
             assert foreign_transition.status_code == 403
 
             scoped_list = client.get("/api/v1/tasks", params={"store_id": foreign_store_id})
-            assert scoped_list.status_code == 200
-            assert scoped_list.json() == []
+            assert scoped_list.status_code == 403
 
 
 
