@@ -93,6 +93,34 @@ def test_duplicate_sku_and_duplicate_assignment_are_rejected():
         assert duplicate.status_code == 409
 
 
+def test_inactive_product_cannot_be_assigned_to_shelf():
+    with TestClient(app) as client:
+        store = client.post("/api/v1/stores", json={"code": "CAT-INACTIVE", "name": "Loja teste"})
+        zone = client.post("/api/v1/zones", json={"store_id": store.json()["id"], "name": "Mercearia"})
+        shelf = client.post("/api/v1/shelves", json={"zone_id": zone.json()["id"], "code": "MER-INACTIVE"})
+        product = client.post(
+            "/api/v1/products",
+            json={"sku": "SKU-INACTIVE", "name": "Produto inactivo", "is_active": False},
+        )
+        assert product.status_code == 201
+
+        assignment = client.post(
+            "/api/v1/shelf-products",
+            json={
+                "shelf_id": shelf.json()["id"],
+                "product_id": product.json()["id"],
+                "target_quantity": 5,
+            },
+        )
+
+        assert assignment.status_code == 409
+        assert assignment.json()["detail"] == "Inactive products cannot be assigned to a shelf"
+        assert client.get(
+            "/api/v1/shelf-products",
+            params={"shelf_id": shelf.json()["id"]},
+        ).json() == []
+
+
 def test_invalid_target_quantity_is_rejected():
     with TestClient(app) as client:
         response = client.post(
