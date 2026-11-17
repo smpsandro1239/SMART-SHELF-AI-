@@ -7218,9 +7218,48 @@ def operational_decisions(
                 *result.get("warnings", []),
                 "O stock apresentado separadamente corresponde à retaguarda; não foi usado como quantidade na prateleira nem para calcular cobertura de exposição.",
             ]))
+        demo_evidence = None
+        if observation is not None and observation.notes:
+            evidence_fields = {
+                key.strip(): value.strip()
+                for segment in observation.notes.split(";")
+                if "=" in segment
+                for key, value in [segment.split("=", 1)]
+            }
+            try:
+                evidence_image_id = int(evidence_fields.get("shelf_image_id", ""))
+                evidence_detection_id = int(evidence_fields.get("demo_detection_id", ""))
+                evidence_review_id = int(evidence_fields.get("human_review_id", ""))
+            except (TypeError, ValueError):
+                evidence_image_id = evidence_detection_id = evidence_review_id = 0
+            evidence_image = (
+                db.query(models.ShelfImage)
+                .filter(
+                    models.ShelfImage.id == evidence_image_id,
+                    models.ShelfImage.retention_status == "ACTIVE",
+                )
+                .first()
+                if evidence_image_id > 0 else None
+            )
+            if (
+                evidence_image is not None
+                and evidence_detection_id > 0
+                and evidence_review_id > 0
+                and evidence_fields.get("provider") == "mock"
+                and evidence_fields.get("sha256") == evidence_image.sha256
+            ):
+                demo_evidence = {
+                    "observation_id": observation.id,
+                    "image_id": evidence_image.id,
+                    "detection_id": evidence_detection_id,
+                    "review_id": evidence_review_id,
+                    "sha256": evidence_image.sha256,
+                }
+
         decisions.append({
             "backroom_inventory": backroom_inventory,
             "replenishment_assessment": replenishment_assessment,
+            "evidence": demo_evidence,
             "store_id": zone.store_id,
             "zone_name": zone.name,
             "shelf_id": shelf.id,

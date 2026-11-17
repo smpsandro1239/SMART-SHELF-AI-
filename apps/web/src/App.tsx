@@ -108,6 +108,7 @@ type OperationalDecisionRow = {
     available_quantity: number; source: string; captured_at: string;
     age_minutes: number; is_fresh: boolean } | null;
   replenishment_assessment?: ReplenishmentAssessment | null;
+  evidence?: { observation_id: number; image_id: number; detection_id: number; review_id: number; sha256: string } | null;
   decision: OperationalDecision;
 };
 type OperationalZoneSummary = {
@@ -599,7 +600,12 @@ export default function App() {
           priority: item.decision.priority === "HIGH" ? "HIGH" : "NORMAL",
           requested_quantity: quantity,
           assigned_user_id: assignedUserId,
-          notes: "Aprovado pelo responsável no dashboard de decisões operacionais.",
+          notes: [
+            "Aprovado pelo responsável no dashboard de decisões operacionais.",
+            item.evidence
+              ? `evidence_image_id=${item.evidence.image_id}; evidence_detection_id=${item.evidence.detection_id}; evidence_observation_id=${item.evidence.observation_id}; evidence_review_id=${item.evidence.review_id}; evidence_sha256=${item.evidence.sha256}`
+              : "",
+          ].filter(Boolean).join("\\n"),
         }),
       });
       await refresh();
@@ -672,6 +678,8 @@ export default function App() {
                 {taskRows.map(task => <TaskRow
                   key={task.id}
                   task={task}
+                  token={token}
+                  evidenceImageId={Number(task.notes?.match(/evidence_image_id=(\\d+)/)?.[1] || 0) || null}
                   canAssign={user?.role === "ADMIN" || user?.role === "SUPERVISOR"}
                   canProgress={user?.role === "EMPLOYEE" ? task.assigned_user_id === user.id : user?.role === "ADMIN" || user?.role === "SUPERVISOR"}
                   canCancel={user?.role === "ADMIN" || user?.role === "SUPERVISOR"}
@@ -945,11 +953,12 @@ function Metric({ icon, label, value, tone, detail }: { icon: ReactNode; label: 
   return <article className="metric-card"><div className={`metric-icon ${tone}`}>{icon}</div><p>{label}</p><strong>{value.toLocaleString("pt-PT")}</strong><span>{detail}</span></article>;
 }
 function TaskRow({
-  task, canAssign, canProgress, canCancel, canAudit, canReconcile,
+  task, token, evidenceImageId, canAssign, canProgress, canCancel, canAudit, canReconcile,
   events, eventsLoading, reconcileLoading, reconcileMessage,
   onLoadEvents, onReconcile, onUpdate,
 }: {
-  task: Task; canAssign: boolean; canProgress: boolean; canCancel: boolean;
+  task: Task; token: string; evidenceImageId: number | null;
+  canAssign: boolean; canProgress: boolean; canCancel: boolean;
   canAudit: boolean; canReconcile: boolean; events: TaskEvent[] | null;
   eventsLoading: boolean; reconcileLoading: boolean; reconcileMessage: string;
   onLoadEvents: (taskId: number) => void;
@@ -962,7 +971,30 @@ function TaskRow({
   const [cancellationReason, setCancellationReason] = useState("");
   const [reconciliationReason, setReconciliationReason] = useState("");
   const [showEvents, setShowEvents] = useState(false);
+  const [evidenceImageUrl, setEvidenceImageUrl] = useState<string | null>(null);
   const next = task.status === "ASSIGNED" ? "IN_PROGRESS" : task.status === "IN_PROGRESS" ? "COMPLETED" : null;
+  useEffect(() => {
+    setEvidenceImageUrl(null);
+    if (!evidenceImageId || !token) return;
+    let active = true;
+    let objectUrl: string | null = null;
+    fetch(`${API_BASE}/api/v1/shelf-images/${evidenceImageId}/content`, {
+      headers: { Authorization: `Bearer ${token}` },
+    }).then(async response => {
+      if (!response.ok) throw new Error("Evidência indisponível");
+      const blob = await response.blob();
+      if (active) {
+        objectUrl = URL.createObjectURL(blob);
+        setEvidenceImageUrl(objectUrl);
+      }
+    }).catch(() => {
+      if (active) setEvidenceImageUrl(null);
+    });
+    return () => {
+      active = false;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [evidenceImageId, token]);
   const actual = Number(actualQuantity);
   const isValidCompletion = Number.isFinite(actual) && actual > 0
     && (task.requested_quantity == null || actual <= task.requested_quantity)
@@ -978,6 +1010,11 @@ function TaskRow({
       <span>Produto #{task.product_id} · {task.assigned_to || "Por atribuir"} · #{task.id}</span>
       {task.status === "COMPLETED" && task.actual_quantity != null && <small className="task-outcome">Quantidade reposta: {task.actual_quantity}{task.exception_reason ? ` · ${task.exception_reason}` : ""}</small>}
       {task.status === "CANCELLED" && task.exception_reason && <small className="task-outcome">Cancelada: {task.exception_reason}</small>}
+      {evidenceImageId && <div className="task-evidence">
+        <strong>Evidência visual · imagem #{evidenceImageId}</strong>
+        {evidenceImageUrl ? <img src={evidenceImageUrl} alt={`Evidência visual da reposição na prateleira #${task.shelf_id}`} /> : <span>A carregar evidência ou imagem indisponível pela política de retenção.</span>}
+        {task.notes?.match(/evidence_sha256=([a-f0-9]{64})/)?.[1] && <small>SHA-256 {task.notes.match(/evidence_sha256=([a-f0-9]{64})/)?.[1]}</small>}
+      </div>}
     </div>
     <span className={"priority " + task.priority.toLowerCase()}>{task.priority}</span>
     <span className={"task-status " + task.status.toLowerCase()}>{task.status.replace("_", " ")}</span>
