@@ -416,7 +416,13 @@ export default function App() {
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.detail || `Erro HTTP ${response.status}`);
-      setCaptureMessage(`Sessão #${sessionId} · fotografia #${payload.id} · SHA-256 ${String(payload.sha256).slice(0, 12)}… · ${payload.analysis_status}.`);
+      let sessionCloseWarning = "";
+      try {
+        await request<CaptureSession>(`/api/v1/capture-sessions/${captureSession.id}/close`, { method: "POST" });
+      } catch {
+        sessionCloseWarning = " A imagem foi guardada, mas a sessão não ficou encerrada; consulta a auditoria.";
+      }
+      setCaptureMessage(`Sessão #${sessionId} · fotografia #${payload.id} · SHA-256 ${String(payload.sha256).slice(0, 12)}… · ${payload.analysis_status}.${sessionCloseWarning}`);
       setCaptureFile(null); setCaptureReset(value => value + 1);
       await refresh();
     } catch (err) {
