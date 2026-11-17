@@ -35,6 +35,12 @@ services:
       VISION_MAX_DETECTIONS: ${VISION_MAX_DETECTIONS:-300}
     ports:
       - "${API_PORT:-8000}:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
     volumes:
       - shelf_images:/app/storage
       - ./apps/api/demo/assets:/app/demo/assets
@@ -69,6 +75,8 @@ services:
       - ${VISION_MODELS_DIR:-./models}:/models:ro
     depends_on:
       db:
+        condition: service_healthy
+      api:
         condition: service_healthy
 
 
