@@ -3261,3 +3261,24 @@ def test_employee_cannot_create_inventory_snapshots_but_supervisor_can(auth_clie
     assert supervisor_response.status_code == 201, supervisor_response.text
     assert supervisor_response.json()["available_quantity"] == 20
 
+
+def test_catalogue_and_warehouse_master_data_writes_are_admin_only(auth_client):
+    client, ids, _ = auth_client
+    protected_paths = (
+        "/api/v1/products",
+        "/api/v1/shelf-products",
+        "/api/v1/warehouse/product-profiles",
+        "/api/v1/warehouse/product-packaging",
+    )
+
+    for role, user_key in (
+        ("SUPERVISOR", "supervisor_a"),
+        ("EMPLOYEE", "employee_a"),
+    ):
+        headers = bearer(ids[user_key], role)
+        for path in protected_paths:
+            response = client.post(path, json={}, headers=headers)
+            assert response.status_code == 403, (
+                f"{role} unexpectedly reached {path}: "
+                f"{response.status_code} {response.text}"
+            )
