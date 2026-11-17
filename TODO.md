@@ -5,7 +5,7 @@
 - [ ] Audit authorization and tenant isolation for computer-vision endpoints: capture sessions, uploads, image content, detections, OCR, evidence fusion, human reviews and embeddings.
 - [ ] Add PostgreSQL concurrency coverage for image retention versus detection review and observation creation.
 - [ ] Audit product and shelf-product catalogue writes for role-based access, tenant ownership and concurrent assignment changes.
-- [ ] Validate worker retry, lease expiry and retention transitions under concurrent execution, including lease-takeover and deterministic recovery-lock ordering tests.
+- [ ] Complete the worker retry, lease-expiry and retention-transition audit under concurrent execution. The lease-takeover and deterministic recovery-lock ordering regression tests now pass CI; add PostgreSQL coverage for any remaining race conditions found.
 - [ ] Verify production authentication configuration rejects anonymous access to all protected API routes.
 - [ ] Confirm production secret validation (including whitespace rejection) passes in CI and deployment environments explicitly set `APP_ENV=production`.
 - [ ] Document the production secret generation, storage and rotation procedure.
