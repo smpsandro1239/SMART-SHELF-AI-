@@ -7050,7 +7050,10 @@ def operational_decisions(
     for link, shelf, zone, product in links:
         observation = (
             db.query(models.Observation)
-            .filter(models.Observation.shelf_id == shelf.id)
+            .filter(
+                models.Observation.shelf_id == shelf.id,
+                models.Observation.product_id == product.id,
+            )
             .order_by(models.Observation.observed_at.desc(), models.Observation.id.desc())
             .first()
         )
