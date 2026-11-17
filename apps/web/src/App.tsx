@@ -750,7 +750,7 @@ export default function App() {
                       <span>Por cobrir: <strong>{item.replenishment_assessment.remaining_gap_quantity == null ? "—" : item.replenishment_assessment.remaining_gap_quantity}</strong></span>
                     </div>
                     {item.replenishment_assessment.requires_human_review && <p className="decision-method">Requer validação humana antes de criar uma tarefa ou movimentar stock.</p>}
-                    {item.replenishment_assessment.status === "NEEDS_REPLENISHMENT" && item.replenishment_assessment.suggested_quantity != null && <label className="demo-assignee">Atribuir ao funcionário
+                    {item.replenishment_assessment.status === "NEEDS_REPLENISHMENT" && item.replenishment_assessment.suggested_quantity != null && <><label className="demo-assignee">Atribuir ao funcionário
                          <select value={employeeSelection[`${item.store_id}:${item.shelf_id}:${item.product_id}`] || ""} onChange={event => setEmployeeSelection(current => ({ ...current, [`${item.store_id}:${item.shelf_id}:${item.product_id}`]: event.target.value }))}>
                            <option value="">Selecionar EMPLOYEE…</option>
                            {employees.filter(employee => employee.store_id === item.store_id).map(employee => <option key={employee.id} value={employee.id}>{employee.full_name} · #{employee.id}</option>)}
@@ -758,7 +758,7 @@ export default function App() {
                        </label>
                        <button className="row-action decision-approve" onClick={() => void approveOperationalRefill(item)} disabled={approvalLoadingKey === `${item.store_id}:${item.shelf_id}:${item.product_id}` || !item.backroom_inventory?.is_fresh || item.replenishment_assessment.suggested_quantity > (item.backroom_inventory?.available_quantity ?? 0)}>
                       {approvalLoadingKey === `${item.store_id}:${item.shelf_id}:${item.product_id}` ? "A criar tarefa…" : "Aprovar e criar tarefa"}
-                    </button>}
+                    </button></>}
                   </div>}
                   {item.decision.warnings.length > 0 && <ul className="decision-warnings">{item.decision.warnings.map((warning, index) => <li key={index}>{warning}</li>)}</ul>}
                 </article>)}
