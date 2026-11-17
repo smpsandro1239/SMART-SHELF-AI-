@@ -3,7 +3,7 @@
 ## Security and reliability
 
 - [ ] Audit authorization and tenant isolation for computer-vision endpoints: capture sessions, uploads, image content, detections, OCR, evidence fusion, human reviews and embeddings.
-- [ ] Add PostgreSQL concurrency coverage for image retention versus detection review and observation creation.
+- [ ] Add PostgreSQL concurrency coverage for image retention versus detection review. Observation creation versus image retention now has a dedicated smoke test; validate it in CI.
 - [ ] Audit product and shelf-product catalogue writes for role-based access, tenant ownership and concurrent assignment changes.
 - [ ] Complete the worker retry, lease-expiry and retention-transition audit under concurrent execution. The lease-takeover and deterministic recovery-lock ordering regression tests now pass CI; add PostgreSQL coverage for any remaining race conditions found.
 - [ ] Verify production authentication configuration rejects anonymous access to all protected API routes.
