@@ -287,5 +287,8 @@ def test_store_employee_listing_is_role_and_store_scoped(monkeypatch):
             assert admin_list.status_code == 200
             assert {row["id"] for row in admin_list.json()} == {employee_a_id, employee_b_id}
     finally:
-        app.dependency_overrides.pop(get_db, None)
+        if previous_db_override is not None:
+            app.dependency_overrides[get_db] = previous_db_override
+        else:
+            app.dependency_overrides.pop(get_db, None)
         Base.metadata.drop_all(bind=ENGINE)
