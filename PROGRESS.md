@@ -41,3 +41,6 @@ Worker lease audit found and fixed a race: a worker that loses its processing le
 ### Catalogue write authorization — 2026-11-17
 
 Added `test_catalogue_and_warehouse_master_data_writes_are_admin_only` to exercise all four middleware-protected creation routes as both SUPERVISOR and EMPLOYEE. The test uses empty payloads deliberately: HTTP 403 must be returned by the authorization boundary before request-schema validation or route-side effects. This establishes role-gate coverage only; ADMIN ownership validation, store scoping and concurrent shelf-product reassignment remain open. Commit: `df1030a860d517f2cf519b01672218b3b4d82852`. CI validation is pending; no local test execution is claimed.
+
+
+- **2026-11-17 — `5ef55ab`**: added a tenant-isolation regression test for `GET /api/v1/shelf-products`: SUPERVISOR sees only the assigned store, an explicit foreign-shelf filter returns an empty list, and ADMIN retains global visibility. The earlier `df1030a` test covers supervisor/employee denial on four catalogue/master-data creation routes. These are regression tests added to the suite; CI is pending and no local execution is claimed. Concurrent shelf-product reassignment remains unvalidated.
