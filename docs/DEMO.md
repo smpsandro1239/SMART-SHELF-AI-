@@ -1,6 +1,6 @@
 # SMART SHELF AI — demonstração vertical de 10 minutos
 
-<badge>Fluxo demonstrativo em integração</badge>
+**Estado: fluxo demonstrativo em integração.**
 
 O provider mock, o seed idempotente e os principais passos de captura, revisão humana, observação, aprovação, execução e reconciliação estão implementados na branch. A validação final de instalação limpa e do percurso completo em PostgreSQL continua pendente. O mock não é um modelo treinado e não deve ser usado para decisões operacionais reais.
 
