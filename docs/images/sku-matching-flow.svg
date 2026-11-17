@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="430" viewBox="0 0 1200 430" role="img" aria-labelledby="title desc">
+  <title id="title">Fluxo conservador de correspondência de SKU</title>
+  <desc id="desc">Embedding gerado por provider de visão é comparado com exemplares revistos. O resultado pode ser correspondência aceite, ambíguo ou desconhecido. Só uma correspondência aceite pode seguir para revisão operacional.</desc>
+  <defs>
+    <style>
+      .bg{fill:#f8fafc}.node{fill:#fff;stroke:#334155;stroke-width:2;rx:16}.decision{fill:#eff6ff;stroke:#2563eb;stroke-width:2}.good{fill:#ecfdf5;stroke:#059669;stroke-width:2}.warn{fill:#fffbeb;stroke:#d97706;stroke-width:2}.muted{fill:#f1f5f9;stroke:#64748b;stroke-width:2}
+      .h{font:700 19px Arial,sans-serif;fill:#0f172a}.p{font:14px Arial,sans-serif;fill:#334155}.small{font:12px Arial,sans-serif;fill:#475569}.arrow{stroke:#475569;stroke-width:2.5;fill:none;marker-end:url(#a)}
+    </style>
+    <marker id="a" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#475569"/></marker>
+  </defs>
+  <rect class="bg" width="1200" height="430" rx="20"/>
+  <rect class="node" x="35" y="145" width="205" height="120"/>
+  <text class="h" x="137" y="181" text-anchor="middle">Imagem da prateleira</text>
+  <text class="p" x="137" y="210" text-anchor="middle">deteção + embedding</text>
+  <text class="small" x="137" y="235" text-anchor="middle">provider configurável</text>
+  <path class="arrow" d="M240 205 H300"/>
+  <rect class="node" x="305" y="130" width="230" height="150"/>
+  <text class="h" x="420" y="168" text-anchor="middle">Registo de exemplares</text>
+  <text class="p" x="420" y="197" text-anchor="middle">SKU + vetor + proveniência</text>
+  <text class="small" x="420" y="222" text-anchor="middle">imagem revista, revisor, licença</text>
+  <text class="small" x="420" y="244" text-anchor="middle">mesma versão de embedding</text>
+  <path class="arrow" d="M535 205 H595"/>
+  <rect class="decision" x="600" y="130" width="210" height="150"/>
+  <text class="h" x="705" y="168" text-anchor="middle">Comparação</text>
+  <text class="p" x="705" y="197" text-anchor="middle">similaridade do cosseno</text>
+  <text class="small" x="705" y="222" text-anchor="middle">limiar + margem top-1/top-2</text>
+  <text class="small" x="705" y="244" text-anchor="middle">um candidato por SKU</text>
+  <path class="arrow" d="M810 205 H865"/>
+  <path class="arrow" d="M865 205 V75 H910"/>
+  <path class="arrow" d="M865 205 H910"/>
+  <path class="arrow" d="M865 205 V335 H910"/>
+  <rect class="good" x="915" y="35" width="245" height="80"/>
+  <text class="h" x="1037" y="67" text-anchor="middle">MATCHED</text>
+  <text class="small" x="1037" y="91" text-anchor="middle">candidato aceite para revisão</text>
+  <rect class="warn" x="915" y="165" width="245" height="80"/>
+  <text class="h" x="1037" y="197" text-anchor="middle">AMBIGUOUS</text>
+  <text class="small" x="1037" y="221" text-anchor="middle">revisão humana obrigatória</text>
+  <rect class="muted" x="915" y="295" width="245" height="80"/>
+  <text class="h" x="1037" y="327" text-anchor="middle">UNKNOWN</text>
+  <text class="small" x="1037" y="351" text-anchor="middle">não associar SKU nem stock</text>
+  <text class="small" x="600" y="405" text-anchor="middle">Nenhum estado atualiza automaticamente a quantidade em stock.</text>
+</svg>

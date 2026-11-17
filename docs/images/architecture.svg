@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="720" viewBox="0 0 1200 720">
+<defs><style>
+.bg{fill:#0b1220}.panel{fill:#142238;stroke:#38506d;stroke-width:2}.source{fill:#183b4a;stroke:#38bdf8;stroke-width:2}.core{fill:#263454;stroke:#818cf8;stroke-width:2}.out{fill:#1d3b31;stroke:#34d399;stroke-width:2}.t{font: bold 25px Arial;fill:#f8fafc}.s{font:18px Arial;fill:#dbeafe}.h{font:bold 32px Arial;fill:#fff}.arrow{stroke:#94a3b8;stroke-width:3;fill:none;marker-end:url(#a)}
+</style><marker id="a" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#94a3b8"/></marker></defs>
+<rect class="bg" width="1200" height="720" rx="24"/><text class="h" x="600" y="58" text-anchor="middle">SMART SHELF AI · Arquitetura de referência</text>
+<text class="s" x="65" y="118">RECOLHA</text><rect class="source" x="55" y="140" width="240" height="110" rx="16"/><text class="t" x="175" y="182" text-anchor="middle">Câmaras / Robô</text><text class="s" x="175" y="216" text-anchor="middle">Imagens autorizadas</text>
+<rect class="source" x="55" y="290" width="240" height="110" rx="16"/><text class="t" x="175" y="332" text-anchor="middle">Aplicação móvel</text><text class="s" x="175" y="366" text-anchor="middle">Observação / confirmação</text>
+<text class="s" x="390" y="118">PROCESSAMENTO</text><rect class="core" x="370" y="140" width="260" height="110" rx="16"/><text class="t" x="500" y="182" text-anchor="middle">Edge AI / Visão</text><text class="s" x="500" y="216" text-anchor="middle">Deteção e confiança</text>
+<rect class="core" x="370" y="290" width="260" height="110" rx="16"/><text class="t" x="500" y="332" text-anchor="middle">API FastAPI</text><text class="s" x="500" y="366" text-anchor="middle">Regras e serviços</text>
+<rect class="core" x="370" y="455" width="260" height="110" rx="16"/><text class="t" x="500" y="497" text-anchor="middle">PostgreSQL</text><text class="s" x="500" y="531" text-anchor="middle">Catálogo / eventos / stock</text>
+<text class="s" x="760" y="118">OPERAÇÃO</text><rect class="out" x="735" y="140" width="390" height="110" rx="16"/><text class="t" x="930" y="182" text-anchor="middle">Recomendações</text><text class="s" x="930" y="216" text-anchor="middle">Stock + estado da prateleira</text>
+<rect class="out" x="735" y="290" width="390" height="110" rx="16"/><text class="t" x="930" y="332" text-anchor="middle">Tarefas de reposição</text><text class="s" x="930" y="366" text-anchor="middle">Prioridade / responsável / estado</text>
+<rect class="out" x="735" y="455" width="390" height="110" rx="16"/><text class="t" x="930" y="497" text-anchor="middle">Dashboard / PWA</text><text class="s" x="930" y="531" text-anchor="middle">Supervisão e execução</text>
+<path class="arrow" d="M295 195 H360"/><path class="arrow" d="M295 345 H360"/><path class="arrow" d="M500 250 V280"/><path class="arrow" d="M500 400 V445"/><path class="arrow" d="M630 345 H720"/><path class="arrow" d="M930 250 V280"/><path class="arrow" d="M930 400 V445"/><path class="arrow" d="M630 510 H720 V345"/>
+<text class="s" x="600" y="650" text-anchor="middle">Integrações POS / ERP / WMS / robô: apenas após autorização e validação técnica.</text>
+</svg>
