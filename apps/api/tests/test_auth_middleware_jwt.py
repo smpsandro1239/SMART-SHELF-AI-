@@ -2341,6 +2341,14 @@ def test_supervisor_can_create_store_scoped_warehouse_resources_with_real_jwt(au
         db.refresh(pallet_level)
         pallet_level_id = pallet_level.id
 
+    with main_module.SessionLocal() as db:
+        snapshots_before = db.query(models.InventorySnapshot).filter_by(
+            store_id=store_id, product_id=ids["product"]
+        ).count()
+        movements_before = db.query(models.InventoryMovement).filter_by(
+            store_id=store_id, product_id=ids["product"]
+        ).count()
+
     pallet_response = client.post(
         "/api/v1/warehouse/pallets",
         json={
@@ -2397,6 +2405,15 @@ def test_supervisor_can_create_store_scoped_warehouse_resources_with_real_jwt(au
         assert events[0].performed_by_user_id == ids["supervisor_a"]
         assert float(events[0].quantity_before) == 0
         assert float(events[0].quantity_after) == 48
+
+        /* Registering a physical pallet is a registry operation, not an
+           inventory receipt: aggregate snapshots and stock movements stay unchanged. */
+        assert db.query(models.InventorySnapshot).filter_by(
+            store_id=store_id, product_id=ids["product"]
+        ).count() == snapshots_before
+        assert db.query(models.InventoryMovement).filter_by(
+            store_id=store_id, product_id=ids["product"]
+        ).count() == movements_before
 
 
 def test_product_packaging_read_is_global_for_supervisors_and_denied_to_employees(auth_client):
