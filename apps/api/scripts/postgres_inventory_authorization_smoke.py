@@ -5,6 +5,7 @@ PostgreSQL-backed sessions, and persisted-state assertions. It intentionally
 creates two stores and checks that a supervisor from store A cannot read or
 mutate store B inventory or warehouse placements.
 """
+from datetime import timedelta
 from uuid import uuid4
 
 from fastapi.testclient import TestClient
@@ -57,6 +58,46 @@ def main() -> None:
             max_weight_kg=100,
         )
         db.add_all([supervisor, admin, foreign_location])
+        db.flush()
+
+        # Seed a completed foreign task and its source stock snapshot for
+        # real JWT-backed cross-store authorization checks.
+        foreign_zone = models.Zone(store_id=store_b.id, name="PG foreign task zone")
+        db.add(foreign_zone)
+        db.flush()
+        foreign_shelf = models.Shelf(
+            zone_id=foreign_zone.id,
+            code=f"PG-TASK-SHELF-{suffix}",
+        )
+        db.add(foreign_shelf)
+        db.flush()
+        db.add(models.ShelfProduct(
+            shelf_id=foreign_shelf.id,
+            product_id=product.id,
+            target_quantity=8,
+            min_display_quantity=1,
+        ))
+        completed_at = models.utc_now()
+        foreign_task = models.ReplenishmentTask(
+            store_id=store_b.id,
+            shelf_id=foreign_shelf.id,
+            product_id=product.id,
+            priority="NORMAL",
+            status="COMPLETED",
+            requested_quantity=2,
+            actual_quantity=2,
+            completed_at=completed_at,
+        )
+        db.add(foreign_task)
+        db.add(models.InventorySnapshot(
+            store_id=store_b.id,
+            product_id=product.id,
+            on_hand_quantity=10,
+            reserved_quantity=0,
+            source="WMS",
+            external_reference=f"PG-AUTH-TASK-STOCK-{suffix}",
+            captured_at=completed_at - timedelta(minutes=1),
+        ))
         db.commit()
         store_a_id = store_a.id
         store_b_id = store_b.id
@@ -64,6 +105,8 @@ def main() -> None:
         supervisor_id = supervisor.id
         admin_id = admin.id
         foreign_location_id = foreign_location.id
+        foreign_shelf_id = foreign_shelf.id
+        foreign_task_id = foreign_task.id
     finally:
         db.close()
 
@@ -127,13 +170,44 @@ def main() -> None:
                     params={"store_id": store_b_id, "source": "POS"},
                     headers=supervisor_headers,
                 ),
+                "foreign task list": client.get(
+                    "/api/v1/tasks",
+                    params={"store_id": store_b_id},
+                    headers=supervisor_headers,
+                ),
+                "foreign task lifecycle update": client.patch(
+                    f"/api/v1/tasks/{foreign_task_id}/status",
+                    json={"status": "CANCELLED", "exception_reason": "Cross-store authorization test"},
+                    headers=supervisor_headers,
+                ),
+                "foreign task audit events": client.get(
+                    f"/api/v1/tasks/{foreign_task_id}/events",
+                    headers=supervisor_headers,
+                ),
+                "foreign task inventory reconciliation": client.post(
+                    f"/api/v1/tasks/{foreign_task_id}/reconcile-inventory",
+                    json={"reason": "Cross-store authorization test"},
+                    headers=supervisor_headers,
+                ),
+                "task creation with foreign shelf": client.post(
+                    "/api/v1/tasks",
+                    json={
+                        "store_id": store_a_id,
+                        "shelf_id": foreign_shelf_id,
+                        "product_id": product_id,
+                        "requested_quantity": 1,
+                    },
+                    headers=supervisor_headers,
+                ),
             }
 
             for resource, response in requests.items():
-                assert response.status_code == 403, (
+                expected_status = 404 if resource == "task creation with foreign shelf" else 403
+                assert response.status_code == expected_status, (
                     f"SUPERVISOR must not access foreign {resource}; "
-                    f"received HTTP {response.status_code}: {response.text}"
+                    f"expected HTTP {expected_status}, received {response.status_code}: {response.text}"
                 )
+            assert requests["foreign task list"].json() == [], requests["foreign task list"].json()
 
             # Verify that denied writes left no rows in PostgreSQL.
             snapshots = client.get(
@@ -172,6 +246,36 @@ def main() -> None:
             finally:
                 db.close()
 
+            # Denied task writes must leave the foreign task and stock unchanged.
+            db = SessionLocal()
+            try:
+                persisted_task = db.get(models.ReplenishmentTask, foreign_task_id)
+                assert persisted_task is not None
+                assert persisted_task.status == "COMPLETED"
+                assert (
+                    db.query(models.InventoryMovement)
+                    .filter(models.InventoryMovement.task_id == foreign_task_id)
+                    .count()
+                    == 0
+                )
+                assert (
+                    db.query(models.ReplenishmentTaskEvent)
+                    .filter(models.ReplenishmentTaskEvent.task_id == foreign_task_id)
+                    .count()
+                    == 0
+                )
+                assert (
+                    db.query(models.ReplenishmentTask)
+                    .filter(
+                        models.ReplenishmentTask.store_id == store_a_id,
+                        models.ReplenishmentTask.shelf_id == foreign_shelf_id,
+                    )
+                    .count()
+                    == 0
+                )
+            finally:
+                db.close()
+
             # The supervisor can still read and write its own store.
             own_snapshot = client.post(
                 "/api/v1/inventory/snapshots",
@@ -203,7 +307,7 @@ def main() -> None:
 
     print(
         "PostgreSQL inventory authorization smoke passed: "
-        "7 cross-store requests denied, denied writes left no rows, "
+        "task list, lifecycle, audit and reconciliation denied across stores; foreign-shelf task creation rejected; inventory controls remain enforced, "
         "and same-store supervisor operations succeeded."
     )
 
