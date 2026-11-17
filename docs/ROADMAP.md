@@ -18,12 +18,15 @@
 - [x] Aplicar a política de frescura configurada também na avaliação operacional; o seed fornece 24 horas e limita o SKU principal a 4 unidades.
 - [x] Disponibilizar listagem de funcionários ativos com isolamento por loja para atribuição por SUPERVISOR.
 - [x] Acrescentar testes do provider, seed, worker, revisão/observação idempotente e isolamento da listagem de funcionários.
+- [x] Criar um pré-validador local read-only para Docker Compose, serviços, readiness da API, frontend e imagem sintética.
+- [x] Criar workflow dedicado para validar a sintaxe Bash e whitespace do pré-validador.
 
 ### Validação
 
 - [x] Suite API completa: 1 097 testes aprovados, 1 ignorado; compilação Python aprovada.
 - [x] Build TypeScript/produção do frontend aprovado.
 - [x] CI PostgreSQL: migrações e smokes de integridade, isolamento, concorrência, ciclo de tarefa e reconciliação aprovados.
+- [ ] Confirmar execução bem-sucedida do novo workflow de validação Bash.
 - [ ] Validar instalação limpa real com Docker Compose, API, PostgreSQL, worker e frontend.
 - [ ] Percorrer manualmente o cenário integral com os três perfis e confirmar movimento/snapshot/auditoria finais.
 - [ ] Capturar screenshots reais do percurso; as instruções de captura estão em [DEMO.md](DEMO.md).
