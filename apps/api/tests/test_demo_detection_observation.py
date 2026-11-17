@@ -130,3 +130,56 @@ def test_demo_detection_requires_human_review_and_is_idempotent(monkeypatch):
         db.close()
         app.dependency_overrides.pop(get_db, None)
         Base.metadata.drop_all(bind=ENGINE)
+
+
+
+def test_store_employee_listing_is_role_and_store_scoped(monkeypatch):
+    Base.metadata.drop_all(bind=ENGINE)
+    Base.metadata.create_all(bind=ENGINE)
+    app.dependency_overrides[get_db] = override_get_db
+    db = TestingSession()
+    try:
+        store_a = models.Store(code="DEMO-EMP-A", name="Demo employee A")
+        store_b = models.Store(code="DEMO-EMP-B", name="Demo employee B")
+        db.add_all([store_a, store_b])
+        db.flush()
+        supervisor = models.User(
+            email="supervisor@demo-employee.test", full_name="Supervisor A",
+            password_hash="not-used", role="SUPERVISOR", store_id=store_a.id, is_active=True,
+        )
+        employee_a = models.User(
+            email="employee-a@demo-employee.test", full_name="Employee A",
+            password_hash="not-used", role="EMPLOYEE", store_id=store_a.id, is_active=True,
+        )
+        employee_b = models.User(
+            email="employee-b@demo-employee.test", full_name="Employee B",
+            password_hash="not-used", role="EMPLOYEE", store_id=store_b.id, is_active=True,
+        )
+        db.add_all([supervisor, employee_a, employee_b])
+        db.commit()
+        actor = {"value": SimpleNamespace(id=supervisor.id, role="SUPERVISOR", store_id=store_a.id)}
+        store_a_id, store_b_id = store_a.id, store_b.id
+        employee_a_id, employee_b_id = employee_a.id, employee_b.id
+    finally:
+        db.close()
+
+    monkeypatch.setattr(main_module, "_request_user", lambda db, request: actor["value"])
+    try:
+        with TestClient(app) as client:
+            scoped = client.get("/api/v1/store-employees")
+            assert scoped.status_code == 200
+            assert [row["id"] for row in scoped.json()] == [employee_a_id]
+            forbidden_store = client.get(f"/api/v1/store-employees?store_id={store_b_id}")
+            assert forbidden_store.status_code == 403
+
+            actor["value"] = SimpleNamespace(id=employee_a_id, role="EMPLOYEE", store_id=store_a_id)
+            forbidden_role = client.get("/api/v1/store-employees")
+            assert forbidden_role.status_code == 403
+
+            actor["value"] = SimpleNamespace(id=999, role="ADMIN", store_id=None)
+            admin_list = client.get("/api/v1/store-employees")
+            assert admin_list.status_code == 200
+            assert {row["id"] for row in admin_list.json()} == {employee_a_id, employee_b_id}
+    finally:
+        app.dependency_overrides.pop(get_db, None)
+        Base.metadata.drop_all(bind=ENGINE)
