@@ -7279,7 +7279,6 @@ def operational_decisions(
                 .filter(
                     models.ShelfImageDetection.id == evidence_detection_id,
                     models.ShelfImageDetection.shelf_image_id == evidence_image_id,
-                    models.ShelfImageDetection.product_id == product.id,
                     models.ShelfImageDetection.model_version.like("mock-%"),
                 )
                 .first()
