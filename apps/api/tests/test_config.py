@@ -4,12 +4,19 @@ from pydantic import ValidationError
 from app.config import Settings
 
 
-def test_production_requires_unique_jwt_and_bootstrap_secrets():
+def _clear_secret_environment(monkeypatch):
+    monkeypatch.delenv("JWT_SECRET_KEY", raising=False)
+    monkeypatch.delenv("BOOTSTRAP_ADMIN_KEY", raising=False)
+
+
+def test_production_requires_unique_jwt_and_bootstrap_secrets(monkeypatch):
+    _clear_secret_environment(monkeypatch)
     with pytest.raises(ValidationError, match="JWT_SECRET_KEY"):
-        Settings(_env_file=None, app_env="production")
+        Settings(_env_file=None, app_env="production", bootstrap_admin_key="b" * 32)
 
 
-def test_production_rejects_short_jwt_secret():
+def test_production_rejects_short_jwt_secret(monkeypatch):
+    _clear_secret_environment(monkeypatch)
     with pytest.raises(ValidationError, match="JWT_SECRET_KEY"):
         Settings(
             _env_file=None,
@@ -19,7 +26,8 @@ def test_production_rejects_short_jwt_secret():
         )
 
 
-def test_production_rejects_short_bootstrap_secret():
+def test_production_rejects_short_bootstrap_secret(monkeypatch):
+    _clear_secret_environment(monkeypatch)
     with pytest.raises(ValidationError, match="BOOTSTRAP_ADMIN_KEY"):
         Settings(
             _env_file=None,
@@ -29,7 +37,20 @@ def test_production_rejects_short_bootstrap_secret():
         )
 
 
-def test_production_accepts_separate_strong_secrets():
+def test_production_rejects_reused_secrets(monkeypatch):
+    _clear_secret_environment(monkeypatch)
+    shared_secret = "s" * 40
+    with pytest.raises(ValidationError, match="must be different"):
+        Settings(
+            _env_file=None,
+            app_env="production",
+            jwt_secret_key=shared_secret,
+            bootstrap_admin_key=shared_secret,
+        )
+
+
+def test_production_accepts_separate_strong_secrets(monkeypatch):
+    _clear_secret_environment(monkeypatch)
     settings = Settings(
         _env_file=None,
         app_env="production",
@@ -41,7 +62,8 @@ def test_production_accepts_separate_strong_secrets():
     assert settings.jwt_secret_key != settings.bootstrap_admin_key
 
 
-def test_development_keeps_local_defaults_available():
+def test_development_keeps_local_defaults_available(monkeypatch):
+    _clear_secret_environment(monkeypatch)
     settings = Settings(_env_file=None, app_env="development")
 
     assert settings.jwt_secret_key == "INSECURE-DEVELOPMENT-KEY-CHANGE-ME"
