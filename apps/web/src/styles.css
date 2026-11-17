@@ -209,3 +209,74 @@
 .task-evidence strong{font-size:9px;color:#526477}
 .task-evidence img{display:block;width:100%;max-height:120px;object-fit:cover;border-radius:6px}
 .task-evidence span,.task-evidence small{font-size:8px;color:#7b8794;overflow-wrap:anywhere}
+
+/* Dashboard accessibility and interaction refinements — WCAG AA contrast targets. */
+:root { --muted-accessible: #536273; --border-accessible: #d5dde6; }
+.muted,.toolbar,.subtle-pill,.metric-card p,.metric-card>span,.metric-label,.metric-detail,
+.panel-heading .muted,.task-info span,.task-outcome,.status-total span,.empty-state,.empty-state span,
+.capture-meta span,.review-queue-main span:not(.review-queue-status),.review-queue-meta,
+.review-queue-row>p,.evaluation-detail,.evaluation-caveat,.plan-hint,.plan-zone-heading span,
+.plan-task>div span,.decision-method,.decision-product span,.decision-meta,.decision-assessment>p,
+.task-reconcile-message,.task-event-timeline li,.task-event-timeline>span,.task-evidence span,
+.task-evidence small,.pick-stop,.data-note,.user-chip span { color: var(--muted-accessible); }
+.metric-card p,.metric-label,.metric-detail,.task-info span,.capture-meta span,
+.review-queue-main span:not(.review-queue-status),.review-queue-meta,.evaluation-detail,
+.plan-hint,.plan-zone-heading span,.plan-task>div span,.decision-method,.decision-product span,
+.decision-meta,.decision-assessment>p,.task-reconcile-message,.task-event-timeline li,
+.task-event-timeline>span,.task-evidence span,.task-evidence small,.pick-stop { font-size: 11px; }
+.eyebrow,.nav-label,.panel-heading .eyebrow,.topbar .eyebrow { color: #5b6878; }
+.toolbar .muted,.user-chip span,.subtle-pill { color: #536273; }
+.metric-card-action { width:100%; min-width:0; text-align:left; font-family:inherit; cursor:pointer; border:1px solid #d5dde6; color:#172435; transition:transform .16s ease,box-shadow .16s ease,border-color .16s ease; }
+.metric-card-action:hover { transform:translateY(-2px); border-color:#8fa5ba; box-shadow:0 8px 22px #26384a14; }
+.metric-card-action .metric-label { display:block; margin:12px 0 3px; font-weight:650; line-height:1.4; }
+.metric-card-action .metric-detail { display:block; margin-top:3px; line-height:1.4; }
+.metric-open-hint { display:flex !important; align-items:center; gap:4px; margin-top:9px !important; color:#315f8a !important; font-size:11px !important; font-weight:700; }
+.metric-card-action:focus-visible,.status-bar-action:focus-visible,.nav-item:focus-visible,.decision-zone-card:focus-visible,.filter-reset:focus-visible { outline:3px solid #1769aa; outline-offset:3px; }
+.task-panel-actions { display:flex; align-items:center; flex-wrap:wrap; justify-content:flex-end; gap:7px; }
+.filter-reset { border:1px solid #aebdca; border-radius:7px; padding:6px 9px; background:#fff; color:#34485d; font-size:11px; font-weight:650; }
+.task-list { display:grid; gap:9px; }
+.task-row { min-height:0; margin:0; padding:13px; border:1px solid #dce3ea; border-radius:11px; background:#fbfcfe; align-items:flex-start; }
+.task-row:last-child { border-bottom:1px solid #dce3ea; }
+.task-info { display:grid; gap:5px; }
+.task-info strong { font-size:13px; line-height:1.4; color:#1f3042; }
+.task-info span { font-size:11px; line-height:1.45; margin-top:0; }
+.task-outcome { font-size:11px; color:#42566a; }
+.task-panel,.status-panel { align-self:start; }
+.content-grid { align-items:start; }
+.status-bar-action { display:block; width:100%; border:0; padding:7px 0; background:transparent; color:#26384b; text-align:left; cursor:pointer; }
+.status-bar-action:hover .status-bar-label { color:#174f7a; }
+.status-bar-label { display:flex; align-items:center; justify-content:space-between; font-size:12px; margin-bottom:7px; }
+.status-bar-label strong { color:#1f3042; }
+.status-bar-action .bar-track { display:block; width:100%; }
+.status-bar-action .bar-fill { display:block; }
+.status-bar-row { margin:8px 0; }
+.nav-item { width:100%; border:0; background:transparent; font-family:inherit; text-align:left; cursor:pointer; }
+.nav-item:hover { background:#203449; color:#fff; }
+.decision-zone-card { width:100%; font:inherit; color:inherit; text-align:left; cursor:pointer; transition:border-color .16s ease,box-shadow .16s ease,transform .16s ease; }
+.decision-zone-card:hover { border-color:#91a8bc; box-shadow:0 6px 18px #26384a12; transform:translateY(-1px); }
+.task-status::before,.priority::before,.decision-status::before,.review-queue-status::before,.plan-risk::before { display:inline-block; margin-right:5px; font-weight:900; line-height:1; }
+.task-status.pending::before { content:"◷"; }
+.task-status.assigned::before { content:"↗"; }
+.task-status.in_progress::before { content:"▶"; }
+.task-status.completed::before { content:"✓"; }
+.task-status.cancelled::before,.task-status.failed::before { content:"×"; }
+.priority.urgent::before { content:"‼"; }
+.priority.high::before { content:"▲"; }
+.priority.normal::before { content:"●"; }
+.priority.low::before { content:"▽"; }
+.decision-status.action_recommended::before { content:"⚑"; }
+.decision-status.already_in_progress::before { content:"▶"; }
+.decision-status.insufficient_evidence::before { content:"?"; }
+.decision-status.monitor::before { content:"◷"; }
+.review-queue-status.conflict::before { content:"⚠"; }
+.review-queue-status.ambiguous::before { content:"?"; }
+.review-queue-status.consensus::before { content:"✓"; }
+.review-queue-status.text_only::before { content:"T"; }
+.review-queue-status.visual_only::before { content:"◉"; }
+.review-queue-status.unknown::before { content:"—"; }
+.plan-risk.critical::before,.plan-risk.high::before { content:"▲"; }
+.plan-risk.medium::before { content:"◆"; }
+.plan-risk.low::before { content:"✓"; }
+.plan-risk.unknown::before,.plan-risk.not_assessed::before { content:"?"; }
+#dashboard-top,#dashboard-metrics,#replenishment-tasks,#task-status-summary,#operational-decisions,#decision-list,#replenishment-plan,#capture-workspace,#capture-history,#review-queue { scroll-margin-top:18px; }
+@media(max-width:700px) { .task-panel-actions { justify-content:flex-start; } .task-row { padding:11px; } .task-panel .panel-heading { flex-wrap:wrap; } .metric-open-hint { font-size:10px !important; } }

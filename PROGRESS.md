@@ -24,6 +24,9 @@
 
 ## Current focus
 
+Dashboard UX refinement (2026-11-17): implemented human-readable day/hour/minute durations, consistent `pt-PT` timestamps with explicit `Europe/Lisbon` timezone abbreviations, stronger secondary-text contrast and readable font sizes, status symbols alongside colour, keyboard-accessible clickable KPI/zone/status summaries with task filters, and a tighter single-task card layout. Frontend CI/build validation is pending. Contrast values target WCAG AA; formal conformance still requires automated and manual contrast verification.
+
+
 Human detection review versus image retention: added `postgres_human_review_retention_smoke.py` and wired it into API CI. The test holds the source-image row lock, sends the real `POST /api/v1/shelf-image-detections/{id}/reviews` request, restricts the image, and asserts HTTP 410 with no persisted `DetectionSkuReview`. Validation is pending; do not mark this race complete until the new API CI step passes.
 
 
