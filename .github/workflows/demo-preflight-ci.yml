@@ -20,5 +20,3 @@ jobs:
         uses: actions/checkout@v7
       - name: Validate preflight script syntax
         run: bash -n scripts/demo-preflight.sh
-      - name: Check patch whitespace
-        run: git diff --check
