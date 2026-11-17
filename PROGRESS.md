@@ -8,6 +8,8 @@
 - GitHub Actions for `355154e` completed successfully: API CI, Smart Shelf quality gates and Demo Docker Compose smoke.
 - **2026-11-17 — `2840912`**: added regression coverage for observation listing isolation by store and shelf filter; all three workflows passed.
 
+- **2026-11-17 — `6861330`**: added focused settings tests for production JWT/bootstrap secret strength, distinct secrets, and development-only defaults. CI validation is pending.
+
 ## Audit notes
 
 - Capture-session tenant isolation, foreign-store create/close denial, employee role restrictions, and upload/session ownership have regression tests in `apps/api/tests/test_auth_middleware_jwt.py`.
@@ -16,4 +18,6 @@
 
 ## Current focus
 
-Continue reviewing catalogue authorization, derived-image retention races, worker lease/retry behavior and production authentication defaults. Do not mark an item complete until its relevant automated checks pass.
+Production configuration review: `Settings` rejects the development JWT key and JWT/bootstrap secrets shorter than 32 characters when `APP_ENV=production`; Vercel deployment guidance explicitly requires `APP_ENV=production` and separate secrets. Added regression tests, pending CI validation.
+
+Continue reviewing catalogue authorization, derived-image retention races and worker lease/retry behavior. Do not mark an item complete until its relevant automated checks pass.
