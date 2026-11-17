@@ -579,6 +579,10 @@ export default function App() {
   async function approveOperationalRefill(item: OperationalDecisionRow) {
     const assessment = item.replenishment_assessment;
     if (!assessment || assessment.status !== "NEEDS_REPLENISHMENT" || assessment.suggested_quantity == null) return;
+    if (!item.evidence) {
+      setError("A aprovação do demo exige evidência visual ativa, deteção e revisão humana ligadas à observação.");
+      return;
+    }
     const quantity = assessment.suggested_quantity;
     const available = item.backroom_inventory?.available_quantity;
     const key = `${item.store_id}:${item.shelf_id}:${item.product_id}`;
@@ -598,7 +602,7 @@ export default function App() {
     setApprovalLoadingKey(key);
     setError("");
     try {
-      await request<Task>("/api/v1/tasks/from-operational-decision?approved=true", {
+      await request<Task>("/api/v1/tasks/from-operational-decision?approved=true&demo_evidence_required=true", {
         method: "POST",
         body: JSON.stringify({
           store_id: item.store_id,

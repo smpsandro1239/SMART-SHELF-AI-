@@ -7726,6 +7726,7 @@ def create_task_from_operational_decision(
     payload: ReplenishmentTaskCreate,
     request: Request,
     approved: bool = False,
+    demo_evidence_required: bool = False,
     db: Session = Depends(get_db),
 ):
     """Create a replenishment task only after explicit approval and fresh re-evaluation."""
@@ -7761,6 +7762,14 @@ def create_task_from_operational_decision(
     )
     if item is None:
         raise HTTPException(status_code=404, detail="Produto não associado a esta prateleira nesta loja")
+    if demo_evidence_required and not item.get("evidence"):
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "DEMO_EVIDENCE_REQUIRED",
+                "message": "A tarefa de demonstração exige uma imagem ativa, deteção e revisão humana ligadas à observação.",
+            },
+        )
     assessment = item.get("replenishment_assessment") or {}
     if assessment.get("status") != "NEEDS_REPLENISHMENT":
         raise HTTPException(

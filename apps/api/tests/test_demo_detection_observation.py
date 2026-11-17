@@ -142,7 +142,7 @@ def test_demo_detection_requires_human_review_and_is_idempotent(monkeypatch):
             "assigned_user_id": employee_id,
             "notes": "Demo vertical: evidência revista e aprovada.",
         }
-        created_task = client.post("/api/v1/tasks/from-operational-decision?approved=true", json=task_payload)
+        created_task = client.post("/api/v1/tasks/from-operational-decision?approved=true&demo_evidence_required=true", json=task_payload)
         duplicate_task = client.post("/api/v1/tasks/from-operational-decision?approved=true", json=task_payload)
 
         actor["value"] = SimpleNamespace(id=employee_id, role="EMPLOYEE", store_id=store_id)
