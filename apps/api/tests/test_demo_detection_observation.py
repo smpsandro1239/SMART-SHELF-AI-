@@ -5,7 +5,7 @@ os.environ["APP_ENV"] = "test"
 os.environ["DATABASE_URL"] = "sqlite:///./test_unused.db"
 
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -132,10 +132,30 @@ def test_demo_detection_requires_human_review_and_is_idempotent(monkeypatch):
             finally:
                 db.close()
 
-            first = client.post(
-                f"/api/v1/shelf-image-detections/{detection_id}/observation",
-                json={"product_id": product_id},
-            )
+            executed_statements = []
+
+            def record_statement(connection, cursor, statement, parameters, context, executemany):
+                normalized = " ".join(statement.lower().split())
+                if normalized.startswith("select") and (
+                    "shelf_image_detections" in normalized or "shelf_images" in normalized
+                ):
+                    executed_statements.append(normalized)
+
+            event.listen(ENGINE, "before_cursor_execute", record_statement)
+            try:
+                first = client.post(
+                    f"/api/v1/shelf-image-detections/{detection_id}/observation",
+                    json={"product_id": product_id},
+                )
+            finally:
+                event.remove(ENGINE, "before_cursor_execute", record_statement)
+
+            lock_order_queries = [
+                "detection" if "shelf_image_detections" in statement else "image"
+                for statement in executed_statements
+            ]
+            assert lock_order_queries[:3] == ["detection", "image", "detection"]
+
             second = client.post(
                 f"/api/v1/shelf-image-detections/{detection_id}/observation",
                 json={"product_id": product_id},
