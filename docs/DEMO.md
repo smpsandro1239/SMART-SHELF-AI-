@@ -1,8 +1,8 @@
 # SMART SHELF AI — demonstração vertical de 10 minutos
 
-**Estado: fluxo demonstrativo em integração.**
+**Estado: implementação concluída na branch; validação automatizada aprovada.**
 
-O provider mock, o seed idempotente e os principais passos de captura, revisão humana, observação, aprovação, execução e reconciliação estão implementados na branch. A validação final de instalação limpa e do percurso completo em PostgreSQL continua pendente. O mock não é um modelo treinado e não deve ser usado para decisões operacionais reais.
+No commit `6fe43fbc4d476ec97cf54e84aab2fe06a5ac468d`, o CI confirmou 1 097 testes API aprovados, 1 teste ignorado, compilação Python, build de produção do frontend e os smokes de migrações, ciclo de tarefas, reconciliação, isolamento e concorrência em PostgreSQL. Continua pendente um ensaio manual de instalação limpa com Docker Compose e a passagem integral pelos três perfis num ambiente local. O mock não é um modelo treinado e não deve ser usado para decisões operacionais reais.
 
 ## Preparação local
 

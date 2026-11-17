@@ -19,12 +19,13 @@
 - [x] Disponibilizar listagem de funcionários ativos com isolamento por loja para atribuição por SUPERVISOR.
 - [x] Acrescentar testes do provider, seed, worker, revisão/observação idempotente e isolamento da listagem de funcionários.
 
-### Validação ainda necessária
+### Validação
 
-- [ ] Executar a suite API completa e os novos testes em PostgreSQL através de CI.
-- [ ] Executar build TypeScript/produção do frontend e corrigir eventuais erros.
+- [x] Suite API completa: 1 097 testes aprovados, 1 ignorado; compilação Python aprovada.
+- [x] Build TypeScript/produção do frontend aprovado.
+- [x] CI PostgreSQL: migrações e smokes de integridade, isolamento, concorrência, ciclo de tarefa e reconciliação aprovados.
 - [ ] Validar instalação limpa real com Docker Compose, API, PostgreSQL, worker e frontend.
-- [ ] Percorrer o cenário integral com os três perfis e confirmar movimento/snapshot/auditoria finais.
+- [ ] Percorrer manualmente o cenário integral com os três perfis e confirmar movimento/snapshot/auditoria finais.
 - [ ] Capturar screenshots reais do percurso; as instruções de captura estão em [DEMO.md](DEMO.md).
 
 ## Fora do âmbito desta fase
