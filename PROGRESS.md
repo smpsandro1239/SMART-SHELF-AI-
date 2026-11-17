@@ -66,3 +66,11 @@ Added `test_catalogue_and_warehouse_master_data_writes_are_admin_only` to exerci
 - Adicionado teste API que confirma HTTP 409 para uma segunda unidade activa do mesmo tipo.
 - Adicionado smoke test PostgreSQL concorrente para tentar duas gravações simultâneas por cada indicador.
 - O resultado só será considerado validado após execução da migração, smoke test e suite completa no CI.
+
+
+## 17-11-2026 — Fronteira entre paletes físicas e inventário agregado
+- A auditoria confirmou que `POST /api/v1/warehouse/pallets` regista uma unidade física, valida a embalagem PALLET e cria um evento `REGISTERED`; não deve criar uma recepção nem alterar snapshots agregados.
+- Adicionada regressão ao teste de recursos de armazém para comparar a contagem de `InventorySnapshot` e `InventoryMovement` antes/depois do registo da palete.
+- Commits: `8897e2e` (teste inicial) e `94d2ca1` (correcção de comentário Python).
+- O API CI anterior passou para o commit `c83574f`, incluindo a migração 0054 e os smoke tests PostgreSQL. A nova regressão ainda aguarda CI; Quality Gates e Docker Compose também aguardam execução na HEAD actual.
+- Não foi criada uma sincronização automática entre paletes e inventário: isso exigiria uma regra de negócio explícita para impedir dupla contabilização.
