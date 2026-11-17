@@ -21,6 +21,7 @@ pass() {
 
 command -v docker >/dev/null 2>&1 || fail "Docker CLI não encontrado."
 command -v curl >/dev/null 2>&1 || fail "curl não encontrado."
+command -v grep >/dev/null 2>&1 || fail "grep não encontrado."
 
 docker compose version >/dev/null 2>&1 || fail "Docker Compose plugin não está disponível."
 pass "Docker Compose disponível."
