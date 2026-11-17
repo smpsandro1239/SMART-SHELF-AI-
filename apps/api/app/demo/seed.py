@@ -127,7 +127,7 @@ def seed_demo_data(db: Session, assets_dir: Path | None = None) -> dict:
         if snapshot is None:
             db.add(models.InventorySnapshot(
                 store_id=store.id, product_id=product.id,
-                on_hand_quantity=36 if index == 0 else 18,
+                on_hand_quantity=4 if index == 0 else 18,
                 reserved_quantity=0, source="MANUAL", external_reference=reference,
                 captured_at=models.utc_now(),
             ))
