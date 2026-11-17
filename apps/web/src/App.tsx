@@ -217,20 +217,28 @@ export default function App() {
     if (!token) return;
     setLoading(true); setError("");
     try {
+      const me = await request<User>("/api/v1/auth/me");
       const query = storeFilter.trim() ? `?store_id=${encodeURIComponent(storeFilter.trim())}` : "";
-      const [me, kpis, taskList, captureList, storeList, zoneList, shelfList, userList] = await Promise.all([
-        request<User>("/api/v1/auth/me"),
+      const [kpis, taskList, captureList] = await Promise.all([
         request<Summary>(`/api/v1/dashboard/summary${query}`),
         request<Task[]>("/api/v1/tasks?limit=100"),
         request<ShelfImage[]>("/api/v1/shelf-images?limit=30"),
-        request<StoreRecord[]>("/api/v1/stores"),
-        request<ZoneRecord[]>("/api/v1/zones"),
-        request<ShelfRecord[]>("/api/v1/shelves"),
-        request<User[]>("/api/v1/auth/users?limit=500"),
       ]);
+      let storeList: StoreRecord[] = [];
+      let zoneList: ZoneRecord[] = [];
+      let shelfList: ShelfRecord[] = [];
+      let employeeList: User[] = [];
+      if (me.role === "ADMIN" || me.role === "SUPERVISOR") {
+        [storeList, zoneList, shelfList, employeeList] = await Promise.all([
+          request<StoreRecord[]>("/api/v1/stores"),
+          request<ZoneRecord[]>("/api/v1/zones"),
+          request<ShelfRecord[]>("/api/v1/shelves"),
+          request<User[]>("/api/v1/store-employees?limit=500"),
+        ]);
+      }
       setUser(me); setSummary(kpis); setTasks(taskList); setCaptures(captureList); setLastUpdated(new Date());
       setStores(storeList); setZones(zoneList); setShelves(shelfList);
-      setEmployees(userList.filter(person => person.role === "EMPLOYEE" && person.is_active));
+      setEmployees(employeeList.filter(person => person.role === "EMPLOYEE" && person.is_active));
       setSelectedStoreId(current => current || String(me.store_id ?? storeList[0]?.id ?? ""));
       if (me.role === "ADMIN" || me.role === "SUPERVISOR") {
         setDecisionLoading(true);
@@ -977,9 +985,16 @@ function TaskRow({
     {canProgress && task.status === "IN_PROGRESS" && <div className="assign-control task-completion">
       <input aria-label={"Quantidade efetivamente reposta na tarefa " + task.id} type="number" min="0.001" step="0.001" placeholder={task.requested_quantity == null ? "Qtd. reposta" : "Qtd. reposta (pedido: " + task.requested_quantity + ")"} value={actualQuantity} onChange={e => setActualQuantity(e.target.value)} />
       {task.requested_quantity != null && Number.isFinite(actual) && actual > 0 && actual < task.requested_quantity && <input aria-label={"Motivo da reposição parcial na tarefa " + task.id} placeholder="Motivo da diferença" value={exceptionReason} onChange={e => setExceptionReason(e.target.value)} />}
-      <button className="row-action" disabled={!isValidCompletion} onClick={() => onUpdate(task, "COMPLETED", undefined, { actual_quantity: actual, ...(exceptionReason.trim() ? { exception_reason: exceptionReason.trim() } : {}) })}>Concluir <ArrowUpRight size={14} /></button>
+      <button className="row-action" disabled={!isValidCompletion} onClick={() => {
+        const detail = exceptionReason.trim() ? `\\nMotivo: ${exceptionReason.trim()}` : "";
+        if (window.confirm(`Confirmar conclusão da tarefa #${task.id}?\\nQuantidade efetivamente reposta: ${actual}${detail}\\nEsta ação será auditada.`)) {
+          onUpdate(task, "COMPLETED", undefined, { actual_quantity: actual, ...(exceptionReason.trim() ? { exception_reason: exceptionReason.trim() } : {}) });
+        }
+      }}>Concluir <ArrowUpRight size={14} /></button>
     </div>}
-    {canProgress && next === "IN_PROGRESS" && <button className="row-action" onClick={() => onUpdate(task, "IN_PROGRESS")}>Iniciar <ArrowUpRight size={14} /></button>}
+    {canProgress && next === "IN_PROGRESS" && <button className="row-action" onClick={() => {
+      if (window.confirm(`Iniciar a tarefa #${task.id} para a reposição do produto #${task.product_id}?`)) onUpdate(task, "IN_PROGRESS");
+    }}>Iniciar <ArrowUpRight size={14} /></button>}
     {canCancelTask && <div className="assign-control task-cancel">
       <input aria-label={"Motivo do cancelamento da tarefa " + task.id} placeholder="Motivo do cancelamento" value={cancellationReason} onChange={event => setCancellationReason(event.target.value)} />
       <button className="row-action" disabled={cancellationReason.trim().length < 3} onClick={() => onUpdate(task, "CANCELLED", undefined, undefined, cancellationReason.trim())}>Cancelar</button>
@@ -995,7 +1010,11 @@ function TaskRow({
     </div>}
     {canReconcileTask && <div className="assign-control task-reconcile">
       <input aria-label={"Motivo da reconciliação da tarefa " + task.id} placeholder="Motivo da reconciliação" value={reconciliationReason} onChange={event => setReconciliationReason(event.target.value)} />
-      <button className="row-action" disabled={reconciliationReason.trim().length < 3 || reconcileLoading} onClick={() => onReconcile(task, reconciliationReason.trim())}>
+      <button className="row-action" disabled={reconciliationReason.trim().length < 3 || reconcileLoading} onClick={() => {
+        if (window.confirm(`Reconciliar o inventário da tarefa #${task.id} com ${task.actual_quantity} unidades?\\nMotivo: ${reconciliationReason.trim()}\\nSerá criado um movimento e um snapshot auditáveis.`)) {
+          onReconcile(task, reconciliationReason.trim());
+        }
+      }}>
         {reconcileLoading ? "A reconciliar…" : "Confirmar stock"}
       </button>
     </div>}
