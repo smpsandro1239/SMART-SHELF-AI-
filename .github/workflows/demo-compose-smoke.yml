@@ -70,12 +70,20 @@ jobs:
             token="$(jq -r '.access_token' <<< "$response")"
             test "$actual_role" = "$role"
             test -n "$token"
-            store_count="$(curl --fail --silent --show-error \
-              -H "Authorization: Bearer $token" \
-              http://127.0.0.1:8000/api/v1/stores | \
-              jq '[.[] | select(.code == "DEMO-BRAGA")] | length')"
-            test "$store_count" = "1"
-            echo "Authenticated $role and verified Demo Store Braga access."
+            if [[ "$role" == "EMPLOYEE" ]]; then
+              status="$(curl --silent --show-error -o /dev/null -w '%{http_code}' \
+                -H "Authorization: Bearer $token" \
+                http://127.0.0.1:8000/api/v1/stores)"
+              test "$status" = "403"
+              echo "Authenticated EMPLOYEE and verified store-list access is restricted."
+            else
+              store_count="$(curl --fail --silent --show-error \
+                -H "Authorization: Bearer $token" \
+                http://127.0.0.1:8000/api/v1/stores | \
+                jq '[.[] | select(.code == "DEMO-BRAGA")] | length')"
+              test "$store_count" = "1"
+              echo "Authenticated $role and verified Demo Store Braga access."
+            fi
           done <<'ACCOUNTS'
           ADMIN|admin@demo.smart-shelf.local|DemoAdmin2026!
           SUPERVISOR|supervisor@demo.smart-shelf.local|DemoSupervisor2026!
