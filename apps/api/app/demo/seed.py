@@ -8,6 +8,7 @@ from PIL import Image, ImageDraw, ImageFont
 from sqlalchemy.orm import Session
 
 from app import models
+from app.config import settings
 from app.database import SessionLocal
 from app.security import hash_password
 
@@ -64,6 +65,7 @@ def _get_or_create_user(db: Session, store_id: int, email: str, name: str, role:
         user.full_name = name
         user.role = role
         user.store_id = store_id
+        user.password_hash = hash_password(password)
         user.is_active = True
     return user
 
@@ -154,6 +156,8 @@ def seed_demo_data(db: Session, assets_dir: Path | None = None) -> dict:
 
 
 def main() -> int:
+    if settings.app_env.lower() == "production":
+        raise SystemExit("The SMART SHELF AI demo seed is disabled in production.")
     parser = argparse.ArgumentParser(description="Create or refresh the SMART SHELF AI local demo fixtures")
     parser.add_argument("--assets-dir", type=Path, default=None, help="Override the generated synthetic image directory")
     args = parser.parse_args()
