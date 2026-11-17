@@ -679,7 +679,7 @@ export default function App() {
                   key={task.id}
                   task={task}
                   token={token}
-                  evidenceImageId={Number(task.notes?.match(/evidence_image_id=(\\d+)/)?.[1] || 0) || null}
+                  evidenceImageId={Number(task.notes?.match(/evidence_image_id=(\d+)/)?.[1] || 0) || null}
                   canAssign={user?.role === "ADMIN" || user?.role === "SUPERVISOR"}
                   canProgress={user?.role === "EMPLOYEE" ? task.assigned_user_id === user.id : user?.role === "ADMIN" || user?.role === "SUPERVISOR"}
                   canCancel={user?.role === "ADMIN" || user?.role === "SUPERVISOR"}

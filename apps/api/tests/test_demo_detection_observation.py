@@ -135,7 +135,7 @@ def test_demo_detection_requires_human_review_and_is_idempotent(monkeypatch):
     assert decisions.status_code == 200
     by_product = {row["product_id"]: row for row in decisions.json()["decisions"]}
     assert by_product[product_id]["replenishment_assessment"] is not None
-    assert by_product[product_id]["evidence"]["image_id"] == image.id if False else by_product[product_id]["evidence"]["sha256"] == "a" * 64
+    assert by_product[product_id]["evidence"]["sha256"] == "a" * 64
     assert by_product[other_product_id]["replenishment_assessment"] is None
     assert by_product[other_product_id]["evidence"] is None
 
