@@ -19,6 +19,8 @@ A API e o worker usam `app.demo.vision:create_provider` por omissão no Docker C
 
 Frontend: executar `npm ci && npm run dev` em `apps/web` (porta 5173). O Vite encaminha `/api` para `http://127.0.0.1:8000`. API: `http://localhost:8000`; documentação OpenAPI: `http://localhost:8000/docs`.
 
+Depois de iniciar o frontend, executa na raiz do repositório `bash scripts/demo-preflight.sh`. O script é apenas de leitura: valida a configuração do Compose, os três serviços, o endpoint `/health/ready`, o frontend e a existência da imagem sintética. Não inicia serviços, não executa seeds e não altera a base de dados. Pode configurar `API_URL` e `WEB_URL` para validar endereços diferentes. Esta pré-validação não substitui o percurso manual dos três perfis.
+
 ## Contas locais de demonstração
 
 | Perfil | Email | Palavra-passe |
