@@ -7778,12 +7778,10 @@ def create_task_from_operational_decision(
             },
         )
 
-    /*
-     * Serialize task approval with inventory snapshot writes. The snapshot
-     * endpoint locks this same product row before appending a new snapshot;
-     * holding the lock here prevents stock from changing between the fresh
-     * operational evaluation and task persistence.
-     */
+    # Serialize task approval with inventory snapshot writes. The snapshot
+    # endpoint locks this same product row before appending a new snapshot;
+    # holding the lock here prevents stock from changing between the fresh
+    # operational evaluation and task persistence.
     locked_product = (
         db.query(models.Product)
         .filter(models.Product.id == payload.product_id)
