@@ -3282,3 +3282,26 @@ def test_catalogue_and_warehouse_master_data_writes_are_admin_only(auth_client):
                 f"{role} unexpectedly reached {path}: "
                 f"{response.status_code} {response.text}"
             )
+
+def test_shelf_product_catalogue_listing_is_scoped_to_supervisor_store(auth_client):
+    client, ids, _ = auth_client
+    supervisor_headers = bearer(ids["supervisor_a"], "SUPERVISOR")
+    admin_headers = bearer(ids["admin"], "ADMIN")
+
+    own_store = client.get("/api/v1/shelf-products", headers=supervisor_headers)
+    foreign_shelf = client.get(
+        "/api/v1/shelf-products",
+        params={"shelf_id": ids["shelf_b"]},
+        headers=supervisor_headers,
+    )
+    all_stores = client.get("/api/v1/shelf-products", headers=admin_headers)
+
+    assert own_store.status_code == 200, own_store.text
+    assert own_store.json()
+    assert all(row["shelf_id"] != ids["shelf_b"] for row in own_store.json())
+    assert foreign_shelf.status_code == 200, foreign_shelf.text
+    assert foreign_shelf.json() == []
+    assert all_stores.status_code == 200, all_stores.text
+    assert {row["shelf_id"] for row in all_stores.json()} >= {
+        ids["shelf_a_assigned"], ids["shelf_b"]
+    }
