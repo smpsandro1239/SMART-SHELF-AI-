@@ -2,8 +2,7 @@
 
 ## Latest validated changes
 
-- **2026-11-17 — `8912843`**: production secret tests and validator changes were exercised by API CI run `44148980219` (success); Docker Compose smoke run `44148980184` also passed. The quality-gates run `44148998271` was cancelled by subsequent pushes before jobs started. Vercel checks on the current documentation commit reported the provider build-rate limit, not an application build failure.
-- **2026-11-17 — `648762d` / `9de762b`**: production JWT and bootstrap secrets now reject any whitespace character; added parameterized regression tests for whitespace-only and mixed whitespace values. These latest changes still require CI validation.
+- **2026-11-17 — `9de762b`**: production JWT/bootstrap secret validation and its placeholder/whitespace regression tests passed API CI (`44149640352`), Smart Shelf quality gates (`44149698056`) and Docker Compose smoke (`44149640514`). Quality gates included Python compilation, full API tests and frontend TypeScript/production build. PostgreSQL smoke checks and Docker demo readiness/worker profiles also passed.
 - Catalogue authorization review: middleware explicitly restricts POST `/products`, `/shelf-products`, `/warehouse/product-profiles` and `/warehouse/product-packaging` to ADMIN; supervisor/employee requests are denied before route execution. Shelf-product listing is scoped to the supervisor's store. No code change made in this pass; targeted regression coverage remains to be assessed.
 
 - **2026-11-17 — `355154e`**: aligned demo detection-to-observation locking with the global image-first lock order and added a regression assertion for the query sequence.
@@ -22,6 +21,6 @@
 
 ## Current focus
 
-Production configuration review: `Settings` rejects the development JWT key, JWT/bootstrap secrets shorter than 32 characters, known placeholder markers, reused secrets, and (latest, pending CI) any whitespace in either production secret when `APP_ENV=production`. Added tests that isolate inherited CI environment variables. Initial CI exposed environment leakage in two tests; corrected the tests, enforced distinct JWT/bootstrap values, and added rejection coverage for known placeholder/example/test secrets. Revalidation pending; intermediate workflow runs were cancelled by subsequent commits.
+Production configuration review: `Settings` rejects the development JWT key, JWT/bootstrap secrets shorter than 32 characters, known placeholder markers, reused secrets, and whitespace in either production secret when `APP_ENV=production`. Tests isolate inherited CI environment variables. Initial CI exposed environment leakage in two tests; corrected the tests, enforced distinct JWT/bootstrap values, and added rejection coverage for placeholder/example/test secrets. The final API, quality-gates and Docker workflows passed.
 
-Continue reviewing catalogue authorization, derived-image retention races and worker lease/retry behavior. Do not mark an item complete until its relevant automated checks pass.
+Worker lease audit found and fixed a race: a worker that loses its processing lease can no longer mark the replacement worker's job FAILED when its own provider call raises. The failure handler now locks and refreshes the image row and changes state only if status and claim timestamp still match. Added a regression test simulating lease takeover during provider execution. This change is pending CI validation. Continue reviewing catalogue authorization, derived-image retention races and worker retry behavior; do not mark an item complete until relevant automated checks pass.
