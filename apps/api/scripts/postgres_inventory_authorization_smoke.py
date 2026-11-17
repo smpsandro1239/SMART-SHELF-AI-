@@ -204,14 +204,12 @@ def main() -> None:
             for resource, response in requests.items():
                 expected_status = (
                     404 if resource == "task creation with foreign shelf"
-                    else 200 if resource == "foreign task list"
                     else 403
                 )
                 assert response.status_code == expected_status, (
                     f"SUPERVISOR must not access foreign {resource}; "
                     f"expected HTTP {expected_status}, received {response.status_code}: {response.text}"
                 )
-            assert requests["foreign task list"].json() == [], requests["foreign task list"].json()
 
             # Verify that denied writes left no rows in PostgreSQL.
             snapshots = client.get(
