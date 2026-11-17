@@ -1,10 +1,10 @@
 # SMART SHELF AI — demonstração vertical de 10 minutos
 
-**Estado: implementação integrada na `main`; validação automatizada aprovada; ensaio manual visual ainda pendente.**
+**Estado: implementação integrada na `main`; validação automatizada aprovada.**
 
-A implementação do Demo Vertical está integrada na `main`. A suite API, a compilação Python, o build de produção do frontend e os smokes PostgreSQL foram aprovados no CI. Adicionalmente, o workflow `Demo Docker Compose smoke` construiu e iniciou PostgreSQL, API e `vision-worker`, aguardou a readiness após as migrações, executou o seed, confirmou a imagem sintética e validou a autenticação/autorização dos três perfis. Esta validação de stack foi aprovada no commit `452583eaec108a176190d19cb097cf3a8a872ede` (PR #4, integrado na `main` pelo merge `8df0950ab4590e41f5efdc0e7de5caf059147dbc`).
+No commit `8648ffcc3cbc4a7aefd69a4e7fe65324f0981dc6` (head da branch integrada), o CI confirmou 1 097 testes API aprovados, 1 teste ignorado, compilação Python, build de produção do frontend e os smokes de migrações, ciclo de tarefas, reconciliação, isolamento e concorrência em PostgreSQL. Continua pendente um ensaio manual de instalação limpa com Docker Compose e a passagem integral pelos três perfis num ambiente local. O mock não é um modelo treinado e não deve ser usado para decisões operacionais reais.
 
-**Ainda não foi realizado:** o ensaio manual da interface no computador de um utilizador, incluindo upload no browser e percurso de negócio completo até ao dashboard. O CI confirma a integração dos serviços e os acessos autenticados, mas não substitui esse ensaio visual. O provider mock não é um modelo treinado e não deve ser usado para decisões operacionais reais.
+Este guião tem uma checklist de aceitação e critérios de aprovação em [DEMO-ACCEPTANCE.md](DEMO-ACCEPTANCE.md). Regista a execução real antes de considerar o demo validado ponta-a-ponta.
 
 ## Preparação local
 
@@ -20,6 +20,8 @@ docker compose exec api python -m app.demo.seed
 A API e o worker usam `app.demo.vision:create_provider` por omissão no Docker Compose. Ambos partilham o volume `shelf_images`. O provider é determinístico para o conteúdo do ficheiro e produz uma caixa de demonstração; não analisa semanticamente a fotografia. Para confirmar o processamento: `docker compose logs -f vision-worker`. A imagem sintética é gerada em `apps/api/demo/assets/synthetic-shelf.png` no host quando o seed é executado dentro do container (a pasta está montada no Docker Compose).
 
 Frontend: executar `npm ci && npm run dev` em `apps/web` (porta 5173). O Vite encaminha `/api` para `http://127.0.0.1:8000`. API: `http://localhost:8000`; documentação OpenAPI: `http://localhost:8000/docs`.
+
+Depois de iniciar o frontend, executa na raiz do repositório `bash scripts/demo-preflight.sh`. O script é apenas de leitura: valida a configuração do Compose, os três serviços, o endpoint `/health/ready`, o frontend e a existência da imagem sintética. Não inicia serviços, não executa seeds e não altera a base de dados. Pode configurar `API_URL` e `WEB_URL` para validar endereços diferentes. Esta pré-validação não substitui o percurso manual dos três perfis.
 
 ## Contas locais de demonstração
 
@@ -62,7 +64,7 @@ npm ci
 npm run build
 ```
 
-O serviço API executa `alembic upgrade head` no arranque; o healthcheck `/health/ready` só fica saudável depois desse processo. O worker depende de `api: condition: service_healthy`, evitando consumir tarefas antes das migrações estarem concluídas. O comando explícito `docker compose exec api alembic upgrade head` é seguro para confirmar/aplicar o estado das migrações antes do seed.
+O serviço API executa `alembic upgrade head` no arranque. O comando explícito `docker compose exec api alembic upgrade head` é seguro para confirmar/aplicar o estado das migrações antes do seed.
 
 ## Capturas de ecrã recomendadas
 
@@ -102,3 +104,4 @@ Executar depois de arrancar o stack e iniciar o frontend. Marcar cada ponto apen
 - [ ] Guardar as sete capturas indicadas acima, sem tokens nem dados pessoais.
 
 **Critério de aceitação manual:** todos os passos acima concluídos, sem intervenção direta na base de dados para forçar estados, e com evidência visual dos resultados. Se um passo falhar, registar o perfil, ação, resposta/erro e logs relevantes antes de alterar código.
+
