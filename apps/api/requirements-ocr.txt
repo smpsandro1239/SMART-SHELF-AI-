@@ -1,5 +1,0 @@
-# Optional OCR runtime (CPU)
-# Install the CPU inference engine first, following PaddlePaddle's official
-# platform-specific instructions:
-# python -m pip install paddlepaddle==3.2.0 -i https://www.paddlepaddle.org.cn/packages/stable/cpu/
-paddleocr==3.7.0

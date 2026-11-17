@@ -1,0 +1,93 @@
+name: Demo Docker Compose smoke
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docker-compose.yml'
+      - 'apps/api/**'
+      - '.github/workflows/demo-compose-smoke.yml'
+  pull_request:
+    paths:
+      - 'docker-compose.yml'
+      - 'apps/api/**'
+      - '.github/workflows/demo-compose-smoke.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: demo-compose-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  compose-smoke:
+    name: Docker Compose demo stack
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build and start API, PostgreSQL and vision worker
+        run: docker compose up --build -d
+
+      - name: Wait for API readiness and seed demo data
+        shell: bash
+        run: |
+          set -euo pipefail
+          ready=0
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:8000/health/ready >/dev/null; then
+              ready=1
+              break
+            fi
+            sleep 2
+          done
+          if [[ "$ready" != "1" ]]; then
+            docker compose ps
+            docker compose logs --no-color api db
+            exit 1
+          fi
+
+          docker compose exec -T api python -m app.demo.seed
+          test -s apps/api/demo/assets/synthetic-shelf.png
+
+      - name: Verify worker and all demo profiles
+        shell: bash
+        run: |
+          set -euo pipefail
+          services="$(docker compose ps --services --filter status=running)"
+          grep -qx 'vision-worker' <<< "$services"
+
+          while IFS='|' read -r role email password; do
+            response="$(curl --fail --silent --show-error \
+              -H 'Content-Type: application/json' \
+              --data "{\"email\":\"$email\",\"password\":\"$password\"}" \
+              http://127.0.0.1:8000/api/v1/auth/login)"
+            actual_role="$(jq -r '.user.role' <<< "$response")"
+            token="$(jq -r '.access_token' <<< "$response")"
+            test "$actual_role" = "$role"
+            test -n "$token"
+            store_count="$(curl --fail --silent --show-error \
+              -H "Authorization: Bearer $token" \
+              http://127.0.0.1:8000/api/v1/stores | \
+              jq '[.[] | select(.code == "DEMO-BRAGA")] | length')"
+            test "$store_count" = "1"
+            echo "Authenticated $role and verified Demo Store Braga access."
+          done <<'ACCOUNTS'
+          ADMIN|admin@demo.smart-shelf.local|DemoAdmin2026!
+          SUPERVISOR|supervisor@demo.smart-shelf.local|DemoSupervisor2026!
+          EMPLOYEE|employee@demo.smart-shelf.local|DemoEmployee2026!
+          ACCOUNTS
+
+      - name: Collect service logs on failure
+        if: failure()
+        run: |
+          docker compose ps
+          docker compose logs --no-color
+
+      - name: Stop stack and remove ephemeral volumes
+        if: always()
+        run: docker compose down --volumes --remove-orphans
