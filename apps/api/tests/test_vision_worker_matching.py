@@ -1,5 +1,6 @@
-import pytest
 from datetime import timedelta
+
+import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
@@ -394,7 +395,7 @@ def test_worker_does_not_fail_image_after_losing_processing_lease(db, tmp_path, 
 
     stored_image = db.get(models.ShelfImage, image_id)
     assert stored_image.analysis_status == "PROCESSING"
-    assert stored_image.analysis_started_at == replacement_lease
+    assert worker._same_claim_timestamp(stored_image.analysis_started_at, replacement_lease)
     assert stored_image.analysis_error is None
     assert stored_image.analysis_completed_at is None
 
