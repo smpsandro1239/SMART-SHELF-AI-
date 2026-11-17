@@ -2406,8 +2406,8 @@ def test_supervisor_can_create_store_scoped_warehouse_resources_with_real_jwt(au
         assert float(events[0].quantity_before) == 0
         assert float(events[0].quantity_after) == 48
 
-        /* Registering a physical pallet is a registry operation, not an
-           inventory receipt: aggregate snapshots and stock movements stay unchanged. */
+        # Registering a physical pallet is a registry operation, not an
+        # inventory receipt: aggregate snapshots and stock movements stay unchanged.
         assert db.query(models.InventorySnapshot).filter_by(
             store_id=store_id, product_id=ids["product"]
         ).count() == snapshots_before
