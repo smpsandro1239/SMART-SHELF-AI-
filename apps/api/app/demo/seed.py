@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import argparse
+import os
+import tempfile
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
@@ -33,8 +35,19 @@ DEMO_PRODUCTS = (
 def create_synthetic_shelf_image(destination: Path) -> Path:
     """Create a clearly synthetic, locally generated shelf photograph substitute."""
     destination.parent.mkdir(parents=True, exist_ok=True)
-    if destination.exists() and destination.stat().st_size > 0:
-        return destination
+    if destination.is_symlink():
+        raise ValueError("Refusing to write the synthetic demo image through a symlink")
+    if destination.exists():
+        if not destination.is_file():
+            raise ValueError("Synthetic demo image destination is not a regular file")
+        try:
+            with Image.open(destination) as existing:
+                if existing.format == "PNG" and existing.size == (1200, 700):
+                    existing.verify()
+                    return destination
+        except (OSError, ValueError):
+            # A corrupt or unexpected asset is replaced atomically below.
+            pass
     image = Image.new("RGB", (1200, 700), "#e9edf0")
     draw = ImageDraw.Draw(image)
     draw.rectangle((0, 0, 1200, 95), fill="#26384a")
@@ -51,7 +64,18 @@ def create_synthetic_shelf_image(destination: Path) -> Path:
             draw.rounded_rectangle((x, top, x + 76, top + 118), radius=8, fill=color, outline="#425466", width=3)
             draw.rectangle((x + 9, top + 18, x + 67, top + 34), fill="#f8f8f4")
             draw.rectangle((x + 13, top + 51, x + 63, top + 92), fill="#f4f1e9")
-    image.save(destination, format="PNG", optimize=True)
+    temporary_path = None
+    try:
+        descriptor, temporary_name = tempfile.mkstemp(
+            prefix=".synthetic-shelf-", suffix=".png", dir=destination.parent
+        )
+        os.close(descriptor)
+        temporary_path = Path(temporary_name)
+        image.save(temporary_path, format="PNG", optimize=True)
+        os.replace(temporary_path, destination)
+    finally:
+        if temporary_path is not None:
+            temporary_path.unlink(missing_ok=True)
     return destination
 
 

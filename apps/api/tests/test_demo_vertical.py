@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+from PIL import Image
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
@@ -60,6 +62,41 @@ def test_demo_seed_is_idempotent_and_generates_synthetic_asset(tmp_path):
     finally:
         Base.metadata.drop_all(engine)
         engine.dispose()
+
+
+def test_synthetic_asset_repairs_corruption_and_is_deterministic(tmp_path):
+    from app.demo.seed import create_synthetic_shelf_image
+
+    destination = tmp_path / "assets" / "synthetic-shelf.png"
+    destination.parent.mkdir(parents=True)
+    destination.write_bytes(b"not-a-png")
+
+    create_synthetic_shelf_image(destination)
+    with Image.open(destination) as generated:
+        assert generated.format == "PNG"
+        assert generated.size == (1200, 700)
+        generated.verify()
+
+    first_bytes = destination.read_bytes()
+    create_synthetic_shelf_image(destination)
+    assert destination.read_bytes() == first_bytes
+
+
+def test_synthetic_asset_refuses_symlink_destination(tmp_path):
+    from app.demo.seed import create_synthetic_shelf_image
+
+    target = tmp_path / "keep.txt"
+    target.write_text("must remain unchanged", encoding="utf-8")
+    destination = tmp_path / "assets" / "synthetic-shelf.png"
+    destination.parent.mkdir(parents=True)
+    try:
+        destination.symlink_to(target)
+    except (NotImplementedError, OSError):
+        pytest.skip("Symlinks are not available in this environment")
+
+    with pytest.raises(ValueError, match="symlink"):
+        create_synthetic_shelf_image(destination)
+    assert target.read_text(encoding="utf-8") == "must remain unchanged"
 
 
 def test_mock_provider_persists_detections_through_existing_worker(tmp_path, monkeypatch):
