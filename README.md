@@ -1334,3 +1334,8 @@ A migration `0050_shelf_record_store_lineage_guard` estende a validação à inf
 A migration `0053_inventory_movement_append_only` protege os movimentos de inventário aprovados contra alterações e eliminações directas na base de dados. A API já trata estes movimentos como transferências imutáveis; a nova defesa aplica essa regra também em PostgreSQL e SQLite, independentemente do caminho de escrita. O downgrade remove explicitamente os triggers e a função PostgreSQL.
 
 A suite SQLite verifica UPDATE e DELETE rejeitados, preservação dos valores originais e remoção das protecções no downgrade. O smoke PostgreSQL de reconciliação foi alargado para tentar adulterar e eliminar o movimento criado pela API, exigindo que ambas as operações falhem e que o registo original permaneça. A execução integral do CI deste commit é a validação necessária para confirmar a migration em PostgreSQL 16 e a suite API.
+
+
+---
+
+**Continuação técnica (2026-11-17):** reforçado `scripts/demo-preflight.sh`. A readiness deixa de aceitar apenas um HTTP 200: valida também os campos `status=ready`, `database=connected` e `migrations=current`. A imagem sintética é verificada dentro do container API com Pillow, incluindo rejeição de symlinks, integridade PNG e dimensões 1200×700. O script mantém-se read-only. Commit `6552cfc99556ac8964813b8c52048692203df3d8`. A validação CI da nova versão e o ensaio manual local ficam pendentes; não confundir o smoke de Docker Compose com aceitação ponta-a-ponta pela interface.
