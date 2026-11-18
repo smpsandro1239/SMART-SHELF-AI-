@@ -303,11 +303,11 @@
 - [x] Acrescentar smoke PostgreSQL com JWT real para importação horária de vendas e tráfego.
 - [x] Testar uploads multipart de SUPERVISOR da loja A para a loja B; exigir 403 antes de parsing e confirmar ausência de linhas persistidas.
 - [x] Confirmar importações válidas na própria loja com persistência de exactamente uma linha por endpoint.
-- [ ] Aguardar e analisar API CI e Quality Gates do commit que integra o smoke.
+- [x] Validar API CI, Quality Gates e Docker Compose smoke no commit `1e3499c8c80ef75494a29d06807469898471e4e1` (todos passaram).
 
 
 ## Importação CSV diária — isolamento multi-loja (18-11-2026)
 - [x] Alargar o teste JWT HTTP ao endpoint `POST /api/v1/sales/import-csv`.
 - [x] Alargar o smoke PostgreSQL com JWT real para os três endpoints CSV de vendas/tráfego.
 - [x] Cobrir rejeição antes do parsing, ausência de efeitos laterais e caminho positivo na loja autorizada.
-- [ ] Validar a execução no CI do commit seguinte.
+- [x] Validar a execução no API CI, Quality Gates e Docker Compose smoke do commit `1e3499c8c80ef75494a29d06807469898471e4e1` (todos passaram).

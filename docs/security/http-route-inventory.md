@@ -208,3 +208,6 @@ O smoke `apps/api/scripts/postgres_sales_import_authorization_smoke.py` foi acre
 
 
 A cobertura PostgreSQL foi alargada à importação diária `POST /api/v1/sales/import-csv`. O smoke `postgres_sales_import_authorization_smoke.py` passa agora a testar os três endpoints CSV (diário, vendas horárias e tráfego horário), com rejeição cross-store, contagens persistidas e operações positivas na loja autorizada. A nova extensão aguarda execução CI.
+
+
+**Validação:** o API CI [44404814359](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44404814359) executou com sucesso o smoke PostgreSQL multi-loja e a suite pytest; Quality Gates [44404814406](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44404814406) e Docker Compose smoke [44404813670](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44404813670) também passaram no commit `1e3499c8c80ef75494a29d06807469898471e4e1`.

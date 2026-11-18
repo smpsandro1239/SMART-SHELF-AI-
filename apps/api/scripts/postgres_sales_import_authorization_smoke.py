@@ -1,4 +1,4 @@
-"""Verify hourly CSV import tenant isolation on PostgreSQL with real JWT middleware.
+"""Verify daily and hourly CSV import tenant isolation on PostgreSQL with real JWT middleware.
 
 The smoke creates two isolated stores, denies cross-store multipart uploads
 before parsing, verifies that no foreign rows are persisted, and confirms

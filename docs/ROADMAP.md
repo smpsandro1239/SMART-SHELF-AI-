@@ -258,9 +258,12 @@ A cobertura usa SQLite isolado e não deve ser apresentada como prova de concorr
 - [x] Smoke PostgreSQL com JWT real para importação de vendas horárias e tráfego.
 - [x] Rejeição cross-store antes de parsing e verificação de ausência de efeitos laterais.
 - [x] Caminho positivo: SUPERVISOR importa ambos os ficheiros na própria loja.
-- [ ] Validar a execução no API CI e registar o resultado.
+- [x] Validar API CI, Quality Gates e Docker Compose smoke no commit `1e3499c8c80ef75494a29d06807469898471e4e1`; todos passaram.
 
 
 ### Cobertura completa das importações CSV — 18-11-2026
 
 A auditoria foi alargada para incluir a importação diária `POST /api/v1/sales/import-csv`, além das importações horárias. O teste HTTP/JWT e o smoke PostgreSQL agora cobrem os três endpoints. A evidência PostgreSQL da ronda horária anterior passou no API CI; a extensão diária aguarda validação no novo commit.
+
+
+**Evidência de validação (18-11-2026):** commit `1e3499c8c80ef75494a29d06807469898471e4e1`; API CI [44404814359](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44404814359), Quality Gates [44404814406](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44404814406) e Docker Compose smoke [44404813670](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44404813670) passaram. A prova PostgreSQL cobre os três endpoints CSV com JWT real, isolamento cross-store, ausência de efeitos laterais e caminho positivo na loja autorizada.

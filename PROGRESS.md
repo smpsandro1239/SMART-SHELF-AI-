@@ -524,3 +524,14 @@ Added `test_catalogue_and_warehouse_master_data_writes_are_admin_only` to exerci
 - O teste JWT HTTP e o smoke PostgreSQL foram alargados para cobrir os três endpoints: vendas diárias, vendas horárias e tráfego horário.
 - Para cada endpoint, a tentativa cross-store deve falhar com 403 antes do parsing; o smoke verifica contagens PostgreSQL antes/depois e confirma importação positiva na loja do supervisor.
 - A validação desta extensão depende dos workflows do commit seguinte.
+
+
+## Validação CI — importações CSV diárias e horárias (18-11-2026)
+
+Commit validado: `1e3499c8c80ef75494a29d06807469898471e4e1`.
+
+- API CI [44404814359](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44404814359): **sucesso**. Migrações PostgreSQL 16, smoke de idempotência CSV, smoke de autorização multi-loja dos três endpoints CSV e suite pytest passaram.
+- Quality Gates [44404814406](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44404814406): **sucesso**. Compilação Python, suite API, TypeScript e build de produção web passaram.
+- Docker Compose smoke [44404813670](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44404813670): **sucesso**.
+- O smoke PostgreSQL usou JWT real de SUPERVISOR, duas lojas, pedidos multipart e verificações directas das tabelas. Os três endpoints cross-store devolveram 403 sem novas linhas; as três importações na loja autorizada persistiram uma linha cada.
+- Os checks externos Vercel continuam limitados por quota de deployment (build-rate-limit; retry indicado em 24 horas); não são falhas dos workflows de código acima.
