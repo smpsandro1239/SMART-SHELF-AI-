@@ -72,3 +72,11 @@
 - [x] Testar actualização de quantidade e estado para PARTIAL.
 - [x] Testar rejeição HTTP 409 de actualização baseada num estado desactualizado, sem evento adicional.
 - [ ] Validar o novo teste na API CI e Quality Gates.
+
+
+## Imutabilidade do histórico físico de paletes (18-11-2026)
+- [x] Adicionar protecção de base de dados contra UPDATE e DELETE em `pallet_rotation_events` para PostgreSQL.
+- [x] Adicionar triggers equivalentes para SQLite nas migrações.
+- [x] Criar smoke test PostgreSQL que tenta alterar e apagar um evento e confirma a preservação dos valores originais.
+- [x] Integrar o smoke test no API CI imediatamente após `alembic upgrade head`.
+- [ ] Validar migração e smoke test na API CI.
