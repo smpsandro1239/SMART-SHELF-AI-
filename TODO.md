@@ -204,3 +204,10 @@
 - [ ] Validar o novo teste no API CI e Quality Gates.
 - [ ] Avaliar se o endpoint necessita de smoke PostgreSQL específico; não declarar essa validação sem execução real.
 
+
+
+## Diretório de funcionários — autorização PostgreSQL (18-11-2026)
+- [x] Criar smoke test HTTP com JWT reais contra PostgreSQL 16 para o endpoint `GET /api/v1/store-employees`.
+- [x] Cobrir SUPERVISOR limitado à própria loja, exclusão de funcionários inactivos, filtro cross-store recusado, ADMIN com filtro de loja e EMPLOYEE recusado.
+- [x] Integrar o smoke no workflow API CI após a validação das migrações.
+- [ ] Confirmar a execução do novo smoke e da suite API no API CI; não declarar validação PostgreSQL antes do resultado do workflow.
