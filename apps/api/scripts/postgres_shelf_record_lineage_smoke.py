@@ -81,6 +81,7 @@ def main() -> None:
         store_a_id, store_b_id = store_a.id, store_b.id
         zone_a_id, zone_b_id = zone_a.id, zone_b.id
         shelf_a_id = shelf_a.id
+        product_id, user_id = product.id, user.id
         alert_id, capture_id, task_id = alert.id, capture.id, task.id
 
     tables = (
@@ -94,9 +95,9 @@ def main() -> None:
     params = {
         "store_id": store_b_id,
         "shelf_id": shelf_a_id,
-        "product_id": product.id,
+        "product_id": product_id,
         "now": now,
-        "user_id": user.id,
+        "user_id": user_id,
     }
 
     with SessionLocal() as db:
