@@ -380,6 +380,11 @@ def test_legal_hold_blocks_overdue_purge_until_hold_is_released(db_session, tmp_
     assert "legal_hold_active" in held_preview["blockers"]
     assert held_preview["deletion_performed"] is False
 
+    scheduled_date = held.purge_not_before
+    scheduled_policy = held.retention_policy_version
+    assert scheduled_date is not None
+    assert scheduled_policy == "test-policy-v1"
+
     released = main_module.release_shelf_image_legal_hold(
         image_id,
         ShelfImageRetentionRequest(reason="Legal review completed"),
@@ -387,6 +392,21 @@ def test_legal_hold_blocks_overdue_purge_until_hold_is_released(db_session, tmp_
         db_session,
     )
     assert released.legal_hold is False
+    assert released.purge_not_before == scheduled_date
+    assert released.retention_policy_version == scheduled_policy
+
+    retention_events = db_session.query(models.ShelfImageRetentionEvent).filter_by(
+        shelf_image_id=image_id
+    ).order_by(models.ShelfImageRetentionEvent.id).all()
+    assert [event.event_type for event in retention_events] == [
+        "LEGAL_HOLD_APPLIED",
+        "LEGAL_HOLD_RELEASED",
+    ]
+    assert retention_events[0].from_status == retention_events[0].to_status == "RESTRICTED"
+    assert retention_events[1].from_status == retention_events[1].to_status == "RESTRICTED"
+    assert all(event.actor_user_id == admin_id for event in retention_events)
+    assert "Preserve image for legal review" in retention_events[0].reason
+    assert "Legal review completed" in retention_events[1].reason
 
     released_preview = main_module.get_shelf_image_purge_eligibility(
         image_id, request, db_session
