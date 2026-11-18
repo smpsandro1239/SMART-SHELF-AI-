@@ -128,3 +128,12 @@ O demo só deve ser anunciado como aceite ponta-a-ponta depois da checklist manu
 
 A reconciliação estática não constitui uma auditoria de segurança concluída. O Docker Compose `44299045038` também passou (build, readiness, seed, worker e perfis).
 
+## Diretório de funcionários — autorização (2026-11-18)
+
+- [x] Confirmar a política no handler: ADMIN global, SUPERVISOR limitado à loja atribuída e apenas funcionários activos.
+- [x] Adicionar teste HTTP JWT para isolamento cross-store, papéis e estado activo.
+- [ ] Validar no API CI/Quality Gates.
+- [ ] Decidir, com base no risco operacional, se é necessário smoke PostgreSQL específico.
+
+A cobertura usa SQLite isolado e não deve ser apresentada como prova de concorrência ou isolamento PostgreSQL.
+
