@@ -784,7 +784,7 @@ export default function App() {
               <p className="decision-method">{operationalDecisions.forecast_policy}</p>
               {(operationalDecisions.decisions.some(item => item.replenishment_assessment?.status === "STALE_OBSERVATION") || operationalDecisions.decisions.some(item => item.backroom_inventory && !item.backroom_inventory.is_fresh)) && <p className="decision-freshness-notice" role="status">Existem dados operacionais desatualizados. As observações expiradas não sustentam uma nova recomendação de reposição e o inventário de retaguarda desatualizado não deve ser usado para aprovar movimentos.</p>}
               {(operationalDecisions.zone_summaries ?? []).length > 0 && <div className="decision-zone-grid">
-                {(operationalDecisions.zone_summaries ?? []).map(zone => <article role="button" tabIndex={0} className="decision-zone-card" key={`${zone.store_id}-${zone.zone_name}`} aria-label={`Consultar decisões da zona ${zone.zone_name}`} onClick={() => navigateToSection("decision-list")} onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); navigateToSection("decision-list"); } }}>
+                {(operationalDecisions.zone_summaries ?? []).map(zone => <button type="button" className="decision-zone-card" key={`${zone.store_id}-${zone.zone_name}`} aria-label={`Consultar decisões da zona ${zone.zone_name}`} onClick={() => navigateToSection("decision-list")}>
                   <div className="decision-zone-heading"><strong>{zone.zone_name}</strong><span>{zone.items_evaluated} referências</span></div>
                   <div className="decision-zone-metrics">
                     <span><strong>{zone.high_priority}</strong> prioridade alta</span>
@@ -797,7 +797,7 @@ export default function App() {
                     <span><strong>{item.product_name}</strong><small>{item.product_sku} · {item.shelf_code}</small></span>
                     <b>{item.priority === "HIGH" ? "ALTA" : "NORMAL"}</b>
                   </div>)}
-                </article>)}
+                </button>)}
               </div>}
               <div id="decision-list" className="decision-list">
                 {operationalDecisions.decisions.length === 0 && <div className="empty-state"><ShieldCheck size={24} /><strong>Sem produtos associados a prateleiras</strong><span>Quando existirem associações e evidência registada, o motor apresentará as decisões aqui.</span></div>}
