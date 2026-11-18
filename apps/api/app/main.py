@@ -5756,6 +5756,20 @@ def get_physical_warehouse_slotting(
             item["volume"] += quantity * float(other_profile.unit_volume_cm3)
             item["weight"] += quantity * float(other_profile.unit_weight_kg)
 
+    # Pallets are a separate physical register and are not linked one-to-one
+    # to placement rows. Never add their quantities to placement occupancy:
+    # that could double-count the same stock. Instead, fail closed for any
+    # bin whose code is also occupied by a registered warehouse pallet.
+    pallet_location_codes = {
+        row[0]
+        for row in db.query(models.StorePallet.location_code).filter(
+            models.StorePallet.store_id == store_id,
+            models.StorePallet.location_type == "WAREHOUSE",
+            models.StorePallet.base_quantity > 0,
+            models.StorePallet.location_code.is_not(None),
+        ).all()
+    }
+
     location_inputs = []
     for location in locations:
         current = occupancy.get(location.id, {
@@ -5767,8 +5781,16 @@ def get_physical_warehouse_slotting(
             "distance_to_picking_m": float(location.distance_to_picking_m),
             "max_volume_cm3": float(location.max_volume_cm3),
             "max_weight_kg": float(location.max_weight_kg),
-            "occupied_volume_cm3": None if current["unknown_profile"] else current["volume"],
-            "occupied_weight_kg": None if current["unknown_profile"] else current["weight"],
+            "occupied_volume_cm3": (
+                None
+                if current["unknown_profile"] or location.code in pallet_location_codes
+                else current["volume"]
+            ),
+            "occupied_weight_kg": (
+                None
+                if current["unknown_profile"] or location.code in pallet_location_codes
+                else current["weight"]
+            ),
             "temperature_zone": location.temperature_zone,
             "is_active": location.is_active,
             "other_product_count": len(current["products"] - {product_id}),
@@ -5794,7 +5816,7 @@ def get_physical_warehouse_slotting(
         "candidates": list(result.candidates),
         "rejected_locations": list(result.rejected_locations),
         "automatic_movement_allowed": False,
-        "policy": "A quantidade indicada é adicional à ocupação atual. Localizações com stock existente sem perfil dimensional conhecido são excluídas; validar fisicamente antes de qualquer transferência.",
+        "policy": "A quantidade indicada é adicional à ocupação atual. A ocupação é estimada a partir das colocações com perfis dimensionais conhecidos. Localizações com ocupação desconhecida ou com paletes físicas registadas no mesmo código são excluídas: não existe ainda uma ligação inequívoca entre palete e colocação, pelo que não se somam nem se duplicam esses registos. Validar fisicamente antes de qualquer transferência.",
     }
 
 
