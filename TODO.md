@@ -436,5 +436,5 @@
 - [x] Exigir digest e referência de staging em jobs `SUCCEEDED`.
 - [x] Impor sequência consecutiva de eventos e impedir eventos posteriores ao estado terminal, preservando o evento terminal legítimo.
 - [x] Acrescentar testes SQLite de migração e expandir smoke PostgreSQL para testar SQL directo contra os guards.
-- [ ] Confirmar migration PostgreSQL 16, API CI, Quality Gates e Docker Compose no commit desta ronda.
+- [x] Confirmar migration PostgreSQL 16, API CI [44419928230](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44419928230), Quality Gates [44419928281](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44419928281) e Docker Compose [44419928382](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44419928382); **1179 passed, 1 skipped, 1 warning**.
 - [ ] Implementar autenticação de workers, leitura controlada por chamada e promoção de outputs condicionada ao fencing token actual.

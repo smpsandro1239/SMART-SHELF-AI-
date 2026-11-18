@@ -396,5 +396,5 @@ Foi criado e integrado no API CI o smoke `postgres_dataset_eligibility_concurren
 - [x] Exigir lease válido para sucesso/falha, timestamp terminal e output staged com digest.
 - [x] Validar sequência de eventos na base de dados e bloquear eventos posteriores à transição terminal, preservando o evento terminal.
 - [x] Adicionar testes SQLite e ampliar o smoke PostgreSQL com tentativas SQL directas.
-- [ ] Aguardar API CI/PostgreSQL 16, Quality Gates e Docker Compose antes de considerar validado.
+- [x] Validar API CI [44419928230](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44419928230), Quality Gates [44419928281](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44419928281) e Docker Compose [44419928382](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44419928382): migration PostgreSQL 16, smokes e 1179 testes aprovados, 1 ignorado, 1 aviso.
 - [ ] Implementar autenticação de workers e serviço de leitura/promoção com fencing.

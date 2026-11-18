@@ -672,7 +672,10 @@ Commit validado: `1e3499c8c80ef75494a29d06807469898471e4e1`.
 - A sequência de eventos passa a ser validada na base de dados e os jobs terminais deixam de aceitar eventos adicionais, excepto o evento terminal correspondente à transição.
 - O serviço de heartbeat preserva a expiração anterior quando a duração pedida é menor.
 - Acrescentados testes de migration SQLite e verificações SQL directas ao smoke PostgreSQL.
-- Estado: alterações preparadas; ainda não validadas por CI. Não declarar garantias PostgreSQL concluídas até os workflows passarem.
+- Validação: API CI [44419928230](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44419928230) passou com migration PostgreSQL 16, smoke SQL directo e **1179 testes aprovados, 1 ignorado, 1 aviso**; Quality Gates [44419928281](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44419928281) e Docker Compose [44419928382](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44419928382) passaram.
 
 
-- CI correction follow-up: the first smoke attempt exposed that a legacy fixture forcibly rewrote a live lease expiry, which the new database guard correctly rejects. The PostgreSQL smoke now uses a one-second lease and waits for natural expiry before takeover; it no longer bypasses the production guard. The earlier smoke failure was separate from the Python claim/heartbeat regression, which was fixed in commit `23a81cb`.
+- Correcções durante a validação: o primeiro teste revelou que a lógica de heartbeat tinha sido aplicada por engano ao claim inicial; foi corrigida no commit `23a81cb`. O smoke PostgreSQL também foi adaptado para aguardar a expiração natural do lease, em vez de alterar directamente a expiração que a nova trigger protege. A execução final passou.
+
+
+- Validação final do commit `93704d6b5f7262ec20befc6dc17ee4f1c80efb78`: API CI [44419928230](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44419928230) — migration PostgreSQL 16, smoke concorrente de leases/fencing e **1179 passed, 1 skipped, 1 warning**; Quality Gates [44419928281](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44419928281) — Python, suite API e build Web aprovados; Docker Compose [44419928382](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44419928382) aprovado.

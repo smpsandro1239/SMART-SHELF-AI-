@@ -112,3 +112,21 @@ Foi acrescentada a primeira camada executável do contrato:
 A implementação ainda não é um worker. O campo `staged_output_reference` regista a referência declarada pelo worker; não executa a promoção. Um consumidor que tenha perdido o lease pode continuar a calcular ou a ler cópias locais; este serviço apenas impede que o token obsoleto renove ou conclua o job. O serviço de leitura por artefacto e o promotor fenced continuam necessários.
 
 **Compatibilidade e validação (commit `0d9140e`):** migration e triggers aplicadas com sucesso em PostgreSQL 16. O smoke `postgres_dataset_job_lease_smoke.py` passou no API CI [44416138879](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44416138879): dois workers concorrentes produziram exactamente um claim; takeover após expiração incrementou o fencing token; heartbeat e conclusão com token obsoleto foram rejeitados; fonte restringida foi revogada e a sequência append-only foi confirmada. A suite API passou com **1177 passed, 1 skipped, 1 warning**. Quality Gates [44416138669](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44416138669) e Docker Compose [44416138628](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44416138628) passaram. Esta evidência valida a persistência e o protocolo de lease, não um worker de treino remoto nem a publicação externa de outputs.
+
+
+## Guards adicionais na base de dados — migration 0057
+
+A migration `0057_dataset_execution_fencing_guards` reforça o contrato ao nível SQL:
+
+- claim inicial: `fencing_token` e `attempt_count` incrementam exactamente uma unidade;
+- heartbeat: só é permitido antes da expiração, com o mesmo proprietário/token, sem diminuir `lease_expires_at` e sem alterar o contador de tentativas;
+- takeover: exige lease anterior expirado, novo proprietário e incremento exacto do token e tentativas;
+- sucesso/falha: exigem lease anterior ainda válido e counters inalterados;
+- estado terminal: exige `finished_at`; sucesso exige `output_sha256` e `staged_output_reference`;
+- eventos: sequência consecutiva protegida por lock da linha do job; após terminalidade só é aceite o evento terminal correspondente, uma única vez.
+
+O serviço de heartbeat preserva a expiração anterior se o pedido de renovação tiver duração inferior. O smoke PostgreSQL usa expiração natural para testar takeover e tenta, por SQL directo, encurtar o lease e inserir uma sequência descontínua; ambas as operações são rejeitadas.
+
+**Validação:** commit `93704d6b5f7262ec20befc6dc17ee4f1c80efb78`; API CI [44419928230](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44419928230), Quality Gates [44419928281](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44419928281) e Docker Compose [44419928382](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44419928382) passaram. A suite API teve 1179 testes aprovados, 1 ignorado e 1 aviso.
+
+Estes guards não autenticam o worker, não impedem que um processo obsoleto continue a ler bytes já copiados localmente e não promovem outputs do staging para um destino final. Essas garantias exigem, respectivamente, autenticação do worker, serviço de leitura controlada por chamada e promotor de outputs que valide o fencing token actual.
