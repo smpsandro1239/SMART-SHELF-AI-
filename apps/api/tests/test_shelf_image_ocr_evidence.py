@@ -1924,3 +1924,65 @@ def test_fused_evidence_status_pagination_applies_offset_after_catalogue_refresh
     assert [item["id"] for item in response.json()] == [
         expected_consensus_ids[-2]
     ]
+
+
+def test_fused_evidence_status_pagination_crosses_keyset_batch_boundary():
+    image_id, first_detection_id = create_image_with_detection()
+    expected_ids = []
+
+    with TestingSession() as db:
+        run = models.ShelfImageOCRRun(
+            shelf_image_id=image_id,
+            provider="batch-pagination-test",
+            model_version="batch-v1",
+            status="COMPLETED",
+        )
+        db.add(run)
+        db.flush()
+
+        for index in range(510):
+            if index == 0:
+                detection = db.get(models.ShelfImageDetection, first_detection_id)
+            else:
+                detection = models.ShelfImageDetection(
+                    shelf_image_id=image_id,
+                    label="product",
+                    confidence=0.8,
+                    x_min=0.1,
+                    y_min=0.1,
+                    x_max=0.5,
+                    y_max=0.5,
+                    model_version="batch-v1",
+                )
+                db.add(detection)
+                db.flush()
+
+            evidence = models.ShelfImageFusedEvidence(
+                ocr_run_id=run.id,
+                detection_id=detection.id,
+                status="UNKNOWN",
+                suggested_product_id=None,
+                visual_product_id=None,
+                text_product_id=None,
+                visual_status="UNKNOWN",
+                text_status="UNKNOWN",
+                visual_model_version="batch-v1",
+                ocr_provider="batch-pagination-test",
+                ocr_model_version="batch-v1",
+                reason="batch pagination regression",
+            )
+            db.add(evidence)
+            db.flush()
+            expected_ids.append(evidence.id)
+
+        db.commit()
+
+    expected_page = sorted(expected_ids, reverse=True)[500:502]
+    with TestClient(app) as client:
+        response = client.get(
+            f"/api/v1/shelf-images/{image_id}/evidence-fusion"
+            "?status=UNKNOWN&limit=2&offset=500"
+        )
+
+    assert response.status_code == 200, response.text
+    assert [item["id"] for item in response.json()] == expected_page
