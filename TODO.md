@@ -198,3 +198,9 @@
 - [x] Demo Docker Compose run `44299045038`: build, readiness, seed e verificação dos perfis/worker aprovados.
 - [ ] Concluir a auditoria de autorização handler-a-handler; inventário estático não é prova de controlo de acesso.
 
+## Diretório de funcionários — autorização multi-loja (18-11-2026)
+- [x] Rever o handler `GET /api/v1/store-employees`: ADMIN global; SUPERVISOR limitado à própria loja; apenas EMPLOYEE activos são devolvidos.
+- [x] Acrescentar teste JWT HTTP para supervisor, administrador e funcionário, incluindo filtro cross-store e exclusão de inactivos.
+- [ ] Validar o novo teste no API CI e Quality Gates.
+- [ ] Avaliar se o endpoint necessita de smoke PostgreSQL específico; não declarar essa validação sem execução real.
+
