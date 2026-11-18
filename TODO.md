@@ -63,7 +63,7 @@
 - [x] Tratar paletes de armazém com localização vazia ou não mapeada como ocupação desconhecida.
 - [x] Excluir conservadoramente todas as localizações do slotting enquanto existir uma palete de armazém sem correspondência com uma localização configurada.
 - [x] Cobrir com teste de integração a palete sem código de localização.
-- [ ] Validar o novo cenário na API CI e Quality Gates.
+- [x] Validar o novo cenário na API CI e Quality Gates.
 
 
 ## Ciclo de vida de paletes — cobertura de integração (18-11-2026)
@@ -86,7 +86,7 @@
 - [x] Corrigir o teste de palete sem localização para respeitar a precedência das regras de segurança.
 - [x] Confirmar que a localização FROZEN continua rejeitada por incompatibilidade térmica.
 - [x] Confirmar que as restantes localizações ficam bloqueadas por ocupação desconhecida.
-- [ ] Reexecutar API CI e Quality Gates após a correcção.
+- [x] Reexecutar API CI e Quality Gates após a correcção.
 
 
 ## Validação de localizações de paletes (18-11-2026)
@@ -95,4 +95,11 @@
 - [x] Ao movimentar paletes para WAREHOUSE, validar a localização de destino quando o código muda.
 - [x] Preservar o registo de paletes sem código de localização, para manter a rastreabilidade de dados incompletos e o bloqueio conservador do slotting.
 - [x] Testar rejeição de códigos desconhecidos/inactivos e aceitação de localização activa.
-- [ ] Validar suite API, Quality Gates e Docker Compose após as alterações.
+- [x] Validar suite API e Quality Gates; Docker Compose permanece pendente para o SHA final.
+
+
+## Resultados de validação — 18-11-2026
+- [x] API CI: 1129 testes passaram, 1 ignorado, 1 aviso; run `44206821156` (SHA `a5312651fb`).
+- [x] Quality Gates: suite API e compilação concluídas com sucesso; run `44206872358` (SHA `df883edbe2`).
+- [x] Quality Gates Web TypeScript/build de produção concluído com sucesso.
+- [ ] Demo Docker Compose no SHA final: execução pendente; não declarar validada até conclusão.
