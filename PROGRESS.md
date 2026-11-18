@@ -1,5 +1,12 @@
 # PROGRESS
 
+## Latest validated changes — 2026-11-18
+
+- **Pagination audit closure — commits `2180c02`, `8a9e676`, `e645e7b`, `2d3794c`, `4c9bf90`:** added bounded offset pagination and deterministic ordering to artifact references, append-only disposition events and human SKU review history, with regression coverage for page boundaries and invalid bounds. The related API CI run `44256610563` passed: **1136 passed, 1 skipped, 1 warning**; all PostgreSQL concurrency/authorization smoke steps passed. Demo Docker Compose run `44256610406` passed build, readiness, seed and worker-profile checks. Quality Gates run `44256985942` passed API tests/Python compilation and Web TypeScript/production build.
+- The Vercel status checks on the documentation commit report `build-rate-limit` (account/build quota), not an application compilation or test failure. GitHub Actions API and Web quality jobs completed successfully.
+- Remaining work is deliberately not marked complete: inspect query plans and deep-offset cost on representative data; finish retention/legal-hold lifecycle coverage; reconcile ROADMAP.md; and perform manual keyboard/browser/contrast verification before claiming WCAG AA conformance.
+
+
 ## Latest validated changes
 
 - **2026-11-17 — `554e9df`**: dashboard UX changes passed Web CI (`44198503068`); frontend TypeScript and production build passed the corresponding quality-gates job (`44198503127`). Full quality-gates run's API test job remained in progress at documentation time. See Current focus for the implementation and the remaining manual accessibility audit.
