@@ -48,13 +48,18 @@ def main() -> None:
     main_module.settings = original_settings.model_copy(update={"app_env": "production"})
     headers = _bearer(supervisor_id, "SUPERVISOR")
     business_date = date.today().isoformat()
+    foreign_daily_ref = f"PG-CSV-FOREIGN-DAILY-{suffix}"
     foreign_sales_ref = f"PG-CSV-FOREIGN-SALES-{suffix}"
     foreign_traffic_ref = f"PG-CSV-FOREIGN-TRAFFIC-{suffix}"
+    own_daily_ref = f"PG-CSV-OWN-DAILY-{suffix}"
     own_sales_ref = f"PG-CSV-OWN-SALES-{suffix}"
     own_traffic_ref = f"PG-CSV-OWN-TRAFFIC-{suffix}"
 
+    daily_header = "product_id,sales_date,quantity,external_reference"
     sales_header = "product_id,business_date,hour_of_day,quantity,external_reference"
     traffic_header = "business_date,hour_of_day,customer_count,external_reference"
+    invalid_daily = (daily_header + "\n" + f"not-an-id,{business_date},3,{foreign_daily_ref}" + "\n").encode()
+    valid_own_daily = (daily_header + "\n" + f"{product_id},{business_date},3,{own_daily_ref}" + "\n").encode()
     invalid_sales = (sales_header + "\n" + f"not-an-id,{business_date},10,3,{foreign_sales_ref}" + "\n").encode()
     valid_foreign_traffic = (traffic_header + "\n" + f"{business_date},10,12,{foreign_traffic_ref}" + "\n").encode()
     valid_own_sales = (sales_header + "\n" + f"{product_id},{business_date},10,3,{own_sales_ref}" + "\n").encode()

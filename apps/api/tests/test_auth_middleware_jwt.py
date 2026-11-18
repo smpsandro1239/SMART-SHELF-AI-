@@ -4542,8 +4542,8 @@ def test_supervisor_cannot_import_other_store_hourly_sales_or_traffic_csv_over_h
     ).encode("utf-8")
 
     daily_csv = (
-        "product_id,sales_date,quantity,external_reference\\n"
-        "not-a-product,2026-11-18,4,CROSS-STORE-DAILY-CSV\\n"
+        "product_id,sales_date,quantity,external_reference\n"
+        "not-a-product,2026-11-18,4,CROSS-STORE-DAILY-CSV\n"
     ).encode("utf-8")
 
     with main_module.SessionLocal() as db:
