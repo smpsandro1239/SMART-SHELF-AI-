@@ -246,7 +246,13 @@ def requeue_stale_processing_images(
     stale_after_seconds: int | None = None,
 ) -> int:
     """Return abandoned PROCESSING jobs to PENDING after a conservative lease timeout."""
-    timeout = stale_after_seconds or settings.vision_processing_timeout_seconds
+    timeout = (
+        settings.vision_processing_timeout_seconds
+        if stale_after_seconds is None
+        else stale_after_seconds
+    )
+    if timeout < 0:
+        raise ValueError("stale_after_seconds must be non-negative")
     cutoff = models.utc_now() - timedelta(seconds=timeout)
     stale_images = (
         db.query(models.ShelfImage)
