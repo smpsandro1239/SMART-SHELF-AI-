@@ -3997,3 +3997,49 @@ def test_external_integration_management_is_admin_only_over_http(auth_client):
         after = db.query(models.StoreExternalIntegration).count()
     assert after == before, "Denied requests must not create integration records"
 
+def test_store_employee_directory_is_scoped_to_supervisor_store(auth_client):
+    client, ids, store_ids = auth_client
+
+    with main_module.SessionLocal() as db:
+        inactive_employee = models.User(
+            email="inactive-employee-a@example.test",
+            full_name="Inactive Employee A",
+            password_hash="test-only",
+            role="EMPLOYEE",
+            store_id=store_ids["a"],
+            is_active=False,
+        )
+        db.add(inactive_employee)
+        db.commit()
+
+    supervisor_response = client.get(
+        "/api/v1/store-employees",
+        headers=bearer(ids["supervisor_a"], "SUPERVISOR"),
+    )
+    assert supervisor_response.status_code == 200, supervisor_response.text
+    supervisor_employees = supervisor_response.json()
+    assert {item["id"] for item in supervisor_employees} == {
+        ids["employee_a"], ids["employee_a_peer"]
+    }
+    assert all(item["store_id"] == store_ids["a"] for item in supervisor_employees)
+    assert all(item["is_active"] for item in supervisor_employees)
+
+    foreign_store_response = client.get(
+        f"/api/v1/store-employees?store_id={store_ids['b']}",
+        headers=bearer(ids["supervisor_a"], "SUPERVISOR"),
+    )
+    assert foreign_store_response.status_code == 403
+
+    admin_response = client.get(
+        f"/api/v1/store-employees?store_id={store_ids['b']}",
+        headers=bearer(ids["admin"], "ADMIN"),
+    )
+    assert admin_response.status_code == 200, admin_response.text
+    assert {item["id"] for item in admin_response.json()} == {ids["employee_b"]}
+
+    employee_response = client.get(
+        "/api/v1/store-employees",
+        headers=bearer(ids["employee_a"], "EMPLOYEE"),
+    )
+    assert employee_response.status_code == 403
+
