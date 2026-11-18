@@ -86,6 +86,11 @@ jobs:
           DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/smart_shelf_ci
           APP_ENV: test
         run: python scripts/postgres_shelf_record_lineage_smoke.py
+      - name: Verify PostgreSQL dataset eligibility hierarchy lock serialization
+        env:
+          DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/smart_shelf_ci
+          APP_ENV: test
+        run: python scripts/postgres_dataset_eligibility_concurrency_smoke.py
       - name: Verify PostgreSQL external artifact disposition audit immutability
         env:
           DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/smart_shelf_ci

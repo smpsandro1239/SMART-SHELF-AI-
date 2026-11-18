@@ -313,3 +313,8 @@ A auditoria foi alargada para incluir a importação diária `POST /api/v1/sales
 ### Elegibilidade operacional de datasets — locks da linhagem multi-loja (18-11-2026)
 
 A validação de proveniência interna passa a bloquear explicitamente imagem, prateleira e zona, pois as três linhas determinam a loja efectiva e a retenção aplicável ao artefacto. A query usa ordenação determinística e o teste de contrato compila SQL PostgreSQL para confirmar `FOR UPDATE OF shelf_images, shelves, zones`. Falta smoke de concorrência PostgreSQL com alteração hierárquica em transação concorrente e auditoria dos consumidores que possam contornar o release gate.
+
+
+### Smoke concorrente PostgreSQL — elegibilidade de datasets (18-11-2026)
+
+Foi criado e integrado no API CI o smoke `postgres_dataset_eligibility_concurrency_smoke.py`. Duas sessões PostgreSQL independentes exercitam actualizações a `shelves.zone_id` e `zones.store_id` enquanto o gate mantém os locks de imagem/prateleira/zona. O smoke exige evidência de bloqueio real através de `pg_stat_activity` e `pg_blocking_pids`, e confirma que as alterações só terminam depois do commit do gate. A validação de runtime permanece pendente até o workflow concluir.

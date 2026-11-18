@@ -590,3 +590,12 @@ Commit validado: `1e3499c8c80ef75494a29d06807469898471e4e1`.
 - Foi acrescentado teste de compilação com o dialecto PostgreSQL para verificar explicitamente as tabelas bloqueadas e a ordenação SQL.
 - Ainda não foi executado o smoke de concorrência real PostgreSQL para este caminho. O teste de compilação não prova o comportamento de bloqueio em runtime.
 - Próximo passo: adicionar smoke PostgreSQL com duas sessões, mantendo a validação aberta enquanto uma segunda transação tenta alterar a loja da zona/prateleira; depois validar o commit completo no API CI.
+
+
+## 2026-11-18 — Smoke concorrente PostgreSQL para elegibilidade de datasets
+
+- Criado `apps/api/scripts/postgres_dataset_eligibility_concurrency_smoke.py`.
+- O smoke cria duas lojas e imagens internas com proveniência verificável; usa sessões SQLAlchemy independentes para manter o gate de elegibilidade aberto e tentar alterar, em paralelo, a zona da prateleira ou a loja da zona.
+- A confirmação não depende apenas de temporização: consulta `pg_stat_activity` e `pg_blocking_pids(pid)` para exigir que cada UPDATE esteja realmente bloqueado pela transação de elegibilidade.
+- Depois do commit do gate, o UPDATE deve concluir e o estado final é confirmado na base de dados.
+- O smoke foi integrado no API CI após as migrações e o smoke de linhagem de registos de prateleira. A validação PostgreSQL 16 só será registada depois da execução do workflow deste commit.

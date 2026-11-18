@@ -360,5 +360,14 @@
 - [x] Alargar os locks da validação de imagens internas às linhas `shelf_images`, `shelves` e `zones`, que em conjunto determinam a loja efectiva.
 - [x] Ordenar os locks por IDs de imagem, prateleira e zona e expor no relatório os IDs bloqueados.
 - [x] Acrescentar teste de compilação SQL PostgreSQL para verificar os alvos `FOR UPDATE` e a ordenação determinística.
-- [ ] Criar smoke concorrente PostgreSQL que tente mover a prateleira/zona enquanto o gate mantém a transação aberta; confirmar bloqueio/serialização e resultado final.
+- [x] Criar `apps/api/scripts/postgres_dataset_eligibility_concurrency_smoke.py`: duas sessões independentes tentam alterar `shelves.zone_id` e `zones.store_id`; o smoke exige espera real em `pg_stat_activity` enquanto o gate mantém os locks.
 - [ ] Auditar os consumidores de COCO/treino/galeria para impedir que contornem o release gate operacional.
+
+
+## Elegibilidade operacional de datasets — smoke PostgreSQL concorrente (18-11-2026)
+
+- [x] Criar smoke PostgreSQL com transações independentes para a validação e a alteração hierárquica.
+- [x] Verificar bloqueio real em `pg_stat_activity` para alterações concorrentes a `shelves.zone_id` e `zones.store_id`.
+- [x] Integrar o smoke no workflow API CI após as migrações e o smoke de linhagem de registos de prateleira.
+- [ ] Confirmar execução verde do smoke no PostgreSQL 16 e registar o run/commit.
+- [ ] Auditar os consumidores COCO/treino/galeria que possam contornar o release gate; a concorrência do gate não prova que todos os caminhos usam o gate.
