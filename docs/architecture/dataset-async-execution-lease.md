@@ -2,7 +2,7 @@
 
 ## Estado
 
-Desenho técnico aprovado para orientar a implementação. **Não existe ainda um executor remoto, uma fila de treino nem este contrato persistido em código.** O processo actualmente suportado continua a ser o consumidor local síncrono de `app.dataset_execution`.
+Contrato parcialmente implementado nas migrations `0056_dataset_execution_job_leases`, `0057_dataset_execution_fencing_guards` e `0058_dataset_execution_state_machine`, com modelos SQLAlchemy, serviço transaccional de leases, testes SQLite e smoke PostgreSQL. **Ainda não existe broker, worker de treino/inferência remoto nem promotor de outputs.** O processo de treino suportado continua a ser o consumidor local síncrono de `app.dataset_execution`.
 
 ## Modelo de ameaça
 
@@ -130,3 +130,16 @@ O serviço de heartbeat preserva a expiração anterior se o pedido de renovaç�
 **Validação:** commit `93704d6b5f7262ec20befc6dc17ee4f1c80efb78`; API CI [44419928230](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44419928230), Quality Gates [44419928281](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44419928281) e Docker Compose [44419928382](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44419928382) passaram. A suite API teve 1179 testes aprovados, 1 ignorado e 1 aviso.
 
 Estes guards não autenticam o worker, não impedem que um processo obsoleto continue a ler bytes já copiados localmente e não promovem outputs do staging para um destino final. Essas garantias exigem, respectivamente, autenticação do worker, serviço de leitura controlada por chamada e promotor de outputs que valide o fencing token actual.
+
+
+## Máquina de estados imposta pela base de dados — migration 0058
+
+A migration `0058_dataset_execution_state_machine` materializa as transições já definidas na tabela de estados e impede que código SQL directo contorne o serviço:
+
+- `QUEUED → LEASED`: claim inicial com owner, lease futuro e incremento exacto de token/tentativas.
+- `QUEUED → REVOKED/CANCELLED`: terminação sem lease activo e sem alterar os counters.
+- `LEASED → LEASED`: heartbeat do mesmo owner/token sem encurtar o lease, ou takeover após expiração com novo owner e incremento exacto.
+- `LEASED → SUCCEEDED/FAILED/REVOKED/CANCELLED`: terminação com lease limpo, counters inalterados e `finished_at`; sucesso/falha exigem lease ainda válido, enquanto revogação pode ocorrer após expiração quando a elegibilidade da fonte falha.
+- Estados terminais não aceitam UPDATE; a identidade do job (ID, idempotency key, hashes, modo e `created_at`) é imutável.
+
+A trigger PostgreSQL e a trigger SQLite cobrem a mesma máquina de estados. Os testes de migration exercitam transições ilegais e alterações à identidade; o smoke PostgreSQL tenta mutar um job activo e reabrir um job concluído. A validação runtime da migration 0058 permanece pendente até os workflows CI desta revisão terminarem.

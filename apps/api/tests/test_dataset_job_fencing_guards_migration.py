@@ -21,6 +21,7 @@ def _load(filename):
 def test_dataset_job_fencing_guards_and_event_sequence(tmp_path):
     base = _load("0056_dataset_execution_job_leases.py")
     guard = _load("0057_dataset_execution_fencing_guards.py")
+    state_machine = _load("0058_dataset_execution_state_machine.py")
     engine = create_engine(f"sqlite:///{tmp_path / 'dataset-job-fencing.db'}")
     with engine.begin() as connection:
         connection.exec_driver_sql("PRAGMA foreign_keys=ON")
@@ -35,6 +36,7 @@ def test_dataset_job_fencing_guards_and_event_sequence(tmp_path):
         with Operations.context(MigrationContext.configure(connection)):
             base.upgrade()
             guard.upgrade()
+            state_machine.upgrade()
         connection.exec_driver_sql(
             "INSERT INTO dataset_execution_jobs (id,idempotency_key,request_sha256,release_fingerprint,approval_record_sha256,approval_report_sha256,mode,status,fencing_token,attempt_count) VALUES "
             "(1,'key','" + "b" * 64 + "','" + "c" * 64 + "','" + "d" * 64 + "','" + "e" * 64 + "','training','QUEUED',0,0)"
@@ -42,6 +44,14 @@ def test_dataset_job_fencing_guards_and_event_sequence(tmp_path):
         connection.exec_driver_sql(
             "INSERT INTO dataset_execution_job_events (id,job_id,sequence_number,event_type,fencing_token,details) VALUES (1,1,1,'QUEUED',0,'{}')"
         )
+        with pytest.raises(IntegrityError):
+            connection.exec_driver_sql(
+                "UPDATE dataset_execution_jobs SET status='SUCCEEDED',output_sha256='" + "f" * 64 + "',staged_output_reference='staging/illegal',finished_at=CURRENT_TIMESTAMP WHERE id=1"
+            )
+        with pytest.raises(IntegrityError, match="state transition"):
+            connection.exec_driver_sql(
+                "UPDATE dataset_execution_jobs SET release_fingerprint='" + "9" * 64 + "' WHERE id=1"
+            )
         with pytest.raises(IntegrityError, match="sequence"):
             connection.exec_driver_sql(
                 "INSERT INTO dataset_execution_job_events (id,job_id,sequence_number,event_type,fencing_token,details) VALUES (2,1,3,'CLAIMED',1,'{}')"
@@ -71,7 +81,16 @@ def test_dataset_job_fencing_guards_and_event_sequence(tmp_path):
             connection.exec_driver_sql(
                 "INSERT INTO dataset_execution_job_events (id,job_id,sequence_number,event_type,fencing_token,details) VALUES (3,1,3,'SUCCEEDED',1,'{}')"
             )
+        with pytest.raises(IntegrityError):
+            connection.exec_driver_sql(
+                "UPDATE dataset_execution_jobs SET status='LEASED',lease_owner='resurrected',lease_expires_at=datetime('now','+1 minute'),finished_at=NULL WHERE id=1"
+            )
+        with pytest.raises(IntegrityError):
+            connection.exec_driver_sql(
+                "UPDATE dataset_execution_jobs SET output_sha256=NULL WHERE id=1"
+            )
         with Operations.context(MigrationContext.configure(connection)):
+            state_machine.downgrade()
             guard.downgrade()
             base.downgrade()
     engine.dispose()

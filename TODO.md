@@ -438,3 +438,15 @@
 - [x] Acrescentar testes SQLite de migração e expandir smoke PostgreSQL para testar SQL directo contra os guards.
 - [x] Confirmar migration PostgreSQL 16, API CI [44419928230](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44419928230), Quality Gates [44419928281](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44419928281) e Docker Compose [44419928382](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44419928382); **1179 passed, 1 skipped, 1 warning**.
 - [ ] Implementar autenticação de workers, leitura controlada por chamada e promoção de outputs condicionada ao fencing token actual.
+
+
+## Máquina de estados e identidade imutável dos jobs — 2026-11-18
+
+- [x] Implementar migration `0058_dataset_execution_state_machine` com transições explícitas de `QUEUED` e `LEASED`.
+- [x] Impedir a reactivação ou alteração de jobs em estados terminais.
+- [x] Tornar imutáveis a chave idempotente, os hashes do pedido/release/aprovação, o modo e a data de criação.
+- [x] Acrescentar testes de migration SQLite para transições ilegais, identidade imutável e reactivação terminal.
+- [x] Expandir o smoke PostgreSQL para tentar alterar a identidade de um job activo e reabrir um job concluído.
+- [ ] Validar a migration em PostgreSQL 16, API CI, Quality Gates e Docker Compose.
+- [ ] Implementar autenticação/identidade de workers antes de expor claims por HTTP.
+- [ ] Implementar leitura de artefactos autorizada por chamada e promoção de outputs condicionada ao fencing token actual.

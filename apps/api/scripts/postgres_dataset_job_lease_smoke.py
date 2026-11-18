@@ -114,6 +114,19 @@ def main():
     with SessionLocal() as db:
         try:
             db.execute(text("""
+                UPDATE dataset_execution_jobs
+                SET release_fingerprint = :digest
+                WHERE id = :job_id
+            """), {"job_id": job_id, "digest": "9" * 64})
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+        else:
+            raise AssertionError("database accepted mutation of an active job identity")
+
+    with SessionLocal() as db:
+        try:
+            db.execute(text("""
                 INSERT INTO dataset_execution_job_events
                     (job_id, sequence_number, event_type, fencing_token, details)
                 VALUES (:job_id, 99, 'HEARTBEAT', :token, '{}'::json)
@@ -152,6 +165,27 @@ def main():
         ).all()
         assert [e.event_type for e in events] == ["QUEUED", "CLAIMED", "CLAIMED", "SUCCEEDED"]
         assert [e.sequence_number for e in events] == [1, 2, 3, 4]
+
+        for statement, parameters in (
+            (
+                """
+                UPDATE dataset_execution_jobs
+                SET status = 'LEASED', lease_owner = 'resurrected-worker',
+                    lease_expires_at = now() + INTERVAL '60 seconds',
+                    fencing_token = fencing_token + 1,
+                    attempt_count = attempt_count + 1, finished_at = NULL
+                WHERE id = :job_id
+                """,
+                {"job_id": job_id},
+            ),
+        ):
+            try:
+                db.execute(text(statement), parameters)
+                db.commit()
+            except IntegrityError:
+                db.rollback()
+            else:
+                raise AssertionError("database accepted a terminal job mutation")
 
     print(
         "PostgreSQL dataset job lease smoke passed: concurrent single claim, "

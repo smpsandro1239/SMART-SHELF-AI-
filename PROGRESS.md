@@ -679,3 +679,14 @@ Commit validado: `1e3499c8c80ef75494a29d06807469898471e4e1`.
 
 
 - Validação final do commit `93704d6b5f7262ec20befc6dc17ee4f1c80efb78`: API CI [44419928230](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44419928230) — migration PostgreSQL 16, smoke concorrente de leases/fencing e **1179 passed, 1 skipped, 1 warning**; Quality Gates [44419928281](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44419928281) — Python, suite API e build Web aprovados; Docker Compose [44419928382](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44419928382) aprovado.
+
+
+## 2026-11-18 — Máquina de estados e identidade imutável dos jobs assíncronos
+
+- HEAD de referência: `2e75c07ff31e6273f6905c84439df8efa8ea71d8`.
+- Criada a migration `0058_dataset_execution_state_machine`, dependente de `0057_dataset_execution_fencing_guards`.
+- PostgreSQL e SQLite passam a rejeitar transições fora do contrato, incluindo `QUEUED → SUCCEEDED`, reactivação terminal e alterações à identidade imutável do job.
+- Mantidas as transições de revogação/cancelamento necessárias ao serviço, incluindo revogação de um lease expirado quando a fonte deixa de ser elegível.
+- Acrescentados testes SQLite de migration e tentativas SQL directas no smoke PostgreSQL para identidade activa e reactivação terminal.
+- Documentação de README, TODO, roadmap e contrato de execução actualizada.
+- Estado: implementação preparada; ainda não declarar validada até concluir migration PostgreSQL 16, suite API, Quality Gates e Docker Compose.

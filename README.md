@@ -1438,3 +1438,12 @@ A migration `0057_dataset_execution_fencing_guards` acrescenta protecções ao n
 Estas garantias não autenticam a identidade do worker: a autenticação e autorização do consumidor continuam a ser responsabilidade de uma camada própria. A publicação externa do output também continua pendente; o campo staging não equivale a publicação.
 
 Validação no commit `93704d6b5f7262ec20befc6dc17ee4f1c80efb78`: API CI [44419928230](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44419928230) passou com migration PostgreSQL 16, smoke de leases/fencing e **1179 testes aprovados, 1 ignorado e 1 aviso**. Quality Gates [44419928281](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44419928281) passou com compilação Python, suite API e build TypeScript/produção Web; Docker Compose [44419928382](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44419928382) também passou.
+
+
+### Máquina de estados e identidade imutável dos jobs assíncronos — 2026-11-18
+
+A migration `0058_dataset_execution_state_machine` fecha uma lacuna entre o contrato documentado e os guards SQL anteriores. A base de dados passa a aceitar apenas as transições `QUEUED → LEASED/REVOKED/CANCELLED` e `LEASED → LEASED/SUCCEEDED/FAILED/REVOKED/CANCELLED`. Um estado terminal não pode ser reaberto nem alterado. A identidade do job — chave idempotente, digest do pedido, release, aprovação, modo e timestamp de criação — não pode ser modificada após o enqueue.
+
+O claim inicial, heartbeat e takeover continuam sujeitos às regras de lease/fencing da migration 0057. A nova trigger aplica ainda as transições permitidas de forma explícita em PostgreSQL e SQLite. O smoke PostgreSQL tenta alterar a identidade de um job activo e reactivar um job concluído; ambas as operações têm de ser rejeitadas. O teste de migration SQLite cobre também transições ilegais, identidade mutável e reactivação terminal.
+
+**Estado nesta revisão:** migration, testes e smoke foram preparados; a validação de PostgreSQL 16 e os workflows desta revisão ainda estão pendentes. Não existe ainda broker/worker, autenticação de workers, serviço de leitura de bytes por chamada nem promotor fenced de outputs.
