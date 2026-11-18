@@ -1,3 +1,9 @@
+## Atualização da auditoria de autorização — 2026-11-18
+
+- [x] Confirmar no API CI [44291136290](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44291136290) que a suite API passou (1148 aprovados, 1 ignorado, 1 aviso), incluindo os testes JWT de upload que estavam documentados como pendentes.
+- [x] Confirmar no mesmo run o smoke PostgreSQL de autorização multi-loja das sessões de captura; o passo dedicado terminou com sucesso.
+- [ ] Manter aberta a auditoria exaustiva de autorização por rota e handler: estes resultados validam apenas os cenários cobertos pelos testes existentes.
+
 ## Auditoria de desempenho PostgreSQL — 2026-11-18
 
 - [x] Criar auditoria `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)` em transacção `READ ONLY`, com timeout, validação da relação imagem/loja e sem operações de escrita.
