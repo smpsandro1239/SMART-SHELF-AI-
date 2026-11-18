@@ -4,19 +4,26 @@
 
 ### Estado de validação — 2026-11-18
 
-- API CI [44268766212](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44268766212), commit `ff59e475`: migrações PostgreSQL, smokes de autorização/integridade/concorrência e suite API passaram, incluindo as duas ordens de concorrência entre restauro e agendamento de purga.
-- Quality Gates [44268807130](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44268807130), HEAD `0024f326`, tentativa 2: **1 140 testes aprovados, 1 ignorado, 1 aviso**; compilação Python e build TypeScript/produção Web aprovados.
-- Docker Compose smoke [44268766432](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44268766432), commit `ff59e475`: build, arranque, readiness, seed e validação dos perfis aprovados.
-- O aviso restante é uma depreciação Starlette/AnyIO; não corresponde a falha de testes.
+- API CI [44271596288](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44271596288), commit `30f3b4e`: suite API e smokes PostgreSQL concluídos com sucesso, incluindo os novos testes de picking.
+- Quality Gates [44271717562](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44271717562), commit `93abecc`: testes API/compilação Python e build TypeScript/produção Web concluídos com sucesso.
+- Docker Compose smoke [44271596168](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44271596168), commit `30f3b4e`: build, arranque, readiness, seed e validação dos perfis aprovados.
+- A ronda de picking está validada por CI; a auditoria de desempenho abaixo está preparada, mas ainda carece de planos obtidos em dados representativos.
 
 ### Ronda adicional — integridade do picking (2026-11-18)
 
 - O planeador exclui todas as linhas quando a entrada contém duplicados para o mesmo SKU/localização, impedindo dupla contagem de stock. A mesma localização para SKUs diferentes continua válida.
-- Foram adicionados testes de regressão; API CI e Quality Gates do commit final desta ronda ainda pendentes.
+- Testes de regressão e validação CI concluídos: API CI `44271596288`, Quality Gates `44271717562` e Docker Compose smoke `44271596168` passaram.
+
+### Preparação da auditoria de desempenho — 2026-11-18
+
+- [x] Criar script read-only para planos das consultas de imagens, deteções, OCR, retenção e fila de revisão SKU, com timeout e validação de loja/imagem.
+- [x] Acrescentar testes unitários aos SELECTs limitados e à validação de IDs.
+- [x] Documentar execução, segurança e critérios de interpretação em [PERFORMANCE-QUERY-AUDIT.md](PERFORMANCE-QUERY-AUDIT.md).
+- [ ] Executar em staging/réplica com volume representativo; nenhuma decisão de índice deve ser tomada antes dessa evidência.
 
 ### Prioridades ainda abertas
 
-1. **P1 — desempenho:** recolher planos `EXPLAIN (ANALYZE, BUFFERS)` e medir paginação profunda/consultas de imagens e evidência com volume representativo antes de acrescentar índices.
+1. **P1 — desempenho:** executar `apps/api/scripts/postgres_image_query_plan_audit.py` numa réplica/staging com volume representativo; analisar planos `EXPLAIN (ANALYZE, BUFFERS)` e medir paginação profunda antes de acrescentar índices ou alterar contratos. Procedimento em [PERFORMANCE-QUERY-AUDIT.md](PERFORMANCE-QUERY-AUDIT.md).
 2. **P1 — aceitação manual:** percorrer o demo completo no browser com ADMIN, SUPERVISOR e EMPLOYEE, sem alterar directamente a base de dados; guardar evidência real em `docs/screenshots/demo/`.
 3. **P1 — acessibilidade:** verificar navegação por teclado, foco, leitores de ecrã e contraste de todos os estados; não declarar conformidade WCAG 2.2 AA apenas com base no build.
 4. **P1 — dados existentes:** executar o preflight da migração 0054 sobre uma cópia representativa dos dados de cada ambiente antes de qualquer aplicação com histórico real.
