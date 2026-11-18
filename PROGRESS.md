@@ -1,3 +1,9 @@
+## 2026-11-18 — Actualização de evidência da auditoria de autorização
+
+A revisão de `docs/security/http-authorization-matrix.md` encontrou dois estados de validação desactualizados. Os testes JWT de upload de imagens (PNG forjado/truncado, MIME SVG e sanitização do nome de ficheiro) estão incluídos na suite API; o API CI [44291136290](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44291136290) passou com 1148 testes aprovados, 1 ignorado e 1 aviso. O smoke PostgreSQL `postgres_capture_session_authorization_smoke.py` também passou no passo dedicado do mesmo workflow.
+
+A documentação foi corrigida sem encerrar a auditoria global: a suite e o smoke demonstram os cenários implementados, não uma prova de cobertura de todas as rotas e handlers. Não houve alterações de código nem de dados nesta ronda.
+
 ## 2026-11-18 — Fecho CI da ronda de acessibilidade semântica
 
 - SHA final validado: `897d6946d0641ee8201cd14c7df8549c60c55a9b`.
