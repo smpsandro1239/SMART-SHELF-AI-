@@ -197,3 +197,10 @@ A cobertura usa SQLite isolado e não deve ser apresentada como prova de concorr
 - [x] API CI e suite API aprovados — [run 44338653668](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44338653668).
 - [x] Quality Gates e build de produção aprovados — [run 44338651433](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44338651433).
 - [x] Docker Compose smoke aprovado — [run 44338651406](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44338651406).
+
+
+### Fluxo ADMIN de integrações externas por HTTP (18-11-2026)
+
+- [x] Cobrir criação, listagem, cobertura e revogação com JWT ADMIN.
+- [x] Confirmar ausência de campo de segredo nas respostas e estado de cobertura coerente.
+- [ ] Validar no API CI e Quality Gates.

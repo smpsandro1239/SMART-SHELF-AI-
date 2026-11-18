@@ -244,3 +244,9 @@
 - [x] Acrescentar teste HTTP/JWT para SUPERVISOR e EMPLOYEE nos quatro métodos.
 - [x] Verificar 403 e ausência de criação/alteração de integrações após pedidos recusados.
 - [x] Confirmar suite API, API CI e Quality Gates (API CI run 44338653668; Quality Gates run 44338651433).
+
+
+## Integrações externas — fluxo ADMIN de ponta a ponta por HTTP (18-11-2026)
+- [x] Acrescentar teste positivo para criação, listagem, consulta de cobertura e revogação com JWT ADMIN.
+- [x] Verificar resposta sem material secreto, estado inicial nunca observado e cobertura após revogação.
+- [ ] Validar suite API e Quality Gates no CI.

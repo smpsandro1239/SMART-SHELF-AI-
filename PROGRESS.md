@@ -459,3 +459,11 @@ Added `test_catalogue_and_warehouse_master_data_writes_are_admin_only` to exerci
 - Docker Compose smoke [44338651406](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44338651406): **success**.
 - A suite de API passou com o novo teste de gestão de integrações externas. O teste HTTP específico usa SQLite isolado; os smokes PostgreSQL do workflow passaram, mas não executam esse teste HTTP contra PostgreSQL.
 - Próximo foco: rever operações de integração externas para além dos quatro métodos já cobertos, incluindo eventuais callbacks/webhooks e fluxos de ingestão com credenciais ou segredos.
+
+
+## 2026-11-18 — Fluxo ADMIN de integrações externas por HTTP
+
+- Acrescentado `test_admin_can_manage_store_external_integrations_over_http`.
+- O teste percorre criação (201), listagem (200), cobertura (200), revogação (200) e nova consulta de cobertura, usando JWT ADMIN real.
+- Verifica que a resposta não expõe campo `secret`, que a integração começa como nunca observada e que a cobertura passa a indicar integração revogada.
+- Execução CI pendente; o teste não foi executado localmente nesta sessão.

@@ -4251,3 +4251,64 @@ def test_admin_external_integration_management_is_store_scoped_over_http(auth_cl
     assert revoked.json()["required_for_retention"] is False
     assert revoked.json()["updated_by_user_id"] == ids["admin"]
 
+
+
+
+def test_admin_can_manage_store_external_integrations_over_http(auth_client):
+    client, ids, store_ids = auth_client
+    store_id = store_ids["a"]
+    headers = bearer(ids["admin"], "ADMIN")
+    external_system = "AUTH-HTTP-ADMIN-SOURCE"
+
+    created = client.post(
+        f"/api/v1/stores/{store_id}/external-integrations",
+        json={
+            "external_system": external_system,
+            "provider": "test-provider",
+            "required_for_retention": True,
+            "capabilities": ["inventory.read", "inventory.attest"],
+        },
+        headers=headers,
+    )
+    assert created.status_code == 201, created.text
+    created_payload = created.json()
+    assert created_payload["store_id"] == store_id
+    assert created_payload["external_system"] == external_system
+    assert created_payload["status"] == "ACTIVE"
+    assert created_payload["required_for_retention"] is True
+    assert created_payload["last_seen_at"] is None
+    assert "secret" not in created_payload
+    integration_id = created_payload["id"]
+
+    listed = client.get(
+        f"/api/v1/stores/{store_id}/external-integrations",
+        headers=headers,
+    )
+    assert listed.status_code == 200, listed.text
+    assert any(item["id"] == integration_id for item in listed.json())
+
+    coverage = client.get(
+        f"/api/v1/stores/{store_id}/external-integrations/coverage",
+        headers=headers,
+    )
+    assert coverage.status_code == 200, coverage.text
+    assert coverage.json()["required_integrations"] == 1
+    assert coverage.json()["active_required_integrations"] == 1
+    assert coverage.json()["never_seen_integrations"] == [external_system]
+    assert coverage.json()["coverage_complete"] is False
+
+    updated = client.patch(
+        f"/api/v1/stores/{store_id}/external-integrations/{integration_id}",
+        json={"status": "REVOKED"},
+        headers=headers,
+    )
+    assert updated.status_code == 200, updated.text
+    assert updated.json()["status"] == "REVOKED"
+
+    revoked_coverage = client.get(
+        f"/api/v1/stores/{store_id}/external-integrations/coverage",
+        headers=headers,
+    )
+    assert revoked_coverage.status_code == 200, revoked_coverage.text
+    assert revoked_coverage.json()["active_required_integrations"] == 0
+    assert revoked_coverage.json()["missing_or_revoked_integrations"] == [external_system]
