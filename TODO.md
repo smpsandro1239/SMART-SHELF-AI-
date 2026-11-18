@@ -57,3 +57,10 @@
 - [x] Acrescentar teste de integração com JWT para a exclusão conservadora de uma localização ocupada por palete física.
 - [ ] Validar o novo teste na suite API CI e Quality Gates.
 - [ ] Definir um modelo explícito de transferência/reconciliação palete-colocação, com identificadores e eventos auditáveis, antes de agregar quantidades entre os dois registos.
+
+
+## Paletes sem localização mapeada — slotting seguro (18-11-2026)
+- [x] Tratar paletes de armazém com localização vazia ou não mapeada como ocupação desconhecida.
+- [x] Excluir conservadoramente todas as localizações do slotting enquanto existir uma palete de armazém sem correspondência com uma localização configurada.
+- [x] Cobrir com teste de integração a palete sem código de localização.
+- [ ] Validar o novo cenário na API CI e Quality Gates.
