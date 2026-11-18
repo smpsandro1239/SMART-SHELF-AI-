@@ -189,5 +189,11 @@ jobs:
           APP_ENV: test
           JWT_SECRET_KEY: test-only-secret-not-for-production
         run: python scripts/postgres_human_review_retention_smoke.py
+      - name: Verify PostgreSQL legal hold and purge schedule concurrency
+        env:
+          DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/smart_shelf_ci
+          APP_ENV: test
+          JWT_SECRET_KEY: test-only-secret-not-for-production
+        run: python scripts/postgres_retention_legal_hold_concurrency_smoke.py
       - name: Run tests
         run: pytest -q
