@@ -1,9 +1,16 @@
+## Auditoria de desempenho PostgreSQL — 2026-11-18
+
+- [x] Criar auditoria `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)` em transacção `READ ONLY`, com timeout, validação da relação imagem/loja e sem operações de escrita.
+- [x] Cobrir planos das listagens de imagens, deteções, OCR matches/evidence, eventos de retenção e subconsulta da fila de revisão SKU.
+- [x] Acrescentar testes unitários aos SELECTs limitados e à validação de IDs.
+- [ ] Executar em staging/réplica com volume representativo, analisar os planos e medir paginação profunda antes de propor índices ou keyset pagination.
+
 ## Planeamento de picking — integridade de colocações (2026-11-18)
 
 - [x] Tornar o planeamento fail-closed quando recebe mais de uma linha para o mesmo par SKU/localização, evitando contar stock físico duplicado.
 - [x] Excluir todas as linhas ambíguas desse par, sem afetar o mesmo local quando contém SKUs diferentes.
 - [x] Acrescentar testes de regressão para duplicados e para SKUs distintos na mesma localização.
-- [ ] Validar a alteração no API CI e Quality Gates no commit final desta ronda.
+- [x] Validar a alteração no API CI run [44271596288](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44271596288) (commit `30f3b4e`) e Quality Gates run [44271717562](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44271717562) (commit `93abecc`); Docker Compose smoke [44271596168](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44271596168) também passou.
 
 ## Validação de concorrência de retenção — 2026-11-18
 
@@ -37,6 +44,8 @@
 ## Product quality
 
 - [ ] Review pagination, filtering and bounded query costs on image-derived data endpoints.
+  - [x] Add a read-only PostgreSQL plan audit for image, detection, OCR, retention and SKU-review queue query shapes; see `docs/PERFORMANCE-QUERY-AUDIT.md`.
+  - [ ] Run the audit against representative staging/read-replica data and review deep-page costs before changing indexes or pagination contracts.
   - [x] Add page-size-bounded offset pagination with stable ordering to shelf-image lists, detections, OCR matches/evidence/runs and fused evidence; preserve store scoping and retention checks. Regression covers detection page boundaries and invalid bounds.
   - [x] Paginate the append-only image retention event history with deterministic chronological ordering, a default page of 100 and a hard maximum of 500; cover page boundaries and negative/zero parameter clamping. API CI and Quality Gates passed on commit `92d0add53d`.
   - [x] Add offset pagination to external artifact references, immutable disposition events and human SKU review history; preserve admin/store authorization and append-only ordering.
