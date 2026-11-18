@@ -103,3 +103,10 @@
 - [x] Quality Gates: suite API e compilação concluídas com sucesso; run `44206872358` (SHA `df883edbe2`).
 - [x] Quality Gates Web TypeScript/build de produção concluído com sucesso.
 - [ ] Demo Docker Compose no SHA final: execução pendente; não declarar validada até conclusão.
+
+
+## Validação CI — paletes e slotting (18-11-2026)
+- [x] API CI: 1129 testes passaram, 1 ignorado, 1 aviso de depreciação.
+- [x] Quality Gates: 1129 testes passaram, 1 ignorado, 1 aviso de depreciação; compilação Python e build TypeScript/produção aprovados.
+- [x] Docker Compose demo stack: build, arranque, readiness da API, seed e verificação do worker/perfis aprovados.
+- [x] Smoke tests PostgreSQL, incluindo migrações e imutabilidade dos eventos de paletes, aprovados.
