@@ -3644,6 +3644,32 @@ def list_shelf_image_fused_evidence(
     # Therefore filtering only by the immutable stored status would be wrong,
     # and applying OFFSET before refreshing would skip the wrong rows. Scan in
     # bounded keyset batches, filter the refreshed view, then apply the page.
+    # Lock every catalogue product referenced by this image before scanning
+    # batches. The shared lock order is source image -> products in ascending ID
+    # order; locking per batch could otherwise invert product order across batches.
+    product_ids = (
+        query.with_entities(
+            models.ShelfImageFusedEvidence.suggested_product_id.label("product_id")
+        )
+        .filter(models.ShelfImageFusedEvidence.suggested_product_id.isnot(None))
+        .union(
+            query.with_entities(
+                models.ShelfImageFusedEvidence.visual_product_id.label("product_id")
+            ).filter(models.ShelfImageFusedEvidence.visual_product_id.isnot(None)),
+            query.with_entities(
+                models.ShelfImageFusedEvidence.text_product_id.label("product_id")
+            ).filter(models.ShelfImageFusedEvidence.text_product_id.isnot(None)),
+        )
+    )
+    (
+        db.query(models.Product)
+        .filter(models.Product.id.in_(product_ids))
+        .order_by(models.Product.id.asc())
+        .with_for_update()
+        .populate_existing()
+        .all()
+    )
+
     page = []
     skipped = 0
     last_seen_id = None
