@@ -305,3 +305,15 @@
 .task-panel:has(.task-row:only-child) .task-list { margin-top:10px; }
 .task-panel:has(.task-row:only-child) .task-row { padding:12px; }
 .decision-zone-card[role="button"] { display:block; border:1px solid var(--border,#e5e7eb); border-radius:12px; padding:14px; background:var(--panel-muted,rgba(127,127,127,.035)); }
+
+/* Keyboard access and small-screen navigation */
+.skip-link{position:fixed;top:-100px;left:16px;z-index:2000;padding:12px 16px;border-radius:8px;background:#fff;color:#142b40;border:2px solid #1769aa;font-size:13px;font-weight:700;box-shadow:0 4px 16px #142b4030}
+.skip-link:focus{top:16px}
+:where(button,input,select,textarea,a,[tabindex]):focus-visible{outline:3px solid #1769aa;outline-offset:3px}
+.store-filter input:focus-visible{outline:3px solid #1769aa;outline-offset:2px;border-radius:4px}
+.mobile-nav{display:none}
+@media(max-width:700px){
+  .mobile-nav{display:flex;gap:8px;overflow-x:auto;padding:10px 0 12px;border-bottom:1px solid #e5e9ef;scrollbar-width:thin}
+  .mobile-nav-item{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:42px;flex:0 0 auto;padding:9px 12px;border:1px solid #d5dee7;border-radius:9px;background:#fff;color:#24394e;font-size:12px;font-weight:700;white-space:nowrap}
+  .mobile-nav-item:active{background:#eaf2f8}
+}
