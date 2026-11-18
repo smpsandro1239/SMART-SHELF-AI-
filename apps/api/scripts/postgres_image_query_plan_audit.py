@@ -161,6 +161,22 @@ def main() -> int:
                     {"timeout": f"{args.statement_timeout_ms}ms"},
                 )
                 connection.execute(text("SET LOCAL lock_timeout = '2000ms'"))
+                image_belongs_to_store = connection.execute(
+                    text(
+                        """
+                        SELECT EXISTS (
+                            SELECT 1
+                            FROM shelf_images AS si
+                            JOIN shelves AS s ON s.id = si.shelf_id
+                            JOIN zones AS z ON z.id = s.zone_id
+                            WHERE si.id = :image_id AND z.store_id = :store_id
+                        )
+                        """
+                    ),
+                    {"image_id": args.image_id, "store_id": args.store_id},
+                ).scalar_one()
+                if not image_belongs_to_store:
+                    raise ValueError("image_id does not belong to the supplied store_id")
 
                 for name, sql, params in build_audit_queries(args.store_id, args.image_id):
                     result = connection.execute(
