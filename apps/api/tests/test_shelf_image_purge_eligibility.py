@@ -1306,3 +1306,63 @@ def test_artifact_lineage_registration_is_idempotent_only_for_same_parent(
     assert exc.value.status_code == 409
     assert db_session.query(models.ShelfImageArtifactReference).count() == 3
 
+
+
+def test_artifact_reference_and_disposition_histories_support_stable_pagination(db_session, tmp_path):
+    image_id, admin_id = build_restricted_image(db_session, tmp_path, with_detection=False)
+    image = db_session.get(models.ShelfImage, image_id)
+    store_id = (
+        db_session.query(models.Zone.store_id)
+        .join(models.Shelf, models.Shelf.zone_id == models.Zone.id)
+        .filter(models.Shelf.id == image.shelf_id)
+        .scalar()
+    )
+    references = []
+    for index, artifact_type in enumerate(("CROP", "REPORT", "BACKUP"), start=1):
+        reference = models.ShelfImageArtifactReference(
+            shelf_image_id=image_id,
+            store_id=store_id,
+            artifact_type=artifact_type,
+            external_system="test-object-store",
+            external_reference=f"artifacts/{index}",
+            declared_by_user_id=admin_id,
+        )
+        db_session.add(reference)
+        db_session.flush()
+        references.append(reference)
+    db_session.commit()
+
+    for index, event_type in enumerate(("PROPOSED", "APPROVED", "REJECTED"), start=1):
+        db_session.add(models.ShelfImageArtifactDispositionEvent(
+            sequence_number=index,
+            artifact_reference_id=references[0].id,
+            shelf_image_id=image_id,
+            store_id=store_id,
+            event_type=event_type,
+            actor_user_id=admin_id,
+            reason=f"Audit event {index}",
+        ))
+    db_session.commit()
+
+    request = SimpleNamespace(state=SimpleNamespace(user_id=admin_id))
+    reference_first = main_module.list_shelf_image_artifact_references(
+        image_id, request, db_session, limit=1, offset=0
+    )
+    reference_second = main_module.list_shelf_image_artifact_references(
+        image_id, request, db_session, limit=1, offset=1
+    )
+    reference_clamped = main_module.list_shelf_image_artifact_references(
+        image_id, request, db_session, limit=0, offset=-10
+    )
+    event_first = main_module.list_shelf_image_artifact_disposition_events(
+        image_id, references[0].id, request, db_session, limit=1, offset=0
+    )
+    event_second = main_module.list_shelf_image_artifact_disposition_events(
+        image_id, references[0].id, request, db_session, limit=1, offset=1
+    )
+
+    assert [row.id for row in reference_first] == [references[0].id]
+    assert [row.id for row in reference_second] == [references[1].id]
+    assert [row.id for row in reference_clamped] == [references[0].id]
+    assert [row.sequence_number for row in event_first] == [1]
+    assert [row.sequence_number for row in event_second] == [2]
