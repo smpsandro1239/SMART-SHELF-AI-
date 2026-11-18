@@ -2343,6 +2343,74 @@ def test_warehouse_placement_rejects_inactive_location_and_product(auth_client):
         ).count() == 0
 
 
+def test_physical_warehouse_slotting_api_respects_capacity_and_temperature(auth_client):
+    client, ids, store_ids = auth_client
+    store_id = store_ids["a"]
+    headers = bearer(ids["supervisor_a"], "SUPERVISOR")
+
+    with main_module.SessionLocal() as db:
+        db.add(models.WarehouseProductProfile(
+            product_id=ids["product"],
+            unit_volume_cm3=100,
+            unit_weight_kg=0.5,
+            temperature_requirement="AMBIENT",
+            is_fragile=False,
+            requires_segregation=False,
+        ))
+        db.commit()
+
+    locations = []
+    for code, distance, volume, weight, temperature in [
+        ("SLOT-NEAR", 2, 1000, 10, "AMBIENT"),
+        ("SLOT-FAR", 8, 600, 5, "AMBIENT"),
+        ("SLOT-TOO-SMALL", 1, 400, 10, "AMBIENT"),
+        ("SLOT-FROZEN", 3, 1000, 10, "FROZEN"),
+    ]:
+        response = client.post(
+            "/api/v1/warehouse/locations",
+            json={
+                "store_id": store_id,
+                "code": code,
+                "distance_to_picking_m": distance,
+                "max_volume_cm3": volume,
+                "max_weight_kg": weight,
+                "temperature_zone": temperature,
+            },
+            headers=headers,
+        )
+        assert response.status_code == 201, response.text
+        locations.append(response.json())
+
+    placement = client.post(
+        "/api/v1/warehouse/placements",
+        json={
+            "location_id": locations[0]["id"],
+            "product_id": ids["product"],
+            "quantity": 2,
+        },
+        headers=headers,
+    )
+    assert placement.status_code == 201, placement.text
+
+    response = client.get(
+        "/api/v1/warehouse/physical-slotting",
+        params={"store_id": store_id, "product_id": ids["product"], "required_quantity": 5},
+        headers=headers,
+    )
+    assert response.status_code == 200, response.text
+    result = response.json()
+    assert result["status"] == "CANDIDATES_FOUND"
+    assert [item["location_code"] for item in result["candidates"]] == [
+        "SLOT-NEAR", "SLOT-FAR"
+    ]
+    assert result["candidates"][0]["required_volume_cm3"] == 500
+    assert result["candidates"][0]["required_weight_kg"] == 2.5
+    rejected = {item["location_code"]: item["reason"] for item in result["rejected_locations"]}
+    assert rejected["SLOT-TOO-SMALL"] == "INSUFFICIENT_VOLUME_CAPACITY"
+    assert rejected["SLOT-FROZEN"] == "TEMPERATURE_INCOMPATIBLE"
+    assert result["automatic_movement_allowed"] is False
+
+
 def test_supervisor_can_create_store_scoped_warehouse_resources_with_real_jwt(auth_client):
     client, ids, store_ids = auth_client
     store_id = store_ids["a"]
