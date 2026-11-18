@@ -178,3 +178,12 @@ Added `test_catalogue_and_warehouse_master_data_writes_are_admin_only` to exerci
 - Confirmado no Demo Docker Compose run `44206821282`, commit de código `a5312651fb`: stack, readiness, seed e verificações operacionais passaram.
 - Corrigida uma frase antiga no TODO que ainda indicava Docker Compose pendente, apesar do run concluído com sucesso.
 - O único aviso da suite API é uma depreciação do Starlette TestClient/AnyIO; não existem falhas de testes nos runs finais observados.
+
+
+## 18-11-2026 — Auditoria de autorização e isolamento da visão computacional
+- Revistos os controlos de autenticação global e os papéis do middleware para as rotas de sessões de captura, uploads, conteúdo binário, deteções, OCR, fusão de evidências, revisões humanas e exemplares de embeddings.
+- Confirmada a autenticação Bearer obrigatória em produção para todas as rotas `/api/v1/*`, excepto bootstrap/login; os testes executam explicitamente em `APP_ENV=production` e rejeitam tokens ausentes/inválidos, contas inactivas e papéis JWT falsificados.
+- A cobertura existente valida isolamento multi-loja para sessões, upload e sessão associada, conteúdo, deteções, OCR, fusão, histórico/revisão humana, filas de revisão e exemplares de embeddings. As operações de escrita de OCR/fusão/revisão são reservadas a ADMIN/SUPERVISOR; EMPLOYEE mantém apenas os acessos operacionais previstos.
+- Não foi identificado um defeito adicional que justificasse alterar código de produção nesta auditoria.
+- O API CI run `44206821156` passou com **1129 passed, 1 skipped, 1 warning**; os smoke tests PostgreSQL de retenção versus observação/revisão humana passaram.
+- A auditoria do catálogo também foi fechada com base nos testes de isolamento, rejeição de produto inactivo/duplicados e smoke test concorrente PostgreSQL já aprovados.
