@@ -1,3 +1,12 @@
+## Validação CI — paginação filtrada e migração 0054 (2026-11-18)
+
+- API CI run `44265754667`, commit `442a8cab89adc3be743e39af76007ad0da94e01d`: job concluído com sucesso. Incluiu a suite API, smoke das migrações Alembic em PostgreSQL e smoke de unicidade concorrente das unidades de embalagem.
+- Quality Gates run `44265786855`, commit `381ff95d82d5a5c3607ad00330bcf5b3afd6d300`: ambos os jobs concluídos com sucesso — testes/compilação Python e TypeScript/build de produção Web.
+- A cobertura da paginação filtrada da fusão visual/OCR, incluindo revalidação do catálogo, locks por ordem crescente e offset que atravessa o lote keyset de 500 registos, está validada nestes pipelines.
+- A migração 0054 e os seus testes de preflight/downgrade estão validados pela suite API e pelo smoke PostgreSQL. Continua pendente a inspecção/saneamento de dados históricos reais antes de aplicar a migração em qualquer ambiente com dados de produção.
+- Não foi executado um novo Docker Compose nesta validação; não inferir essa cobertura a partir dos Quality Gates.
+
+
 # PROGRESS
 
 ## Paginação filtrada da evidência visual/OCR — 2026-11-18
