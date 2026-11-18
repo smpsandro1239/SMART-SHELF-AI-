@@ -34,3 +34,11 @@
 - [x] Acrescentar regressão que confirma que registar uma palete não altera snapshots agregados nem movimentos de stock; a palete é um registo físico, não uma recepção automática de inventário.
 - [ ] Validar a nova regressão no API CI e concluir Quality Gates e Demo Docker Compose smoke.
 - [ ] Definir, numa fase própria, uma reconciliação explícita entre paletes físicas e stock agregado; não somar automaticamente estes domínios enquanto não existir regra de negócio para evitar dupla contabilização.
+
+
+## Integridade das colocações de armazém (18-11-2026)
+- [x] Rejeitar a criação de colocações em localizações inactivas.
+- [x] Rejeitar a criação de colocações para produtos inactivos.
+- [x] Acrescentar teste de regressão que confirma HTTP 409 e ausência de persistência nos dois cenários.
+- [ ] Validar a alteração na suite API CI, Quality Gates e Demo Docker Compose.
+- [ ] Definir e testar uma política explícita de capacidade/peso/temperatura para colocações; não impor bloqueios sem garantir que o perfil físico do produto está configurado e que a regra representa a operação real.
