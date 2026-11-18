@@ -152,3 +152,8 @@ Total de declarações únicas encontradas: **123**.
 A comparação estática das declarações literais `@app.get/post/put/patch/delete` em `apps/api/app/main.py` confirmou **123 declarações únicas**: 107 entradas previamente inventariadas e 16 agora integradas na tabela principal. Não foram encontradas entradas obsoletas.
 
 **Limite:** esta reconciliação cobre declarações com caminhos literais no módulo principal. Não prova a política de autorização dos handlers nem deteta rotas montadas dinamicamente; a revisão de autorização continua separada.
+
+
+## Autorização dos artefactos externos — evidência de teste (18-11-2026)
+
+Os seis handlers de artefactos listados acima exigem perfil `ADMIN` directamente no handler. O teste `test_shelf_image_external_artifact_governance_is_admin_only_over_http` exercita os seis caminhos com JWT de `SUPERVISOR` e `EMPLOYEE`, espera HTTP 403 e confirma ausência de efeitos laterais nas tabelas de referências, snapshots e eventos. A cobertura permanece pendente de execução CI e não substitui a revisão de isolamento multi-loja para todos os restantes handlers.

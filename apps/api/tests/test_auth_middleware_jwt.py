@@ -4043,3 +4043,77 @@ def test_store_employee_directory_is_scoped_to_supervisor_store(auth_client):
     )
     assert employee_response.status_code == 403
 
+
+
+def test_shelf_image_external_artifact_governance_is_admin_only_over_http(auth_client):
+    client, ids, store_ids = auth_client
+    image_id = ids["image_a"]
+    with main_module.SessionLocal() as db:
+        artifact = models.ShelfImageArtifactReference(
+            shelf_image_id=image_id,
+            store_id=store_ids["a"],
+            artifact_type="OTHER",
+            external_system="authorization-test",
+            external_reference="object://authorization-test/artifact-1",
+            declared_by_user_id=ids["admin"],
+        )
+        db.add(artifact)
+        db.commit()
+        db.refresh(artifact)
+        artifact_id = artifact.id
+
+    headers_by_role = {
+        "SUPERVISOR": bearer(ids["supervisor_a"], "SUPERVISOR"),
+        "EMPLOYEE": bearer(ids["employee_a"], "EMPLOYEE"),
+    }
+    snapshot_payload = {
+        "external_system": "authorization-test",
+        "snapshot_id": "denied-snapshot",
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "inventory_complete": True,
+        "entries": [{
+            "artifact_type": "OTHER",
+            "external_reference": "object://authorization-test/artifact-1",
+            "state": "PRESENT",
+        }],
+        "key_id": "legacy",
+        "signature": "a" * 64,
+    }
+    requests = [
+        ("POST", f"/api/v1/shelf-images/{image_id}/artifacts", {
+            "artifact_type": "OTHER",
+            "external_system": "authorization-test",
+            "external_reference": "object://authorization-test/unauthorized-create",
+        }),
+        ("GET", f"/api/v1/shelf-images/{image_id}/artifacts", None),
+        ("POST", f"/api/v1/shelf-images/{image_id}/artifact-inventory-snapshots", snapshot_payload),
+        ("GET", f"/api/v1/shelf-images/{image_id}/artifacts/{artifact_id}/access", None),
+        ("POST", f"/api/v1/shelf-images/{image_id}/artifacts/{artifact_id}/disposition-events", {
+            "action": "PROPOSE",
+            "reason": "Pedido de teste não autorizado",
+        }),
+        ("GET", f"/api/v1/shelf-images/{image_id}/artifacts/{artifact_id}/disposition-events", None),
+    ]
+
+    with main_module.SessionLocal() as db:
+        before = {
+            "artifacts": db.query(models.ShelfImageArtifactReference).count(),
+            "snapshots": db.query(models.ShelfImageArtifactInventorySnapshot).count(),
+            "disposition_events": db.query(models.ShelfImageArtifactDispositionEvent).count(),
+        }
+
+    for role, headers in headers_by_role.items():
+        for method, path, payload in requests:
+            response = client.request(method, path, json=payload, headers=headers)
+            assert response.status_code == 403, (
+                f"{role} must not access external artifact governance: "
+                f"{method} {path} returned {response.status_code}"
+            )
+
+    with main_module.SessionLocal() as db:
+        after = {
+            "artifacts": db.query(models.ShelfImageArtifactReference).count(),
+            "snapshots": db.query(models.ShelfImageArtifactInventorySnapshot).count(),
+            "disposition_events": db.query(models.ShelfImageArtifactDispositionEvent).count(),
+        }
+    assert after == before, "Denied requests must not persist artifact governance records"

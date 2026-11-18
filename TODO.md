@@ -221,3 +221,11 @@
 
 - [x] Reforçar o smoke PostgreSQL do diretório de funcionários: ausência de Bearer, JWT inválido e conta SUPERVISOR inactiva (401); ADMIN global só recebe funcionários activos; manter testes de isolamento por loja e recusa EMPLOYEE.
 - [ ] Confirmar o novo cenário no API CI; a alteração de teste ainda não tem resultado de execução PostgreSQL.
+
+
+## Governação de artefactos externos de imagens — autorização HTTP (18-11-2026)
+- [x] Rever handlers de registo/listagem de artefactos, snapshots de inventário, decisão de acesso e eventos de disposição: todos exigem ADMIN antes de consultar ou alterar dados.
+- [x] Acrescentar teste JWT HTTP para SUPERVISOR e EMPLOYEE nas seis operações.
+- [x] Verificar que os pedidos recusados não criam artefactos, snapshots ou eventos de disposição.
+- [ ] Executar a suite API e confirmar API CI/Quality Gates antes de declarar a cobertura validada.
+- [ ] Continuar auditoria handler-a-handler; esta ronda não fecha a auditoria global.

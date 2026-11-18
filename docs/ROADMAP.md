@@ -159,3 +159,12 @@ A cobertura usa SQLite isolado e não deve ser apresentada como prova de concorr
 - [x] Verificar que a listagem global de ADMIN exclui funcionários inactivos.
 - [x] Preservar cobertura de isolamento por loja, filtro ADMIN e recusa EMPLOYEE.
 - [ ] Confirmar execução no API CI/PostgreSQL antes de fechar a validação.
+
+
+### Governação de artefactos externos — autorização (18-11-2026)
+
+- [x] Rever os seis handlers de governação de artefactos externos e confirmar a exigência de ADMIN no início de cada operação.
+- [x] Acrescentar teste HTTP/JWT para SUPERVISOR e EMPLOYEE em registo, listagem, snapshot de inventário, decisão de acesso e eventos de disposição.
+- [x] Confirmar no teste que as recusas não criam registos de artefactos, snapshots ou eventos.
+- [ ] Validar no API CI e Quality Gates antes de fechar esta ronda.
+- [ ] Continuar auditoria global de autorização; não inferir cobertura total a partir deste conjunto.

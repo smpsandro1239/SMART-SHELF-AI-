@@ -405,3 +405,14 @@ Added `test_catalogue_and_warehouse_master_data_writes_are_admin_only` to exerci
 - Commit do smoke: `e0ac4af806693cd203864ae92eb03e307fecafa6`.
 - A execução do script contra PostgreSQL e o resultado do API CI continuam pendentes; não foi executado localmente.
 - A revisão do middleware confirmou que `GET /api/v1/auth/users` exige autenticação e ADMIN. Não foi identificada exposição pública nessa rota.
+
+
+## 2026-11-18 — Autorização dos artefactos externos de imagens
+
+- A revisão dos handlers confirmou que as seis operações de governação de artefactos externos exigem ADMIN: registo, listagem, snapshot de inventário, decisão de acesso, criação e consulta de eventos de disposição.
+- Foi acrescentado `test_shelf_image_external_artifact_governance_is_admin_only_over_http`, que usa JWT reais através do TestClient para SUPERVISOR e EMPLOYEE.
+- O teste verifica 12 pedidos negados (seis operações por dois perfis) e compara contagens de artefactos, snapshots e eventos antes/depois para detectar efeitos laterais.
+- O teste usa SQLite isolado; não prova concorrência nem comportamento de locks em PostgreSQL.
+- Validação CI pendente. Não foram executados testes localmente nesta sessão.
+- SHA inicial: `13af626c8237c8f5fa26d452a2d83d5342c4200b`.
+- Próximo passo: executar API CI/Quality Gates, corrigir falhas e continuar a revisão dos restantes handlers.
