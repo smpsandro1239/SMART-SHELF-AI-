@@ -71,7 +71,7 @@
 - [x] Testar transição READY → ON_DISPLAY com localização SALES_FLOOR.
 - [x] Testar actualização de quantidade e estado para PARTIAL.
 - [x] Testar rejeição HTTP 409 de actualização baseada num estado desactualizado, sem evento adicional.
-- [ ] Validar o novo teste na API CI e Quality Gates.
+- [x] Validar o novo teste na API CI e Quality Gates.
 
 
 ## Imutabilidade do histórico físico de paletes (18-11-2026)
@@ -79,7 +79,7 @@
 - [x] Adicionar triggers equivalentes para SQLite nas migrações.
 - [x] Criar smoke test PostgreSQL que tenta alterar e apagar um evento e confirma a preservação dos valores originais.
 - [x] Integrar o smoke test no API CI imediatamente após `alembic upgrade head`.
-- [ ] Validar migração e smoke test na API CI.
+- [x] Validar migração e smoke test na API CI.
 
 
 ## Correcção da expectativa de rejeição no slotting (18-11-2026)
@@ -102,7 +102,7 @@
 - [x] API CI: 1129 testes passaram, 1 ignorado, 1 aviso; run `44206821156` (SHA `a5312651fb`).
 - [x] Quality Gates: suite API e compilação concluídas com sucesso; run `44206872358` (SHA `df883edbe2`).
 - [x] Quality Gates Web TypeScript/build de produção concluído com sucesso.
-- [ ] Demo Docker Compose no SHA final: execução pendente; não declarar validada até conclusão.
+- [x] Demo Docker Compose: run `44206821282` no commit `a5312651fb` concluído com sucesso.
 
 
 ## Validação CI — paletes e slotting (18-11-2026)
@@ -110,3 +110,8 @@
 - [x] Quality Gates: 1129 testes passaram, 1 ignorado, 1 aviso de depreciação; compilação Python e build TypeScript/produção aprovados.
 - [x] Docker Compose demo stack: build, arranque, readiness da API, seed e verificação do worker/perfis aprovados.
 - [x] Smoke tests PostgreSQL, incluindo migrações e imutabilidade dos eventos de paletes, aprovados.
+
+
+## Limpeza de estado de validação — 18-11-2026
+- [x] Alinhar as caixas de verificação antigas do ciclo de vida e da imutabilidade com os resultados finais dos pipelines.
+- [x] Remover a indicação de Docker Compose pendente, substituindo-a pelo run concluído com sucesso.
