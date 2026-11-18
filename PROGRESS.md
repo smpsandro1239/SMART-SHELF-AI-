@@ -74,3 +74,12 @@ Added `test_catalogue_and_warehouse_master_data_writes_are_admin_only` to exerci
 - Commits: `8897e2e` (teste inicial) e `94d2ca1` (correcção de comentário Python).
 - O API CI anterior passou para o commit `c83574f`, incluindo a migração 0054 e os smoke tests PostgreSQL. A nova regressão ainda aguarda CI; Quality Gates e Docker Compose também aguardam execução na HEAD actual.
 - Não foi criada uma sincronização automática entre paletes e inventário: isso exigiria uma regra de negócio explícita para impedir dupla contabilização.
+
+
+## 18-11-2026 — Integridade das colocações de armazém
+- A auditoria encontrou que o endpoint `POST /api/v1/warehouse/placements` aceitava produtos e localizações inactivos.
+- O endpoint passou a responder HTTP 409 para ambos os casos, antes de criar a colocação.
+- Adicionado teste de regressão com JWT de SUPERVISOR; confirma os dois conflitos e que nenhuma linha é persistida.
+- Commits de código/teste: `724f84d` e `0d5b9aa`.
+- Validação pendente: API CI, Quality Gates e Demo Docker Compose. As execuções iniciadas para commits intermédios foram supersedidas; a validação deve ser confirmada na HEAD final.
+- A política de capacidade/peso/temperatura continua em aberto: o perfil físico pode não existir e a colocação também representa registo de stock físico existente; não bloquear dados sem uma regra operacional explícita.
