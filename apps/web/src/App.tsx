@@ -692,7 +692,7 @@ export default function App() {
 
   return (
     <div className="app-shell">
-      <a className="skip-link" href="#dashboard-top">Saltar para o conteúdo principal</a>
+      <a className="skip-link" href="#main-content">Saltar para o conteúdo principal</a>
       <aside className="sidebar">
         <div className="sidebar-brand"><div className="brand-mark small"><Warehouse size={20} /></div><div><strong>SMART SHELF</strong><span>INTELLIGENCE PLATFORM</span></div></div>
         <nav className="sidebar-nav" aria-label="Navegação principal">
@@ -703,7 +703,7 @@ export default function App() {
         </nav>
         <div className="sidebar-bottom"><div className="status-dot" aria-hidden="true" /> API ligada por sessão</div>
       </aside>
-      <main className="main-area">
+      <main id="main-content" className="main-area" tabIndex={-1}>
         <nav className="mobile-nav" aria-label="Navegação principal">
           <button type="button" className="mobile-nav-item" onClick={() => navigateToSection("dashboard-top")}><Activity size={16} /> Visão geral</button>
           <button type="button" className="mobile-nav-item" onClick={() => { setTaskFocusFilter("ALL"); navigateToSection("replenishment-tasks"); }}><PackageSearch size={16} /> Tarefas</button>
