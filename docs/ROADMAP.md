@@ -276,3 +276,12 @@ A auditoria foi alargada para incluir a importação diária `POST /api/v1/sales
 - [x] Verificar ausência de efeitos laterais em escritas recusadas e caminho positivo ADMIN.
 - [ ] Validar API CI e Quality Gates.
 - [ ] Confirmar no smoke PostgreSQL as constraints/triggers de linhagem da hierarquia, sem inferir essa validação a partir de SQLite.
+
+
+### Batches e consultas de forecasting — isolamento multi-loja (18-11-2026)
+
+- [x] Confirmar validator de loja única nos schemas dos batches de vendas horárias e tráfego.
+- [x] Testar payloads com duas lojas: HTTP 422 e ausência de efeitos laterais nas duas lojas.
+- [x] Alargar cobertura HTTP/JWT a vendas diárias, traffic peaks, hourly demand e slotting recommendations.
+- [ ] Validar os testes no API CI e Quality Gates.
+- [ ] Prosseguir auditoria handler-a-handler; a cobertura actual não fecha a matriz global.

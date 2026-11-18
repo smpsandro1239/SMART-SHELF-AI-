@@ -4508,11 +4508,15 @@ def test_supervisor_cannot_access_other_store_sales_and_forecasts_over_http(auth
         ("POST", "/api/v1/sales/traffic/hourly", traffic),
         ("POST", "/api/v1/sales/hourly/batch", {"records": [hourly]}),
         ("POST", "/api/v1/sales/traffic/hourly/batch", {"records": [traffic]}),
+        ("GET", f"/api/v1/sales/daily?store_id={store_b}&product_id={product_id}&source=POS&days=7", None),
         ("GET", f"/api/v1/sales/hourly?store_id={store_b}", None),
         ("GET", f"/api/v1/sales/traffic/hourly?store_id={store_b}", None),
+        ("GET", f"/api/v1/forecasting/traffic-peaks?store_id={store_b}&days=14", None),
+        ("GET", f"/api/v1/forecasting/hourly-demand?store_id={store_b}&product_id={product_id}&horizon_days=7&history_days=28&source=POS", None),
         ("GET", f"/api/v1/forecasting/demand?store_id={store_b}&product_id={product_id}&source=POS&lead_time_days=2&days=7", None),
         ("GET", f"/api/v1/forecasting/stockout-risk?store_id={store_b}&product_id={product_id}&source=POS&lead_time_days=2&days=7", None),
         ("GET", f"/api/v1/forecasting/stockout-risk/portfolio?store_id={store_b}&source=POS&lead_time_days=2&days=7", None),
+        ("GET", f"/api/v1/warehouse/slotting-recommendations?store_id={store_b}&source=POS&days=7", None),
         ("GET", f"/api/v1/warehouse/pallet-rotation/hourly-profile?store_id={store_b}&product_id={product_id}&days=7", None),
         ("GET", f"/api/v1/warehouse/pallet-rotation/portfolio-from-history?store_id={store_b}&current_hour=10&days=7", None),
     ]
@@ -4633,3 +4637,58 @@ def test_zone_and_shelf_routes_enforce_admin_writes_and_store_scoped_reads(auth_
     admin_zones = client.get("/api/v1/zones", headers=admin_headers)
     assert admin_zones.status_code == 200
     assert {zone["store_id"] for zone in admin_zones.json()} == {store_ids["a"], store_ids["b"]}
+
+
+def test_sales_batches_reject_mixed_store_payloads_over_http(auth_client):
+    """A batch must not mix tenant IDs, even when its first row is in scope."""
+    client, ids, store_ids = auth_client
+    headers = bearer(ids["supervisor_a"], "SUPERVISOR")
+    store_a, store_b = store_ids["a"], store_ids["b"]
+    product_id = ids["product"]
+
+    sales_rows = [
+        {
+            "store_id": store_a, "product_id": product_id, "business_date": "2026-11-18",
+            "hour_of_day": 11, "quantity": 2, "source": "POS",
+            "external_reference": "AUTH-MIXED-SALES-A",
+        },
+        {
+            "store_id": store_b, "product_id": product_id, "business_date": "2026-11-18",
+            "hour_of_day": 12, "quantity": 3, "source": "POS",
+            "external_reference": "AUTH-MIXED-SALES-B",
+        },
+    ]
+    traffic_rows = [
+        {
+            "store_id": store_a, "business_date": "2026-11-18", "hour_of_day": 11,
+            "customer_count": 8, "source": "POS", "external_reference": "AUTH-MIXED-TRAFFIC-A",
+        },
+        {
+            "store_id": store_b, "business_date": "2026-11-18", "hour_of_day": 12,
+            "customer_count": 9, "source": "POS", "external_reference": "AUTH-MIXED-TRAFFIC-B",
+        },
+    ]
+
+    with main_module.SessionLocal() as db:
+        sales_before = {
+            store_id: db.query(models.HourlySalesRecord).filter_by(store_id=store_id).count()
+            for store_id in (store_a, store_b)
+        }
+        traffic_before = {
+            store_id: db.query(models.HourlyStoreTrafficRecord).filter_by(store_id=store_id).count()
+            for store_id in (store_a, store_b)
+        }
+
+    sales_response = client.post(
+        "/api/v1/sales/hourly/batch", json={"records": sales_rows}, headers=headers
+    )
+    traffic_response = client.post(
+        "/api/v1/sales/traffic/hourly/batch", json={"records": traffic_rows}, headers=headers
+    )
+    assert sales_response.status_code == 422, sales_response.text
+    assert traffic_response.status_code == 422, traffic_response.text
+
+    with main_module.SessionLocal() as db:
+        for store_id in (store_a, store_b):
+            assert db.query(models.HourlySalesRecord).filter_by(store_id=store_id).count() == sales_before[store_id]
+            assert db.query(models.HourlyStoreTrafficRecord).filter_by(store_id=store_id).count() == traffic_before[store_id]

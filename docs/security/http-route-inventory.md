@@ -216,3 +216,10 @@ A cobertura PostgreSQL foi alargada à importação diária `POST /api/v1/sales/
 ## Zonas e prateleiras — autorização por perfil e loja (18-11-2026)
 
 O teste `test_zone_and_shelf_routes_enforce_admin_writes_and_store_scoped_reads` cobre as quatro rotas de hierarquia: `GET /api/v1/zones`, `POST /api/v1/zones`, `GET /api/v1/shelves` e `POST /api/v1/shelves`. SUPERVISOR só lista a própria loja e recebe 403 ao filtrar outra; EMPLOYEE não pode consultar a hierarquia; ambas as escritas são ADMIN-only. O teste compara contagens antes/depois das tentativas recusadas e confirma criação positiva por ADMIN. A validação CI ainda está pendente.
+
+
+## Reforço da matriz de isolamento — batches e forecasting (18-11-2026)
+
+Os schemas `HourlySalesBatchCreate` e `HourlyStoreTrafficBatchCreate` exigem que todos os elementos do batch tenham exactamente o mesmo `store_id`. Os handlers validam o âmbito desse identificador antes de persistir. Foi acrescentado teste HTTP/JWT com batches mistos entre loja A e B: ambos devem ser rejeitados por validação (HTTP 422), sem alterações nas tabelas das duas lojas. A matriz de isolamento cobre também `GET /api/v1/sales/daily`, `GET /api/v1/forecasting/traffic-peaks`, `GET /api/v1/forecasting/hourly-demand` e `GET /api/v1/warehouse/slotting-recommendations`, além dos endpoints já documentados.
+
+**Limite:** confirmação estática dos validators e handlers complementada por regressões HTTP/JWT com SQLite isolado. O CI deste conjunto ainda está pendente; a auditoria global mantém-se aberta.

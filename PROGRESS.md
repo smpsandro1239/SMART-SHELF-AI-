@@ -543,3 +543,11 @@ Commit validado: `1e3499c8c80ef75494a29d06807469898471e4e1`.
 - Confirmado que as escritas são ADMIN-only; as leituras de SUPERVISOR filtram por loja e a consulta explícita de outra loja deve devolver 403. EMPLOYEE não tem permissão de leitura destes recursos.
 - Acrescentado `test_zone_and_shelf_routes_enforce_admin_writes_and_store_scoped_reads`: verifica listagens próprias, tentativa cross-store, recusas sem efeitos laterais e criação positiva ADMIN.
 - Teste publicado na `main`; a validação CI está pendente. A cobertura SQLite HTTP não substitui a validação PostgreSQL das triggers de linhagem hierárquica.
+
+
+## 2026-11-18 — Reforço de batches multi-loja e forecasting
+
+- Os schemas `HourlySalesBatchCreate` e `HourlyStoreTrafficBatchCreate` têm validator que exige um único `store_id` em todos os registos. Não foi identificada uma escrita cross-store por esta via.
+- Acrescentado teste HTTP/JWT com batches contendo simultaneamente lojas A e B. A validação do schema deve rejeitar ambos com HTTP 422 antes da execução do handler; as contagens de vendas e tráfego nas duas lojas são comparadas antes/depois.
+- A matriz de isolamento passa também a cobrir `GET /api/v1/sales/daily`, `GET /api/v1/forecasting/traffic-peaks`, `GET /api/v1/forecasting/hourly-demand` e `GET /api/v1/warehouse/slotting-recommendations`, cujos handlers aplicam `_enforce_store_scope` e filtram por `store_id`.
+- Os testes foram publicados; aguardam validação CI. Não foi executado pytest localmente nesta ronda.

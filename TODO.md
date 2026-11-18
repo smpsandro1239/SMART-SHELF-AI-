@@ -319,3 +319,11 @@
 - [x] Testar criação positiva de zona e prateleira por ADMIN.
 - [ ] Validar a nova cobertura no API CI e Quality Gates.
 - [ ] Complementar com revisão PostgreSQL das constraints/triggers de linhagem hierárquica já existentes.
+
+
+## Batches multi-loja e cobertura de forecasting — 18-11-2026
+- [x] Confirmar que os schemas dos batches exigem que todos os registos pertençam exactamente à mesma loja.
+- [x] Acrescentar regressões HTTP para batches mistos (loja A + loja B), exigindo HTTP 422 e ausência de escritas em ambas as lojas.
+- [x] Alargar a matriz negativa a vendas diárias, traffic peaks, hourly demand e recomendações de slotting.
+- [ ] Validar API CI e Quality Gates do novo conjunto de testes.
+- [ ] Continuar a reconciliação dos restantes handlers e acessos indirectos.
