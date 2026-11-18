@@ -101,18 +101,19 @@ def test_claim_heartbeat_and_completion_use_current_fencing_token(db):
 def test_takeover_increments_token_and_rejects_stale_worker(db):
     job = enqueue(db)
     old = claim_next_dataset_job(db, worker_id="worker-old", lease_seconds=30)
+    old_token = old.fencing_token
     db.execute(update(models.DatasetExecutionJob).where(
         models.DatasetExecutionJob.id == job.id
     ).values(lease_expires_at=models.utc_now() - timedelta(seconds=1)))
     db.commit()
     new = claim_next_dataset_job(db, worker_id="worker-new", lease_seconds=30)
-    assert new.fencing_token == old.fencing_token + 1 and new.attempt_count == 2
+    assert new.fencing_token == old_token + 1 and new.attempt_count == 2
     with pytest.raises(DatasetJobLeaseLost):
         heartbeat_dataset_job(db, job_id=job.id, worker_id="worker-old",
-                              fencing_token=old.fencing_token, lease_seconds=30)
+                              fencing_token=old_token, lease_seconds=30)
     with pytest.raises(DatasetJobLeaseLost):
         complete_dataset_job(db, job_id=job.id, worker_id="worker-old",
-                             fencing_token=old.fencing_token, output_sha256="f" * 64,
+                             fencing_token=old_token, output_sha256="f" * 64,
                              staged_output_reference="staging/obsolete")
     done = complete_dataset_job(db, job_id=job.id, worker_id="worker-new",
                                 fencing_token=new.fencing_token, output_sha256="e" * 64,
