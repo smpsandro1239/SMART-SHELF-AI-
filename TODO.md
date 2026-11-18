@@ -87,3 +87,12 @@
 - [x] Confirmar que a localização FROZEN continua rejeitada por incompatibilidade térmica.
 - [x] Confirmar que as restantes localizações ficam bloqueadas por ocupação desconhecida.
 - [ ] Reexecutar API CI e Quality Gates após a correcção.
+
+
+## Validação de localizações de paletes (18-11-2026)
+- [x] Ao registar paletes em WAREHOUSE, rejeitar códigos de localização não configurados para a loja.
+- [x] Ao registar paletes em WAREHOUSE, rejeitar localizações inactivas.
+- [x] Ao movimentar paletes para WAREHOUSE, validar a localização de destino quando o código muda.
+- [x] Preservar o registo de paletes sem código de localização, para manter a rastreabilidade de dados incompletos e o bloqueio conservador do slotting.
+- [x] Testar rejeição de códigos desconhecidos/inactivos e aceitação de localização activa.
+- [ ] Validar suite API, Quality Gates e Docker Compose após as alterações.
