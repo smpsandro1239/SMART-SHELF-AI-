@@ -2441,6 +2441,33 @@ def test_physical_warehouse_slotting_api_respects_capacity_and_temperature(auth_
     assert "paletes físicas" in result["policy"]
     assert result["automatic_movement_allowed"] is False
 
+    unlocated_pallet = client.post(
+        "/api/v1/warehouse/pallets",
+        json={
+            "store_id": store_id,
+            "product_id": ids["product"],
+            "packaging_level_id": pallet_level_id,
+            "pallet_code": "SLOTTING-PALLET-UNLOCATED",
+            "base_quantity": 10,
+            "status": "READY",
+            "location_type": "WAREHOUSE",
+        },
+        headers=headers,
+    )
+    assert unlocated_pallet.status_code == 201, unlocated_pallet.text
+
+    response = client.get(
+        "/api/v1/warehouse/physical-slotting",
+        params={"store_id": store_id, "product_id": ids["product"], "required_quantity": 5},
+        headers=headers,
+    )
+    assert response.status_code == 200, response.text
+    result = response.json()
+    assert result["candidates"] == []
+    assert {
+        item["reason"] for item in result["rejected_locations"]
+    } == {"UNKNOWN_CURRENT_OCCUPANCY"}
+
 
 def test_supervisor_can_create_store_scoped_warehouse_resources_with_real_jwt(auth_client):
     client, ids, store_ids = auth_client
