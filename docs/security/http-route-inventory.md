@@ -200,3 +200,8 @@ A revisão estática confirma que as consultas de forecasting incluem store_id e
 Os handlers `POST /api/v1/sales/hourly/import-csv` e `POST /api/v1/sales/traffic/hourly/import-csv` resolvem o utilizador e aplicam `_enforce_store_scope` antes de consultar a loja, ler o upload ou executar os parsers. O teste `test_supervisor_cannot_import_other_store_hourly_sales_or_traffic_csv_over_http` usa uploads multipart com JWT SUPERVISOR da loja A e `store_id` da loja B; exige HTTP 403 e compara as contagens das tabelas de vendas e tráfego antes/depois.
 
 **Limite:** a evidência HTTP é executada com SQLite isolado. O teste ainda necessita de validação CI e não substitui um smoke PostgreSQL dedicado.
+
+
+## Importações CSV horárias — validação PostgreSQL (18-11-2026)
+
+O smoke `apps/api/scripts/postgres_sales_import_authorization_smoke.py` foi acrescentado ao API CI. Usa duas lojas persistidas, JWT de SUPERVISOR da loja A e uploads multipart reais para `POST /api/v1/sales/hourly/import-csv` e `POST /api/v1/sales/traffic/hourly/import-csv`. Os dois pedidos para a loja B devem receber 403; as contagens das tabelas PostgreSQL permanecem inalteradas. O smoke inclui também importações válidas na loja A e exige uma linha persistida por endpoint. A implementação do smoke está concluída, mas a evidência de execução depende do CI do commit.

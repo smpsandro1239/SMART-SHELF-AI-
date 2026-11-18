@@ -154,6 +154,12 @@ jobs:
           DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/smart_shelf_ci
           APP_ENV: test
         run: python scripts/postgres_csv_import_concurrency_smoke.py
+      - name: Verify PostgreSQL hourly CSV import tenant authorization
+        env:
+          DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/smart_shelf_ci
+          APP_ENV: test
+          JWT_SECRET_KEY: test-only-secret-not-for-production
+        run: python scripts/postgres_sales_import_authorization_smoke.py
       - name: Verify PostgreSQL concurrent shelf-product assignment idempotency
         env:
           DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/smart_shelf_ci

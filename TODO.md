@@ -297,3 +297,10 @@
 - [ ] Acrescentar/confirmar cobertura PostgreSQL dedicada para isolamento multi-loja das importações.
 
 **Limite:** o teste HTTP/JWT usa SQLite isolado. O payload de vendas é intencionalmente inválido para demonstrar que a autorização ocorre antes do parsing; a ausência de efeitos laterais é verificada nas duas tabelas operacionais.
+
+
+## Autorização PostgreSQL nas importações CSV horárias (18-11-2026)
+- [x] Acrescentar smoke PostgreSQL com JWT real para importação horária de vendas e tráfego.
+- [x] Testar uploads multipart de SUPERVISOR da loja A para a loja B; exigir 403 antes de parsing e confirmar ausência de linhas persistidas.
+- [x] Confirmar importações válidas na própria loja com persistência de exactamente uma linha por endpoint.
+- [ ] Aguardar e analisar API CI e Quality Gates do commit que integra o smoke.

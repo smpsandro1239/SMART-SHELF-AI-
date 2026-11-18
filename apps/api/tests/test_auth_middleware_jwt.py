@@ -4533,12 +4533,12 @@ def test_supervisor_cannot_import_other_store_hourly_sales_or_traffic_csv_over_h
     store_b = store_ids["b"]
 
     sales_csv = (
-        "product_id,business_date,hour_of_day,quantity,external_reference\\n"
-        "not-a-product,2026-11-18,10,4,CROSS-STORE-SALES-CSV\\n"
+        "product_id,business_date,hour_of_day,quantity,external_reference\n"
+        "not-a-product,2026-11-18,10,4,CROSS-STORE-SALES-CSV\n"
     ).encode("utf-8")
     traffic_csv = (
-        "business_date,hour_of_day,customer_count,external_reference\\n"
-        "2026-11-18,10,12,CROSS-STORE-TRAFFIC-CSV\\n"
+        "business_date,hour_of_day,customer_count,external_reference\n"
+        "2026-11-18,10,12,CROSS-STORE-TRAFFIC-CSV\n"
     ).encode("utf-8")
 
     with main_module.SessionLocal() as db:

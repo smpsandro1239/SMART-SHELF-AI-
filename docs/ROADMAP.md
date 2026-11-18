@@ -251,3 +251,11 @@ A cobertura usa SQLite isolado e não deve ser apresentada como prova de concorr
 - [ ] Criar/confirmar smoke PostgreSQL específico para isolamento multi-loja nas importações CSV.
 
 **Limite:** a cobertura HTTP adicionada usa SQLite isolado. A revisão estática da ordem de execução não substitui um teste PostgreSQL nem encerra a auditoria global.
+
+
+### Autorização das importações CSV horárias em PostgreSQL — 18-11-2026
+
+- [x] Smoke PostgreSQL com JWT real para importação de vendas horárias e tráfego.
+- [x] Rejeição cross-store antes de parsing e verificação de ausência de efeitos laterais.
+- [x] Caminho positivo: SUPERVISOR importa ambos os ficheiros na própria loja.
+- [ ] Validar a execução no API CI e registar o resultado.

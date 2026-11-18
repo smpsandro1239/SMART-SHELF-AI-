@@ -508,3 +508,11 @@ Added `test_catalogue_and_warehouse_master_data_writes_are_admin_only` to exerci
 - Acrescentado `test_supervisor_cannot_import_other_store_hourly_sales_or_traffic_csv_over_http` com uploads multipart reais na camada HTTP. As duas operações devem responder 403 e as contagens de `HourlySalesRecord` e `HourlyStoreTrafficRecord` da loja B devem permanecer inalteradas.
 - O teste foi publicado na `main`; ainda não foi executado localmente nem validado por CI nesta ronda.
 - Próximo passo: validar os workflows e acrescentar cobertura PostgreSQL de ingestão multi-loja, sem confundir o teste SQLite com prova de isolamento PostgreSQL.
+
+
+## 2026-11-18 — Smoke PostgreSQL para autorização de importações CSV
+
+- Corrigida a representação das quebras de linha nos payloads multipart do teste JWT SQLite.
+- Criado `apps/api/scripts/postgres_sales_import_authorization_smoke.py`: duas lojas isoladas, JWT SUPERVISOR real, tentativas cross-store para os dois endpoints, contagens antes/depois e importações positivas na loja autorizada.
+- Integrado o smoke no API CI após o smoke existente de idempotência concorrente CSV.
+- O teste PostgreSQL ainda depende da execução do API CI deste commit; não foi executado localmente nesta sessão.
