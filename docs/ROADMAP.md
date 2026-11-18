@@ -213,3 +213,12 @@ A cobertura usa SQLite isolado e não deve ser apresentada como prova de concorr
 - [ ] Prosseguir a auditoria de autorização por handler e isolamento multi-loja.
 
 **Limite:** teste HTTP com SQLite isolado; não equivale a validação PostgreSQL nem a conclusão da auditoria global.
+
+### Isolamento multi-loja — armazém (18-11-2026)
+- [x] Cobrir leitura de localizações de outra loja por supervisor.
+- [x] Cobrir criação de localização noutra loja por supervisor.
+- [x] Cobrir criação de colocação numa localização de outra loja.
+- [x] Verificar 403 e ausência de efeitos laterais.
+- [ ] Validar no CI e continuar a cobertura dos recursos de armazém.
+
+**Limite:** evidência HTTP SQLite; a auditoria multi-loja permanece aberta.

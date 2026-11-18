@@ -476,3 +476,10 @@ Added `test_catalogue_and_warehouse_master_data_writes_are_admin_only` to exerci
 - O teste foi adicionado ao repositório, mas ainda não foi executado nesta sessão. A validação CI permanece pendente.
 - Próximo passo: executar API CI/Quality Gates e continuar a auditoria dos restantes handlers, em especial operações de captura, catálogo partilhado e isolamento indirecto por loja.
 - Correcção preventiva antes da validação: separar detection_id da expressão f-string para manter compatibilidade com o parser Python usado pelo projecto. A validação continua pendente.
+
+## 2026-11-18 — Isolamento multi-loja no armazém
+- Foi acrescentado test_supervisor_cannot_access_other_store_warehouse_resources_over_http.
+- O teste usa um supervisor atribuído à loja A e tenta consultar localizações da loja B, criar uma localização na loja B e criar uma colocação numa localização da loja B.
+- As três operações devem responder HTTP 403. O teste compara as contagens de WarehouseLocation e WarehouseProductPlacement antes/depois para verificar ausência de efeitos laterais.
+- A alteração foi publicada na main; a validação CI ainda está pendente.
+- Próximo passo: alargar a cobertura a paletes, eventos de rotação, políticas e leituras de inventário/forecasting com identificadores de outra loja.

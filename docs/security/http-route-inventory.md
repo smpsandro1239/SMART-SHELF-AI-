@@ -173,3 +173,9 @@ O teste `test_admin_can_manage_store_external_integrations_over_http` complement
 A middleware reserva a ADMIN/SUPERVISOR a consulta da fila de revisão, resumo, avaliação de SKU revista, candidatos de treino revistos e submissão de revisão de deteção. O teste test_employee_cannot_access_human_review_workflows_over_http envia JWT EMPLOYEE para as cinco operações e exige HTTP 403; compara também a contagem de DetectionSkuReview antes/depois para confirmar ausência de efeitos laterais na escrita recusada.
 
 **Limite:** esta evidência cobre o perfil EMPLOYEE através da middleware com SQLite isolado. Não demonstra o isolamento multi-loja de todos os handlers nem fecha a auditoria global.
+
+## Armazém — isolamento de localizações e colocações (18-11-2026)
+
+O teste test_supervisor_cannot_access_other_store_warehouse_resources_over_http usa um SUPERVISOR da loja A e exige HTTP 403 ao listar localizações da loja B, criar uma localização na loja B e criar uma colocação numa localização da loja B. Compara as contagens de WarehouseLocation e WarehouseProductPlacement antes/depois para confirmar ausência de efeitos laterais.
+
+**Limite:** teste HTTP com SQLite isolado. Não prova isolamento de todos os recursos de armazém nem fecha a auditoria global.

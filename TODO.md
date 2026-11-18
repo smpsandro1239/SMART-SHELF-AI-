@@ -259,3 +259,13 @@
 - [ ] Continuar a auditoria handler-a-handler e confirmar isolamento multi-loja nos restantes fluxos de visão.
 
 **Limite:** a cobertura acrescentada valida a barreira de perfil EMPLOYEE do middleware em ambiente production com SQLite isolado. Não prova concorrência PostgreSQL nem conclui a auditoria global.
+
+## Isolamento multi-loja — localizações e colocações de armazém (18-11-2026)
+- [x] Acrescentar teste HTTP/JWT que tenta listar localizações da loja B com supervisor da loja A.
+- [x] Testar criação de localização na loja B por supervisor da loja A.
+- [x] Testar colocação de produto numa localização da loja B por supervisor da loja A.
+- [x] Confirmar 403 nas três operações e ausência de novas localizações/colocações.
+- [ ] Validar a nova cobertura no API CI e Quality Gates.
+- [ ] Prosseguir a revisão de isolamento multi-loja nos restantes recursos de armazém e inventário.
+
+**Limite:** teste HTTP com SQLite isolado; não substitui smoke PostgreSQL nem conclui a auditoria global.

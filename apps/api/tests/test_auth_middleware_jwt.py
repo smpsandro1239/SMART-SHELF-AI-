@@ -4341,3 +4341,43 @@ def test_employee_cannot_access_human_review_workflows_over_http(auth_client):
     with main_module.SessionLocal() as db:
         after = db.query(models.DetectionSkuReview).count()
     assert after == before, "Denied employee review requests must not create review records"
+
+
+def test_supervisor_cannot_access_other_store_warehouse_resources_over_http(auth_client):
+    """Warehouse location and placement endpoints must enforce store ownership."""
+    client, ids, store_ids = auth_client
+    headers = bearer(ids["supervisor_a"], "SUPERVISOR")
+    store_b = store_ids["b"]
+    location_b = ids["warehouse_location_b"]
+
+    with main_module.SessionLocal() as db:
+        locations_before = db.query(models.WarehouseLocation).filter_by(store_id=store_b).count()
+        placements_before = db.query(models.WarehouseProductPlacement).count()
+
+    requests = [
+        ("GET", f"/api/v1/warehouse/locations?store_id={store_b}", None),
+        ("POST", "/api/v1/warehouse/locations", {
+            "store_id": store_b,
+            "code": "A-CROSS-STORE-ATTEMPT",
+            "distance_to_picking_m": 5,
+            "max_volume_cm3": 50000,
+            "max_weight_kg": 50,
+        }),
+        ("POST", "/api/v1/warehouse/placements", {
+            "location_id": location_b,
+            "product_id": ids["product"],
+            "quantity": 3,
+        }),
+    ]
+    for method, path, payload in requests:
+        response = client.request(method, path, json=payload, headers=headers)
+        assert response.status_code == 403, (
+            f"SUPERVISOR from store A must not access store B warehouse data: "
+            f"{method} {path} returned {response.status_code}"
+        )
+
+    with main_module.SessionLocal() as db:
+        locations_after = db.query(models.WarehouseLocation).filter_by(store_id=store_b).count()
+        placements_after = db.query(models.WarehouseProductPlacement).count()
+    assert locations_after == locations_before, "Denied cross-store location creation must have no side effects"
+    assert placements_after == placements_before, "Denied cross-store placement creation must have no side effects"
