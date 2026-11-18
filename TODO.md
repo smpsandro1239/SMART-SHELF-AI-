@@ -25,7 +25,8 @@
   - [x] Validate the filtered fused-evidence pagination regression and lock-order change in API CI (`44265754667`) and Quality Gates (`44265786855`); both completed successfully.
 - [ ] Complete the retention/legal-hold lifecycle audit across restore, purge scheduling, cancellation and concurrent transitions.
   - [x] Cover restore cancellation, purge schedule/cancellation audit events, overdue purge blocking under legal hold, and preservation of the scheduled date/policy while a hold is applied/released.
-  - [ ] Validate the additional legal-hold release audit assertions in API CI; then extend PostgreSQL concurrency coverage for simultaneous hold/schedule transitions.
+  - [x] Validate legal-hold release audit assertions in API CI run `44266521498`; Docker Compose smoke `44266521499` and Quality Gates `44266547157` also passed.
+  - [ ] Validate the new PostgreSQL race smoke for simultaneous legal-hold/purge-schedule transitions; added as API CI step in commit `e0df33d`.
 - [ ] Keep ROADMAP.md aligned with implemented and validated capabilities.
 - [x] Implement dashboard UX refinements: human-readable durations, Europe/Lisbon timestamps, stronger contrast palette, non-colour status cues, compact single-task layout and clickable summary cards with exact task-state filters; Web CI and frontend quality build passed.
 - [ ] Complete manual browser/keyboard and full-state contrast audit before claiming formal WCAG AA conformance.
