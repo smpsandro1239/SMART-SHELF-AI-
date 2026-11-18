@@ -1,7 +1,8 @@
-"""Explainable warehouse slotting recommendations from complete daily sales history.
+"""Explainable warehouse slotting and physical-bin feasibility recommendations.
 
-This module ranks product rotation. It does not choose a physical bin: warehouse
-locations, travel distances, dimensions and handling constraints are not yet modeled.
+Rotation rankings and physical-bin candidates are advisory only; neither operation
+moves stock or reserves capacity. Physical feasibility depends on configured product
+profiles and known current occupancy.
 """
 from __future__ import annotations
 
