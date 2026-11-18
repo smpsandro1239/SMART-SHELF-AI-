@@ -1,5 +1,10 @@
 # PROGRESS
 
+## Segurança de migrações — unidades de embalagem (2026-11-18)
+
+A migração `0054_unique_active_product_packaging_units` passou a executar um preflight antes de criar os índices únicos parciais. O preflight identifica conflitos por produto, separando unidade activa de encomenda e unidade activa de reposição, apresenta IDs e contagens (até 20 por função) e aborta sem modificar linhas quando encontra duplicados. Foram acrescentados testes SQLite para dados preexistentes conflituosos, exclusão de linhas inactivas, enforcement dos índices e downgrade. **Esta alteração e os novos testes ainda aguardam execução no CI; não estão validados.** A verificação/saneamento de dados reais continua a ser uma tarefa operacional antes de aplicar a migração num ambiente com histórico de produção.
+
+
 ## Latest validated changes — 2026-11-18
 
 - **Pagination audit closure — commits `2180c02`, `8a9e676`, `e645e7b`, `2d3794c`, `4c9bf90`:** added bounded offset pagination and deterministic ordering to artifact references, append-only disposition events and human SKU review history, with regression coverage for page boundaries and invalid bounds. The related API CI run `44256610563` passed: **1136 passed, 1 skipped, 1 warning**; all PostgreSQL concurrency/authorization smoke steps passed. Demo Docker Compose run `44256610406` passed build, readiness, seed and worker-profile checks. Quality Gates run `44256985942` passed API tests/Python compilation and Web TypeScript/production build.
