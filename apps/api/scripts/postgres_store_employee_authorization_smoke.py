@@ -43,6 +43,14 @@ def main() -> None:
             store_id=None,
             is_active=True,
         )
+        inactive_supervisor = models.User(
+            email=f"pg-employee-inactive-supervisor-{suffix}@example.test",
+            full_name="Inactive directory supervisor",
+            password_hash="smoke-test-only",
+            role="SUPERVISOR",
+            store_id=store_a.id,
+            is_active=False,
+        )
         employee_a = models.User(
             email=f"pg-employee-a-{suffix}@example.test",
             full_name="Active employee A",
@@ -67,13 +75,17 @@ def main() -> None:
             store_id=store_a.id,
             is_active=False,
         )
-        db.add_all([supervisor, admin, employee_a, employee_b, inactive_employee_a])
+        db.add_all([
+            supervisor, admin, inactive_supervisor,
+            employee_a, employee_b, inactive_employee_a,
+        ])
         db.commit()
 
         store_a_id = store_a.id
         store_b_id = store_b.id
         supervisor_id = supervisor.id
         admin_id = admin.id
+        inactive_supervisor_id = inactive_supervisor.id
         employee_a_id = employee_a.id
         employee_b_id = employee_b.id
     finally:
@@ -83,6 +95,21 @@ def main() -> None:
     main_module.settings = original_settings.model_copy(update={"app_env": "production"})
     try:
         with TestClient(app) as client:
+            missing_token = client.get("/api/v1/store-employees")
+            assert missing_token.status_code == 401, missing_token.text
+
+            invalid_token = client.get(
+                "/api/v1/store-employees",
+                headers={"Authorization": "Bearer invalid.jwt.token"},
+            )
+            assert invalid_token.status_code == 401, invalid_token.text
+
+            inactive_account = client.get(
+                "/api/v1/store-employees",
+                headers=_bearer(inactive_supervisor_id, "SUPERVISOR"),
+            )
+            assert inactive_account.status_code == 401, inactive_account.text
+
             supervisor_headers = _bearer(supervisor_id, "SUPERVISOR")
             own_response = client.get("/api/v1/store-employees", headers=supervisor_headers)
             assert own_response.status_code == 200, own_response.text
@@ -98,13 +125,23 @@ def main() -> None:
             )
             assert foreign_response.status_code == 403, foreign_response.text
 
+            admin_headers = _bearer(admin_id, "ADMIN")
             admin_response = client.get(
                 "/api/v1/store-employees",
                 params={"store_id": store_b_id},
-                headers=_bearer(admin_id, "ADMIN"),
+                headers=admin_headers,
             )
             assert admin_response.status_code == 200, admin_response.text
             assert {row["id"] for row in admin_response.json()} == {employee_b_id}
+
+            admin_global_response = client.get(
+                "/api/v1/store-employees",
+                headers=admin_headers,
+            )
+            assert admin_global_response.status_code == 200, admin_global_response.text
+            assert {row["id"] for row in admin_global_response.json()} == {
+                employee_a_id, employee_b_id
+            }, admin_global_response.json()
 
             employee_response = client.get(
                 "/api/v1/store-employees",
@@ -116,8 +153,9 @@ def main() -> None:
 
     print(
         "PostgreSQL store employee authorization smoke passed: "
-        "SUPERVISOR sees active employees in their store only, "
-        "ADMIN can filter another store, and EMPLOYEE is denied."
+        "missing/invalid/inactive identities are rejected, SUPERVISOR sees "
+        "active employees in their store only, ADMIN sees active employees "
+        "globally or by store, and EMPLOYEE is denied."
     )
 
 
