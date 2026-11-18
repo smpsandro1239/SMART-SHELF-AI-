@@ -362,3 +362,10 @@ A implementação já aplicava estes filtros; a alteração acrescenta cobertura
 O smoke `apps/api/scripts/postgres_store_employee_authorization_smoke.py` foi integrado no API CI. Cria duas lojas e testa o endpoint `GET /api/v1/store-employees` através de HTTP com JWT reais: SUPERVISOR limitado à loja própria e apenas a funcionários activos, filtro cross-store recusado com 403, ADMIN autorizado a consultar a segunda loja e EMPLOYEE recusado com 403.
 
 **Estado:** implementação do smoke e integração no workflow concluídas; execução CI ainda pendente. Até o passo dedicado passar, esta cobertura não deve ser apresentada como validação PostgreSQL aprovada.
+
+
+## Smoke PostgreSQL — diretório de funcionários (cobertura expandida)
+
+O smoke `apps/api/scripts/postgres_store_employee_authorization_smoke.py` também valida ausência de Bearer (401), JWT inválido (401), conta SUPERVISOR inactiva (401) e que a listagem global ADMIN exclui funcionários inactivos. Mantém os cenários de SUPERVISOR restrito à loja própria, filtro cross-store recusado (403), ADMIN com filtro explícito de loja e EMPLOYEE recusado (403).
+
+**Estado:** o código do smoke foi expandido no commit `e0ac4af806693cd203864ae92eb03e307fecafa6`; a execução PostgreSQL no API CI ainda não está confirmada.
