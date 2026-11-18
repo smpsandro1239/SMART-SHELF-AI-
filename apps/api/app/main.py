@@ -4956,6 +4956,27 @@ def list_product_packaging_levels(
     )
 
 
+def _validate_pallet_warehouse_location(
+    db: Session,
+    store_id: int,
+    location_type: str,
+    location_code: str | None,
+) -> None:
+    """Require configured, active warehouse bins when a pallet names a bin."""
+    if location_type != "WAREHOUSE" or location_code is None:
+        return
+    if not location_code.strip():
+        raise HTTPException(status_code=422, detail="Warehouse location code cannot be empty")
+    location = db.query(models.WarehouseLocation).filter_by(
+        store_id=store_id,
+        code=location_code,
+    ).first()
+    if location is None:
+        raise HTTPException(status_code=409, detail="Warehouse location code is not configured for this store")
+    if not location.is_active:
+        raise HTTPException(status_code=409, detail="Warehouse location is inactive")
+
+
 @app.post("/api/v1/warehouse/pallets", response_model=StorePalletRead, status_code=201, tags=["warehouse"])
 def register_store_pallet(
     payload: StorePalletCreate,
@@ -4981,6 +5002,9 @@ def register_store_pallet(
         raise HTTPException(status_code=422, detail="ON_DISPLAY pallets must have SALES_FLOOR location type")
     if payload.status in {"READY", "RETURNED", "REBUILDING"} and payload.location_type == "SALES_FLOOR":
         raise HTTPException(status_code=422, detail="This pallet status is incompatible with SALES_FLOOR location")
+    _validate_pallet_warehouse_location(
+        db, payload.store_id, payload.location_type, payload.location_code
+    )
 
     pallet = models.StorePallet(**payload.model_dump())
     db.add(pallet)
@@ -5625,6 +5649,14 @@ def record_pallet_lifecycle_update(
     old_quantity = float(pallet.base_quantity)
     old_location_type = pallet.location_type
     old_location_code = pallet.location_code
+    if (
+        next_location_type == "WAREHOUSE"
+        and next_location_code is not None
+        and (old_location_type != "WAREHOUSE" or old_location_code != next_location_code)
+    ):
+        _validate_pallet_warehouse_location(
+            db, pallet.store_id, next_location_type, next_location_code
+        )
     if next_status != old_status:
         event_type = "STATUS_REVIEWED"
     elif next_quantity != old_quantity:
