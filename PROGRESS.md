@@ -368,3 +368,11 @@ Added `test_catalogue_and_warehouse_master_data_writes_are_admin_only` to exerci
 - O inventário foi reconciliado com o código `main.py` no commit `297f92453791331ab9788920f6a8e0b28367818f`; não foram encontradas entradas obsoletas.
 - Limite: esta reconciliação é estática; não prova autorização efectiva, nem cobre routers montados dinamicamente. A auditoria handler-a-handler continua aberta.
 
+## 2026-11-18 — Diretório de funcionários e isolamento multi-loja
+
+- A revisão do inventário encontrou que `GET /api/v1/store-employees` não tinha cobertura explícita na suite JWT.
+- O handler exige ADMIN/SUPERVISOR, restringe SUPERVISOR à própria loja e devolve apenas funcionários activos; ADMIN pode filtrar outra loja.
+- Acrescentado `test_store_employee_directory_is_scoped_to_supervisor_store`: lista permitida na loja A, filtro cross-store 403, consulta ADMIN à loja B, EMPLOYEE 403 e exclusão de funcionário inactivo.
+- Commit de teste: `16666ead622fcbdfea073e6f7fa5c178b93c4da3`.
+- **CI pendente**; a auditoria de autorização por handler continua aberta.
+
