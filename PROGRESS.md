@@ -1,3 +1,12 @@
+## Validação e concorrência do ciclo de retenção (2026-11-18)
+
+- API CI run `44266521498` passou no commit `b50b402dd6e5`; o job `test` terminou com sucesso.
+- Docker Compose smoke run `44266521499` passou no mesmo commit: build/start, readiness, seed e verificação dos perfis de demonstração concluídos.
+- Quality Gates run `44266547157` passou no commit `c40e2f27d081`: testes/compilação Python e TypeScript/build de produção Web passaram.
+- O reforço de `test_legal_hold_blocks_overdue_purge_until_hold_is_released` ficou validado: aplicar/libertar legal hold preserva a data e a versão da política agendadas e produz os eventos append-only esperados.
+- Foi acrescentado `apps/api/scripts/postgres_retention_legal_hold_concurrency_smoke.py` e integrado no API CI por `e0df33d023e5`. O teste força as duas ordens concorrentes: (1) legal hold confirma enquanto o pedido de agendamento espera, que deve responder 409; (2) agendamento confirma enquanto o pedido de legal hold espera, que deve preservar data/política e histórico. **Este novo smoke ainda aguarda execução CI; não está validado.**
+
+
 ## Auditoria de legal hold — regressão adicional (2026-11-18)
 
 A pré-visualização de purge já bloqueava imagens com legal hold activo e os endpoints de agendamento/cancelamento/restauro já registavam eventos append-only. Foi reforçado `test_legal_hold_blocks_overdue_purge_until_hold_is_released` para verificar também que aplicar/libertar um legal hold preserva a data e a versão da política previamente agendadas, e que ambos os eventos registam transição de estado, administrador e motivo. Esta preservação é intencional: o legal hold suspende a elegibilidade, não apaga nem cancela silenciosamente o agendamento. **O novo reforço de teste aguarda API CI; não está validado.** Continua pendente cobertura PostgreSQL de concorrência entre aplicação/libertação de hold e agendamento/cancelamento.
