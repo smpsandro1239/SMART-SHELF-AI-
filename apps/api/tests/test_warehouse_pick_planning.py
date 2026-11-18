@@ -121,6 +121,43 @@ def test_pick_plan_groups_items_by_location_and_sequences_stops():
     assert result["physical_route_optimized"] is False
 
 
+def test_pick_plan_excludes_all_duplicate_product_location_rows_to_prevent_double_counting():
+    result = build_warehouse_pick_plan(
+        [candidate(quantity=9)],
+        [
+            placement(1, 1, 8, 2),
+            placement(1, 1, 8, 2),
+            placement(1, 2, 2, 4),
+        ],
+    )
+
+    product = result["products"][0]
+    assert product["required_quantity"] == 9
+    assert product["allocated_quantity"] == 2
+    assert product["shortfall_quantity"] == 7
+    assert product["status"] == "PARTIAL_STOCK"
+    assert [row["location_id"] for row in result["allocations"]] == [2]
+    assert result["summary"]["ambiguous_placement_rows_excluded"] == 2
+
+
+def test_pick_plan_does_not_flag_same_location_for_different_products_as_duplicate():
+    result = build_warehouse_pick_plan(
+        [
+            candidate(product=1, quantity=2),
+            candidate(product=2, shelf=20, quantity=3),
+        ],
+        [
+            placement(1, 1, 2, 1),
+            placement(2, 1, 3, 1),
+        ],
+    )
+
+    assert [row["status"] for row in result["products"]] == [
+        "READY_FOR_REVIEW", "READY_FOR_REVIEW"
+    ]
+    assert result["summary"]["ambiguous_placement_rows_excluded"] == 0
+
+
 def test_pick_plan_accepts_decimal_quantities_returned_by_sqlalchemy_numeric():
     result = build_warehouse_pick_plan(
         [candidate(quantity=Decimal("4.500"))],
