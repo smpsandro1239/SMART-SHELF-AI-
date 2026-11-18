@@ -5760,14 +5760,26 @@ def get_physical_warehouse_slotting(
     # to placement rows. Never add their quantities to placement occupancy:
     # that could double-count the same stock. Instead, fail closed for any
     # bin whose code is also occupied by a registered warehouse pallet.
-    pallet_location_codes = {
+    warehouse_pallet_location_codes = [
         row[0]
         for row in db.query(models.StorePallet.location_code).filter(
             models.StorePallet.store_id == store_id,
             models.StorePallet.location_type == "WAREHOUSE",
             models.StorePallet.base_quantity > 0,
-            models.StorePallet.location_code.is_not(None),
         ).all()
+    ]
+    known_warehouse_location_codes = {
+        row[0]
+        for row in db.query(models.WarehouseLocation.code).filter(
+            models.WarehouseLocation.store_id == store_id,
+        ).all()
+    }
+    has_unmapped_warehouse_pallet = any(
+        not code or code not in known_warehouse_location_codes
+        for code in warehouse_pallet_location_codes
+    )
+    pallet_location_codes = {
+        code for code in warehouse_pallet_location_codes if code
     }
 
     location_inputs = []
@@ -5783,7 +5795,7 @@ def get_physical_warehouse_slotting(
             "max_weight_kg": float(location.max_weight_kg),
             "occupied_volume_cm3": (
                 None
-                if current["unknown_profile"] or location.code in pallet_location_codes
+                if current["unknown_profile"] or has_unmapped_warehouse_pallet or location.code in pallet_location_codes
                 else current["volume"]
             ),
             "occupied_weight_kg": (
@@ -5816,7 +5828,7 @@ def get_physical_warehouse_slotting(
         "candidates": list(result.candidates),
         "rejected_locations": list(result.rejected_locations),
         "automatic_movement_allowed": False,
-        "policy": "A quantidade indicada é adicional à ocupação atual. A ocupação é estimada a partir das colocações com perfis dimensionais conhecidos. Localizações com ocupação desconhecida ou com paletes físicas registadas no mesmo código são excluídas: não existe ainda uma ligação inequívoca entre palete e colocação, pelo que não se somam nem se duplicam esses registos. Validar fisicamente antes de qualquer transferência.",
+        "policy": "A quantidade indicada é adicional à ocupação atual. A ocupação é estimada a partir das colocações com perfis dimensionais conhecidos. Localizações com ocupação desconhecida ou com paletes físicas registadas no mesmo código são excluídas. Se existir uma palete de armazém com código de localização vazio ou não mapeado, todas as localizações são excluídas até se corrigir o registo: não existe ainda uma ligação inequívoca entre palete e colocação, pelo que não se somam nem se duplicam esses registos. Validar fisicamente antes de qualquer transferência.",
     }
 
 
