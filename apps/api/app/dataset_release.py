@@ -93,7 +93,21 @@ def create_release(
     db_session: Any | None = None,
     min_images_per_split: int = 1,
     min_class_instances: int = 0,
+    approval_evidence: dict[str, Any] | None = None,
 ) -> tuple[dict[str, Any], bool]:
+    if approval_evidence is not None:
+        if not isinstance(approval_evidence, dict):
+            raise ValueError("approval_evidence must be an object")
+        if approval_evidence.get("status") != "APPROVED":
+            raise ValueError("approval_evidence must have APPROVED status")
+        if approval_evidence.get("mode") not in {"training", "inference"}:
+            raise ValueError("approval_evidence mode must be training or inference")
+        for field in ("record_sha256", "gate_report_sha256"):
+            digest = approval_evidence.get(field)
+            if (not isinstance(digest, str) or len(digest) != 64
+                    or any(character not in "0123456789abcdef" for character in digest)):
+                raise ValueError(f"approval_evidence.{field} must be a lowercase SHA-256 digest")
+
     rows = load_manifest(manifest_path)
     try:
         provenance_record = json.loads(provenance_path.read_text(encoding="utf-8"))
@@ -160,11 +174,11 @@ def create_release(
         class_instance_counts[category_name] = per_split
 
     provenance_digest = sha256_file(provenance_path)
+    identity_payload = {"images": rows, "provenance_sha256": provenance_digest}
+    if approval_evidence is not None:
+        identity_payload["approval"] = approval_evidence
     canonical = json.dumps(
-        {"images": rows, "provenance_sha256": provenance_digest},
-        sort_keys=True,
-        separators=(",", ":"),
-        ensure_ascii=False,
+        identity_payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False,
     )
     fingerprint = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
     release = {
@@ -207,6 +221,8 @@ def create_release(
             "minimum_instances_per_class_per_split": min_class_instances,
         },
     }
+    if approval_evidence is not None:
+        release["approval"] = dict(approval_evidence)
 
     releases_dir = registry_dir / "releases"
     releases_dir.mkdir(parents=True, exist_ok=True)

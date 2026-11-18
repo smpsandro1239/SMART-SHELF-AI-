@@ -1,3 +1,14 @@
+## 2026-11-18 — Gate de aprovação obrigatório na execução de datasets
+
+- Base de trabalho: commit documental `39d90e7a75934037fab9c5281d13a19def6e2fb6`.
+- Lacuna encontrada: `dataset_execution` criava uma release a partir de manifestos/auditorias e lançava o consumidor sem invocar `dataset_approval.run_release_gate`; assim, o fluxo de execução não exigia o registo de aprovação nem validava os três documentos COCO nessa fronteira.
+- A execução passa a exigir `--release-record`, `--train`, `--val` e `--test`, e executa o gate de aprovação antes de criar a release ou iniciar o processo filho.
+- A identidade da release passa a incluir os hashes do registo de aprovação e do relatório determinístico do gate. O processo filho recebe o estado, modo e hashes de aprovação através de `SMART_SHELF_DATASET_APPROVAL_*`.
+- A validação operacional foi movida para o fim do trabalho de ficheiros/COCO/revisão. Para fontes internas, os locks são adquiridos apenas depois dessas verificações e mantidos através da criação da release e da execução síncrona.
+- Foram acrescentados testes para a ordem transaccional, recusa sem aprovação, metadados de aprovação no ambiente do consumidor, fingerprint distinta e rejeição de evidência malformada.
+- Validação pendente: ainda não foram executados pytest, compilação Python ou workflows para esta alteração. Não declarar a implementação certificada até API CI/Quality Gates terminarem.
+- Limites: jobs remotos/destacados continuam fora da garantia; a ferramenta COCO offline continua sem autorização operacional própria. Próxima tarefa após CI: desenhar lease/claim com fencing para consumidores distribuídos e auditar exports/caches/backups.
+
 ## 2026-11-18 — Validação da elegibilidade de datasets e linhagem HTTP de artefactos
 
 - SHA inicial e final da base validada: `33425007fc016b220c3f49f95078444189fd1ec9`.

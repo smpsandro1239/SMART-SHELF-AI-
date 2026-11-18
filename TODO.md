@@ -379,3 +379,15 @@
 - [ ] Definir um contrato operacional de linhagem/retenção para derivados internos (crops, cópias, relatórios, exports, caches, backups e artefactos publicados), incluindo a política para descendentes quando a origem fica RESTRICTED ou sob legal hold.
 - [ ] Avaliar a necessidade de leases/claims duráveis e fencing para treino remoto, filas e jobs destacados; os locks PostgreSQL do processo síncrono não cobrem trabalho que continue após a sessão terminar.
 - [ ] Não activar purge físico nem inferir política de conservação: manter a eliminação fail-closed até existir política formal aprovada e prova de cobertura de todos os destinos.
+
+
+## Gate de aprovação obrigatório no consumidor de datasets — 18-11-2026
+
+- [x] Fazer `dataset_execution` executar `run_release_gate` antes de criar uma release ou iniciar o consumidor.
+- [x] Exigir registo de aprovação e os três splits COCO; suportar revisão visual dos três splits como requisito explícito.
+- [x] Vincular SHA-256 do registo e do relatório de aprovação à fingerprint e aos metadados imutáveis da release.
+- [x] Passar ao processo consumidor os hashes de aprovação e o modo validado através de variáveis de ambiente.
+- [x] Adiar a aquisição dos locks operacionais até terminarem as verificações de ficheiros/COCO/revisão, mantendo-os durante release e consumo síncrono.
+- [x] Acrescentar testes para ordem gate → release → consumidor, bloqueio sem aprovação e fingerprint distinta para evidência de aprovação diferente.
+- [ ] Validar os testes focados, suite API, compilação Python e Quality Gates no CI.
+- [ ] Criar mecanismo de lease/claim com fencing para consumidores remotos/destacados; não está coberto pela transacção síncrona.

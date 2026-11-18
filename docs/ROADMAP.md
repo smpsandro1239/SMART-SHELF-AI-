@@ -330,3 +330,16 @@ Foi criado e integrado no API CI o smoke `postgres_dataset_eligibility_concurren
 - [ ] Desenhar coordenação durável com lease/claim e fencing para consumidores remotos ou destacados, porque locks da sessão síncrona não cobrem trabalho assíncrono.
 
 **Limites:** a prova HTTP/JWT da linhagem usa SQLite isolado; o smoke PostgreSQL prova os locks do gate, não o uso universal do gate por todos os consumidores. A suite verde não demonstra integração com fornecedores externos nem execução de treino real.
+
+
+## 2026-11-18 — Gate de aprovação obrigatório no consumidor síncrono
+
+- [x] Ligar `dataset_execution` ao gate completo de aprovação antes de iniciar o consumidor.
+- [x] Exigir release record e os três splits COCO; aceitar os três registos de revisão visual em conjunto e exigir aprovação visual quando configurado.
+- [x] Incluir hashes do registo e do relatório do gate na fingerprint imutável da release.
+- [x] Manter os locks de elegibilidade operacional durante a criação da release e o consumidor síncrono, adquirindo-os apenas depois das verificações de ficheiros.
+- [ ] Validar suite API e Quality Gates no CI.
+- [ ] Desenhar leases/claims duráveis com fencing para filas e consumidores remotos/destacados.
+- [ ] Auditar exports, caches, backups e artefactos derivados quanto a herança de retenção.
+
+**Limites:** a garantia é local e síncrona. Não autoriza jobs remotos nem substitui política formal de retenção/purge.

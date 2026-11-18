@@ -1363,3 +1363,34 @@ A validação de proveniência interna bloqueia as linhas `shelf_images`, `shelv
 O commit `33425007fc016b220c3f49f95078444189fd1ec9` passou no API CI [44410444406](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44410444406), Quality Gates [44410444404](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44410444404) e Docker Compose [44410444721](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44410444721). O API CI concluiu as migrações PostgreSQL 16, todos os smokes operacionais, incluindo `postgres_dataset_eligibility_concurrency_smoke.py`, e a suite API. O smoke demonstrou que actualizações concorrentes a `shelves.zone_id` e `zones.store_id` ficam bloqueadas enquanto a validação de elegibilidade mantém os locks de imagem/prateleira/zona. A suite API também executou o teste HTTP/JWT `test_admin_registers_artifact_parent_lineage_over_http`.
 
 **Limites da evidência:** o smoke de elegibilidade prova a serialização PostgreSQL do gate, não que todos os consumidores offline/externos o utilizem. O teste de registo pai/filho atravessa HTTP/JWT, mas usa SQLite isolado; não é um smoke PostgreSQL individual do endpoint. A auditoria dos consumidores e a propagação operacional de retenção aos derivados, backups e caches continuam abertas. O treino remoto/destacado não está coberto por locks de uma transacção síncrona. A purga física permanece desactivada.
+
+
+## Execução de consumidores de datasets com aprovação vinculada
+
+O comando `python -m app.dataset_execution` exige agora o registo de aprovação e os três ficheiros COCO (`train`, `val`, `test`). Antes de criar a release ou iniciar o processo externo, executa `app.dataset_approval.run_release_gate`, incluindo proveniência, autorizações declaradas, integridade COCO, splits, qualidade e revisões visuais quando explicitamente exigidas. Para imagens internas, a validação operacional de retenção é feita no fim das verificações de ficheiros e mantém a transacção PostgreSQL aberta durante a criação da release e a execução síncrona do consumidor.
+
+Exemplo:
+
+```bash
+cd apps/api
+python -m app.dataset_execution \
+  --manifest /data/metadata/image_manifest.csv \
+  --split-audit /data/reports/split-audit.json \
+  --visual-audit /data/reports/visual-similarity.json \
+  --provenance-manifest /data/metadata/provenance.json \
+  --release-record /data/metadata/dataset-release-record.json \
+  --train /data/annotations/instances_train.json \
+  --val /data/annotations/instances_val.json \
+  --test /data/annotations/instances_test.json \
+  --registry /data/dataset-registry \
+  --require-visual-review \
+  --review-train /data/reviews/train.json \
+  --review-val /data/reviews/val.json \
+  --review-test /data/reviews/test.json \
+  --timeout-seconds 7200 \
+  -- python -m training.train --config /data/config.yaml
+```
+
+A fingerprint da release inclui os SHA-256 do registo de aprovação e do relatório determinístico do gate. O consumidor recebe estes identificadores, o modo aprovado e a fingerprint por variáveis de ambiente `SMART_SHELF_DATASET_APPROVAL_*`. Uma alteração no registo ou na evidência de aprovação produz outra identidade de release. O CLI `dataset_release` continua a poder criar releases técnicas/candidatas sem aprovação; essas releases não devem ser confundidas com uma execução autorizada através de `dataset_execution`.
+
+**Limites:** a transacção e os locks cobrem apenas o processo síncrono lançado localmente. Filas remotas, jobs destacados e serviços de treino cloud precisam de lease/claim e fencing próprios e continuam fora desta garantia. A ferramenta de revisão COCO continua offline e não é, por si só, um mecanismo de autorização operacional.
