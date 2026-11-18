@@ -2392,6 +2392,35 @@ def test_physical_warehouse_slotting_api_respects_capacity_and_temperature(auth_
     )
     assert placement.status_code == 201, placement.text
 
+    with main_module.SessionLocal() as db:
+        pallet_level = models.ProductPackagingLevel(
+            product_id=ids["product"],
+            code="SLOTTING-PALLET",
+            name="Palete para teste de slotting",
+            package_type="PALLET",
+            base_units_per_package=100,
+        )
+        db.add(pallet_level)
+        db.commit()
+        db.refresh(pallet_level)
+        pallet_level_id = pallet_level.id
+
+    pallet = client.post(
+        "/api/v1/warehouse/pallets",
+        json={
+            "store_id": store_id,
+            "product_id": ids["product"],
+            "packaging_level_id": pallet_level_id,
+            "pallet_code": "SLOTTING-PALLET-01",
+            "base_quantity": 20,
+            "status": "READY",
+            "location_type": "WAREHOUSE",
+            "location_code": "SLOT-FAR",
+        },
+        headers=headers,
+    )
+    assert pallet.status_code == 201, pallet.text
+
     response = client.get(
         "/api/v1/warehouse/physical-slotting",
         params={"store_id": store_id, "product_id": ids["product"], "required_quantity": 5},
@@ -2401,13 +2430,15 @@ def test_physical_warehouse_slotting_api_respects_capacity_and_temperature(auth_
     result = response.json()
     assert result["status"] == "CANDIDATES_FOUND"
     assert [item["location_code"] for item in result["candidates"]] == [
-        "SLOT-NEAR", "SLOT-FAR"
+        "SLOT-NEAR"
     ]
     assert result["candidates"][0]["required_volume_cm3"] == 500
     assert result["candidates"][0]["required_weight_kg"] == 2.5
     rejected = {item["location_code"]: item["reason"] for item in result["rejected_locations"]}
     assert rejected["SLOT-TOO-SMALL"] == "INSUFFICIENT_VOLUME_CAPACITY"
     assert rejected["SLOT-FROZEN"] == "TEMPERATURE_INCOMPATIBLE"
+    assert rejected["SLOT-FAR"] == "UNKNOWN_CURRENT_OCCUPANCY"
+    assert "paletes físicas" in result["policy"]
     assert result["automatic_movement_allowed"] is False
 
 
