@@ -63,9 +63,9 @@ def build_warehouse_pick_plan(
         )
         candidate_results.append(item)
 
-    /* A placement is unique per (location_id, product_id) in the database.
-       Treat duplicate input rows as ambiguous and exclude every copy: summing
-       them could double-count the same physical stock after an accidental join. */
+    # A placement is unique per (location_id, product_id) in the database.
+    # Treat duplicate input rows as ambiguous and exclude every copy: summing
+    # them could double-count the same physical stock after an accidental join.
     placement_rows = [dict(row) for row in placements]
     placement_counts: dict[tuple[int, int], int] = defaultdict(int)
     for row in placement_rows:
