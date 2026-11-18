@@ -3608,7 +3608,7 @@ def list_shelf_image_fused_evidence(
     offset: int = 0,
     db: Session = Depends(get_db),
 ):
-    """List persisted fused evidence, optionally filtered by review status."""
+    """List persisted fused evidence with pagination over the refreshed status view."""
     allowed_statuses = {"CONSENSUS", "VISUAL_ONLY", "TEXT_ONLY", "CONFLICT", "AMBIGUOUS", "UNKNOWN"}
     if status is not None and status not in allowed_statuses:
         raise HTTPException(status_code=422, detail="Unsupported evidence-fusion status")
@@ -3630,16 +3630,50 @@ def list_shelf_image_fused_evidence(
     )
     bounded_limit = max(1, min(limit, 1000))
     bounded_offset = max(0, offset)
-    rows = (
-        query.order_by(models.ShelfImageFusedEvidence.id.desc())
-        .limit(min(bounded_limit + bounded_offset, 1000))
-        .all()
-    )
-    refreshed = _refresh_fused_evidence_view(db, rows)
-    if status is not None:
-        refreshed = [row for row in refreshed if row['status'] == status]
-    return refreshed[bounded_offset:bounded_offset + bounded_limit]
 
+    if status is None:
+        rows = (
+            query.order_by(models.ShelfImageFusedEvidence.id.desc())
+            .offset(bounded_offset)
+            .limit(bounded_limit)
+            .all()
+        )
+        return _refresh_fused_evidence_view(db, rows)
+
+    # The served status is recomputed against the current active catalogue.
+    # Therefore filtering only by the immutable stored status would be wrong,
+    # and applying OFFSET before refreshing would skip the wrong rows. Scan in
+    # bounded keyset batches, filter the refreshed view, then apply the page.
+    page = []
+    skipped = 0
+    last_seen_id = None
+    batch_size = 500
+    while len(page) < bounded_limit:
+        batch_query = query
+        if last_seen_id is not None:
+            batch_query = batch_query.filter(
+                models.ShelfImageFusedEvidence.id < last_seen_id
+            )
+        batch = (
+            batch_query
+            .order_by(models.ShelfImageFusedEvidence.id.desc())
+            .limit(batch_size)
+            .all()
+        )
+        if not batch:
+            break
+        last_seen_id = batch[-1].id
+        refreshed = _refresh_fused_evidence_view(db, batch)
+        for item in refreshed:
+            if item["status"] != status:
+                continue
+            if skipped < bounded_offset:
+                skipped += 1
+                continue
+            page.append(item)
+            if len(page) >= bounded_limit:
+                break
+    return page
 
 
 @app.post("/api/v1/shelf-images/{image_id}/ocr-runs", response_model=ShelfImageOCRRunRead, status_code=201, tags=["computer-vision"])
