@@ -311,3 +311,11 @@
 - [x] Alargar o smoke PostgreSQL com JWT real para os três endpoints CSV de vendas/tráfego.
 - [x] Cobrir rejeição antes do parsing, ausência de efeitos laterais e caminho positivo na loja autorizada.
 - [x] Validar a execução no API CI, Quality Gates e Docker Compose smoke do commit `1e3499c8c80ef75494a29d06807469898471e4e1` (todos passaram).
+
+
+## Hierarquia de lojas — zonas e prateleiras (18-11-2026)
+- [x] Testar leitura de zonas e prateleiras por SUPERVISOR limitada à loja atribuída.
+- [x] Testar recusa explícita de filtro para outra loja e de escrita por SUPERVISOR/EMPLOYEE.
+- [x] Testar criação positiva de zona e prateleira por ADMIN.
+- [ ] Validar a nova cobertura no API CI e Quality Gates.
+- [ ] Complementar com revisão PostgreSQL das constraints/triggers de linhagem hierárquica já existentes.

@@ -4573,3 +4573,63 @@ def test_supervisor_cannot_import_other_store_hourly_sales_or_traffic_csv_over_h
     assert sales_after == sales_before, "Denied hourly sales CSV import must not persist sales"
     assert traffic_after == traffic_before, "Denied traffic CSV import must not persist traffic"
 
+
+
+def test_zone_and_shelf_routes_enforce_admin_writes_and_store_scoped_reads(auth_client):
+    """Store layout reads are tenant-scoped and only ADMIN can change the hierarchy."""
+    client, ids, store_ids = auth_client
+    supervisor_headers = bearer(ids["supervisor_a"], "SUPERVISOR")
+    employee_headers = bearer(ids["employee_a"], "EMPLOYEE")
+    admin_headers = bearer(ids["admin"], "ADMIN")
+
+    with main_module.SessionLocal() as db:
+        zone_b = db.query(models.Zone).filter_by(store_id=store_ids["b"]).one()
+        zones_before = db.query(models.Zone).count()
+        shelves_before = db.query(models.Shelf).count()
+        zone_b_id = zone_b.id
+
+    supervisor_zones = client.get("/api/v1/zones", headers=supervisor_headers)
+    supervisor_foreign_zones = client.get(
+        "/api/v1/zones", params={"store_id": store_ids["b"]}, headers=supervisor_headers
+    )
+    supervisor_shelves = client.get("/api/v1/shelves", headers=supervisor_headers)
+    assert supervisor_zones.status_code == 200, supervisor_zones.text
+    assert {zone["store_id"] for zone in supervisor_zones.json()} == {store_ids["a"]}
+    assert supervisor_foreign_zones.status_code == 403
+    assert supervisor_shelves.status_code == 200, supervisor_shelves.text
+    assert {shelf["id"] for shelf in supervisor_shelves.json()} == {
+        ids["shelf_a_assigned"], ids["shelf_a_unassigned"], ids["shelf_a_peer"]
+    }
+
+    denied_zone = client.post(
+        "/api/v1/zones", json={"store_id": store_ids["b"], "name": "Unauthorized zone"},
+        headers=supervisor_headers,
+    )
+    denied_shelf = client.post(
+        "/api/v1/shelves", json={"zone_id": zone_b_id, "code": "UNAUTHORIZED-SHELF"},
+        headers=supervisor_headers,
+    )
+    employee_zones = client.get("/api/v1/zones", headers=employee_headers)
+    employee_shelves = client.get("/api/v1/shelves", headers=employee_headers)
+    assert denied_zone.status_code == 403
+    assert denied_shelf.status_code == 403
+    assert employee_zones.status_code == 403
+    assert employee_shelves.status_code == 403
+
+    with main_module.SessionLocal() as db:
+        assert db.query(models.Zone).count() == zones_before
+        assert db.query(models.Shelf).count() == shelves_before
+
+    admin_zone = client.post(
+        "/api/v1/zones", json={"store_id": store_ids["b"], "name": "Admin-created zone"},
+        headers=admin_headers,
+    )
+    assert admin_zone.status_code == 201, admin_zone.text
+    admin_shelf = client.post(
+        "/api/v1/shelves", json={"zone_id": admin_zone.json()["id"], "code": "ADMIN-CREATED-SHELF"},
+        headers=admin_headers,
+    )
+    assert admin_shelf.status_code == 201, admin_shelf.text
+    admin_zones = client.get("/api/v1/zones", headers=admin_headers)
+    assert admin_zones.status_code == 200
+    assert {zone["store_id"] for zone in admin_zones.json()} == {store_ids["a"], store_ids["b"]}

@@ -267,3 +267,12 @@ A auditoria foi alargada para incluir a importação diária `POST /api/v1/sales
 
 
 **Evidência de validação (18-11-2026):** commit `1e3499c8c80ef75494a29d06807469898471e4e1`; API CI [44404814359](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44404814359), Quality Gates [44404814406](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44404814406) e Docker Compose smoke [44404813670](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44404813670) passaram. A prova PostgreSQL cobre os três endpoints CSV com JWT real, isolamento cross-store, ausência de efeitos laterais e caminho positivo na loja autorizada.
+
+
+### Hierarquia de zonas e prateleiras — autorização (18-11-2026)
+
+- [x] Rever as regras ADMIN-only de criação de zonas/prateleiras.
+- [x] Cobrir listagens SUPERVISOR por loja, filtro cross-store e recusa de EMPLOYEE.
+- [x] Verificar ausência de efeitos laterais em escritas recusadas e caminho positivo ADMIN.
+- [ ] Validar API CI e Quality Gates.
+- [ ] Confirmar no smoke PostgreSQL as constraints/triggers de linhagem da hierarquia, sem inferir essa validação a partir de SQLite.

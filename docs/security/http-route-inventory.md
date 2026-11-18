@@ -211,3 +211,8 @@ A cobertura PostgreSQL foi alargada à importação diária `POST /api/v1/sales/
 
 
 **Validação:** o API CI [44404814359](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44404814359) executou com sucesso o smoke PostgreSQL multi-loja e a suite pytest; Quality Gates [44404814406](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44404814406) e Docker Compose smoke [44404813670](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44404813670) também passaram no commit `1e3499c8c80ef75494a29d06807469898471e4e1`.
+
+
+## Zonas e prateleiras — autorização por perfil e loja (18-11-2026)
+
+O teste `test_zone_and_shelf_routes_enforce_admin_writes_and_store_scoped_reads` cobre as quatro rotas de hierarquia: `GET /api/v1/zones`, `POST /api/v1/zones`, `GET /api/v1/shelves` e `POST /api/v1/shelves`. SUPERVISOR só lista a própria loja e recebe 403 ao filtrar outra; EMPLOYEE não pode consultar a hierarquia; ambas as escritas são ADMIN-only. O teste compara contagens antes/depois das tentativas recusadas e confirma criação positiva por ADMIN. A validação CI ainda está pendente.

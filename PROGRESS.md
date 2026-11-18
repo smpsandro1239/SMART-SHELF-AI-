@@ -535,3 +535,11 @@ Commit validado: `1e3499c8c80ef75494a29d06807469898471e4e1`.
 - Docker Compose smoke [44404813670](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44404813670): **sucesso**.
 - O smoke PostgreSQL usou JWT real de SUPERVISOR, duas lojas, pedidos multipart e verificações directas das tabelas. Os três endpoints cross-store devolveram 403 sem novas linhas; as três importações na loja autorizada persistiram uma linha cada.
 - Os checks externos Vercel continuam limitados por quota de deployment (build-rate-limit; retry indicado em 24 horas); não são falhas dos workflows de código acima.
+
+
+## 2026-11-18 — Autorização da hierarquia de zonas e prateleiras
+
+- Revisados os handlers `GET/POST /api/v1/zones` e `GET/POST /api/v1/shelves` e a classificação de perfil na middleware.
+- Confirmado que as escritas são ADMIN-only; as leituras de SUPERVISOR filtram por loja e a consulta explícita de outra loja deve devolver 403. EMPLOYEE não tem permissão de leitura destes recursos.
+- Acrescentado `test_zone_and_shelf_routes_enforce_admin_writes_and_store_scoped_reads`: verifica listagens próprias, tentativa cross-store, recusas sem efeitos laterais e criação positiva ADMIN.
+- Teste publicado na `main`; a validação CI está pendente. A cobertura SQLite HTTP não substitui a validação PostgreSQL das triggers de linhagem hierárquica.
