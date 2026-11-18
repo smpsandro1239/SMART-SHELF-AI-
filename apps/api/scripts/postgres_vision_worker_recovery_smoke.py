@@ -121,6 +121,11 @@ def _verify_successful_stale_lease_is_fenced(
         store_root.mkdir(parents=True)
         image_path = store_root / "lease-fencing.jpg"
         image_path.write_bytes(b"vision-worker-postgresql-smoke")
+        with SessionLocal() as db:
+            pending_image = db.get(models.ShelfImage, pending_image_id)
+            assert pending_image is not None
+            pending_image.storage_path = str(image_path)
+            db.commit()
 
         previous_storage_path = settings.image_storage_path
         settings.image_storage_path = str(root)
