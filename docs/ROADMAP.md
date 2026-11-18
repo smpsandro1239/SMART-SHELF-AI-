@@ -21,6 +21,31 @@
 - [x] Documentar execução, segurança e critérios de interpretação em [PERFORMANCE-QUERY-AUDIT.md](PERFORMANCE-QUERY-AUDIT.md).
 - [ ] Executar em staging/réplica com volume representativo; nenhuma decisão de índice deve ser tomada antes dessa evidência.
 
+# SMART SHELF AI — Roadmap
+
+## Prioridade atual: preparar um piloto controlado com validação operacional e evidência
+
+### Estado de validação — 2026-11-18
+
+- API CI [44271596288](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44271596288), commit `30f3b4e`: suite API e smokes PostgreSQL concluídos com sucesso, incluindo os novos testes de picking.
+- Quality Gates [44271717562](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44271717562), commit `93abecc`: testes API/compilação Python e build TypeScript/produção Web concluídos com sucesso.
+- Docker Compose smoke [44271596168](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44271596168), commit `30f3b4e`: build, arranque, readiness, seed e validação dos perfis aprovados.
+- A ronda de picking está validada por CI; a auditoria de desempenho abaixo está preparada, mas ainda carece de planos obtidos em dados representativos. A preparação da auditoria de desempenho passou no API CI [44291136290](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44291136290) (**1148 passed, 1 skipped, 1 warning**), Quality Gates [44291194461](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44291194461) e Docker Compose [44291133419](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44291133419).
+
+### Ronda adicional — integridade do picking (2026-11-18)
+
+- O planeador exclui todas as linhas quando a entrada contém duplicados para o mesmo SKU/localização, impedindo dupla contagem de stock. A mesma localização para SKUs diferentes continua válida.
+- Testes de regressão e validação CI concluídos: API CI `44271596288`, Quality Gates `44271717562` e Docker Compose smoke `44271596168` passaram.
+
+### Preparação da auditoria de desempenho — 2026-11-18
+
+- [x] Criar script read-only para planos das consultas de imagens, deteções, OCR, retenção e fila de revisão SKU, com timeout e validação de loja/imagem.
+- [x] Acrescentar testes unitários aos SELECTs limitados e à validação de IDs.
+- [x] Documentar execução, segurança e critérios de interpretação em [PERFORMANCE-QUERY-AUDIT.md](PERFORMANCE-QUERY-AUDIT.md).
+- [ ] Executar em staging/réplica com volume representativo; nenhuma decisão de índice deve ser tomada antes dessa evidência.
+
+- [x] Usar botão HTML nativo nos cartões de resumo de zona e anunciar o carregamento da avaliação operacional através de uma região de estado acessível.
+- [x] Web CI [44296222519](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44296222519) passou no commit `49f137995cc4ffe34fc0354c0d7d1e267ea0b1a1`; Quality Gates [44296222533](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44296222533) ainda estava em execução na última consulta.
 ### Acessibilidade e navegação responsiva — 2026-11-18
 
 - [x] Adicionar skip link para o conteúdo principal e landmark de navegação com nome acessível.
