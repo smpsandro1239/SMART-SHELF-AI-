@@ -411,7 +411,7 @@
 - [x] Definir staging e publicação condicionada ao token actual.
 - [x] Definir testes de aceitação PostgreSQL/SQLite e sequência de implementação.
 - [x] Implementar tabelas de jobs/fontes/eventos, constraints, triggers de imutabilidade e serviço transaccional de lease/claim/heartbeat/conclusão. O worker/broker e a publicação final permanecem fora do âmbito.
-- [ ] Validar o smoke PostgreSQL com workers concorrentes, takeover, worker obsoleto e restrição de retenção no API CI deste commit.
+- [x] Validar no API CI [44416138879](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44416138879) a migration PostgreSQL 16 e o smoke de dois workers, claim único, takeover, fencing monotónico, rejeição de worker obsoleto e revogação por retenção.
 - [ ] Integrar broker/worker e publicação apenas após validação do fencing.
 
 
@@ -424,5 +424,5 @@
 - [x] Revalidar elegibilidade das fontes em enqueue, claim, heartbeat e conclusão; revogar jobs quando a imagem deixa de estar ACTIVE ou entra em legal hold.
 - [x] Proteger identidade, fontes e eventos através de constraints/triggers PostgreSQL e SQLite.
 - [x] Acrescentar testes de idempotência, takeover, worker obsoleto, expiração e revogação por retenção.
-- [ ] Validar migration PostgreSQL 16, suite API e smoke concorrente no CI.
+- [x] Validar migration PostgreSQL 16, suite API (**1177 passed, 1 skipped, 1 warning**) e smoke concorrente no API CI [44416138879](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44416138879); Quality Gates [44416138669](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44416138669) e Docker Compose [44416138628](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44416138628) também passaram.
 - [ ] Implementar worker/broker, serviço de leitura de artefactos e promoção de outputs com fencing; não publicar directamente a partir do worker.

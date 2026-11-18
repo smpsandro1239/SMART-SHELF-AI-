@@ -651,7 +651,7 @@ Commit validado: `1e3499c8c80ef75494a29d06807469898471e4e1`.
 - Documentados os limites do heartbeat: não impede leituras de cópias locais após perda do lease; é necessário serviço de acesso controlado por leitura e inventário/revogação de caches.
 - Documento: `docs/architecture/dataset-async-execution-lease.md`.
 - Estado: desenho concluído; nenhuma tabela, serviço ou worker remoto foi implementado nesta etapa.
-- Próximo passo: implementar migration/modelos e serviço transaccional; validar dois workers concorrentes, takeover e rejeição de operações com token obsoleto em PostgreSQL 16.
+- Próximo passo: implementar serviço de leitura de artefactos por chamada e promotor de outputs condicionado ao fencing token actual; só depois integrar broker/worker.
 
 
 ## 2026-11-18 — Persistência de jobs assíncronos e serviço de fencing
@@ -661,4 +661,4 @@ Commit validado: `1e3499c8c80ef75494a29d06807469898471e4e1`.
 - Criado `app.dataset_job_leases`: enqueue idempotente com evidência APPROVED, claim com `SKIP LOCKED`, lease, fencing monotónico, heartbeat, falha e conclusão em staging. As operações de vida do lease revalidam as fontes sob locks imagem/prateleira/zona.
 - Adicionados testes SQLite de contrato e migration e smoke PostgreSQL com dois workers concorrentes, takeover, rejeição de heartbeat/conclusão obsoletos e sequência de eventos.
 - O serviço não executa comandos nem publica outputs; não foi ligado a um broker ou worker. A primeira versão só aceita fontes internas; o acesso remoto aos bytes e a publicação fenced permanecem requisitos separados.
-- Validação pendente até ao API CI do commit; não foram executados testes locais nesta ronda.
+- Validação concluída: API CI [44416138879](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44416138879) passou com migration PostgreSQL 16, smoke de leases e **1177 testes aprovados, 1 ignorado, 1 aviso**; Quality Gates [44416138669](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44416138669) e Docker Compose [44416138628](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44416138628) também passaram. A primeira execução detectou dois defeitos nos fixtures/testes (dois jobs na fila inicial do smoke e comparação de uma entidade ORM mutável); ambos foram corrigidos antes da execução verde. Não foram executados testes localmente.

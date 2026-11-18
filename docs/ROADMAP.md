@@ -373,8 +373,8 @@ Foi criado e integrado no API CI o smoke `postgres_dataset_eligibility_concurren
 - [x] Definir claim `FOR UPDATE SKIP LOCKED`, expiração, takeover e fencing token monotónico.
 - [x] Definir revalidação de retenção/legal hold em enqueue, claim, heartbeat e conclusão.
 - [x] Definir staging e promoção condicionada ao token actual.
-- [ ] Implementar persistência, serviço de lease e auditoria append-only.
-- [ ] Validar concorrência, takeover, token obsoleto e retenção em PostgreSQL 16.
+- [x] Implementar persistência, serviço de lease e auditoria append-only.
+- [x] Validar concorrência, takeover, token obsoleto e retenção em PostgreSQL 16 no API CI [44416138879](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44416138879); suite API: 1177 passed, 1 skipped, 1 warning.
 - [ ] Integrar worker/fila apenas depois da validação do serviço.
 
 
@@ -384,6 +384,6 @@ Foi criado e integrado no API CI o smoke `postgres_dataset_eligibility_concurren
 - [x] Implementar enqueue idempotente, claim `SKIP LOCKED`, lease, heartbeat, falha, conclusão em staging e fencing monotónico.
 - [x] Revalidar retenção/loja/hash das fontes em cada fronteira de autorização e revogar jobs inelegíveis.
 - [x] Acrescentar testes unitários/SQLite e smoke PostgreSQL concorrente.
-- [ ] Validar migration, suite API e smoke no API CI.
+- [x] Validar migration PostgreSQL 16, suite API e smoke concorrente no API CI [44416138879](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44416138879), Quality Gates [44416138669](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44416138669) e Docker Compose [44416138628](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44416138628).
 - [ ] Integrar broker/worker apenas depois da validação PostgreSQL.
 - [ ] Implementar leitura de artefactos autorizada por chamada e promoção de outputs condicionada ao token actual.
