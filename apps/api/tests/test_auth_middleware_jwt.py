@@ -2621,7 +2621,16 @@ def test_pallet_lifecycle_transitions_are_audited_and_reject_stale_updates(auth_
             base_units_per_package=48,
             is_active=True,
         )
-        db.add(level)
+        warehouse_location = models.WarehouseLocation(
+            store_id=store_id,
+            code="WH-A",
+            distance_to_picking_m=2,
+            max_volume_cm3=5000,
+            max_weight_kg=100,
+            temperature_zone="AMBIENT",
+            is_active=True,
+        )
+        db.add_all([level, warehouse_location])
         db.commit()
         db.refresh(level)
         level_id = level.id
