@@ -4117,3 +4117,63 @@ def test_shelf_image_external_artifact_governance_is_admin_only_over_http(auth_c
             "disposition_events": db.query(models.ShelfImageArtifactDispositionEvent).count(),
         }
     assert after == before, "Denied requests must not persist artifact governance records"
+
+
+
+def test_store_external_integration_governance_is_admin_only_over_http(auth_client):
+    client, ids, store_ids = auth_client
+    store_id = store_ids["a"]
+    with main_module.SessionLocal() as db:
+        integration = models.StoreExternalIntegration(
+            store_id=store_id,
+            external_system="AUTH-EXTERNAL-BASELINE",
+            provider="test-provider",
+            status="ACTIVE",
+            required_for_retention=True,
+            capabilities=["inventory.read"],
+            created_by_user_id=ids["admin"],
+            updated_by_user_id=ids["admin"],
+        )
+        db.add(integration)
+        db.commit()
+        db.refresh(integration)
+        integration_id = integration.id
+
+    headers_by_role = {
+        "SUPERVISOR": bearer(ids["supervisor_a"], "SUPERVISOR"),
+        "EMPLOYEE": bearer(ids["employee_a"], "EMPLOYEE"),
+    }
+    requests = [
+        ("POST", f"/api/v1/stores/{store_id}/external-integrations", {
+            "external_system": "AUTH-EXTERNAL-UNAUTHORIZED",
+            "provider": "test-provider",
+            "required_for_retention": True,
+            "capabilities": ["inventory.read"],
+        }),
+        ("GET", f"/api/v1/stores/{store_id}/external-integrations", None),
+        ("GET", f"/api/v1/stores/{store_id}/external-integrations/coverage", None),
+        ("PATCH", f"/api/v1/stores/{store_id}/external-integrations/{integration_id}", {
+            "status": "REVOKED",
+        }),
+    ]
+
+    with main_module.SessionLocal() as db:
+        before_count = db.query(models.StoreExternalIntegration).count()
+        before = db.get(models.StoreExternalIntegration, integration_id)
+        before_state = (before.status, before.required_for_retention, list(before.capabilities))
+
+    for role, headers in headers_by_role.items():
+        for method, path, payload in requests:
+            response = client.request(method, path, json=payload, headers=headers)
+            assert response.status_code == 403, (
+                f"{role} must not access external integration governance: "
+                f"{method} {path} returned {response.status_code}"
+            )
+
+    with main_module.SessionLocal() as db:
+        after_count = db.query(models.StoreExternalIntegration).count()
+        after = db.get(models.StoreExternalIntegration, integration_id)
+        after_state = (after.status, after.required_for_retention, list(after.capabilities))
+
+    assert after_count == before_count, "Denied requests must not create external integrations"
+    assert after_state == before_state, "Denied requests must not mutate external integration policy"

@@ -229,3 +229,10 @@
 - [x] Verificar que os pedidos recusados não criam artefactos, snapshots ou eventos de disposição.
 - [x] Suite API (`pytest -q`), API CI e Quality Gates aprovados (runs 44337777007 e 44337776819).
 - [ ] Continuar auditoria handler-a-handler; esta ronda não fecha a auditoria global.
+
+
+## Integrações externas por loja — autorização HTTP (18-11-2026)
+- [x] Rever criação, listagem, consulta de cobertura e actualização de integrações externas; os quatro handlers exigem ADMIN.
+- [x] Acrescentar teste HTTP/JWT para SUPERVISOR e EMPLOYEE nos quatro métodos.
+- [x] Verificar 403 e ausência de criação/alteração de integrações após pedidos recusados.
+- [ ] Confirmar suite API, API CI e Quality Gates no novo commit.

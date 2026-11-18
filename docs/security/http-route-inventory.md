@@ -157,3 +157,8 @@ A comparação estática das declarações literais `@app.get/post/put/patch/del
 ## Autorização dos artefactos externos — evidência de teste (18-11-2026)
 
 Os seis handlers de artefactos listados acima exigem perfil `ADMIN` directamente no handler. O teste `test_shelf_image_external_artifact_governance_is_admin_only_over_http` exercita os seis caminhos com JWT de `SUPERVISOR` e `EMPLOYEE`, espera HTTP 403 e confirma ausência de efeitos laterais nas tabelas de referências, snapshots e eventos. A cobertura foi validada pela suite API no CI (run 44337777007). O teste HTTP usa SQLite isolado e não substitui a revisão de isolamento multi-loja para os restantes handlers nem constitui, por si só, prova PostgreSQL.
+
+
+## Gestão de integrações externas — cobertura de autorização (18-11-2026)
+
+Os handlers de criação, listagem, consulta de cobertura e actualização de integrações externas por loja exigem ADMIN directamente. O teste `test_store_external_integration_governance_is_admin_only_over_http` verifica os quatro métodos com JWT de SUPERVISOR e EMPLOYEE, espera 403 e confirma que a contagem e a política da integração preexistente não se alteram. Validação CI pendente.

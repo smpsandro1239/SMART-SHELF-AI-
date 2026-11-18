@@ -427,3 +427,12 @@ Added `test_catalogue_and_warehouse_master_data_writes_are_admin_only` to exerci
 - Não foram identificadas falhas de código nem regressões nesta ronda.
 - Commit funcional: `4b45ae475b2059832c71ca447011fb9c34165c1d`.
 - Próximo passo: continuar a auditoria dos restantes handlers e alinhar a política de acesso com os testes por perfil e loja.
+
+
+## 2026-11-18 — Autorização da gestão de integrações externas por loja
+
+- Revisão dos handlers `POST/GET /api/v1/stores/{store_id}/external-integrations`, `GET .../coverage` e `PATCH .../{integration_id}`: todos exigem ADMIN directamente no handler.
+- Acrescentado `test_store_external_integration_governance_is_admin_only_over_http`: 8 pedidos (quatro operações por dois perfis JWT: SUPERVISOR e EMPLOYEE), todos esperados como HTTP 403.
+- O teste compara a contagem e os campos de política da integração preexistente antes/depois, para detectar criação ou alteração por pedidos recusados.
+- Execução CI deste novo teste pendente; não foi executado localmente nesta sessão.
+- Esta ronda alarga a cobertura de autorização administrativa; não encerra a auditoria global nem substitui testes PostgreSQL de concorrência.

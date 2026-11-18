@@ -175,3 +175,11 @@ A cobertura usa SQLite isolado e não deve ser apresentada como prova de concorr
 - [x] API CI: smoke PostgreSQL e suite `pytest -q` aprovados — [run 44337777007](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44337777007).
 - [x] Quality Gates: build Web de produção aprovado — [run 44337776819](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44337776819).
 - [x] Docker Compose: API, PostgreSQL, worker e perfis de demonstração aprovados — [run 44337776893](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44337776893).
+
+
+### Gestão de integrações externas — autorização HTTP (2026-11-18)
+
+- [x] Rever os quatro handlers de criação, listagem, cobertura e actualização de integrações externas.
+- [x] Acrescentar teste JWT para SUPERVISOR e EMPLOYEE nos quatro métodos.
+- [x] Confirmar no teste a recusa HTTP 403 e a ausência de efeitos laterais sobre registos e política.
+- [ ] Validar a nova cobertura no API CI e Quality Gates.
