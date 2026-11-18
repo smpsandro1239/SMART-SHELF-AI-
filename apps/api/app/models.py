@@ -942,6 +942,9 @@ class DatasetExecutionJob(Base):
         CheckConstraint("attempt_count >= 0", name="ck_dataset_execution_job_attempts_nonnegative"),
         CheckConstraint("(status = 'LEASED' AND lease_owner IS NOT NULL AND lease_expires_at IS NOT NULL) OR (status <> 'LEASED' AND lease_owner IS NULL AND lease_expires_at IS NULL)", name="ck_dataset_execution_job_lease_state"),
         CheckConstraint("output_sha256 IS NULL OR length(output_sha256) = 64", name="ck_dataset_execution_job_output_digest"),
+        CheckConstraint("status <> 'SUCCEEDED' OR (output_sha256 IS NOT NULL AND staged_output_reference IS NOT NULL)", name="ck_dataset_execution_job_success_output"),
+        CheckConstraint("(status IN ('SUCCEEDED', 'FAILED', 'REVOKED', 'CANCELLED') AND finished_at IS NOT NULL) OR (status NOT IN ('SUCCEEDED', 'FAILED', 'REVOKED', 'CANCELLED') AND finished_at IS NULL)", name="ck_dataset_execution_job_finished_state"),
+        CheckConstraint("status <> 'LEASED' OR (fencing_token > 0 AND attempt_count > 0)", name="ck_dataset_execution_job_active_fencing"),
         UniqueConstraint("idempotency_key", name="uq_dataset_execution_job_idempotency"),
         Index("ix_dataset_execution_jobs_claim", "status", "lease_expires_at", "created_at", "id"),
     )

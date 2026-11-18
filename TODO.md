@@ -426,3 +426,15 @@
 - [x] Acrescentar testes de idempotência, takeover, worker obsoleto, expiração e revogação por retenção.
 - [x] Validar migration PostgreSQL 16, suite API (**1177 passed, 1 skipped, 1 warning**) e smoke concorrente no API CI [44416138879](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44416138879); Quality Gates [44416138669](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44416138669) e Docker Compose [44416138628](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44416138628) também passaram.
 - [ ] Implementar worker/broker, serviço de leitura de artefactos e promoção de outputs com fencing; não publicar directamente a partir do worker.
+
+
+## Fencing reforçado na base de dados — 2026-11-18
+
+- [x] Impor incremento exacto do fencing token e contador de tentativas em claim inicial e takeover.
+- [x] Rejeitar heartbeat de lease expirado e impedir encurtamento da expiração, tanto no serviço como na base de dados.
+- [x] Exigir lease válido para conclusão/falha e `finished_at` para estados terminais.
+- [x] Exigir digest e referência de staging em jobs `SUCCEEDED`.
+- [x] Impor sequência consecutiva de eventos e impedir eventos posteriores ao estado terminal, preservando o evento terminal legítimo.
+- [x] Acrescentar testes SQLite de migração e expandir smoke PostgreSQL para testar SQL directo contra os guards.
+- [ ] Confirmar migration PostgreSQL 16, API CI, Quality Gates e Docker Compose no commit desta ronda.
+- [ ] Implementar autenticação de workers, leitura controlada por chamada e promoção de outputs condicionada ao fencing token actual.

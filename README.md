@@ -1429,3 +1429,10 @@ O claim incrementa um fencing token monotónico. Heartbeat e conclusão exigem s
 O commit `0d9140eff2f842e065cd20597ef80a42effcb7c2` foi validado no API CI [44416138879](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44416138879): migration PostgreSQL 16, smoke concorrente de leases e **1177 testes aprovados, 1 ignorado e 1 aviso**. O smoke demonstrou claim único entre dois workers, takeover após expiração, incremento do fencing token, rejeição de heartbeat/conclusão obsoletos e revogação de job cuja fonte passou a RESTRICTED. Quality Gates [44416138669](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44416138669) e Docker Compose [44416138628](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44416138628) também passaram.
 
 Esta evidência valida a migration, o serviço de lease e os testes automatizados. Não demonstra um worker de treino remoto, autenticação de workers, leitura de bytes através de um serviço controlado, nem publicação externa de resultados. Esses elementos permanecem pendentes.
+
+
+### Garantias de fencing impostas pela base de dados — 2026-11-18
+
+A migration `0057_dataset_execution_fencing_guards` acrescenta protecções ao nível da base de dados: claims e takeovers têm de incrementar exactamente o fencing token e o contador de tentativas; um heartbeat não pode renovar um lease expirado nem encurtar a sua expiração; conclusão/falha exigem um lease ainda válido; estados terminais exigem `finished_at`; um job `SUCCEEDED` exige digest e referência de output em staging; eventos têm sequência consecutiva e não podem ser anexados depois de o job terminar. O serviço Python também deixa de encurtar leases em heartbeats curtos.
+
+Estas garantias não autenticam a identidade do worker: a autenticação e autorização do consumidor continuam a ser responsabilidade de uma camada própria. A publicação externa do output também continua pendente; o campo staging não equivale a publicação. A migration e os smokes PostgreSQL/SQLite só serão considerados validados depois dos workflows desta alteração terminarem com sucesso.

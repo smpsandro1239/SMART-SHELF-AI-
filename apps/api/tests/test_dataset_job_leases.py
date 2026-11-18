@@ -165,3 +165,14 @@ def test_failed_job_is_terminal_and_failure_code_is_sanitised(db):
     with pytest.raises(DatasetJobLeaseLost):
         heartbeat_dataset_job(db, job_id=job.id, worker_id="worker-a",
                               fencing_token=claim.fencing_token, lease_seconds=30)
+
+
+def test_heartbeat_never_shortens_an_existing_lease(db):
+    job = enqueue(db)
+    claim = claim_next_dataset_job(db, worker_id="worker-a", lease_seconds=300)
+    previous_expiry = claim.lease_expires_at
+    renewed = heartbeat_dataset_job(
+        db, job_id=job.id, worker_id="worker-a",
+        fencing_token=claim.fencing_token, lease_seconds=1,
+    )
+    assert renewed.lease_expires_at >= previous_expiry

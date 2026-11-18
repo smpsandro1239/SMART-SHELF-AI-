@@ -4,7 +4,8 @@ from concurrent.futures import ThreadPoolExecutor
 from threading import Barrier
 from uuid import uuid4
 
-from sqlalchemy import update
+from sqlalchemy import text, update
+from sqlalchemy.exc import IntegrityError
 
 from app import models
 from app.database import SessionLocal
@@ -109,6 +110,31 @@ def main():
                 pass
             else:
                 raise AssertionError("obsolete worker was allowed to mutate the job")
+
+    with SessionLocal() as db:
+        try:
+            db.execute(text("""
+                INSERT INTO dataset_execution_job_events
+                    (job_id, sequence_number, event_type, fencing_token, details)
+                VALUES (:job_id, 99, 'HEARTBEAT', :token, '{}'::json)
+            """), {"job_id": job_id, "token": first_token + 1})
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+        else:
+            raise AssertionError("database accepted a non-contiguous event sequence")
+
+        try:
+            db.execute(text("""
+                UPDATE dataset_execution_jobs
+                SET lease_expires_at = lease_expires_at - INTERVAL '1 second'
+                WHERE id = :job_id AND status = 'LEASED'
+            """), {"job_id": job_id})
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+        else:
+            raise AssertionError("database accepted a heartbeat that shortens the lease")
 
     with SessionLocal() as db:
         completed = complete_dataset_job(

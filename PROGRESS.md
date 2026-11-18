@@ -662,3 +662,14 @@ Commit validado: `1e3499c8c80ef75494a29d06807469898471e4e1`.
 - Adicionados testes SQLite de contrato e migration e smoke PostgreSQL com dois workers concorrentes, takeover, rejeição de heartbeat/conclusão obsoletos e sequência de eventos.
 - O serviço não executa comandos nem publica outputs; não foi ligado a um broker ou worker. A primeira versão só aceita fontes internas; o acesso remoto aos bytes e a publicação fenced permanecem requisitos separados.
 - Validação concluída: API CI [44416138879](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44416138879) passou com migration PostgreSQL 16, smoke de leases e **1177 testes aprovados, 1 ignorado, 1 aviso**; Quality Gates [44416138669](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44416138669) e Docker Compose [44416138628](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44416138628) também passaram. A primeira execução detectou dois defeitos nos fixtures/testes (dois jobs na fila inicial do smoke e comparação de uma entidade ORM mutável); ambos foram corrigidos antes da execução verde. Não foram executados testes localmente.
+
+
+## 2026-11-18 — Fencing e sequências de eventos reforçados ao nível da base de dados
+
+- HEAD inicial: `d84b836c566943e799ddb1ea6a23d1de5999b79f`.
+- Criada migration `0057_dataset_execution_fencing_guards` com validação de claims, heartbeats, takeovers e transições terminais; acrescentadas constraints para outputs bem-sucedidos, estado terminal e leases activos.
+- Acrescentados triggers SQLite equivalentes para testes de contrato; PostgreSQL usa constraints e triggers transaccionais.
+- A sequência de eventos passa a ser validada na base de dados e os jobs terminais deixam de aceitar eventos adicionais, excepto o evento terminal correspondente à transição.
+- O serviço de heartbeat preserva a expiração anterior quando a duração pedida é menor.
+- Acrescentados testes de migration SQLite e verificações SQL directas ao smoke PostgreSQL.
+- Estado: alterações preparadas; ainda não validadas por CI. Não declarar garantias PostgreSQL concluídas até os workflows passarem.
