@@ -191,3 +191,8 @@
 - [ ] Confirmar no CI as oito recusas HTTP 403 e a ausência de novos registos após pedidos negados.
 - [ ] Rever a cobertura de autorização dos endpoints restantes e reconciliar o inventário HTTP com as rotas actualmente declaradas em `apps/api/app/main.py`.
 
+### Reconciliação do inventário HTTP (18-11-2026)
+- [x] Comparar as declarações de rotas literais em `apps/api/app/main.py` com `docs/security/http-route-inventory.md`.
+- [x] Identificar e acrescentar as 16 declarações em falta; inventário actualizado de 107 para 123 rotas, sem entradas obsoletas.
+- [ ] Concluir a auditoria de autorização handler-a-handler; inventário estático não é prova de controlo de acesso.
+
