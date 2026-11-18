@@ -63,10 +63,34 @@ def build_warehouse_pick_plan(
         )
         candidate_results.append(item)
 
-    eligible: dict[int, list[dict[str, Any]]] = defaultdict(list)
-    for row in placements:
+    /* A placement is unique per (location_id, product_id) in the database.
+       Treat duplicate input rows as ambiguous and exclude every copy: summing
+       them could double-count the same physical stock after an accidental join. */
+    placement_rows = [dict(row) for row in placements]
+    placement_counts: dict[tuple[int, int], int] = defaultdict(int)
+    for row in placement_rows:
         product_id = row.get("product_id")
-        if isinstance(product_id, bool) or not isinstance(product_id, int):
+        location_id = row.get("location_id")
+        if (isinstance(product_id, bool) or not isinstance(product_id, int)
+                or isinstance(location_id, bool) or not isinstance(location_id, int)):
+            continue
+        placement_counts[(product_id, location_id)] += 1
+
+    ambiguous_placement_keys = {
+        key for key, count in placement_counts.items() if count > 1
+    }
+    ambiguous_placement_rows = sum(
+        placement_counts[key] for key in ambiguous_placement_keys
+    )
+
+    eligible: dict[int, list[dict[str, Any]]] = defaultdict(list)
+    for row in placement_rows:
+        product_id = row.get("product_id")
+        location_id = row.get("location_id")
+        if (isinstance(product_id, bool) or not isinstance(product_id, int)
+                or isinstance(location_id, bool) or not isinstance(location_id, int)):
+            continue
+        if (product_id, location_id) in ambiguous_placement_keys:
             continue
         quantity = _number(row.get("quantity"))
         distance = _number(row.get("distance_to_picking_m"))
@@ -76,7 +100,7 @@ def build_warehouse_pick_plan(
             continue
         temperature = str(row.get("temperature_zone") or "").upper()
         eligible[product_id].append({
-            **dict(row),
+            **row,
             "quantity": quantity,
             "distance_to_picking_m": distance,
             "temperature_zone": temperature,
@@ -199,6 +223,7 @@ def build_warehouse_pick_plan(
             "warehouse_stops": len(stops),
             "total_proposed_units": round(sum(row["proposed_pick_quantity"] for row in allocations), 3),
             "total_shortfall_units": round(sum(row["shortfall_quantity"] for row in product_results), 3),
+            "ambiguous_placement_rows_excluded": ambiguous_placement_rows,
         },
         "candidates_without_quantified_demand": sum(
             row["warehouse_pick_status"] == "NO_QUANTIFIED_DEMAND" for row in candidate_results
