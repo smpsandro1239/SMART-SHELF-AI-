@@ -63,8 +63,20 @@ def main() -> None:
     try:
         with TestClient(app) as client:
             with SessionLocal() as verify:
+                daily_before = verify.query(models.DailySalesRecord).filter_by(store_id=store_b_id).count()
                 sales_before = verify.query(models.HourlySalesRecord).filter_by(store_id=store_b_id).count()
                 traffic_before = verify.query(models.HourlyStoreTrafficRecord).filter_by(store_id=store_b_id).count()
+
+            denied_daily = client.post(
+                "/api/v1/sales/import-csv",
+                data={"store_id": str(store_b_id), "source": "IMPORT"},
+                files={"file": ("foreign-daily.csv", invalid_daily, "text/csv")},
+                headers=headers,
+            )
+            assert denied_daily.status_code == 403, (
+                f"Cross-store daily sales CSV must be rejected before parsing: "
+                f"{denied_daily.status_code} {denied_daily.text}"
+            )
 
             denied_sales = client.post(
                 "/api/v1/sales/hourly/import-csv",
@@ -88,10 +100,20 @@ def main() -> None:
             )
 
             with SessionLocal() as verify:
+                daily_after = verify.query(models.DailySalesRecord).filter_by(store_id=store_b_id).count()
                 sales_after = verify.query(models.HourlySalesRecord).filter_by(store_id=store_b_id).count()
                 traffic_after = verify.query(models.HourlyStoreTrafficRecord).filter_by(store_id=store_b_id).count()
+                assert daily_after == daily_before, (daily_before, daily_after)
                 assert sales_after == sales_before, (sales_before, sales_after)
                 assert traffic_after == traffic_before, (traffic_before, traffic_after)
+
+            own_daily = client.post(
+                "/api/v1/sales/import-csv",
+                data={"store_id": str(store_a_id), "source": "IMPORT"},
+                files={"file": ("own-daily.csv", valid_own_daily, "text/csv")},
+                headers=headers,
+            )
+            assert own_daily.status_code == 200, own_daily.text
 
             own_sales = client.post(
                 "/api/v1/sales/hourly/import-csv",
@@ -109,21 +131,25 @@ def main() -> None:
             assert own_traffic.status_code == 200, own_traffic.text
 
             with SessionLocal() as verify:
+                daily_count = verify.query(models.DailySalesRecord).filter_by(
+                    store_id=store_a_id, external_reference=own_daily_ref
+                ).count()
                 sales_count = verify.query(models.HourlySalesRecord).filter_by(
                     store_id=store_a_id, external_reference=own_sales_ref
                 ).count()
                 traffic_count = verify.query(models.HourlyStoreTrafficRecord).filter_by(
                     store_id=store_a_id, external_reference=own_traffic_ref
                 ).count()
+                assert daily_count == 1, daily_count
                 assert sales_count == 1, sales_count
                 assert traffic_count == 1, traffic_count
     finally:
         main_module.settings = original_settings
 
     print(
-        "PostgreSQL hourly CSV authorization smoke passed: both cross-store "
-        "imports returned 403 without writes, and both same-store imports "
-        "persisted exactly one row."
+        "PostgreSQL CSV authorization smoke passed: daily sales, hourly sales "
+        "and hourly traffic cross-store imports returned 403 without writes; "
+        "same-store imports persisted exactly one row per endpoint."
     )
 
 

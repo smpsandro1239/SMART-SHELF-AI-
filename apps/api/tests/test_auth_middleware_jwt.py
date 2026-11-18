@@ -4541,11 +4541,18 @@ def test_supervisor_cannot_import_other_store_hourly_sales_or_traffic_csv_over_h
         "2026-11-18,10,12,CROSS-STORE-TRAFFIC-CSV\n"
     ).encode("utf-8")
 
+    daily_csv = (
+        "product_id,sales_date,quantity,external_reference\\n"
+        "not-a-product,2026-11-18,4,CROSS-STORE-DAILY-CSV\\n"
+    ).encode("utf-8")
+
     with main_module.SessionLocal() as db:
+        daily_before = db.query(models.DailySalesRecord).filter_by(store_id=store_b).count()
         sales_before = db.query(models.HourlySalesRecord).filter_by(store_id=store_b).count()
         traffic_before = db.query(models.HourlyStoreTrafficRecord).filter_by(store_id=store_b).count()
 
     attempts = [
+        ("/api/v1/sales/import-csv", daily_csv, "daily-sales.csv"),
         ("/api/v1/sales/hourly/import-csv", sales_csv, "sales.csv"),
         ("/api/v1/sales/traffic/hourly/import-csv", traffic_csv, "traffic.csv"),
     ]
@@ -4559,7 +4566,10 @@ def test_supervisor_cannot_import_other_store_hourly_sales_or_traffic_csv_over_h
         assert response.status_code == 403, f"POST {path} returned {response.status_code}: {response.text}"
 
     with main_module.SessionLocal() as db:
+        daily_after = db.query(models.DailySalesRecord).filter_by(store_id=store_b).count()
         sales_after = db.query(models.HourlySalesRecord).filter_by(store_id=store_b).count()
         traffic_after = db.query(models.HourlyStoreTrafficRecord).filter_by(store_id=store_b).count()
-    assert sales_after == sales_before, "Denied sales CSV import must not persist hourly sales"
-    assert traffic_after == traffic_before, "Denied traffic CSV import must not persist hourly traffic"
+    assert daily_after == daily_before, "Denied daily sales CSV import must not persist sales"
+    assert sales_after == sales_before, "Denied hourly sales CSV import must not persist sales"
+    assert traffic_after == traffic_before, "Denied traffic CSV import must not persist traffic"
+

@@ -516,3 +516,11 @@ Added `test_catalogue_and_warehouse_master_data_writes_are_admin_only` to exerci
 - Criado `apps/api/scripts/postgres_sales_import_authorization_smoke.py`: duas lojas isoladas, JWT SUPERVISOR real, tentativas cross-store para os dois endpoints, contagens antes/depois e importações positivas na loja autorizada.
 - Integrado o smoke no API CI após o smoke existente de idempotência concorrente CSV.
 - O teste PostgreSQL ainda depende da execução do API CI deste commit; não foi executado localmente nesta sessão.
+
+
+## 2026-11-18 — Cobertura CSV diária e horária completa
+
+- A revisão da lista de rotas identificou também `POST /api/v1/sales/import-csv`, a importação diária que não estava incluída na primeira ronda horária.
+- O teste JWT HTTP e o smoke PostgreSQL foram alargados para cobrir os três endpoints: vendas diárias, vendas horárias e tráfego horário.
+- Para cada endpoint, a tentativa cross-store deve falhar com 403 antes do parsing; o smoke verifica contagens PostgreSQL antes/depois e confirma importação positiva na loja do supervisor.
+- A validação desta extensão depende dos workflows do commit seguinte.

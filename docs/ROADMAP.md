@@ -259,3 +259,8 @@ A cobertura usa SQLite isolado e não deve ser apresentada como prova de concorr
 - [x] Rejeição cross-store antes de parsing e verificação de ausência de efeitos laterais.
 - [x] Caminho positivo: SUPERVISOR importa ambos os ficheiros na própria loja.
 - [ ] Validar a execução no API CI e registar o resultado.
+
+
+### Cobertura completa das importações CSV — 18-11-2026
+
+A auditoria foi alargada para incluir a importação diária `POST /api/v1/sales/import-csv`, além das importações horárias. O teste HTTP/JWT e o smoke PostgreSQL agora cobrem os três endpoints. A evidência PostgreSQL da ronda horária anterior passou no API CI; a extensão diária aguarda validação no novo commit.

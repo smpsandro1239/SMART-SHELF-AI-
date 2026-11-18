@@ -205,3 +205,6 @@ Os handlers `POST /api/v1/sales/hourly/import-csv` e `POST /api/v1/sales/traffic
 ## Importações CSV horárias — validação PostgreSQL (18-11-2026)
 
 O smoke `apps/api/scripts/postgres_sales_import_authorization_smoke.py` foi acrescentado ao API CI. Usa duas lojas persistidas, JWT de SUPERVISOR da loja A e uploads multipart reais para `POST /api/v1/sales/hourly/import-csv` e `POST /api/v1/sales/traffic/hourly/import-csv`. Os dois pedidos para a loja B devem receber 403; as contagens das tabelas PostgreSQL permanecem inalteradas. O smoke inclui também importações válidas na loja A e exige uma linha persistida por endpoint. A implementação do smoke está concluída, mas a evidência de execução depende do CI do commit.
+
+
+A cobertura PostgreSQL foi alargada à importação diária `POST /api/v1/sales/import-csv`. O smoke `postgres_sales_import_authorization_smoke.py` passa agora a testar os três endpoints CSV (diário, vendas horárias e tráfego horário), com rejeição cross-store, contagens persistidas e operações positivas na loja autorizada. A nova extensão aguarda execução CI.
