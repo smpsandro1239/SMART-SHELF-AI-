@@ -83,3 +83,12 @@ Added `test_catalogue_and_warehouse_master_data_writes_are_admin_only` to exerci
 - Commits de código/teste: `724f84d` e `0d5b9aa`.
 - Validação pendente: API CI, Quality Gates e Demo Docker Compose. As execuções iniciadas para commits intermédios foram supersedidas; a validação deve ser confirmada na HEAD final.
 - A política de capacidade/peso/temperatura continua em aberto: o perfil físico pode não existir e a colocação também representa registo de stock físico existente; não bloquear dados sem uma regra operacional explícita.
+
+
+## 18-11-2026 — Cobertura do slotting físico por API
+- A revisão confirmou que a lógica de recomendação física já calcula ocupação por perfil, capacidade volumétrica e ponderal, temperatura e segregação; localizações com ocupação desconhecida são excluídas em vez de tratadas como vazias.
+- A rota permanece consultiva: não move stock nem reserva capacidade.
+- Adicionado teste de integração com JWT para garantir que a rota API expõe candidatos compatíveis, rejeita capacidade volumétrica insuficiente e incompatibilidade térmica, calcula volume/peso e ordena por distância.
+- Corrigida a docstring do módulo, que ainda afirmava que as localizações e restrições físicas não estavam modeladas.
+- Commits: `135779d` (teste API) e `3fab8b8` (documentação do módulo).
+- Validação CI do novo teste pendente.
