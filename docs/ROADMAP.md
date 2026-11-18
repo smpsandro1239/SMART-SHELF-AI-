@@ -109,3 +109,14 @@ Só marcar uma tarefa de validação como concluída quando existir implementaç
 ## Critérios de prontidão para piloto
 
 O demo só deve ser anunciado como aceite ponta-a-ponta depois da checklist manual de [DEMO-ACCEPTANCE.md](DEMO-ACCEPTANCE.md) estar preenchida com evidência real. CI verde valida código e testes automatizados, mas não substitui ensaio de browser, acessibilidade, dados representativos, backups/restauro ou integrações externas.
+
+## Auditoria de autorização — integrações externas (2026-11-18)
+
+- [x] Confirmar controlo ADMIN nos handlers de criação, listagem, alteração e cobertura de integrações externas por loja.
+- [x] Acrescentar teste de integração HTTP com JWT para SUPERVISOR e EMPLOYEE nas quatro operações, incluindo verificação de ausência de efeitos laterais.
+- [ ] Validar a nova cobertura no API CI e Quality Gates.
+- [ ] Reconciliar `docs/security/http-route-inventory.md`: o inventário actualmente documenta 107 declarações e parte de uma revisão anterior de `main.py`; não deve ser tratado como inventário completo até regeneração e revisão.
+- [ ] Continuar a auditoria handler-a-handler dos restantes endpoints e caminhos indirectos.
+
+**Limite:** o teste acrescentado usa SQLite isolado. Não prova concorrência PostgreSQL nem fecha a auditoria global de autorização.
+
