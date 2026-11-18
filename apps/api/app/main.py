@@ -2559,7 +2559,14 @@ def get_shelf_image_purge_eligibility(
     response_model=list[ShelfImageRetentionEventRead],
     tags=["computer-vision"],
 )
-def list_shelf_image_retention_events(image_id: int, request: Request, db: Session = Depends(get_db)):
+def list_shelf_image_retention_events(
+    image_id: int,
+    request: Request,
+    limit: int = 100,
+    offset: int = 0,
+    db: Session = Depends(get_db),
+):
+    """List immutable retention history with bounded, stable chronological pagination."""
     item = db.get(models.ShelfImage, image_id)
     if item is None:
         raise HTTPException(status_code=404, detail="Shelf image not found")
@@ -2572,7 +2579,12 @@ def list_shelf_image_retention_events(image_id: int, request: Request, db: Sessi
     return (
         db.query(models.ShelfImageRetentionEvent)
         .filter(models.ShelfImageRetentionEvent.shelf_image_id == image_id)
-        .order_by(models.ShelfImageRetentionEvent.created_at, models.ShelfImageRetentionEvent.id)
+        .order_by(
+            models.ShelfImageRetentionEvent.created_at.asc(),
+            models.ShelfImageRetentionEvent.id.asc(),
+        )
+        .offset(max(0, offset))
+        .limit(max(1, min(limit, 500)))
         .all()
     )
 
