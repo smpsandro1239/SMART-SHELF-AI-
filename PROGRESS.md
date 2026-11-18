@@ -237,3 +237,14 @@ Added `test_catalogue_and_warehouse_master_data_writes_are_admin_only` to exerci
 - Commits: `a475e7f` (endpoints), `b7d6d98` (teste), `a97fb8d` (ordenação da paginação da evidência fundida).
 - Validação API CI, Quality Gates e Docker Compose pendente; não declarar a alteração validada até os workflows terminarem.
 - O gate global de paginação/custos continua aberto: faltam auditoria sistemática de todos os endpoints derivados de imagem, contagens totais, índices e avaliação de planos de consulta.
+
+
+## 2026-11-18 — Paginação adicional de auditoria de artefactos e revisões humanas
+- Acrescentado `offset` limitado e ordenação estável a `GET /api/v1/shelf-images/{image_id}/artifacts`, ao histórico imutável de `disposition-events` e ao histórico de revisões humanas de deteções.
+- A autorização ADMIN, o isolamento por loja, a verificação da relação imagem/artefacto e o bloqueio de leitura de imagens não activas mantêm-se antes da consulta paginada.
+- Testes de regressão adicionados para referências, eventos de disposição e histórico de revisões: duas páginas consecutivas, `limit=0` e `offset` negativo.
+- Commits de implementação/testes: `2180c02`, `8a9e676`, `e645e7b`.
+- Quality Gates [44256610346](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44256610346): **1136 passed, 1 skipped, 1 warning**; compilação Python e build TypeScript/produção aprovados.
+- Demo Docker Compose [44256610406](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44256610406): build, arranque, readiness, seed e perfis do worker aprovados.
+- API CI [44256610563](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44256610563): todos os smoke tests PostgreSQL concluídos com sucesso; suite API ainda estava em execução na última consulta. Não declarar o workflow integralmente concluído até confirmar o resultado final.
+- Limitação mantida: a auditoria global de custos de consulta continua aberta; faltam contagens totais, revisão sistemática de índices e análise de planos em dados representativos.
