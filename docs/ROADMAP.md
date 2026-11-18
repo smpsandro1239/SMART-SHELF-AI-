@@ -21,6 +21,13 @@
 - [x] Documentar execução, segurança e critérios de interpretação em [PERFORMANCE-QUERY-AUDIT.md](PERFORMANCE-QUERY-AUDIT.md).
 - [ ] Executar em staging/réplica com volume representativo; nenhuma decisão de índice deve ser tomada antes dessa evidência.
 
+### Acessibilidade e navegação responsiva — 2026-11-18
+
+- [x] Adicionar skip link para o conteúdo principal e landmark de navegação com nome acessível.
+- [x] Disponibilizar navegação equivalente em ecrãs pequenos, onde a barra lateral deixa de estar visível.
+- [x] Reforçar indicadores de foco visível e anúncio do estado inicial de carregamento.
+- [ ] Validar manualmente teclado, leitor de ecrã, contraste de todos os estados e comportamento real em browser; não declarar conformidade WCAG 2.2 AA apenas com o build.
+
 ### Prioridades ainda abertas
 
 1. **P1 — desempenho:** executar `apps/api/scripts/postgres_image_query_plan_audit.py` numa réplica/staging com volume representativo; analisar planos `EXPLAIN (ANALYZE, BUFFERS)` e medir paginação profunda antes de acrescentar índices ou alterar contratos. Procedimento em [PERFORMANCE-QUERY-AUDIT.md](PERFORMANCE-QUERY-AUDIT.md).
