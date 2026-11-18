@@ -3962,3 +3962,843 @@ def test_supervisor_can_retry_failed_image_once_and_employee_is_denied(auth_clie
         assert image.analysis_started_at is None
         assert image.analysis_completed_at is None
         assert image.model_version is None
+
+def test_external_integration_management_is_admin_only_over_http(auth_client):
+    client, ids, store_ids = auth_client
+    store_id = store_ids["a"]
+    headers_by_role = {
+        "SUPERVISOR": bearer(ids["supervisor_a"], "SUPERVISOR"),
+        "EMPLOYEE": bearer(ids["employee_a"], "EMPLOYEE"),
+    }
+    requests = [
+        ("POST", f"/api/v1/stores/{store_id}/external-integrations", {
+            "external_system": "backup-vault",
+            "provider": "s3-compatible",
+        }),
+        ("GET", f"/api/v1/stores/{store_id}/external-integrations", None),
+        ("PATCH", f"/api/v1/stores/{store_id}/external-integrations/999999", {
+            "status": "REVOKED",
+        }),
+        ("GET", f"/api/v1/stores/{store_id}/external-integrations/coverage", None),
+    ]
+
+    with main_module.SessionLocal() as db:
+        before = db.query(models.StoreExternalIntegration).count()
+
+    for role, headers in headers_by_role.items():
+        for method, path, payload in requests:
+            response = client.request(method, path, json=payload, headers=headers)
+            assert response.status_code == 403, (
+                f"{role} must not access external integration management: "
+                f"{method} {path} returned {response.status_code}"
+            )
+
+    with main_module.SessionLocal() as db:
+        after = db.query(models.StoreExternalIntegration).count()
+    assert after == before, "Denied requests must not create integration records"
+
+def test_store_employee_directory_is_scoped_to_supervisor_store(auth_client):
+    client, ids, store_ids = auth_client
+
+    with main_module.SessionLocal() as db:
+        inactive_employee = models.User(
+            email="inactive-employee-a@example.test",
+            full_name="Inactive Employee A",
+            password_hash="test-only",
+            role="EMPLOYEE",
+            store_id=store_ids["a"],
+            is_active=False,
+        )
+        db.add(inactive_employee)
+        db.commit()
+
+    supervisor_response = client.get(
+        "/api/v1/store-employees",
+        headers=bearer(ids["supervisor_a"], "SUPERVISOR"),
+    )
+    assert supervisor_response.status_code == 200, supervisor_response.text
+    supervisor_employees = supervisor_response.json()
+    assert {item["id"] for item in supervisor_employees} == {
+        ids["employee_a"], ids["employee_a_peer"]
+    }
+    assert all(item["store_id"] == store_ids["a"] for item in supervisor_employees)
+    assert all(item["is_active"] for item in supervisor_employees)
+
+    foreign_store_response = client.get(
+        f"/api/v1/store-employees?store_id={store_ids['b']}",
+        headers=bearer(ids["supervisor_a"], "SUPERVISOR"),
+    )
+    assert foreign_store_response.status_code == 403
+
+    admin_response = client.get(
+        f"/api/v1/store-employees?store_id={store_ids['b']}",
+        headers=bearer(ids["admin"], "ADMIN"),
+    )
+    assert admin_response.status_code == 200, admin_response.text
+    assert {item["id"] for item in admin_response.json()} == {ids["employee_b"]}
+
+    employee_response = client.get(
+        "/api/v1/store-employees",
+        headers=bearer(ids["employee_a"], "EMPLOYEE"),
+    )
+    assert employee_response.status_code == 403
+
+
+
+def test_shelf_image_external_artifact_governance_is_admin_only_over_http(auth_client):
+    client, ids, store_ids = auth_client
+    image_id = ids["image_a"]
+    with main_module.SessionLocal() as db:
+        artifact = models.ShelfImageArtifactReference(
+            shelf_image_id=image_id,
+            store_id=store_ids["a"],
+            artifact_type="OTHER",
+            external_system="authorization-test",
+            external_reference="object://authorization-test/artifact-1",
+            declared_by_user_id=ids["admin"],
+        )
+        db.add(artifact)
+        db.commit()
+        db.refresh(artifact)
+        artifact_id = artifact.id
+
+    headers_by_role = {
+        "SUPERVISOR": bearer(ids["supervisor_a"], "SUPERVISOR"),
+        "EMPLOYEE": bearer(ids["employee_a"], "EMPLOYEE"),
+    }
+    snapshot_payload = {
+        "external_system": "authorization-test",
+        "snapshot_id": "denied-snapshot",
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "inventory_complete": True,
+        "entries": [{
+            "artifact_type": "OTHER",
+            "external_reference": "object://authorization-test/artifact-1",
+            "state": "PRESENT",
+        }],
+        "key_id": "legacy",
+        "signature": "a" * 64,
+    }
+    requests = [
+        ("POST", f"/api/v1/shelf-images/{image_id}/artifacts", {
+            "artifact_type": "OTHER",
+            "external_system": "authorization-test",
+            "external_reference": "object://authorization-test/unauthorized-create",
+        }),
+        ("GET", f"/api/v1/shelf-images/{image_id}/artifacts", None),
+        ("POST", f"/api/v1/shelf-images/{image_id}/artifact-inventory-snapshots", snapshot_payload),
+        ("GET", f"/api/v1/shelf-images/{image_id}/artifacts/{artifact_id}/access", None),
+        ("POST", f"/api/v1/shelf-images/{image_id}/artifacts/{artifact_id}/disposition-events", {
+            "action": "PROPOSE",
+            "reason": "Pedido de teste não autorizado",
+        }),
+        ("GET", f"/api/v1/shelf-images/{image_id}/artifacts/{artifact_id}/disposition-events", None),
+    ]
+
+    with main_module.SessionLocal() as db:
+        before = {
+            "artifacts": db.query(models.ShelfImageArtifactReference).count(),
+            "snapshots": db.query(models.ShelfImageArtifactInventorySnapshot).count(),
+            "disposition_events": db.query(models.ShelfImageArtifactDispositionEvent).count(),
+        }
+
+    for role, headers in headers_by_role.items():
+        for method, path, payload in requests:
+            response = client.request(method, path, json=payload, headers=headers)
+            assert response.status_code == 403, (
+                f"{role} must not access external artifact governance: "
+                f"{method} {path} returned {response.status_code}"
+            )
+
+    with main_module.SessionLocal() as db:
+        after = {
+            "artifacts": db.query(models.ShelfImageArtifactReference).count(),
+            "snapshots": db.query(models.ShelfImageArtifactInventorySnapshot).count(),
+            "disposition_events": db.query(models.ShelfImageArtifactDispositionEvent).count(),
+        }
+    assert after == before, "Denied requests must not persist artifact governance records"
+
+
+
+def test_store_external_integration_governance_is_admin_only_over_http(auth_client):
+    client, ids, store_ids = auth_client
+    store_id = store_ids["a"]
+    with main_module.SessionLocal() as db:
+        integration = models.StoreExternalIntegration(
+            store_id=store_id,
+            external_system="AUTH-EXTERNAL-BASELINE",
+            provider="test-provider",
+            status="ACTIVE",
+            required_for_retention=True,
+            capabilities=["inventory.read"],
+            created_by_user_id=ids["admin"],
+            updated_by_user_id=ids["admin"],
+        )
+        db.add(integration)
+        db.commit()
+        db.refresh(integration)
+        integration_id = integration.id
+
+    headers_by_role = {
+        "SUPERVISOR": bearer(ids["supervisor_a"], "SUPERVISOR"),
+        "EMPLOYEE": bearer(ids["employee_a"], "EMPLOYEE"),
+    }
+    requests = [
+        ("POST", f"/api/v1/stores/{store_id}/external-integrations", {
+            "external_system": "AUTH-EXTERNAL-UNAUTHORIZED",
+            "provider": "test-provider",
+            "required_for_retention": True,
+            "capabilities": ["inventory.read"],
+        }),
+        ("GET", f"/api/v1/stores/{store_id}/external-integrations", None),
+        ("GET", f"/api/v1/stores/{store_id}/external-integrations/coverage", None),
+        ("PATCH", f"/api/v1/stores/{store_id}/external-integrations/{integration_id}", {
+            "status": "REVOKED",
+        }),
+    ]
+
+    with main_module.SessionLocal() as db:
+        before_count = db.query(models.StoreExternalIntegration).count()
+        before = db.get(models.StoreExternalIntegration, integration_id)
+        before_state = (before.status, before.required_for_retention, list(before.capabilities))
+
+    for role, headers in headers_by_role.items():
+        for method, path, payload in requests:
+            response = client.request(method, path, json=payload, headers=headers)
+            assert response.status_code == 403, (
+                f"{role} must not access external integration governance: "
+                f"{method} {path} returned {response.status_code}"
+            )
+
+    with main_module.SessionLocal() as db:
+        after_count = db.query(models.StoreExternalIntegration).count()
+        after = db.get(models.StoreExternalIntegration, integration_id)
+        after_state = (after.status, after.required_for_retention, list(after.capabilities))
+
+    assert after_count == before_count, "Denied requests must not create external integrations"
+    assert after_state == before_state, "Denied requests must not mutate external integration policy"
+
+
+def test_admin_external_integration_management_is_store_scoped_over_http(auth_client):
+    client, ids, store_ids = auth_client
+    admin_headers = bearer(ids["admin"], "ADMIN")
+    external_system = "auth-backup-store-a"
+
+    created = client.post(
+        f"/api/v1/stores/{store_ids['a']}/external-integrations",
+        json={
+            "external_system": external_system,
+            "provider": "test-provider",
+            "required_for_retention": True,
+            "capabilities": ["inventory.read", "retention.attest"],
+        },
+        headers=admin_headers,
+    )
+    assert created.status_code == 201, created.text
+    integration = created.json()
+    integration_id = integration["id"]
+    assert integration["store_id"] == store_ids["a"]
+    assert integration["external_system"] == external_system
+    assert integration["status"] == "ACTIVE"
+    assert integration["required_for_retention"] is True
+    assert integration["created_by_user_id"] == ids["admin"]
+    assert not ({"secret", "secret_key", "signing_key", "credentials"} & set(integration))
+
+    store_a_list = client.get(
+        f"/api/v1/stores/{store_ids['a']}/external-integrations",
+        headers=admin_headers,
+    )
+    store_b_list = client.get(
+        f"/api/v1/stores/{store_ids['b']}/external-integrations",
+        headers=admin_headers,
+    )
+    assert store_a_list.status_code == 200, store_a_list.text
+    assert [item["id"] for item in store_a_list.json()] == [integration_id]
+    assert store_b_list.status_code == 200, store_b_list.text
+    assert store_b_list.json() == []
+
+    coverage = client.get(
+        f"/api/v1/stores/{store_ids['a']}/external-integrations/coverage",
+        headers=admin_headers,
+    )
+    assert coverage.status_code == 200, coverage.text
+    assert coverage.json()["store_id"] == store_ids["a"]
+    assert coverage.json()["required_integrations"] == 1
+    assert coverage.json()["active_required_integrations"] == 1
+    assert coverage.json()["never_seen_integrations"] == [external_system]
+
+    cross_store_update = client.patch(
+        f"/api/v1/stores/{store_ids['b']}/external-integrations/{integration_id}",
+        json={"status": "REVOKED"},
+        headers=admin_headers,
+    )
+    assert cross_store_update.status_code == 404, cross_store_update.text
+
+    unchanged = client.get(
+        f"/api/v1/stores/{store_ids['a']}/external-integrations",
+        headers=admin_headers,
+    )
+    assert unchanged.status_code == 200, unchanged.text
+    assert unchanged.json()[0]["status"] == "ACTIVE"
+
+    revoked = client.patch(
+        f"/api/v1/stores/{store_ids['a']}/external-integrations/{integration_id}",
+        json={"status": "REVOKED", "required_for_retention": False},
+        headers=admin_headers,
+    )
+    assert revoked.status_code == 200, revoked.text
+    assert revoked.json()["status"] == "REVOKED"
+    assert revoked.json()["required_for_retention"] is False
+    assert revoked.json()["updated_by_user_id"] == ids["admin"]
+
+
+
+
+def test_admin_can_manage_store_external_integrations_over_http(auth_client):
+    client, ids, store_ids = auth_client
+    store_id = store_ids["a"]
+    headers = bearer(ids["admin"], "ADMIN")
+    external_system = "AUTH-HTTP-ADMIN-SOURCE"
+
+    created = client.post(
+        f"/api/v1/stores/{store_id}/external-integrations",
+        json={
+            "external_system": external_system,
+            "provider": "test-provider",
+            "required_for_retention": True,
+            "capabilities": ["inventory.read", "inventory.attest"],
+        },
+        headers=headers,
+    )
+    assert created.status_code == 201, created.text
+    created_payload = created.json()
+    assert created_payload["store_id"] == store_id
+    assert created_payload["external_system"] == external_system
+    assert created_payload["status"] == "ACTIVE"
+    assert created_payload["required_for_retention"] is True
+    assert created_payload["last_seen_at"] is None
+    assert "secret" not in created_payload
+    integration_id = created_payload["id"]
+
+    listed = client.get(
+        f"/api/v1/stores/{store_id}/external-integrations",
+        headers=headers,
+    )
+    assert listed.status_code == 200, listed.text
+    assert any(item["id"] == integration_id for item in listed.json())
+
+    coverage = client.get(
+        f"/api/v1/stores/{store_id}/external-integrations/coverage",
+        headers=headers,
+    )
+    assert coverage.status_code == 200, coverage.text
+    assert coverage.json()["required_integrations"] == 1
+    assert coverage.json()["active_required_integrations"] == 1
+    assert coverage.json()["never_seen_integrations"] == [external_system]
+    assert coverage.json()["coverage_complete"] is False
+
+    updated = client.patch(
+        f"/api/v1/stores/{store_id}/external-integrations/{integration_id}",
+        json={"status": "REVOKED"},
+        headers=headers,
+    )
+    assert updated.status_code == 200, updated.text
+    assert updated.json()["status"] == "REVOKED"
+
+    revoked_coverage = client.get(
+        f"/api/v1/stores/{store_id}/external-integrations/coverage",
+        headers=headers,
+    )
+    assert revoked_coverage.status_code == 200, revoked_coverage.text
+    assert revoked_coverage.json()["active_required_integrations"] == 0
+    assert revoked_coverage.json()["missing_or_revoked_integrations"] == [external_system]
+
+
+def test_employee_cannot_access_human_review_workflows_over_http(auth_client):
+    """Employees may inspect their own detection history, but cannot perform reviews."""
+    client, ids, _ = auth_client
+    headers = bearer(ids["employee_a"], "EMPLOYEE")
+    detection_id = ids["detection_a"]
+    review_path = f"/api/v1/shelf-image-detections/{detection_id}/reviews"
+
+    with main_module.SessionLocal() as db:
+        before = db.query(models.DetectionSkuReview).count()
+
+    requests = [
+        ("GET", "/api/v1/shelf-image-review-queue"),
+        ("GET", "/api/v1/shelf-image-review-queue/summary"),
+        ("GET", "/api/v1/sku-evaluation/reviewed"),
+        ("GET", "/api/v1/training-candidates/reviewed"),
+        ("POST", review_path),
+    ]
+    for method, path in requests:
+        response = client.request(method, path, json={} if method == "POST" else None, headers=headers)
+        assert response.status_code == 403, (
+            f"EMPLOYEE must not access human-review workflow: "
+            f"{method} {path} returned {response.status_code}"
+        )
+
+    with main_module.SessionLocal() as db:
+        after = db.query(models.DetectionSkuReview).count()
+    assert after == before, "Denied employee review requests must not create review records"
+
+
+def test_supervisor_cannot_access_other_store_warehouse_resources_over_http(auth_client):
+    """Warehouse location and placement endpoints must enforce store ownership."""
+    client, ids, store_ids = auth_client
+    headers = bearer(ids["supervisor_a"], "SUPERVISOR")
+    store_b = store_ids["b"]
+    location_b = ids["warehouse_location_b"]
+
+    with main_module.SessionLocal() as db:
+        locations_before = db.query(models.WarehouseLocation).filter_by(store_id=store_b).count()
+        placements_before = db.query(models.WarehouseProductPlacement).count()
+
+    requests = [
+        ("GET", f"/api/v1/warehouse/locations?store_id={store_b}", None),
+        ("POST", "/api/v1/warehouse/locations", {
+            "store_id": store_b,
+            "code": "A-CROSS-STORE-ATTEMPT",
+            "distance_to_picking_m": 5,
+            "max_volume_cm3": 50000,
+            "max_weight_kg": 50,
+        }),
+        ("POST", "/api/v1/warehouse/placements", {
+            "location_id": location_b,
+            "product_id": ids["product"],
+            "quantity": 3,
+        }),
+    ]
+    for method, path, payload in requests:
+        response = client.request(method, path, json=payload, headers=headers)
+        assert response.status_code == 403, (
+            f"SUPERVISOR from store A must not access store B warehouse data: "
+            f"{method} {path} returned {response.status_code}"
+        )
+
+    with main_module.SessionLocal() as db:
+        locations_after = db.query(models.WarehouseLocation).filter_by(store_id=store_b).count()
+        placements_after = db.query(models.WarehouseProductPlacement).count()
+    assert locations_after == locations_before, "Denied cross-store location creation must have no side effects"
+    assert placements_after == placements_before, "Denied cross-store placement creation must have no side effects"
+
+
+def test_supervisor_cannot_access_other_store_pallets_policies_or_events_over_http(auth_client):
+    """A supervisor cannot read or mutate pallet operations belonging to another store."""
+    client, ids, store_ids = auth_client
+    headers = bearer(ids["supervisor_a"], "SUPERVISOR")
+    store_b = store_ids["b"]
+
+    with main_module.SessionLocal() as db:
+        pallet_level = models.ProductPackagingLevel(
+            product_id=ids["product"],
+            code="AUTH-PALLET-LEVEL",
+            name="Palete de teste",
+            package_type="PALLET",
+            base_units_per_package=100,
+            is_active=True,
+        )
+        db.add(pallet_level)
+        db.flush()
+        pallet = models.StorePallet(
+            store_id=store_b,
+            product_id=ids["product"],
+            packaging_level_id=pallet_level.id,
+            pallet_code="AUTH-B-PALLET-01",
+            base_quantity=10,
+            status="READY",
+            location_type="WAREHOUSE",
+            location_code="B-WAREHOUSE-01",
+        )
+        policy = models.PalletRotationPolicy(
+            store_id=store_b,
+            product_id=ids["product"],
+            threshold_ratio=0.5,
+            is_enabled=True,
+        )
+        db.add_all([pallet, policy])
+        db.flush()
+        db.add(models.PalletRotationEvent(
+            pallet_id=pallet.id,
+            event_type="REGISTERED",
+            to_location_type="WAREHOUSE",
+            to_location_code="B-WAREHOUSE-01",
+            quantity_before=0,
+            quantity_after=10,
+            reason="Initial test fixture",
+        ))
+        db.commit()
+        pallet_id = pallet.id
+        policy_id = policy.id
+        packaging_level_id = pallet_level.id
+
+    with main_module.SessionLocal() as db:
+        events_before = db.query(models.PalletRotationEvent).filter_by(pallet_id=pallet_id).count()
+        policy_before = db.get(models.PalletRotationPolicy, policy_id)
+        policy_state_before = (float(policy_before.threshold_ratio), policy_before.is_enabled)
+        pallet_before = db.get(models.StorePallet, pallet_id)
+        pallet_state_before = (pallet_before.status, float(pallet_before.base_quantity), pallet_before.location_type)
+
+    requests = [
+        ("GET", f"/api/v1/warehouse/pallets?store_id={store_b}", None),
+        ("POST", "/api/v1/warehouse/pallets", {
+            "store_id": store_b,
+            "product_id": ids["product"],
+            "packaging_level_id": packaging_level_id,
+            "pallet_code": "AUTH-CROSS-STORE-ATTEMPT",
+            "base_quantity": 10,
+            "status": "READY",
+            "location_type": "WAREHOUSE",
+            "location_code": "B-WAREHOUSE-01",
+        }),
+        ("PATCH", f"/api/v1/warehouse/pallet-rotation/policies/{policy_id}", {
+            "threshold_ratio": 0.75,
+        }),
+        ("GET", f"/api/v1/warehouse/pallets/{pallet_id}/events?store_id={store_b}", None),
+        ("POST", f"/api/v1/warehouse/pallets/{pallet_id}/events", {
+            "expected_status": "READY",
+            "expected_base_quantity": 10,
+            "status": "QUARANTINED",
+            "reason": "Cross-store authorization probe",
+        }),
+    ]
+    for method, path, payload in requests:
+        response = client.request(method, path, json=payload, headers=headers)
+        assert response.status_code == 403, (
+            f"SUPERVISOR from store A must not access store B pallet operations: "
+            f"{method} {path} returned {response.status_code}"
+        )
+
+    with main_module.SessionLocal() as db:
+        events_after = db.query(models.PalletRotationEvent).filter_by(pallet_id=pallet_id).count()
+        policy_after = db.get(models.PalletRotationPolicy, policy_id)
+        policy_state_after = (float(policy_after.threshold_ratio), policy_after.is_enabled)
+        pallet_after = db.get(models.StorePallet, pallet_id)
+        pallet_state_after = (pallet_after.status, float(pallet_after.base_quantity), pallet_after.location_type)
+    assert events_after == events_before, "Denied cross-store event requests must not append lifecycle events"
+    assert policy_state_after == policy_state_before, "Denied cross-store requests must not alter rotation policy"
+    assert pallet_state_after == pallet_state_before, "Denied cross-store requests must not alter pallet state"
+
+def test_supervisor_cannot_access_other_store_sales_and_forecasts_over_http(auth_client):
+    """Sales and forecast endpoints must reject a supervisor from another store."""
+    client, ids, store_ids = auth_client
+    headers = bearer(ids["supervisor_a"], "SUPERVISOR")
+    store_b = store_ids["b"]
+    product_id = ids["product"]
+    hourly = {
+        "store_id": store_b, "product_id": product_id, "business_date": "2026-11-18",
+        "hour_of_day": 10, "quantity": 4, "source": "POS",
+        "external_reference": "AUTH-CROSS-STORE-HOURLY",
+    }
+    traffic = {
+        "store_id": store_b, "business_date": "2026-11-18", "hour_of_day": 10,
+        "customer_count": 12, "source": "POS", "external_reference": "AUTH-CROSS-STORE-TRAFFIC",
+    }
+    with main_module.SessionLocal() as db:
+        daily_before = db.query(models.DailySalesRecord).filter_by(store_id=store_b).count()
+        hourly_before = db.query(models.HourlySalesRecord).filter_by(store_id=store_b).count()
+        traffic_before = db.query(models.HourlyStoreTrafficRecord).filter_by(store_id=store_b).count()
+
+    attempts = [
+        ("POST", "/api/v1/sales/daily", {
+            "store_id": store_b, "product_id": product_id, "sales_date": "2026-11-18",
+            "quantity": 4, "source": "POS", "external_reference": "AUTH-CROSS-STORE-DAILY",
+        }),
+        ("POST", "/api/v1/sales/hourly", hourly),
+        ("POST", "/api/v1/sales/traffic/hourly", traffic),
+        ("POST", "/api/v1/sales/hourly/batch", {"records": [hourly]}),
+        ("POST", "/api/v1/sales/traffic/hourly/batch", {"records": [traffic]}),
+        ("GET", f"/api/v1/sales/daily?store_id={store_b}&product_id={product_id}&source=POS&days=7", None),
+        ("GET", f"/api/v1/sales/hourly?store_id={store_b}", None),
+        ("GET", f"/api/v1/sales/traffic/hourly?store_id={store_b}", None),
+        ("GET", f"/api/v1/forecasting/traffic-peaks?store_id={store_b}&days=14", None),
+        ("GET", f"/api/v1/forecasting/hourly-demand?store_id={store_b}&product_id={product_id}&horizon_days=7&history_days=28&source=POS", None),
+        ("GET", f"/api/v1/forecasting/demand?store_id={store_b}&product_id={product_id}&source=POS&lead_time_days=2&days=7", None),
+        ("GET", f"/api/v1/forecasting/stockout-risk?store_id={store_b}&product_id={product_id}&source=POS&lead_time_days=2&days=7", None),
+        ("GET", f"/api/v1/forecasting/stockout-risk/portfolio?store_id={store_b}&source=POS&lead_time_days=2&days=7", None),
+        ("GET", f"/api/v1/warehouse/slotting-recommendations?store_id={store_b}&source=POS&days=7", None),
+        ("GET", f"/api/v1/warehouse/pallet-rotation/hourly-profile?store_id={store_b}&product_id={product_id}&days=7", None),
+        ("GET", f"/api/v1/warehouse/pallet-rotation/portfolio-from-history?store_id={store_b}&current_hour=10&days=7", None),
+    ]
+    for method, path, payload in attempts:
+        response = client.request(method, path, json=payload, headers=headers)
+        assert response.status_code == 403, f"{method} {path} returned {response.status_code}"
+
+    with main_module.SessionLocal() as db:
+        assert db.query(models.DailySalesRecord).filter_by(store_id=store_b).count() == daily_before
+        assert db.query(models.HourlySalesRecord).filter_by(store_id=store_b).count() == hourly_before
+        assert db.query(models.HourlyStoreTrafficRecord).filter_by(store_id=store_b).count() == traffic_before
+
+
+def test_supervisor_cannot_import_other_store_hourly_sales_or_traffic_csv_over_http(auth_client):
+    """CSV ingestion must enforce store scope before parsing or persisting rows."""
+    client, ids, store_ids = auth_client
+    headers = bearer(ids["supervisor_a"], "SUPERVISOR")
+    store_b = store_ids["b"]
+
+    sales_csv = (
+        "product_id,business_date,hour_of_day,quantity,external_reference\n"
+        "not-a-product,2026-11-18,10,4,CROSS-STORE-SALES-CSV\n"
+    ).encode("utf-8")
+    traffic_csv = (
+        "business_date,hour_of_day,customer_count,external_reference\n"
+        "2026-11-18,10,12,CROSS-STORE-TRAFFIC-CSV\n"
+    ).encode("utf-8")
+
+    daily_csv = (
+        "product_id,sales_date,quantity,external_reference\n"
+        "not-a-product,2026-11-18,4,CROSS-STORE-DAILY-CSV\n"
+    ).encode("utf-8")
+
+    with main_module.SessionLocal() as db:
+        daily_before = db.query(models.DailySalesRecord).filter_by(store_id=store_b).count()
+        sales_before = db.query(models.HourlySalesRecord).filter_by(store_id=store_b).count()
+        traffic_before = db.query(models.HourlyStoreTrafficRecord).filter_by(store_id=store_b).count()
+
+    attempts = [
+        ("/api/v1/sales/import-csv", daily_csv, "daily-sales.csv"),
+        ("/api/v1/sales/hourly/import-csv", sales_csv, "sales.csv"),
+        ("/api/v1/sales/traffic/hourly/import-csv", traffic_csv, "traffic.csv"),
+    ]
+    for path, payload, filename in attempts:
+        response = client.post(
+            path,
+            data={"store_id": str(store_b), "source": "IMPORT"},
+            files={"file": (filename, payload, "text/csv")},
+            headers=headers,
+        )
+        assert response.status_code == 403, f"POST {path} returned {response.status_code}: {response.text}"
+
+    with main_module.SessionLocal() as db:
+        daily_after = db.query(models.DailySalesRecord).filter_by(store_id=store_b).count()
+        sales_after = db.query(models.HourlySalesRecord).filter_by(store_id=store_b).count()
+        traffic_after = db.query(models.HourlyStoreTrafficRecord).filter_by(store_id=store_b).count()
+    assert daily_after == daily_before, "Denied daily sales CSV import must not persist sales"
+    assert sales_after == sales_before, "Denied hourly sales CSV import must not persist sales"
+    assert traffic_after == traffic_before, "Denied traffic CSV import must not persist traffic"
+
+
+
+def test_zone_and_shelf_routes_enforce_admin_writes_and_store_scoped_reads(auth_client):
+    """Store layout reads are tenant-scoped and only ADMIN can change the hierarchy."""
+    client, ids, store_ids = auth_client
+    supervisor_headers = bearer(ids["supervisor_a"], "SUPERVISOR")
+    employee_headers = bearer(ids["employee_a"], "EMPLOYEE")
+    admin_headers = bearer(ids["admin"], "ADMIN")
+
+    with main_module.SessionLocal() as db:
+        zone_b = db.query(models.Zone).filter_by(store_id=store_ids["b"]).one()
+        zones_before = db.query(models.Zone).count()
+        shelves_before = db.query(models.Shelf).count()
+        zone_b_id = zone_b.id
+
+    supervisor_zones = client.get("/api/v1/zones", headers=supervisor_headers)
+    supervisor_foreign_zones = client.get(
+        "/api/v1/zones", params={"store_id": store_ids["b"]}, headers=supervisor_headers
+    )
+    supervisor_shelves = client.get("/api/v1/shelves", headers=supervisor_headers)
+    assert supervisor_zones.status_code == 200, supervisor_zones.text
+    assert {zone["store_id"] for zone in supervisor_zones.json()} == {store_ids["a"]}
+    assert supervisor_foreign_zones.status_code == 403
+    assert supervisor_shelves.status_code == 200, supervisor_shelves.text
+    assert {shelf["id"] for shelf in supervisor_shelves.json()} == {
+        ids["shelf_a_assigned"], ids["shelf_a_unassigned"], ids["shelf_a_peer"]
+    }
+
+    denied_zone = client.post(
+        "/api/v1/zones", json={"store_id": store_ids["b"], "name": "Unauthorized zone"},
+        headers=supervisor_headers,
+    )
+    denied_shelf = client.post(
+        "/api/v1/shelves", json={"zone_id": zone_b_id, "code": "UNAUTHORIZED-SHELF"},
+        headers=supervisor_headers,
+    )
+    employee_zones = client.get("/api/v1/zones", headers=employee_headers)
+    employee_shelves = client.get("/api/v1/shelves", headers=employee_headers)
+    assert denied_zone.status_code == 403
+    assert denied_shelf.status_code == 403
+    assert employee_zones.status_code == 403
+    assert employee_shelves.status_code == 403
+
+    with main_module.SessionLocal() as db:
+        assert db.query(models.Zone).count() == zones_before
+        assert db.query(models.Shelf).count() == shelves_before
+
+    admin_zone = client.post(
+        "/api/v1/zones", json={"store_id": store_ids["b"], "name": "Admin-created zone"},
+        headers=admin_headers,
+    )
+    assert admin_zone.status_code == 201, admin_zone.text
+    admin_shelf = client.post(
+        "/api/v1/shelves", json={"zone_id": admin_zone.json()["id"], "code": "ADMIN-CREATED-SHELF"},
+        headers=admin_headers,
+    )
+    assert admin_shelf.status_code == 201, admin_shelf.text
+    admin_zones = client.get("/api/v1/zones", headers=admin_headers)
+    assert admin_zones.status_code == 200
+    assert {zone["store_id"] for zone in admin_zones.json()} == {store_ids["a"], store_ids["b"]}
+
+
+def test_sales_batches_reject_mixed_store_payloads_over_http(auth_client):
+    """A batch must not mix tenant IDs, even when its first row is in scope."""
+    client, ids, store_ids = auth_client
+    headers = bearer(ids["supervisor_a"], "SUPERVISOR")
+    store_a, store_b = store_ids["a"], store_ids["b"]
+    product_id = ids["product"]
+
+    sales_rows = [
+        {
+            "store_id": store_a, "product_id": product_id, "business_date": "2026-11-18",
+            "hour_of_day": 11, "quantity": 2, "source": "POS",
+            "external_reference": "AUTH-MIXED-SALES-A",
+        },
+        {
+            "store_id": store_b, "product_id": product_id, "business_date": "2026-11-18",
+            "hour_of_day": 12, "quantity": 3, "source": "POS",
+            "external_reference": "AUTH-MIXED-SALES-B",
+        },
+    ]
+    traffic_rows = [
+        {
+            "store_id": store_a, "business_date": "2026-11-18", "hour_of_day": 11,
+            "customer_count": 8, "source": "POS", "external_reference": "AUTH-MIXED-TRAFFIC-A",
+        },
+        {
+            "store_id": store_b, "business_date": "2026-11-18", "hour_of_day": 12,
+            "customer_count": 9, "source": "POS", "external_reference": "AUTH-MIXED-TRAFFIC-B",
+        },
+    ]
+
+    with main_module.SessionLocal() as db:
+        sales_before = {
+            store_id: db.query(models.HourlySalesRecord).filter_by(store_id=store_id).count()
+            for store_id in (store_a, store_b)
+        }
+        traffic_before = {
+            store_id: db.query(models.HourlyStoreTrafficRecord).filter_by(store_id=store_id).count()
+            for store_id in (store_a, store_b)
+        }
+
+    sales_response = client.post(
+        "/api/v1/sales/hourly/batch", json={"records": sales_rows}, headers=headers
+    )
+    traffic_response = client.post(
+        "/api/v1/sales/traffic/hourly/batch", json={"records": traffic_rows}, headers=headers
+    )
+    assert sales_response.status_code == 422, sales_response.text
+    assert traffic_response.status_code == 422, traffic_response.text
+
+    with main_module.SessionLocal() as db:
+        for store_id in (store_a, store_b):
+            assert db.query(models.HourlySalesRecord).filter_by(store_id=store_id).count() == sales_before[store_id]
+            assert db.query(models.HourlyStoreTrafficRecord).filter_by(store_id=store_id).count() == traffic_before[store_id]
+
+
+
+def test_admin_registers_artifact_parent_lineage_over_http(auth_client):
+    client, ids, store_ids = auth_client
+    headers = bearer(ids["admin"], "ADMIN")
+    external_system = "artifact-lineage-api-test"
+
+    with main_module.SessionLocal() as db:
+        for store_id in (store_ids["a"], store_ids["b"]):
+            db.add(models.StoreExternalIntegration(
+                store_id=store_id,
+                external_system=external_system,
+                provider="test-provider",
+                status="ACTIVE",
+                required_for_retention=False,
+                capabilities=["artifact.read", "inventory.read"],
+                created_by_user_id=ids["admin"],
+                updated_by_user_id=ids["admin"],
+            ))
+        same_store_other_image = models.ShelfImage(
+            shelf_id=ids["shelf_a_assigned"],
+            original_filename="lineage-other-image.jpg",
+            storage_path=f"/tmp/{store_ids['a']}/lineage-other-image.jpg",
+            mime_type="image/jpeg",
+            file_size_bytes=10,
+            sha256="f" * 64,
+            analysis_status="PENDING",
+            retention_status="ACTIVE",
+        )
+        db.add(same_store_other_image)
+        db.commit()
+        db.refresh(same_store_other_image)
+        other_image_same_store_id = same_store_other_image.id
+
+    def register(image_id, external_reference, parent_reference_id=None):
+        payload = {
+            "artifact_type": "CROP",
+            "external_system": external_system,
+            "external_reference": external_reference,
+        }
+        if parent_reference_id is not None:
+            payload["parent_reference_id"] = parent_reference_id
+        return client.post(
+            f"/api/v1/shelf-images/{image_id}/artifacts",
+            json=payload,
+            headers=headers,
+        )
+
+    root = register(ids["image_a"], "bucket/source/root.jpg")
+    assert root.status_code == 201, root.text
+    root_id = root.json()["id"]
+    assert root.json()["parent_reference_id"] is None
+
+    child = register(ids["image_a"], "bucket/source/child.jpg", root_id)
+    assert child.status_code == 201, child.text
+    child_id = child.json()["id"]
+    assert child.json()["parent_reference_id"] == root_id
+
+    # An exact retry must preserve the same immutable parent relation.
+    retry = register(ids["image_a"], "bucket/source/child.jpg", root_id)
+    assert retry.status_code == 201, retry.text
+    assert retry.json()["id"] == child_id
+    assert retry.json()["parent_reference_id"] == root_id
+
+    # Reusing the same artifact identity with another lineage is a conflict.
+    conflicting_retry = register(ids["image_a"], "bucket/source/child.jpg")
+    assert conflicting_retry.status_code == 409
+
+    # Missing parents are rejected before any artifact row is created.
+    missing_parent = register(
+        ids["image_a"], "bucket/source/missing-parent.jpg", 999999999
+    )
+    assert missing_parent.status_code == 422
+
+    # A parent from another image in the same store is not a valid ancestor.
+    other_image_root = register(
+        other_image_same_store_id, "bucket/other-image/root.jpg"
+    )
+    assert other_image_root.status_code == 201, other_image_root.text
+    cross_image = register(
+        ids["image_a"],
+        "bucket/source/cross-image.jpg",
+        other_image_root.json()["id"],
+    )
+    assert cross_image.status_code == 422
+
+    # A parent from a different store is rejected even if it is a valid record.
+    other_store_root = register(ids["image_b"], "bucket/other-store/root.jpg")
+    assert other_store_root.status_code == 201, other_store_root.text
+    cross_store = register(
+        ids["image_a"],
+        "bucket/source/cross-store.jpg",
+        other_store_root.json()["id"],
+    )
+    assert cross_store.status_code == 422
+
+    listed = client.get(
+        f"/api/v1/shelf-images/{ids['image_a']}/artifacts",
+        headers=headers,
+    )
+    assert listed.status_code == 200, listed.text
+    by_reference = {
+        item["external_reference"]: item for item in listed.json()
+    }
+    assert by_reference["bucket/source/root.jpg"]["parent_reference_id"] is None
+    assert by_reference["bucket/source/child.jpg"]["parent_reference_id"] == root_id
+    assert "bucket/source/missing-parent.jpg" not in by_reference
+    assert "bucket/source/cross-image.jpg" not in by_reference
+    assert "bucket/source/cross-store.jpg" not in by_reference

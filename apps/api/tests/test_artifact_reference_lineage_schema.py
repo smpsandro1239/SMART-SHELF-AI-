@@ -135,3 +135,14 @@ def test_sqlite_migration_rejects_parent_lineage_mutation(tmp_path):
         assert parent_id == 3
     engine.dispose()
 
+
+
+def test_artifact_reference_api_rejects_boolean_parent_ids():
+    # bool is a subclass of int in Python; accepting True as ID 1 is unsafe.
+    with pytest.raises(ValidationError):
+        ShelfImageArtifactReferenceCreate(
+            artifact_type="CROP",
+            external_system="object-store-a",
+            external_reference="bucket/crops/boolean-parent.jpg",
+            parent_reference_id=True,
+        )

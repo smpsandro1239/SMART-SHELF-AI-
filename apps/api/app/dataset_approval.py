@@ -229,20 +229,6 @@ def run_release_gate(
         report["errors"] = errors
         return errors, report
 
-    operational_errors, operational_report = validate_internal_image_eligibility(
-        db_session,
-        provenance_record.get("images", []) if isinstance(provenance_record, dict) else [],
-    )
-    errors.extend(operational_errors)
-    report["checks"]["operational_image_eligibility"] = {
-        "passed": not operational_errors,
-        **operational_report,
-    }
-    if errors:
-        report["status"] = "BLOCKED"
-        report["errors"] = errors
-        return errors, report
-
     documents: dict[str, Any] = {}
     for split in SPLITS:
         path = split_paths.get(split)
@@ -303,6 +289,20 @@ def run_release_gate(
         report["checks"]["visual_review"] = {
             "passed": False,
             "errors": ["visual review could not run because one or more COCO splits are unavailable"],
+        }
+
+    # Acquire source locks only after file/COCO/review checks have succeeded.
+    # The caller may keep this transaction open through release creation and
+    # synchronous consumption without holding locks during the expensive audits.
+    if not errors:
+        operational_errors, operational_report = validate_internal_image_eligibility(
+            db_session,
+            provenance_record.get("images", []) if isinstance(provenance_record, dict) else [],
+        )
+        errors.extend(operational_errors)
+        report["checks"]["operational_image_eligibility"] = {
+            "passed": not operational_errors,
+            **operational_report,
         }
 
     report["status"] = "APPROVED" if not errors else "BLOCKED"

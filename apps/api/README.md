@@ -1315,3 +1315,14 @@ O registo não armazena chaves nem tokens. As chaves HMAC permanecem em `ARTIFAC
 
 
 A resposta de cobertura devolve `coverage_configured=false` e `coverage_complete=false` quando não existem fontes obrigatórias registadas. Quando existem, `coverage_complete=true` cobre apenas o conjunto configurado e exige todas as fontes ativas, observadas e dentro da janela de frescura. Não é prova da inexistência de conectores externos não declarados pelo administrador.
+
+
+## Execução de treino/publicação com gate de aprovação
+
+`python -m app.dataset_execution` é a única fronteira implementada para executar um consumidor síncrono sob a mesma transacção que valida as imagens internas. São obrigatórios `--release-record`, `--train`, `--val` e `--test`; a operação chama `run_release_gate` antes de criar a release ou lançar o consumidor. Os parâmetros `--review-train`, `--review-val` e `--review-test` têm de ser fornecidos em conjunto; `--require-visual-review` torna esses registos obrigatórios.
+
+A evidência de aprovação é incorporada na fingerprint da release através dos hashes do registo e do relatório do gate. O processo filho recebe `SMART_SHELF_DATASET_APPROVAL_STATUS`, `SMART_SHELF_DATASET_APPROVAL_MODE`, `SMART_SHELF_DATASET_APPROVAL_RECORD_SHA256` e `SMART_SHELF_DATASET_APPROVAL_REPORT_SHA256`, além dos identificadores habituais da release.
+
+Para imagens internas, as verificações de ficheiros, COCO, splits, qualidade e revisão decorrem antes da aquisição dos locks operacionais. Depois de validar a elegibilidade, a mesma sessão permanece aberta durante a criação da release e até o consumidor síncrono terminar. O timeout, um erro do processo ou qualquer excepção desencadeiam rollback/fecho da sessão.
+
+**Fora do âmbito:** não é uma lease distribuída. Um processo que se destaque, submeta trabalho a uma fila remota ou devolva antes de terminar o treino deixa de estar coberto pelos locks. Esses consumidores exigem um protocolo de claim/lease com fencing antes de serem suportados.

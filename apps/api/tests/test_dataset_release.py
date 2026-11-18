@@ -231,3 +231,43 @@ def test_release_manifest_rejects_non_portable_paths(tmp_path, file_name):
             writer.writerow({"split": split, "file_name": name, "size_bytes": 1, "sha256": "a" * 64})
     with pytest.raises(ValueError, match="unsafe file_name"):
         load_manifest(path)
+
+
+
+def test_approval_evidence_is_bound_to_release_fingerprint(tmp_path):
+    manifest, split, visual, provenance = setup_release_inputs(tmp_path)
+    registry = tmp_path / "registry"
+    approval_one = {
+        "status": "APPROVED", "mode": "training",
+        "record_sha256": "a" * 64, "gate_report_sha256": "b" * 64,
+    }
+    approval_two = {
+        "status": "APPROVED", "mode": "training",
+        "record_sha256": "c" * 64, "gate_report_sha256": "b" * 64,
+    }
+    first, first_created = create_release(
+        manifest, split, visual, registry,
+        provenance_path=provenance, approval_evidence=approval_one,
+    )
+    second, second_created = create_release(
+        manifest, split, visual, registry,
+        provenance_path=provenance, approval_evidence=approval_two,
+    )
+    assert first_created is True
+    assert second_created is True
+    assert first["approval"] == approval_one
+    assert second["approval"] == approval_two
+    assert first["fingerprint"] != second["fingerprint"]
+
+
+def test_release_rejects_malformed_approval_evidence(tmp_path):
+    manifest, split, visual, provenance = setup_release_inputs(tmp_path)
+    with pytest.raises(ValueError, match="record_sha256"):
+        create_release(
+            manifest, split, visual, tmp_path / "registry",
+            provenance_path=provenance,
+            approval_evidence={
+                "status": "APPROVED", "mode": "training",
+                "record_sha256": "not-a-digest", "gate_report_sha256": "b" * 64,
+            },
+        )

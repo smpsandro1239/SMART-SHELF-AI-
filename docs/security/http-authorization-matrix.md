@@ -44,11 +44,11 @@ Este documento regista a política de autorização aplicada pelo middleware HTT
 
 ## Validação do upload de imagens
 
-A suite JWT inclui `test_employee_upload_rejects_forged_image_and_unsupported_mime`, que verifica a rejeição de conteúdo PNG truncado/forjado e de MIME SVG, sem criar ficheiros nem registos na base de dados. Inclui também `test_employee_upload_sanitizes_client_filename`, que confirma que caminhos fornecidos pelo cliente são reduzidos ao nome base e que o ficheiro permanece no diretório da loja. Estes testes usam o handler HTTP real e SQLite isolado; não são uma validação PostgreSQL. A execução CI dos novos testes está pendente.
+A suite JWT inclui `test_employee_upload_rejects_forged_image_and_unsupported_mime`, que verifica a rejeição de conteúdo PNG truncado/forjado e de MIME SVG, sem criar ficheiros nem registos na base de dados. Inclui também `test_employee_upload_sanitizes_client_filename`, que confirma que caminhos fornecidos pelo cliente são reduzidos ao nome base e que o ficheiro permanece no diretório da loja. Estes testes usam o handler HTTP real e SQLite isolado; não são uma validação PostgreSQL. **Validação CI confirmada:** os testes de upload fazem parte da suite API, que passou no run [44291136290](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44291136290) (1148 aprovados, 1 ignorado, 1 aviso). Esta cobertura usa SQLite isolado; não a apresentar como smoke PostgreSQL.
 
 ## Validação PostgreSQL — sessões de captura
 
-O smoke `apps/api/scripts/postgres_capture_session_authorization_smoke.py` exercita a listagem de sessões com dois estabelecimentos e JWT reais: SUPERVISOR recebe apenas sessões da sua loja; o filtro por prateleira estrangeira devolve lista vazia; ADMIN vê ambas as lojas; EMPLOYEE recebe HTTP 403. O smoke está integrado no workflow API CI após as migrações e os restantes smoke tests PostgreSQL. A assinatura de `create_access_token` exige `user_id` e `role`; o helper do smoke fornece explicitamente os três claims de perfil. A execução CI deste cenário ainda não foi confirmada, pelo que a validação permanece pendente.
+O smoke `apps/api/scripts/postgres_capture_session_authorization_smoke.py` exercita a listagem de sessões com dois estabelecimentos e JWT reais: SUPERVISOR recebe apenas sessões da sua loja; o filtro por prateleira estrangeira devolve lista vazia; ADMIN vê ambas as lojas; EMPLOYEE recebe HTTP 403. O smoke está integrado no workflow API CI após as migrações e os restantes smoke tests PostgreSQL. A assinatura de `create_access_token` exige `user_id` e `role`; o helper do smoke fornece explicitamente os claims de perfil. A execução PostgreSQL deste cenário passou no API CI [44291136290](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44291136290), no passo “Verify PostgreSQL capture-session tenant authorization”.
 
 ## Cobertura de integração JWT
 
@@ -199,7 +199,7 @@ O commit `4b0a023ca7996864c4dfc40dc3703a067785bc4f` passou no API CI `4346847449
 
 ## Cobertura JWT — isolamento de inventário e localizações de armazém
 
-O teste `test_supervisor_jwt_cannot_read_or_write_foreign_inventory_and_placement_resources` acrescenta sete pedidos autenticados por JWT real de SUPERVISOR da loja A para recursos da loja B: listagem e leitura do último snapshot, criação de snapshot, consulta e atualização de política de frescura, criação de colocação numa localização estrangeira e recomendações de slotting. Todos exigem HTTP 403. A localização estrangeira é criada no fixture e os payloads de escrita são estruturalmente válidos, para que a resposta demonstre o controlo de âmbito no handler. O teste usa SQLite isolado; a validação PostgreSQL individual destes endpoints permanece pendente.
+O teste `test_supervisor_jwt_cannot_read_or_write_foreign_inventory_and_placement_resources` acrescenta sete pedidos autenticados por JWT real de SUPERVISOR da loja A para recursos da loja B: listagem e leitura do último snapshot, criação de snapshot, consulta e atualização de política de frescura, criação de colocação numa localização estrangeira e recomendações de slotting. Todos exigem HTTP 403. A localização estrangeira é criada no fixture e os payloads de escrita são estruturalmente válidos, para que a resposta demonstre o controlo de âmbito no handler. O teste HTTP usa SQLite isolado; a validação complementar PostgreSQL destes fluxos foi acrescentada pelo smoke `postgres_inventory_authorization_smoke.py`, executado com sucesso no API CI `44299045159`.
 
 
 ## Verificação de ausência de efeitos laterais — inventário cross-store
@@ -213,7 +213,7 @@ O script `apps/api/scripts/postgres_inventory_authorization_smoke.py` foi adicio
 
 O cenário cria duas lojas, um supervisor da loja A, um administrador e uma localização de armazém na loja B. Executa sete operações cross-store (listagem e leitura de snapshots, criação de snapshot, leitura e upsert de política de frescura, criação de colocação e recomendações de slotting) e exige HTTP 403 em todas. Em seguida verifica através da API e diretamente na base de dados que as tentativas recusadas não persistiram snapshots, políticas nem colocações. Por fim confirma que o supervisor consegue criar um snapshot e uma política na sua própria loja.
 
-**Estado:** implementação e integração CI publicadas; validação PostgreSQL real pendente da conclusão verde do workflow. O smoke test não fecha a auditoria global de autorização.
+**Estado:** smoke PostgreSQL 16 executado com sucesso no API CI `44299045159`: os sete pedidos cross-store receberam HTTP 403, a ausência de persistência foi confirmada e as operações permitidas na própria loja passaram. O smoke test não fecha a auditoria global de autorização.
 
 ## Retenção de imagens — validação recente
 
@@ -329,11 +329,69 @@ O teste `test_reviewed_sku_evaluation_is_scoped_to_supervisor_store` cobre diret
 - EMPLOYEE recebe HTTP 403 antes de qualquer agregação;
 - o filtro `model_version` é preservado no encaminhamento do relatório.
 
-A prova isola a fronteira HTTP/autorização e não valida o cálculo SQL das métricas. O teste usa SQLite isolado e mock do agregador; a validação CI deste commit está pendente.
+A prova isola a fronteira HTTP/autorização e não valida o cálculo SQL das métricas. O teste usa SQLite isolado e mock do agregador; a suite API CI mais recente (`44299045159`, 1149 testes aprovados) executou a cobertura. A validação PostgreSQL individual do agregador continua separada.
 
 ## Listagem de exemplares de embedding — isolamento da imagem de origem
 
 O teste JWT `test_product_embedding_exemplar_listing_is_scoped_to_source_image_store` cobre `GET /api/v1/product-embedding-exemplars` com exemplares associados a imagens de duas lojas. Confirma que SUPERVISOR da loja A só recebe exemplares cuja imagem de origem pertence à loja A, ADMIN recebe os exemplares das duas lojas e EMPLOYEE recebe HTTP 403. A imagem estrangeira é ativada no cenário para que o filtro de retenção não esconda uma falha de isolamento.
 
-A prova cobre a listagem HTTP e o âmbito da imagem de origem; não avalia a utilização dos vetores pelo motor de matching. Commit `07f46a43c17a9f617aea8b55a242b3d3f7426106`; CI pendente.
+A prova cobre a listagem HTTP e o âmbito da imagem de origem; não avalia a utilização dos vetores pelo motor de matching. A suite API CI mais recente (`44299045159`, 1149 testes aprovados) executou esta cobertura; não existe aqui uma validação PostgreSQL específica do endpoint.
 
+## Gestão de integrações externas — cobertura HTTP JWT acrescentada
+
+O teste `test_external_integration_management_is_admin_only_over_http` foi acrescentado à suite JWT para cobrir os quatro endpoints de gestão por loja: criação, listagem, alteração e consulta de cobertura. SUPERVISOR e EMPLOYEE têm de receber HTTP 403 nas quatro operações; o teste confirma ainda que as tentativas recusadas não criam registos de integração.
+
+A implementação dos handlers já exige explicitamente `ADMIN`; a cobertura atravessa o middleware HTTP com tokens JWT reais. API CI `44299045159` passou com **1149 testes aprovados, 1 ignorado e 1 aviso**, incluindo este teste. O teste usa SQLite isolado e não substitui uma validação PostgreSQL individual destes endpoints.
+
+## Diretório de funcionários — isolamento por loja
+
+O teste `test_store_employee_directory_is_scoped_to_supervisor_store` cobre `GET /api/v1/store-employees` com JWT real:
+
+- SUPERVISOR recebe apenas funcionários activos da sua loja;
+- funcionários inactivos não são incluídos;
+- a tentativa de filtrar explicitamente outra loja recebe HTTP 403;
+- ADMIN pode consultar os funcionários activos da loja indicada;
+- EMPLOYEE recebe HTTP 403.
+
+A implementação já aplicava estes filtros; a alteração acrescenta cobertura HTTP de regressão para evitar exposição de identidades entre lojas. O teste usa SQLite isolado. **Validação CI pendente** no commit `16666ead`; não equivale a smoke PostgreSQL individual do endpoint.
+
+
+
+## Diretório de funcionários — validação PostgreSQL adicionada
+
+O smoke `apps/api/scripts/postgres_store_employee_authorization_smoke.py` foi integrado no API CI. Cria duas lojas e testa o endpoint `GET /api/v1/store-employees` através de HTTP com JWT reais: SUPERVISOR limitado à loja própria e apenas a funcionários activos, filtro cross-store recusado com 403, ADMIN autorizado a consultar a segunda loja e EMPLOYEE recusado com 403.
+
+**Estado:** implementação do smoke e integração no workflow concluídas; execução CI ainda pendente. Até o passo dedicado passar, esta cobertura não deve ser apresentada como validação PostgreSQL aprovada.
+
+
+## Smoke PostgreSQL — diretório de funcionários (cobertura expandida)
+
+O smoke `apps/api/scripts/postgres_store_employee_authorization_smoke.py` também valida ausência de Bearer (401), JWT inválido (401), conta SUPERVISOR inactiva (401) e que a listagem global ADMIN exclui funcionários inactivos. Mantém os cenários de SUPERVISOR restrito à loja própria, filtro cross-store recusado (403), ADMIN com filtro explícito de loja e EMPLOYEE recusado (403).
+
+**Estado:** o código do smoke foi expandido no commit `e0ac4af806693cd203864ae92eb03e307fecafa6`; a execução PostgreSQL no API CI ainda não está confirmada.
+
+
+## Gestão de integrações externas — percurso ADMIN e isolamento por loja
+
+O teste JWT HTTP `test_admin_external_integration_management_is_store_scoped_over_http` cobre o percurso autorizado de ADMIN: criação, listagem, consulta da cobertura e revogação de uma integração. Confirma que a listagem de outra loja não revela a integração, que uma actualização com `store_id` incompatível devolve 404 e não altera o registo, e que a actualização na loja correcta identifica o ADMIN como autor. A resposta também é verificada para não expor campos de credenciais ou chaves. Esta cobertura usa SQLite isolado; não equivale a um smoke PostgreSQL individual destes handlers.
+
+**Validação CI:** pendente no commit desta ronda.
+
+
+## Linhagem de prateleiras e registos operacionais — validação PostgreSQL (18-11-2026)
+
+A migration `0050_shelf_record_store_lineage_guard` e o smoke `apps/api/scripts/postgres_shelf_record_lineage_smoke.py` passaram no API CI [44408063719](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44408063719), com PostgreSQL 16. Foram rejeitados INSERT/UPDATE cujo `store_id` diverge da loja alcançada por `shelf_id → zone_id → store_id` nas tabelas `observation_alerts`, `capture_sessions` e `replenishment_tasks`. O smoke também confirmou que mover uma prateleira ou zona com registos dependentes para outra loja é rejeitado e que os registos válidos permanecem intactos. Quality Gates [44408063767](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44408063767) passou. Esta evidência é específica à hierarquia e às três tabelas testadas; não encerra a auditoria global de autorização.
+
+
+## Linhagem pai/filho de artefactos externos — cobertura de registo (18-11-2026)
+
+O endpoint `POST /api/v1/shelf-images/{image_id}/artifacts` é ADMIN-only. A implementação bloqueia a imagem, a integração externa activa e, quando fornecido, o registo pai, exigindo que o pai pertença à mesma imagem e loja. A referência persistida expõe `parent_reference_id`; retries só são idempotentes quando o digest, release e pai coincidem. A migration 0046 impede reescrever a relação depois da criação.
+
+Foi acrescentado teste HTTP/JWT para criação de raiz/descendente, pai inexistente, pai de outra imagem na mesma loja, pai de outra loja, retry idempotente e conflito de linhagem. O contrato Pydantic rejeita booleanos como IDs. **Validação CI pendente:** a suite HTTP usa SQLite isolado; não constitui smoke PostgreSQL nem fecha a auditoria global.
+
+
+## Registo de linhagem pai/filho de artefactos externos — teste HTTP/JWT (18-11-2026)
+
+O teste `test_admin_registers_artifact_parent_lineage_over_http` exercita `POST /api/v1/shelf-images/{image_id}/artifacts` e a listagem associada com JWT ADMIN real. Confirma criação de referência raiz e descendente, persistência/devolução de `parent_reference_id`, retry exactamente idempotente, conflito quando a mesma identidade é reapresentada com outra linhagem, rejeição de pai inexistente, pai de outra imagem na mesma loja e pai de outra loja. A listagem final confirma que as referências recusadas não foram persistidas.
+
+**Validação:** o teste foi executado pela suite API no API CI [44410444406](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44410444406), commit `33425007fc016b220c3f49f95078444189fd1ec9`. O teste HTTP usa SQLite isolado; não constitui smoke PostgreSQL individual do endpoint. A política ADMIN-only já é exercida pelos testes de governação de artefactos externos, que verificam 403 para SUPERVISOR/EMPLOYEE e ausência de efeitos laterais. A auditoria global handler-a-handler permanece aberta.

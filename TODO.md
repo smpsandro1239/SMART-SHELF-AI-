@@ -1,3 +1,24 @@
+## Gestão HTTP de integrações externas — percurso ADMIN e isolamento de loja (2026-11-18)
+
+- [x] Acrescentar teste JWT HTTP do percurso ADMIN para criar, listar, consultar cobertura e revogar uma integração.
+- [x] Verificar isolamento por loja: listagem da loja B vazia e PATCH de integração da loja A através do caminho da loja B devolve 404 sem alterar o registo.
+- [x] Confirmar que a resposta não expõe campos de credenciais/chaves e que a auditoria identifica o ADMIN.
+- [ ] Confirmar API CI e Quality Gates no commit desta ronda; o teste usa SQLite isolado e não substitui um smoke PostgreSQL específico dos handlers.
+- [ ] Continuar auditoria handler-a-handler; a cobertura não fecha a auditoria global.
+
+## Leitura obrigatória do README e correcção do smoke PostgreSQL — 2026-11-18
+
+- [x] Reforçar o protocolo autónomo: ler integralmente o README antes de cada ronda, por blocos quando necessário, e não apenas os títulos ou o resumo.
+- [x] Corrigir a asserção do smoke `postgres_store_employee_authorization_smoke.py`: o ADMIN global pode ver funcionários activos criados por outros smokes que partilham a base PostgreSQL do CI; validar inclusão dos dois funcionários desta ronda e exclusão do inactivo, sem assumir que a lista global contém apenas duas linhas.
+- [ ] Aguardar nova execução API CI/PostgreSQL após esta correcção; o run [44308942806](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44308942806) falhou apenas neste assert do smoke, enquanto o Docker Compose smoke [44308942877](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44308942877) passou.
+- [ ] Manter aberta a auditoria global de autorização handler-a-handler; esta correcção não aumenta a cobertura funcional dos endpoints.
+
+## Atualização da auditoria de autorização — 2026-11-18
+
+- [x] Confirmar no API CI [44291136290](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44291136290) que a suite API passou (1148 aprovados, 1 ignorado, 1 aviso), incluindo os testes JWT de upload que estavam documentados como pendentes.
+- [x] Confirmar no mesmo run o smoke PostgreSQL de autorização multi-loja das sessões de captura; o passo dedicado terminou com sucesso.
+- [ ] Manter aberta a auditoria exaustiva de autorização por rota e handler: estes resultados validam apenas os cenários cobertos pelos testes existentes.
+
 ## Auditoria de desempenho PostgreSQL — 2026-11-18
 
 - [x] Criar auditoria `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)` em transacção `READ ONLY`, com timeout, validação da relação imagem/loja e sem operações de escrita.
@@ -62,7 +83,7 @@
 - [x] Reconcile ROADMAP.md with implemented capabilities, current CI evidence and remaining operational blockers (2026-11-18).
 - [x] Implement dashboard UX refinements: human-readable durations, Europe/Lisbon timestamps, stronger contrast palette, non-colour status cues, compact single-task layout and clickable summary cards with exact task-state filters; Web CI and frontend quality build passed.
 - [x] Add a visible-on-focus skip link, labelled desktop navigation landmark, keyboard focus outlines for interactive controls and equivalent mobile navigation controls.
-- [x] Substituir o cartão interactivo de zona por um botão nativo e anunciar o carregamento da avaliação operacional com `role=status`/`aria-live=polite`; Web CI `44296222519` passou. Quality Gates `44296222533` ainda pendente na última consulta.
+- [x] Substituir o cartão interactivo de zona por um botão nativo e anunciar o carregamento da avaliação operacional com `role=status`/`aria-live=polite`; Web CI [44296222519](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44296222519) passou e Quality Gates [44296524262](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44296524262) passou com testes API e build Web concluídos.
 - [x] Validar a alteração de navegação acessível no Web CI [44292103581](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44292103581) e Quality Gates [44292103676](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44292103676), ambos aprovados no commit `5ca7babcd3529f4459a50eaf5542aa289db91d05`.
 - [ ] Complete manual browser/keyboard, screen-reader and full-state contrast audit before claiming formal WCAG 2.2 AA conformance.
 
@@ -178,3 +199,230 @@
 - [x] Quality Gates run `44251681042`, commit `dd8dfc673d97`: **1130 passed, 1 skipped, 1 warning**; compilação Python e build Web TypeScript/produção aprovados.
 - [x] Demo Docker Compose run `44251551219`, commit `40281c07a68a`: stack concluída com sucesso após a alteração de passagem de variáveis de ambiente.
 - [x] A suite mantém apenas um aviso de depreciação Starlette/AnyIO; não houve falhas.
+
+## Auditoria de autorização — integrações externas (18-11-2026)
+- [x] Confirmar que os quatro handlers de gestão de integrações externas exigem explicitamente perfil ADMIN.
+- [x] Acrescentar teste JWT HTTP para criação, listagem, alteração e consulta de cobertura por loja, com SUPERVISOR e EMPLOYEE.
+- [x] API CI run `44299045159` no commit `297f924`: **1149 passed, 1 skipped, 1 warning**; teste JWT HTTP executado com sucesso.
+- [ ] Rever a cobertura de autorização dos endpoints restantes, handler-a-handler e nos caminhos indirectos.
+
+### Reconciliação do inventário HTTP (18-11-2026)
+- [x] Comparar as declarações de rotas literais em `apps/api/app/main.py` com `docs/security/http-route-inventory.md`.
+- [x] Identificar e integrar as 16 declarações em falta na tabela principal; inventário actualizado de 107 para 123 rotas, sem entradas obsoletas (commit `a60ac242`).
+- [x] Quality Gates run `44299324366`: API tests/compilação Python e build Web TypeScript/produção aprovados.
+- [x] Demo Docker Compose run `44299045038`: build, readiness, seed e verificação dos perfis/worker aprovados.
+- [ ] Concluir a auditoria de autorização handler-a-handler; inventário estático não é prova de controlo de acesso.
+
+## Diretório de funcionários — autorização multi-loja (18-11-2026)
+- [x] Rever o handler `GET /api/v1/store-employees`: ADMIN global; SUPERVISOR limitado à própria loja; apenas EMPLOYEE activos são devolvidos.
+- [x] Acrescentar teste JWT HTTP para supervisor, administrador e funcionário, incluindo filtro cross-store e exclusão de inactivos.
+- [x] Validar o novo teste no API CI e Quality Gates (API CI run 44337777007; Quality Gates run 44337776819).
+- [ ] Avaliar se o endpoint necessita de smoke PostgreSQL específico; não declarar essa validação sem execução real.
+
+
+
+## Diretório de funcionários — autorização PostgreSQL (18-11-2026)
+- [x] Criar smoke test HTTP com JWT reais contra PostgreSQL 16 para o endpoint `GET /api/v1/store-employees`.
+- [x] Cobrir SUPERVISOR limitado à própria loja, exclusão de funcionários inactivos, filtro cross-store recusado, ADMIN com filtro de loja e EMPLOYEE recusado.
+- [x] Integrar o smoke no workflow API CI após a validação das migrações.
+- [x] Confirmar a execução do smoke PostgreSQL, incluindo o diretório de funcionários, e da suite API no API CI (run 44337777007).
+
+- [x] Reforçar o smoke PostgreSQL do diretório de funcionários: ausência de Bearer, JWT inválido e conta SUPERVISOR inactiva (401); ADMIN global só recebe funcionários activos; manter testes de isolamento por loja e recusa EMPLOYEE.
+- [x] Confirmar o cenário reforçado no API CI/PostgreSQL (run 44337777007).
+
+
+## Governação de artefactos externos de imagens — autorização HTTP (18-11-2026)
+- [x] Rever handlers de registo/listagem de artefactos, snapshots de inventário, decisão de acesso e eventos de disposição: todos exigem ADMIN antes de consultar ou alterar dados.
+- [x] Acrescentar teste JWT HTTP para SUPERVISOR e EMPLOYEE nas seis operações.
+- [x] Verificar que os pedidos recusados não criam artefactos, snapshots ou eventos de disposição.
+- [x] Suite API (`pytest -q`), API CI e Quality Gates aprovados (runs 44337777007 e 44337776819).
+- [ ] Continuar auditoria handler-a-handler; esta ronda não fecha a auditoria global.
+
+
+## Integrações externas por loja — autorização HTTP (18-11-2026)
+- [x] Rever criação, listagem, consulta de cobertura e actualização de integrações externas; os quatro handlers exigem ADMIN.
+- [x] Acrescentar teste HTTP/JWT para SUPERVISOR e EMPLOYEE nos quatro métodos.
+- [x] Verificar 403 e ausência de criação/alteração de integrações após pedidos recusados.
+- [x] Confirmar suite API, API CI e Quality Gates (API CI run 44338653668; Quality Gates run 44338651433).
+
+
+## Integrações externas — fluxo ADMIN de ponta a ponta por HTTP (18-11-2026)
+- [x] Acrescentar teste positivo para criação, listagem, consulta de cobertura e revogação com JWT ADMIN.
+- [x] Verificar resposta sem material secreto, estado inicial nunca observado e cobertura após revogação.
+- [ ] Validar suite API e Quality Gates no CI.
+
+## Fluxos de revisão humana — autorização de funcionários (18-11-2026)
+- [x] Rever as rotas de fila de revisão, resumo, avaliação SKU revista, candidatos de treino revistos e submissão de revisão de deteção.
+- [x] Acrescentar teste HTTP/JWT que confirma que EMPLOYEE recebe 403 nas cinco operações.
+- [x] Verificar que a tentativa de submissão recusada não cria registos de revisão.
+- [ ] Validar a nova cobertura no API CI e Quality Gates.
+- [ ] Continuar a auditoria handler-a-handler e confirmar isolamento multi-loja nos restantes fluxos de visão.
+
+**Limite:** a cobertura acrescentada valida a barreira de perfil EMPLOYEE do middleware em ambiente production com SQLite isolado. Não prova concorrência PostgreSQL nem conclui a auditoria global.
+
+## Isolamento multi-loja — localizações e colocações de armazém (18-11-2026)
+- [x] Acrescentar teste HTTP/JWT que tenta listar localizações da loja B com supervisor da loja A.
+- [x] Testar criação de localização na loja B por supervisor da loja A.
+- [x] Testar colocação de produto numa localização da loja B por supervisor da loja A.
+- [x] Confirmar 403 nas três operações e ausência de novas localizações/colocações.
+- [ ] Validar a nova cobertura no API CI e Quality Gates.
+- [ ] Prosseguir a revisão de isolamento multi-loja nos restantes recursos de armazém e inventário.
+
+**Limite:** teste HTTP com SQLite isolado; não substitui smoke PostgreSQL nem conclui a auditoria global.
+
+## Isolamento multi-loja — paletes e rotação (18-11-2026)
+- [x] Acrescentar teste HTTP/JWT para listagem e registo de paletes de outra loja.
+- [x] Cobrir actualização de política de rotação por identificador pertencente à loja B.
+- [x] Cobrir leitura e escrita de eventos de ciclo de vida de uma palete da loja B.
+- [x] Confirmar 403 e ausência de alterações em eventos, política e estado da palete.
+- [ ] Validar a nova cobertura no API CI e Quality Gates.
+- [ ] Prosseguir auditoria das operações de simulação, portefólio e histórico com referências cruzadas entre lojas.
+
+**Validação anterior:** no commit d39adb2, Quality Gates e Docker Compose smoke passaram; API CI continuava em execução no momento da revisão. O novo teste ainda não foi executado.
+
+## Isolamento multi-loja — vendas e previsões (18-11-2026)
+- [x] Acrescentar teste HTTP/JWT para ingestão diária/horária, tráfego e batches.
+- [x] Cobrir histórico horário, previsão de procura, risco de rutura, portefólio e perfil horário de rotação.
+- [x] Exigir 403 para supervisor da loja A em operações sobre a loja B.
+- [x] Confirmar ausência de novas linhas de vendas e tráfego após pedidos recusados.
+- [ ] Validar no API CI e Quality Gates; prosseguir revisão de imports CSV e restantes caminhos de ingestão.
+
+**Limite:** teste HTTP/JWT com SQLite isolado; não substitui smoke PostgreSQL nem conclui a auditoria multi-loja.
+
+
+## Isolamento multi-loja — importações CSV horárias (18-11-2026)
+- [x] Cobrir importação CSV de vendas horárias e tráfego com JWT SUPERVISOR da loja A e `store_id` da loja B.
+- [x] Exigir HTTP 403 antes da validação do conteúdo CSV e confirmar ausência de novas linhas persistidas.
+- [ ] Validar o novo teste no API CI e Quality Gates.
+- [ ] Acrescentar/confirmar cobertura PostgreSQL dedicada para isolamento multi-loja das importações.
+
+**Limite:** o teste HTTP/JWT usa SQLite isolado. O payload de vendas é intencionalmente inválido para demonstrar que a autorização ocorre antes do parsing; a ausência de efeitos laterais é verificada nas duas tabelas operacionais.
+
+
+## Autorização PostgreSQL nas importações CSV horárias (18-11-2026)
+- [x] Acrescentar smoke PostgreSQL com JWT real para importação horária de vendas e tráfego.
+- [x] Testar uploads multipart de SUPERVISOR da loja A para a loja B; exigir 403 antes de parsing e confirmar ausência de linhas persistidas.
+- [x] Confirmar importações válidas na própria loja com persistência de exactamente uma linha por endpoint.
+- [x] Validar API CI, Quality Gates e Docker Compose smoke no commit `1e3499c8c80ef75494a29d06807469898471e4e1` (todos passaram).
+
+
+## Importação CSV diária — isolamento multi-loja (18-11-2026)
+- [x] Alargar o teste JWT HTTP ao endpoint `POST /api/v1/sales/import-csv`.
+- [x] Alargar o smoke PostgreSQL com JWT real para os três endpoints CSV de vendas/tráfego.
+- [x] Cobrir rejeição antes do parsing, ausência de efeitos laterais e caminho positivo na loja autorizada.
+- [x] Validar a execução no API CI, Quality Gates e Docker Compose smoke do commit `1e3499c8c80ef75494a29d06807469898471e4e1` (todos passaram).
+
+
+## Hierarquia de lojas — zonas e prateleiras (18-11-2026)
+- [x] Testar leitura de zonas e prateleiras por SUPERVISOR limitada à loja atribuída.
+- [x] Testar recusa explícita de filtro para outra loja e de escrita por SUPERVISOR/EMPLOYEE.
+- [x] Testar criação positiva de zona e prateleira por ADMIN.
+- [ ] Validar a nova cobertura no API CI e Quality Gates.
+- [ ] Complementar com revisão PostgreSQL das constraints/triggers de linhagem hierárquica já existentes.
+
+
+## Batches multi-loja e cobertura de forecasting — 18-11-2026
+- [x] Confirmar que os schemas dos batches exigem que todos os registos pertençam exactamente à mesma loja.
+- [x] Acrescentar regressões HTTP para batches mistos (loja A + loja B), exigindo HTTP 422 e ausência de escritas em ambas as lojas.
+- [x] Alargar a matriz negativa a vendas diárias, traffic peaks, hourly demand e recomendações de slotting.
+- [ ] Validar API CI e Quality Gates do novo conjunto de testes.
+- [ ] Continuar a reconciliação dos restantes handlers e acessos indirectos.
+
+
+## Linhagem PostgreSQL de registos associados a prateleiras (18-11-2026)
+- [x] Rever a migration 0050 e os triggers PostgreSQL para observation_alerts, capture_sessions e replenishment_tasks.
+- [x] Criar smoke PostgreSQL que rejeita INSERT/UPDATE com store_id incompatível com shelf → zone.
+- [x] Verificar que mover shelf/zone entre lojas é bloqueado quando existem registos operacionais dependentes.
+- [ ] Validar o smoke no API CI; o workflow ainda está em execução no commit anterior.
+
+
+## Linhagem multi-loja de registos de prateleira — validação CI (18-11-2026)
+
+- [x] Validar em PostgreSQL 16 a migration `0050_shelf_record_store_lineage_guard` e o smoke `postgres_shelf_record_lineage_smoke.py`.
+- [x] Confirmar rejeição de INSERT/UPDATE com `store_id` divergente em `observation_alerts`, `capture_sessions` e `replenishment_tasks`.
+- [x] Confirmar rejeição de movimentos cross-store de prateleiras/zonas com registos dependentes e preservação dos três registos válidos.
+- [x] API CI [44408063719](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44408063719) e Quality Gates [44408063767](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44408063767) passaram no commit `04c542320ad892a06c81c2295f518f5583428bc4`.
+- [ ] Continuar a auditoria handler-a-handler; esta validação cobre apenas as três tabelas e a hierarquia shelf → zone → store.
+
+
+## Linhagem pai/filho de artefactos externos — validação HTTP (18-11-2026)
+
+- [x] Tornar `parent_reference_id` estrito no schema de criação: IDs booleanos deixam de ser aceites como inteiros.
+- [x] Acrescentar teste HTTP/JWT do endpoint de registo: raiz, descendente, listagem e retry idempotente.
+- [x] Cobrir conflito quando a mesma referência é reapresentada com outra linhagem.
+- [x] Cobrir pai inexistente, pai de outra imagem na mesma loja e pai de outra loja; confirmar ausência das referências recusadas na listagem.
+- [x] Validar o teste HTTP/JWT e a suite API no API CI [44410444406](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44410444406); a suite, incluindo o teste de linhagem, terminou com sucesso. O teste HTTP usa SQLite isolado.
+- [x] Registar a evidência do API CI [44410444406](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44410444406) e Quality Gates [44410444404](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44410444404); actualizar a matriz de autorização. O teste HTTP usa SQLite isolado e não substitui smoke PostgreSQL específico do endpoint.
+
+
+## Elegibilidade operacional de datasets — estabilidade da linhagem (18-11-2026)
+
+- [x] Alargar os locks da validação de imagens internas às linhas `shelf_images`, `shelves` e `zones`, que em conjunto determinam a loja efectiva.
+- [x] Ordenar os locks por IDs de imagem, prateleira e zona e expor no relatório os IDs bloqueados.
+- [x] Acrescentar teste de compilação SQL PostgreSQL para verificar os alvos `FOR UPDATE` e a ordenação determinística.
+- [x] Criar `apps/api/scripts/postgres_dataset_eligibility_concurrency_smoke.py`: duas sessões independentes tentam alterar `shelves.zone_id` e `zones.store_id`; o smoke exige espera real em `pg_stat_activity` enquanto o gate mantém os locks.
+- [ ] Auditar os consumidores de COCO/treino/galeria para impedir que contornem o release gate operacional.
+
+
+## Elegibilidade operacional de datasets — smoke PostgreSQL concorrente (18-11-2026)
+
+- [x] Criar smoke PostgreSQL com transações independentes para a validação e a alteração hierárquica.
+- [x] Verificar bloqueio real em `pg_stat_activity` para alterações concorrentes a `shelves.zone_id` e `zones.store_id`.
+- [x] Integrar o smoke no workflow API CI após as migrações e o smoke de linhagem de registos de prateleira.
+- [x] Confirmar execução verde do smoke no PostgreSQL 16 no API CI [44410444406](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44410444406), commit `33425007fc016b220c3f49f95078444189fd1ec9`; o passo dedicado, os restantes smokes e a suite API terminaram com sucesso.
+- [ ] Auditar os consumidores COCO/treino/galeria que possam contornar o release gate; a concorrência do gate não prova que todos os caminhos usam o gate.
+
+
+## Continuação prioritária — fronteiras de consumo e retenção de datasets (18-11-2026)
+
+- [x] Auditar os consumidores COCO, galeria, diff, qualidade, revisão, aprovação, release e execução. A classificação, os efeitos laterais e os limites estão em [Fronteiras dos consumidores de datasets](docs/architecture/dataset-consumer-boundaries.md). A única fronteira inspeccionada que inicia um processo externo é `dataset_execution`, agora ligada ao gate; galeria e relatórios são ferramentas offline/documentais, não autorização operacional.
+- [ ] Definir um contrato operacional de linhagem/retenção para derivados internos (crops, cópias, relatórios, exports, caches, backups e artefactos publicados), incluindo a política para descendentes quando a origem fica RESTRICTED ou sob legal hold.
+- [x] Avaliar a necessidade de leases/claims duráveis e fencing; o desenho técnico e os testes de aceitação estão em [Contrato de execução assíncrona de datasets](docs/architecture/dataset-async-execution-lease.md). A implementação persistente e a integração com worker continuam pendentes.
+- [ ] Não activar purge físico nem inferir política de conservação: manter a eliminação fail-closed até existir política formal aprovada e prova de cobertura de todos os destinos.
+
+
+## Gate de aprovação obrigatório no consumidor de datasets — 18-11-2026
+
+- [x] Fazer `dataset_execution` executar `run_release_gate` antes de criar uma release ou iniciar o consumidor.
+- [x] Exigir registo de aprovação e os três splits COCO; suportar revisão visual dos três splits como requisito explícito.
+- [x] Vincular SHA-256 do registo e do relatório de aprovação à fingerprint e aos metadados imutáveis da release.
+- [x] Passar ao processo consumidor os hashes de aprovação e o modo validado através de variáveis de ambiente.
+- [x] Adiar a aquisição dos locks operacionais até terminarem as verificações de ficheiros/COCO/revisão, mantendo-os durante release e consumo síncrono.
+- [x] Acrescentar testes para ordem gate → release → consumidor, bloqueio sem aprovação e fingerprint distinta para evidência de aprovação diferente.
+- [x] Validar a implementação no API CI [44412024791](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44412024791): **1168 passed, 1 skipped, 1 warning**, migrações PostgreSQL 16 e smokes operacionais concluídos; Quality Gates [44412024893](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44412024893) e Docker Compose [44412025214](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44412025214) também passaram. O smoke PostgreSQL de elegibilidade de datasets e o build Web foram aprovados.
+- [ ] Criar mecanismo de lease/claim com fencing para consumidores remotos/destacados; não está coberto pela transacção síncrona.
+
+
+## Auditoria das fronteiras de consumo de datasets — 18-11-2026
+
+- [x] Classificar os CLIs COCO, galeria, diff, qualidade, auditoria, revisão, aprovação, release e execução.
+- [x] Documentar que galeria e relatórios são operações locais/documentais e não equivalem a aprovação ou autorização de treino.
+- [x] Confirmar que `dataset_execution` é a fronteira inspeccionada que inicia um processo externo e que exige agora o gate completo.
+- [ ] Criar catálogo persistente de artefactos derivados e propagar retenção/legal hold a HTML, relatórios, cópias, exports, caches e backups.
+- [ ] Implementar execução assíncrona com claim/lease/fencing e publicação condicionada ao token actual; ver requisitos no documento de fronteiras.
+- [ ] Autenticar revisores e substituir a confiança em identidade declarada em ficheiros por evidência autenticada.
+
+
+## Contrato de execução assíncrona — desenho técnico (18-11-2026)
+
+- [x] Definir identidade imutável do job e idempotência.
+- [x] Definir estados, claim atómico, lease, heartbeat, takeover e fencing monotónico.
+- [x] Definir revalidação de fontes internas em enqueue/claim/heartbeat/conclusão e lock order.
+- [x] Definir staging e publicação condicionada ao token actual.
+- [x] Definir testes de aceitação PostgreSQL/SQLite e sequência de implementação.
+- [x] Implementar tabelas de jobs/fontes/eventos, constraints, triggers de imutabilidade e serviço transaccional de lease/claim/heartbeat/conclusão. O worker/broker e a publicação final permanecem fora do âmbito.
+- [ ] Validar o smoke PostgreSQL com workers concorrentes, takeover, worker obsoleto e restrição de retenção no API CI deste commit.
+- [ ] Integrar broker/worker e publicação apenas após validação do fencing.
+
+
+## Persistência de jobs de datasets e fencing — 18-11-2026
+
+- [x] Criar tabelas persistentes para jobs, fontes internas e eventos append-only.
+- [x] Fixar identidade do pedido e dependências de imagem/loja/hash; impor idempotência por chave e digest do payload.
+- [x] Implementar claim atómico com `FOR UPDATE SKIP LOCKED`, lease com expiração e fencing token monotónico.
+- [x] Implementar heartbeat, falha e conclusão condicionados por worker, token actual e lease não expirado.
+- [x] Revalidar elegibilidade das fontes em enqueue, claim, heartbeat e conclusão; revogar jobs quando a imagem deixa de estar ACTIVE ou entra em legal hold.
+- [x] Proteger identidade, fontes e eventos através de constraints/triggers PostgreSQL e SQLite.
+- [x] Acrescentar testes de idempotência, takeover, worker obsoleto, expiração e revogação por retenção.
+- [ ] Validar migration PostgreSQL 16, suite API e smoke concorrente no CI.
+- [ ] Implementar worker/broker, serviço de leitura de artefactos e promoção de outputs com fencing; não publicar directamente a partir do worker.

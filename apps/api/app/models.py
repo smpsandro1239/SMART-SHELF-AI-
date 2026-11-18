@@ -926,3 +926,78 @@ class DailySalesRecord(Base):
     source: Mapped[str] = mapped_column(String(20), nullable=False)
     external_reference: Mapped[str] = mapped_column(String(120), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+
+class DatasetExecutionJob(Base):
+    """Durable approval-bound dataset execution job with a fenced worker lease."""
+    __tablename__ = "dataset_execution_jobs"
+    __table_args__ = (
+        CheckConstraint("status IN ('QUEUED', 'LEASED', 'SUCCEEDED', 'FAILED', 'REVOKED', 'CANCELLED')", name="ck_dataset_execution_job_status"),
+        CheckConstraint("mode IN ('training', 'inference')", name="ck_dataset_execution_job_mode"),
+        CheckConstraint("length(release_fingerprint) = 64", name="ck_dataset_execution_job_release_digest"),
+        CheckConstraint("length(approval_record_sha256) = 64", name="ck_dataset_execution_job_record_digest"),
+        CheckConstraint("length(approval_report_sha256) = 64", name="ck_dataset_execution_job_report_digest"),
+        CheckConstraint("length(request_sha256) = 64", name="ck_dataset_execution_job_request_digest"),
+        CheckConstraint("fencing_token >= 0", name="ck_dataset_execution_job_fencing_nonnegative"),
+        CheckConstraint("attempt_count >= 0", name="ck_dataset_execution_job_attempts_nonnegative"),
+        CheckConstraint("(status = 'LEASED' AND lease_owner IS NOT NULL AND lease_expires_at IS NOT NULL) OR (status <> 'LEASED' AND lease_owner IS NULL AND lease_expires_at IS NULL)", name="ck_dataset_execution_job_lease_state"),
+        CheckConstraint("output_sha256 IS NULL OR length(output_sha256) = 64", name="ck_dataset_execution_job_output_digest"),
+        UniqueConstraint("idempotency_key", name="uq_dataset_execution_job_idempotency"),
+        Index("ix_dataset_execution_jobs_claim", "status", "lease_expires_at", "created_at", "id"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    idempotency_key: Mapped[str] = mapped_column(String(160), nullable=False)
+    request_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    release_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    approval_record_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    approval_report_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    mode: Mapped[str] = mapped_column(String(16), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), default="QUEUED", nullable=False)
+    lease_owner: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    fencing_token: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    attempt_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    output_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    staged_output_reference: Mapped[str | None] = mapped_column(String(600), nullable=True)
+    failure_code: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class DatasetExecutionJobSource(Base):
+    """Immutable internal image dependency captured by a dataset execution job."""
+    __tablename__ = "dataset_execution_job_sources"
+    __table_args__ = (
+        UniqueConstraint("job_id", "shelf_image_id", name="uq_dataset_execution_job_source"),
+        CheckConstraint("length(source_image_sha256) = 64", name="ck_dataset_execution_source_digest"),
+        Index("ix_dataset_execution_job_sources_image", "shelf_image_id", "job_id"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    job_id: Mapped[int] = mapped_column(ForeignKey("dataset_execution_jobs.id", ondelete="RESTRICT"), nullable=False, index=True)
+    shelf_image_id: Mapped[int] = mapped_column(ForeignKey("shelf_images.id", ondelete="RESTRICT"), nullable=False, index=True)
+    store_id: Mapped[int] = mapped_column(ForeignKey("stores.id", ondelete="RESTRICT"), nullable=False, index=True)
+    source_image_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+
+class DatasetExecutionJobEvent(Base):
+    """Append-only audit event for durable dataset job lease and lifecycle changes."""
+    __tablename__ = "dataset_execution_job_events"
+    __table_args__ = (
+        UniqueConstraint("job_id", "sequence_number", name="uq_dataset_execution_job_event_sequence"),
+        CheckConstraint("event_type IN ('QUEUED', 'CLAIMED', 'HEARTBEAT', 'SUCCEEDED', 'FAILED', 'REVOKED', 'CANCELLED')", name="ck_dataset_execution_job_event_type"),
+        CheckConstraint("fencing_token >= 0", name="ck_dataset_execution_job_event_fencing_nonnegative"),
+        Index("ix_dataset_execution_job_events_job_sequence", "job_id", "sequence_number"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    job_id: Mapped[int] = mapped_column(ForeignKey("dataset_execution_jobs.id", ondelete="RESTRICT"), nullable=False, index=True)
+    sequence_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    event_type: Mapped[str] = mapped_column(String(16), nullable=False)
+    fencing_token: Mapped[int] = mapped_column(Integer, nullable=False)
+    worker_id: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    details: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
