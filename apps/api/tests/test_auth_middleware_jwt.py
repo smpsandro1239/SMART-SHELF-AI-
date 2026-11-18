@@ -4692,3 +4692,113 @@ def test_sales_batches_reject_mixed_store_payloads_over_http(auth_client):
         for store_id in (store_a, store_b):
             assert db.query(models.HourlySalesRecord).filter_by(store_id=store_id).count() == sales_before[store_id]
             assert db.query(models.HourlyStoreTrafficRecord).filter_by(store_id=store_id).count() == traffic_before[store_id]
+
+
+
+def test_admin_registers_artifact_parent_lineage_over_http(auth_client):
+    client, ids, store_ids = auth_client
+    headers = bearer(ids["admin"], "ADMIN")
+    external_system = "artifact-lineage-api-test"
+
+    with main_module.SessionLocal() as db:
+        for store_id in (store_ids["a"], store_ids["b"]):
+            db.add(models.StoreExternalIntegration(
+                store_id=store_id,
+                external_system=external_system,
+                provider="test-provider",
+                status="ACTIVE",
+                required_for_retention=False,
+                capabilities=["artifact.read", "inventory.read"],
+                created_by_user_id=ids["admin"],
+                updated_by_user_id=ids["admin"],
+            ))
+        same_store_other_image = models.ShelfImage(
+            shelf_id=ids["shelf_a_assigned"],
+            original_filename="lineage-other-image.jpg",
+            storage_path=f"/tmp/{store_ids['a']}/lineage-other-image.jpg",
+            mime_type="image/jpeg",
+            file_size_bytes=10,
+            sha256="f" * 64,
+            analysis_status="PENDING",
+            retention_status="ACTIVE",
+        )
+        db.add(same_store_other_image)
+        db.commit()
+        db.refresh(same_store_other_image)
+        other_image_same_store_id = same_store_other_image.id
+
+    def register(image_id, external_reference, parent_reference_id=None):
+        payload = {
+            "artifact_type": "CROP",
+            "external_system": external_system,
+            "external_reference": external_reference,
+        }
+        if parent_reference_id is not None:
+            payload["parent_reference_id"] = parent_reference_id
+        return client.post(
+            f"/api/v1/shelf-images/{image_id}/artifacts",
+            json=payload,
+            headers=headers,
+        )
+
+    root = register(ids["image_a"], "bucket/source/root.jpg")
+    assert root.status_code == 201, root.text
+    root_id = root.json()["id"]
+    assert root.json()["parent_reference_id"] is None
+
+    child = register(ids["image_a"], "bucket/source/child.jpg", root_id)
+    assert child.status_code == 201, child.text
+    child_id = child.json()["id"]
+    assert child.json()["parent_reference_id"] == root_id
+
+    # An exact retry must preserve the same immutable parent relation.
+    retry = register(ids["image_a"], "bucket/source/child.jpg", root_id)
+    assert retry.status_code == 201, retry.text
+    assert retry.json()["id"] == child_id
+    assert retry.json()["parent_reference_id"] == root_id
+
+    # Reusing the same artifact identity with another lineage is a conflict.
+    conflicting_retry = register(ids["image_a"], "bucket/source/child.jpg")
+    assert conflicting_retry.status_code == 409
+
+    # Missing parents are rejected before any artifact row is created.
+    missing_parent = register(
+        ids["image_a"], "bucket/source/missing-parent.jpg", 999999999
+    )
+    assert missing_parent.status_code == 422
+
+    # A parent from another image in the same store is not a valid ancestor.
+    other_image_root = register(
+        other_image_same_store_id, "bucket/other-image/root.jpg"
+    )
+    assert other_image_root.status_code == 201, other_image_root.text
+    cross_image = register(
+        ids["image_a"],
+        "bucket/source/cross-image.jpg",
+        other_image_root.json()["id"],
+    )
+    assert cross_image.status_code == 422
+
+    # A parent from a different store is rejected even if it is a valid record.
+    other_store_root = register(ids["image_b"], "bucket/other-store/root.jpg")
+    assert other_store_root.status_code == 201, other_store_root.text
+    cross_store = register(
+        ids["image_a"],
+        "bucket/source/cross-store.jpg",
+        other_store_root.json()["id"],
+    )
+    assert cross_store.status_code == 422
+
+    listed = client.get(
+        f"/api/v1/shelf-images/{ids['image_a']}/artifacts",
+        headers=headers,
+    )
+    assert listed.status_code == 200, listed.text
+    by_reference = {
+        item["external_reference"]: item for item in listed.json()
+    }
+    assert by_reference["bucket/source/root.jpg"]["parent_reference_id"] is None
+    assert by_reference["bucket/source/child.jpg"]["parent_reference_id"] == root_id
+    assert "bucket/source/missing-parent.jpg" not in by_reference
+    assert "bucket/source/cross-image.jpg" not in by_reference
+    assert "bucket/source/cross-store.jpg" not in by_reference

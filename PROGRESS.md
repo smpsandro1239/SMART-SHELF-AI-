@@ -571,3 +571,12 @@ Commit validado: `1e3499c8c80ef75494a29d06807469898471e4e1`.
 - API CI: [44408063719](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44408063719) — success. Quality Gates: [44408063767](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44408063767) — success.
 - Não foram executados testes localmente nesta ronda. A evidência é de CI; não representa auditoria exaustiva de todos os handlers nem validação manual do produto.
 - Próximo passo: continuar a auditoria de autorização e isolamento por loja nas rotas restantes, priorizando caminhos administrativos, operações indirectas e efeitos laterais.
+
+
+## 2026-11-18 — Cobertura HTTP da linhagem pai/filho de artefactos externos
+
+- Confirmado no handler existente que `POST /api/v1/shelf-images/{image_id}/artifacts` já valida o pai dentro do mesmo `shelf_image_id` e `store_id`, sob a ordem de locks imagem → integração externa → referência.
+- Reforçado `ShelfImageArtifactReferenceCreate.parent_reference_id` com validação inteira estrita para impedir a coerção de booleanos para IDs.
+- Acrescentado teste HTTP/JWT para criação de raiz e descendente, retry idempotente, conflito de linhagem, pai inexistente, pai de outra imagem na mesma loja e pai de outra loja; verifica ainda a listagem e a ausência de efeitos laterais.
+- Testes e CI ainda não executados para este commit. A cobertura é SQLite HTTP, não evidência PostgreSQL.
+- Próximo passo: validar API CI/Quality Gates e, se aprovado, atualizar a matriz de autorização com a evidência. Manter a auditoria multi-loja global aberta.

@@ -343,3 +343,13 @@
 - [x] Confirmar rejeição de movimentos cross-store de prateleiras/zonas com registos dependentes e preservação dos três registos válidos.
 - [x] API CI [44408063719](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44408063719) e Quality Gates [44408063767](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44408063767) passaram no commit `04c542320ad892a06c81c2295f518f5583428bc4`.
 - [ ] Continuar a auditoria handler-a-handler; esta validação cobre apenas as três tabelas e a hierarquia shelf → zone → store.
+
+
+## Linhagem pai/filho de artefactos externos — validação HTTP (18-11-2026)
+
+- [x] Tornar `parent_reference_id` estrito no schema de criação: IDs booleanos deixam de ser aceites como inteiros.
+- [x] Acrescentar teste HTTP/JWT do endpoint de registo: raiz, descendente, listagem e retry idempotente.
+- [x] Cobrir conflito quando a mesma referência é reapresentada com outra linhagem.
+- [x] Cobrir pai inexistente, pai de outra imagem na mesma loja e pai de outra loja; confirmar ausência das referências recusadas na listagem.
+- [ ] Executar o teste focado e a suite API no CI; confirmar também compilação Python e Quality Gates.
+- [ ] Se a execução passar, registar os IDs dos workflows e reconciliar a matriz de autorização. O teste usa SQLite isolado e não substitui smoke PostgreSQL.

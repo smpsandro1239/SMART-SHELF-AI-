@@ -381,3 +381,10 @@ O teste JWT HTTP `test_admin_external_integration_management_is_store_scoped_ove
 ## Linhagem de prateleiras e registos operacionais — validação PostgreSQL (18-11-2026)
 
 A migration `0050_shelf_record_store_lineage_guard` e o smoke `apps/api/scripts/postgres_shelf_record_lineage_smoke.py` passaram no API CI [44408063719](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44408063719), com PostgreSQL 16. Foram rejeitados INSERT/UPDATE cujo `store_id` diverge da loja alcançada por `shelf_id → zone_id → store_id` nas tabelas `observation_alerts`, `capture_sessions` e `replenishment_tasks`. O smoke também confirmou que mover uma prateleira ou zona com registos dependentes para outra loja é rejeitado e que os registos válidos permanecem intactos. Quality Gates [44408063767](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44408063767) passou. Esta evidência é específica à hierarquia e às três tabelas testadas; não encerra a auditoria global de autorização.
+
+
+## Linhagem pai/filho de artefactos externos — cobertura de registo (18-11-2026)
+
+O endpoint `POST /api/v1/shelf-images/{image_id}/artifacts` é ADMIN-only. A implementação bloqueia a imagem, a integração externa activa e, quando fornecido, o registo pai, exigindo que o pai pertença à mesma imagem e loja. A referência persistida expõe `parent_reference_id`; retries só são idempotentes quando o digest, release e pai coincidem. A migration 0046 impede reescrever a relação depois da criação.
+
+Foi acrescentado teste HTTP/JWT para criação de raiz/descendente, pai inexistente, pai de outra imagem na mesma loja, pai de outra loja, retry idempotente e conflito de linhagem. O contrato Pydantic rejeita booleanos como IDs. **Validação CI pendente:** a suite HTTP usa SQLite isolado; não constitui smoke PostgreSQL nem fecha a auditoria global.

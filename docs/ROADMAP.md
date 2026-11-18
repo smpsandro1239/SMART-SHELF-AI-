@@ -300,3 +300,11 @@ A auditoria foi alargada para incluir a importação diária `POST /api/v1/sales
 - O smoke confirmou a rejeição de INSERT/UPDATE divergentes em alertas, sessões de captura e tarefas, bem como movimentos de prateleiras/zonas com dependências existentes.
 - Quality Gates [44408063767](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44408063767) passou no mesmo SHA `04c542320ad892a06c81c2295f518f5583428bc4`.
 - A auditoria global de autorização e isolamento multi-loja permanece aberta; a validação não deve ser generalizada para rotas não cobertas.
+
+
+### Linhagem pai/filho de artefactos externos — reforço de contrato e HTTP (18-11-2026)
+
+- O endpoint existente valida o pai no mesmo recurso de imagem e loja e mantém a ordem de bloqueios imagem → integração → referência.
+- O schema de criação passa a rejeitar booleanos em `parent_reference_id`, evitando a coerção Python `True == 1`.
+- Foi acrescentado teste HTTP/JWT para raiz, descendente, repetição idempotente, conflito de linhagem, pai inexistente, pai de outra imagem e pai de outra loja.
+- A validação CI ainda está pendente; a cobertura de integração usa SQLite isolado e não fecha a validação PostgreSQL nem a auditoria global.
