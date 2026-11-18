@@ -80,3 +80,10 @@
 - [x] Criar smoke test PostgreSQL que tenta alterar e apagar um evento e confirma a preservação dos valores originais.
 - [x] Integrar o smoke test no API CI imediatamente após `alembic upgrade head`.
 - [ ] Validar migração e smoke test na API CI.
+
+
+## Correcção da expectativa de rejeição no slotting (18-11-2026)
+- [x] Corrigir o teste de palete sem localização para respeitar a precedência das regras de segurança.
+- [x] Confirmar que a localização FROZEN continua rejeitada por incompatibilidade térmica.
+- [x] Confirmar que as restantes localizações ficam bloqueadas por ocupação desconhecida.
+- [ ] Reexecutar API CI e Quality Gates após a correcção.
