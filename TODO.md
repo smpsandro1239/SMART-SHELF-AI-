@@ -21,6 +21,7 @@
   - [x] Add regression tests for artifact and disposition page boundaries, negative/zero bounds and human review history pages.
   - [x] Finish API CI, Quality Gates and Docker Compose validation for the pagination changes: API CI run `44256610563` passed (1136 passed, 1 skipped, 1 warning); Quality Gates run `44256985942` passed (API tests/compilation and Web TypeScript/production build); Docker Compose run `44256610406` passed.
   - [x] Correct fused-evidence status-filter pagination: recompute status before applying the filtered offset, scan bounded keyset batches, and acquire all relevant product locks in ascending ID order to preserve the global image→product lock order.
+  - [x] Add regression coverage for filtered pagination after catalogue revalidation and for offsets crossing the 500-row keyset batch boundary.
   - [ ] Validate the filtered fused-evidence pagination regression and lock-order change in CI.
 - [ ] Verify retention and legal-hold audit trails across restore, purge scheduling and cancellation.
 - [ ] Keep ROADMAP.md aligned with implemented and validated capabilities.
