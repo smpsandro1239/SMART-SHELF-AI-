@@ -21,8 +21,6 @@
 
 ### Implementado nesta fase
 
-### Implementado nesta fase
-
 - [x] Criar provider mock determinístico compatível com `VisionProvider`, selecionável por `VISION_PROVIDER_FACTORY`.
 - [x] Configurar API e worker no Docker Compose para usar o provider mock por omissão no ambiente local.
 - [x] Criar seed idempotente com loja Demo Store Braga, três prateleiras, quinze produtos, três perfis, snapshots e política de frescura.
