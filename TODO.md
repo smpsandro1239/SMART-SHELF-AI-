@@ -1,3 +1,11 @@
+## Gestão HTTP de integrações externas — percurso ADMIN e isolamento de loja (2026-11-18)
+
+- [x] Acrescentar teste JWT HTTP do percurso ADMIN para criar, listar, consultar cobertura e revogar uma integração.
+- [x] Verificar isolamento por loja: listagem da loja B vazia e PATCH de integração da loja A através do caminho da loja B devolve 404 sem alterar o registo.
+- [x] Confirmar que a resposta não expõe campos de credenciais/chaves e que a auditoria identifica o ADMIN.
+- [ ] Confirmar API CI e Quality Gates no commit desta ronda; o teste usa SQLite isolado e não substitui um smoke PostgreSQL específico dos handlers.
+- [ ] Continuar auditoria handler-a-handler; a cobertura não fecha a auditoria global.
+
 ## Leitura obrigatória do README e correcção do smoke PostgreSQL — 2026-11-18
 
 - [x] Reforçar o protocolo autónomo: ler integralmente o README antes de cada ronda, por blocos quando necessário, e não apenas os títulos ou o resumo.

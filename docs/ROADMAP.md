@@ -1,3 +1,10 @@
+### Auditoria HTTP de integrações externas — percurso ADMIN (2026-11-18)
+
+- Acrescentado teste JWT positivo para criação, listagem, consulta de cobertura e revogação de integrações externas por ADMIN.
+- Verificado o isolamento entre lojas e a resposta 404 para tentativa de actualizar uma integração através do caminho de outra loja.
+- Confirmado que a resposta não inclui campos de credenciais e que a alteração regista o utilizador ADMIN responsável.
+- O teste usa SQLite isolado; validação CI pendente no commit desta ronda. A auditoria global de autorização permanece aberta.
+
 # SMART SHELF AI — Roadmap
 
 ## Prioridade atual: preparar um piloto controlado com validação operacional e evidência

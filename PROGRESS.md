@@ -1,3 +1,13 @@
+## 2026-11-18 — Percurso ADMIN e isolamento de integrações externas
+
+- HEAD inicial: `038e7bcebda8bc02226f264ee3797772ac289a81`.
+- Acrescentado teste JWT HTTP positivo para a gestão de integrações externas: ADMIN cria uma integração obrigatória para retenção, consulta a listagem e a cobertura, e revoga a integração.
+- O cenário verifica isolamento entre lojas: a listagem da loja B não inclui a integração da loja A; um PATCH com o ID da integração A no caminho da loja B devolve 404 e mantém o estado ACTIVE.
+- A resposta HTTP é verificada para não expor campos de credenciais/chaves; a alteração de política regista o ADMIN em `updated_by_user_id`.
+- Actualizados TODO, matriz de autorização e roadmap.
+- O teste é HTTP/JWT com SQLite isolado. Não constitui validação PostgreSQL individual dos handlers.
+- Validação API CI e Quality Gates pendente após o push; não foram executados testes locais.
+
 ## 2026-11-18 — README obrigatório e robustez do smoke PostgreSQL de funcionários
 
 - HEAD inicial: `fcbc65c408fc03b7a02f47159f96af2e4411cf36`.

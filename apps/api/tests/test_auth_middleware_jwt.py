@@ -4177,3 +4177,77 @@ def test_store_external_integration_governance_is_admin_only_over_http(auth_clie
 
     assert after_count == before_count, "Denied requests must not create external integrations"
     assert after_state == before_state, "Denied requests must not mutate external integration policy"
+
+
+def test_admin_external_integration_management_is_store_scoped_over_http(auth_client):
+    client, ids, store_ids = auth_client
+    admin_headers = bearer(ids["admin"], "ADMIN")
+    external_system = "auth-backup-store-a"
+
+    created = client.post(
+        f"/api/v1/stores/{store_ids['a']}/external-integrations",
+        json={
+            "external_system": external_system,
+            "provider": "test-provider",
+            "required_for_retention": True,
+            "capabilities": ["inventory.read", "retention.attest"],
+        },
+        headers=admin_headers,
+    )
+    assert created.status_code == 201, created.text
+    integration = created.json()
+    integration_id = integration["id"]
+    assert integration["store_id"] == store_ids["a"]
+    assert integration["external_system"] == external_system
+    assert integration["status"] == "ACTIVE"
+    assert integration["required_for_retention"] is True
+    assert integration["created_by_user_id"] == ids["admin"]
+    assert not ({"secret", "secret_key", "signing_key", "credentials"} & set(integration))
+
+    store_a_list = client.get(
+        f"/api/v1/stores/{store_ids['a']}/external-integrations",
+        headers=admin_headers,
+    )
+    store_b_list = client.get(
+        f"/api/v1/stores/{store_ids['b']}/external-integrations",
+        headers=admin_headers,
+    )
+    assert store_a_list.status_code == 200, store_a_list.text
+    assert [item["id"] for item in store_a_list.json()] == [integration_id]
+    assert store_b_list.status_code == 200, store_b_list.text
+    assert store_b_list.json() == []
+
+    coverage = client.get(
+        f"/api/v1/stores/{store_ids['a']}/external-integrations/coverage",
+        headers=admin_headers,
+    )
+    assert coverage.status_code == 200, coverage.text
+    assert coverage.json()["store_id"] == store_ids["a"]
+    assert coverage.json()["required_integrations"] == 1
+    assert coverage.json()["active_required_integrations"] == 1
+    assert coverage.json()["never_seen_integrations"] == [external_system]
+
+    cross_store_update = client.patch(
+        f"/api/v1/stores/{store_ids['b']}/external-integrations/{integration_id}",
+        json={"status": "REVOKED"},
+        headers=admin_headers,
+    )
+    assert cross_store_update.status_code == 404, cross_store_update.text
+
+    unchanged = client.get(
+        f"/api/v1/stores/{store_ids['a']}/external-integrations",
+        headers=admin_headers,
+    )
+    assert unchanged.status_code == 200, unchanged.text
+    assert unchanged.json()[0]["status"] == "ACTIVE"
+
+    revoked = client.patch(
+        f"/api/v1/stores/{store_ids['a']}/external-integrations/{integration_id}",
+        json={"status": "REVOKED", "required_for_retention": False},
+        headers=admin_headers,
+    )
+    assert revoked.status_code == 200, revoked.text
+    assert revoked.json()["status"] == "REVOKED"
+    assert revoked.json()["required_for_retention"] is False
+    assert revoked.json()["updated_by_user_id"] == ids["admin"]
+

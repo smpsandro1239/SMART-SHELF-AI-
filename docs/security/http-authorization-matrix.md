@@ -369,3 +369,10 @@ O smoke `apps/api/scripts/postgres_store_employee_authorization_smoke.py` foi in
 O smoke `apps/api/scripts/postgres_store_employee_authorization_smoke.py` também valida ausência de Bearer (401), JWT inválido (401), conta SUPERVISOR inactiva (401) e que a listagem global ADMIN exclui funcionários inactivos. Mantém os cenários de SUPERVISOR restrito à loja própria, filtro cross-store recusado (403), ADMIN com filtro explícito de loja e EMPLOYEE recusado (403).
 
 **Estado:** o código do smoke foi expandido no commit `e0ac4af806693cd203864ae92eb03e307fecafa6`; a execução PostgreSQL no API CI ainda não está confirmada.
+
+
+## Gestão de integrações externas — percurso ADMIN e isolamento por loja
+
+O teste JWT HTTP `test_admin_external_integration_management_is_store_scoped_over_http` cobre o percurso autorizado de ADMIN: criação, listagem, consulta da cobertura e revogação de uma integração. Confirma que a listagem de outra loja não revela a integração, que uma actualização com `store_id` incompatível devolve 404 e não altera o registo, e que a actualização na loja correcta identifica o ADMIN como autor. A resposta também é verificada para não expor campos de credenciais ou chaves. Esta cobertura usa SQLite isolado; não equivale a um smoke PostgreSQL individual destes handlers.
+
+**Validação CI:** pendente no commit desta ronda.
