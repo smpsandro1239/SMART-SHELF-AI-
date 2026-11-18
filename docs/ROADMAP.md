@@ -9,6 +9,11 @@
 - Docker Compose smoke [44268766432](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44268766432), commit `ff59e475`: build, arranque, readiness, seed e validação dos perfis aprovados.
 - O aviso restante é uma depreciação Starlette/AnyIO; não corresponde a falha de testes.
 
+### Ronda adicional — integridade do picking (2026-11-18)
+
+- O planeador exclui todas as linhas quando a entrada contém duplicados para o mesmo SKU/localização, impedindo dupla contagem de stock. A mesma localização para SKUs diferentes continua válida.
+- Foram adicionados testes de regressão; API CI e Quality Gates do commit final desta ronda ainda pendentes.
+
 ### Prioridades ainda abertas
 
 1. **P1 — desempenho:** recolher planos `EXPLAIN (ANALYZE, BUFFERS)` e medir paginação profunda/consultas de imagens e evidência com volume representativo antes de acrescentar índices.
