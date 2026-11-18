@@ -1,6 +1,6 @@
 # Inventário de rotas HTTP — SMART SHELF AI
 
-> Gerado por leitura estática de `apps/api/app/main.py` na branch `main`, a partir do commit `260d373dea32d744deb98071ebca45035465f192` (14-11-2026). É um inventário de declarações FastAPI, não uma prova de autorização efetiva. Rotas dinâmicas, dependências, middleware e permissões aplicadas dentro dos handlers devem ser confirmados em testes.
+> Gerado por leitura estática de `apps/api/app/main.py` na branch `main`, a partir do commit `297f92453791331ab9788920f6a8e0b28367818f` (18-11-2026). É um inventário de declarações FastAPI, não uma prova de autorização efetiva. Rotas dinâmicas, dependências, middleware e permissões aplicadas dentro dos handlers devem ser confirmados em testes.
 
 Total de declarações únicas encontradas: **107**.
 
@@ -129,3 +129,29 @@ Total de declarações únicas encontradas: **107**.
 - O inventário é extraído das declarações `@app.get/post/put/patch/delete` com caminhos literais num único módulo. Não deteta rotas montadas por subaplicações, routers externos, caminhos construídos dinamicamente ou métodos registados programaticamente.
 - A presença de uma rota nesta lista não significa que esteja acessível a todos os perfis; o middleware e os handlers podem impor controlos adicionais.
 - Esta lista não fecha a auditoria multi-loja. Serve como checklist de cobertura e deve ser reconciliada com a matriz de autorização e os testes existentes.
+
+## Reconciliação do inventário — 2026-11-18
+
+A comparação das declarações literais `@app.get/post/put/patch/delete` em `apps/api/app/main.py` com a tabela acima encontrou 16 declarações em falta. As linhas seguintes completam a tabela; o total passa de 107 para **123 declarações únicas**. Não foram encontradas linhas obsoletas na tabela anterior.
+
+| Método | Caminho | Handler |
+|---|---|---|
+| `GET` | `/api/v1/zones` | `list_zones` |
+| `POST` | `/api/v1/shelf-images/{image_id}/retention/purge-schedule` | `schedule_shelf_image_purge` |
+| `POST` | `/api/v1/shelf-images/{image_id}/retention/purge-schedule/cancel` | `cancel_shelf_image_purge_schedule` |
+| `POST` | `/api/v1/stores/{store_id}/external-integrations` | `create_store_external_integration` |
+| `GET` | `/api/v1/stores/{store_id}/external-integrations` | `list_store_external_integrations` |
+| `PATCH` | `/api/v1/stores/{store_id}/external-integrations/{integration_id}` | `update_store_external_integration` |
+| `GET` | `/api/v1/stores/{store_id}/external-integrations/coverage` | `get_store_external_integration_coverage` |
+| `POST` | `/api/v1/shelf-images/{image_id}/artifacts` | `register_shelf_image_artifact_reference` |
+| `GET` | `/api/v1/shelf-images/{image_id}/artifacts` | `list_shelf_image_artifact_references` |
+| `POST` | `/api/v1/shelf-images/{image_id}/artifact-inventory-snapshots` | `create_shelf_image_artifact_inventory_snapshot` |
+| `GET` | `/api/v1/shelf-images/{image_id}/artifacts/{artifact_id}/access` | `get_shelf_image_artifact_access_decision` |
+| `POST` | `/api/v1/shelf-images/{image_id}/artifacts/{artifact_id}/disposition-events` | `create_shelf_image_artifact_disposition_event` |
+| `GET` | `/api/v1/shelf-images/{image_id}/artifacts/{artifact_id}/disposition-events` | `list_shelf_image_artifact_disposition_events` |
+| `GET` | `/api/v1/shelf-images/{image_id}/retention/purge-eligibility` | `get_shelf_image_purge_eligibility` |
+| `POST` | `/api/v1/shelf-image-detections/{detection_id}/observation` | `create_observation_from_demo_detection` |
+| `GET` | `/api/v1/store-employees` | `list_store_employees` |
+
+**Limite:** a reconciliação é estática e cobre declarações com caminhos literais no módulo principal. Não prova a política de autorização dos handlers nem deteta rotas montadas dinamicamente; a revisão de autorização continua separada.
+
