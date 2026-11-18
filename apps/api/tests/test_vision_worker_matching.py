@@ -663,3 +663,44 @@ def test_stale_processing_recovery_locks_images_in_stable_id_order(db, tmp_path)
     assert len(statements) == 1
     assert "order by shelf_images.id asc" in statements[0]
     assert all(image.analysis_status == "PENDING" for image in images)
+
+
+def test_stale_processing_recovery_honours_explicit_zero_timeout(db, tmp_path):
+    import app.vision_worker as worker
+
+    store = models.Store(code="RECOVERY-ZERO", name="Recovery zero timeout")
+    db.add(store)
+    db.flush()
+    zone = models.Zone(store_id=store.id, name="Zona")
+    db.add(zone)
+    db.flush()
+    shelf = models.Shelf(zone_id=zone.id, code="RECOVERY-ZERO-01")
+    db.add(shelf)
+    db.flush()
+
+    image = models.ShelfImage(
+        shelf_id=shelf.id,
+        original_filename="zero-timeout.jpg",
+        storage_path=str(tmp_path / "zero-timeout.jpg"),
+        mime_type="image/jpeg",
+        file_size_bytes=10,
+        sha256="f" * 64,
+        analysis_status="PROCESSING",
+        retention_status="ACTIVE",
+        analysis_started_at=models.utc_now() - timedelta(seconds=1),
+    )
+    db.add(image)
+    db.commit()
+
+    assert worker.requeue_stale_processing_images(db, stale_after_seconds=0) == 1
+    db.refresh(image)
+    assert image.analysis_status == "PENDING"
+    assert image.analysis_started_at is None
+    assert image.analysis_error == "Recovered abandoned processing job after timeout"
+
+
+def test_stale_processing_recovery_rejects_negative_timeout(db):
+    import app.vision_worker as worker
+
+    with pytest.raises(ValueError, match="must be non-negative"):
+        worker.requeue_stale_processing_images(db, stale_after_seconds=-1)
