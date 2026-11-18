@@ -356,13 +356,15 @@ Added `test_catalogue_and_warehouse_master_data_writes_are_admin_only` to exerci
 - A cobertura anterior em `test_store_external_integrations.py` chamava directamente um handler com EMPLOYEE; não exercitava o middleware HTTP nem os JWT.
 - Acrescentado `test_external_integration_management_is_admin_only_over_http` em `test_auth_middleware_jwt.py`: quatro operações × dois perfis não administrativos, mais verificação de que os pedidos recusados não criam integrações.
 - Commit de código/teste: `297f92453791331ab9788920f6a8e0b28367818f`.
-- **CI pendente**; não declarar esta cobertura validada até confirmar a execução da suite API e Quality Gates.
-- A auditoria global permanece aberta. O inventário de rotas também requer reconciliação: o documento actual declara 107 rotas e foi gerado a partir de uma versão anterior de `main.py`.
+- API CI run `44299045159`: **1149 passed, 1 skipped, 1 warning**; a nova cobertura JWT HTTP passou.
+- Quality Gates run `44299324366`: suite API/compilação Python e build Web TypeScript/produção passaram.
+- Docker Compose run `44299045038`: build, readiness, seed e verificação dos perfis/worker passaram.
+- A auditoria global permanece aberta; a reconciliação do inventário é registada abaixo.
 
 ## 2026-11-18 — Reconciliação do inventário HTTP
 
 - Comparação estática das declarações `@app.get/post/put/patch/delete` em `apps/api/app/main.py` com o inventário documentado encontrou 16 rotas em falta e nenhuma entrada obsoleta.
-- Actualizado `docs/security/http-route-inventory.md` para 123 declarações únicas, incluindo endpoints de retenção/purga, integrações externas, artefactos, observações de deteções e listagem de funcionários.
-- O inventário foi alinhado com o commit de código `297f92453791331ab9788920f6a8e0b28367818f`.
+- Actualizado `docs/security/http-route-inventory.md` para 123 declarações únicas, com as 16 linhas integradas na tabela principal (commit documental `a60ac242`).
+- O inventário foi reconciliado com o código `main.py` no commit `297f92453791331ab9788920f6a8e0b28367818f`; não foram encontradas entradas obsoletas.
 - Limite: esta reconciliação é estática; não prova autorização efectiva, nem cobre routers montados dinamicamente. A auditoria handler-a-handler continua aberta.
 
