@@ -55,8 +55,12 @@ jobs:
       - name: Smoke-test Alembic migrations on PostgreSQL
         env:
           DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/smart_shelf_ci
-          APP_ENV: test
         run: alembic upgrade head
+      - name: Verify PostgreSQL pallet lifecycle event append-only protection
+        working-directory: apps/api
+        env:
+          DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/smart_shelf_ci
+        run: python scripts/postgres_pallet_event_immutability_smoke.py
       - name: Verify PostgreSQL inventory snapshot append-only protection
         env:
           DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/smart_shelf_ci
