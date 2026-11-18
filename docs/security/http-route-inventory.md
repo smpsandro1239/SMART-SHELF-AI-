@@ -167,3 +167,9 @@ Os handlers de criação, listagem, consulta de cobertura e actualização de in
 ### Caminho autorizado ADMIN — integrações externas
 
 O teste `test_admin_can_manage_store_external_integrations_over_http` complementa a cobertura negativa: confirma o fluxo positivo de criação, listagem, cobertura e revogação por ADMIN, incluindo ausência de campo `secret` na resposta e alteração coerente da cobertura após revogação. Validação CI pendente.
+
+## Fluxos de revisão humana — autorização por perfil (18-11-2026)
+
+A middleware reserva a ADMIN/SUPERVISOR a consulta da fila de revisão, resumo, avaliação de SKU revista, candidatos de treino revistos e submissão de revisão de deteção. O teste test_employee_cannot_access_human_review_workflows_over_http envia JWT EMPLOYEE para as cinco operações e exige HTTP 403; compara também a contagem de DetectionSkuReview antes/depois para confirmar ausência de efeitos laterais na escrita recusada.
+
+**Limite:** esta evidência cobre o perfil EMPLOYEE através da middleware com SQLite isolado. Não demonstra o isolamento multi-loja de todos os handlers nem fecha a auditoria global.

@@ -4312,3 +4312,31 @@ def test_admin_can_manage_store_external_integrations_over_http(auth_client):
     assert revoked_coverage.status_code == 200, revoked_coverage.text
     assert revoked_coverage.json()["active_required_integrations"] == 0
     assert revoked_coverage.json()["missing_or_revoked_integrations"] == [external_system]
+
+
+def test_employee_cannot_access_human_review_workflows_over_http(auth_client):
+    """Employees may inspect their own detection history, but cannot perform reviews."""
+    client, ids, _ = auth_client
+    headers = bearer(ids["employee_a"], "EMPLOYEE")
+    review_path = f"/api/v1/shelf-image-detections/{ids["detection_a"]}/reviews"
+
+    with main_module.SessionLocal() as db:
+        before = db.query(models.DetectionSkuReview).count()
+
+    requests = [
+        ("GET", "/api/v1/shelf-image-review-queue"),
+        ("GET", "/api/v1/shelf-image-review-queue/summary"),
+        ("GET", "/api/v1/sku-evaluation/reviewed"),
+        ("GET", "/api/v1/training-candidates/reviewed"),
+        ("POST", review_path),
+    ]
+    for method, path in requests:
+        response = client.request(method, path, json={} if method == "POST" else None, headers=headers)
+        assert response.status_code == 403, (
+            f"EMPLOYEE must not access human-review workflow: "
+            f"{method} {path} returned {response.status_code}"
+        )
+
+    with main_module.SessionLocal() as db:
+        after = db.query(models.DetectionSkuReview).count()
+    assert after == before, "Denied employee review requests must not create review records"

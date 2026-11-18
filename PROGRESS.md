@@ -467,3 +467,11 @@ Added `test_catalogue_and_warehouse_master_data_writes_are_admin_only` to exerci
 - O teste percorre criação (201), listagem (200), cobertura (200), revogação (200) e nova consulta de cobertura, usando JWT ADMIN real.
 - Verifica que a resposta não expõe campo `secret`, que a integração começa como nunca observada e que a cobertura passa a indicar integração revogada.
 - Execução CI pendente; o teste não foi executado localmente nesta sessão.
+
+## 2026-11-18 — Autorização dos fluxos de revisão humana
+- A revisão da matriz de middleware identificou um conjunto de operações de revisão acessíveis apenas a ADMIN/SUPERVISOR: fila de revisão, resumo, avaliação de SKU revista, candidatos de treino revistos e criação de revisão de uma deteção.
+- Foi acrescentado test_employee_cannot_access_human_review_workflows_over_http, com JWT EMPLOYEE e middleware activo em modo production.
+- O teste exige HTTP 403 nas cinco operações e compara a contagem de DetectionSkuReview antes/depois para garantir que a tentativa de submissão não cria uma revisão.
+- A leitura de histórico de revisões de deteção continua a ser uma permissão separada; esta alteração não a alarga.
+- O teste foi adicionado ao repositório, mas ainda não foi executado nesta sessão. A validação CI permanece pendente.
+- Próximo passo: executar API CI/Quality Gates e continuar a auditoria dos restantes handlers, em especial operações de captura, catálogo partilhado e isolamento indirecto por loja.

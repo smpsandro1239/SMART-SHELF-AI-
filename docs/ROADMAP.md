@@ -204,3 +204,12 @@ A cobertura usa SQLite isolado e não deve ser apresentada como prova de concorr
 - [x] Cobrir criação, listagem, cobertura e revogação com JWT ADMIN.
 - [x] Confirmar ausência de campo de segredo nas respostas e estado de cobertura coerente.
 - [ ] Validar no API CI e Quality Gates.
+
+### Fluxos de revisão humana — controlo de perfil (18-11-2026)
+- [x] Identificar as rotas de fila/resumo de revisão, avaliação de SKU e candidatos de treino como operações reservadas a ADMIN/SUPERVISOR.
+- [x] Acrescentar teste JWT HTTP que exige 403 para EMPLOYEE nas cinco operações, incluindo criação de revisão de deteção.
+- [x] Confirmar no teste que a operação de escrita recusada não cria registos.
+- [ ] Validar o teste no API CI e Quality Gates.
+- [ ] Prosseguir a auditoria de autorização por handler e isolamento multi-loja.
+
+**Limite:** teste HTTP com SQLite isolado; não equivale a validação PostgreSQL nem a conclusão da auditoria global.

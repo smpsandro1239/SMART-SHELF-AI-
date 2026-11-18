@@ -250,3 +250,12 @@
 - [x] Acrescentar teste positivo para criação, listagem, consulta de cobertura e revogação com JWT ADMIN.
 - [x] Verificar resposta sem material secreto, estado inicial nunca observado e cobertura após revogação.
 - [ ] Validar suite API e Quality Gates no CI.
+
+## Fluxos de revisão humana — autorização de funcionários (18-11-2026)
+- [x] Rever as rotas de fila de revisão, resumo, avaliação SKU revista, candidatos de treino revistos e submissão de revisão de deteção.
+- [x] Acrescentar teste HTTP/JWT que confirma que EMPLOYEE recebe 403 nas cinco operações.
+- [x] Verificar que a tentativa de submissão recusada não cria registos de revisão.
+- [ ] Validar a nova cobertura no API CI e Quality Gates.
+- [ ] Continuar a auditoria handler-a-handler e confirmar isolamento multi-loja nos restantes fluxos de visão.
+
+**Limite:** a cobertura acrescentada valida a barreira de perfil EMPLOYEE do middleware em ambiente production com SQLite isolado. Não prova concorrência PostgreSQL nem conclui a auditoria global.
