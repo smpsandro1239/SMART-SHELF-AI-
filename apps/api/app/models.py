@@ -953,7 +953,7 @@ class DatasetExecutionJob(Base):
     approval_record_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
     approval_report_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
     mode: Mapped[str] = mapped_column(String(16), nullable=False)
-    status: Mapped[str] = mapped_column(String(16), default="QUEUED", nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(16), default="QUEUED", nullable=False)
     lease_owner: Mapped[str | None] = mapped_column(String(160), nullable=True)
     lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     fencing_token: Mapped[int] = mapped_column(Integer, default=0, nullable=False)

@@ -30,7 +30,7 @@ def test_dataset_job_migration_guards_sources_events_and_terminal_rows(tmp_path)
             migration.upgrade()
         connection.exec_driver_sql(
             "INSERT INTO dataset_execution_jobs (id,idempotency_key,request_sha256,release_fingerprint,approval_record_sha256,approval_report_sha256,mode,status,fencing_token,attempt_count) VALUES "
-            "(1,'key,'" + "b" * 64 + "','" + "c" * 64 + "','" + "d" * 64 + "','" + "e" * 64 + "','training','QUEUED',0,0)"
+            "(1,'key','" + "b" * 64 + "','" + "c" * 64 + "','" + "d" * 64 + "','" + "e" * 64 + "','training','QUEUED',0,0)"
         )
         connection.exec_driver_sql(
             "INSERT INTO dataset_execution_job_sources (id,job_id,shelf_image_id,store_id,source_image_sha256) VALUES (1,1,1,1,'" + "a" * 64 + "')"
@@ -48,7 +48,7 @@ def test_dataset_job_migration_guards_sources_events_and_terminal_rows(tmp_path)
             connection.exec_driver_sql("UPDATE dataset_execution_jobs SET release_fingerprint='" + "f" * 64 + "' WHERE id=1")
         connection.exec_driver_sql("UPDATE dataset_execution_jobs SET status='LEASED',lease_owner='worker',lease_expires_at=CURRENT_TIMESTAMP,fencing_token=1,attempt_count=1 WHERE id=1")
         connection.exec_driver_sql("UPDATE dataset_execution_jobs SET status='SUCCEEDED',lease_owner=NULL,lease_expires_at=NULL,output_sha256='" + "f" * 64 + "' WHERE id=1")
-        with pytest.raises(IntegrityError, match="terminal"):
+        with pytest.raises(IntegrityError, match="immutable"):
             connection.exec_driver_sql("UPDATE dataset_execution_jobs SET status='FAILED' WHERE id=1")
         with Operations.context(MigrationContext.configure(connection)):
             migration.downgrade()

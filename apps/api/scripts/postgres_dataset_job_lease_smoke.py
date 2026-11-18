@@ -65,7 +65,6 @@ def main():
     suffix = uuid4().hex[:10]
     source_one, source_two = _fixture(suffix)
     job_id = _enqueue(f"pg-dataset-{suffix}-one", source_one)
-    revoked_job_id = _enqueue(f"pg-dataset-{suffix}-two", source_two)
 
     barrier = Barrier(2)
     with ThreadPoolExecutor(max_workers=2) as executor:
@@ -77,6 +76,7 @@ def main():
     claimed_id, first_token, first_owner = claimed[0]
     assert claimed_id == job_id
 
+    revoked_job_id = _enqueue(f"pg-dataset-{suffix}-two", source_two)
     with SessionLocal() as db:
         db.execute(update(models.DatasetExecutionJob).where(
             models.DatasetExecutionJob.id == job_id
