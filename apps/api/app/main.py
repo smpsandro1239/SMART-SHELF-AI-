@@ -7681,6 +7681,18 @@ def list_replenishment_task_events(task_id: int, request: Request, db: Session =
     )
 
 
+def _lock_admin_bootstrap(db: Session) -> None:
+    """Serialize first-admin creation so concurrent requests cannot create multiple admins."""
+    dialect = db.get_bind().dialect.name
+    if dialect == "postgresql":
+        db.execute(text("SELECT pg_advisory_xact_lock(:lock_key)"), {
+            "lock_key": 0x534D415254534845,
+        })
+    elif dialect == "sqlite":
+        # SQLite has no advisory locks; reserve the write transaction before checking users.
+        db.execute(text("BEGIN IMMEDIATE"))
+
+
 @app.post("/api/v1/auth/bootstrap", response_model=TokenRead, status_code=201, tags=["authentication"])
 def bootstrap_first_admin(
     payload: BootstrapAdminCreate,
@@ -7691,6 +7703,7 @@ def bootstrap_first_admin(
     supplied_key = request.headers.get("X-Bootstrap-Key", "")
     if not settings.bootstrap_admin_key or supplied_key != settings.bootstrap_admin_key:
         raise HTTPException(status_code=403, detail="Invalid or unconfigured bootstrap key")
+    _lock_admin_bootstrap(db)
     if db.query(models.User).count() > 0:
         raise HTTPException(status_code=409, detail="Administrator bootstrap has already been completed")
     email = payload.email.strip().lower()
