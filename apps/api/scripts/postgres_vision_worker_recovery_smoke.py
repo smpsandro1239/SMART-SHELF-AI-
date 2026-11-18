@@ -101,6 +101,11 @@ def _verify_skip_locked_recovery(stale_image_ids: list[int]) -> None:
             held_image_id: "PENDING",
             available_image_id: "PENDING",
         }, states
+        for image_id in stale_image_ids[:2]:
+            image = db.get(models.ShelfImage, image_id)
+            assert image is not None
+            image.analysis_status = "COMPLETED"
+        db.commit()
 
 
 def _recover_stale_images() -> int:
