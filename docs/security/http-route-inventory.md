@@ -161,4 +161,4 @@ Os seis handlers de artefactos listados acima exigem perfil `ADMIN` directamente
 
 ## Gestão de integrações externas — cobertura de autorização (18-11-2026)
 
-Os handlers de criação, listagem, consulta de cobertura e actualização de integrações externas por loja exigem ADMIN directamente. O teste `test_store_external_integration_governance_is_admin_only_over_http` verifica os quatro métodos com JWT de SUPERVISOR e EMPLOYEE, espera 403 e confirma que a contagem e a política da integração preexistente não se alteram. Validação CI pendente.
+Os handlers de criação, listagem, consulta de cobertura e actualização de integrações externas por loja exigem ADMIN directamente. O teste `test_store_external_integration_governance_is_admin_only_over_http` verifica os quatro métodos com JWT de SUPERVISOR e EMPLOYEE, espera 403 e confirma que a contagem e a política da integração preexistente não se alteram. Validação CI concluída: API CI run 44338653668 e Quality Gates run 44338651433 passaram; Docker Compose smoke run 44338651406 também passou. O teste HTTP corre na suite API com SQLite isolado.

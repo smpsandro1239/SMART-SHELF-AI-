@@ -189,4 +189,11 @@ A cobertura usa SQLite isolado e não deve ser apresentada como prova de concorr
 - [x] Rever os quatro handlers de criação, listagem, cobertura e actualização de integrações externas.
 - [x] Acrescentar teste JWT para SUPERVISOR e EMPLOYEE nos quatro métodos.
 - [x] Confirmar no teste a recusa HTTP 403 e a ausência de efeitos laterais sobre registos e política.
-- [ ] Validar a nova cobertura no API CI e Quality Gates.
+- [x] Validar a nova cobertura no API CI e Quality Gates (runs 44338653668 e 44338651433); Docker Compose smoke também passou (run 44338651406).
+
+
+### Validação CI — gestão de integrações externas (18-11-2026)
+
+- [x] API CI e suite API aprovados — [run 44338653668](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44338653668).
+- [x] Quality Gates e build de produção aprovados — [run 44338651433](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44338651433).
+- [x] Docker Compose smoke aprovado — [run 44338651406](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44338651406).

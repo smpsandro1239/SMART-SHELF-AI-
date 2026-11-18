@@ -243,4 +243,4 @@
 - [x] Rever criação, listagem, consulta de cobertura e actualização de integrações externas; os quatro handlers exigem ADMIN.
 - [x] Acrescentar teste HTTP/JWT para SUPERVISOR e EMPLOYEE nos quatro métodos.
 - [x] Verificar 403 e ausência de criação/alteração de integrações após pedidos recusados.
-- [ ] Confirmar suite API, API CI e Quality Gates no novo commit.
+- [x] Confirmar suite API, API CI e Quality Gates (API CI run 44338653668; Quality Gates run 44338651433).

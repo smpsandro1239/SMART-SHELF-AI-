@@ -444,5 +444,18 @@ Added `test_catalogue_and_warehouse_master_data_writes_are_admin_only` to exerci
 - Revisão dos handlers `POST/GET /api/v1/stores/{store_id}/external-integrations`, `GET .../coverage` e `PATCH .../{integration_id}`: todos exigem ADMIN directamente no handler.
 - Acrescentado `test_store_external_integration_governance_is_admin_only_over_http`: 8 pedidos (quatro operações por dois perfis JWT: SUPERVISOR e EMPLOYEE), todos esperados como HTTP 403.
 - O teste compara a contagem e os campos de política da integração preexistente antes/depois, para detectar criação ou alteração por pedidos recusados.
-- Execução CI deste novo teste pendente; não foi executado localmente nesta sessão.
+- API CI run [44338653668](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44338653668): **success**; suite API e smoke PostgreSQL concluídos.
+- Quality Gates run [44338651433](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44338651433): **success**; testes API, TypeScript e build de produção aprovados.
+- Docker Compose smoke run [44338651406](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44338651406): **success**.
+- Teste HTTP/JWT validado na suite API; não foi executado localmente nesta sessão.
 - Esta ronda alarga a cobertura de autorização administrativa; não encerra a auditoria global nem substitui testes PostgreSQL de concorrência.
+
+
+## Validação CI — gestão de integrações externas (18-11-2026)
+
+- Commit funcional: `038e7bcebda8bc02226f264ee3797772ac289a81`.
+- API CI [44338653668](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44338653668): **success**.
+- Quality Gates [44338651433](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44338651433): **success**.
+- Docker Compose smoke [44338651406](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44338651406): **success**.
+- A suite de API passou com o novo teste de gestão de integrações externas. O teste HTTP específico usa SQLite isolado; os smokes PostgreSQL do workflow passaram, mas não executam esse teste HTTP contra PostgreSQL.
+- Próximo foco: rever operações de integração externas para além dos quatro métodos já cobertos, incluindo eventuais callbacks/webhooks e fluxos de ingestão com credenciais ou segredos.
