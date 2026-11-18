@@ -211,3 +211,6 @@
 - [x] Cobrir SUPERVISOR limitado à própria loja, exclusão de funcionários inactivos, filtro cross-store recusado, ADMIN com filtro de loja e EMPLOYEE recusado.
 - [x] Integrar o smoke no workflow API CI após a validação das migrações.
 - [ ] Confirmar a execução do novo smoke e da suite API no API CI; não declarar validação PostgreSQL antes do resultado do workflow.
+
+- [x] Reforçar o smoke PostgreSQL do diretório de funcionários: ausência de Bearer, JWT inválido e conta SUPERVISOR inactiva (401); ADMIN global só recebe funcionários activos; manter testes de isolamento por loja e recusa EMPLOYEE.
+- [ ] Confirmar o novo cenário no API CI; a alteração de teste ainda não tem resultado de execução PostgreSQL.
