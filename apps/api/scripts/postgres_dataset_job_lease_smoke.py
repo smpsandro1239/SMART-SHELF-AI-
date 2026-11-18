@@ -2,6 +2,7 @@
 
 from concurrent.futures import ThreadPoolExecutor
 from threading import Barrier
+from time import sleep
 from uuid import uuid4
 
 from sqlalchemy import text, update
@@ -58,7 +59,7 @@ def _enqueue(key, source):
 def _claim(worker, barrier):
     with SessionLocal() as db:
         barrier.wait(timeout=10)
-        job = claim_next_dataset_job(db, worker_id=worker, lease_seconds=60)
+        job = claim_next_dataset_job(db, worker_id=worker, lease_seconds=1)
         return None if job is None else (job.id, job.fencing_token, job.lease_owner)
 
 
@@ -79,12 +80,11 @@ def main():
 
     revoked_job_id = _enqueue(f"pg-dataset-{suffix}-two", source_two)
     with SessionLocal() as db:
-        db.execute(update(models.DatasetExecutionJob).where(
-            models.DatasetExecutionJob.id == job_id
-        ).values(lease_expires_at=models.utc_now()))
         image = db.get(models.ShelfImage, source_two["shelf_image_id"])
         image.retention_status = "RESTRICTED"
         db.commit()
+
+    sleep(1.1)
 
     with SessionLocal() as db:
         replacement = claim_next_dataset_job(db, worker_id="replacement-worker", lease_seconds=60)

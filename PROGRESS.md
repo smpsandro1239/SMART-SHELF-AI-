@@ -673,3 +673,6 @@ Commit validado: `1e3499c8c80ef75494a29d06807469898471e4e1`.
 - O serviço de heartbeat preserva a expiração anterior quando a duração pedida é menor.
 - Acrescentados testes de migration SQLite e verificações SQL directas ao smoke PostgreSQL.
 - Estado: alterações preparadas; ainda não validadas por CI. Não declarar garantias PostgreSQL concluídas até os workflows passarem.
+
+
+- CI correction follow-up: the first smoke attempt exposed that a legacy fixture forcibly rewrote a live lease expiry, which the new database guard correctly rejects. The PostgreSQL smoke now uses a one-second lease and waits for natural expiry before takeover; it no longer bypasses the production guard. The earlier smoke failure was separate from the Python claim/heartbeat regression, which was fixed in commit `23a81cb`.
