@@ -3,6 +3,7 @@
 - [x] Criar auditoria `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)` em transacção `READ ONLY`, com timeout, validação da relação imagem/loja e sem operações de escrita.
 - [x] Cobrir planos das listagens de imagens, deteções, OCR matches/evidence, eventos de retenção e subconsulta da fila de revisão SKU.
 - [x] Acrescentar testes unitários aos SELECTs limitados e à validação de IDs.
+- [x] Validar script/testes no API CI [44291136290](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44291136290): **1148 passed, 1 skipped, 1 warning**; Quality Gates [44291194461](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44291194461) passou; Docker Compose [44291133419](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44291133419) passou.
 - [ ] Executar em staging/réplica com volume representativo, analisar os planos e medir paginação profunda antes de propor índices ou keyset pagination.
 
 ## Planeamento de picking — integridade de colocações (2026-11-18)
