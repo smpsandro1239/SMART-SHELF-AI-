@@ -2,9 +2,9 @@
 
 ## Security and reliability
 
-- [ ] Audit authorization and tenant isolation for computer-vision endpoints: capture sessions, uploads, image content, detections, OCR, evidence fusion, human reviews and embeddings.
-- [ ] Add PostgreSQL concurrency coverage for image retention versus detection review. Observation creation versus image retention and human review versus image retention now have dedicated smoke tests; validate the new human-review test in CI.
-- [ ] Complete the product/shelf-product catalogue audit: role-gate and tenant-listing regression coverage is in place; inactive products and duplicate shelf assignments are rejected without writes; a PostgreSQL concurrent duplicate-assignment smoke test is now wired into API CI. Await CI evidence, then confirm global ADMIN catalogue semantics are intentional/documented.
+- [x] Auditar autorização e isolamento multi-loja nos endpoints de visão computacional: sessões de captura, uploads, conteúdo, deteções, OCR, fusão de evidências, revisões humanas e embeddings; cobertura de regressão existente validada no CI.
+- [x] Adicionar e validar no PostgreSQL a concorrência entre retenção de imagens e criação de observações/revisões humanas; os smoke tests de bloqueio e revalidação passaram no API CI.
+- [x] Concluir a auditoria do catálogo/produto-prateleira: autorização, isolamento por loja, produtos inativos, associações duplicadas e concorrência PostgreSQL cobertos; semântica global do catálogo ADMIN documentada e validada no CI.
 - [ ] Complete the worker retry, lease-expiry and retention-transition audit under concurrent execution. The lease-takeover and deterministic recovery-lock ordering regression tests now pass CI; add PostgreSQL coverage for any remaining race conditions found.
 - [ ] Verify production authentication configuration rejects anonymous access to all protected API routes.
 - [ ] Confirm production secret validation (including whitespace rejection) passes in CI and deployment environments explicitly set `APP_ENV=production`.
