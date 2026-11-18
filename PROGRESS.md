@@ -218,3 +218,11 @@ Added `test_catalogue_and_warehouse_master_data_writes_are_admin_only` to exerci
 - Quality Gates run [44254466640](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44254466640) passou com **1133 passed, 1 skipped, 1 warning**, compilação Python e build TypeScript/produção aprovados.
 - Demo Docker Compose run [44254466613](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44254466613) passou.
 - Conclusão limitada: o fencing impede que um worker antigo altere resultados depois de perder a lease. Não foi introduzido heartbeat periódico durante inferências longas; a recuperação continua dependente de `VISION_PROCESSING_TIMEOUT_SECONDS`, pelo que esse timeout deve exceder a duração normal/máxima esperada do provider. A duplicação de inferência durante um takeover pode ocorrer, mas só a tentativa que ainda detém a lease pode persistir.
+
+
+## 18-11-2026 — Paginação do histórico de retenção de imagens
+- Identificado um endpoint de auditoria append-only sem limite de resultados: `GET /api/v1/shelf-images/{image_id}/retention/events`.
+- Adicionada paginação por `limit` e `offset`, com ordenação cronológica estável por `created_at` e `id`, limite predefinido de 100 e máximo de 500 eventos por resposta. O comportamento mantém compatibilidade com consumidores existentes que não enviam parâmetros.
+- O teste do ciclo de legal hold passou também a verificar duas páginas consecutivas e a normalização de `limit=0` / `offset=-10`.
+- API CI run [44254865551](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44254865551) e Quality Gates run [44254865747](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44254865747) executaram o código; Quality Gates passou com **1133 passed, 1 skipped, 1 warning**, compilação Python e build web aprovados. Demo Docker Compose run [44254865566](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44254865566) passou. API CI estava a concluir a suite na última consulta; confirmar o estado final antes de fechar a validação global.
+- A auditoria global de paginação e custos de consulta continua aberta: esta alteração cobre apenas o histórico de retenção por imagem, não todas as listagens de deteções, OCR, fusão e referências de artefactos.
