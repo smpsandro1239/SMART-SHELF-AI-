@@ -101,3 +101,11 @@ Added `test_catalogue_and_warehouse_master_data_writes_are_admin_only` to exerci
 - Adicionado teste de integração com JWT que regista uma palete em `SLOT-FAR` e confirma que essa localização deixa de ser candidata, enquanto as restantes regras de capacidade e temperatura continuam aplicadas.
 - Commits: `99d1543` (lógica) e `d597d0c` (teste).
 - Validação da alteração pendente nos workflows API CI e Quality Gates.
+
+
+## 18-11-2026 — Paletes sem localização mapeada
+- A validação anterior mostrou que a exclusão por código exacto só cobria paletes com um código conhecido. Uma palete positiva de armazém sem código, ou com código que não corresponde a nenhuma localização configurada, podia deixar as localizações elegíveis como se estivessem livres.
+- O slotting passa a detectar paletes positivas de armazém sem correspondência em `WarehouseLocation`. Nesse cenário, todas as localizações são tratadas como ocupação desconhecida e rejeitadas, até o registo ser corrigido. A mesma protecção é aplicada às capacidades volumétrica e ponderal.
+- O teste de integração foi estendido: depois de confirmar a exclusão de uma localização com código coincidente, regista uma segunda palete sem código e confirma que nenhuma localização é recomendada.
+- Commits: `a4e077b` (detecção e teste inicial), `7b55b59` (guarda também na capacidade ponderal).
+- Validação CI pendente.
