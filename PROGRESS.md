@@ -146,3 +146,11 @@ Added `test_catalogue_and_warehouse_master_data_writes_are_admin_only` to exerci
 - O teste do ciclo de vida foi actualizado para criar a localização WAREHOUSE que utiliza.
 - Commits: validação `918bbe3`; testes `ac1661d` e `a531265`.
 - Validação CI pendente.
+
+
+## 18-11-2026 — Validação CI da integridade de paletes
+- API CI run `44206821156`, SHA `a5312651fb`: sucesso. Suite completa: **1129 passed, 1 skipped, 1 warning**. Todos os smoke tests PostgreSQL passaram, incluindo migrações, histórico append-only das paletes, concorrência de inventário/embalagens e as verificações de autorização.
+- Quality Gates run `44206872358`, SHA `df883edbe2`: sucesso. Suite API e compilação passaram; build Web TypeScript/produção também passou.
+- O teste de slotting com palete sem localização e o teste de registo/movimentação de paletes com localizações desconhecidas/inactivas estão incluídos na suite aprovada do API CI.
+- O teste do ciclo de vida de paletes passou depois de configurar explicitamente a localização WAREHOUSE usada pelo cenário.
+- O smoke Demo Docker Compose mais recente observado ainda não terminou; não é considerado validado nesta actualização.
