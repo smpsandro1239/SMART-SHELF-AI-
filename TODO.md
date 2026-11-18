@@ -31,6 +31,8 @@
 - [x] Acrescentar teste API para rejeitar configurações duplicadas de unidades logísticas.
 - [x] Integrar smoke test de concorrência PostgreSQL no API CI.
 - [x] Confirmar migração 0054 e smoke de concorrência no API CI; índices únicos parciais aplicados em PostgreSQL e SQLite.
+- [x] Endurecer a migração 0054 com preflight que identifica até 20 produtos duplicados por função (unidade de encomenda/reposição), aborta antes de criar índices e não altera dados.
+- [ ] Validar o preflight e o downgrade na suite de migrações SQLite e na cadeia PostgreSQL completa após esta alteração.
 - [ ] Avaliar dados existentes antes de aplicar a migração em ambientes com histórico real; duplicados preexistentes devem ser saneados antes da criação dos índices.
 
 
