@@ -375,7 +375,7 @@
 
 ## Continuação prioritária — fronteiras de consumo e retenção de datasets (18-11-2026)
 
-- [ ] Auditar todos os caminhos de COCO, galeria, revisão offline, aprovação, exportação e treino para identificar quais consultam o release gate e quais conseguem contorná-lo.
+- [x] Auditar os consumidores COCO, galeria, diff, qualidade, revisão, aprovação, release e execução. A classificação, os efeitos laterais e os limites estão em [Fronteiras dos consumidores de datasets](docs/architecture/dataset-consumer-boundaries.md). A única fronteira inspeccionada que inicia um processo externo é `dataset_execution`, agora ligada ao gate; galeria e relatórios são ferramentas offline/documentais, não autorização operacional.
 - [ ] Definir um contrato operacional de linhagem/retenção para derivados internos (crops, cópias, relatórios, exports, caches, backups e artefactos publicados), incluindo a política para descendentes quando a origem fica RESTRICTED ou sob legal hold.
 - [ ] Avaliar a necessidade de leases/claims duráveis e fencing para treino remoto, filas e jobs destacados; os locks PostgreSQL do processo síncrono não cobrem trabalho que continue após a sessão terminar.
 - [ ] Não activar purge físico nem inferir política de conservação: manter a eliminação fail-closed até existir política formal aprovada e prova de cobertura de todos os destinos.
@@ -391,3 +391,13 @@
 - [x] Acrescentar testes para ordem gate → release → consumidor, bloqueio sem aprovação e fingerprint distinta para evidência de aprovação diferente.
 - [x] Validar a implementação no API CI [44412024791](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44412024791): **1168 passed, 1 skipped, 1 warning**, migrações PostgreSQL 16 e smokes operacionais concluídos; Quality Gates [44412024893](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44412024893) e Docker Compose [44412025214](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44412025214) também passaram. O smoke PostgreSQL de elegibilidade de datasets e o build Web foram aprovados.
 - [ ] Criar mecanismo de lease/claim com fencing para consumidores remotos/destacados; não está coberto pela transacção síncrona.
+
+
+## Auditoria das fronteiras de consumo de datasets — 18-11-2026
+
+- [x] Classificar os CLIs COCO, galeria, diff, qualidade, auditoria, revisão, aprovação, release e execução.
+- [x] Documentar que galeria e relatórios são operações locais/documentais e não equivalem a aprovação ou autorização de treino.
+- [x] Confirmar que `dataset_execution` é a fronteira inspeccionada que inicia um processo externo e que exige agora o gate completo.
+- [ ] Criar catálogo persistente de artefactos derivados e propagar retenção/legal hold a HTML, relatórios, cópias, exports, caches e backups.
+- [ ] Implementar execução assíncrona com claim/lease/fencing e publicação condicionada ao token actual; ver requisitos no documento de fronteiras.
+- [ ] Autenticar revisores e substituir a confiança em identidade declarada em ficheiros por evidência autenticada.

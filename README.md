@@ -1401,3 +1401,10 @@ A fingerprint da release inclui os SHA-256 do registo de aprovação e do relat�
 O commit `107d2bda261685717d8601d2913b2a8beffcd7fa` foi validado nos três workflows: [API CI](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44412024791) (**1168 passed, 1 skipped, 1 warning**, incluindo migrações PostgreSQL 16 e smokes), [Quality Gates](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44412024893) e [Docker Compose](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44412025214). A aprovação está ligada à fingerprint da release e é exigida antes do consumidor síncrono arrancar.
 
 Esta evidência confirma os testes automatizados e os fluxos PostgreSQL definidos no CI. Não demonstra treino de um modelo real, integração com fornecedor externo, coordenação de filas remotas nem execução assíncrona segura. Essas lacunas permanecem no roadmap.
+
+
+## Auditoria das fronteiras de consumo de datasets
+
+A distinção entre validação COCO, galeria offline, diff, qualidade, revisão, aprovação, criação de release e execução de consumidores está documentada em [docs/architecture/dataset-consumer-boundaries.md](docs/architecture/dataset-consumer-boundaries.md). A única fronteira inspeccionada que inicia um processo externo é `app.dataset_execution`, que exige o gate de aprovação. Os restantes CLIs são ferramentas locais de validação/revisão ou criação de relatórios/releases candidatas; não devem ser interpretados como autorização de treino.
+
+A auditoria não fecha a governação dos artefactos derivados: relatórios, HTML, exports, caches, backups e cópias ainda precisam de um catálogo central com herança de retenção. Também não existe ainda execução remota/destacada com lease e fencing. A purga física permanece desactivada.

@@ -633,3 +633,12 @@ Commit validado: `1e3499c8c80ef75494a29d06807469898471e4e1`.
 - A execução de consumidores síncronos passa a exigir gate de aprovação e a vincular a evidência à fingerprint da release. Os locks de elegibilidade interna permanecem durante o consumidor.
 - Limite mantido: CI não valida treino real nem serviços externos; consumidores remotos/destacados continuam sem lease/fencing.
 - Próxima prioridade: definir e testar uma autorização durável para consumidores assíncronos, sem permitir que um lease expirado valide resultados tardios.
+
+
+## 2026-11-18 — Auditoria dos consumidores COCO e fronteiras de execução
+
+- Inspeccionados `coco_dataset.py`, `coco_review.py`, `dataset_diff.py`, `dataset_audit.py`, `dataset_quality.py`, `dataset_review.py`, `dataset_approval.py`, `dataset_release.py` e `dataset_execution.py`.
+- Conclusão: validação COCO, galeria e diff não iniciam treino; a galeria escreve HTML que referencia os originais, e o diff/qualidade escrevem relatórios. A revisão valida evidência declarada, mas não autentica o revisor. A release pode ser candidata. O wrapper síncrono `dataset_execution` é a fronteira inspeccionada que inicia o processo externo e já exige gate.
+- Documentadas as operações, os efeitos laterais e os limites em `docs/architecture/dataset-consumer-boundaries.md`.
+- A auditoria dos CLIs foi concluída para os ficheiros inspeccionados; não prova que um operador não execute manualmente um trainer fora do wrapper.
+- Próximas lacunas: catálogo persistente de derivados e destinos; herança de retenção; revisão autenticada; claim/lease/fencing e publicação condicionada ao token actual.

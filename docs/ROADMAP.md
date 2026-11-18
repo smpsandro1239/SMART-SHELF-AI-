@@ -355,3 +355,13 @@ Foi criado e integrado no API CI o smoke `postgres_dataset_eligibility_concurren
 - [ ] Propagar linhagem e retenção aos derivados, exports, relatórios, caches e backups; manter purge físico desactivado.
 
 **Limites:** a evidência é CI automatizado; não comprova treino real nem integração externa. O lock transaccional não protege trabalho que sobreviva ao processo consumidor.
+
+
+### Auditoria das fronteiras dos consumidores de datasets — 18-11-2026
+
+- [x] Classificar validação COCO, galeria offline, diff, qualidade, revisão, aprovação, release e execução.
+- [x] Identificar `dataset_execution` como a única fronteira inspeccionada que inicia um processo externo; está ligada ao gate de aprovação.
+- [x] Documentar que relatórios/galeria/releases candidatas não são autorização operacional nem autenticam revisores.
+- [ ] Implementar catálogo persistente de artefactos derivados e herança de retenção para relatórios, exports, caches e backups.
+- [ ] Implementar lease/claim/fencing durável para consumidores assíncronos e condicionar a publicação ao token actual.
+- [ ] Substituir revisão por ficheiro declarativo por aprovação autenticada quando existir contrato de utilizadores/revisores.
