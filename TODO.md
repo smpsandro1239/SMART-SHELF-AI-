@@ -208,7 +208,7 @@
 ## Diretório de funcionários — autorização multi-loja (18-11-2026)
 - [x] Rever o handler `GET /api/v1/store-employees`: ADMIN global; SUPERVISOR limitado à própria loja; apenas EMPLOYEE activos são devolvidos.
 - [x] Acrescentar teste JWT HTTP para supervisor, administrador e funcionário, incluindo filtro cross-store e exclusão de inactivos.
-- [ ] Validar o novo teste no API CI e Quality Gates.
+- [x] Validar o novo teste no API CI e Quality Gates (API CI run 44337777007; Quality Gates run 44337776819).
 - [ ] Avaliar se o endpoint necessita de smoke PostgreSQL específico; não declarar essa validação sem execução real.
 
 
@@ -217,15 +217,15 @@
 - [x] Criar smoke test HTTP com JWT reais contra PostgreSQL 16 para o endpoint `GET /api/v1/store-employees`.
 - [x] Cobrir SUPERVISOR limitado à própria loja, exclusão de funcionários inactivos, filtro cross-store recusado, ADMIN com filtro de loja e EMPLOYEE recusado.
 - [x] Integrar o smoke no workflow API CI após a validação das migrações.
-- [ ] Confirmar a execução do novo smoke e da suite API no API CI; não declarar validação PostgreSQL antes do resultado do workflow.
+- [x] Confirmar a execução do smoke PostgreSQL, incluindo o diretório de funcionários, e da suite API no API CI (run 44337777007).
 
 - [x] Reforçar o smoke PostgreSQL do diretório de funcionários: ausência de Bearer, JWT inválido e conta SUPERVISOR inactiva (401); ADMIN global só recebe funcionários activos; manter testes de isolamento por loja e recusa EMPLOYEE.
-- [ ] Confirmar o novo cenário no API CI; a alteração de teste ainda não tem resultado de execução PostgreSQL.
+- [x] Confirmar o cenário reforçado no API CI/PostgreSQL (run 44337777007).
 
 
 ## Governação de artefactos externos de imagens — autorização HTTP (18-11-2026)
 - [x] Rever handlers de registo/listagem de artefactos, snapshots de inventário, decisão de acesso e eventos de disposição: todos exigem ADMIN antes de consultar ou alterar dados.
 - [x] Acrescentar teste JWT HTTP para SUPERVISOR e EMPLOYEE nas seis operações.
 - [x] Verificar que os pedidos recusados não criam artefactos, snapshots ou eventos de disposição.
-- [ ] Executar a suite API e confirmar API CI/Quality Gates antes de declarar a cobertura validada.
+- [x] Suite API (`pytest -q`), API CI e Quality Gates aprovados (runs 44337777007 e 44337776819).
 - [ ] Continuar auditoria handler-a-handler; esta ronda não fecha a auditoria global.

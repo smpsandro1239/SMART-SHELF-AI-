@@ -139,7 +139,7 @@ A reconciliação estática não constitui uma auditoria de segurança concluíd
 
 - [x] Confirmar a política no handler: ADMIN global, SUPERVISOR limitado à loja atribuída e apenas funcionários activos.
 - [x] Adicionar teste HTTP JWT para isolamento cross-store, papéis e estado activo.
-- [ ] Validar no API CI/Quality Gates.
+- [x] Validar no API CI/Quality Gates (runs 44337777007 e 44337776819).
 - [ ] Decidir, com base no risco operacional, se é necessário smoke PostgreSQL específico.
 
 A cobertura usa SQLite isolado e não deve ser apresentada como prova de concorrência ou isolamento PostgreSQL.
@@ -150,7 +150,7 @@ A cobertura usa SQLite isolado e não deve ser apresentada como prova de concorr
 
 - [x] Acrescentar smoke HTTP/JWT em PostgreSQL 16 para `GET /api/v1/store-employees`, cobrindo isolamento do SUPERVISOR, exclusão de inactivos, filtro cross-store, acesso ADMIN e recusa EMPLOYEE.
 - [x] Integrar o smoke no workflow API CI.
-- [ ] Confirmar a execução CI antes de considerar o isolamento PostgreSQL validado.
+- [x] Confirmar a execução do smoke PostgreSQL no API CI (run 44337777007).
 
 
 ### Reforço do smoke de funcionários — 2026-11-18
@@ -158,7 +158,7 @@ A cobertura usa SQLite isolado e não deve ser apresentada como prova de concorr
 - [x] Cobrir 401 para ausência de Bearer, JWT inválido e conta SUPERVISOR inactiva.
 - [x] Verificar que a listagem global de ADMIN exclui funcionários inactivos.
 - [x] Preservar cobertura de isolamento por loja, filtro ADMIN e recusa EMPLOYEE.
-- [ ] Confirmar execução no API CI/PostgreSQL antes de fechar a validação.
+- [x] Confirmar execução no API CI/PostgreSQL (run 44337777007).
 
 
 ### Governação de artefactos externos — autorização (18-11-2026)
@@ -166,5 +166,12 @@ A cobertura usa SQLite isolado e não deve ser apresentada como prova de concorr
 - [x] Rever os seis handlers de governação de artefactos externos e confirmar a exigência de ADMIN no início de cada operação.
 - [x] Acrescentar teste HTTP/JWT para SUPERVISOR e EMPLOYEE em registo, listagem, snapshot de inventário, decisão de acesso e eventos de disposição.
 - [x] Confirmar no teste que as recusas não criam registos de artefactos, snapshots ou eventos.
-- [ ] Validar no API CI e Quality Gates antes de fechar esta ronda.
+- [x] Validar no API CI e Quality Gates (runs 44337777007 e 44337776819).
 - [ ] Continuar auditoria global de autorização; não inferir cobertura total a partir deste conjunto.
+
+
+### Validação integrada — commit 4b45ae4 (2026-11-18)
+
+- [x] API CI: smoke PostgreSQL e suite `pytest -q` aprovados — [run 44337777007](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44337777007).
+- [x] Quality Gates: build Web de produção aprovado — [run 44337776819](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44337776819).
+- [x] Docker Compose: API, PostgreSQL, worker e perfis de demonstração aprovados — [run 44337776893](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44337776893).

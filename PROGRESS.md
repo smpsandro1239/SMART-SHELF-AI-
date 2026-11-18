@@ -416,3 +416,14 @@ Added `test_catalogue_and_warehouse_master_data_writes_are_admin_only` to exerci
 - Validação CI pendente. Não foram executados testes localmente nesta sessão.
 - SHA inicial: `13af626c8237c8f5fa26d452a2d83d5342c4200b`.
 - Próximo passo: executar API CI/Quality Gates, corrigir falhas e continuar a revisão dos restantes handlers.
+
+
+## 2026-11-18 — Validação CI da autorização de artefactos externos
+
+- API CI run [44337777007](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44337777007): **success**. As 28 etapas de smoke PostgreSQL terminaram com sucesso e a suite completa `pytest -q` também passou.
+- Quality Gates run [44337776819](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44337776819): **success**; build Web de produção concluído.
+- Docker Compose smoke run [44337776893](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44337776893): **success**; API, PostgreSQL, worker e perfis de demonstração verificados.
+- A cobertura JWT de seis operações de governação de artefactos externos está agora validada pela suite API no CI. O teste HTTP usa SQLite isolado; os smoke PostgreSQL do workflow validam as respectivas invariantes de persistência/concurrency, mas não executam esse teste HTTP específico contra PostgreSQL.
+- Não foram identificadas falhas de código nem regressões nesta ronda.
+- Commit funcional: `4b45ae475b2059832c71ca447011fb9c34165c1d`.
+- Próximo passo: continuar a auditoria dos restantes handlers e alinhar a política de acesso com os testes por perfil e loja.
