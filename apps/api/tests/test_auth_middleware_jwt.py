@@ -1457,6 +1457,41 @@ def test_employee_jwt_cannot_reassign_task_while_starting_it(auth_client):
 
 
 
+
+def test_admin_bootstrap_requires_key_and_rejects_second_initialization(auth_client, monkeypatch):
+    client, _, _ = auth_client
+    original_settings = main_module.settings
+    bootstrap_key = "bootstrap-test-key-that-is-long-enough"
+    monkeypatch.setattr(
+        main_module,
+        "settings",
+        original_settings.model_copy(update={"bootstrap_admin_key": bootstrap_key}),
+    )
+
+    invalid = client.post(
+        "/api/v1/auth/bootstrap",
+        headers={"X-Bootstrap-Key": "incorrect"},
+        json={
+            "email": "unexpected-admin@example.test",
+            "full_name": "Unexpected Admin",
+            "password": "Strong-password-42!",
+        },
+    )
+    assert invalid.status_code == 403
+
+    already_initialized = client.post(
+        "/api/v1/auth/bootstrap",
+        headers={"X-Bootstrap-Key": bootstrap_key},
+        json={
+            "email": "second-admin@example.test",
+            "full_name": "Second Admin",
+            "password": "Strong-password-42!",
+        },
+    )
+    assert already_initialized.status_code == 409
+    assert already_initialized.json()["detail"] == "Administrator bootstrap has already been completed"
+
+
 def test_every_versioned_api_route_requires_bearer_except_public_auth_routes(auth_client):
     client, _, _ = auth_client
     public_paths = {"/api/v1/auth/bootstrap", "/api/v1/auth/login"}
