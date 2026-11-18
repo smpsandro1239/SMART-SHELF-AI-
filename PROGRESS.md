@@ -1,3 +1,9 @@
+## 2026-11-18 — Semântica e anúncios acessíveis nos estados operacionais
+
+A revisão estática identificou um cartão de zona implementado como `article[role=button]`, com gestão manual de Enter/Espaço. Foi substituído por um `button type="button"` nativo, preservando o estilo e o destino de navegação. O cartão usa agora a semântica e o comportamento de teclado nativos do browser. O estado de carregamento da avaliação de evidência operacional passou também a usar `role="status"` e `aria-live="polite"`, tal como o carregamento inicial.
+
+**Validação disponível:** Web CI [44296222519](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44296222519) passou no commit `49f137995cc4ffe34fc0354c0d7d1e267ea0b1a1`. Quality Gates [44296222533](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44296222533) estava em execução na última consulta; não é declarado aprovado. Não foram executados testes locais nem ensaios manuais de teclado/leitor de ecrã.
+
 ## Ronda 2026-11-18 — fecho da validação de navegação acessível
 
 - HEAD inicial: `5ca7babcd3529f4459a50eaf5542aa289db91d05`.
