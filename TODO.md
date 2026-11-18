@@ -23,7 +23,9 @@
   - [x] Correct fused-evidence status-filter pagination: recompute status before applying the filtered offset, scan bounded keyset batches, and acquire all relevant product locks in ascending ID order to preserve the global image→product lock order.
   - [x] Add regression coverage for filtered pagination after catalogue revalidation and for offsets crossing the 500-row keyset batch boundary.
   - [x] Validate the filtered fused-evidence pagination regression and lock-order change in API CI (`44265754667`) and Quality Gates (`44265786855`); both completed successfully.
-- [ ] Verify retention and legal-hold audit trails across restore, purge scheduling and cancellation.
+- [ ] Complete the retention/legal-hold lifecycle audit across restore, purge scheduling, cancellation and concurrent transitions.
+  - [x] Cover restore cancellation, purge schedule/cancellation audit events, overdue purge blocking under legal hold, and preservation of the scheduled date/policy while a hold is applied/released.
+  - [ ] Validate the additional legal-hold release audit assertions in API CI; then extend PostgreSQL concurrency coverage for simultaneous hold/schedule transitions.
 - [ ] Keep ROADMAP.md aligned with implemented and validated capabilities.
 - [x] Implement dashboard UX refinements: human-readable durations, Europe/Lisbon timestamps, stronger contrast palette, non-colour status cues, compact single-task layout and clickable summary cards with exact task-state filters; Web CI and frontend quality build passed.
 - [ ] Complete manual browser/keyboard and full-state contrast audit before claiming formal WCAG AA conformance.
