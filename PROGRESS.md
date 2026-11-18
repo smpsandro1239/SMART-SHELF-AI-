@@ -92,3 +92,12 @@ Added `test_catalogue_and_warehouse_master_data_writes_are_admin_only` to exerci
 - Corrigida a docstring do módulo, que ainda afirmava que as localizações e restrições físicas não estavam modeladas.
 - Commits: `135779d` (teste API) e `3fab8b8` (documentação do módulo).
 - Validação CI do novo teste pendente.
+
+
+## 18-11-2026 — Reconciliação conservadora entre paletes e slotting
+- A auditoria confirmou que o smoke PostgreSQL `postgres_active_task_smoke.py` já cobre duas tarefas distintas, do mesmo produto e snapshot, a tentar reconciliar em simultâneo: apenas um movimento de 4 unidades é aceite, o segundo é rejeitado e o snapshot final mantém 1 unidade. A concorrência é serializada pelo bloqueio da linha do produto.
+- Identificada uma lacuna no slotting físico: a ocupação era calculada a partir de `WarehouseProductPlacement`, sem considerar paletes registadas no mesmo código de localização. Como não existe uma ligação inequívoca entre palete e colocação, somar quantidades poderia duplicar stock e ignorar paletes poderia sobrestimar capacidade livre.
+- O endpoint `GET /api/v1/warehouse/physical-slotting` passa agora a excluir conservadoramente localizações com paletes físicas positivas registadas em `location_type=WAREHOUSE` e no mesmo `location_code`, tratando a ocupação como desconhecida. A política da resposta explica a limitação e não converte nem soma quantidades.
+- Adicionado teste de integração com JWT que regista uma palete em `SLOT-FAR` e confirma que essa localização deixa de ser candidata, enquanto as restantes regras de capacidade e temperatura continuam aplicadas.
+- Commits: `99d1543` (lógica) e `d597d0c` (teste).
+- Validação da alteração pendente nos workflows API CI e Quality Gates.
