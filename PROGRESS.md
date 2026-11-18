@@ -349,3 +349,13 @@ Added `test_catalogue_and_warehouse_master_data_writes_are_admin_only` to exerci
 - Demo Docker Compose [44256610406](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44256610406): build, arranque, readiness, seed e perfis do worker aprovados.
 - API CI [44256610563](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44256610563): todos os smoke tests PostgreSQL concluídos com sucesso; suite API ainda estava em execução na última consulta. Não declarar o workflow integralmente concluído até confirmar o resultado final.
 - Limitação mantida: a auditoria global de custos de consulta continua aberta; faltam contagens totais, revisão sistemática de índices e análise de planos em dados representativos.
+
+## 2026-11-18 — Auditoria de autorização das integrações externas
+
+- Confirmado por leitura dos handlers que `POST/GET /api/v1/stores/{store_id}/external-integrations`, `PATCH .../{integration_id}` e `GET .../coverage` exigem perfil ADMIN antes de executar a operação.
+- A cobertura anterior em `test_store_external_integrations.py` chamava directamente um handler com EMPLOYEE; não exercitava o middleware HTTP nem os JWT.
+- Acrescentado `test_external_integration_management_is_admin_only_over_http` em `test_auth_middleware_jwt.py`: quatro operações × dois perfis não administrativos, mais verificação de que os pedidos recusados não criam integrações.
+- Commit de código/teste: `297f92453791331ab9788920f6a8e0b28367818f`.
+- **CI pendente**; não declarar esta cobertura validada até confirmar a execução da suite API e Quality Gates.
+- A auditoria global permanece aberta. O inventário de rotas também requer reconciliação: o documento actual declara 107 rotas e foi gerado a partir de uma versão anterior de `main.py`.
+
