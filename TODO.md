@@ -188,11 +188,13 @@
 ## Auditoria de autorização — integrações externas (18-11-2026)
 - [x] Confirmar que os quatro handlers de gestão de integrações externas exigem explicitamente perfil ADMIN.
 - [x] Acrescentar teste JWT HTTP para criação, listagem, alteração e consulta de cobertura por loja, com SUPERVISOR e EMPLOYEE.
-- [ ] Confirmar no CI as oito recusas HTTP 403 e a ausência de novos registos após pedidos negados.
-- [ ] Rever a cobertura de autorização dos endpoints restantes e reconciliar o inventário HTTP com as rotas actualmente declaradas em `apps/api/app/main.py`.
+- [x] API CI run `44299045159` no commit `297f924`: **1149 passed, 1 skipped, 1 warning**; teste JWT HTTP executado com sucesso.
+- [ ] Rever a cobertura de autorização dos endpoints restantes, handler-a-handler e nos caminhos indirectos.
 
 ### Reconciliação do inventário HTTP (18-11-2026)
 - [x] Comparar as declarações de rotas literais em `apps/api/app/main.py` com `docs/security/http-route-inventory.md`.
-- [x] Identificar e acrescentar as 16 declarações em falta; inventário actualizado de 107 para 123 rotas, sem entradas obsoletas.
+- [x] Identificar e integrar as 16 declarações em falta na tabela principal; inventário actualizado de 107 para 123 rotas, sem entradas obsoletas (commit `a60ac242`).
+- [x] Quality Gates run `44299324366`: API tests/compilação Python e build Web TypeScript/produção aprovados.
+- [x] Demo Docker Compose run `44299045038`: build, readiness, seed e verificação dos perfis/worker aprovados.
 - [ ] Concluir a auditoria de autorização handler-a-handler; inventário estático não é prova de controlo de acesso.
 
