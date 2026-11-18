@@ -1,6 +1,12 @@
+## 2026-11-18 — Auditoria de desempenho PostgreSQL (preparação)
+
+Foi criado `apps/api/scripts/postgres_image_query_plan_audit.py` para recolher `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON, TIMING OFF)` das principais consultas de imagens/evidência e da fila de revisão SKU. O script exige PostgreSQL, usa transacção `READ ONLY`, timeout por consulta, valida que a imagem pertence à loja indicada e não executa DDL/DML. Foram acrescentados testes unitários para os seis SELECTs limitados e validação de IDs. A utilização está documentada em `docs/PERFORMANCE-QUERY-AUDIT.md` e ligada no README.
+
+**Ainda não medido:** o script não foi executado contra staging/réplica com volume representativo nesta sessão. Não foram adicionados índices nem alterados contratos de paginação, porque ainda não existem planos reais que justifiquem essas mudanças. A validação CI do script/testes está pendente.
+
 ## 2026-11-18 — Integridade do planeamento de picking
 
-O planeador de picking passou a detetar duplicados na entrada para o par `(product_id, location_id)`, que é único no modelo de dados. Todas as linhas desse par são excluídas por ambiguidade, em vez de somar potencialmente duas vezes a mesma quantidade física. O resumo expõe `ambiguous_placement_rows_excluded`. Foram adicionados testes para a exclusão de duplicados e para confirmar que a mesma localização pode continuar a conter SKUs diferentes. Código e testes foram commitados; validação CI do commit final ainda pendente. Não foram executados testes locais nesta sessão.
+O planeador de picking passou a detetar duplicados na entrada para o par `(product_id, location_id)`, que é único no modelo de dados. Todas as linhas desse par são excluídas por ambiguidade, em vez de somar potencialmente duas vezes a mesma quantidade física. O resumo expõe `ambiguous_placement_rows_excluded`. Foram adicionados testes para a exclusão de duplicados e para confirmar que a mesma localização pode continuar a conter SKUs diferentes. **Validação concluída:** API CI [44271596288](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44271596288) passou no commit `30f3b4e`; Quality Gates [44271717562](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44271717562) passou no commit documental `93abecc`; Docker Compose smoke [44271596168](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44271596168) passou no commit `30f3b4e`. Não foram executados testes locais nesta sessão.
 
 ## Validação de concorrência de retenção — 2026-11-18
 
