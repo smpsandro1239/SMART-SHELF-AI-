@@ -222,3 +222,13 @@ A cobertura usa SQLite isolado e não deve ser apresentada como prova de concorr
 - [ ] Validar no CI e continuar a cobertura dos recursos de armazém.
 
 **Limite:** evidência HTTP SQLite; a auditoria multi-loja permanece aberta.
+
+### Isolamento multi-loja — paletes e rotação (18-11-2026)
+- [x] Cobrir listagem e registo de paletes da loja B por supervisor da loja A.
+- [x] Cobrir alteração de política de rotação da loja B por identificador.
+- [x] Cobrir leitura e escrita de eventos de ciclo de vida de palete da loja B.
+- [x] Confirmar 403 e ausência de efeitos laterais em estado, política e eventos.
+- [ ] Validar no API CI e Quality Gates.
+- [ ] Continuar a revisão de simulação, portefólio e histórico de rotação.
+
+**Limite:** teste HTTP com SQLite isolado; não prova concorrência PostgreSQL nem conclui a auditoria global.

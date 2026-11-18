@@ -483,3 +483,11 @@ Added `test_catalogue_and_warehouse_master_data_writes_are_admin_only` to exerci
 - As três operações devem responder HTTP 403. O teste compara as contagens de WarehouseLocation e WarehouseProductPlacement antes/depois para verificar ausência de efeitos laterais.
 - A alteração foi publicada na main; a validação CI ainda está pendente.
 - Próximo passo: alargar a cobertura a paletes, eventos de rotação, políticas e leituras de inventário/forecasting com identificadores de outra loja.
+
+## 2026-11-18 — Isolamento multi-loja em paletes e rotação
+- A revisão dos handlers identificou operações de listagem/registo de paletes, actualização de políticas de rotação e leitura/escrita de eventos de ciclo de vida.
+- Foi acrescentado test_supervisor_cannot_access_other_store_pallets_policies_or_events_over_http. O cenário cria uma palete, uma política e um evento na loja B e tenta aceder-lhes com JWT SUPERVISOR da loja A.
+- O teste exige HTTP 403 em cinco operações e compara eventos, política e estado da palete antes/depois para detectar efeitos laterais.
+- No commit anterior d39adb2, Quality Gates (incluindo build web) e Docker Compose smoke passaram. API CI run 44353746006 ainda estava em execução na última consulta.
+- A nova cobertura foi publicada na main, mas ainda não foi executada; os workflows do novo commit são a validação pendente.
+- A auditoria continua aberta; próximo foco: simulação, portefólio e histórico de rotação, além da confirmação PostgreSQL.

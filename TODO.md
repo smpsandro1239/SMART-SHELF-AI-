@@ -269,3 +269,13 @@
 - [ ] Prosseguir a revisão de isolamento multi-loja nos restantes recursos de armazém e inventário.
 
 **Limite:** teste HTTP com SQLite isolado; não substitui smoke PostgreSQL nem conclui a auditoria global.
+
+## Isolamento multi-loja — paletes e rotação (18-11-2026)
+- [x] Acrescentar teste HTTP/JWT para listagem e registo de paletes de outra loja.
+- [x] Cobrir actualização de política de rotação por identificador pertencente à loja B.
+- [x] Cobrir leitura e escrita de eventos de ciclo de vida de uma palete da loja B.
+- [x] Confirmar 403 e ausência de alterações em eventos, política e estado da palete.
+- [ ] Validar a nova cobertura no API CI e Quality Gates.
+- [ ] Prosseguir auditoria das operações de simulação, portefólio e histórico com referências cruzadas entre lojas.
+
+**Validação anterior:** no commit d39adb2, Quality Gates e Docker Compose smoke passaram; API CI continuava em execução no momento da revisão. O novo teste ainda não foi executado.

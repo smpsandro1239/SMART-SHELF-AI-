@@ -4381,3 +4381,100 @@ def test_supervisor_cannot_access_other_store_warehouse_resources_over_http(auth
         placements_after = db.query(models.WarehouseProductPlacement).count()
     assert locations_after == locations_before, "Denied cross-store location creation must have no side effects"
     assert placements_after == placements_before, "Denied cross-store placement creation must have no side effects"
+
+
+def test_supervisor_cannot_access_other_store_pallets_policies_or_events_over_http(auth_client):
+    """A supervisor cannot read or mutate pallet operations belonging to another store."""
+    client, ids, store_ids = auth_client
+    headers = bearer(ids["supervisor_a"], "SUPERVISOR")
+    store_b = store_ids["b"]
+
+    with main_module.SessionLocal() as db:
+        pallet_level = models.ProductPackagingLevel(
+            product_id=ids["product"],
+            code="AUTH-PALLET-LEVEL",
+            name="Palete de teste",
+            package_type="PALLET",
+            base_units_per_package=100,
+            is_active=True,
+        )
+        db.add(pallet_level)
+        db.flush()
+        pallet = models.StorePallet(
+            store_id=store_b,
+            product_id=ids["product"],
+            packaging_level_id=pallet_level.id,
+            pallet_code="AUTH-B-PALLET-01",
+            base_quantity=10,
+            status="READY",
+            location_type="WAREHOUSE",
+            location_code="B-WAREHOUSE-01",
+        )
+        policy = models.PalletRotationPolicy(
+            store_id=store_b,
+            product_id=ids["product"],
+            threshold_ratio=0.5,
+            is_enabled=True,
+        )
+        db.add_all([pallet, policy])
+        db.flush()
+        db.add(models.PalletRotationEvent(
+            pallet_id=pallet.id,
+            event_type="REGISTERED",
+            to_location_type="WAREHOUSE",
+            to_location_code="B-WAREHOUSE-01",
+            quantity_before=0,
+            quantity_after=10,
+            reason="Initial test fixture",
+        ))
+        db.commit()
+        pallet_id = pallet.id
+        policy_id = policy.id
+        packaging_level_id = pallet_level.id
+
+    with main_module.SessionLocal() as db:
+        events_before = db.query(models.PalletRotationEvent).filter_by(pallet_id=pallet_id).count()
+        policy_before = db.get(models.PalletRotationPolicy, policy_id)
+        policy_state_before = (float(policy_before.threshold_ratio), policy_before.is_enabled)
+        pallet_before = db.get(models.StorePallet, pallet_id)
+        pallet_state_before = (pallet_before.status, float(pallet_before.base_quantity), pallet_before.location_type)
+
+    requests = [
+        ("GET", f"/api/v1/warehouse/pallets?store_id={store_b}", None),
+        ("POST", "/api/v1/warehouse/pallets", {
+            "store_id": store_b,
+            "product_id": ids["product"],
+            "packaging_level_id": packaging_level_id,
+            "pallet_code": "AUTH-CROSS-STORE-ATTEMPT",
+            "base_quantity": 10,
+            "status": "READY",
+            "location_type": "WAREHOUSE",
+            "location_code": "B-WAREHOUSE-01",
+        }),
+        ("PATCH", f"/api/v1/warehouse/pallet-rotation/policies/{policy_id}", {
+            "threshold_ratio": 0.75,
+        }),
+        ("GET", f"/api/v1/warehouse/pallets/{pallet_id}/events?store_id={store_b}", None),
+        ("POST", f"/api/v1/warehouse/pallets/{pallet_id}/events", {
+            "expected_status": "READY",
+            "expected_base_quantity": 10,
+            "status": "QUARANTINED",
+            "reason": "Cross-store authorization probe",
+        }),
+    ]
+    for method, path, payload in requests:
+        response = client.request(method, path, json=payload, headers=headers)
+        assert response.status_code == 403, (
+            f"SUPERVISOR from store A must not access store B pallet operations: "
+            f"{method} {path} returned {response.status_code}"
+        )
+
+    with main_module.SessionLocal() as db:
+        events_after = db.query(models.PalletRotationEvent).filter_by(pallet_id=pallet_id).count()
+        policy_after = db.get(models.PalletRotationPolicy, policy_id)
+        policy_state_after = (float(policy_after.threshold_ratio), policy_after.is_enabled)
+        pallet_after = db.get(models.StorePallet, pallet_id)
+        pallet_state_after = (pallet_after.status, float(pallet_after.base_quantity), pallet_after.location_type)
+    assert events_after == events_before, "Denied cross-store event requests must not append lifecycle events"
+    assert policy_state_after == policy_state_before, "Denied cross-store requests must not alter rotation policy"
+    assert pallet_state_after == pallet_state_before, "Denied cross-store requests must not alter pallet state"

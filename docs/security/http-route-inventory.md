@@ -179,3 +179,9 @@ A middleware reserva a ADMIN/SUPERVISOR a consulta da fila de revisão, resumo, 
 O teste test_supervisor_cannot_access_other_store_warehouse_resources_over_http usa um SUPERVISOR da loja A e exige HTTP 403 ao listar localizações da loja B, criar uma localização na loja B e criar uma colocação numa localização da loja B. Compara as contagens de WarehouseLocation e WarehouseProductPlacement antes/depois para confirmar ausência de efeitos laterais.
 
 **Limite:** teste HTTP com SQLite isolado. Não prova isolamento de todos os recursos de armazém nem fecha a auditoria global.
+
+## Paletes e rotação — isolamento multi-loja (18-11-2026)
+
+O teste test_supervisor_cannot_access_other_store_pallets_policies_or_events_over_http cria uma palete, uma política de rotação e um evento na loja B. Um JWT SUPERVISOR da loja A tenta listar e registar paletes da loja B, alterar a política pelo respectivo ID, consultar eventos e submeter uma actualização do ciclo de vida. As cinco operações devem responder HTTP 403. O teste compara o número de eventos e os campos da política e da palete antes/depois.
+
+**Limite:** a evidência usa HTTP/JWT com SQLite isolado. Não demonstra por si só isolamento PostgreSQL, todos os caminhos indirectos nem conclusão da auditoria global.
