@@ -3962,3 +3962,38 @@ def test_supervisor_can_retry_failed_image_once_and_employee_is_denied(auth_clie
         assert image.analysis_started_at is None
         assert image.analysis_completed_at is None
         assert image.model_version is None
+
+def test_external_integration_management_is_admin_only_over_http(auth_client):
+    client, ids, store_ids = auth_client
+    store_id = store_ids["a"]
+    headers_by_role = {
+        "SUPERVISOR": bearer(ids["supervisor_a"], "SUPERVISOR"),
+        "EMPLOYEE": bearer(ids["employee_a"], "EMPLOYEE"),
+    }
+    requests = [
+        ("POST", f"/api/v1/stores/{store_id}/external-integrations", {
+            "external_system": "backup-vault",
+            "provider": "s3-compatible",
+        }),
+        ("GET", f"/api/v1/stores/{store_id}/external-integrations", None),
+        ("PATCH", f"/api/v1/stores/{store_id}/external-integrations/999999", {
+            "status": "REVOKED",
+        }),
+        ("GET", f"/api/v1/stores/{store_id}/external-integrations/coverage", None),
+    ]
+
+    with main_module.SessionLocal() as db:
+        before = db.query(models.StoreExternalIntegration).count()
+
+    for role, headers in headers_by_role.items():
+        for method, path, payload in requests:
+            response = client.request(method, path, json=payload, headers=headers)
+            assert response.status_code == 403, (
+                f"{role} must not access external integration management: "
+                f"{method} {path} returned {response.status_code}"
+            )
+
+    with main_module.SessionLocal() as db:
+        after = db.query(models.StoreExternalIntegration).count()
+    assert after == before, "Denied requests must not create integration records"
+
