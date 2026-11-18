@@ -5800,7 +5800,7 @@ def get_physical_warehouse_slotting(
             ),
             "occupied_weight_kg": (
                 None
-                if current["unknown_profile"] or location.code in pallet_location_codes
+                if current["unknown_profile"] or has_unmapped_warehouse_pallet or location.code in pallet_location_codes
                 else current["weight"]
             ),
             "temperature_zone": location.temperature_zone,
