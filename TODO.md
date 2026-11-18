@@ -351,8 +351,8 @@
 - [x] Acrescentar teste HTTP/JWT do endpoint de registo: raiz, descendente, listagem e retry idempotente.
 - [x] Cobrir conflito quando a mesma referência é reapresentada com outra linhagem.
 - [x] Cobrir pai inexistente, pai de outra imagem na mesma loja e pai de outra loja; confirmar ausência das referências recusadas na listagem.
-- [ ] Executar o teste focado e a suite API no CI; confirmar também compilação Python e Quality Gates.
-- [ ] Se a execução passar, registar os IDs dos workflows e reconciliar a matriz de autorização. O teste usa SQLite isolado e não substitui smoke PostgreSQL.
+- [x] Validar o teste HTTP/JWT e a suite API no API CI [44410444406](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44410444406); a suite, incluindo o teste de linhagem, terminou com sucesso. O teste HTTP usa SQLite isolado.
+- [x] Registar a evidência do API CI [44410444406](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44410444406) e Quality Gates [44410444404](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44410444404); actualizar a matriz de autorização. O teste HTTP usa SQLite isolado e não substitui smoke PostgreSQL específico do endpoint.
 
 
 ## Elegibilidade operacional de datasets — estabilidade da linhagem (18-11-2026)
@@ -369,5 +369,13 @@
 - [x] Criar smoke PostgreSQL com transações independentes para a validação e a alteração hierárquica.
 - [x] Verificar bloqueio real em `pg_stat_activity` para alterações concorrentes a `shelves.zone_id` e `zones.store_id`.
 - [x] Integrar o smoke no workflow API CI após as migrações e o smoke de linhagem de registos de prateleira.
-- [ ] Confirmar execução verde do smoke no PostgreSQL 16 e registar o run/commit.
+- [x] Confirmar execução verde do smoke no PostgreSQL 16 no API CI [44410444406](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44410444406), commit `33425007fc016b220c3f49f95078444189fd1ec9`; o passo dedicado, os restantes smokes e a suite API terminaram com sucesso.
 - [ ] Auditar os consumidores COCO/treino/galeria que possam contornar o release gate; a concorrência do gate não prova que todos os caminhos usam o gate.
+
+
+## Continuação prioritária — fronteiras de consumo e retenção de datasets (18-11-2026)
+
+- [ ] Auditar todos os caminhos de COCO, galeria, revisão offline, aprovação, exportação e treino para identificar quais consultam o release gate e quais conseguem contorná-lo.
+- [ ] Definir um contrato operacional de linhagem/retenção para derivados internos (crops, cópias, relatórios, exports, caches, backups e artefactos publicados), incluindo a política para descendentes quando a origem fica RESTRICTED ou sob legal hold.
+- [ ] Avaliar a necessidade de leases/claims duráveis e fencing para treino remoto, filas e jobs destacados; os locks PostgreSQL do processo síncrono não cobrem trabalho que continue após a sessão terminar.
+- [ ] Não activar purge físico nem inferir política de conservação: manter a eliminação fail-closed até existir política formal aprovada e prova de cobertura de todos os destinos.

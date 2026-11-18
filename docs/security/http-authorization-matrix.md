@@ -388,3 +388,10 @@ A migration `0050_shelf_record_store_lineage_guard` e o smoke `apps/api/scripts/
 O endpoint `POST /api/v1/shelf-images/{image_id}/artifacts` é ADMIN-only. A implementação bloqueia a imagem, a integração externa activa e, quando fornecido, o registo pai, exigindo que o pai pertença à mesma imagem e loja. A referência persistida expõe `parent_reference_id`; retries só são idempotentes quando o digest, release e pai coincidem. A migration 0046 impede reescrever a relação depois da criação.
 
 Foi acrescentado teste HTTP/JWT para criação de raiz/descendente, pai inexistente, pai de outra imagem na mesma loja, pai de outra loja, retry idempotente e conflito de linhagem. O contrato Pydantic rejeita booleanos como IDs. **Validação CI pendente:** a suite HTTP usa SQLite isolado; não constitui smoke PostgreSQL nem fecha a auditoria global.
+
+
+## Registo de linhagem pai/filho de artefactos externos — teste HTTP/JWT (18-11-2026)
+
+O teste `test_admin_registers_artifact_parent_lineage_over_http` exercita `POST /api/v1/shelf-images/{image_id}/artifacts` e a listagem associada com JWT ADMIN real. Confirma criação de referência raiz e descendente, persistência/devolução de `parent_reference_id`, retry exactamente idempotente, conflito quando a mesma identidade é reapresentada com outra linhagem, rejeição de pai inexistente, pai de outra imagem na mesma loja e pai de outra loja. A listagem final confirma que as referências recusadas não foram persistidas.
+
+**Validação:** o teste foi executado pela suite API no API CI [44410444406](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44410444406), commit `33425007fc016b220c3f49f95078444189fd1ec9`. O teste HTTP usa SQLite isolado; não constitui smoke PostgreSQL individual do endpoint. A política ADMIN-only já é exercida pelos testes de governação de artefactos externos, que verificam 403 para SUPERVISOR/EMPLOYEE e ausência de efeitos laterais. A auditoria global handler-a-handler permanece aberta.

@@ -318,3 +318,15 @@ A validação de proveniência interna passa a bloquear explicitamente imagem, p
 ### Smoke concorrente PostgreSQL — elegibilidade de datasets (18-11-2026)
 
 Foi criado e integrado no API CI o smoke `postgres_dataset_eligibility_concurrency_smoke.py`. Duas sessões PostgreSQL independentes exercitam actualizações a `shelves.zone_id` e `zones.store_id` enquanto o gate mantém os locks de imagem/prateleira/zona. O smoke exige evidência de bloqueio real através de `pg_stat_activity` e `pg_blocking_pids`, e confirma que as alterações só terminam depois do commit do gate. A validação de runtime permanece pendente até o workflow concluir.
+
+
+## 2026-11-18 — Elegibilidade de datasets: concorrência PostgreSQL validada
+
+- [x] Confirmar no API CI [44410444406](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44410444406) o smoke `postgres_dataset_eligibility_concurrency_smoke.py`: PostgreSQL 16 observou bloqueios reais a alterações concorrentes de `shelves.zone_id` e `zones.store_id` enquanto o gate mantinha locks de imagem/prateleira/zona.
+- [x] Confirmar no mesmo API CI a suite API completa, incluindo o teste HTTP/JWT de registo de linhagem pai/filho.
+- [x] Confirmar Quality Gates [44410444404](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44410444404) e Docker Compose [44410444721](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44410444721).
+- [ ] Auditar consumidores COCO, galeria, revisão offline, aprovação, exportação e treino para identificar caminhos que não passam pelo release gate.
+- [ ] Definir linhagem operacional e propagação de retenção para derivados, exports, relatórios, caches e backups; não activar purge físico sem política aprovada.
+- [ ] Desenhar coordenação durável com lease/claim e fencing para consumidores remotos ou destacados, porque locks da sessão síncrona não cobrem trabalho assíncrono.
+
+**Limites:** a prova HTTP/JWT da linhagem usa SQLite isolado; o smoke PostgreSQL prova os locks do gate, não o uso universal do gate por todos os consumidores. A suite verde não demonstra integração com fornecedores externos nem execução de treino real.

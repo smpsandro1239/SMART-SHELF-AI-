@@ -1,3 +1,15 @@
+## 2026-11-18 — Validação da elegibilidade de datasets e linhagem HTTP de artefactos
+
+- SHA inicial e final da base validada: `33425007fc016b220c3f49f95078444189fd1ec9`.
+- API CI [44410444406](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44410444406) terminou com sucesso. O job `test` concluiu as migrações PostgreSQL 16, todos os smokes operacionais e `Run tests`; o passo `Verify PostgreSQL dataset eligibility hierarchy lock serialization` passou.
+- O smoke `postgres_dataset_eligibility_concurrency_smoke.py` usou sessões PostgreSQL independentes e observou bloqueios reais via `pg_stat_activity`/`pg_blocking_pids` para alterações concorrentes a `shelves.zone_id` e `zones.store_id`. As alterações só terminaram depois do commit da transacção do gate.
+- A suite API executou `test_admin_registers_artifact_parent_lineage_over_http`: criação de raiz/descendente, listagem, retry idempotente, conflito de linhagem, pai inexistente, pai de outra imagem e pai de outra loja. Esta integração HTTP/JWT usa SQLite isolado; não é uma validação PostgreSQL individual do endpoint.
+- Quality Gates [44410444404](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44410444404) terminou com sucesso. Docker Compose [44410444721](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44410444721) terminou com sucesso.
+- Actualizados README, TODO, roadmap e matriz de autorização para reflectir evidência e limitações.
+- Não foram executados comandos localmente nesta ronda; a evidência apresentada provém exclusivamente dos workflows GitHub Actions indicados.
+- Riscos em aberto: os caminhos COCO/galeria/revisão offline ainda precisam de auditoria de consumo do release gate; a propagação de retenção para derivados, exports, caches e backups não está demonstrada; locks de transacção não coordenam jobs remotos/destacados; purge físico continua desactivado.
+- Próxima tarefa: inventariar cada consumidor e definir um mecanismo comum de autorização/linhagem com lease/fencing para operações assíncronas, sem assumir uma política de retenção não aprovada.
+
 ## 2026-11-18 — Percurso ADMIN e isolamento de integrações externas
 
 - HEAD inicial: `038e7bcebda8bc02226f264ee3797772ac289a81`.

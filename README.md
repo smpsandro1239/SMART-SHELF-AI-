@@ -1356,3 +1356,10 @@ A cobertura de integração foi alargada para exercer o endpoint real com JWT AD
 ### Estabilidade concorrente da elegibilidade operacional de datasets — 2026-11-18
 
 A validação de proveniência interna bloqueia as linhas `shelf_images`, `shelves` e `zones` que determinam a loja efectiva da imagem, com ordenação explícita por ID. O relatório identifica os IDs bloqueados. O smoke `apps/api/scripts/postgres_dataset_eligibility_concurrency_smoke.py` usa duas sessões PostgreSQL independentes e verifica em `pg_stat_activity` que actualizações concorrentes de `shelves.zone_id` e `zones.store_id` ficam efectivamente à espera até o gate terminar a transacção. O smoke foi integrado no API CI; a execução neste commit ainda está pendente.
+
+
+## Validação CI mais recente — elegibilidade de datasets e linhagem de artefactos (18-11-2026)
+
+O commit `33425007fc016b220c3f49f95078444189fd1ec9` passou no API CI [44410444406](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44410444406), Quality Gates [44410444404](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44410444404) e Docker Compose [44410444721](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44410444721). O API CI concluiu as migrações PostgreSQL 16, todos os smokes operacionais, incluindo `postgres_dataset_eligibility_concurrency_smoke.py`, e a suite API. O smoke demonstrou que actualizações concorrentes a `shelves.zone_id` e `zones.store_id` ficam bloqueadas enquanto a validação de elegibilidade mantém os locks de imagem/prateleira/zona. A suite API também executou o teste HTTP/JWT `test_admin_registers_artifact_parent_lineage_over_http`.
+
+**Limites da evidência:** o smoke de elegibilidade prova a serialização PostgreSQL do gate, não que todos os consumidores offline/externos o utilizem. O teste de registo pai/filho atravessa HTTP/JWT, mas usa SQLite isolado; não é um smoke PostgreSQL individual do endpoint. A auditoria dos consumidores e a propagação operacional de retenção aos derivados, backups e caches continuam abertas. O treino remoto/destacado não está coberto por locks de uma transacção síncrona. A purga física permanece desactivada.
