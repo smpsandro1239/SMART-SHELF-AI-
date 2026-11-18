@@ -10,7 +10,7 @@
 - [x] Test production secret validation, including whitespace rejection; document the required `APP_ENV=production` setting for Vercel and Docker Compose.
 - [x] Document production secret generation, storage, first-admin bootstrap and JWT/bootstrap/database credential rotation in `docs/security/production-secrets.md`.
 - [x] Review JWT and bootstrap secret lifecycle; document single-key JWT rotation and one-time bootstrap behaviour.
-- [ ] Re-run API, frontend, Docker Compose and PostgreSQL smoke suites after backend changes.
+- [x] Re-run API, frontend, Docker Compose and PostgreSQL smoke suites after the latest backend/security changes; all final runs passed.
 
 ## Product quality
 
@@ -122,4 +122,11 @@
 - [x] Serializar a transacção SQLite com `BEGIN IMMEDIATE`.
 - [x] Acrescentar teste API para chave inválida e recusa de segundo bootstrap.
 - [x] Acrescentar smoke test PostgreSQL concorrente: duas requisições simultâneas, uma criação, um HTTP 409 e uma única conta ADMIN.
-- [ ] Validar o novo smoke test e a suite completa no API CI; validar Quality Gates e Docker Compose após as alterações.
+- [x] Validar o smoke test concorrente de bootstrap e a suite completa no API CI, Quality Gates e Docker Compose.
+
+
+## Validação CI — bootstrap e gestão de segredos (18-11-2026)
+- [x] API CI run `44251465118`, commit `ddd016401bb2`: **1130 passed, 1 skipped, 1 warning**; smoke PostgreSQL de bootstrap concorrente aprovado.
+- [x] Quality Gates run `44251681042`, commit `dd8dfc673d97`: **1130 passed, 1 skipped, 1 warning**; compilação Python e build Web TypeScript/produção aprovados.
+- [x] Demo Docker Compose run `44251551219`, commit `40281c07a68a`: stack concluída com sucesso após a alteração de passagem de variáveis de ambiente.
+- [x] A suite mantém apenas um aviso de depreciação Starlette/AnyIO; não houve falhas.
