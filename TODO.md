@@ -64,3 +64,11 @@
 - [x] Excluir conservadoramente todas as localizações do slotting enquanto existir uma palete de armazém sem correspondência com uma localização configurada.
 - [x] Cobrir com teste de integração a palete sem código de localização.
 - [ ] Validar o novo cenário na API CI e Quality Gates.
+
+
+## Ciclo de vida de paletes — cobertura de integração (18-11-2026)
+- [x] Testar rejeição de transições de estado não permitidas.
+- [x] Testar transição READY → ON_DISPLAY com localização SALES_FLOOR.
+- [x] Testar actualização de quantidade e estado para PARTIAL.
+- [x] Testar rejeição HTTP 409 de actualização baseada num estado desactualizado, sem evento adicional.
+- [ ] Validar o novo teste na API CI e Quality Gates.
