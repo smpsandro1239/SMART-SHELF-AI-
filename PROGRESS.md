@@ -1,8 +1,10 @@
 ## 2026-11-18 — Auditoria de desempenho PostgreSQL (preparação)
 
-Foi criado `apps/api/scripts/postgres_image_query_plan_audit.py` para recolher `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON, TIMING OFF)` das principais consultas de imagens/evidência e da fila de revisão SKU. O script exige PostgreSQL, usa transacção `READ ONLY`, timeout por consulta, valida que a imagem pertence à loja indicada e não executa DDL/DML. Foram acrescentados testes unitários para os seis SELECTs limitados e validação de IDs. A utilização está documentada em `docs/PERFORMANCE-QUERY-AUDIT.md` e ligada no README.
+Foi criado `apps/api/scripts/postgres_image_query_plan_audit.py` para recolher `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON, TIMING OFF)` das principais consultas de imagens/evidência e da fila de revisão SKU. O script exige PostgreSQL, usa transacção `READ ONLY`, timeout por consulta, valida que a imagem pertence à loja indicada e não executa DDL/DML. Foram acrescentados testes unitários para os seis SELECTs limitados e validação de IDs. A utilização está documentada em `docs/PERFORMANCE-QUERY-AUDIT.md` e ligada no README. A auditoria cobre primeiras páginas e offset profundo configurável (por omissão 5000), incluindo evidência fundida e a fila de revisão SKU.
 
-**Ainda não medido:** o script não foi executado contra staging/réplica com volume representativo nesta sessão. Não foram adicionados índices nem alterados contratos de paginação, porque ainda não existem planos reais que justifiquem essas mudanças. A validação CI do script/testes está pendente.
+**Validação automatizada concluída:** API CI [44291136290](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44291136290) passou com **1148 testes aprovados, 1 ignorado e 1 aviso**; Quality Gates [44291194461](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44291194461) passou com compilação Python e build Web; Docker Compose smoke [44291133419](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44291133419) passou.
+
+**Ainda não medido:** o script não foi executado contra staging/réplica com volume representativo nesta sessão. Não foram adicionados índices nem alterados contratos de paginação, porque ainda não existem planos reais que justifiquem essas mudanças.
 
 ## 2026-11-18 — Integridade do planeamento de picking
 
