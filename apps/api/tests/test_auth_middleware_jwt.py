@@ -4318,7 +4318,8 @@ def test_employee_cannot_access_human_review_workflows_over_http(auth_client):
     """Employees may inspect their own detection history, but cannot perform reviews."""
     client, ids, _ = auth_client
     headers = bearer(ids["employee_a"], "EMPLOYEE")
-    review_path = f"/api/v1/shelf-image-detections/{ids["detection_a"]}/reviews"
+    detection_id = ids["detection_a"]
+    review_path = f"/api/v1/shelf-image-detections/{detection_id}/reviews"
 
     with main_module.SessionLocal() as db:
         before = db.query(models.DetectionSkuReview).count()

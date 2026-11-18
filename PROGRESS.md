@@ -475,3 +475,4 @@ Added `test_catalogue_and_warehouse_master_data_writes_are_admin_only` to exerci
 - A leitura de histórico de revisões de deteção continua a ser uma permissão separada; esta alteração não a alarga.
 - O teste foi adicionado ao repositório, mas ainda não foi executado nesta sessão. A validação CI permanece pendente.
 - Próximo passo: executar API CI/Quality Gates e continuar a auditoria dos restantes handlers, em especial operações de captura, catálogo partilhado e isolamento indirecto por loja.
+- Correcção preventiva antes da validação: separar detection_id da expressão f-string para manter compatibilidade com o parser Python usado pelo projecto. A validação continua pendente.
