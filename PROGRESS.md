@@ -163,3 +163,10 @@ Added `test_catalogue_and_warehouse_master_data_writes_are_admin_only` to exerci
 - O único aviso reportado pela suite foi uma depreciação do alias `anyio.abc.BlockingPortal` usado pelo Starlette TestClient; não causou falha.
 - As alterações de validação de localização WAREHOUSE, os testes de registo/movimentação de paletes e a correcção da expectativa de slotting estão incluídos na suite aprovada.
 - Os runs intermédios cancelados foram substituídos pelas execuções finais acima; não foram contabilizados como falhas.
+
+
+## 18-11-2026 — Reconciliação final do estado documental
+- Revistos os registos históricos do TODO: as caixas do ciclo de vida e da imutabilidade append-only ainda apareciam como pendentes apesar de os pipelines posteriores as terem validado. Foram alinhadas com os resultados efectivos.
+- A validação Docker Compose foi confirmada no run `44206821282`, commit `a5312651fb`: stack API/PostgreSQL/vision worker, readiness, seed e verificações operacionais passaram.
+- Quality Gates mais recente, run `44207723589`, commit `84000c0ddf`: API tests/Python compilation e Web TypeScript/production build passaram. A suite API reportou **1129 passed, 1 skipped, 1 warning**.
+- Não foi necessária qualquer alteração adicional ao código de produção nesta reconciliação.
