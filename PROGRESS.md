@@ -1,3 +1,7 @@
+## 2026-11-18 — Integridade do planeamento de picking
+
+O planeador de picking passou a detetar duplicados na entrada para o par `(product_id, location_id)`, que é único no modelo de dados. Todas as linhas desse par são excluídas por ambiguidade, em vez de somar potencialmente duas vezes a mesma quantidade física. O resumo expõe `ambiguous_placement_rows_excluded`. Foram adicionados testes para a exclusão de duplicados e para confirmar que a mesma localização pode continuar a conter SKUs diferentes. Código e testes foram commitados; validação CI do commit final ainda pendente. Não foram executados testes locais nesta sessão.
+
 ## Validação de concorrência de retenção — 2026-11-18
 
 - [x] O smoke PostgreSQL cobre as duas ordens concorrentes entre restauro e agendamento de purga.
