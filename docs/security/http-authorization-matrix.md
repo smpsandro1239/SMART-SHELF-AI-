@@ -199,7 +199,7 @@ O commit `4b0a023ca7996864c4dfc40dc3703a067785bc4f` passou no API CI `4346847449
 
 ## Cobertura JWT — isolamento de inventário e localizações de armazém
 
-O teste `test_supervisor_jwt_cannot_read_or_write_foreign_inventory_and_placement_resources` acrescenta sete pedidos autenticados por JWT real de SUPERVISOR da loja A para recursos da loja B: listagem e leitura do último snapshot, criação de snapshot, consulta e atualização de política de frescura, criação de colocação numa localização estrangeira e recomendações de slotting. Todos exigem HTTP 403. A localização estrangeira é criada no fixture e os payloads de escrita são estruturalmente válidos, para que a resposta demonstre o controlo de âmbito no handler. O teste usa SQLite isolado; a validação PostgreSQL individual destes endpoints permanece pendente.
+O teste `test_supervisor_jwt_cannot_read_or_write_foreign_inventory_and_placement_resources` acrescenta sete pedidos autenticados por JWT real de SUPERVISOR da loja A para recursos da loja B: listagem e leitura do último snapshot, criação de snapshot, consulta e atualização de política de frescura, criação de colocação numa localização estrangeira e recomendações de slotting. Todos exigem HTTP 403. A localização estrangeira é criada no fixture e os payloads de escrita são estruturalmente válidos, para que a resposta demonstre o controlo de âmbito no handler. O teste HTTP usa SQLite isolado; a validação complementar PostgreSQL destes fluxos foi acrescentada pelo smoke `postgres_inventory_authorization_smoke.py`, executado com sucesso no API CI `44299045159`.
 
 
 ## Verificação de ausência de efeitos laterais — inventário cross-store
@@ -213,7 +213,7 @@ O script `apps/api/scripts/postgres_inventory_authorization_smoke.py` foi adicio
 
 O cenário cria duas lojas, um supervisor da loja A, um administrador e uma localização de armazém na loja B. Executa sete operações cross-store (listagem e leitura de snapshots, criação de snapshot, leitura e upsert de política de frescura, criação de colocação e recomendações de slotting) e exige HTTP 403 em todas. Em seguida verifica através da API e diretamente na base de dados que as tentativas recusadas não persistiram snapshots, políticas nem colocações. Por fim confirma que o supervisor consegue criar um snapshot e uma política na sua própria loja.
 
-**Estado:** implementação e integração CI publicadas; validação PostgreSQL real pendente da conclusão verde do workflow. O smoke test não fecha a auditoria global de autorização.
+**Estado:** smoke PostgreSQL 16 executado com sucesso no API CI `44299045159`: os sete pedidos cross-store receberam HTTP 403, a ausência de persistência foi confirmada e as operações permitidas na própria loja passaram. O smoke test não fecha a auditoria global de autorização.
 
 ## Retenção de imagens — validação recente
 
