@@ -126,3 +126,12 @@ Added `test_catalogue_and_warehouse_master_data_writes_are_admin_only` to exerci
 - API CI executa o smoke test imediatamente depois de `alembic upgrade head`, garantindo que a protecção está instalada antes da verificação.
 - Commits: migração `11bc8bf`; workflow `0e409e6`; smoke test `41faedf`; TODO `ed7e100`.
 - Validação pendente na nova execução da API CI.
+
+
+## 18-11-2026 — Correcção da expectativa do teste de slotting
+- A primeira execução da suite API revelou uma falha exclusivamente na expectativa do teste `test_physical_warehouse_slotting_api_respects_capacity_and_temperature`: esperava que todas as localizações fossem classificadas como `UNKNOWN_CURRENT_OCCUPANCY` quando existe uma palete sem localização.
+- A implementação preserva correctamente a precedência de segurança: a localização `SLOT-FROZEN` continua classificada como `TEMPERATURE_INCOMPATIBLE`, enquanto as restantes são excluídas por ocupação desconhecida. Nenhuma localização é recomendada.
+- Corrigido o teste para verificar explicitamente as quatro localizações, mantendo a incompatibilidade térmica e a regra de ocupação desconhecida para as outras três.
+- Não foi alterada a lógica de produção; a falha era uma asserção demasiado restritiva.
+- Commit da correcção: `08679a4`.
+- API CI anterior: 1127 passed, 1 skipped, 1 failed; Quality Gates API falhou pelo mesmo teste. Nova validação pendente.
