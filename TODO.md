@@ -288,3 +288,12 @@
 - [ ] Validar no API CI e Quality Gates; prosseguir revisão de imports CSV e restantes caminhos de ingestão.
 
 **Limite:** teste HTTP/JWT com SQLite isolado; não substitui smoke PostgreSQL nem conclui a auditoria multi-loja.
+
+
+## Isolamento multi-loja — importações CSV horárias (18-11-2026)
+- [x] Cobrir importação CSV de vendas horárias e tráfego com JWT SUPERVISOR da loja A e `store_id` da loja B.
+- [x] Exigir HTTP 403 antes da validação do conteúdo CSV e confirmar ausência de novas linhas persistidas.
+- [ ] Validar o novo teste no API CI e Quality Gates.
+- [ ] Acrescentar/confirmar cobertura PostgreSQL dedicada para isolamento multi-loja das importações.
+
+**Limite:** o teste HTTP/JWT usa SQLite isolado. O payload de vendas é intencionalmente inválido para demonstrar que a autorização ocorre antes do parsing; a ausência de efeitos laterais é verificada nas duas tabelas operacionais.

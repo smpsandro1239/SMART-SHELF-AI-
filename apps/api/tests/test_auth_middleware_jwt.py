@@ -4524,3 +4524,42 @@ def test_supervisor_cannot_access_other_store_sales_and_forecasts_over_http(auth
         assert db.query(models.DailySalesRecord).filter_by(store_id=store_b).count() == daily_before
         assert db.query(models.HourlySalesRecord).filter_by(store_id=store_b).count() == hourly_before
         assert db.query(models.HourlyStoreTrafficRecord).filter_by(store_id=store_b).count() == traffic_before
+
+
+def test_supervisor_cannot_import_other_store_hourly_sales_or_traffic_csv_over_http(auth_client):
+    """CSV ingestion must enforce store scope before parsing or persisting rows."""
+    client, ids, store_ids = auth_client
+    headers = bearer(ids["supervisor_a"], "SUPERVISOR")
+    store_b = store_ids["b"]
+
+    sales_csv = (
+        "product_id,business_date,hour_of_day,quantity,external_reference\\n"
+        "not-a-product,2026-11-18,10,4,CROSS-STORE-SALES-CSV\\n"
+    ).encode("utf-8")
+    traffic_csv = (
+        "business_date,hour_of_day,customer_count,external_reference\\n"
+        "2026-11-18,10,12,CROSS-STORE-TRAFFIC-CSV\\n"
+    ).encode("utf-8")
+
+    with main_module.SessionLocal() as db:
+        sales_before = db.query(models.HourlySalesRecord).filter_by(store_id=store_b).count()
+        traffic_before = db.query(models.HourlyStoreTrafficRecord).filter_by(store_id=store_b).count()
+
+    attempts = [
+        ("/api/v1/sales/hourly/import-csv", sales_csv, "sales.csv"),
+        ("/api/v1/sales/traffic/hourly/import-csv", traffic_csv, "traffic.csv"),
+    ]
+    for path, payload, filename in attempts:
+        response = client.post(
+            path,
+            data={"store_id": str(store_b), "source": "IMPORT"},
+            files={"file": (filename, payload, "text/csv")},
+            headers=headers,
+        )
+        assert response.status_code == 403, f"POST {path} returned {response.status_code}: {response.text}"
+
+    with main_module.SessionLocal() as db:
+        sales_after = db.query(models.HourlySalesRecord).filter_by(store_id=store_b).count()
+        traffic_after = db.query(models.HourlyStoreTrafficRecord).filter_by(store_id=store_b).count()
+    assert sales_after == sales_before, "Denied sales CSV import must not persist hourly sales"
+    assert traffic_after == traffic_before, "Denied traffic CSV import must not persist hourly traffic"

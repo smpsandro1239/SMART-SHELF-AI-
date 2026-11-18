@@ -499,3 +499,12 @@ Added `test_catalogue_and_warehouse_master_data_writes_are_admin_only` to exerci
 - A revisão estática confirma filtros store_id nas consultas de forecasting e nos perfis horários.
 - Commit anterior 2fd6796 validado: API CI 44354437977, Quality Gates 44354438016 e Docker Compose smoke 44354437876 — todos success.
 - Validação da nova cobertura pendente; auditoria multi-loja continua aberta.
+
+
+## 2026-11-18 — Isolamento multi-loja nas importações CSV horárias
+
+- Inspeccionados os handlers `POST /api/v1/sales/hourly/import-csv` e `POST /api/v1/sales/traffic/hourly/import-csv`.
+- Ambos executam `_request_user` e `_enforce_store_scope` antes de validar a loja, ler o ficheiro ou analisar o CSV; a revisão estática confirma a ordem fail-fast.
+- Acrescentado `test_supervisor_cannot_import_other_store_hourly_sales_or_traffic_csv_over_http` com uploads multipart reais na camada HTTP. As duas operações devem responder 403 e as contagens de `HourlySalesRecord` e `HourlyStoreTrafficRecord` da loja B devem permanecer inalteradas.
+- O teste foi publicado na `main`; ainda não foi executado localmente nem validado por CI nesta ronda.
+- Próximo passo: validar os workflows e acrescentar cobertura PostgreSQL de ingestão multi-loja, sem confundir o teste SQLite com prova de isolamento PostgreSQL.

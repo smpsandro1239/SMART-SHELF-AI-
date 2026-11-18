@@ -240,3 +240,14 @@ A cobertura usa SQLite isolado e não deve ser apresentada como prova de concorr
 - [ ] Validar no CI e continuar auditoria dos restantes fluxos.
 
 **Limite:** teste HTTP/JWT com SQLite isolado; não prova isolamento PostgreSQL nem conclui a auditoria global.
+
+
+### Importações CSV horárias — isolamento multi-loja (18-11-2026)
+
+- [x] Rever a ordem de autorização dos handlers de importação CSV de vendas e tráfego: a verificação de loja ocorre antes da leitura/parsing do ficheiro.
+- [x] Acrescentar teste HTTP/JWT multipart para SUPERVISOR da loja A a tentar importar dados para a loja B.
+- [x] Verificar HTTP 403 e ausência de efeitos laterais nas tabelas de vendas e tráfego.
+- [ ] Validar o teste no API CI e Quality Gates.
+- [ ] Criar/confirmar smoke PostgreSQL específico para isolamento multi-loja nas importações CSV.
+
+**Limite:** a cobertura HTTP adicionada usa SQLite isolado. A revisão estática da ordem de execução não substitui um teste PostgreSQL nem encerra a auditoria global.

@@ -193,3 +193,10 @@ O teste test_supervisor_cannot_access_other_store_sales_and_forecasts_over_http 
 A revisão estática confirma que as consultas de forecasting incluem store_id e product_id e que os portefólios restringem produtos e snapshots à loja solicitada.
 
 **Limite:** evidência HTTP/JWT com SQLite isolado; não equivale a validação PostgreSQL nem encerra a auditoria global.
+
+
+## Importações CSV horárias — autorização e isolamento multi-loja (18-11-2026)
+
+Os handlers `POST /api/v1/sales/hourly/import-csv` e `POST /api/v1/sales/traffic/hourly/import-csv` resolvem o utilizador e aplicam `_enforce_store_scope` antes de consultar a loja, ler o upload ou executar os parsers. O teste `test_supervisor_cannot_import_other_store_hourly_sales_or_traffic_csv_over_http` usa uploads multipart com JWT SUPERVISOR da loja A e `store_id` da loja B; exige HTTP 403 e compara as contagens das tabelas de vendas e tráfego antes/depois.
+
+**Limite:** a evidência HTTP é executada com SQLite isolado. O teste ainda necessita de validação CI e não substitui um smoke PostgreSQL dedicado.
