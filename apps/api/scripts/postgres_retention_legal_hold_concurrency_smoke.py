@@ -1,9 +1,8 @@
-"""Prove PostgreSQL serializes legal-hold and purge-schedule HTTP transitions.
+"""Prove PostgreSQL serializes retention, legal-hold and purge HTTP transitions.
 
-The first race commits a legal hold while a purge-schedule request waits on the
-image row; scheduling must re-check the refreshed row and return HTTP 409.
-The inverse race commits a purge schedule while a legal-hold request waits;
-the hold must succeed without clearing the scheduled date or policy.
+The smoke exercises both commit orders for legal hold versus purge scheduling,
+and restore versus purge scheduling. Each competing HTTP request must wait on
+the source-image row lock and then revalidate the committed state.
 """
 from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta, timezone
@@ -45,7 +44,7 @@ def create_fixture(suffix: str) -> tuple[int, int, int]:
         db.add(shelf)
         db.flush()
         image_ids = []
-        for label in ("hold-first", "schedule-first"):
+        for label in ("hold-first", "schedule-first", "restore-first", "schedule-before-restore"):
             image = models.ShelfImage(
                 shelf_id=shelf.id,
                 original_filename=f"retention-race-{label}.jpg",
@@ -60,7 +59,7 @@ def create_fixture(suffix: str) -> tuple[int, int, int]:
             db.flush()
             image_ids.append(image.id)
         db.commit()
-        return image_ids[0], image_ids[1], admin.id
+        return (*image_ids, admin.id)
 
 
 def run_serialized_race(
@@ -167,7 +166,7 @@ def run_serialized_race(
 
 def main() -> None:
     suffix = uuid4().hex[:10]
-    hold_first_id, schedule_first_id, admin_id = create_fixture(suffix)
+    hold_first_id, schedule_first_id, restore_first_id, restore_after_schedule_id, admin_id = create_fixture(suffix)
     token, _ = create_access_token(user_id=admin_id, role="ADMIN")
     scheduled_at = (models.utc_now() + timedelta(days=30)).astimezone(timezone.utc)
 
@@ -220,6 +219,57 @@ def main() -> None:
         expected_status=200,
     )
 
+    restore_result = run_serialized_race(
+        image_id=restore_first_id,
+        application_name=f"ss-retention-restore-first-{suffix}",
+        token=token,
+        mutate_locked_image=lambda db, image: (
+            setattr(image, "retention_status", "ACTIVE"),
+            setattr(image, "retention_reason", "PostgreSQL concurrent restore smoke"),
+            db.add(models.ShelfImageRetentionEvent(
+                shelf_image_id=image.id,
+                event_type="RESTORED",
+                from_status="RESTRICTED",
+                to_status="ACTIVE",
+                actor_user_id=admin_id,
+                reason="PostgreSQL concurrent restore smoke",
+            )),
+        ),
+        endpoint=f"/api/v1/shelf-images/{restore_first_id}/retention/purge-schedule",
+        payload={
+            "purge_not_before": scheduled_at.isoformat(),
+            "policy_version": "pg-retention-race-v1",
+            "reason": "Schedule request racing with restore",
+        },
+        expected_status=409,
+    )
+    assert "only restricted" in str(restore_result.get("body", {})).lower()
+
+    restore_schedule_at = scheduled_at + timedelta(days=1)
+
+    def commit_restore_schedule(db, image) -> None:
+        image.purge_not_before = restore_schedule_at
+        image.retention_policy_version = "pg-retention-restore-race-v1"
+        image.retention_reason = "PostgreSQL concurrent restore smoke"
+        db.add(models.ShelfImageRetentionEvent(
+            shelf_image_id=image.id,
+            event_type="PURGE_SCHEDULED",
+            from_status="RESTRICTED",
+            to_status="RESTRICTED",
+            actor_user_id=admin_id,
+            reason="PostgreSQL concurrent restore smoke",
+        ))
+
+    run_serialized_race(
+        image_id=restore_after_schedule_id,
+        application_name=f"ss-retention-schedule-restore-{suffix}",
+        token=token,
+        mutate_locked_image=commit_restore_schedule,
+        endpoint=f"/api/v1/shelf-images/{restore_after_schedule_id}/retention/restore",
+        payload={"reason": "Restore request racing with scheduled purge"},
+        expected_status=200,
+    )
+
     with SessionLocal() as db:
         hold_first = db.get(models.ShelfImage, hold_first_id)
         schedule_first = db.get(models.ShelfImage, schedule_first_id)
@@ -247,12 +297,43 @@ def main() -> None:
             "PURGE_SCHEDULED",
             "LEGAL_HOLD_APPLIED",
         ]
-        assert all(event.actor_user_id == admin_id for event in first_events + second_events)
+        restore_first = db.get(models.ShelfImage, restore_first_id)
+        restored_after_schedule = db.get(models.ShelfImage, restore_after_schedule_id)
+        assert restore_first is not None and restore_first.retention_status == "ACTIVE"
+        assert restore_first.purge_not_before is None
+        assert restored_after_schedule is not None
+        assert restored_after_schedule.retention_status == "ACTIVE"
+        assert restored_after_schedule.purge_not_before is None
+        assert restored_after_schedule.retention_policy_version is None
+
+        restore_first_events = (
+            db.query(models.ShelfImageRetentionEvent)
+            .filter(models.ShelfImageRetentionEvent.shelf_image_id == restore_first_id)
+            .order_by(models.ShelfImageRetentionEvent.id)
+            .all()
+        )
+        restored_after_schedule_events = (
+            db.query(models.ShelfImageRetentionEvent)
+            .filter(models.ShelfImageRetentionEvent.shelf_image_id == restore_after_schedule_id)
+            .order_by(models.ShelfImageRetentionEvent.id)
+            .all()
+        )
+        assert [event.event_type for event in restore_first_events] == ["RESTORED"]
+        assert [event.event_type for event in restored_after_schedule_events] == [
+            "PURGE_SCHEDULED",
+            "PURGE_CANCELLED",
+            "RESTORED",
+        ]
+        assert all(
+            event.actor_user_id == admin_id
+            for event in first_events + second_events + restore_first_events + restored_after_schedule_events
+        )
 
     print(
-        "PostgreSQL retention concurrency smoke passed: purge scheduling was "
-        "rejected after a competing legal hold committed; applying a legal hold "
-        "after a competing schedule committed preserved its date, policy and audit history."
+        "PostgreSQL retention concurrency smoke passed: legal hold and restore "
+        "both serialize correctly against purge scheduling; conflicting schedules "
+        "are rejected and restore cancels a previously committed schedule with "
+        "append-only audit history."
     )
 
 
