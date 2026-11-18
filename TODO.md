@@ -15,6 +15,7 @@
 ## Product quality
 
 - [ ] Review pagination, filtering and bounded query costs on image-derived data endpoints.
+  - [x] Add bounded offset pagination with stable ordering to shelf-image lists, detections, OCR matches/evidence/runs and fused evidence; preserve store scoping and retention checks. Detection pagination has a regression test; CI validation pending.
   - [x] Paginate the append-only image retention event history with deterministic chronological ordering, a default page of 100 and a hard maximum of 500; cover page boundaries and negative/zero parameter clamping. API CI and Quality Gates passed on commit `92d0add53d`.
 - [ ] Verify retention and legal-hold audit trails across restore, purge scheduling and cancellation.
 - [ ] Keep ROADMAP.md aligned with implemented and validated capabilities.
