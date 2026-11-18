@@ -199,3 +199,12 @@ Added `test_catalogue_and_warehouse_master_data_writes_are_admin_only` to exerci
 - Commits: correcção `9586d65`; smoke `336cad9`; workflow `c867dde`; teste API `ddd0164`; documentação de segredos `e3bd947`; Compose `40281c0`; documentação de deployment `abe6230`.
 - Validação CI da correcção de bootstrap pendente nesta actualização.
 - Limitação operacional: não foi verificada uma instância de produção real; a configuração `APP_ENV=production` está documentada e coberta por testes de Settings, mas os valores do secret store de cada ambiente continuam a ser responsabilidade do operador.
+
+
+## 18-11-2026 — Validação final da correcção de bootstrap
+- API CI run `44251465118`, commit `ddd016401bb2`: **1130 passed, 1 skipped, 1 warning** em 79,07 s. O smoke test PostgreSQL `Verify PostgreSQL concurrent first-admin bootstrap` passou antes da suite completa.
+- Quality Gates run `44251681042`, commit `dd8dfc673d97`: **1130 passed, 1 skipped, 1 warning** em 55,42 s; compilação dos módulos Python e build TypeScript/produção passaram.
+- Demo Docker Compose run `44251551219`, commit `40281c07a68a`: sucesso com a nova passagem de `APP_ENV`, `JWT_SECRET_KEY` e `BOOTSTRAP_ADMIN_KEY` para API e worker.
+- O teste SQLite da rota confirmou que o bloqueio `BEGIN IMMEDIATE` funciona no percurso de teste; o smoke PostgreSQL confirmou serialização real entre duas requisições concorrentes.
+- Os três pipelines foram executados em SHAs diferentes, mas cada um contém as alterações relevantes para a sua verificação: API CI incluiu código, smoke e teste; Compose incluiu o ficheiro de stack; Quality Gates executou a HEAD documental final.
+- O único aviso é a depreciação de `anyio.abc.BlockingPortal` usada pelo Starlette TestClient; sem falhas.
