@@ -208,3 +208,13 @@ Added `test_catalogue_and_warehouse_master_data_writes_are_admin_only` to exerci
 - O teste SQLite da rota confirmou que o bloqueio `BEGIN IMMEDIATE` funciona no percurso de teste; o smoke PostgreSQL confirmou serialização real entre duas requisições concorrentes.
 - Os três pipelines foram executados em SHAs diferentes, mas cada um contém as alterações relevantes para a sua verificação: API CI incluiu código, smoke e teste; Compose incluiu o ficheiro de stack; Quality Gates executou a HEAD documental final.
 - O único aviso é a depreciação de `anyio.abc.BlockingPortal` usada pelo Starlette TestClient; sem falhas.
+
+
+## 18-11-2026 — Auditoria concorrente do vision worker
+- Revistos `apps/api/app/vision_worker.py`, o fluxo de recuperação de tarefas `PROCESSING`, a reivindicação de imagens `PENDING`, a comparação do timestamp da lease e a revalidação do estado de retenção antes de persistir resultados.
+- Confirmado que a recuperação usa `SELECT FOR UPDATE SKIP LOCKED` e ordenação crescente por ID; os workers concorrentes não aguardam por linhas já bloqueadas e podem recuperar as restantes.
+- Alargado `apps/api/scripts/postgres_vision_worker_recovery_smoke.py` para PostgreSQL real: recuperação de duas tarefas com uma linha bloqueada, fencing de inferência bem-sucedida após takeover, rejeição de deteções quando a imagem passa a `RESTRICTED` durante a inferência e fencing de excepções do provider antigo após takeover.
+- O smoke PostgreSQL passou no API CI run [44254466581](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44254466581). A suite completa terminou com **1133 passed, 1 skipped, 1 warning**.
+- Quality Gates run [44254466640](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44254466640) passou com **1133 passed, 1 skipped, 1 warning**, compilação Python e build TypeScript/produção aprovados.
+- Demo Docker Compose run [44254466613](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44254466613) passou.
+- Conclusão limitada: o fencing impede que um worker antigo altere resultados depois de perder a lease. Não foi introduzido heartbeat periódico durante inferências longas; a recuperação continua dependente de `VISION_PROCESSING_TIMEOUT_SECONDS`, pelo que esse timeout deve exceder a duração normal/máxima esperada do provider. A duplicação de inferência durante um takeover pode ocorrer, mas só a tentativa que ainda detém a lease pode persistir.
