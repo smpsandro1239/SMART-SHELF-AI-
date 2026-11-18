@@ -2,6 +2,13 @@
 
 ## Prioridade atual: preparar um piloto controlado com validação operacional e evidência
 
+### Ronda em curso — 2026-11-18
+
+- Reforçado o protocolo para leitura integral do README antes de cada ronda de desenvolvimento.
+- Corrigida uma expectativa demasiado restritiva no smoke PostgreSQL do diretório de funcionários: a listagem global ADMIN pode incluir funcionários activos criados por outros smokes na base de CI partilhada.
+- Aguardar API CI/PostgreSQL para validar a correcção. O run anterior `44308942806` falhou apenas na asserção de igualdade global do smoke; o Docker Compose smoke `44308942877` passou.
+- A auditoria global de autorização por handler continua pendente.
+
 ### Estado de validação — 2026-11-18
 
 - API CI [44271596288](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44271596288), commit `30f3b4e`: suite API e smokes PostgreSQL concluídos com sucesso, incluindo os novos testes de picking.

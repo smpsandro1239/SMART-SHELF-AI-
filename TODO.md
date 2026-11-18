@@ -1,3 +1,10 @@
+## Leitura obrigatória do README e correcção do smoke PostgreSQL — 2026-11-18
+
+- [x] Reforçar o protocolo autónomo: ler integralmente o README antes de cada ronda, por blocos quando necessário, e não apenas os títulos ou o resumo.
+- [x] Corrigir a asserção do smoke `postgres_store_employee_authorization_smoke.py`: o ADMIN global pode ver funcionários activos criados por outros smokes que partilham a base PostgreSQL do CI; validar inclusão dos dois funcionários desta ronda e exclusão do inactivo, sem assumir que a lista global contém apenas duas linhas.
+- [ ] Aguardar nova execução API CI/PostgreSQL após esta correcção; o run [44308942806](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44308942806) falhou apenas neste assert do smoke, enquanto o Docker Compose smoke [44308942877](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44308942877) passou.
+- [ ] Manter aberta a auditoria global de autorização handler-a-handler; esta correcção não aumenta a cobertura funcional dos endpoints.
+
 ## Atualização da auditoria de autorização — 2026-11-18
 
 - [x] Confirmar no API CI [44291136290](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44291136290) que a suite API passou (1148 aprovados, 1 ignorado, 1 aviso), incluindo os testes JWT de upload que estavam documentados como pendentes.

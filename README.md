@@ -30,7 +30,7 @@ O guião completo, as limitações, os comandos de teste e a lista de capturas e
 
 ## 1.1. Roadmap e TODO — controlo central do projeto
 
-**Protocolo obrigatório de desenvolvimento autónomo:** [AUTONOMOUS-DEVELOPMENT-PROMPT.md](AUTONOMOUS-DEVELOPMENT-PROMPT.md). Deve ser lido antes de qualquer ronda e prevalece sobre instruções ad hoc incompatíveis.
+**Protocolo obrigatório de desenvolvimento autónomo:** [AUTONOMOUS-DEVELOPMENT-PROMPT.md](AUTONOMOUS-DEVELOPMENT-PROMPT.md). Deve ser lido antes de qualquer ronda e prevalece sobre instruções ad hoc incompatíveis. A leitura integral deste `README.md`, do primeiro ao último parágrafo, é obrigatória antes de analisar ou alterar o código; quando necessário, deve ser feita por blocos, sem omitir secções.
 
 
 Esta é a fonte de verdade para manter o SMART SHELF AI focado. Deve ser revista antes de cada ronda de desenvolvimento e atualizada no mesmo commit em que forem concluídas novas tarefas. Só se marca como concluído o que está implementado e verificável; documentação, protótipos, mocks e testes simulados não equivalem a integração real.

@@ -88,6 +88,7 @@ def main() -> None:
         inactive_supervisor_id = inactive_supervisor.id
         employee_a_id = employee_a.id
         employee_b_id = employee_b.id
+        inactive_employee_a_id = inactive_employee_a.id
     finally:
         db.close()
 
@@ -139,9 +140,15 @@ def main() -> None:
                 headers=admin_headers,
             )
             assert admin_global_response.status_code == 200, admin_global_response.text
-            assert {row["id"] for row in admin_global_response.json()} == {
-                employee_a_id, employee_b_id
-            }, admin_global_response.json()
+            global_rows = admin_global_response.json()
+            global_employee_ids = {row["id"] for row in global_rows}
+            # Other PostgreSQL smoke scripts share this CI database and may
+            # leave active employees behind. The global ADMIN directory must
+            # include this smoke scenario employees, but cannot be asserted
+            # equal to a two-row fixture set.
+            assert {employee_a_id, employee_b_id}.issubset(global_employee_ids), global_rows
+            assert inactive_employee_a_id not in global_employee_ids, global_rows
+            assert all(row["is_active"] for row in global_rows), global_rows
 
             employee_response = client.get(
                 "/api/v1/store-employees",

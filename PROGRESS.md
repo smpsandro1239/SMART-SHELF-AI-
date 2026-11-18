@@ -1,3 +1,13 @@
+## 2026-11-18 — README obrigatório e robustez do smoke PostgreSQL de funcionários
+
+- HEAD inicial: `fcbc65c408fc03b7a02f47159f96af2e4411cf36`.
+- Foi reforçado `AUTONOMOUS-DEVELOPMENT-PROMPT.md` para exigir a leitura integral do `README.md` antes de qualquer análise ou alteração. A leitura pode ser dividida em blocos, mas não pode limitar-se ao índice, títulos ou resumo.
+- O próprio README passou a declarar explicitamente essa regra junto do protocolo de desenvolvimento.
+- A análise do API CI [44308942806](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44308942806) identificou uma falha no assert do smoke PostgreSQL do diretório de funcionários: a base de CI é partilhada por vários smokes e já continha outros funcionários activos. O handler ADMIN global estava a devolver os registos esperados, além dos registos criados por outros smokes; a igualdade exacta com apenas dois IDs era uma expectativa inválida do teste.
+- O smoke foi corrigido para exigir a presença dos dois funcionários activos criados por este cenário, a ausência do funcionário inactivo e o estado activo de todas as linhas devolvidas, sem pressupor que a base de dados partilhada está vazia.
+- O run API CI anterior falhou neste assert; o Docker Compose smoke [44308942877](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44308942877) passou. Não foram executados testes locais nesta ronda.
+- A nova validação PostgreSQL fica pendente da execução CI do commit desta correcção. A auditoria global de autorização permanece aberta.
+
 ## 2026-11-18 — Actualização de evidência da auditoria de autorização
 
 A revisão de `docs/security/http-authorization-matrix.md` encontrou dois estados de validação desactualizados. Os testes JWT de upload de imagens (PNG forjado/truncado, MIME SVG e sanitização do nome de ficheiro) estão incluídos na suite API; o API CI [44291136290](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44291136290) passou com 1148 testes aprovados, 1 ignorado e 1 aviso. O smoke PostgreSQL `postgres_capture_session_authorization_smoke.py` também passou no passo dedicado do mesmo workflow.

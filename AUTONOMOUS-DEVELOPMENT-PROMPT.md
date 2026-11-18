@@ -11,7 +11,7 @@ Não optimizes para quantidade de commits. Optimiza para valor verificável, red
 ## 2. Fonte de verdade e preparação
 
 Antes de cada ronda:
-1. Lê `README.md`, `TODO.md`, `PROGRESS.md`, `docs/ROADMAP.md` e a documentação directamente relacionada com a tarefa.
+1. Lê integralmente `README.md` (do início ao fim, não apenas o resumo, índice ou títulos), `TODO.md`, `PROGRESS.md`, `docs/ROADMAP.md` e a documentação directamente relacionada com a tarefa. O README é leitura obrigatória antes de qualquer análise ou alteração; se for demasiado extenso para uma única consulta, divide a leitura em blocos até cobrir todas as linhas.
 2. Confirma a branch `main`, o SHA actual e o estado dos workflows.
 3. Inspecciona a implementação e os testes existentes antes de propor alterações.
 4. Identifica dependências, migrações, contratos API, permissões, efeitos transaccionais e compatibilidade SQLite/PostgreSQL.
