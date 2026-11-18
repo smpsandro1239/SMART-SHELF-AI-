@@ -2085,6 +2085,25 @@ def test_admin_legal_hold_is_idempotent_and_preserves_operational_visibility(aut
     assert history.json()[0]["reason"] == "Preservar evidência para investigação"
     assert history.json()[1]["reason"] == "Investigação concluída e libertação autorizada"
 
+    first_page = client.get(
+        f"{base}/events?limit=1&offset=0",
+        headers=headers,
+    )
+    second_page = client.get(
+        f"{base}/events?limit=1&offset=1",
+        headers=headers,
+    )
+    clamped_page = client.get(
+        f"{base}/events?limit=0&offset=-10",
+        headers=headers,
+    )
+    assert first_page.status_code == 200, first_page.text
+    assert second_page.status_code == 200, second_page.text
+    assert clamped_page.status_code == 200, clamped_page.text
+    assert [event["event_type"] for event in first_page.json()] == ["LEGAL_HOLD_APPLIED"]
+    assert [event["event_type"] for event in second_page.json()] == ["LEGAL_HOLD_RELEASED"]
+    assert [event["event_type"] for event in clamped_page.json()] == ["LEGAL_HOLD_APPLIED"]
+
 
 
 def test_supervisor_review_queue_and_summary_are_scoped_to_own_store(auth_client):
