@@ -4887,8 +4887,13 @@ def create_warehouse_placement(
     if location is None:
         raise HTTPException(status_code=404, detail="Warehouse location not found")
     _enforce_store_scope(actor, location.store_id)
-    if db.get(models.Product, payload.product_id) is None:
+    if not location.is_active:
+        raise HTTPException(status_code=409, detail="Cannot place stock in an inactive warehouse location")
+    product = db.get(models.Product, payload.product_id)
+    if product is None:
         raise HTTPException(status_code=404, detail="Product not found")
+    if not product.is_active:
+        raise HTTPException(status_code=409, detail="Cannot place inactive product in warehouse")
     placement = models.WarehouseProductPlacement(**payload.model_dump())
     db.add(placement)
     try:
