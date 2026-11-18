@@ -114,8 +114,8 @@ O demo só deve ser anunciado como aceite ponta-a-ponta depois da checklist manu
 
 - [x] Confirmar controlo ADMIN nos handlers de criação, listagem, alteração e cobertura de integrações externas por loja.
 - [x] Acrescentar teste de integração HTTP com JWT para SUPERVISOR e EMPLOYEE nas quatro operações, incluindo verificação de ausência de efeitos laterais.
-- [ ] Validar a nova cobertura no API CI e Quality Gates.
-- [ ] Reconciliar `docs/security/http-route-inventory.md`: o inventário actualmente documenta 107 declarações e parte de uma revisão anterior de `main.py`; não deve ser tratado como inventário completo até regeneração e revisão.
+- [x] API CI `44299045159`: 1149 passed, 1 skipped, 1 warning; Quality Gates `44299324366` aprovou testes API, compilação Python e build Web.
+- [x] Reconciliar `docs/security/http-route-inventory.md`: 16 rotas integradas na tabela principal; total 123 declarações, sem entradas obsoletas (commit `a60ac242`).
 - [ ] Continuar a auditoria handler-a-handler dos restantes endpoints e caminhos indirectos.
 
 **Limite:** o teste acrescentado usa SQLite isolado. Não prova concorrência PostgreSQL nem fecha a auditoria global de autorização.
@@ -126,5 +126,5 @@ O demo só deve ser anunciado como aceite ponta-a-ponta depois da checklist manu
 - [x] Acrescentar 16 rotas omitidas e actualizar o total documentado para 123; nenhuma entrada anterior ficou obsoleta.
 - [ ] Concluir a revisão de autorização por handler, incluindo caminhos indirectos e isolamento multi-loja.
 
-A reconciliação estática não constitui uma auditoria de segurança concluída.
+A reconciliação estática não constitui uma auditoria de segurança concluída. O Docker Compose `44299045038` também passou (build, readiness, seed, worker e perfis).
 
