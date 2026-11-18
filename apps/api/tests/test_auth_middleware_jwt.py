@@ -2289,6 +2289,60 @@ def test_admin_can_create_global_warehouse_product_metadata_with_real_jwt(auth_c
         assert persisted_packaging.is_ordering_unit is True
         assert persisted_packaging.is_replenishment_unit is True
 
+def test_warehouse_placement_rejects_inactive_location_and_product(auth_client):
+    client, ids, store_ids = auth_client
+    store_id = store_ids["a"]
+    headers = bearer(ids["supervisor_a"], "SUPERVISOR")
+
+    location_response = client.post(
+        "/api/v1/warehouse/locations",
+        json={
+            "store_id": store_id,
+            "code": "A-INACTIVE-PLACEMENT-LOCATION",
+            "distance_to_picking_m": 1,
+            "max_volume_cm3": 10000,
+            "max_weight_kg": 100,
+            "temperature_zone": "AMBIENT",
+        },
+        headers=headers,
+    )
+    assert location_response.status_code == 201, location_response.text
+    location_id = location_response.json()["id"]
+
+    with main_module.SessionLocal() as db:
+        location = db.get(models.WarehouseLocation, location_id)
+        location.is_active = False
+        product = db.get(models.Product, ids["product"])
+        product.is_active = False
+        db.commit()
+
+    inactive_location = client.post(
+        "/api/v1/warehouse/placements",
+        json={"location_id": location_id, "product_id": ids["product"], "quantity": 3},
+        headers=headers,
+    )
+    assert inactive_location.status_code == 409
+    assert "inactive warehouse location" in inactive_location.json()["detail"]
+
+    with main_module.SessionLocal() as db:
+        location = db.get(models.WarehouseLocation, location_id)
+        location.is_active = True
+        db.commit()
+
+    inactive_product = client.post(
+        "/api/v1/warehouse/placements",
+        json={"location_id": location_id, "product_id": ids["product"], "quantity": 3},
+        headers=headers,
+    )
+    assert inactive_product.status_code == 409
+    assert "inactive product" in inactive_product.json()["detail"]
+
+    with main_module.SessionLocal() as db:
+        assert db.query(models.WarehouseProductPlacement).filter_by(
+            location_id=location_id, product_id=ids["product"]
+        ).count() == 0
+
+
 def test_supervisor_can_create_store_scoped_warehouse_resources_with_real_jwt(auth_client):
     client, ids, store_ids = auth_client
     store_id = store_ids["a"]
