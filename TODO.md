@@ -279,3 +279,12 @@
 - [ ] Prosseguir auditoria das operações de simulação, portefólio e histórico com referências cruzadas entre lojas.
 
 **Validação anterior:** no commit d39adb2, Quality Gates e Docker Compose smoke passaram; API CI continuava em execução no momento da revisão. O novo teste ainda não foi executado.
+
+## Isolamento multi-loja — vendas e previsões (18-11-2026)
+- [x] Acrescentar teste HTTP/JWT para ingestão diária/horária, tráfego e batches.
+- [x] Cobrir histórico horário, previsão de procura, risco de rutura, portefólio e perfil horário de rotação.
+- [x] Exigir 403 para supervisor da loja A em operações sobre a loja B.
+- [x] Confirmar ausência de novas linhas de vendas e tráfego após pedidos recusados.
+- [ ] Validar no API CI e Quality Gates; prosseguir revisão de imports CSV e restantes caminhos de ingestão.
+
+**Limite:** teste HTTP/JWT com SQLite isolado; não substitui smoke PostgreSQL nem conclui a auditoria multi-loja.

@@ -185,3 +185,11 @@ O teste test_supervisor_cannot_access_other_store_warehouse_resources_over_http 
 O teste test_supervisor_cannot_access_other_store_pallets_policies_or_events_over_http cria uma palete, uma política de rotação e um evento na loja B. Um JWT SUPERVISOR da loja A tenta listar e registar paletes da loja B, alterar a política pelo respectivo ID, consultar eventos e submeter uma actualização do ciclo de vida. As cinco operações devem responder HTTP 403. O teste compara o número de eventos e os campos da política e da palete antes/depois.
 
 **Limite:** a evidência usa HTTP/JWT com SQLite isolado. Não demonstra por si só isolamento PostgreSQL, todos os caminhos indirectos nem conclusão da auditoria global.
+
+## Vendas, tráfego e forecasting — isolamento multi-loja (18-11-2026)
+
+O teste test_supervisor_cannot_access_other_store_sales_and_forecasts_over_http tenta ingerir vendas diárias/horárias, tráfego e batches na loja B com JWT SUPERVISOR da loja A, consultar históricos e executar previsão de procura, risco de rutura, portefólio de risco, perfil horário e portefólio histórico. Todas as operações devem responder HTTP 403. As contagens de DailySalesRecord, HourlySalesRecord e HourlyStoreTrafficRecord são comparadas antes/depois.
+
+A revisão estática confirma que as consultas de forecasting incluem store_id e product_id e que os portefólios restringem produtos e snapshots à loja solicitada.
+
+**Limite:** evidência HTTP/JWT com SQLite isolado; não equivale a validação PostgreSQL nem encerra a auditoria global.

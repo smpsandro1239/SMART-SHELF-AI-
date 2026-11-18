@@ -4478,3 +4478,49 @@ def test_supervisor_cannot_access_other_store_pallets_policies_or_events_over_ht
     assert events_after == events_before, "Denied cross-store event requests must not append lifecycle events"
     assert policy_state_after == policy_state_before, "Denied cross-store requests must not alter rotation policy"
     assert pallet_state_after == pallet_state_before, "Denied cross-store requests must not alter pallet state"
+
+def test_supervisor_cannot_access_other_store_sales_and_forecasts_over_http(auth_client):
+    """Sales and forecast endpoints must reject a supervisor from another store."""
+    client, ids, store_ids = auth_client
+    headers = bearer(ids["supervisor_a"], "SUPERVISOR")
+    store_b = store_ids["b"]
+    product_id = ids["product"]
+    hourly = {
+        "store_id": store_b, "product_id": product_id, "business_date": "2026-11-18",
+        "hour_of_day": 10, "quantity": 4, "source": "POS",
+        "external_reference": "AUTH-CROSS-STORE-HOURLY",
+    }
+    traffic = {
+        "store_id": store_b, "business_date": "2026-11-18", "hour_of_day": 10,
+        "customer_count": 12, "source": "POS", "external_reference": "AUTH-CROSS-STORE-TRAFFIC",
+    }
+    with main_module.SessionLocal() as db:
+        daily_before = db.query(models.DailySalesRecord).filter_by(store_id=store_b).count()
+        hourly_before = db.query(models.HourlySalesRecord).filter_by(store_id=store_b).count()
+        traffic_before = db.query(models.HourlyStoreTrafficRecord).filter_by(store_id=store_b).count()
+
+    attempts = [
+        ("POST", "/api/v1/sales/daily", {
+            "store_id": store_b, "product_id": product_id, "sales_date": "2026-11-18",
+            "quantity": 4, "source": "POS", "external_reference": "AUTH-CROSS-STORE-DAILY",
+        }),
+        ("POST", "/api/v1/sales/hourly", hourly),
+        ("POST", "/api/v1/sales/traffic/hourly", traffic),
+        ("POST", "/api/v1/sales/hourly/batch", {"records": [hourly]}),
+        ("POST", "/api/v1/sales/traffic/hourly/batch", {"records": [traffic]}),
+        ("GET", f"/api/v1/sales/hourly?store_id={store_b}", None),
+        ("GET", f"/api/v1/sales/traffic/hourly?store_id={store_b}", None),
+        ("GET", f"/api/v1/forecasting/demand?store_id={store_b}&product_id={product_id}&source=POS&lead_time_days=2&days=7", None),
+        ("GET", f"/api/v1/forecasting/stockout-risk?store_id={store_b}&product_id={product_id}&source=POS&lead_time_days=2&days=7", None),
+        ("GET", f"/api/v1/forecasting/stockout-risk/portfolio?store_id={store_b}&source=POS&lead_time_days=2&days=7", None),
+        ("GET", f"/api/v1/warehouse/pallet-rotation/hourly-profile?store_id={store_b}&product_id={product_id}&days=7", None),
+        ("GET", f"/api/v1/warehouse/pallet-rotation/portfolio-from-history?store_id={store_b}&current_hour=10&days=7", None),
+    ]
+    for method, path, payload in attempts:
+        response = client.request(method, path, json=payload, headers=headers)
+        assert response.status_code == 403, f"{method} {path} returned {response.status_code}"
+
+    with main_module.SessionLocal() as db:
+        assert db.query(models.DailySalesRecord).filter_by(store_id=store_b).count() == daily_before
+        assert db.query(models.HourlySalesRecord).filter_by(store_id=store_b).count() == hourly_before
+        assert db.query(models.HourlyStoreTrafficRecord).filter_by(store_id=store_b).count() == traffic_before

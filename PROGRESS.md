@@ -491,3 +491,11 @@ Added `test_catalogue_and_warehouse_master_data_writes_are_admin_only` to exerci
 - No commit anterior d39adb2, Quality Gates (incluindo build web) e Docker Compose smoke passaram. API CI run 44353746006 ainda estava em execução na última consulta.
 - A nova cobertura foi publicada na main, mas ainda não foi executada; os workflows do novo commit são a validação pendente.
 - A auditoria continua aberta; próximo foco: simulação, portefólio e histórico de rotação, além da confirmação PostgreSQL.
+
+## 2026-11-18 — Isolamento multi-loja em vendas e previsões
+- Revistos os handlers de ingestão diária/horária, tráfego, batches, consultas horárias, previsão de procura, risco de rutura e portefólios.
+- Acrescentado test_supervisor_cannot_access_other_store_sales_and_forecasts_over_http, com 12 tentativas cross-store e JWT SUPERVISOR da loja A.
+- O teste exige 403 e compara contagens de DailySalesRecord, HourlySalesRecord e HourlyStoreTrafficRecord antes/depois.
+- A revisão estática confirma filtros store_id nas consultas de forecasting e nos perfis horários.
+- Commit anterior 2fd6796 validado: API CI 44354437977, Quality Gates 44354438016 e Docker Compose smoke 44354437876 — todos success.
+- Validação da nova cobertura pendente; auditoria multi-loja continua aberta.

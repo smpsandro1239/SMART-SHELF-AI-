@@ -232,3 +232,11 @@ A cobertura usa SQLite isolado e não deve ser apresentada como prova de concorr
 - [ ] Continuar a revisão de simulação, portefólio e histórico de rotação.
 
 **Limite:** teste HTTP com SQLite isolado; não prova concorrência PostgreSQL nem conclui a auditoria global.
+
+### Isolamento multi-loja — vendas e forecasting (2026-11-18)
+- [x] Cobrir ingestão diária/horária, tráfego e batches.
+- [x] Cobrir histórico, previsão de procura, risco de rutura, portefólio e perfil horário.
+- [x] Verificar 403 e ausência de efeitos laterais.
+- [ ] Validar no CI e continuar auditoria dos restantes fluxos.
+
+**Limite:** teste HTTP/JWT com SQLite isolado; não prova isolamento PostgreSQL nem conclui a auditoria global.
