@@ -26,6 +26,7 @@
 - [x] Adicionar skip link para o conteúdo principal e landmark de navegação com nome acessível.
 - [x] Disponibilizar navegação equivalente em ecrãs pequenos, onde a barra lateral deixa de estar visível.
 - [x] Reforçar indicadores de foco visível e anúncio do estado inicial de carregamento.
+- [x] Validar Web CI [44292103581](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44292103581) e Quality Gates [44292103676](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44292103676), ambos aprovados no commit `5ca7babcd3529f4459a50eaf5542aa289db91d05`.
 - [ ] Validar manualmente teclado, leitor de ecrã, contraste de todos os estados e comportamento real em browser; não declarar conformidade WCAG 2.2 AA apenas com o build.
 
 ### Prioridades ainda abertas
