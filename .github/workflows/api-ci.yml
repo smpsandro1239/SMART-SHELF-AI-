@@ -56,6 +56,11 @@ jobs:
         env:
           DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/smart_shelf_ci
         run: alembic upgrade head
+      - name: Verify PostgreSQL vision worker lease recovery and fencing
+        env:
+          DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/smart_shelf_ci
+          APP_ENV: test
+        run: python scripts/postgres_vision_worker_recovery_smoke.py
       - name: Verify PostgreSQL concurrent first-admin bootstrap
         env:
           DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/smart_shelf_ci
