@@ -2594,6 +2594,7 @@ def list_shelf_images(
     request: Request,
     shelf_id: int | None = None,
     limit: int = 100,
+    offset: int = 0,
     db: Session = Depends(get_db),
 ):
     query = (
@@ -2607,7 +2608,12 @@ def list_shelf_images(
     query = query.filter(models.ShelfImage.retention_status == "ACTIVE")
     if shelf_id is not None:
         query = query.filter(models.ShelfImage.shelf_id == shelf_id)
-    return query.order_by(models.ShelfImage.created_at.desc()).limit(max(1, min(limit, 500))).all()
+    return (
+        query.order_by(models.ShelfImage.created_at.desc(), models.ShelfImage.id.desc())
+        .offset(max(0, offset))
+        .limit(max(1, min(limit, 500)))
+        .all()
+    )
 
 
 @app.get("/api/v1/shelf-images/{image_id}/content", tags=["computer-vision"])
@@ -2698,6 +2704,7 @@ def list_shelf_image_detections(
     image_id: int,
     request: Request,
     limit: int = 200,
+    offset: int = 0,
     db: Session = Depends(get_db),
 ):
     """Return persisted model detections for an image, scoped to the user's store."""
@@ -2719,6 +2726,7 @@ def list_shelf_image_detections(
         db.query(models.ShelfImageDetection)
         .filter(models.ShelfImageDetection.shelf_image_id == image_id)
         .order_by(models.ShelfImageDetection.id)
+        .offset(max(0, offset))
         .limit(max(1, min(limit, 500)))
         .all()
     )
@@ -2984,7 +2992,10 @@ def match_shelf_image_ocr_to_catalogue(image_id: int, request: Request, db: Sess
 
 
 @app.get("/api/v1/shelf-images/{image_id}/ocr-matches", response_model=list[ShelfImageOCRMatchRead], tags=["computer-vision"])
-def list_shelf_image_ocr_matches(image_id: int, request: Request, limit: int = 500, db: Session = Depends(get_db)):
+def list_shelf_image_ocr_matches(
+    image_id: int, request: Request, limit: int = 500, offset: int = 0,
+    db: Session = Depends(get_db),
+):
     """List persisted OCR catalogue suggestions for an image."""
     image_record = (
         db.query(models.ShelfImage)
@@ -3002,6 +3013,7 @@ def list_shelf_image_ocr_matches(image_id: int, request: Request, limit: int = 5
         .join(models.ShelfImageOCRRun, models.ShelfImageOCRMatch.run_id == models.ShelfImageOCRRun.id)
         .filter(models.ShelfImageOCRRun.shelf_image_id == image_id)
         .order_by(models.ShelfImageOCRMatch.id.desc())
+        .offset(max(0, offset))
         .limit(max(1, min(limit, 1000))).all()
     )
     return _refresh_ocr_match_view(db, rows)
@@ -3589,6 +3601,7 @@ def list_shelf_image_fused_evidence(
     request: Request,
     limit: int = 500,
     status: str | None = None,
+    offset: int = 0,
     db: Session = Depends(get_db),
 ):
     """List persisted fused evidence, optionally filtered by review status."""
@@ -3678,7 +3691,10 @@ def create_shelf_image_ocr_run(image_id: int, payload: ShelfImageOCRRunCreate, r
 
 
 @app.get("/api/v1/shelf-images/{image_id}/ocr-evidence", response_model=list[ShelfImageOCREvidenceRead], tags=["computer-vision"])
-def list_shelf_image_ocr_evidence(image_id: int, request: Request, limit: int = 500, db: Session = Depends(get_db)):
+def list_shelf_image_ocr_evidence(
+    image_id: int, request: Request, limit: int = 500, offset: int = 0,
+    db: Session = Depends(get_db),
+):
     """List OCR evidence for an image, newest inference run first."""
     image_record = (
         db.query(models.ShelfImage)
@@ -3696,12 +3712,16 @@ def list_shelf_image_ocr_evidence(image_id: int, request: Request, limit: int = 
         .join(models.ShelfImageOCRRun, models.ShelfImageOCREvidence.run_id == models.ShelfImageOCRRun.id)
         .filter(models.ShelfImageOCRRun.shelf_image_id == image_id)
         .order_by(models.ShelfImageOCREvidence.id.desc())
+        .offset(max(0, offset))
         .limit(max(1, min(limit, 1000))).all()
     )
 
 
 @app.get("/api/v1/shelf-images/{image_id}/ocr-runs", response_model=list[ShelfImageOCRRunRead], tags=["computer-vision"])
-def list_shelf_image_ocr_runs(image_id: int, request: Request, limit: int = 100, db: Session = Depends(get_db)):
+def list_shelf_image_ocr_runs(
+    image_id: int, request: Request, limit: int = 100, offset: int = 0,
+    db: Session = Depends(get_db),
+):
     """List OCR inference provenance for a shelf image."""
     image_record = (
         db.query(models.ShelfImage)
@@ -3718,6 +3738,7 @@ def list_shelf_image_ocr_runs(image_id: int, request: Request, limit: int = 100,
         db.query(models.ShelfImageOCRRun)
         .filter(models.ShelfImageOCRRun.shelf_image_id == image_id)
         .order_by(models.ShelfImageOCRRun.id.desc())
+        .offset(max(0, offset))
         .limit(max(1, min(limit, 500))).all()
     )
 
