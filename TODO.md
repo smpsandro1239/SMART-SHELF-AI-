@@ -42,3 +42,10 @@
 - [x] Acrescentar teste de regressão que confirma HTTP 409 e ausência de persistência nos dois cenários.
 - [ ] Validar a alteração na suite API CI, Quality Gates e Demo Docker Compose.
 - [ ] Definir e testar uma política explícita de capacidade/peso/temperatura para colocações; não impor bloqueios sem garantir que o perfil físico do produto está configurado e que a regra representa a operação real.
+
+
+## Slotting físico — validação do endpoint (18-11-2026)
+- [x] Acrescentar teste de integração com JWT para o endpoint de slotting físico.
+- [x] Cobrir capacidade volumétrica, peso calculado, compatibilidade de temperatura e ordenação por distância.
+- [x] Confirmar que as recomendações não autorizam movimentos automáticos nem reserva de stock.
+- [ ] Validar o novo teste no API CI e Quality Gates.
