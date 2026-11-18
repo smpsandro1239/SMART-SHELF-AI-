@@ -2724,6 +2724,116 @@ def test_pallet_lifecycle_transitions_are_audited_and_reject_stale_updates(auth_
         assert db.query(models.PalletRotationEvent).filter_by(pallet_id=pallet_id).count() == 3
 
 
+
+def test_pallet_registration_and_movement_require_active_store_warehouse_locations(auth_client):
+    client, ids, store_ids = auth_client
+    store_id = store_ids["a"]
+    headers = bearer(ids["supervisor_a"], "SUPERVISOR")
+
+    with main_module.SessionLocal() as db:
+        level = models.ProductPackagingLevel(
+            product_id=ids["product"],
+            code="PALLET-LOCATION-VALIDATION",
+            name="Palete para validação de localização",
+            package_type="PALLET",
+            base_units_per_package=48,
+            is_active=True,
+        )
+        active_location = models.WarehouseLocation(
+            store_id=store_id,
+            code="PALLET-BIN-ACTIVE",
+            distance_to_picking_m=2,
+            max_volume_cm3=5000,
+            max_weight_kg=100,
+            temperature_zone="AMBIENT",
+            is_active=True,
+        )
+        inactive_location = models.WarehouseLocation(
+            store_id=store_id,
+            code="PALLET-BIN-INACTIVE",
+            distance_to_picking_m=3,
+            max_volume_cm3=5000,
+            max_weight_kg=100,
+            temperature_zone="AMBIENT",
+            is_active=False,
+        )
+        db.add_all([level, active_location, inactive_location])
+        db.commit()
+        db.refresh(level)
+        level_id = level.id
+
+    def register(code, location_code, status="READY", location_type="WAREHOUSE"):
+        return client.post(
+            "/api/v1/warehouse/pallets",
+            json={
+                "store_id": store_id,
+                "product_id": ids["product"],
+                "packaging_level_id": level_id,
+                "pallet_code": code,
+                "base_quantity": 24,
+                "status": status,
+                "location_type": location_type,
+                "location_code": location_code,
+            },
+            headers=headers,
+        )
+
+    unknown = register("PALLET-UNKNOWN-BIN", "PALLET-BIN-MISSING")
+    assert unknown.status_code == 409
+    inactive = register("PALLET-INACTIVE-BIN", "PALLET-BIN-INACTIVE")
+    assert inactive.status_code == 409
+    active = register("PALLET-ACTIVE-BIN", "PALLET-BIN-ACTIVE")
+    assert active.status_code == 201, active.text
+
+    display = register(
+        "PALLET-MOVE-VALIDATION",
+        "FLOOR-VALIDATION",
+        status="ON_DISPLAY",
+        location_type="SALES_FLOOR",
+    )
+    assert display.status_code == 201, display.text
+    pallet_id = display.json()["id"]
+
+    rejected_move = client.post(
+        f"/api/v1/warehouse/pallets/{pallet_id}/events",
+        json={
+            "expected_status": "ON_DISPLAY",
+            "expected_base_quantity": 24,
+            "status": "PARTIAL",
+            "base_quantity": 12,
+            "location_type": "WAREHOUSE",
+            "location_code": "PALLET-BIN-INACTIVE",
+            "reason": "Tentativa de movimentação para localização inactiva",
+        },
+        headers=headers,
+    )
+    assert rejected_move.status_code == 409
+
+    accepted_move = client.post(
+        f"/api/v1/warehouse/pallets/{pallet_id}/events",
+        json={
+            "expected_status": "ON_DISPLAY",
+            "expected_base_quantity": 24,
+            "status": "PARTIAL",
+            "base_quantity": 12,
+            "location_type": "WAREHOUSE",
+            "location_code": "PALLET-BIN-ACTIVE",
+            "reason": "Movimentação para localização activa",
+        },
+        headers=headers,
+    )
+    assert accepted_move.status_code == 201, accepted_move.text
+    assert accepted_move.json()["to_location_code"] == "PALLET-BIN-ACTIVE"
+
+    with main_module.SessionLocal() as db:
+        persisted = db.get(models.StorePallet, pallet_id)
+        assert persisted.status == "PARTIAL"
+        assert float(persisted.base_quantity) == 12
+        assert persisted.location_type == "WAREHOUSE"
+        assert persisted.location_code == "PALLET-BIN-ACTIVE"
+        assert db.query(models.PalletRotationEvent).filter_by(pallet_id=pallet_id).count() == 2
+
+
 def test_product_packaging_read_is_global_for_supervisors_and_denied_to_employees(auth_client):
     client, ids, _ = auth_client
     path = "/api/v1/warehouse/product-packaging"
