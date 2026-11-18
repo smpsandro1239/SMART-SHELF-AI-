@@ -22,6 +22,7 @@ def test_dataset_job_fencing_guards_and_event_sequence(tmp_path):
     base = _load("0056_dataset_execution_job_leases.py")
     guard = _load("0057_dataset_execution_fencing_guards.py")
     state_machine = _load("0058_dataset_execution_state_machine.py")
+    initial_state = _load("0059_dataset_execution_initial_state.py")
     engine = create_engine(f"sqlite:///{tmp_path / 'dataset-job-fencing.db'}")
     with engine.begin() as connection:
         connection.exec_driver_sql("PRAGMA foreign_keys=ON")
@@ -37,6 +38,12 @@ def test_dataset_job_fencing_guards_and_event_sequence(tmp_path):
             base.upgrade()
             guard.upgrade()
             state_machine.upgrade()
+            initial_state.upgrade()
+        with pytest.raises(IntegrityError, match="initial QUEUED state"):
+            connection.exec_driver_sql(
+                "INSERT INTO dataset_execution_jobs (id,idempotency_key,request_sha256,release_fingerprint,approval_record_sha256,approval_report_sha256,mode,status,fencing_token,attempt_count,output_sha256,staged_output_reference,finished_at) VALUES "
+                "(2,'forged','" + "b" * 64 + "','" + "c" * 64 + "','" + "d" * 64 + "','" + "e" * 64 + "','training','SUCCEEDED',1,1,'" + "f" * 64 + "','staging/forged',CURRENT_TIMESTAMP)"
+            )
         connection.exec_driver_sql(
             "INSERT INTO dataset_execution_jobs (id,idempotency_key,request_sha256,release_fingerprint,approval_record_sha256,approval_report_sha256,mode,status,fencing_token,attempt_count) VALUES "
             "(1,'key','" + "b" * 64 + "','" + "c" * 64 + "','" + "d" * 64 + "','" + "e" * 64 + "','training','QUEUED',0,0)"
@@ -90,6 +97,7 @@ def test_dataset_job_fencing_guards_and_event_sequence(tmp_path):
                 "UPDATE dataset_execution_jobs SET output_sha256=NULL WHERE id=1"
             )
         with Operations.context(MigrationContext.configure(connection)):
+            initial_state.downgrade()
             state_machine.downgrade()
             guard.downgrade()
             base.downgrade()

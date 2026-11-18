@@ -68,6 +68,34 @@ def main():
     source_one, source_two = _fixture(suffix)
     job_id = _enqueue(f"pg-dataset-{suffix}-one", source_one)
 
+    with SessionLocal() as db:
+        try:
+            db.execute(text("""
+                INSERT INTO dataset_execution_jobs (
+                    idempotency_key, request_sha256, release_fingerprint,
+                    approval_record_sha256, approval_report_sha256, mode,
+                    status, fencing_token, attempt_count, output_sha256,
+                    staged_output_reference, finished_at
+                ) VALUES (
+                    :key, :request_digest, :release_digest,
+                    :approval_digest, :report_digest, 'training',
+                    'SUCCEEDED', 1, 1, :output_digest,
+                    'staging/forged/output', now()
+                )
+            """), {
+                "key": f"pg-forged-terminal-{suffix}",
+                "request_digest": "b" * 64,
+                "release_digest": "c" * 64,
+                "approval_digest": "d" * 64,
+                "report_digest": "e" * 64,
+                "output_digest": "f" * 64,
+            })
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+        else:
+            raise AssertionError("database accepted a job inserted directly in terminal state")
+
     barrier = Barrier(2)
     with ThreadPoolExecutor(max_workers=2) as executor:
         results = list(executor.map(

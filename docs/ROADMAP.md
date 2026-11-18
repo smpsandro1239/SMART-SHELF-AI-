@@ -407,3 +407,10 @@ Foi criado e integrado no API CI o smoke `postgres_dataset_eligibility_concurren
 - [x] Acrescentar guards equivalentes para PostgreSQL e SQLite, testes de migration e smoke SQL directo.
 - [ ] Confirmar a migration 0058 e os workflows de CI antes de marcar a garantia como validada.
 - [ ] Implementar autenticação de workers, consumo de bytes autorizado por chamada e promoção de outputs com fencing.
+
+
+### Validação da migration 0058 — 18-11-2026
+
+- [x] API CI [44421831066](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44421831066): migration PostgreSQL 16, smoke de execução assíncrona e 1179 testes aprovados, 1 ignorado, 1 aviso.
+- [x] Quality Gates [44421831076](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44421831076) e Docker Compose [44421831148](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44421831148) passaram.
+- [ ] A migration 0059 de estado inicial obrigatório ainda aguarda validação.

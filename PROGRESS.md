@@ -690,3 +690,11 @@ Commit validado: `1e3499c8c80ef75494a29d06807469898471e4e1`.
 - Acrescentados testes SQLite de migration e tentativas SQL directas no smoke PostgreSQL para identidade activa e reactivação terminal.
 - Documentação de README, TODO, roadmap e contrato de execução actualizada.
 - Estado: implementação preparada; ainda não declarar validada até concluir migration PostgreSQL 16, suite API, Quality Gates e Docker Compose.
+
+
+### Validação da máquina de estados — migration 0058 (18-11-2026)
+
+- API CI [44421831066](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44421831066): migration PostgreSQL 16 e smoke de execução assíncrona passaram; suite API **1179 passed, 1 skipped, 1 warning**.
+- Quality Gates [44421831076](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44421831076): compilação Python, testes API e build Web passaram.
+- Docker Compose [44421831148](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44421831148): stack de demonstração passou.
+- A validação acima cobre o commit `8d63a1748ae2fa9608e110ef8f8220dc7be30c7e`. A migration 0059, acrescentada para impedir INSERT em estado terminal, permanece pendente de CI.

@@ -447,6 +447,6 @@
 - [x] Tornar imutáveis a chave idempotente, os hashes do pedido/release/aprovação, o modo e a data de criação.
 - [x] Acrescentar testes de migration SQLite para transições ilegais, identidade imutável e reactivação terminal.
 - [x] Expandir o smoke PostgreSQL para tentar alterar a identidade de um job activo e reabrir um job concluído.
-- [ ] Validar a migration em PostgreSQL 16, API CI, Quality Gates e Docker Compose.
+- [x] Validar a migration 0058 em PostgreSQL 16, API CI [44421831066](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44421831066), Quality Gates [44421831076](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44421831076) e Docker Compose [44421831148](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44421831148): **1179 passed, 1 skipped, 1 warning**.
 - [ ] Implementar autenticação/identidade de workers antes de expor claims por HTTP.
 - [ ] Implementar leitura de artefactos autorizada por chamada e promoção de outputs condicionada ao fencing token actual.
