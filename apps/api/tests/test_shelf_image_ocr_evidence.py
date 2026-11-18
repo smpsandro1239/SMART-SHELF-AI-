@@ -1844,3 +1844,83 @@ def test_image_detections_support_stable_bounded_offset_pagination():
     assert [item["id"] for item in second_page.json()] == [expected_ids[1]]
     assert [item["id"] for item in clamped.json()] == [expected_ids[0]]
     assert first_detection_id == expected_ids[0]
+
+
+
+def test_fused_evidence_status_pagination_applies_offset_after_catalogue_refresh():
+    image_id, first_detection_id = create_image_with_detection()
+    expected_consensus_ids = []
+
+    with TestingSession() as db:
+        run = models.ShelfImageOCRRun(
+            shelf_image_id=image_id,
+            provider="mock-ocr",
+            model_version="mock-v1",
+            status="COMPLETED",
+        )
+        db.add(run)
+        db.flush()
+
+        for index in range(6):
+            if index == 0:
+                detection = db.get(models.ShelfImageDetection, first_detection_id)
+            else:
+                detection = models.ShelfImageDetection(
+                    shelf_image_id=image_id,
+                    label="product",
+                    confidence=0.95,
+                    x_min=0.1,
+                    y_min=0.1,
+                    x_max=0.8,
+                    y_max=0.8,
+                    model_version="detector-v1",
+                )
+                db.add(detection)
+                db.flush()
+
+            product = models.Product(
+                sku=f"FUSION-PAGE-{index}",
+                name=f"Produto Fusion {index}",
+                is_active=index < 3,
+            )
+            db.add(product)
+            db.flush()
+            detection.sku_match_status = "MATCHED"
+            detection.product_id = product.id
+            detection.sku_similarity = 0.96
+            detection.sku_match_margin = 0.12
+
+            evidence = models.ShelfImageFusedEvidence(
+                ocr_run_id=run.id,
+                detection_id=detection.id,
+                status="CONSENSUS",
+                suggested_product_id=product.id,
+                visual_product_id=product.id,
+                text_product_id=product.id,
+                visual_status="MATCHED",
+                text_status="SUGGESTED",
+                visual_similarity=0.96,
+                text_score=1.0,
+                ocr_confidence=0.98,
+                visual_model_version="visual-v1",
+                ocr_provider="mock-ocr",
+                ocr_model_version="mock-v1",
+                reason="historical consensus",
+            )
+            db.add(evidence)
+            db.flush()
+            if product.is_active:
+                expected_consensus_ids.append(evidence.id)
+
+        db.commit()
+
+    with TestClient(app) as client:
+        response = client.get(
+            f"/api/v1/shelf-images/{image_id}/evidence-fusion"
+            "?status=CONSENSUS&limit=1&offset=1"
+        )
+
+    assert response.status_code == 200
+    assert [item["id"] for item in response.json()] == [
+        expected_consensus_ids[-2]
+    ]
