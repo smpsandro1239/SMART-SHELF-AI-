@@ -386,3 +386,12 @@ Added `test_catalogue_and_warehouse_master_data_writes_are_admin_only` to exerci
 - Commits: smoke `4094b2d1b5f5d2ce3bbc5bbf3ff372026c3f44d2`; workflow `2b9511c3212308cae5949f41360bbb431d070b70`.
 - A execução CI ainda não foi confirmada nesta actualização. Não foram executados testes localmente nem se declara o cenário PostgreSQL aprovado.
 - Próximo passo: confirmar o novo passo no API CI, corrigir eventuais falhas e só depois actualizar a matriz de autorização para evidência validada.
+
+
+## 2026-11-18 — Reforço de autenticação do diretório de funcionários
+
+- Expandido `apps/api/scripts/postgres_store_employee_authorization_smoke.py` para verificar também ausência de token (401), JWT inválido (401), identidade de SUPERVISOR inactiva (401) e listagem global de ADMIN sem funcionários inactivos.
+- Mantidos os cenários de isolamento SUPERVISOR, filtro cross-store (403), filtro ADMIN por loja e recusa de EMPLOYEE (403).
+- Commit do smoke: `e0ac4af806693cd203864ae92eb03e307fecafa6`.
+- A execução do script contra PostgreSQL e o resultado do API CI continuam pendentes; não foi executado localmente.
+- A revisão do middleware confirmou que `GET /api/v1/auth/users` exige autenticação e ADMIN. Não foi identificada exposição pública nessa rota.
