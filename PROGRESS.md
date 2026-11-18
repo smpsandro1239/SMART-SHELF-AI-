@@ -1,8 +1,15 @@
+## Ronda 2026-11-18 — fecho da validação de navegação acessível
+
+- HEAD inicial: `5ca7babcd3529f4459a50eaf5542aa289db91d05`.
+- A execução Web CI [44292103581](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44292103581) passou; Quality Gates [44292103676](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44292103676) terminou com sucesso no mesmo commit.
+- A validação automatizada confirma o build Web e os gates configurados para a alteração de navegação acessível. Não foram executados testes locais nem ensaio manual de browser nesta sessão.
+- Permanecem por executar: teclado ponta-a-ponta, leitor de ecrã, zoom/reflow, contraste medido dos estados e validação em browser móvel/desktop. Não declarar WCAG 2.2 AA.
+
 ## 2026-11-18 — Navegação acessível no frontend
 
 A aplicação autenticada passou a ter um link de salto para o conteúdo principal, um landmark `nav` com nome acessível na navegação lateral e controlos de navegação equivalentes em ecrãs pequenos (a barra lateral é ocultada abaixo de 700 px). Foram reforçados os indicadores `:focus-visible` para controlos interactivos, incluindo o campo de filtro, e o estado inicial de carregamento passou a ser anunciado com `role="status"` e `aria-live="polite"`.
 
-Esta é uma melhoria estática de estrutura e teclado; não equivale a auditoria manual com leitor de ecrã, medição de contraste de todos os estados, nem declaração de conformidade WCAG 2.2 AA. Build TypeScript/produção e validação CI desta alteração ainda pendentes.
+**Validação automatizada concluída:** Web CI [44292103581](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44292103581) e Quality Gates [44292103676](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44292103676) passaram no commit `5ca7babcd3529f4459a50eaf5542aa289db91d05`. A validação confirma TypeScript/build e os gates automatizados configurados; não substitui testes manuais com teclado/leitor de ecrã nem medição sistemática de contraste. Não declarar conformidade WCAG 2.2 AA.
 
 ## 2026-11-18 — Auditoria de desempenho PostgreSQL (preparação)
 
