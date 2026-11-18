@@ -1,3 +1,8 @@
+## Auditoria de legal hold — regressão adicional (2026-11-18)
+
+A pré-visualização de purge já bloqueava imagens com legal hold activo e os endpoints de agendamento/cancelamento/restauro já registavam eventos append-only. Foi reforçado `test_legal_hold_blocks_overdue_purge_until_hold_is_released` para verificar também que aplicar/libertar um legal hold preserva a data e a versão da política previamente agendadas, e que ambos os eventos registam transição de estado, administrador e motivo. Esta preservação é intencional: o legal hold suspende a elegibilidade, não apaga nem cancela silenciosamente o agendamento. **O novo reforço de teste aguarda API CI; não está validado.** Continua pendente cobertura PostgreSQL de concorrência entre aplicação/libertação de hold e agendamento/cancelamento.
+
+
 ## Validação CI — paginação filtrada e migração 0054 (2026-11-18)
 
 - API CI run `44265754667`, commit `442a8cab89adc3be743e39af76007ad0da94e01d`: job concluído com sucesso. Incluiu a suite API, smoke das migrações Alembic em PostgreSQL e smoke de unicidade concorrente das unidades de embalagem.
