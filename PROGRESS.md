@@ -2,7 +2,7 @@
 
 ## Paginação filtrada da evidência visual/OCR — 2026-11-18
 
-A revisão da rota `GET /api/v1/shelf-images/{image_id}/evidence-fusion` identificou que o `offset` era aplicado antes da filtragem pelo estado recalculado a partir do catálogo activo. Isso podia devolver páginas incompletas quando os primeiros registos da página bruta mudavam de estado após revalidação. A rota passou a percorrer lotes keyset de 500 registos, recalcular o estado e só depois aplicar o offset/limite ao conjunto filtrado. Para evitar inversão da ordem de locks entre lotes, bloqueia primeiro todos os produtos referenciados pela imagem em ordem crescente de ID, mantendo a ordem global imagem → produtos. Foi acrescentado teste de regressão com estados históricos que mudam após desactivação de produtos. **Código e teste ainda aguardam CI; não estão validados.**
+A revisão da rota `GET /api/v1/shelf-images/{image_id}/evidence-fusion` identificou que o `offset` era aplicado antes da filtragem pelo estado recalculado a partir do catálogo activo. Isso podia devolver páginas incompletas quando os primeiros registos da página bruta mudavam de estado após revalidação. A rota passou a percorrer lotes keyset de 500 registos, recalcular o estado e só depois aplicar o offset/limite ao conjunto filtrado. Para evitar inversão da ordem de locks entre lotes, bloqueia primeiro todos os produtos referenciados pela imagem em ordem crescente de ID, mantendo a ordem global imagem → produtos. Foram acrescentados testes de regressão para estados históricos que mudam após desactivação de produtos e para paginação que atravessa o limite entre lotes (offset 500). **Código e testes ainda aguardam CI; não estão validados.**
 
 
 ## Segurança de migrações — unidades de embalagem (2026-11-18)
