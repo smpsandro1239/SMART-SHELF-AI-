@@ -170,3 +170,11 @@ Added `test_catalogue_and_warehouse_master_data_writes_are_admin_only` to exerci
 - A validação Docker Compose foi confirmada no run `44206821282`, commit `a5312651fb`: stack API/PostgreSQL/vision worker, readiness, seed e verificações operacionais passaram.
 - Quality Gates mais recente, run `44207723589`, commit `84000c0ddf`: API tests/Python compilation e Web TypeScript/production build passaram. A suite API reportou **1129 passed, 1 skipped, 1 warning**.
 - Não foi necessária qualquer alteração adicional ao código de produção nesta reconciliação.
+
+
+## 18-11-2026 — Revisão final do estado documental
+- Confirmado no API CI run `44206821156`, commit de código `a5312651fb`: **1129 passed, 1 skipped, 1 warning**; todos os smoke tests PostgreSQL passaram, incluindo o novo teste de imutabilidade do histórico de paletes.
+- Confirmado no Quality Gates run `44207723589`, commit `84000c0ddf`: suite API/Python e build Web TypeScript/produção concluídos com sucesso.
+- Confirmado no Demo Docker Compose run `44206821282`, commit de código `a5312651fb`: stack, readiness, seed e verificações operacionais passaram.
+- Corrigida uma frase antiga no TODO que ainda indicava Docker Compose pendente, apesar do run concluído com sucesso.
+- O único aviso da suite API é uma depreciação do Starlette TestClient/AnyIO; não existem falhas de testes nos runs finais observados.
