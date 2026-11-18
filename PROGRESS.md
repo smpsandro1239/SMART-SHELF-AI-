@@ -359,3 +359,10 @@ Added `test_catalogue_and_warehouse_master_data_writes_are_admin_only` to exerci
 - **CI pendente**; não declarar esta cobertura validada até confirmar a execução da suite API e Quality Gates.
 - A auditoria global permanece aberta. O inventário de rotas também requer reconciliação: o documento actual declara 107 rotas e foi gerado a partir de uma versão anterior de `main.py`.
 
+## 2026-11-18 — Reconciliação do inventário HTTP
+
+- Comparação estática das declarações `@app.get/post/put/patch/delete` em `apps/api/app/main.py` com o inventário documentado encontrou 16 rotas em falta e nenhuma entrada obsoleta.
+- Actualizado `docs/security/http-route-inventory.md` para 123 declarações únicas, incluindo endpoints de retenção/purga, integrações externas, artefactos, observações de deteções e listagem de funcionários.
+- O inventário foi alinhado com o commit de código `297f92453791331ab9788920f6a8e0b28367818f`.
+- Limite: esta reconciliação é estática; não prova autorização efectiva, nem cobre routers montados dinamicamente. A auditoria handler-a-handler continua aberta.
+
