@@ -1,3 +1,10 @@
+## Planeamento de picking — integridade de colocações (2026-11-18)
+
+- [x] Tornar o planeamento fail-closed quando recebe mais de uma linha para o mesmo par SKU/localização, evitando contar stock físico duplicado.
+- [x] Excluir todas as linhas ambíguas desse par, sem afetar o mesmo local quando contém SKUs diferentes.
+- [x] Acrescentar testes de regressão para duplicados e para SKUs distintos na mesma localização.
+- [ ] Validar a alteração no API CI e Quality Gates no commit final desta ronda.
+
 ## Validação de concorrência de retenção — 2026-11-18
 
 - [x] O smoke PostgreSQL cobre as duas ordens concorrentes entre restauro e agendamento de purga.
