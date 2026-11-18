@@ -187,3 +187,15 @@ Added `test_catalogue_and_warehouse_master_data_writes_are_admin_only` to exerci
 - Não foi identificado um defeito adicional que justificasse alterar código de produção nesta auditoria.
 - O API CI run `44206821156` passou com **1129 passed, 1 skipped, 1 warning**; os smoke tests PostgreSQL de retenção versus observação/revisão humana passaram.
 - A auditoria do catálogo também foi fechada com base nos testes de isolamento, rejeição de produto inactivo/duplicados e smoke test concorrente PostgreSQL já aprovados.
+
+
+## 18-11-2026 — Auditoria de segredos e concorrência do bootstrap
+- Revistos `apps/api/app/config.py`, os testes de configuração e a documentação de deployment. A validação de produção já rejeita segredos curtos, placeholders, whitespace e reutilização entre JWT e bootstrap; os testes cobrem esses casos.
+- Criado `docs/security/production-secrets.md` com geração independente de 256 bits, armazenamento, bootstrap inicial e rotação. A documentação de deployment Vercel referencia o procedimento.
+- Detectada uma corrida no endpoint `POST /api/v1/auth/bootstrap`: duas requisições concorrentes podiam observar a tabela `users` vazia antes de cada uma inserir um administrador.
+- Corrigido com advisory lock transaccional no PostgreSQL e `BEGIN IMMEDIATE` em SQLite, antes da verificação de existência de utilizadores.
+- Adicionado teste API para chave inválida e recusa de segundo bootstrap; criado smoke PostgreSQL concorrente que exige exactamente uma criação e um HTTP 409.
+- O Docker Compose passou a encaminhar `APP_ENV`, `JWT_SECRET_KEY` e `BOOTSTRAP_ADMIN_KEY` para API e worker; os defaults permanecem apenas para desenvolvimento e falham a validação quando `APP_ENV=production`.
+- Commits: correcção `9586d65`; smoke `336cad9`; workflow `c867dde`; teste API `ddd0164`; documentação de segredos `e3bd947`; Compose `40281c0`; documentação de deployment `abe6230`.
+- Validação CI da correcção de bootstrap pendente nesta actualização.
+- Limitação operacional: não foi verificada uma instância de produção real; a configuração `APP_ENV=production` está documentada e coberta por testes de Settings, mas os valores do secret store de cada ambiente continuam a ser responsabilidade do operador.
