@@ -38,6 +38,14 @@ O endpoint `/health/ready` só responde `200` quando consegue consultar PostgreS
 
 A configuração de CORS não é necessária para as chamadas normais do frontend, porque usa o mesmo domínio e os rewrites da Vercel. Se a API vier a ser consumida a partir de outro domínio, configurar `CORS_ALLOWED_ORIGINS` com as origens explícitas.
 
+## Segredos e primeiro administrador
+
+A validação de configuração de produção exige `APP_ENV=production`, um `JWT_SECRET_KEY` e um `BOOTSTRAP_ADMIN_KEY` distintos, aleatórios, sem espaços e com pelo menos 32 caracteres. A configuração Multi-Service deve receber estes valores como variáveis de ambiente server-side; nunca os inclua em `vercel.json`, no frontend ou no repositório.
+
+Para gerar e rodar os segredos, incluindo a consequência da rotação JWT para sessões activas, consultar [Production secrets: generation, storage and rotation](../security/production-secrets.md).
+
+O Docker Compose local também aceita `APP_ENV`, `JWT_SECRET_KEY` e `BOOTSTRAP_ADMIN_KEY` para a API e o worker. Os valores por omissão são apenas de desenvolvimento; não são uma configuração de produção válida.
+
 ## Limitações funcionais que permanecem
 
 - **PostgreSQL:** externo e sujeito aos limites/termos do respetivo fornecedor.
