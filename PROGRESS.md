@@ -376,3 +376,13 @@ Added `test_catalogue_and_warehouse_master_data_writes_are_admin_only` to exerci
 - Commit de teste: `16666ead622fcbdfea073e6f7fa5c178b93c4da3`.
 - **CI pendente**; a auditoria de autorização por handler continua aberta.
 
+
+
+## 2026-11-18 — Smoke PostgreSQL do diretório de funcionários
+
+- A cobertura HTTP SQLite já existente foi complementada com `apps/api/scripts/postgres_store_employee_authorization_smoke.py`, que cria duas lojas, funcionários activos/inactivos e testa o endpoint com JWT assinados reais.
+- O smoke verifica que SUPERVISOR só recebe funcionários activos da própria loja, que um filtro explícito para outra loja devolve 403, que ADMIN pode filtrar a segunda loja e que EMPLOYEE recebe 403.
+- O passo foi integrado em `.github/workflows/api-ci.yml`, após as migrações e os smokes PostgreSQL de autorização relacionados.
+- Commits: smoke `4094b2d1b5f5d2ce3bbc5bbf3ff372026c3f44d2`; workflow `2b9511c3212308cae5949f41360bbb431d070b70`.
+- A execução CI ainda não foi confirmada nesta actualização. Não foram executados testes localmente nem se declara o cenário PostgreSQL aprovado.
+- Próximo passo: confirmar o novo passo no API CI, corrigir eventuais falhas e só depois actualizar a matriz de autorização para evidência validada.
