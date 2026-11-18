@@ -551,3 +551,11 @@ Commit validado: `1e3499c8c80ef75494a29d06807469898471e4e1`.
 - Acrescentado teste HTTP/JWT com batches contendo simultaneamente lojas A e B. A validação do schema deve rejeitar ambos com HTTP 422 antes da execução do handler; as contagens de vendas e tráfego nas duas lojas são comparadas antes/depois.
 - A matriz de isolamento passa também a cobrir `GET /api/v1/sales/daily`, `GET /api/v1/forecasting/traffic-peaks`, `GET /api/v1/forecasting/hourly-demand` e `GET /api/v1/warehouse/slotting-recommendations`, cujos handlers aplicam `_enforce_store_scope` e filtram por `store_id`.
 - Os testes foram publicados; aguardam validação CI. Não foi executado pytest localmente nesta ronda.
+
+
+## 2026-11-18 — Linhagem de registos de prateleira em PostgreSQL
+
+- Revisada a migration `0050_shelf_record_store_lineage_guard`: triggers protegem INSERT/UPDATE dos três registos operacionais e impedem mudanças de loja na hierarquia quando estas deixam referências inconsistentes.
+- Criado `apps/api/scripts/postgres_shelf_record_lineage_smoke.py`, que usa PostgreSQL real e cria duas lojas, zonas, uma prateleira e registos válidos de alerta, captura e reposição.
+- O smoke tenta INSERT e UPDATE com loja divergente nas três tabelas e movimentos cross-store de prateleira/zona; exige rejeição pela base de dados e confirma que os registos válidos permanecem intactos.
+- Integrado no API CI. Ainda aguarda execução; não foi validado localmente nesta sessão.

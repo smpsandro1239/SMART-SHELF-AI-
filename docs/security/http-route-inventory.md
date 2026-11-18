@@ -223,3 +223,8 @@ O teste `test_zone_and_shelf_routes_enforce_admin_writes_and_store_scoped_reads`
 Os schemas `HourlySalesBatchCreate` e `HourlyStoreTrafficBatchCreate` exigem que todos os elementos do batch tenham exactamente o mesmo `store_id`. Os handlers validam o âmbito desse identificador antes de persistir. Foi acrescentado teste HTTP/JWT com batches mistos entre loja A e B: ambos devem ser rejeitados por validação (HTTP 422), sem alterações nas tabelas das duas lojas. A matriz de isolamento cobre também `GET /api/v1/sales/daily`, `GET /api/v1/forecasting/traffic-peaks`, `GET /api/v1/forecasting/hourly-demand` e `GET /api/v1/warehouse/slotting-recommendations`, além dos endpoints já documentados.
 
 **Limite:** confirmação estática dos validators e handlers complementada por regressões HTTP/JWT com SQLite isolado. O CI deste conjunto ainda está pendente; a auditoria global mantém-se aberta.
+
+
+## Integridade de linhagem shelf → zone → store no PostgreSQL
+
+A migration `0050_shelf_record_store_lineage_guard` protege `observation_alerts`, `capture_sessions` e `replenishment_tasks` contra divergência entre `store_id` do registo e a loja alcançada por `shelf_id → zone_id → store_id`. O smoke `apps/api/scripts/postgres_shelf_record_lineage_smoke.py` foi adicionado ao API CI para verificar INSERT/UPDATE inválidos e movimentos cross-store de prateleiras/zonas com registos dependentes. A evidência de execução ainda está pendente.

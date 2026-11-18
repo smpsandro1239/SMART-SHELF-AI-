@@ -285,3 +285,10 @@ A auditoria foi alargada para incluir a importação diária `POST /api/v1/sales
 - [x] Alargar cobertura HTTP/JWT a vendas diárias, traffic peaks, hourly demand e slotting recommendations.
 - [ ] Validar os testes no API CI e Quality Gates.
 - [ ] Prosseguir auditoria handler-a-handler; a cobertura actual não fecha a matriz global.
+
+
+### Linhagem de registos associados a prateleiras — PostgreSQL (18-11-2026)
+
+- [x] Rever triggers da migration 0050 para alerts, capture sessions e replenishment tasks.
+- [x] Acrescentar smoke PostgreSQL para INSERT/UPDATE cross-store e movimentos da hierarquia.
+- [ ] Validar API CI e registar resultado.

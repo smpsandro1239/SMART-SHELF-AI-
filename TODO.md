@@ -327,3 +327,10 @@
 - [x] Alargar a matriz negativa a vendas diárias, traffic peaks, hourly demand e recomendações de slotting.
 - [ ] Validar API CI e Quality Gates do novo conjunto de testes.
 - [ ] Continuar a reconciliação dos restantes handlers e acessos indirectos.
+
+
+## Linhagem PostgreSQL de registos associados a prateleiras (18-11-2026)
+- [x] Rever a migration 0050 e os triggers PostgreSQL para observation_alerts, capture_sessions e replenishment_tasks.
+- [x] Criar smoke PostgreSQL que rejeita INSERT/UPDATE com store_id incompatível com shelf → zone.
+- [x] Verificar que mover shelf/zone entre lojas é bloqueado quando existem registos operacionais dependentes.
+- [ ] Validar o smoke no API CI; o workflow ainda está em execução no commit anterior.
