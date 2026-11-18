@@ -95,7 +95,7 @@
 - [x] Ao movimentar paletes para WAREHOUSE, validar a localização de destino quando o código muda.
 - [x] Preservar o registo de paletes sem código de localização, para manter a rastreabilidade de dados incompletos e o bloqueio conservador do slotting.
 - [x] Testar rejeição de códigos desconhecidos/inactivos e aceitação de localização activa.
-- [x] Validar suite API e Quality Gates; Docker Compose permanece pendente para o SHA final.
+- [x] Validar suite API e Quality Gates; Docker Compose validado no commit de código `a5312651fb`.
 
 
 ## Resultados de validação — 18-11-2026
