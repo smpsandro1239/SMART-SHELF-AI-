@@ -62,6 +62,7 @@
 - [x] Reconcile ROADMAP.md with implemented capabilities, current CI evidence and remaining operational blockers (2026-11-18).
 - [x] Implement dashboard UX refinements: human-readable durations, Europe/Lisbon timestamps, stronger contrast palette, non-colour status cues, compact single-task layout and clickable summary cards with exact task-state filters; Web CI and frontend quality build passed.
 - [x] Add a visible-on-focus skip link, labelled desktop navigation landmark, keyboard focus outlines for interactive controls and equivalent mobile navigation controls.
+- [x] Substituir o cartão interactivo de zona por um botão nativo e anunciar o carregamento da avaliação operacional com `role=status`/`aria-live=polite`; Web CI `44296222519` passou. Quality Gates `44296222533` ainda pendente na última consulta.
 - [x] Validar a alteração de navegação acessível no Web CI [44292103581](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44292103581) e Quality Gates [44292103676](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44292103676), ambos aprovados no commit `5ca7babcd3529f4459a50eaf5542aa289db91d05`.
 - [ ] Complete manual browser/keyboard, screen-reader and full-state contrast audit before claiming formal WCAG 2.2 AA conformance.
 
