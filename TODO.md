@@ -6,10 +6,10 @@
 - [x] Adicionar e validar no PostgreSQL a concorrência entre retenção de imagens e criação de observações/revisões humanas; os smoke tests de bloqueio e revalidação passaram no API CI.
 - [x] Concluir a auditoria do catálogo/produto-prateleira: autorização, isolamento por loja, produtos inativos, associações duplicadas e concorrência PostgreSQL cobertos; semântica global do catálogo ADMIN documentada e validada no CI.
 - [ ] Complete the worker retry, lease-expiry and retention-transition audit under concurrent execution. The lease-takeover and deterministic recovery-lock ordering regression tests now pass CI; add PostgreSQL coverage for any remaining race conditions found.
-- [ ] Verify production authentication configuration rejects anonymous access to all protected API routes.
-- [ ] Confirm production secret validation (including whitespace rejection) passes in CI and deployment environments explicitly set `APP_ENV=production`.
-- [ ] Document the production secret generation, storage and rotation procedure.
-- [ ] Review rotation and operational lifecycle for JWT and bootstrap secrets.
+- [x] Verify production authentication configuration rejects anonymous access to all protected API routes; route inventory regression passed in API CI.
+- [x] Test production secret validation, including whitespace rejection; document the required `APP_ENV=production` setting for Vercel and Docker Compose.
+- [x] Document production secret generation, storage, first-admin bootstrap and JWT/bootstrap/database credential rotation in `docs/security/production-secrets.md`.
+- [x] Review JWT and bootstrap secret lifecycle; document single-key JWT rotation and one-time bootstrap behaviour.
 - [ ] Re-run API, frontend, Docker Compose and PostgreSQL smoke suites after backend changes.
 
 ## Product quality
@@ -25,14 +25,14 @@
 - [x] Adicionar índices únicos parciais para garantir uma única unidade activa de encomenda e uma única unidade activa de reposição por produto, ao nível da base de dados.
 - [x] Acrescentar teste API para rejeitar configurações duplicadas de unidades logísticas.
 - [x] Integrar smoke test de concorrência PostgreSQL no API CI.
-- [ ] Confirmar migração 0054 e todos os pipelines após execução no CI.
+- [x] Confirmar migração 0054 e smoke de concorrência no API CI; índices únicos parciais aplicados em PostgreSQL e SQLite.
 - [ ] Avaliar dados existentes antes de aplicar a migração em ambientes com histórico real; duplicados preexistentes devem ser saneados antes da criação dos índices.
 
 
 ## Inventário físico e registo de paletes (17-11-2026)
 - [x] Confirmar que o registo de uma palete física valida produto, embalagem PALLET, capacidade e loja, e cria evento inicial de auditoria.
 - [x] Acrescentar regressão que confirma que registar uma palete não altera snapshots agregados nem movimentos de stock; a palete é um registo físico, não uma recepção automática de inventário.
-- [ ] Validar a nova regressão no API CI e concluir Quality Gates e Demo Docker Compose smoke.
+- [x] Validar a regressão de registo físico de paletes no API CI, Quality Gates e Demo Docker Compose.
 - [ ] Definir, numa fase própria, uma reconciliação explícita entre paletes físicas e stock agregado; não somar automaticamente estes domínios enquanto não existir regra de negócio para evitar dupla contabilização.
 
 
@@ -40,7 +40,7 @@
 - [x] Rejeitar a criação de colocações em localizações inactivas.
 - [x] Rejeitar a criação de colocações para produtos inactivos.
 - [x] Acrescentar teste de regressão que confirma HTTP 409 e ausência de persistência nos dois cenários.
-- [ ] Validar a alteração na suite API CI, Quality Gates e Demo Docker Compose.
+- [x] Validar a alteração de rejeição de colocações inactivas na suite API CI, Quality Gates e Demo Docker Compose.
 - [ ] Definir e testar uma política explícita de capacidade/peso/temperatura para colocações; não impor bloqueios sem garantir que o perfil físico do produto está configurado e que a regra representa a operação real.
 
 
@@ -48,14 +48,14 @@
 - [x] Acrescentar teste de integração com JWT para o endpoint de slotting físico.
 - [x] Cobrir capacidade volumétrica, peso calculado, compatibilidade de temperatura e ordenação por distância.
 - [x] Confirmar que as recomendações não autorizam movimentos automáticos nem reserva de stock.
-- [ ] Validar o novo teste no API CI e Quality Gates.
+- [x] Validar o teste de integração do slotting físico no API CI e Quality Gates.
 
 
 ## Reconciliação entre paletes e slotting físico (18-11-2026)
 - [x] Confirmar que tarefas distintas do mesmo produto não conseguem consumir concorrencialmente o mesmo stock agregado; o smoke PostgreSQL existente verifica que apenas um movimento é persistido.
 - [x] Evitar recomendações de capacidade para localizações cujo código coincide com paletes físicas registadas no armazém, enquanto não existir ligação inequívoca palete-colocação.
 - [x] Acrescentar teste de integração com JWT para a exclusão conservadora de uma localização ocupada por palete física.
-- [ ] Validar o novo teste na suite API CI e Quality Gates.
+- [x] Validar o teste de exclusão conservadora de paletes no slotting na suite API CI e Quality Gates.
 - [ ] Definir um modelo explícito de transferência/reconciliação palete-colocação, com identificadores e eventos auditáveis, antes de agregar quantidades entre os dois registos.
 
 
@@ -115,3 +115,11 @@
 ## Limpeza de estado de validação — 18-11-2026
 - [x] Alinhar as caixas de verificação antigas do ciclo de vida e da imutabilidade com os resultados finais dos pipelines.
 - [x] Remover a indicação de Docker Compose pendente, substituindo-a pelo run concluído com sucesso.
+
+
+## Concorrência do bootstrap do primeiro administrador (18-11-2026)
+- [x] Serializar o bootstrap no PostgreSQL com advisory lock transaccional.
+- [x] Serializar a transacção SQLite com `BEGIN IMMEDIATE`.
+- [x] Acrescentar teste API para chave inválida e recusa de segundo bootstrap.
+- [x] Acrescentar smoke test PostgreSQL concorrente: duas requisições simultâneas, uma criação, um HTTP 409 e uma única conta ADMIN.
+- [ ] Validar o novo smoke test e a suite completa no API CI; validar Quality Gates e Docker Compose após as alterações.
