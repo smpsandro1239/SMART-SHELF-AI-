@@ -226,3 +226,14 @@ Added `test_catalogue_and_warehouse_master_data_writes_are_admin_only` to exerci
 - O teste do ciclo de legal hold passou também a verificar duas páginas consecutivas e a normalização de `limit=0` / `offset=-10`.
 - API CI run [44254865551](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44254865551) e Quality Gates run [44254865747](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44254865747) executaram o código; Quality Gates passou com **1133 passed, 1 skipped, 1 warning**, compilação Python e build web aprovados. Demo Docker Compose run [44254865566](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44254865566) passou. API CI estava a concluir a suite na última consulta; confirmar o estado final antes de fechar a validação global.
 - A auditoria global de paginação e custos de consulta continua aberta: esta alteração cobre apenas o histórico de retenção por imagem, não todas as listagens de deteções, OCR, fusão e referências de artefactos.
+
+
+## 2026-11-18 — Paginação de endpoints de visão computacional
+- Acrescentado `offset` com clamp para valores negativos e limites máximos já existentes nas listagens de imagens, deteções, correspondências OCR, evidências OCR, execuções OCR e evidência fundida.
+- As listagens de imagens ganharam desempate por ID para ordenação estável; as restantes mantêm ordenação por identificador persistente.
+- Na evidência fundida, a filtragem por estado é aplicada antes do corte da página, evitando páginas vazias/incorrectas causadas por filtrar apenas depois de paginar. A leitura continua limitada a um máximo de 1000 registos por pedido.
+- Preservados os controlos de autorização, isolamento por loja e estado ACTIVE das imagens.
+- Adicionado teste de regressão para paginação das deteções, incluindo fronteira entre páginas, `limit=0` e `offset` negativo.
+- Commits: `a475e7f` (endpoints), `b7d6d98` (teste), `a97fb8d` (ordenação da paginação da evidência fundida).
+- Validação API CI, Quality Gates e Docker Compose pendente; não declarar a alteração validada até os workflows terminarem.
+- O gate global de paginação/custos continua aberto: faltam auditoria sistemática de todos os endpoints derivados de imagem, contagens totais, índices e avaliação de planos de consulta.
