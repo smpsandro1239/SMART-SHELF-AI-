@@ -49,3 +49,11 @@
 - [x] Cobrir capacidade volumétrica, peso calculado, compatibilidade de temperatura e ordenação por distância.
 - [x] Confirmar que as recomendações não autorizam movimentos automáticos nem reserva de stock.
 - [ ] Validar o novo teste no API CI e Quality Gates.
+
+
+## Reconciliação entre paletes e slotting físico (18-11-2026)
+- [x] Confirmar que tarefas distintas do mesmo produto não conseguem consumir concorrencialmente o mesmo stock agregado; o smoke PostgreSQL existente verifica que apenas um movimento é persistido.
+- [x] Evitar recomendações de capacidade para localizações cujo código coincide com paletes físicas registadas no armazém, enquanto não existir ligação inequívoca palete-colocação.
+- [x] Acrescentar teste de integração com JWT para a exclusão conservadora de uma localização ocupada por palete física.
+- [ ] Validar o novo teste na suite API CI e Quality Gates.
+- [ ] Definir um modelo explícito de transferência/reconciliação palete-colocação, com identificadores e eventos auditáveis, antes de agregar quantidades entre os dois registos.
