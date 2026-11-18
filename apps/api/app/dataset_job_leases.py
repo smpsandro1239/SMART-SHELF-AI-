@@ -208,8 +208,7 @@ def claim_next_dataset_job(db: Session, *, worker_id: str, lease_seconds: int = 
             continue
         job.status = "LEASED"
         job.lease_owner = owner
-        current_expiry = _utc(job.lease_expires_at)
-        job.lease_expires_at = max(current_expiry, now + timedelta(seconds=duration))
+        job.lease_expires_at = now + timedelta(seconds=duration)
         job.fencing_token += 1
         job.attempt_count += 1
         job.updated_at = now
@@ -259,7 +258,8 @@ def heartbeat_dataset_job(db, *, job_id, worker_id, fencing_token, lease_seconds
     job = _owned_lease(db, job_id=job_id, worker_id=owner, fencing_token=fencing_token)
     now = models.utc_now()
     if not _revoke_if_sources_invalid(db, job, owner):
-        job.lease_expires_at = now + timedelta(seconds=duration)
+        current_expiry = _utc(job.lease_expires_at)
+        job.lease_expires_at = max(current_expiry, now + timedelta(seconds=duration))
         job.updated_at = now
         _append_event(db, job, "HEARTBEAT", worker_id=owner, details={"lease_seconds": duration})
     db.commit()
