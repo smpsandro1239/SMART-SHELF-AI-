@@ -692,21 +692,29 @@ export default function App() {
 
   return (
     <div className="app-shell">
+      <a className="skip-link" href="#dashboard-top">Saltar para o conteúdo principal</a>
       <aside className="sidebar">
         <div className="sidebar-brand"><div className="brand-mark small"><Warehouse size={20} /></div><div><strong>SMART SHELF</strong><span>INTELLIGENCE PLATFORM</span></div></div>
-        <div className="nav-label">ESPAÇO DE TRABALHO</div>
-        <button type="button" className="nav-item active" onClick={() => navigateToSection("dashboard-top")}><Activity size={18} /> Visão geral</button>
-        <button type="button" className="nav-item" onClick={() => { setTaskFocusFilter("ALL"); navigateToSection("replenishment-tasks"); }}><PackageSearch size={18} /> Tarefas de reposição <span className="nav-count">{summary?.active_tasks ?? "—"}</span></button>
-        <button type="button" className="nav-item" onClick={() => navigateToSection("operational-decisions")}><Store size={18} /> Operação da loja</button>
-        <div className="sidebar-bottom"><div className="status-dot" /> API ligada por sessão</div>
+        <nav className="sidebar-nav" aria-label="Navegação principal">
+          <div className="nav-label">ESPAÇO DE TRABALHO</div>
+          <button type="button" className="nav-item active" onClick={() => navigateToSection("dashboard-top")}><Activity size={18} /> Visão geral</button>
+          <button type="button" className="nav-item" onClick={() => { setTaskFocusFilter("ALL"); navigateToSection("replenishment-tasks"); }}><PackageSearch size={18} /> Tarefas de reposição <span className="nav-count">{summary?.active_tasks ?? "—"}</span></button>
+          <button type="button" className="nav-item" onClick={() => navigateToSection("operational-decisions")}><Store size={18} /> Operação da loja</button>
+        </nav>
+        <div className="sidebar-bottom"><div className="status-dot" aria-hidden="true" /> API ligada por sessão</div>
       </aside>
       <main className="main-area">
+        <nav className="mobile-nav" aria-label="Navegação principal">
+          <button type="button" className="mobile-nav-item" onClick={() => navigateToSection("dashboard-top")}><Activity size={16} /> Visão geral</button>
+          <button type="button" className="mobile-nav-item" onClick={() => { setTaskFocusFilter("ALL"); navigateToSection("replenishment-tasks"); }}><PackageSearch size={16} /> Tarefas</button>
+          <button type="button" className="mobile-nav-item" onClick={() => navigateToSection("operational-decisions")}><Store size={16} /> Operação</button>
+        </nav>
         <header id="dashboard-top" className="topbar">
           <div><p className="eyebrow">OPERAÇÕES / DASHBOARD</p><h1>Visão geral</h1></div>
           <div className="top-actions">
-            <button className="icon-button" onClick={() => void refresh()} title="Atualizar dados" disabled={loading}><RefreshCw size={17} className={loading ? "spin" : ""} /></button>
+            <button type="button" className="icon-button" onClick={() => void refresh()} aria-label="Atualizar dados" title="Atualizar dados" disabled={loading}><RefreshCw size={17} className={loading ? "spin" : ""} /></button>
             <div className="user-chip"><div className="avatar"><UserRound size={17} /></div><div><strong>{user?.full_name || "A carregar…"}</strong><span>{user?.role || "Sessão"}</span></div></div>
-            <button className="icon-button" onClick={logout} title="Terminar sessão"><LogOut size={17} /></button>
+            <button type="button" className="icon-button" onClick={logout} aria-label="Terminar sessão" title="Terminar sessão"><LogOut size={17} /></button>
           </div>
         </header>
         <section className="toolbar">
@@ -999,7 +1007,7 @@ export default function App() {
           </section>}
           <footer className="data-note"><ShieldCheck size={15} /> {summary.note} <span>·</span> {summary.role} {summary.store_id ? `· Loja #${summary.store_id}` : "· Visão global"}</footer>
         </>}
-        {!summary && loading && <div className="loading-state"><RefreshCw className="spin" /> A carregar os indicadores…</div>}
+        {!summary && loading && <div className="loading-state" role="status" aria-live="polite"><RefreshCw className="spin" aria-hidden="true" /> A carregar os indicadores…</div>}
       </main>
     </div>
   );
