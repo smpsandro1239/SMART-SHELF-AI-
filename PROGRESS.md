@@ -1,3 +1,9 @@
+## 2026-11-18 — Navegação acessível no frontend
+
+A aplicação autenticada passou a ter um link de salto para o conteúdo principal, um landmark `nav` com nome acessível na navegação lateral e controlos de navegação equivalentes em ecrãs pequenos (a barra lateral é ocultada abaixo de 700 px). Foram reforçados os indicadores `:focus-visible` para controlos interactivos, incluindo o campo de filtro, e o estado inicial de carregamento passou a ser anunciado com `role="status"` e `aria-live="polite"`.
+
+Esta é uma melhoria estática de estrutura e teclado; não equivale a auditoria manual com leitor de ecrã, medição de contraste de todos os estados, nem declaração de conformidade WCAG 2.2 AA. Build TypeScript/produção e validação CI desta alteração ainda pendentes.
+
 ## 2026-11-18 — Auditoria de desempenho PostgreSQL (preparação)
 
 Foi criado `apps/api/scripts/postgres_image_query_plan_audit.py` para recolher `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON, TIMING OFF)` das principais consultas de imagens/evidência e da fila de revisão SKU. O script exige PostgreSQL, usa transacção `READ ONLY`, timeout por consulta, valida que a imagem pertence à loja indicada e não executa DDL/DML. Foram acrescentados testes unitários para os seis SELECTs limitados e validação de IDs. A utilização está documentada em `docs/PERFORMANCE-QUERY-AUDIT.md` e ligada no README. A auditoria cobre primeiras páginas e offset profundo configurável (por omissão 5000), incluindo evidência fundida e a fila de revisão SKU.
