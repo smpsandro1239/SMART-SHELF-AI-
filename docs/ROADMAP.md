@@ -365,3 +365,14 @@ Foi criado e integrado no API CI o smoke `postgres_dataset_eligibility_concurren
 - [ ] Implementar catálogo persistente de artefactos derivados e herança de retenção para relatórios, exports, caches e backups.
 - [ ] Implementar lease/claim/fencing durável para consumidores assíncronos e condicionar a publicação ao token actual.
 - [ ] Substituir revisão por ficheiro declarativo por aprovação autenticada quando existir contrato de utilizadores/revisores.
+
+
+### Execução assíncrona de datasets — contrato de lease/fencing definido (18-11-2026)
+
+- [x] Definir identidade imutável do job, idempotência, estados e transições.
+- [x] Definir claim `FOR UPDATE SKIP LOCKED`, expiração, takeover e fencing token monotónico.
+- [x] Definir revalidação de retenção/legal hold em enqueue, claim, heartbeat e conclusão.
+- [x] Definir staging e promoção condicionada ao token actual.
+- [ ] Implementar persistência, serviço de lease e auditoria append-only.
+- [ ] Validar concorrência, takeover, token obsoleto e retenção em PostgreSQL 16.
+- [ ] Integrar worker/fila apenas depois da validação do serviço.

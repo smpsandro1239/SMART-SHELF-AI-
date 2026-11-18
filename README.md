@@ -1408,3 +1408,8 @@ Esta evidência confirma os testes automatizados e os fluxos PostgreSQL definido
 A distinção entre validação COCO, galeria offline, diff, qualidade, revisão, aprovação, criação de release e execução de consumidores está documentada em [docs/architecture/dataset-consumer-boundaries.md](docs/architecture/dataset-consumer-boundaries.md). A única fronteira inspeccionada que inicia um processo externo é `app.dataset_execution`, que exige o gate de aprovação. Os restantes CLIs são ferramentas locais de validação/revisão ou criação de relatórios/releases candidatas; não devem ser interpretados como autorização de treino.
 
 A auditoria não fecha a governação dos artefactos derivados: relatórios, HTML, exports, caches, backups e cópias ainda precisam de um catálogo central com herança de retenção. Também não existe ainda execução remota/destacada com lease e fencing. A purga física permanece desactivada.
+
+
+### Execução assíncrona de datasets — contrato de lease/fencing
+
+O contrato técnico para jobs remotos está em [docs/architecture/dataset-async-execution-lease.md](docs/architecture/dataset-async-execution-lease.md). Define identidade imutável, idempotência, estados, claim com `SKIP LOCKED`, fencing monotónico, revalidação de retenção, staging e publicação protegida contra workers obsoletos. **É desenho, não implementação**: não existe ainda tabela de jobs, worker de treino remoto ou broker. A execução suportada permanece síncrona através de `dataset_execution`.

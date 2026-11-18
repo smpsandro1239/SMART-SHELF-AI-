@@ -377,7 +377,7 @@
 
 - [x] Auditar os consumidores COCO, galeria, diff, qualidade, revisão, aprovação, release e execução. A classificação, os efeitos laterais e os limites estão em [Fronteiras dos consumidores de datasets](docs/architecture/dataset-consumer-boundaries.md). A única fronteira inspeccionada que inicia um processo externo é `dataset_execution`, agora ligada ao gate; galeria e relatórios são ferramentas offline/documentais, não autorização operacional.
 - [ ] Definir um contrato operacional de linhagem/retenção para derivados internos (crops, cópias, relatórios, exports, caches, backups e artefactos publicados), incluindo a política para descendentes quando a origem fica RESTRICTED ou sob legal hold.
-- [ ] Avaliar a necessidade de leases/claims duráveis e fencing para treino remoto, filas e jobs destacados; os locks PostgreSQL do processo síncrono não cobrem trabalho que continue após a sessão terminar.
+- [x] Avaliar a necessidade de leases/claims duráveis e fencing; o desenho técnico e os testes de aceitação estão em [Contrato de execução assíncrona de datasets](docs/architecture/dataset-async-execution-lease.md). A implementação persistente e a integração com worker continuam pendentes.
 - [ ] Não activar purge físico nem inferir política de conservação: manter a eliminação fail-closed até existir política formal aprovada e prova de cobertura de todos os destinos.
 
 
@@ -401,3 +401,15 @@
 - [ ] Criar catálogo persistente de artefactos derivados e propagar retenção/legal hold a HTML, relatórios, cópias, exports, caches e backups.
 - [ ] Implementar execução assíncrona com claim/lease/fencing e publicação condicionada ao token actual; ver requisitos no documento de fronteiras.
 - [ ] Autenticar revisores e substituir a confiança em identidade declarada em ficheiros por evidência autenticada.
+
+
+## Contrato de execução assíncrona — desenho técnico (18-11-2026)
+
+- [x] Definir identidade imutável do job e idempotência.
+- [x] Definir estados, claim atómico, lease, heartbeat, takeover e fencing monotónico.
+- [x] Definir revalidação de fontes internas em enqueue/claim/heartbeat/conclusão e lock order.
+- [x] Definir staging e publicação condicionada ao token actual.
+- [x] Definir testes de aceitação PostgreSQL/SQLite e sequência de implementação.
+- [ ] Implementar tabelas, constraints, triggers append-only e serviço de lease.
+- [ ] Criar smoke PostgreSQL com workers concorrentes, takeover, worker obsoleto e restrição de retenção.
+- [ ] Integrar broker/worker e publicação apenas após validação do fencing.

@@ -642,3 +642,13 @@ Commit validado: `1e3499c8c80ef75494a29d06807469898471e4e1`.
 - Documentadas as operações, os efeitos laterais e os limites em `docs/architecture/dataset-consumer-boundaries.md`.
 - A auditoria dos CLIs foi concluída para os ficheiros inspeccionados; não prova que um operador não execute manualmente um trainer fora do wrapper.
 - Próximas lacunas: catálogo persistente de derivados e destinos; herança de retenção; revisão autenticada; claim/lease/fencing e publicação condicionada ao token actual.
+
+
+## 2026-11-18 — Contrato técnico para execução assíncrona
+
+- Definido o protocolo de lease/fencing para jobs de treino/inferência remotos: identidade imutável e idempotente, estados, claim com `SKIP LOCKED`, token monotónico, heartbeat, takeover e conclusão condicionada ao token.
+- Definida revalidação de fontes internas em cada fronteira, lock order, auditoria append-only e publicação de outputs através de staging.
+- Documentados os limites do heartbeat: não impede leituras de cópias locais após perda do lease; é necessário serviço de acesso controlado por leitura e inventário/revogação de caches.
+- Documento: `docs/architecture/dataset-async-execution-lease.md`.
+- Estado: desenho concluído; nenhuma tabela, serviço ou worker remoto foi implementado nesta etapa.
+- Próximo passo: implementar migration/modelos e serviço transaccional; validar dois workers concorrentes, takeover e rejeição de operações com token obsoleto em PostgreSQL 16.
