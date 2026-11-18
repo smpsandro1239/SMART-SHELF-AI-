@@ -109,3 +109,11 @@ Added `test_catalogue_and_warehouse_master_data_writes_are_admin_only` to exerci
 - O teste de integração foi estendido: depois de confirmar a exclusão de uma localização com código coincidente, regista uma segunda palete sem código e confirma que nenhuma localização é recomendada.
 - Commits: `a4e077b` (detecção e teste inicial), `7b55b59` (guarda também na capacidade ponderal).
 - Validação CI pendente.
+
+
+## 18-11-2026 — Ciclo de vida das paletes
+- A auditoria confirmou que o endpoint de eventos já usa bloqueio da linha da palete, comparação optimista de estado/quantidade, matriz explícita de transições e persistência conjunta do estado actual e evento de auditoria.
+- Acrescentado teste de integração com JWT para cobrir a rejeição de READY → PARTIAL, transição READY → ON_DISPLAY com localização SALES_FLOOR, pedido desactualizado (HTTP 409 sem novo evento) e transição ON_DISPLAY → PARTIAL com redução de quantidade.
+- O teste verifica ainda a sequência de três eventos (registo e duas transições), os valores antes/depois e o estado final persistido.
+- Commit do teste: `b698950`.
+- Validação CI pendente.
