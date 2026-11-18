@@ -1,3 +1,7 @@
+## Concorrência entre restauro e agendamento de purga — 2026-11-18
+
+O smoke apps/api/scripts/postgres_retention_legal_hold_concurrency_smoke.py foi alargado para testar também as duas ordens concorrentes entre o endpoint de restauro e o agendamento de purga. Se o restauro confirmar primeiro, o pedido de agendamento que aguardava o lock deve revalidar o estado ACTIVE e devolver HTTP 409. Se o agendamento confirmar primeiro, o restauro deve limpar a data e a versão da política e registar, por esta ordem, PURGE_CANCELLED e RESTORED. Tal como nos cenários de legal hold, o smoke confirma através de pg_stat_activity / pg_blocking_pids que o pedido HTTP está efetivamente bloqueado na linha da imagem. **Alteração ainda aguarda API CI; não está validada.**
+
 ## Validação e concorrência do ciclo de retenção (2026-11-18)
 
 - API CI run `44266521498` passou no commit `b50b402dd6e5`; o job `test` terminou com sucesso.
