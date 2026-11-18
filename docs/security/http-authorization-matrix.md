@@ -343,3 +343,15 @@ O teste `test_external_integration_management_is_admin_only_over_http` foi acres
 
 A implementação dos handlers já exige explicitamente `ADMIN`; a cobertura atravessa o middleware HTTP com tokens JWT reais. API CI `44299045159` passou com **1149 testes aprovados, 1 ignorado e 1 aviso**, incluindo este teste. O teste usa SQLite isolado e não substitui uma validação PostgreSQL individual destes endpoints.
 
+## Diretório de funcionários — isolamento por loja
+
+O teste `test_store_employee_directory_is_scoped_to_supervisor_store` cobre `GET /api/v1/store-employees` com JWT real:
+
+- SUPERVISOR recebe apenas funcionários activos da sua loja;
+- funcionários inactivos não são incluídos;
+- a tentativa de filtrar explicitamente outra loja recebe HTTP 403;
+- ADMIN pode consultar os funcionários activos da loja indicada;
+- EMPLOYEE recebe HTTP 403.
+
+A implementação já aplicava estes filtros; a alteração acrescenta cobertura HTTP de regressão para evitar exposição de identidades entre lojas. O teste usa SQLite isolado. **Validação CI pendente** no commit `16666ead`; não equivale a smoke PostgreSQL individual do endpoint.
+
