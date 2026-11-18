@@ -580,3 +580,13 @@ Commit validado: `1e3499c8c80ef75494a29d06807469898471e4e1`.
 - Acrescentado teste HTTP/JWT para criação de raiz e descendente, retry idempotente, conflito de linhagem, pai inexistente, pai de outra imagem na mesma loja e pai de outra loja; verifica ainda a listagem e a ausência de efeitos laterais.
 - Testes e CI ainda não executados para este commit. A cobertura é SQLite HTTP, não evidência PostgreSQL.
 - Próximo passo: validar API CI/Quality Gates e, se aprovado, atualizar a matriz de autorização com a evidência. Manter a auditoria multi-loja global aberta.
+
+
+## 2026-11-18 — Locks da hierarquia na elegibilidade operacional de datasets
+
+- A validação de imagens internas já bloqueava a linha de `shelf_images`, mas a loja efectiva também depende de `shelves.zone_id` e `zones.store_id`. O lock apenas da imagem deixava essas duas linhas fora da secção crítica.
+- A consulta foi alterada para selecionar e bloquear imagem, prateleira e zona com `FOR UPDATE OF shelf_images, shelves, zones`, ordenando por `shelf_images.id, shelves.id, zones.id`.
+- O relatório passou a expor os IDs de prateleiras e zonas bloqueados, além das imagens.
+- Foi acrescentado teste de compilação com o dialecto PostgreSQL para verificar explicitamente as tabelas bloqueadas e a ordenação SQL.
+- Ainda não foi executado o smoke de concorrência real PostgreSQL para este caminho. O teste de compilação não prova o comportamento de bloqueio em runtime.
+- Próximo passo: adicionar smoke PostgreSQL com duas sessões, mantendo a validação aberta enquanto uma segunda transação tenta alterar a loja da zona/prateleira; depois validar o commit completo no API CI.

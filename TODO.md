@@ -353,3 +353,12 @@
 - [x] Cobrir pai inexistente, pai de outra imagem na mesma loja e pai de outra loja; confirmar ausência das referências recusadas na listagem.
 - [ ] Executar o teste focado e a suite API no CI; confirmar também compilação Python e Quality Gates.
 - [ ] Se a execução passar, registar os IDs dos workflows e reconciliar a matriz de autorização. O teste usa SQLite isolado e não substitui smoke PostgreSQL.
+
+
+## Elegibilidade operacional de datasets — estabilidade da linhagem (18-11-2026)
+
+- [x] Alargar os locks da validação de imagens internas às linhas `shelf_images`, `shelves` e `zones`, que em conjunto determinam a loja efectiva.
+- [x] Ordenar os locks por IDs de imagem, prateleira e zona e expor no relatório os IDs bloqueados.
+- [x] Acrescentar teste de compilação SQL PostgreSQL para verificar os alvos `FOR UPDATE` e a ordenação determinística.
+- [ ] Criar smoke concorrente PostgreSQL que tente mover a prateleira/zona enquanto o gate mantém a transação aberta; confirmar bloqueio/serialização e resultado final.
+- [ ] Auditar os consumidores de COCO/treino/galeria para impedir que contornem o release gate operacional.

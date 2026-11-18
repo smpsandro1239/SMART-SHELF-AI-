@@ -308,3 +308,8 @@ A auditoria foi alargada para incluir a importação diária `POST /api/v1/sales
 - O schema de criação passa a rejeitar booleanos em `parent_reference_id`, evitando a coerção Python `True == 1`.
 - Foi acrescentado teste HTTP/JWT para raiz, descendente, repetição idempotente, conflito de linhagem, pai inexistente, pai de outra imagem e pai de outra loja.
 - A validação CI ainda está pendente; a cobertura de integração usa SQLite isolado e não fecha a validação PostgreSQL nem a auditoria global.
+
+
+### Elegibilidade operacional de datasets — locks da linhagem multi-loja (18-11-2026)
+
+A validação de proveniência interna passa a bloquear explicitamente imagem, prateleira e zona, pois as três linhas determinam a loja efectiva e a retenção aplicável ao artefacto. A query usa ordenação determinística e o teste de contrato compila SQL PostgreSQL para confirmar `FOR UPDATE OF shelf_images, shelves, zones`. Falta smoke de concorrência PostgreSQL com alteração hierárquica em transação concorrente e auditoria dos consumidores que possam contornar o release gate.
