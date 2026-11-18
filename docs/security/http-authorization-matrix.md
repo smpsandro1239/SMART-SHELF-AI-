@@ -329,17 +329,17 @@ O teste `test_reviewed_sku_evaluation_is_scoped_to_supervisor_store` cobre diret
 - EMPLOYEE recebe HTTP 403 antes de qualquer agregação;
 - o filtro `model_version` é preservado no encaminhamento do relatório.
 
-A prova isola a fronteira HTTP/autorização e não valida o cálculo SQL das métricas. O teste usa SQLite isolado e mock do agregador; a validação CI deste commit está pendente.
+A prova isola a fronteira HTTP/autorização e não valida o cálculo SQL das métricas. O teste usa SQLite isolado e mock do agregador; a suite API CI mais recente (`44299045159`, 1149 testes aprovados) executou a cobertura. A validação PostgreSQL individual do agregador continua separada.
 
 ## Listagem de exemplares de embedding — isolamento da imagem de origem
 
 O teste JWT `test_product_embedding_exemplar_listing_is_scoped_to_source_image_store` cobre `GET /api/v1/product-embedding-exemplars` com exemplares associados a imagens de duas lojas. Confirma que SUPERVISOR da loja A só recebe exemplares cuja imagem de origem pertence à loja A, ADMIN recebe os exemplares das duas lojas e EMPLOYEE recebe HTTP 403. A imagem estrangeira é ativada no cenário para que o filtro de retenção não esconda uma falha de isolamento.
 
-A prova cobre a listagem HTTP e o âmbito da imagem de origem; não avalia a utilização dos vetores pelo motor de matching. Commit `07f46a43c17a9f617aea8b55a242b3d3f7426106`; CI pendente.
+A prova cobre a listagem HTTP e o âmbito da imagem de origem; não avalia a utilização dos vetores pelo motor de matching. A suite API CI mais recente (`44299045159`, 1149 testes aprovados) executou esta cobertura; não existe aqui uma validação PostgreSQL específica do endpoint.
 
 ## Gestão de integrações externas — cobertura HTTP JWT acrescentada
 
 O teste `test_external_integration_management_is_admin_only_over_http` foi acrescentado à suite JWT para cobrir os quatro endpoints de gestão por loja: criação, listagem, alteração e consulta de cobertura. SUPERVISOR e EMPLOYEE têm de receber HTTP 403 nas quatro operações; o teste confirma ainda que as tentativas recusadas não criam registos de integração.
 
-A implementação dos handlers já exige explicitamente `ADMIN`; esta alteração acrescenta cobertura através do middleware HTTP e de tokens JWT reais. **Validação CI pendente** no commit de teste. O teste HTTP usa SQLite isolado e não substitui uma validação PostgreSQL individual destes endpoints.
+A implementação dos handlers já exige explicitamente `ADMIN`; a cobertura atravessa o middleware HTTP com tokens JWT reais. API CI `44299045159` passou com **1149 testes aprovados, 1 ignorado e 1 aviso**, incluindo este teste. O teste usa SQLite isolado e não substitui uma validação PostgreSQL individual destes endpoints.
 
