@@ -1,5 +1,10 @@
 # PROGRESS
 
+## Paginação filtrada da evidência visual/OCR — 2026-11-18
+
+A revisão da rota `GET /api/v1/shelf-images/{image_id}/evidence-fusion` identificou que o `offset` era aplicado antes da filtragem pelo estado recalculado a partir do catálogo activo. Isso podia devolver páginas incompletas quando os primeiros registos da página bruta mudavam de estado após revalidação. A rota passou a percorrer lotes keyset de 500 registos, recalcular o estado e só depois aplicar o offset/limite ao conjunto filtrado. Para evitar inversão da ordem de locks entre lotes, bloqueia primeiro todos os produtos referenciados pela imagem em ordem crescente de ID, mantendo a ordem global imagem → produtos. Foi acrescentado teste de regressão com estados históricos que mudam após desactivação de produtos. **Código e teste ainda aguardam CI; não estão validados.**
+
+
 ## Segurança de migrações — unidades de embalagem (2026-11-18)
 
 A migração `0054_unique_active_product_packaging_units` passou a executar um preflight antes de criar os índices únicos parciais. O preflight identifica conflitos por produto, separando unidade activa de encomenda e unidade activa de reposição, apresenta IDs e contagens (até 20 por função) e aborta sem modificar linhas quando encontra duplicados. Foram acrescentados testes SQLite para dados preexistentes conflituosos, exclusão de linhas inactivas, enforcement dos índices e downgrade. **Esta alteração e os novos testes ainda aguardam execução no CI; não estão validados.** A verificação/saneamento de dados reais continua a ser uma tarefa operacional antes de aplicar a migração num ambiente com histórico de produção.
