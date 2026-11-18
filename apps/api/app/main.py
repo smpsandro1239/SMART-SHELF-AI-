@@ -1555,6 +1555,7 @@ def list_shelf_image_artifact_references(
     request: Request,
     db: Session = Depends(get_db),
     limit: int = 200,
+    offset: int = 0,
 ):
     """List declared external derivatives for an image within the caller's store scope."""
     actor = _request_user(db, request)
@@ -1571,6 +1572,7 @@ def list_shelf_image_artifact_references(
             models.ShelfImageArtifactReference.store_id == store_id,
         )
         .order_by(models.ShelfImageArtifactReference.created_at, models.ShelfImageArtifactReference.id)
+        .offset(max(0, offset))
         .limit(max(1, min(limit, 500)))
         .all()
     )
@@ -2144,6 +2146,7 @@ def list_shelf_image_artifact_disposition_events(
     request: Request,
     db: Session = Depends(get_db),
     limit: int = 100,
+    offset: int = 0,
 ):
     """Return the immutable decision history for one external artifact reference."""
     actor = _request_user(db, request)
@@ -2167,6 +2170,7 @@ def list_shelf_image_artifact_disposition_events(
             models.ShelfImageArtifactDispositionEvent.store_id == store_id,
         )
         .order_by(models.ShelfImageArtifactDispositionEvent.sequence_number)
+        .offset(max(0, offset))
         .limit(max(1, min(limit, 500)))
         .all()
     )
@@ -3854,6 +3858,7 @@ def list_detection_sku_reviews(
     detection_id: int,
     request: Request,
     limit: int = 100,
+    offset: int = 0,
     db: Session = Depends(get_db),
 ):
     initial_detection = db.get(models.ShelfImageDetection, detection_id)
@@ -3886,6 +3891,7 @@ def list_detection_sku_reviews(
         db.query(models.DetectionSkuReview)
         .filter(models.DetectionSkuReview.detection_id == detection_id)
         .order_by(models.DetectionSkuReview.created_at, models.DetectionSkuReview.id)
+        .offset(max(0, offset))
         .limit(max(1, min(limit, 500)))
         .all()
     )
