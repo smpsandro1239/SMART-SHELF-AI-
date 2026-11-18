@@ -137,3 +137,10 @@ A reconciliação estática não constitui uma auditoria de segurança concluíd
 
 A cobertura usa SQLite isolado e não deve ser apresentada como prova de concorrência ou isolamento PostgreSQL.
 
+
+
+### Diretório de funcionários — validação PostgreSQL (2026-11-18)
+
+- [x] Acrescentar smoke HTTP/JWT em PostgreSQL 16 para `GET /api/v1/store-employees`, cobrindo isolamento do SUPERVISOR, exclusão de inactivos, filtro cross-store, acesso ADMIN e recusa EMPLOYEE.
+- [x] Integrar o smoke no workflow API CI.
+- [ ] Confirmar a execução CI antes de considerar o isolamento PostgreSQL validado.
