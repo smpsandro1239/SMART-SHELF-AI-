@@ -18,12 +18,18 @@ from sqlalchemy import text
 from app.database import engine
 
 
-def build_audit_queries(store_id: int, image_id: int) -> list[tuple[str, str, dict[str, int]]]:
-    """Return the production query shapes used by image/evidence listing routes."""
-    params = {"store_id": store_id, "image_id": image_id}
+def build_audit_queries(
+    store_id: int, image_id: int, deep_offset: int = 5000
+) -> list[tuple[str, str, dict[str, int]]]:
+    """Return production query shapes for first/deep pages and the review queue."""
+    params = {
+        "store_id": store_id,
+        "image_id": image_id,
+        "deep_offset": deep_offset,
+    }
     return [
         (
-            "active_shelf_images_by_store",
+            "active_shelf_images_first_page",
             """
             SELECT si.id
             FROM shelf_images AS si
@@ -37,7 +43,21 @@ def build_audit_queries(store_id: int, image_id: int) -> list[tuple[str, str, di
             params,
         ),
         (
-            "detections_by_image",
+            "active_shelf_images_deep_page",
+            """
+            SELECT si.id
+            FROM shelf_images AS si
+            JOIN shelves AS s ON s.id = si.shelf_id
+            JOIN zones AS z ON z.id = s.zone_id
+            WHERE z.store_id = :store_id
+              AND si.retention_status = 'ACTIVE'
+            ORDER BY si.created_at DESC, si.id DESC
+            LIMIT 100 OFFSET :deep_offset
+            """,
+            params,
+        ),
+        (
+            "detections_first_page",
             """
             SELECT d.id
             FROM shelf_image_detections AS d
@@ -48,7 +68,18 @@ def build_audit_queries(store_id: int, image_id: int) -> list[tuple[str, str, di
             params,
         ),
         (
-            "ocr_matches_by_image",
+            "detections_deep_page",
+            """
+            SELECT d.id
+            FROM shelf_image_detections AS d
+            WHERE d.shelf_image_id = :image_id
+            ORDER BY d.id
+            LIMIT 200 OFFSET :deep_offset
+            """,
+            params,
+        ),
+        (
+            "ocr_matches_first_page",
             """
             SELECT m.id
             FROM shelf_image_ocr_matches AS m
@@ -60,7 +91,19 @@ def build_audit_queries(store_id: int, image_id: int) -> list[tuple[str, str, di
             params,
         ),
         (
-            "ocr_evidence_by_image",
+            "ocr_matches_deep_page",
+            """
+            SELECT m.id
+            FROM shelf_image_ocr_matches AS m
+            JOIN shelf_image_ocr_runs AS r ON r.id = m.run_id
+            WHERE r.shelf_image_id = :image_id
+            ORDER BY m.id DESC
+            LIMIT 500 OFFSET :deep_offset
+            """,
+            params,
+        ),
+        (
+            "ocr_evidence_first_page",
             """
             SELECT e.id
             FROM shelf_image_ocr_evidence AS e
@@ -72,7 +115,31 @@ def build_audit_queries(store_id: int, image_id: int) -> list[tuple[str, str, di
             params,
         ),
         (
-            "retention_events_by_image",
+            "ocr_evidence_deep_page",
+            """
+            SELECT e.id
+            FROM shelf_image_ocr_evidence AS e
+            JOIN shelf_image_ocr_runs AS r ON r.id = e.run_id
+            WHERE r.shelf_image_id = :image_id
+            ORDER BY e.id DESC
+            LIMIT 500 OFFSET :deep_offset
+            """,
+            params,
+        ),
+        (
+            "fused_evidence_deep_page",
+            """
+            SELECT fe.id
+            FROM shelf_image_fused_evidence AS fe
+            JOIN shelf_image_detections AS d ON d.id = fe.detection_id
+            WHERE d.shelf_image_id = :image_id
+            ORDER BY fe.id DESC
+            LIMIT 1000 OFFSET :deep_offset
+            """,
+            params,
+        ),
+        (
+            "retention_events_first_page",
             """
             SELECT e.id
             FROM shelf_image_retention_events AS e
@@ -83,7 +150,18 @@ def build_audit_queries(store_id: int, image_id: int) -> list[tuple[str, str, di
             params,
         ),
         (
-            "review_queue_latest_review_filter",
+            "retention_events_deep_page",
+            """
+            SELECT e.id
+            FROM shelf_image_retention_events AS e
+            WHERE e.shelf_image_id = :image_id
+            ORDER BY e.created_at ASC, e.id ASC
+            LIMIT 100 OFFSET :deep_offset
+            """,
+            params,
+        ),
+        (
+            "review_queue_latest_review_deep_page",
             """
             SELECT fe.id
             FROM shelf_image_fused_evidence AS fe
@@ -113,7 +191,7 @@ def build_audit_queries(store_id: int, image_id: int) -> list[tuple[str, str, di
               END ASC,
               fe.created_at ASC,
               fe.id ASC
-            LIMIT 250 OFFSET 0
+            LIMIT 250 OFFSET :deep_offset
             """,
             params,
         ),
@@ -134,6 +212,14 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--store-id", type=_positive_id, required=True)
     parser.add_argument("--image-id", type=_positive_id, required=True)
+    parser.add_argument(
+        "--deep-offset",
+        type=int,
+        default=5000,
+        choices=range(1, 1000001),
+        metavar="1..1000000",
+        help="offset used to measure deep-page query cost (default: 5000)",
+    )
     parser.add_argument(
         "--statement-timeout-ms",
         type=int,
@@ -178,7 +264,9 @@ def main() -> int:
                 if not image_belongs_to_store:
                     raise ValueError("image_id does not belong to the supplied store_id")
 
-                for name, sql, params in build_audit_queries(args.store_id, args.image_id):
+                for name, sql, params in build_audit_queries(
+                    args.store_id, args.image_id, args.deep_offset
+                ):
                     result = connection.execute(
                         text("EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON, TIMING OFF) " + sql),
                         params,
@@ -202,7 +290,20 @@ def main() -> int:
         )
         return 1
 
-    print(json.dumps({"status": "ok", "plans": reports}, indent=2, default=str))
+    print(
+        json.dumps(
+            {
+                "status": "ok",
+                "store_id": args.store_id,
+                "image_id": args.image_id,
+                "deep_offset": args.deep_offset,
+                "statement_timeout_ms": args.statement_timeout_ms,
+                "plans": reports,
+            },
+            indent=2,
+            default=str,
+        )
+    )
     return 0
 
 
