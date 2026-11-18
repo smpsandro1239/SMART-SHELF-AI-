@@ -184,3 +184,10 @@
 - [x] Quality Gates run `44251681042`, commit `dd8dfc673d97`: **1130 passed, 1 skipped, 1 warning**; compilação Python e build Web TypeScript/produção aprovados.
 - [x] Demo Docker Compose run `44251551219`, commit `40281c07a68a`: stack concluída com sucesso após a alteração de passagem de variáveis de ambiente.
 - [x] A suite mantém apenas um aviso de depreciação Starlette/AnyIO; não houve falhas.
+
+## Auditoria de autorização — integrações externas (18-11-2026)
+- [x] Confirmar que os quatro handlers de gestão de integrações externas exigem explicitamente perfil ADMIN.
+- [x] Acrescentar teste JWT HTTP para criação, listagem, alteração e consulta de cobertura por loja, com SUPERVISOR e EMPLOYEE.
+- [ ] Confirmar no CI as oito recusas HTTP 403 e a ausência de novos registos após pedidos negados.
+- [ ] Rever a cobertura de autorização dos endpoints restantes e reconciliar o inventário HTTP com as rotas actualmente declaradas em `apps/api/app/main.py`.
+
