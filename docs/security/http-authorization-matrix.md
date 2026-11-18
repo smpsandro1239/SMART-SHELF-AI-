@@ -337,3 +337,9 @@ O teste JWT `test_product_embedding_exemplar_listing_is_scoped_to_source_image_s
 
 A prova cobre a listagem HTTP e o âmbito da imagem de origem; não avalia a utilização dos vetores pelo motor de matching. Commit `07f46a43c17a9f617aea8b55a242b3d3f7426106`; CI pendente.
 
+## Gestão de integrações externas — cobertura HTTP JWT acrescentada
+
+O teste `test_external_integration_management_is_admin_only_over_http` foi acrescentado à suite JWT para cobrir os quatro endpoints de gestão por loja: criação, listagem, alteração e consulta de cobertura. SUPERVISOR e EMPLOYEE têm de receber HTTP 403 nas quatro operações; o teste confirma ainda que as tentativas recusadas não criam registos de integração.
+
+A implementação dos handlers já exige explicitamente `ADMIN`; esta alteração acrescenta cobertura através do middleware HTTP e de tokens JWT reais. **Validação CI pendente** no commit de teste. O teste HTTP usa SQLite isolado e não substitui uma validação PostgreSQL individual destes endpoints.
+
