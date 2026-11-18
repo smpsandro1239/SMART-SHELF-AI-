@@ -1798,3 +1798,49 @@ def test_ocr_pipeline_locks_catalogue_after_source_image_and_suppresses_inactive
     assert "product" in lock_order
     assert lock_order.index("image") < lock_order.index("product")
 
+
+
+def test_image_detections_support_stable_bounded_offset_pagination():
+    image_id, first_detection_id = create_image_with_detection()
+    with TestingSession() as db:
+        extra_detections = [
+            models.ShelfImageDetection(
+                shelf_image_id=image_id,
+                label="product",
+                confidence=0.8,
+                x_min=0.1,
+                y_min=0.1,
+                x_max=0.4,
+                y_max=0.4,
+                model_version="detector-v1",
+            )
+            for _ in range(2)
+        ]
+        db.add_all(extra_detections)
+        db.commit()
+        expected_ids = [
+            row.id
+            for row in db.query(models.ShelfImageDetection)
+            .filter(models.ShelfImageDetection.shelf_image_id == image_id)
+            .order_by(models.ShelfImageDetection.id)
+            .all()
+        ]
+
+    with TestClient(app) as client:
+        first_page = client.get(
+            f"/api/v1/shelf-images/{image_id}/detections?limit=1&offset=0"
+        )
+        second_page = client.get(
+            f"/api/v1/shelf-images/{image_id}/detections?limit=1&offset=1"
+        )
+        clamped = client.get(
+            f"/api/v1/shelf-images/{image_id}/detections?limit=0&offset=-10"
+        )
+
+    assert first_page.status_code == 200
+    assert second_page.status_code == 200
+    assert clamped.status_code == 200
+    assert [item["id"] for item in first_page.json()] == [expected_ids[0]]
+    assert [item["id"] for item in second_page.json()] == [expected_ids[1]]
+    assert [item["id"] for item in clamped.json()] == [expected_ids[0]]
+    assert first_detection_id == expected_ids[0]
