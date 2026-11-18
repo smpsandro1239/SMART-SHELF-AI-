@@ -2,7 +2,7 @@
 
 > Gerado por leitura estática de `apps/api/app/main.py` na branch `main`, a partir do commit `297f92453791331ab9788920f6a8e0b28367818f` (18-11-2026). É um inventário de declarações FastAPI, não uma prova de autorização efetiva. Rotas dinâmicas, dependências, middleware e permissões aplicadas dentro dos handlers devem ser confirmados em testes.
 
-Total de declarações únicas encontradas: **107**.
+Total de declarações únicas encontradas: **123**.
 
 | Método | Caminho | Handler |
 |---|---|---|
@@ -113,29 +113,6 @@ Total de declarações únicas encontradas: **107**.
 | `POST` | `/api/v1/zones` | `create_zone` |
 | `GET` | `/health/ready` | `readiness` |
 | `GET` | `/health` | `health` |
-
-## Regras de utilização
-
-- Cada rota deve ser classificada por perfil (`ADMIN`, `SUPERVISOR`, `EMPLOYEE`) e por âmbito de recurso (global, loja, prateleira, imagem, sessão de captura, tarefa, armazém).
-- Para cada operação de leitura e escrita, criar pelo menos um teste JWT positivo no âmbito permitido e um teste negativo fora do âmbito.
-- Confirmar que as respostas 403/404 não deixam alterações em base de dados, ficheiros, eventos de auditoria, filas ou tarefas.
-- Distinguir rotas que são intencionalmente globais (por exemplo, catálogo e metadados de embalagem) de dados operacionais pertencentes a uma loja.
-- Verificar rotas com sufixos e caminhos dinâmicos: a classificação do middleware por `startswith`, igualdade e sufixo deve corresponder exatamente à política pretendida.
-- Complementar testes HTTP SQLite com smoke tests PostgreSQL para handlers que dependam de bloqueios, constraints, transações ou triggers.
-- Atualizar este inventário sempre que uma rota for adicionada, removida ou alterada.
-
-## Limitações desta geração
-
-- O inventário é extraído das declarações `@app.get/post/put/patch/delete` com caminhos literais num único módulo. Não deteta rotas montadas por subaplicações, routers externos, caminhos construídos dinamicamente ou métodos registados programaticamente.
-- A presença de uma rota nesta lista não significa que esteja acessível a todos os perfis; o middleware e os handlers podem impor controlos adicionais.
-- Esta lista não fecha a auditoria multi-loja. Serve como checklist de cobertura e deve ser reconciliada com a matriz de autorização e os testes existentes.
-
-## Reconciliação do inventário — 2026-11-18
-
-A comparação das declarações literais `@app.get/post/put/patch/delete` em `apps/api/app/main.py` com a tabela acima encontrou 16 declarações em falta. As linhas seguintes completam a tabela; o total passa de 107 para **123 declarações únicas**. Não foram encontradas linhas obsoletas na tabela anterior.
-
-| Método | Caminho | Handler |
-|---|---|---|
 | `GET` | `/api/v1/zones` | `list_zones` |
 | `POST` | `/api/v1/shelf-images/{image_id}/retention/purge-schedule` | `schedule_shelf_image_purge` |
 | `POST` | `/api/v1/shelf-images/{image_id}/retention/purge-schedule/cancel` | `cancel_shelf_image_purge_schedule` |
@@ -153,5 +130,25 @@ A comparação das declarações literais `@app.get/post/put/patch/delete` em `a
 | `POST` | `/api/v1/shelf-image-detections/{detection_id}/observation` | `create_observation_from_demo_detection` |
 | `GET` | `/api/v1/store-employees` | `list_store_employees` |
 
-**Limite:** a reconciliação é estática e cobre declarações com caminhos literais no módulo principal. Não prova a política de autorização dos handlers nem deteta rotas montadas dinamicamente; a revisão de autorização continua separada.
+## Regras de utilização
 
+- Cada rota deve ser classificada por perfil (`ADMIN`, `SUPERVISOR`, `EMPLOYEE`) e por âmbito de recurso (global, loja, prateleira, imagem, sessão de captura, tarefa, armazém).
+- Para cada operação de leitura e escrita, criar pelo menos um teste JWT positivo no âmbito permitido e um teste negativo fora do âmbito.
+- Confirmar que as respostas 403/404 não deixam alterações em base de dados, ficheiros, eventos de auditoria, filas ou tarefas.
+- Distinguir rotas que são intencionalmente globais (por exemplo, catálogo e metadados de embalagem) de dados operacionais pertencentes a uma loja.
+- Verificar rotas com sufixos e caminhos dinâmicos: a classificação do middleware por `startswith`, igualdade e sufixo deve corresponder exatamente à política pretendida.
+- Complementar testes HTTP SQLite com smoke tests PostgreSQL para handlers que dependam de bloqueios, constraints, transações ou triggers.
+- Atualizar este inventário sempre que uma rota for adicionada, removida ou alterada.
+
+## Limitações desta geração
+
+- O inventário é extraído das declarações `@app.get/post/put/patch/delete` com caminhos literais num único módulo. Não deteta rotas montadas por subaplicações, routers externos, caminhos construídos dinamicamente ou métodos registados programaticamente.
+- A presença de uma rota nesta lista não significa que esteja acessível a todos os perfis; o middleware e os handlers podem impor controlos adicionais.
+- Esta lista não fecha a auditoria multi-loja. Serve como checklist de cobertura e deve ser reconciliada com a matriz de autorização e os testes existentes.
+
+
+## Reconciliação do inventário — 2026-11-18
+
+A comparação estática das declarações literais `@app.get/post/put/patch/delete` em `apps/api/app/main.py` confirmou **123 declarações únicas**: 107 entradas previamente inventariadas e 16 agora integradas na tabela principal. Não foram encontradas entradas obsoletas.
+
+**Limite:** esta reconciliação cobre declarações com caminhos literais no módulo principal. Não prova a política de autorização dos handlers nem deteta rotas montadas dinamicamente; a revisão de autorização continua separada.
