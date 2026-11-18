@@ -652,3 +652,13 @@ Commit validado: `1e3499c8c80ef75494a29d06807469898471e4e1`.
 - Documento: `docs/architecture/dataset-async-execution-lease.md`.
 - Estado: desenho concluído; nenhuma tabela, serviço ou worker remoto foi implementado nesta etapa.
 - Próximo passo: implementar migration/modelos e serviço transaccional; validar dois workers concorrentes, takeover e rejeição de operações com token obsoleto em PostgreSQL 16.
+
+
+## 2026-11-18 — Persistência de jobs assíncronos e serviço de fencing
+
+- Base inicial: `24cd266ebcf2ea7719a18e3933d1d33e676416c1`; implementação preparada sobre a `main` após leitura integral do README e do protocolo autónomo.
+- Criada migration `0056_dataset_execution_job_leases` com tabelas de jobs, fontes internas e eventos append-only; constraints para estados, modos, digests, lease e contadores; triggers para identidade imutável, linhagem/eligibilidade das fontes e eventos append-only.
+- Criado `app.dataset_job_leases`: enqueue idempotente com evidência APPROVED, claim com `SKIP LOCKED`, lease, fencing monotónico, heartbeat, falha e conclusão em staging. As operações de vida do lease revalidam as fontes sob locks imagem/prateleira/zona.
+- Adicionados testes SQLite de contrato e migration e smoke PostgreSQL com dois workers concorrentes, takeover, rejeição de heartbeat/conclusão obsoletos e sequência de eventos.
+- O serviço não executa comandos nem publica outputs; não foi ligado a um broker ou worker. A primeira versão só aceita fontes internas; o acesso remoto aos bytes e a publicação fenced permanecem requisitos separados.
+- Validação pendente até ao API CI do commit; não foram executados testes locais nesta ronda.

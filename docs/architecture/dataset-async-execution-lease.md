@@ -99,3 +99,16 @@ A implementação deve usar:
 6. Publicação/staging e catálogo de outputs ligados ao registo de artefactos e à retenção.
 
 Não implementar um broker ou integração cloud antes dos passos 1–4. Não definir duração de retenção nem activar purge físico nesta fase.
+
+
+## Implementação persistente inicial — migration 0056
+
+Foi acrescentada a primeira camada executável do contrato:
+- `dataset_execution_jobs`: identidade idempotente, hashes de release/aprovação/pedido, estado, proprietário/expiração, fencing token, tentativas e metadados de output em staging.
+- `dataset_execution_job_sources`: lista imutável de imagens internas, loja esperada e SHA-256, com FKs RESTRICT e trigger que valida a linhagem e estado ACTIVE/no legal hold na inserção.
+- `dataset_execution_job_events`: eventos com sequência por job, append-only.
+- `app.dataset_job_leases`: enqueue, claim `SKIP LOCKED`, heartbeat, fail e complete. Claim/heartbeat/complete revalidam as fontes e mantêm locks apenas durante a transacção curta.
+
+A implementação ainda não é um worker. O campo `staged_output_reference` regista a referência declarada pelo worker; não executa a promoção. Um consumidor que tenha perdido o lease pode continuar a calcular ou a ler cópias locais; este serviço apenas impede que o token obsoleto renove ou conclua o job. O serviço de leitura por artefacto e o promotor fenced continuam necessários.
+
+**Compatibilidade e validação:** a migration e triggers suportam PostgreSQL e SQLite. O smoke PostgreSQL integrado no API CI prova a atribuição única e takeover; a suite de testes SQLite não substitui essa prova. A validação de runtime deste commit permanece pendente.

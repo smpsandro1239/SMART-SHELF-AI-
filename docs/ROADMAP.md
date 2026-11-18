@@ -376,3 +376,14 @@ Foi criado e integrado no API CI o smoke `postgres_dataset_eligibility_concurren
 - [ ] Implementar persistência, serviço de lease e auditoria append-only.
 - [ ] Validar concorrência, takeover, token obsoleto e retenção em PostgreSQL 16.
 - [ ] Integrar worker/fila apenas depois da validação do serviço.
+
+
+### Persistência de jobs de datasets e fencing — implementação inicial (18-11-2026)
+
+- [x] Criar migration/modelos para jobs, fontes internas e eventos append-only.
+- [x] Implementar enqueue idempotente, claim `SKIP LOCKED`, lease, heartbeat, falha, conclusão em staging e fencing monotónico.
+- [x] Revalidar retenção/loja/hash das fontes em cada fronteira de autorização e revogar jobs inelegíveis.
+- [x] Acrescentar testes unitários/SQLite e smoke PostgreSQL concorrente.
+- [ ] Validar migration, suite API e smoke no API CI.
+- [ ] Integrar broker/worker apenas depois da validação PostgreSQL.
+- [ ] Implementar leitura de artefactos autorizada por chamada e promoção de outputs condicionada ao token actual.

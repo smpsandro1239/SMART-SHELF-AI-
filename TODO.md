@@ -410,6 +410,19 @@
 - [x] Definir revalidação de fontes internas em enqueue/claim/heartbeat/conclusão e lock order.
 - [x] Definir staging e publicação condicionada ao token actual.
 - [x] Definir testes de aceitação PostgreSQL/SQLite e sequência de implementação.
-- [ ] Implementar tabelas, constraints, triggers append-only e serviço de lease.
-- [ ] Criar smoke PostgreSQL com workers concorrentes, takeover, worker obsoleto e restrição de retenção.
+- [x] Implementar tabelas de jobs/fontes/eventos, constraints, triggers de imutabilidade e serviço transaccional de lease/claim/heartbeat/conclusão. O worker/broker e a publicação final permanecem fora do âmbito.
+- [ ] Validar o smoke PostgreSQL com workers concorrentes, takeover, worker obsoleto e restrição de retenção no API CI deste commit.
 - [ ] Integrar broker/worker e publicação apenas após validação do fencing.
+
+
+## Persistência de jobs de datasets e fencing — 18-11-2026
+
+- [x] Criar tabelas persistentes para jobs, fontes internas e eventos append-only.
+- [x] Fixar identidade do pedido e dependências de imagem/loja/hash; impor idempotência por chave e digest do payload.
+- [x] Implementar claim atómico com `FOR UPDATE SKIP LOCKED`, lease com expiração e fencing token monotónico.
+- [x] Implementar heartbeat, falha e conclusão condicionados por worker, token actual e lease não expirado.
+- [x] Revalidar elegibilidade das fontes em enqueue, claim, heartbeat e conclusão; revogar jobs quando a imagem deixa de estar ACTIVE ou entra em legal hold.
+- [x] Proteger identidade, fontes e eventos através de constraints/triggers PostgreSQL e SQLite.
+- [x] Acrescentar testes de idempotência, takeover, worker obsoleto, expiração e revogação por retenção.
+- [ ] Validar migration PostgreSQL 16, suite API e smoke concorrente no CI.
+- [ ] Implementar worker/broker, serviço de leitura de artefactos e promoção de outputs com fencing; não publicar directamente a partir do worker.

@@ -1413,3 +1413,12 @@ A auditoria não fecha a governação dos artefactos derivados: relatórios, HTM
 ### Execução assíncrona de datasets — contrato de lease/fencing
 
 O contrato técnico para jobs remotos está em [docs/architecture/dataset-async-execution-lease.md](docs/architecture/dataset-async-execution-lease.md). Define identidade imutável, idempotência, estados, claim com `SKIP LOCKED`, fencing monotónico, revalidação de retenção, staging e publicação protegida contra workers obsoletos. **É desenho, não implementação**: não existe ainda tabela de jobs, worker de treino remoto ou broker. A execução suportada permanece síncrona através de `dataset_execution`.
+
+
+## Execução assíncrona — persistência inicial de jobs e fencing
+
+A migration `0056_dataset_execution_job_leases` cria o registo durável de jobs, dependências internas de imagens e eventos append-only. O serviço `app.dataset_job_leases` permite enfileirar um pedido com evidência de aprovação, reclamar jobs com `FOR UPDATE SKIP LOCKED`, renovar leases, registar falha e concluir com referência de output em staging. A identidade do pedido e a lista de fontes ficam imutáveis; uma chave idempotente repetida com payload diferente é conflito.
+
+O claim incrementa um fencing token monotónico. Heartbeat e conclusão exigem simultaneamente proprietário, token e lease ainda válido, e revalidam a elegibilidade das imagens internas (loja, SHA-256, estado ACTIVE e ausência de legal hold). Se a origem deixar de ser elegível antes do claim/heartbeat/conclusão, o job é revogado. As fontes e os eventos são protegidos por triggers contra alteração/eliminação; a base de dados também impede alterações à identidade do job e a transições a partir de estados terminais.
+
+**Limites deliberados:** este bloco implementa o contrato de persistência e lease, não um broker, worker de treino, execução de comandos ou publicação final. A conclusão apenas regista um output em staging; um promotor externo condicionado ao token actual ainda não existe. Os jobs aceitam apenas fontes internas nesta primeira versão; fontes externas precisam de um contrato de inventário/assinatura próprio. A transacção é mantida apenas durante cada operação curta de claim/heartbeat/conclusão, nunca durante o cálculo remoto. O smoke PostgreSQL `postgres_dataset_job_lease_smoke.py` valida concorrência de claim e takeover; a aprovação depende do API CI.
