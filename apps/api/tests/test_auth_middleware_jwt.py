@@ -2596,6 +2596,124 @@ def test_supervisor_can_create_store_scoped_warehouse_resources_with_real_jwt(au
         ).count() == movements_before
 
 
+
+def test_pallet_lifecycle_transitions_are_audited_and_reject_stale_updates(auth_client):
+    client, ids, store_ids = auth_client
+    store_id = store_ids["a"]
+    headers = bearer(ids["supervisor_a"], "SUPERVISOR")
+
+    with main_module.SessionLocal() as db:
+        level = models.ProductPackagingLevel(
+            product_id=ids["product"],
+            code="LIFECYCLE-PALLET",
+            name="Palete para teste de ciclo de vida",
+            package_type="PALLET",
+            base_units_per_package=48,
+            is_active=True,
+        )
+        db.add(level)
+        db.commit()
+        db.refresh(level)
+        level_id = level.id
+
+    created = client.post(
+        "/api/v1/warehouse/pallets",
+        json={
+            "store_id": store_id,
+            "product_id": ids["product"],
+            "packaging_level_id": level_id,
+            "pallet_code": "LIFECYCLE-PALLET-01",
+            "base_quantity": 48,
+            "status": "READY",
+            "location_type": "WAREHOUSE",
+            "location_code": "WH-A",
+        },
+        headers=headers,
+    )
+    assert created.status_code == 201, created.text
+    pallet_id = created.json()["id"]
+
+    invalid_transition = client.post(
+        f"/api/v1/warehouse/pallets/{pallet_id}/events",
+        json={
+            "expected_status": "READY",
+            "expected_base_quantity": 48,
+            "status": "PARTIAL",
+            "base_quantity": 24,
+            "reason": "Transição não permitida",
+        },
+        headers=headers,
+    )
+    assert invalid_transition.status_code == 422
+
+    displayed = client.post(
+        f"/api/v1/warehouse/pallets/{pallet_id}/events",
+        json={
+            "expected_status": "READY",
+            "expected_base_quantity": 48,
+            "status": "ON_DISPLAY",
+            "location_type": "SALES_FLOOR",
+            "location_code": "FLOOR-A",
+            "reason": "Colocação na área de venda",
+        },
+        headers=headers,
+    )
+    assert displayed.status_code == 201, displayed.text
+    assert displayed.json()["event_type"] == "STATUS_REVIEWED"
+    assert displayed.json()["from_location_type"] == "WAREHOUSE"
+    assert displayed.json()["to_location_type"] == "SALES_FLOOR"
+    assert float(displayed.json()["quantity_before"]) == 48
+    assert float(displayed.json()["quantity_after"]) == 48
+
+    stale_update = client.post(
+        f"/api/v1/warehouse/pallets/{pallet_id}/events",
+        json={
+            "expected_status": "READY",
+            "expected_base_quantity": 48,
+            "status": "ON_DISPLAY",
+            "location_type": "SALES_FLOOR",
+            "location_code": "FLOOR-B",
+            "reason": "Pedido baseado num estado antigo",
+        },
+        headers=headers,
+    )
+    assert stale_update.status_code == 409
+
+    partial = client.post(
+        f"/api/v1/warehouse/pallets/{pallet_id}/events",
+        json={
+            "expected_status": "ON_DISPLAY",
+            "expected_base_quantity": 48,
+            "status": "PARTIAL",
+            "base_quantity": 24,
+            "reason": "Venda parcial registada",
+        },
+        headers=headers,
+    )
+    assert partial.status_code == 201, partial.text
+    assert partial.json()["event_type"] == "STATUS_REVIEWED"
+    assert float(partial.json()["quantity_before"]) == 48
+    assert float(partial.json()["quantity_after"]) == 24
+
+    events = client.get(
+        f"/api/v1/warehouse/pallets/{pallet_id}/events",
+        params={"store_id": store_id},
+        headers=headers,
+    )
+    assert events.status_code == 200, events.text
+    assert [event["event_type"] for event in events.json()] == [
+        "REGISTERED", "STATUS_REVIEWED", "STATUS_REVIEWED"
+    ]
+
+    with main_module.SessionLocal() as db:
+        persisted = db.get(models.StorePallet, pallet_id)
+        assert persisted.status == "PARTIAL"
+        assert float(persisted.base_quantity) == 24
+        assert persisted.location_type == "SALES_FLOOR"
+        assert persisted.location_code == "FLOOR-A"
+        assert db.query(models.PalletRotationEvent).filter_by(pallet_id=pallet_id).count() == 3
+
+
 def test_product_packaging_read_is_global_for_supervisors_and_denied_to_employees(auth_client):
     client, ids, _ = auth_client
     path = "/api/v1/warehouse/product-packaging"
