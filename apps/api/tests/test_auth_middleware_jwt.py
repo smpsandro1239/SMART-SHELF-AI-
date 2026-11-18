@@ -2464,8 +2464,18 @@ def test_physical_warehouse_slotting_api_respects_capacity_and_temperature(auth_
     assert response.status_code == 200, response.text
     result = response.json()
     assert result["candidates"] == []
+    rejected_after_unlocated_pallet = {
+        item["location_code"]: item["reason"]
+        for item in result["rejected_locations"]
+    }
+    assert set(rejected_after_unlocated_pallet) == {
+        "SLOT-NEAR", "SLOT-FAR", "SLOT-TOO-SMALL", "SLOT-FROZEN"
+    }
+    assert rejected_after_unlocated_pallet["SLOT-FROZEN"] == "TEMPERATURE_INCOMPATIBLE"
     assert {
-        item["reason"] for item in result["rejected_locations"]
+        reason
+        for location_code, reason in rejected_after_unlocated_pallet.items()
+        if location_code != "SLOT-FROZEN"
     } == {"UNKNOWN_CURRENT_OCCUPANCY"}
 
 
