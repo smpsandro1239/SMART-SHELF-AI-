@@ -3895,3 +3895,51 @@ def test_admin_cannot_create_multiple_active_ordering_or_replenishment_units(aut
         ).all()
         assert sum(level.is_ordering_unit for level in active_levels) == 1
         assert sum(level.is_replenishment_unit for level in active_levels) == 1
+
+
+def test_supervisor_can_retry_failed_image_once_and_employee_is_denied(auth_client):
+    client, ids, _ = auth_client
+    image_id = ids["image_a"]
+
+    with main_module.SessionLocal() as db:
+        image = db.get(models.ShelfImage, image_id)
+        image.analysis_status = "FAILED"
+        image.analysis_error = "RuntimeError: previous processing failed"
+        image.analysis_started_at = models.utc_now() - timedelta(minutes=5)
+        image.analysis_completed_at = models.utc_now()
+        image.model_version = "failed-model-v1"
+        db.commit()
+
+    supervisor_headers = bearer(ids["supervisor_a"], "SUPERVISOR")
+    employee_headers = bearer(ids["employee_a"], "EMPLOYEE")
+
+    retried = client.post(
+        f"/api/v1/shelf-images/{image_id}/retry",
+        headers=supervisor_headers,
+    )
+    assert retried.status_code == 200, retried.text
+    assert retried.json()["analysis_status"] == "PENDING"
+    assert retried.json()["analysis_error"] is None
+    assert retried.json()["analysis_started_at"] is None
+    assert retried.json()["analysis_completed_at"] is None
+    assert retried.json()["model_version"] is None
+
+    duplicate_retry = client.post(
+        f"/api/v1/shelf-images/{image_id}/retry",
+        headers=supervisor_headers,
+    )
+    assert duplicate_retry.status_code == 409, duplicate_retry.text
+
+    employee_retry = client.post(
+        f"/api/v1/shelf-images/{image_id}/retry",
+        headers=employee_headers,
+    )
+    assert employee_retry.status_code == 403, employee_retry.text
+
+    with main_module.SessionLocal() as db:
+        image = db.get(models.ShelfImage, image_id)
+        assert image.analysis_status == "PENDING"
+        assert image.analysis_error is None
+        assert image.analysis_started_at is None
+        assert image.analysis_completed_at is None
+        assert image.model_version is None
