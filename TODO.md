@@ -1,3 +1,9 @@
+## Concorrência entre restauro e agendamento de purga (18-11-2026)
+- [x] Alargar o smoke PostgreSQL de retenção para cobrir as duas ordens de concorrência entre restauro e agendamento de purga.
+- [ ] Validar no API CI que um restauro confirmado primeiro faz o agendamento concorrente devolver HTTP 409.
+- [ ] Validar no API CI que um agendamento confirmado primeiro é cancelado pelo restauro, com limpeza da data/política e eventos append-only PURGE_CANCELLED e RESTORED.
+- [ ] Confirmar que a suite API, Quality Gates e o smoke PostgreSQL terminam com sucesso antes de fechar a auditoria de concorrência de retenção.
+
 # TODO
 
 ## Security and reliability
