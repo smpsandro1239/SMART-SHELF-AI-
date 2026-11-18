@@ -135,3 +135,14 @@ Added `test_catalogue_and_warehouse_master_data_writes_are_admin_only` to exerci
 - Não foi alterada a lógica de produção; a falha era uma asserção demasiado restritiva.
 - Commit da correcção: `08679a4`.
 - API CI anterior: 1127 passed, 1 skipped, 1 failed; Quality Gates API falhou pelo mesmo teste. Nova validação pendente.
+
+
+## 18-11-2026 — Validação de localizações de paletes
+- Auditoria aos endpoints de registo e eventos confirmou que os códigos de localização WAREHOUSE eram aceites como texto livre, mesmo quando não existiam na loja ou apontavam para uma localização inactiva.
+- Adicionada validação partilhada: quando uma palete declara um código WAREHOUSE, este tem de corresponder a uma `WarehouseLocation` da mesma loja e estar activo. Código desconhecido ou localização inactiva devolve HTTP 409; código vazio devolve HTTP 422.
+- A validação aplica-se ao registo inicial e à mudança efectiva para uma localização WAREHOUSE. Actualizações sem mudança de localização não revalidam registos históricos antigos.
+- Paletes sem `location_code` continuam registáveis para preservar a possibilidade de registar fisicamente uma palete cuja posição ainda não foi identificada; o slotting continua a tratar essa situação como ocupação desconhecida e bloqueia recomendações.
+- Novo teste JWT cobre registo em localização desconhecida/inactiva, registo em localização activa, movimentação rejeitada para localização inactiva e movimentação aceite para localização activa.
+- O teste do ciclo de vida foi actualizado para criar a localização WAREHOUSE que utiliza.
+- Commits: validação `918bbe3`; testes `ac1661d` e `a531265`.
+- Validação CI pendente.
