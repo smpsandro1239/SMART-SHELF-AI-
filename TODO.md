@@ -334,3 +334,12 @@
 - [x] Criar smoke PostgreSQL que rejeita INSERT/UPDATE com store_id incompatível com shelf → zone.
 - [x] Verificar que mover shelf/zone entre lojas é bloqueado quando existem registos operacionais dependentes.
 - [ ] Validar o smoke no API CI; o workflow ainda está em execução no commit anterior.
+
+
+## Linhagem multi-loja de registos de prateleira — validação CI (18-11-2026)
+
+- [x] Validar em PostgreSQL 16 a migration `0050_shelf_record_store_lineage_guard` e o smoke `postgres_shelf_record_lineage_smoke.py`.
+- [x] Confirmar rejeição de INSERT/UPDATE com `store_id` divergente em `observation_alerts`, `capture_sessions` e `replenishment_tasks`.
+- [x] Confirmar rejeição de movimentos cross-store de prateleiras/zonas com registos dependentes e preservação dos três registos válidos.
+- [x] API CI [44408063719](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44408063719) e Quality Gates [44408063767](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44408063767) passaram no commit `04c542320ad892a06c81c2295f518f5583428bc4`.
+- [ ] Continuar a auditoria handler-a-handler; esta validação cobre apenas as três tabelas e a hierarquia shelf → zone → store.

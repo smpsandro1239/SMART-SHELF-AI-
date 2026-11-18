@@ -292,3 +292,11 @@ A auditoria foi alargada para incluir a importação diária `POST /api/v1/sales
 - [x] Rever triggers da migration 0050 para alerts, capture sessions e replenishment tasks.
 - [x] Acrescentar smoke PostgreSQL para INSERT/UPDATE cross-store e movimentos da hierarquia.
 - [ ] Validar API CI e registar resultado.
+
+
+### Linhagem multi-loja shelf → zone → store — validada (18-11-2026)
+
+- A migration `0050_shelf_record_store_lineage_guard` e o smoke PostgreSQL foram validados no API CI [44408063719](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44408063719): PostgreSQL 16, migrações, smokes operacionais e suite API passaram.
+- O smoke confirmou a rejeição de INSERT/UPDATE divergentes em alertas, sessões de captura e tarefas, bem como movimentos de prateleiras/zonas com dependências existentes.
+- Quality Gates [44408063767](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44408063767) passou no mesmo SHA `04c542320ad892a06c81c2295f518f5583428bc4`.
+- A auditoria global de autorização e isolamento multi-loja permanece aberta; a validação não deve ser generalizada para rotas não cobertas.

@@ -559,3 +559,15 @@ Commit validado: `1e3499c8c80ef75494a29d06807469898471e4e1`.
 - Criado `apps/api/scripts/postgres_shelf_record_lineage_smoke.py`, que usa PostgreSQL real e cria duas lojas, zonas, uma prateleira e registos válidos de alerta, captura e reposição.
 - O smoke tenta INSERT e UPDATE com loja divergente nas três tabelas e movimentos cross-store de prateleira/zona; exige rejeição pela base de dados e confirma que os registos válidos permanecem intactos.
 - Integrado no API CI. Ainda aguarda execução; não foi validado localmente nesta sessão.
+
+
+## 2026-11-18 — Validação PostgreSQL da linhagem multi-loja de registos de prateleira
+
+- SHA validado: `04c542320ad892a06c81c2295f518f5583428bc4`.
+- O smoke `apps/api/scripts/postgres_shelf_record_lineage_smoke.py` foi executado no API CI com PostgreSQL 16.
+- Passaram as migrações Alembic, os 28 passos de smoke PostgreSQL e a suite `pytest -q` (job completo com sucesso).
+- O smoke confirmou que INSERT e UPDATE com `store_id` divergente são rejeitados em `observation_alerts`, `capture_sessions` e `replenishment_tasks`; também rejeitou a mudança de loja de prateleiras/zonas com registos dependentes.
+- A validação confirmou que os três registos originais permanecem íntegros. A correcção anterior preservou os IDs após fechar a sessão SQLAlchemy, evitando acesso a atributos expirados/detached.
+- API CI: [44408063719](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44408063719) — success. Quality Gates: [44408063767](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44408063767) — success.
+- Não foram executados testes localmente nesta ronda. A evidência é de CI; não representa auditoria exaustiva de todos os handlers nem validação manual do produto.
+- Próximo passo: continuar a auditoria de autorização e isolamento por loja nas rotas restantes, priorizando caminhos administrativos, operações indirectas e efeitos laterais.

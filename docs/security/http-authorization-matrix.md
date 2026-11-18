@@ -376,3 +376,8 @@ O smoke `apps/api/scripts/postgres_store_employee_authorization_smoke.py` també
 O teste JWT HTTP `test_admin_external_integration_management_is_store_scoped_over_http` cobre o percurso autorizado de ADMIN: criação, listagem, consulta da cobertura e revogação de uma integração. Confirma que a listagem de outra loja não revela a integração, que uma actualização com `store_id` incompatível devolve 404 e não altera o registo, e que a actualização na loja correcta identifica o ADMIN como autor. A resposta também é verificada para não expor campos de credenciais ou chaves. Esta cobertura usa SQLite isolado; não equivale a um smoke PostgreSQL individual destes handlers.
 
 **Validação CI:** pendente no commit desta ronda.
+
+
+## Linhagem de prateleiras e registos operacionais — validação PostgreSQL (18-11-2026)
+
+A migration `0050_shelf_record_store_lineage_guard` e o smoke `apps/api/scripts/postgres_shelf_record_lineage_smoke.py` passaram no API CI [44408063719](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44408063719), com PostgreSQL 16. Foram rejeitados INSERT/UPDATE cujo `store_id` diverge da loja alcançada por `shelf_id → zone_id → store_id` nas tabelas `observation_alerts`, `capture_sessions` e `replenishment_tasks`. O smoke também confirmou que mover uma prateleira ou zona com registos dependentes para outra loja é rejeitado e que os registos válidos permanecem intactos. Quality Gates [44408063767](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44408063767) passou. Esta evidência é específica à hierarquia e às três tabelas testadas; não encerra a auditoria global de autorização.
