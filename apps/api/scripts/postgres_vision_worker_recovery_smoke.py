@@ -69,11 +69,21 @@ def _create_fixture(suffix: str) -> tuple[int, list[int]]:
             analysis_status="PENDING",
             retention_status="ACTIVE",
         )
-        db.add_all([*stale_images, pending_image, retention_race_image])
+        failed_lease_image = models.ShelfImage(
+            shelf_id=shelf.id,
+            original_filename="failed-lease-fencing.jpg",
+            storage_path=f"/tmp/pg-vision-failed-lease-{suffix}.jpg",
+            mime_type="image/jpeg",
+            file_size_bytes=10,
+            sha256="e" * 64,
+            analysis_status="PENDING",
+            retention_status="ACTIVE",
+        )
+        db.add_all([*stale_images, pending_image, retention_race_image, failed_lease_image])
         db.commit()
         return store.id, [
             image.id for image in stale_images
-        ] + [pending_image.id, retention_race_image.id]
+        ] + [pending_image.id, retention_race_image.id, failed_lease_image.id]
 
 
 def _verify_skip_locked_recovery(stale_image_ids: list[int]) -> None:
@@ -256,18 +266,73 @@ def _verify_retention_transition_fences_inference(
         ).count() == 0
 
 
+def _verify_failed_stale_lease_is_fenced(
+    store_id: int,
+    image_id: int,
+    suffix: str,
+) -> None:
+    with TemporaryDirectory(prefix=f"ss-failed-lease-{suffix}-") as directory:
+        root = Path(directory)
+        store_root = root / str(store_id)
+        store_root.mkdir(parents=True)
+        image_path = store_root / "failed-lease-fencing.jpg"
+        image_path.write_bytes(b"vision-worker-failed-lease-smoke")
+        with SessionLocal() as db:
+            image = db.get(models.ShelfImage, image_id)
+            assert image is not None
+            image.storage_path = str(image_path)
+            db.commit()
+
+        previous_storage_path = settings.image_storage_path
+        settings.image_storage_path = str(root)
+        replacement_lease = models.utc_now() + timedelta(minutes=7)
+
+        class TakingOverFailingProvider:
+            def analyze(self, _path: Path) -> VisionAnalysis:
+                with SessionLocal() as takeover_db:
+                    image = takeover_db.get(models.ShelfImage, image_id)
+                    assert image is not None
+                    image.analysis_status = "PROCESSING"
+                    image.analysis_started_at = replacement_lease
+                    image.analysis_error = None
+                    image.analysis_completed_at = None
+                    takeover_db.commit()
+                raise RuntimeError("simulated obsolete provider failure")
+
+        try:
+            with SessionLocal() as db:
+                processed_id = process_next_image(db, TakingOverFailingProvider())
+                assert processed_id == image_id
+        finally:
+            settings.image_storage_path = previous_storage_path
+
+    with SessionLocal() as db:
+        image = db.get(models.ShelfImage, image_id)
+        assert image is not None
+        assert image.analysis_status == "PROCESSING"
+        assert image.analysis_started_at == replacement_lease
+        assert image.analysis_error is None
+        assert image.analysis_completed_at is None
+        assert image.model_version is None
+        assert db.query(models.ShelfImageDetection).filter(
+            models.ShelfImageDetection.shelf_image_id == image_id
+        ).count() == 0
+
+
 def main() -> None:
     suffix = uuid4().hex[:10]
     store_id, image_ids = _create_fixture(suffix)
     _verify_skip_locked_recovery(image_ids)
     _verify_successful_stale_lease_is_fenced(store_id, image_ids[2], suffix)
     _verify_retention_transition_fences_inference(store_id, image_ids[3], suffix)
+    _verify_failed_stale_lease_is_fenced(store_id, image_ids[4], suffix)
     print(
         "PostgreSQL vision recovery smoke passed: SKIP LOCKED recovery "
         "processed available stale rows without waiting for a competing "
         "row lock, recovered the remaining row after release, and fenced "
         "a successful inference result after lease takeover, and rejected "
-        "detections when retention changed to RESTRICTED during inference."
+        "detections when retention changed to RESTRICTED during inference, "
+        "and ignored provider failures from a worker whose lease had been replaced."
     )
 
 
