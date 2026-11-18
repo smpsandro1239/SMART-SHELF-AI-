@@ -355,3 +355,10 @@ O teste `test_store_employee_directory_is_scoped_to_supervisor_store` cobre `GET
 
 A implementação já aplicava estes filtros; a alteração acrescenta cobertura HTTP de regressão para evitar exposição de identidades entre lojas. O teste usa SQLite isolado. **Validação CI pendente** no commit `16666ead`; não equivale a smoke PostgreSQL individual do endpoint.
 
+
+
+## Diretório de funcionários — validação PostgreSQL adicionada
+
+O smoke `apps/api/scripts/postgres_store_employee_authorization_smoke.py` foi integrado no API CI. Cria duas lojas e testa o endpoint `GET /api/v1/store-employees` através de HTTP com JWT reais: SUPERVISOR limitado à loja própria e apenas a funcionários activos, filtro cross-store recusado com 403, ADMIN autorizado a consultar a segunda loja e EMPLOYEE recusado com 403.
+
+**Estado:** implementação do smoke e integração no workflow concluídas; execução CI ainda pendente. Até o passo dedicado passar, esta cobertura não deve ser apresentada como validação PostgreSQL aprovada.
