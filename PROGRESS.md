@@ -117,3 +117,12 @@ Added `test_catalogue_and_warehouse_master_data_writes_are_admin_only` to exerci
 - O teste verifica ainda a sequência de três eventos (registo e duas transições), os valores antes/depois e o estado final persistido.
 - Commit do teste: `b698950`.
 - Validação CI pendente.
+
+
+## 18-11-2026 — Imutabilidade do histórico de paletes
+- Auditoria confirmou que `PalletRotationEvent` era descrito como append-only, mas não tinha triggers de base de dados contra UPDATE/DELETE; os endpoints não expunham operações de edição/apagamento, mas SQL directo continuava a poder alterar o histórico.
+- Nova migração `0055_pallet_rotation_events_append_only` cria triggers PostgreSQL e SQLite que rejeitam UPDATE e DELETE em `pallet_rotation_events`.
+- Novo script `apps/api/scripts/postgres_pallet_event_immutability_smoke.py` cria palete/evento, tenta ambas as mutações, exige rejeição e confirma os valores originais.
+- API CI executa o smoke test imediatamente depois de `alembic upgrade head`, garantindo que a protecção está instalada antes da verificação.
+- Commits: migração `11bc8bf`; workflow `0e409e6`; smoke test `41faedf`; TODO `ed7e100`.
+- Validação pendente na nova execução da API CI.
