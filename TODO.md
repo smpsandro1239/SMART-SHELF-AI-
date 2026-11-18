@@ -15,6 +15,7 @@
 ## Product quality
 
 - [ ] Review pagination, filtering and bounded query costs on image-derived data endpoints.
+  - [x] Paginate the append-only image retention event history with deterministic chronological ordering, a default page of 100 and a hard maximum of 500; cover page boundaries and negative/zero parameter clamping. API CI and Quality Gates passed on commit `92d0add53d`.
 - [ ] Verify retention and legal-hold audit trails across restore, purge scheduling and cancellation.
 - [ ] Keep ROADMAP.md aligned with implemented and validated capabilities.
 - [x] Implement dashboard UX refinements: human-readable durations, Europe/Lisbon timestamps, stronger contrast palette, non-colour status cues, compact single-task layout and clickable summary cards with exact task-state filters; Web CI and frontend quality build passed.
