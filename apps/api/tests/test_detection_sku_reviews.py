@@ -224,3 +224,31 @@ def test_detection_review_reloads_detection_after_source_image_lock(monkeypatch)
             models.DetectionSkuReview.detection_id == data["detection_id"]
         ).count() == 0
 
+
+
+def test_detection_review_history_supports_stable_offset_pagination():
+    data = create_detection(second_product=True)
+    with TestClient(app) as client:
+        first = client.post(
+            f"/api/v1/shelf-image-detections/{data['detection_id']}/reviews",
+            json={"decision": "CONFIRMED", "notes": "First review"},
+        )
+        second = client.post(
+            f"/api/v1/shelf-image-detections/{data['detection_id']}/reviews",
+            json={"decision": "CORRECTED", "selected_product_id": data["correct_product_id"]},
+        )
+        page_one = client.get(
+            f"/api/v1/shelf-image-detections/{data['detection_id']}/reviews?limit=1&offset=0"
+        )
+        page_two = client.get(
+            f"/api/v1/shelf-image-detections/{data['detection_id']}/reviews?limit=1&offset=1"
+        )
+        clamped = client.get(
+            f"/api/v1/shelf-image-detections/{data['detection_id']}/reviews?limit=0&offset=-5"
+        )
+
+    assert first.status_code == 201
+    assert second.status_code == 201
+    assert [item["decision"] for item in page_one.json()] == ["CONFIRMED"]
+    assert [item["decision"] for item in page_two.json()] == ["CORRECTED"]
+    assert [item["decision"] for item in clamped.json()] == ["CONFIRMED"]
