@@ -770,7 +770,7 @@ export default function App() {
               <div><p className="eyebrow">INTELIGÊNCIA OPERACIONAL</p><h2>Decisões e alertas por prateleira</h2><p className="muted">Cruza observações, inventário, vendas recentes e tarefas ativas. Apenas recomenda; não cria tarefas nem altera stock.</p></div>
               <button className="row-action" onClick={() => void refresh()} disabled={loading || decisionLoading}>{decisionLoading ? "A atualizar…" : "Atualizar decisões"} <RefreshCw size={14} /></button>
             </div>
-            {decisionLoading && !operationalDecisions && <div className="loading-state">A avaliar evidência operacional…</div>}
+            {decisionLoading && !operationalDecisions && <div className="loading-state" role="status" aria-live="polite">A avaliar evidência operacional…</div>}
             {operationalDecisions && <>
               <div className="decision-counts">
                 <div><span>Itens avaliados</span><strong>{operationalDecisions.count}</strong></div>
