@@ -389,5 +389,5 @@
 - [x] Passar ao processo consumidor os hashes de aprovação e o modo validado através de variáveis de ambiente.
 - [x] Adiar a aquisição dos locks operacionais até terminarem as verificações de ficheiros/COCO/revisão, mantendo-os durante release e consumo síncrono.
 - [x] Acrescentar testes para ordem gate → release → consumidor, bloqueio sem aprovação e fingerprint distinta para evidência de aprovação diferente.
-- [ ] Validar os testes focados, suite API, compilação Python e Quality Gates no CI.
+- [x] Validar a implementação no API CI [44412024791](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44412024791): **1168 passed, 1 skipped, 1 warning**, migrações PostgreSQL 16 e smokes operacionais concluídos; Quality Gates [44412024893](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44412024893) e Docker Compose [44412025214](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44412025214) também passaram. O smoke PostgreSQL de elegibilidade de datasets e o build Web foram aprovados.
 - [ ] Criar mecanismo de lease/claim com fencing para consumidores remotos/destacados; não está coberto pela transacção síncrona.

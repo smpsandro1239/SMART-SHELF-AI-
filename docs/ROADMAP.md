@@ -343,3 +343,15 @@ Foi criado e integrado no API CI o smoke `postgres_dataset_eligibility_concurren
 - [ ] Auditar exports, caches, backups e artefactos derivados quanto a herança de retenção.
 
 **Limites:** a garantia é local e síncrona. Não autoriza jobs remotos nem substitui política formal de retenção/purge.
+
+
+### Gate de aprovação no consumidor síncrono — validado (18-11-2026)
+
+- [x] API CI [44412024791](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44412024791): **1168 passed, 1 skipped, 1 warning**; migrações PostgreSQL 16 e smokes operacionais passaram.
+- [x] Quality Gates [44412024893](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44412024893): compilação Python e build Web passaram.
+- [x] Docker Compose [44412025214](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44412025214): stack de demonstração passou.
+- [x] Gate de aprovação, evidência SHA-256 vinculada à release e execução síncrona com locks mantidos validados pela suite API.
+- [ ] Criar lease/claim durável com fencing para consumidores remotos ou destacados.
+- [ ] Propagar linhagem e retenção aos derivados, exports, relatórios, caches e backups; manter purge físico desactivado.
+
+**Limites:** a evidência é CI automatizado; não comprova treino real nem integração externa. O lock transaccional não protege trabalho que sobreviva ao processo consumidor.

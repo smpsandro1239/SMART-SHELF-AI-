@@ -622,3 +622,14 @@ Commit validado: `1e3499c8c80ef75494a29d06807469898471e4e1`.
 - A confirmação não depende apenas de temporização: consulta `pg_stat_activity` e `pg_blocking_pids(pid)` para exigir que cada UPDATE esteja realmente bloqueado pela transação de elegibilidade.
 - Depois do commit do gate, o UPDATE deve concluir e o estado final é confirmado na base de dados.
 - O smoke foi integrado no API CI após as migrações e o smoke de linhagem de registos de prateleira. A validação PostgreSQL 16 só será registada depois da execução do workflow deste commit.
+
+
+## 2026-11-18 — Validação do gate de aprovação de datasets
+
+- SHA validado: `107d2bda261685717d8601d2913b2a8beffcd7fa`.
+- API CI [44412024791](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44412024791): sucesso; **1168 testes aprovados, 1 ignorado, 1 aviso**. Migrações PostgreSQL 16, smokes de concorrência/isolamento e suite API concluídos.
+- Quality Gates [44412024893](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44412024893): sucesso; compilação Python e build TypeScript/produção Web aprovados.
+- Docker Compose [44412025214](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44412025214): sucesso; stack de demonstração validada.
+- A execução de consumidores síncronos passa a exigir gate de aprovação e a vincular a evidência à fingerprint da release. Os locks de elegibilidade interna permanecem durante o consumidor.
+- Limite mantido: CI não valida treino real nem serviços externos; consumidores remotos/destacados continuam sem lease/fencing.
+- Próxima prioridade: definir e testar uma autorização durável para consumidores assíncronos, sem permitir que um lease expirado valide resultados tardios.

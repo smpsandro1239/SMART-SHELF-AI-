@@ -1394,3 +1394,10 @@ python -m app.dataset_execution \
 A fingerprint da release inclui os SHA-256 do registo de aprovação e do relatório determinístico do gate. O consumidor recebe estes identificadores, o modo aprovado e a fingerprint por variáveis de ambiente `SMART_SHELF_DATASET_APPROVAL_*`. Uma alteração no registo ou na evidência de aprovação produz outra identidade de release. O CLI `dataset_release` continua a poder criar releases técnicas/candidatas sem aprovação; essas releases não devem ser confundidas com uma execução autorizada através de `dataset_execution`.
 
 **Limites:** a transacção e os locks cobrem apenas o processo síncrono lançado localmente. Filas remotas, jobs destacados e serviços de treino cloud precisam de lease/claim e fencing próprios e continuam fora desta garantia. A ferramenta de revisão COCO continua offline e não é, por si só, um mecanismo de autorização operacional.
+
+
+### Validação do gate de aprovação na execução síncrona — 18-11-2026
+
+O commit `107d2bda261685717d8601d2913b2a8beffcd7fa` foi validado nos três workflows: [API CI](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44412024791) (**1168 passed, 1 skipped, 1 warning**, incluindo migrações PostgreSQL 16 e smokes), [Quality Gates](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44412024893) e [Docker Compose](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44412025214). A aprovação está ligada à fingerprint da release e é exigida antes do consumidor síncrono arrancar.
+
+Esta evidência confirma os testes automatizados e os fluxos PostgreSQL definidos no CI. Não demonstra treino de um modelo real, integração com fornecedor externo, coordenação de filas remotas nem execução assíncrona segura. Essas lacunas permanecem no roadmap.
