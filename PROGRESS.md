@@ -154,3 +154,12 @@ Added `test_catalogue_and_warehouse_master_data_writes_are_admin_only` to exerci
 - O teste de slotting com palete sem localização e o teste de registo/movimentação de paletes com localizações desconhecidas/inactivas estão incluídos na suite aprovada do API CI.
 - O teste do ciclo de vida de paletes passou depois de configurar explicitamente a localização WAREHOUSE usada pelo cenário.
 - O smoke Demo Docker Compose mais recente observado ainda não terminou; não é considerado validado nesta actualização.
+
+
+## 18-11-2026 — Validação CI concluída: paletes e slotting
+- API CI run `44206821156`, commit `a5312651fb`: sucesso. Suite completa: **1129 passed, 1 skipped, 1 warning** em 61,50 s. Todos os smoke tests PostgreSQL passaram, incluindo migrações, imutabilidade append-only dos eventos de paletes e verificações de concorrência.
+- Quality Gates run `44206872358`, commit `df883edbe2`: sucesso. Suite API: **1129 passed, 1 skipped, 1 warning** em 58,05 s; compilação Python e build TypeScript/produção aprovados.
+- Demo Docker Compose run `44206821282`, commit `a5312651fb`: sucesso. Build e arranque de API/PostgreSQL/vision worker, readiness, seed de dados de demonstração, verificação do worker/perfis e limpeza dos volumes concluídos.
+- O único aviso reportado pela suite foi uma depreciação do alias `anyio.abc.BlockingPortal` usado pelo Starlette TestClient; não causou falha.
+- As alterações de validação de localização WAREHOUSE, os testes de registo/movimentação de paletes e a correcção da expectativa de slotting estão incluídos na suite aprovada.
+- Os runs intermédios cancelados foram substituídos pelas execuções finais acima; não foram contabilizados como falhas.
