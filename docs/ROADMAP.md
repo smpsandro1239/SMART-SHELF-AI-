@@ -120,3 +120,11 @@ O demo só deve ser anunciado como aceite ponta-a-ponta depois da checklist manu
 
 **Limite:** o teste acrescentado usa SQLite isolado. Não prova concorrência PostgreSQL nem fecha a auditoria global de autorização.
 
+### Inventário de rotas HTTP — reconciliação (2026-11-18)
+
+- [x] Comparar o inventário com as declarações literais do módulo FastAPI principal.
+- [x] Acrescentar 16 rotas omitidas e actualizar o total documentado para 123; nenhuma entrada anterior ficou obsoleta.
+- [ ] Concluir a revisão de autorização por handler, incluindo caminhos indirectos e isolamento multi-loja.
+
+A reconciliação estática não constitui uma auditoria de segurança concluída.
+
