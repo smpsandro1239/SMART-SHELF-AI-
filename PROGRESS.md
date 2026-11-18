@@ -1,3 +1,11 @@
+## 2026-11-18 — Fecho CI da ronda de acessibilidade semântica
+
+- SHA final validado: `897d6946d0641ee8201cd14c7df8549c60c55a9b`.
+- O cartão de resumo de zona usa agora `button type="button"` nativo em vez de `article[role=button]`, removendo gestão manual de Enter/Espaço e preservando o destino de navegação.
+- O estado de carregamento da avaliação de evidência operacional usa `role="status"` e `aria-live="polite"`.
+- Quality Gates [44296524262](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44296524262) passou: job de testes API e compilação Python concluído com sucesso; job Web TypeScript/build de produção concluído com sucesso. Os runs intermédios cancelados foram substituídos por esta execução final aprovada.
+- Não foram executados testes locais nem ensaios manuais de browser nesta sessão. Permanecem pendentes teclado ponta-a-ponta, leitor de ecrã, zoom/reflow e medição de contraste; não declarar conformidade WCAG 2.2 AA.
+
 ## 2026-11-18 — Semântica e anúncios acessíveis nos estados operacionais
 
 A revisão estática identificou um cartão de zona implementado como `article[role=button]`, com gestão manual de Enter/Espaço. Foi substituído por um `button type="button"` nativo, preservando o estilo e o destino de navegação. O cartão usa agora a semântica e o comportamento de teclado nativos do browser. O estado de carregamento da avaliação de evidência operacional passou também a usar `role="status"` e `aria-live="polite"`, tal como o carregamento inicial.
