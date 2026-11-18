@@ -3624,11 +3624,17 @@ def list_shelf_image_fused_evidence(
         .join(models.ShelfImageDetection, models.ShelfImageFusedEvidence.detection_id == models.ShelfImageDetection.id)
         .filter(models.ShelfImageDetection.shelf_image_id == image_id)
     )
-    rows = query.order_by(models.ShelfImageFusedEvidence.id.desc()).limit(max(1, min(limit, 1000))).all()
+    bounded_limit = max(1, min(limit, 1000))
+    bounded_offset = max(0, offset)
+    rows = (
+        query.order_by(models.ShelfImageFusedEvidence.id.desc())
+        .limit(min(bounded_limit + bounded_offset, 1000))
+        .all()
+    )
     refreshed = _refresh_fused_evidence_view(db, rows)
     if status is not None:
         refreshed = [row for row in refreshed if row['status'] == status]
-    return refreshed
+    return refreshed[bounded_offset:bounded_offset + bounded_limit]
 
 
 
