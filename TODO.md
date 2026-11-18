@@ -61,7 +61,8 @@
   - [x] Validate the PostgreSQL race smoke for simultaneous legal-hold/purge-schedule and restore/purge-schedule transitions; API CI run `44268766212` passed all smoke steps.
 - [x] Reconcile ROADMAP.md with implemented capabilities, current CI evidence and remaining operational blockers (2026-11-18).
 - [x] Implement dashboard UX refinements: human-readable durations, Europe/Lisbon timestamps, stronger contrast palette, non-colour status cues, compact single-task layout and clickable summary cards with exact task-state filters; Web CI and frontend quality build passed.
-- [ ] Complete manual browser/keyboard and full-state contrast audit before claiming formal WCAG AA conformance.
+- [x] Add a visible-on-focus skip link, labelled desktop navigation landmark, keyboard focus outlines for interactive controls and equivalent mobile navigation controls.
+- [ ] Complete manual browser/keyboard, screen-reader and full-state contrast audit before claiming formal WCAG 2.2 AA conformance.
 
 
 ## Integridade das unidades logísticas (17-11-2026)
