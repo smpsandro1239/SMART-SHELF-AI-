@@ -38,9 +38,10 @@ O comando requer PostgreSQL. Em SQLite termina sem executar consultas. O resulta
 3. Correspondências OCR, ligadas às execuções OCR da imagem.
 4. Regiões de evidência OCR, ligadas às execuções OCR da imagem.
 5. Eventos de retenção, ordenados cronologicamente com ID como desempate.
-6. Fila de revisão SKU, incluindo a subconsulta correlacionada que compara a data da última revisão humana com a evidência fundida.
+6. Evidência fundida por imagem.
+7. Fila de revisão SKU, incluindo a subconsulta correlacionada que compara a data da última revisão humana com a evidência fundida.
 
-Os SELECTs são representativos das rotas actuais, não um benchmark de carga. A consulta da fila projecta apenas IDs para reduzir o volume de leitura, mantendo os joins, filtros, ordenação e limite relevantes para o plano.
+Os SELECTs incluem primeiras páginas e páginas profundas (offset configurável, por omissão 5000), não são um benchmark de carga. A consulta da fila projecta apenas IDs para reduzir o volume de leitura, mantendo os joins, filtros, ordenação e limite relevantes para o plano.
 
 ## Critérios de análise
 
@@ -61,4 +62,5 @@ Não adicionar índices apenas porque aparece um `Seq Scan` num ambiente pequeno
 
 - O CI usa uma base de dados efémera e pequena; não fornece evidência de desempenho com volume de produção.
 - O script não gera dados sintéticos em ambientes partilhados, não altera estatísticas e não cria índices.
+- O offset profundo é um cenário de medição configurável, não uma alteração ao contrato actual da API.
 - A execução com dados representativos continua a depender de acesso autorizado a staging ou a uma réplica.
