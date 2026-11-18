@@ -1,8 +1,17 @@
+## Validação de concorrência de retenção — 2026-11-18
+
+- [x] O smoke PostgreSQL cobre as duas ordens concorrentes entre restauro e agendamento de purga.
+- [x] API CI run [44268766212](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44268766212), commit `ff59e475a6694985747b4b055aacd06c37aec053`: migrações PostgreSQL, todos os smokes operacionais (incluindo `postgres_retention_legal_hold_concurrency_smoke.py`) e suite API concluídos com sucesso.
+- [x] Quality Gates run [44268807130](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44268807130), HEAD `0024f326bbe98ae09834c273163326809b28b5cd`, tentativa 2: API e Web concluídos com sucesso; **1 140 testes aprovados, 1 ignorado, 1 aviso**; compilação Python e build TypeScript/produção aprovados.
+- [x] Docker Compose smoke run [44268766432](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44268766432), commit `ff59e475`: build, arranque, readiness, seed e validação dos perfis concluídos com sucesso.
+- [x] Fechar a auditoria automatizada de concorrência legal hold/restauro/agendamento de purga.
+- [ ] A execução de purga física continua deliberadamente indisponível; não existe executor operacional e a API mantém-se fail-closed.
+
 ## Concorrência entre restauro e agendamento de purga (18-11-2026)
 - [x] Alargar o smoke PostgreSQL de retenção para cobrir as duas ordens de concorrência entre restauro e agendamento de purga.
-- [ ] Validar no API CI que um restauro confirmado primeiro faz o agendamento concorrente devolver HTTP 409.
-- [ ] Validar no API CI que um agendamento confirmado primeiro é cancelado pelo restauro, com limpeza da data/política e eventos append-only PURGE_CANCELLED e RESTORED.
-- [ ] Confirmar que a suite API, Quality Gates e o smoke PostgreSQL terminam com sucesso antes de fechar a auditoria de concorrência de retenção.
+- [x] Validar no API CI que um restauro confirmado primeiro faz o agendamento concorrente devolver HTTP 409 (API CI 44268766212).
+- [x] Validar no API CI que um agendamento confirmado primeiro é cancelado pelo restauro, com limpeza da data/política e eventos append-only PURGE_CANCELLED e RESTORED (API CI 44268766212).
+- [x] Confirmar suite API, Quality Gates e smoke PostgreSQL: API CI 44268766212; Quality Gates 44268807130 (1 140 passed, 1 skipped); Docker Compose 44268766432.
 
 # TODO
 
@@ -29,11 +38,11 @@
   - [x] Correct fused-evidence status-filter pagination: recompute status before applying the filtered offset, scan bounded keyset batches, and acquire all relevant product locks in ascending ID order to preserve the global image→product lock order.
   - [x] Add regression coverage for filtered pagination after catalogue revalidation and for offsets crossing the 500-row keyset batch boundary.
   - [x] Validate the filtered fused-evidence pagination regression and lock-order change in API CI (`44265754667`) and Quality Gates (`44265786855`); both completed successfully.
-- [ ] Complete the retention/legal-hold lifecycle audit across restore, purge scheduling, cancellation and concurrent transitions.
+- [x] Complete the automated retention/legal-hold lifecycle audit across restore, purge scheduling, cancellation and concurrent transitions. Physical purge execution remains intentionally unimplemented and fail-closed.
   - [x] Cover restore cancellation, purge schedule/cancellation audit events, overdue purge blocking under legal hold, and preservation of the scheduled date/policy while a hold is applied/released.
   - [x] Validate legal-hold release audit assertions in API CI run `44266521498`; Docker Compose smoke `44266521499` and Quality Gates `44266547157` also passed.
-  - [ ] Validate the new PostgreSQL race smoke for simultaneous legal-hold/purge-schedule transitions; added as API CI step in commit `e0df33d`.
-- [ ] Keep ROADMAP.md aligned with implemented and validated capabilities.
+  - [x] Validate the PostgreSQL race smoke for simultaneous legal-hold/purge-schedule and restore/purge-schedule transitions; API CI run `44268766212` passed all smoke steps.
+- [x] Reconcile ROADMAP.md with implemented capabilities, current CI evidence and remaining operational blockers (2026-11-18).
 - [x] Implement dashboard UX refinements: human-readable durations, Europe/Lisbon timestamps, stronger contrast palette, non-colour status cues, compact single-task layout and clickable summary cards with exact task-state filters; Web CI and frontend quality build passed.
 - [ ] Complete manual browser/keyboard and full-state contrast audit before claiming formal WCAG AA conformance.
 

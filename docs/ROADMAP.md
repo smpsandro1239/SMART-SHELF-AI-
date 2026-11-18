@@ -1,6 +1,25 @@
 # SMART SHELF AI — Roadmap
 
-## Prioridade atual: concluir e validar o demo vertical de 10 minutos
+## Prioridade atual: preparar um piloto controlado com validação operacional e evidência
+
+### Estado de validação — 2026-11-18
+
+- API CI [44268766212](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44268766212), commit `ff59e475`: migrações PostgreSQL, smokes de autorização/integridade/concorrência e suite API passaram, incluindo as duas ordens de concorrência entre restauro e agendamento de purga.
+- Quality Gates [44268807130](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44268807130), HEAD `0024f326`, tentativa 2: **1 140 testes aprovados, 1 ignorado, 1 aviso**; compilação Python e build TypeScript/produção Web aprovados.
+- Docker Compose smoke [44268766432](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44268766432), commit `ff59e475`: build, arranque, readiness, seed e validação dos perfis aprovados.
+- O aviso restante é uma depreciação Starlette/AnyIO; não corresponde a falha de testes.
+
+### Prioridades ainda abertas
+
+1. **P1 — desempenho:** recolher planos `EXPLAIN (ANALYZE, BUFFERS)` e medir paginação profunda/consultas de imagens e evidência com volume representativo antes de acrescentar índices.
+2. **P1 — aceitação manual:** percorrer o demo completo no browser com ADMIN, SUPERVISOR e EMPLOYEE, sem alterar directamente a base de dados; guardar evidência real em `docs/screenshots/demo/`.
+3. **P1 — acessibilidade:** verificar navegação por teclado, foco, leitores de ecrã e contraste de todos os estados; não declarar conformidade WCAG 2.2 AA apenas com base no build.
+4. **P1 — dados existentes:** executar o preflight da migração 0054 sobre uma cópia representativa dos dados de cada ambiente antes de qualquer aplicação com histórico real.
+5. **P2 — armazém:** definir com o responsável operacional as regras de transferência palete↔colocação e reconciliação com stock agregado; manter os domínios separados até existir decisão aprovada.
+6. **P2 — capacidade:** validar a política de capacidade/peso/temperatura com perfis físicos completos e regras reais de negócio; dados desconhecidos continuam a bloquear recomendações em vez de serem assumidos como zero.
+7. **P2 — IA e integrações:** provider de visão production-grade treinado/avaliado e conectores POS/ERP/WMS reais continuam fora da validação actual.
+
+### Implementado nesta fase
 
 ### Implementado nesta fase
 
@@ -31,11 +50,14 @@
 - [ ] Executar localmente a interface e percorrer manualmente o cenário integral com os três perfis, confirmando movimento/snapshot/auditoria finais (checklist em [DEMO.md](DEMO.md)).
 - [ ] Capturar screenshots reais do percurso; as instruções de captura estão em [DEMO.md](DEMO.md).
 
-## Fora do âmbito desta fase
+## Limitações e fronteiras actuais
 
-- Integrações POS, ERP ou WMS reais.
-- Treino ou inferência de modelos de visão production-grade.
-- Rotação de paletes, slotting, picking ou previsão avançada.
+- O provider do demo é mock determinístico; não é um modelo treinado nem valida semanticamente a imagem.
+- Não existe integração POS/ERP/WMS real configurada.
+- Não existe executor de purga física; os endpoints de retenção são de governação/preview e falham fechados.
+- O ensaio manual ponta-a-ponta, capturas reais e auditoria formal de acessibilidade continuam pendentes.
+- Slotting físico e picking existem como recomendações consultivas; não reservam stock nem executam movimentos.
+- Registos de paletes e inventário agregado permanecem separados para evitar dupla contabilização.
 
 ## Regras de conclusão
 
@@ -54,3 +76,8 @@ Só marcar uma tarefa de validação como concluída quando existir implementaç
 - [ ] Guardar capturas reais do percurso e preencher `docs/DEMO-ACCEPTANCE.md`.
 
 **Limite:** o CI de Docker Compose prova o arranque, seed e autenticação/permissões básicas; não prova ainda o percurso operacional completo na interface web. O preflight valida a integridade do asset e a readiness, mas não substitui a aceitação manual.
+
+
+## Critérios de prontidão para piloto
+
+O demo só deve ser anunciado como aceite ponta-a-ponta depois da checklist manual de [DEMO-ACCEPTANCE.md](DEMO-ACCEPTANCE.md) estar preenchida com evidência real. CI verde valida código e testes automatizados, mas não substitui ensaio de browser, acessibilidade, dados representativos, backups/restauro ou integrações externas.

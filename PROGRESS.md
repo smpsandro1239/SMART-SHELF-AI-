@@ -1,6 +1,16 @@
+## Validação de concorrência de retenção — 2026-11-18
+
+- [x] O smoke PostgreSQL cobre as duas ordens concorrentes entre restauro e agendamento de purga.
+- [x] API CI run [44268766212](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44268766212), commit `ff59e475a6694985747b4b055aacd06c37aec053`: migrações PostgreSQL, todos os smokes operacionais (incluindo `postgres_retention_legal_hold_concurrency_smoke.py`) e suite API concluídos com sucesso.
+- [x] Quality Gates run [44268807130](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44268807130), HEAD `0024f326bbe98ae09834c273163326809b28b5cd`, tentativa 2: API e Web concluídos com sucesso; **1 140 testes aprovados, 1 ignorado, 1 aviso**; compilação Python e build TypeScript/produção aprovados.
+- [x] Docker Compose smoke run [44268766432](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44268766432), commit `ff59e475`: build, arranque, readiness, seed e validação dos perfis concluídos com sucesso.
+- [x] Fechar a auditoria automatizada de concorrência legal hold/restauro/agendamento de purga.
+- [ ] A execução de purga física continua deliberadamente indisponível; não existe executor operacional e a API mantém-se fail-closed.
+
+
 ## Concorrência entre restauro e agendamento de purga — 2026-11-18
 
-O smoke apps/api/scripts/postgres_retention_legal_hold_concurrency_smoke.py foi alargado para testar também as duas ordens concorrentes entre o endpoint de restauro e o agendamento de purga. Se o restauro confirmar primeiro, o pedido de agendamento que aguardava o lock deve revalidar o estado ACTIVE e devolver HTTP 409. Se o agendamento confirmar primeiro, o restauro deve limpar a data e a versão da política e registar, por esta ordem, PURGE_CANCELLED e RESTORED. Tal como nos cenários de legal hold, o smoke confirma através de pg_stat_activity / pg_blocking_pids que o pedido HTTP está efetivamente bloqueado na linha da imagem. **Alteração ainda aguarda API CI; não está validada.**
+O smoke apps/api/scripts/postgres_retention_legal_hold_concurrency_smoke.py foi alargado para testar também as duas ordens concorrentes entre o endpoint de restauro e o agendamento de purga. Se o restauro confirmar primeiro, o pedido de agendamento que aguardava o lock deve revalidar o estado ACTIVE e devolver HTTP 409. Se o agendamento confirmar primeiro, o restauro deve limpar a data e a versão da política e registar, por esta ordem, PURGE_CANCELLED e RESTORED. Tal como nos cenários de legal hold, o smoke confirma através de pg_stat_activity / pg_blocking_pids que o pedido HTTP está efetivamente bloqueado na linha da imagem. **Validado:** API CI run `44268766212` passou todos os passos, incluindo este smoke e a suite API. Quality Gates run `44268807130` (tentativa 2) passou API e Web no HEAD `0024f326`; Docker Compose smoke `44268766432` passou no commit de código `ff59e475`.
 
 ## Validação e concorrência do ciclo de retenção (2026-11-18)
 
@@ -38,6 +48,8 @@ A migração `0054_unique_active_product_packaging_units` passou a executar um p
 
 
 ## Latest validated changes — 2026-11-18
+
+- **Retention restore/purge race — `ff59e475`:** API CI `44268766212` passed all PostgreSQL migration/smoke steps, including both restore-vs-schedule race orders, and the full API test suite. Quality Gates `44268807130` attempt 2 passed on HEAD `0024f326`: 1,140 passed, 1 skipped, 1 warning; Python compilation and Web TypeScript/production build passed. Docker Compose smoke `44268766432` passed on `ff59e475`.
 
 - **Pagination audit closure — commits `2180c02`, `8a9e676`, `e645e7b`, `2d3794c`, `4c9bf90`:** added page-size-bounded offset pagination and deterministic ordering to artifact references, append-only disposition events and human SKU review history, with regression coverage for page boundaries and invalid bounds. The related API CI run `44256610563` passed: **1136 passed, 1 skipped, 1 warning**; all PostgreSQL concurrency/authorization smoke steps passed. Demo Docker Compose run `44256610406` passed build, readiness, seed and worker-profile checks. Quality Gates run `44256985942` passed API tests/Python compilation and Web TypeScript/production build.
 - The Vercel status checks on the documentation commit report `build-rate-limit` (account/build quota), not an application compilation or test failure. GitHub Actions API and Web quality jobs completed successfully.

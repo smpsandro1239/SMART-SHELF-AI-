@@ -30,6 +30,9 @@ O guião completo, as limitações, os comandos de teste e a lista de capturas e
 
 ## 1.1. Roadmap e TODO — controlo central do projeto
 
+**Protocolo obrigatório de desenvolvimento autónomo:** [AUTONOMOUS-DEVELOPMENT-PROMPT.md](AUTONOMOUS-DEVELOPMENT-PROMPT.md). Deve ser lido antes de qualquer ronda e prevalece sobre instruções ad hoc incompatíveis.
+
+
 Esta é a fonte de verdade para manter o SMART SHELF AI focado. Deve ser revista antes de cada ronda de desenvolvimento e atualizada no mesmo commit em que forem concluídas novas tarefas. Só se marca como concluído o que está implementado e verificável; documentação, protótipos, mocks e testes simulados não equivalem a integração real.
 
 **Foco atual:** consolidar a inteligência operacional, a qualidade dos dados e a execução auditável. A rotação de paletes é uma estratégia opcional a jusante, não o objetivo central do produto.
