@@ -22,7 +22,7 @@
   - [x] Finish API CI, Quality Gates and Docker Compose validation for the pagination changes: API CI run `44256610563` passed (1136 passed, 1 skipped, 1 warning); Quality Gates run `44256985942` passed (API tests/compilation and Web TypeScript/production build); Docker Compose run `44256610406` passed.
   - [x] Correct fused-evidence status-filter pagination: recompute status before applying the filtered offset, scan bounded keyset batches, and acquire all relevant product locks in ascending ID order to preserve the global image→product lock order.
   - [x] Add regression coverage for filtered pagination after catalogue revalidation and for offsets crossing the 500-row keyset batch boundary.
-  - [ ] Validate the filtered fused-evidence pagination regression and lock-order change in CI.
+  - [x] Validate the filtered fused-evidence pagination regression and lock-order change in API CI (`44265754667`) and Quality Gates (`44265786855`); both completed successfully.
 - [ ] Verify retention and legal-hold audit trails across restore, purge scheduling and cancellation.
 - [ ] Keep ROADMAP.md aligned with implemented and validated capabilities.
 - [x] Implement dashboard UX refinements: human-readable durations, Europe/Lisbon timestamps, stronger contrast palette, non-colour status cues, compact single-task layout and clickable summary cards with exact task-state filters; Web CI and frontend quality build passed.
@@ -35,7 +35,7 @@
 - [x] Integrar smoke test de concorrência PostgreSQL no API CI.
 - [x] Confirmar migração 0054 e smoke de concorrência no API CI; índices únicos parciais aplicados em PostgreSQL e SQLite.
 - [x] Endurecer a migração 0054 com preflight que identifica até 20 produtos duplicados por função (unidade de encomenda/reposição), aborta antes de criar índices e não altera dados.
-- [ ] Validar o preflight e o downgrade na suite de migrações SQLite e na cadeia PostgreSQL completa após esta alteração.
+- [x] Validar o preflight/downgrade na suite API (incluindo testes SQLite) e a cadeia de migrações PostgreSQL no API CI `44265754667`; smoke de migrações e unicidade concorrente passaram.
 - [ ] Avaliar dados existentes antes de aplicar a migração em ambientes com histórico real; duplicados preexistentes devem ser saneados antes da criação dos índices.
 
 
