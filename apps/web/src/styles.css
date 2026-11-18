@@ -151,7 +151,7 @@
 
 /* Zone-level operational intelligence summary */
 .decision-zone-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;margin:16px 0}
-.decision-zone-card{min-width:0;border:1px solid var(--border,#e5e7eb);border-radius:12px;padding:14px;background:var(--panel-muted,rgba(127,127,127,.035))}
+.decision-zone-card{display:block;width:100%;min-width:0;appearance:none;text-align:left;font:inherit;color:inherit;cursor:pointer;border:1px solid var(--border,#e5e7eb);border-radius:12px;padding:14px;background:var(--panel-muted,rgba(127,127,127,.035))}
 .decision-zone-heading{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px}
 .decision-zone-heading strong{font-size:14px}
 .decision-zone-heading span,.decision-zone-item small{font-size:12px;color:var(--muted,#737373)}
