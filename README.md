@@ -28,6 +28,10 @@ O guião completo, as limitações, os comandos de teste e a lista de capturas e
 
 > **Transparência:** o backend inclui lojas, zonas, prateleiras, catálogo, observações, inventário, recomendações, tarefas, autenticação, captura de imagens e um worker de inferência com provider configurável. Existe uma aplicação web inicial com dashboard e fluxo de captura. Ainda não existe modelo de visão real configurado ou treinado, PWA nem integração POS/ERP/WMS operacional. Os mockups são ilustrativos e não representam dados reais.
 
+## Contrato de evidência de comparação de planogramas
+
+A comparação de captura com planograma permanece read-only. Antes de persistir resultados ou ligar o worker, foi definido um contrato técnico proposto para identidade, snapshots canónicos, idempotência, revisão humana append-only, retenção/linhagem e concorrência: [contrato de evidência](docs/architecture/planogram-comparison-evidence-contract.md). A persistência continua bloqueada até aprovação da política de derivados/legal hold e resolução das lacunas do manifesto de inferência e da precedência das revisões SKU.
+
 ## 1.1. Roadmap e TODO — controlo central do projeto
 
 **Protocolo obrigatório de desenvolvimento autónomo:** [AUTONOMOUS-DEVELOPMENT-PROMPT.md](AUTONOMOUS-DEVELOPMENT-PROMPT.md). Deve ser lido antes de qualquer ronda e prevalece sobre instruções ad hoc incompatíveis. A leitura integral deste `README.md`, do primeiro ao último parágrafo, é obrigatória antes de analisar ou alterar o código; quando necessário, deve ser feita por blocos, sem omitir secções.

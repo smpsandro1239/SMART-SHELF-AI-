@@ -1,3 +1,10 @@
+### Contrato de evidência de comparação de planogramas — 2026-11-19
+
+- A validação do fingerprint foi concluída no commit db7f8b423d14b0011609ff154874014cd122dfac: API CI [44589714790](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44589714790), Quality Gates [44589714764](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44589714764) e Docker Compose [44589714845](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44589714845) passaram.
+- Criado contrato técnico proposto para identidade, snapshot, idempotência, revisão append-only, retenção/linhagem e ordem de locks: [planogram-comparison-evidence-contract.md](architecture/planogram-comparison-evidence-contract.md).
+- Não foi criada migration nem persistência: a captura pode ser purgada e as deteções podem desaparecer em cascata; a precedência de revisões SKU e o manifesto completo de inferência ainda não estão definidos.
+- Próximos passos bloqueados por decisão de produto/privacidade: aprovar sobrevivência de derivados após purga/legal hold; definir manifesto imutável do pipeline e regra de revisão; depois implementar schema append-only e smoke PostgreSQL concorrente.
+
 ### Comparação read-only de captura com planograma ativo — 2026-11-19
 
 - Implementado serviço puro de comparação entre deteções persistidas e células do planograma ACTIVE.

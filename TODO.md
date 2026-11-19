@@ -1,3 +1,13 @@
+## Evidência de comparação de planogramas — contrato antes da persistência (2026-11-19)
+
+- [x] Confirmar API CI, Quality Gates e Docker Compose do commit db7f8b423d14b0011609ff154874014cd122dfac: os três workflows passaram.
+- [x] Documentar identidade, snapshot canónico, idempotência, revisão append-only, retenção/derivados, concorrência e critérios de aceitação.
+- [x] Identificar lacunas do modelo actual: manifesto imutável de inferência e precedência entre deteção original/revisão SKU.
+- [ ] Obter aprovação da política de retenção de derivados, sobrevivência após purga e legal hold antes de qualquer migration.
+- [ ] Definir manifesto imutável do pipeline e semântica de revisão SKU antes de congelar snapshots.
+- [ ] Especificar e testar idempotência/reprocessamento e constraints append-only em PostgreSQL/SQLite.
+- [ ] Só depois implementar migration, serviço transacional e smoke PostgreSQL concorrente; manter worker desligado até validação integral.
+
 ## Governação de derivados, autorização e cópias — 2026-11-19
 
 - [x] Confirmar API CI, Quality Gates e Docker Compose do commit anterior 9f6e871520a1d63b1f148bcc7578c546a41d090e: os três workflows passaram.
