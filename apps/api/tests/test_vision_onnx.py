@@ -249,7 +249,12 @@ def test_provider_effective_version_binds_weights_labels_and_preprocessing(tmp_p
 
     first = ONNXShelfVisionProvider(detector, model_version="catalog-detector", class_labels={0: "product"})
     same = ONNXShelfVisionProvider(detector, model_version="catalog-detector", class_labels={0: "product"})
-    relabelled = ONNXShelfVisionProvider(detector, model_version="catalog-detector", class_labels={0: "carton"})
+    relabelled = ONNXShelfVisionProvider(
+        detector,
+        model_version="catalog-detector",
+        class_labels={0: "carton"},
+        sku_match_labels={"carton"},
+    )
 
     assert first.model_version == same.model_version
     assert first.model_version != relabelled.model_version
@@ -270,10 +275,19 @@ def test_embedding_version_is_bound_to_embedding_weights(tmp_path, monkeypatch):
     embedder = tmp_path / "embedder.onnx"
     detector.write_bytes(b"detector")
     embedder.write_bytes(b"embedder-v1")
+    session_calls = 0
+
+    def load_session(*args, **kwargs):
+        nonlocal session_calls
+        session_calls += 1
+        return fake_session(
+            output_shape=(1, 256) if session_calls == 2 else (1, "detections", 6)
+        )
+
     monkeypatch.setitem(
         sys.modules,
         "onnxruntime",
-        SimpleNamespace(InferenceSession=lambda *args, **kwargs: fake_session(output_shape=(1, 256))),
+        SimpleNamespace(InferenceSession=load_session),
     )
 
     first = ONNXShelfVisionProvider(
