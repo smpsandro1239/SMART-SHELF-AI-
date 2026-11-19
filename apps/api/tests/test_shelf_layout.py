@@ -133,3 +133,17 @@ def test_duplicate_cell_ids_and_invalid_overlap_are_rejected():
         )
     with pytest.raises(ValueError, match="minimum_cell_overlap"):
         compare_detections_to_cells([], [], minimum_cell_overlap=0)
+
+
+
+def test_cell_without_explicit_visibility_calibration_is_unknown():
+    uncalibrated = ShelfCell("UNCALIBRATED", 0.0, 0.0, 1.0, 1.0)
+
+    result = compare_detections_to_cells([uncalibrated], [])
+
+    assert result[0].status == "UNKNOWN"
+
+
+def test_detection_product_id_must_be_an_integer():
+    with pytest.raises(ValueError, match="positive integer"):
+        group_detections_into_rows([box(0.1, 0.1, 0.4, 0.4, 1.5)])
