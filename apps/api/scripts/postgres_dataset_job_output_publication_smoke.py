@@ -75,12 +75,12 @@ def main():
             )
             claim = claim_next_dataset_job(db, worker_id=worker_id, lease_seconds=300)
             assert claim is not None and claim.id == job.id
-            stage_dir = root / "staging" / str(job.id)
+            stage_dir = root / "staging" / str(job.id) / str(claim.fencing_token)
             stage_dir.mkdir(parents=True)
             (stage_dir / "model.bin").write_bytes(payload)
             complete_dataset_job(
                 db, job_id=job.id, worker_id=worker_id, fencing_token=claim.fencing_token,
-                output_sha256=digest, staged_output_reference=f"staging/{job.id}/model.bin",
+                output_sha256=digest, staged_output_reference=f"staging/{job.id}/{claim.fencing_token}/model.bin",
             )
             principal = authenticate_dataset_worker(db, bearer_token=token)
             job_id, token_value, credential_id = job.id, claim.fencing_token, credential.credential_id
@@ -120,7 +120,7 @@ def main():
                 {
                     "job": job_id, "worker": worker_id, "credential": credential_id,
                     "token": token_value + 1, "digest": digest,
-                    "staged": f"staging/{job_id}/model.bin",
+                    "staged": f"staging/{job_id}/{token_value}/model.bin",
                     "published": f"published/{job_id}/forged.artifact",
                 },
                 "stale fencing token publication",
