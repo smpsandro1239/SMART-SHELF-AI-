@@ -768,7 +768,7 @@ A principal referência arquitetural é a separação entre deteção genérica 
 
 Foi adicionado um provider local CPU-first em `apps/api/app/vision_onnx.py`, compatível com o contrato `VisionProvider`. Suporta um detetor ONNX pós-NMS e, opcionalmente, um extrator ONNX de embeddings para matching de SKU. O Compose monta os pesos a partir de uma pasta local em modo só de leitura; os modelos não são descarregados nem versionados pelo projeto.
 
-**Importante:** o provider não vem ativado por defeito e não inclui pesos. Para o ativar são necessários modelos exportados com o contrato documentado, confirmação de licenças, validação no dataset autorizado e configuração de `VISION_PROVIDER_FACTORY`. Sem embedder, as deteções não são identificadas por SKU e o sistema abstém com `UNKNOWN`.
+**Importante:** as Settings mantêm a visão `disabled` por defeito. O Docker Compose selecciona explicitamente o provider `mock` apenas para a demonstração local; este modo é recusado em produção. Para inferência real é obrigatório configurar `VISION_PROVIDER_MODE=real`, `VISION_PROVIDER_FACTORY=app.vision_onnx:create_provider`, pesos autorizados e `VISION_CLASS_LABELS_JSON` com o mapeamento exacto de `class_id` para etiquetas semânticas. Classes desconhecidas ou outputs fora do contrato fazem a inferência falhar. O mapa de classes não identifica SKU; sem embedder e exemplares aprovados, o matching abstém com `UNKNOWN`.
 
 - [Contrato, configuração e execução do provider ONNX](docs/architecture/onnx-vision-provider.md)
 - [Exemplo de variáveis de ambiente](apps/api/.env.vision.example)
