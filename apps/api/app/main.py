@@ -60,6 +60,7 @@ from app.shelf_planograms import (
     activate_planogram,
     create_draft_planogram,
     load_active_planogram_for_shelf,
+    replace_draft_planogram_cells,
     retire_planogram,
 )
 from app.pallet_rotation_forecast_bridge import enrich_pallet_candidates_with_hourly_profiles
@@ -95,7 +96,7 @@ from app.schemas import (
     WarehouseLocationCreate, WarehouseProductProfileCreate, WarehousePlacementCreate,
     ProductPackagingLevelCreate, StorePalletCreate, StorePalletRead,
     PalletRotationPolicyCreate, PalletRotationPolicyRead, PalletRotationPolicyUpdate, PalletRotationEventRead, PalletLifecycleUpdate, PalletRotationSimulationRequest,
-    ShelfPlanogramCreate, ShelfPlanogramLifecycleRequest, ShelfPlanogramRead,
+    ShelfPlanogramCreate, ShelfPlanogramCellsReplace, ShelfPlanogramLifecycleRequest, ShelfPlanogramRead,
 )
 
 app = FastAPI(title=settings.app_name, version="0.2.0", description="Operational API for SMART SHELF AI.")
@@ -127,7 +128,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[origin.strip() for origin in settings.cors_allowed_origins.split(",") if origin.strip()],
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PATCH", "OPTIONS"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type"],
 )
 
@@ -537,6 +538,36 @@ def create_shelf_planogram(
     except IntegrityError as exc:
         db.rollback()
         raise HTTPException(status_code=409, detail="Planogram changed concurrently; retry with current shelf state") from exc
+
+
+@app.put(
+    "/api/v1/planograms/{planogram_id}/cells",
+    response_model=ShelfPlanogramRead,
+    tags=["planograms"],
+)
+def update_draft_planogram_cells(
+    planogram_id: int,
+    payload: ShelfPlanogramCellsReplace,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    actor = _require_planogram_actor(db, request)
+    try:
+        item = replace_draft_planogram_cells(
+            db,
+            planogram_id=planogram_id,
+            actor_user_id=actor.id,
+            cells=payload.cells,
+        )
+        db.commit()
+        db.refresh(item)
+        return item
+    except ShelfPlanogramError as exc:
+        db.rollback()
+        raise _planogram_http_error(exc) from exc
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Draft planogram changed concurrently; refresh and retry") from exc
 
 
 @app.get(

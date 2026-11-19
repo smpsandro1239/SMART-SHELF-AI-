@@ -277,6 +277,10 @@ class ShelfPlanogramCell(Base):
             "AND y_min >= 0 AND y_min < y_max AND y_max <= 1",
             name="ck_shelf_planogram_cell_bbox_normalized",
         ),
+        CheckConstraint(
+            "expected_facings IS NULL OR (expected_facings > 0 AND expected_product_id IS NOT NULL)",
+            name="ck_shelf_planogram_cell_expected_facings",
+        ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -293,6 +297,7 @@ class ShelfPlanogramCell(Base):
     expected_product_id: Mapped[int | None] = mapped_column(
         ForeignKey("products.id", ondelete="RESTRICT"), nullable=True, index=True
     )
+    expected_facings: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
     planogram: Mapped[ShelfPlanogram] = relationship(back_populates="cells")
 

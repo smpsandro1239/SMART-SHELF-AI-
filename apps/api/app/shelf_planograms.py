@@ -151,6 +151,7 @@ def _validated_cells(cells: Iterable[Mapping[str, Any] | Any]) -> tuple[dict[str
         grid_positions.add((row, column))
 
         expected_product_id = read(item, "expected_product_id")
+        expected_facings = read(item, "expected_facings")
         try:
             cell = ShelfCell(
                 cell_id=code,
@@ -159,6 +160,7 @@ def _validated_cells(cells: Iterable[Mapping[str, Any] | Any]) -> tuple[dict[str
                 x_max=read(item, "x_max"),
                 y_max=read(item, "y_max"),
                 expected_product_id=expected_product_id,
+                expected_facings=expected_facings,
                 is_visible=False,
             )
         except (TypeError, ValueError) as exc:
@@ -174,6 +176,7 @@ def _validated_cells(cells: Iterable[Mapping[str, Any] | Any]) -> tuple[dict[str
             "x_max": cell.x_max,
             "y_max": cell.y_max,
             "expected_product_id": expected_product_id,
+            "expected_facings": cell.expected_facings,
         })
 
     for index, cell in enumerate(geometry):
@@ -263,6 +266,50 @@ def create_draft_planogram(
     for cell in normalized_cells:
         db.add(models.ShelfPlanogramCell(planogram_id=planogram.id, **cell))
     db.flush()
+    return planogram
+
+
+def replace_draft_planogram_cells(
+    db: Session,
+    *,
+    planogram_id: int,
+    actor_user_id: int,
+    cells: Iterable[Mapping[str, Any] | Any],
+) -> models.ShelfPlanogram:
+    """Atomically replace all cells of a DRAFT planogram only."""
+    actor = _active_actor(db, actor_user_id)
+    normalized_cells = _validated_cells(cells)
+    shelf_id, image_id, image_sha256 = _load_planogram_context(db, planogram_id)
+    image = _lock_source_image(
+        db, image_id, shelf_id=shelf_id, expected_sha256=image_sha256
+    ) if image_id is not None else None
+    shelf, store_id = _lock_shelf(db, shelf_id)
+    _enforce_store_scope(actor, store_id)
+    planogram = (
+        db.query(models.ShelfPlanogram)
+        .filter(models.ShelfPlanogram.id == planogram_id)
+        .with_for_update()
+        .populate_existing()
+        .first()
+    )
+    if planogram is None:
+        raise ShelfPlanogramError("Planogram not found")
+    if planogram.status != "DRAFT":
+        raise ShelfPlanogramError("Only a DRAFT planogram can change cells")
+    if image is not None and (
+        image.shelf_id != shelf.id
+        or image.retention_status != "ACTIVE"
+        or image.sha256 != planogram.calibration_image_sha256
+    ):
+        raise ShelfPlanogramError("Calibration image is no longer eligible")
+    _validate_cell_products(db, shelf.id, normalized_cells)
+    db.query(models.ShelfPlanogramCell).filter(
+        models.ShelfPlanogramCell.planogram_id == planogram.id
+    ).delete(synchronize_session=False)
+    for cell in normalized_cells:
+        db.add(models.ShelfPlanogramCell(planogram_id=planogram.id, **cell))
+    db.flush()
+    db.expire(planogram, ["cells"])
     return planogram
 
 

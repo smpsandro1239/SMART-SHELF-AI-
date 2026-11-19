@@ -1,4 +1,4 @@
-"""SQLite migration contracts for versioned shelf planograms (0067)."""
+"""SQLite migration contracts for versioned shelf planograms (0067–0068)."""
 import importlib.util
 from pathlib import Path
 
@@ -19,6 +19,16 @@ def _apply_migration(connection):
     return migration
 
 
+def _apply_expected_facings_migration(connection):
+    migration_path = Path(__file__).parents[1] / "migrations" / "versions" / "0068_shelf_planogram_expected_facings.py"
+    spec = importlib.util.spec_from_file_location("shelf_planogram_expected_facings_0068", migration_path)
+    migration = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(migration)
+    with Operations.context(MigrationContext.configure(connection)):
+        migration.upgrade()
+    return migration
+
+
 def _insert_planogram(connection, *, version, created_by=1, source="MANUAL", image_id=None, image_sha=None):
     connection.exec_driver_sql(
         """
@@ -32,14 +42,14 @@ def _insert_planogram(connection, *, version, created_by=1, source="MANUAL", ima
     return connection.exec_driver_sql("SELECT last_insert_rowid()").scalar_one()
 
 
-def _insert_cell(connection, planogram_id, code, x_min, y_min, x_max, y_max, product_id=10, row=0, column=0):
+def _insert_cell(connection, planogram_id, code, x_min, y_min, x_max, y_max, product_id=10, row=0, column=0, expected_facings=None):
     connection.exec_driver_sql(
         """
         INSERT INTO shelf_planogram_cells
-        (planogram_id,cell_code,row_index,column_index,x_min,y_min,x_max,y_max,expected_product_id,created_at)
-        VALUES (?,?,?,?,?,?,?,?,?,?)
+        (planogram_id,cell_code,row_index,column_index,x_min,y_min,x_max,y_max,expected_product_id,expected_facings,created_at)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?)
         """,
-        (planogram_id, code, row, column, x_min, y_min, x_max, y_max, product_id,
+        (planogram_id, code, row, column, x_min, y_min, x_max, y_max, product_id, expected_facings,
          "2026-11-19T10:00:00+00:00"),
     )
 
@@ -80,6 +90,7 @@ def _engine(tmp_path):
             "sha256 VARCHAR(64) NOT NULL, retention_status VARCHAR(20) NOT NULL)"
         )
         _apply_migration(db)
+        _apply_expected_facings_migration(db)
         db.exec_driver_sql("INSERT INTO users VALUES (1,1),(2,1),(3,0)")
         db.exec_driver_sql("INSERT INTO zones VALUES (1,100)")
         db.exec_driver_sql("INSERT INTO shelves VALUES (1,1)")
@@ -173,4 +184,29 @@ def test_draft_delete_is_allowed_but_active_and_retired_history_is_preserved(tmp
         db.exec_driver_sql("DELETE FROM shelf_planograms WHERE id=?", (draft,))
         assert db.exec_driver_sql("SELECT COUNT(*) FROM shelf_planograms").scalar_one() == 0
         assert db.exec_driver_sql("SELECT COUNT(*) FROM shelf_planogram_cells").scalar_one() == 0
+    engine.dispose()
+
+
+
+def test_expected_facings_sqlite_guard_requires_positive_count_and_expected_sku(tmp_path):
+    engine = _engine(tmp_path)
+    with engine.begin() as db:
+        plan = _insert_planogram(db, version=1)
+        with pytest.raises(IntegrityError, match="expected_facings"):
+            _insert_cell(
+                db, plan, "BAD-COUNT", 0.0, 0.0, 0.5, 1.0,
+                expected_facings=0,
+            )
+        with pytest.raises(IntegrityError, match="expected_facings"):
+            _insert_cell(
+                db, plan, "NO-SKU", 0.5, 0.0, 1.0, 1.0,
+                product_id=None, expected_facings=2, row=0, column=1,
+            )
+        _insert_cell(
+            db, plan, "VALID", 0.0, 0.0, 0.5, 1.0,
+            expected_facings=3,
+        )
+        assert db.exec_driver_sql(
+            "SELECT expected_facings FROM shelf_planogram_cells WHERE cell_code='VALID'"
+        ).scalar_one() == 3
     engine.dispose()

@@ -1172,11 +1172,14 @@ class ShelfPlanogramCellCreate(BaseModel):
     x_max: float = Field(ge=0, le=1, allow_inf_nan=False)
     y_max: float = Field(ge=0, le=1, allow_inf_nan=False)
     expected_product_id: int | None = Field(default=None, gt=0)
+    expected_facings: int | None = Field(default=None, gt=0, le=500)
 
     @model_validator(mode="after")
     def validate_geometry(self):
         if self.x_min >= self.x_max or self.y_min >= self.y_max:
             raise ValueError("Cell bounds must have positive width and height")
+        if self.expected_facings is not None and self.expected_product_id is None:
+            raise ValueError("expected_facings requires expected_product_id")
         return self
 
 
@@ -1184,6 +1187,10 @@ class ShelfPlanogramCreate(BaseModel):
     calibration_source: Literal["MANUAL", "IMAGE"] = "MANUAL"
     calibration_image_id: int | None = Field(default=None, gt=0)
     calibration_image_sha256: str | None = Field(default=None, min_length=64, max_length=64)
+    cells: list[ShelfPlanogramCellCreate] = Field(min_length=1, max_length=500)
+
+
+class ShelfPlanogramCellsReplace(BaseModel):
     cells: list[ShelfPlanogramCellCreate] = Field(min_length=1, max_length=500)
 
 
@@ -1202,6 +1209,7 @@ class ShelfPlanogramCellRead(BaseModel):
     x_max: float
     y_max: float
     expected_product_id: int | None
+    expected_facings: int | None
     created_at: datetime
     model_config = ConfigDict(from_attributes=True)
 

@@ -89,15 +89,15 @@ def _headers(user_id, role):
     return {"Authorization": f"Bearer {token}"}
 
 
-def _payload(product_id):
-    return {
-        "calibration_source": "MANUAL",
-        "cells": [{
-            "cell_code": "A1", "row_index": 0, "column_index": 0,
-            "x_min": 0.0, "y_min": 0.0, "x_max": 0.5, "y_max": 1.0,
-            "expected_product_id": product_id,
-        }],
+def _payload(product_id, expected_facings=None):
+    cell = {
+        "cell_code": "A1", "row_index": 0, "column_index": 0,
+        "x_min": 0.0, "y_min": 0.0, "x_max": 0.5, "y_max": 1.0,
+        "expected_product_id": product_id,
     }
+    if expected_facings is not None:
+        cell["expected_facings"] = expected_facings
+    return {"calibration_source": "MANUAL", "cells": [cell]}
 
 
 def test_supervisor_can_version_activate_and_retire_planograms(planogram_api):
@@ -188,3 +188,41 @@ def test_planogram_api_rejects_overlapping_cells_and_unassigned_sku(planogram_ap
     assert invalid_geometry.status_code == 422
     assert wrong_sku.status_code == 422
 
+
+
+
+def test_draft_planogram_cells_can_be_replaced_and_expected_facings_round_trip(planogram_api):
+    client, ids = planogram_api
+    headers = _headers(ids["supervisor_a"], "SUPERVISOR")
+    created = client.post(
+        f"/api/v1/shelves/{ids['shelf_a']}/planograms",
+        json=_payload(ids["product_a"], expected_facings=2), headers=headers,
+    )
+    assert created.status_code == 201, created.text
+    planogram_id = created.json()["id"]
+    assert created.json()["cells"][0]["expected_facings"] == 2
+
+    replacement = {
+        "cells": [{
+            "cell_code": "B1", "row_index": 0, "column_index": 0,
+            "x_min": 0.5, "y_min": 0.0, "x_max": 1.0, "y_max": 1.0,
+            "expected_product_id": ids["product_a"], "expected_facings": 4,
+        }],
+    }
+    updated = client.put(
+        f"/api/v1/planograms/{planogram_id}/cells",
+        json=replacement, headers=headers,
+    )
+    assert updated.status_code == 200, updated.text
+    assert [(cell["cell_code"], cell["expected_facings"]) for cell in updated.json()["cells"]] == [("B1", 4)]
+
+    activated = client.post(
+        f"/api/v1/planograms/{planogram_id}/activate",
+        json={"reason": "Reviewed facing count"}, headers=headers,
+    )
+    assert activated.status_code == 200, activated.text
+    denied = client.put(
+        f"/api/v1/planograms/{planogram_id}/cells",
+        json=replacement, headers=headers,
+    )
+    assert denied.status_code == 409

@@ -11,6 +11,7 @@ from app.shelf_planograms import (
     activate_planogram,
     create_draft_planogram,
     load_active_planogram_for_shelf,
+    replace_draft_planogram_cells,
     retire_planogram,
 )
 
@@ -114,7 +115,7 @@ def planogram_db():
     engine.dispose()
 
 
-def cell(code="A1", *, row=0, column=0, x1=0.0, y1=0.0, x2=0.5, y2=1.0, product_id=None):
+def cell(code="A1", *, row=0, column=0, x1=0.0, y1=0.0, x2=0.5, y2=1.0, product_id=None, expected_facings=None):
     return {
         "cell_code": code,
         "row_index": row,
@@ -124,6 +125,7 @@ def cell(code="A1", *, row=0, column=0, x1=0.0, y1=0.0, x2=0.5, y2=1.0, product_
         "x_max": x2,
         "y_max": y2,
         "expected_product_id": product_id,
+        "expected_facings": expected_facings,
     }
 
 
@@ -320,3 +322,51 @@ def test_active_planogram_refuses_products_removed_from_shelf_assignment(planogr
 
     with pytest.raises(ShelfPlanogramError, match="active and assigned"):
         load_active_planogram_for_shelf(db, shelf_id=shelf.id, actor_user_id=admin.id)
+
+
+
+def test_expected_facings_requires_expected_sku_and_positive_count(planogram_db):
+    db = planogram_db["db"]
+    shelf = planogram_db["shelf"]
+    admin = planogram_db["admin"]
+    product = planogram_db["product"]
+
+    with pytest.raises(ShelfPlanogramError, match="expected_facings"):
+        create_draft_planogram(
+            db, shelf_id=shelf.id, actor_user_id=admin.id,
+            cells=[cell(expected_facings=2)],
+        )
+    with pytest.raises(ShelfPlanogramError, match="expected_facings"):
+        create_draft_planogram(
+            db, shelf_id=shelf.id, actor_user_id=admin.id,
+            cells=[cell(product_id=product.id, expected_facings=0)],
+        )
+    plan = create_draft_planogram(
+        db, shelf_id=shelf.id, actor_user_id=admin.id,
+        cells=[cell(product_id=product.id, expected_facings=3)],
+    )
+    assert plan.cells[0].expected_facings == 3
+
+
+def test_draft_cells_can_be_replaced_atomically_but_not_after_activation(planogram_db):
+    db = planogram_db["db"]
+    shelf = planogram_db["shelf"]
+    admin = planogram_db["admin"]
+    product = planogram_db["product"]
+
+    plan = create_draft_planogram(
+        db, shelf_id=shelf.id, actor_user_id=admin.id,
+        cells=[cell("A1", product_id=product.id, expected_facings=2)],
+    )
+    replaced = replace_draft_planogram_cells(
+        db, planogram_id=plan.id, actor_user_id=admin.id,
+        cells=[cell("B1", x1=0.5, x2=1.0, product_id=product.id, expected_facings=4)],
+    )
+    assert [(item.cell_code, item.expected_facings) for item in replaced.cells] == [("B1", 4)]
+
+    activate_planogram(db, planogram_id=plan.id, actor_user_id=admin.id, reason="approved")
+    with pytest.raises(ShelfPlanogramError, match="Only a DRAFT"):
+        replace_draft_planogram_cells(
+            db, planogram_id=plan.id, actor_user_id=admin.id,
+            cells=[cell("C1", product_id=product.id, expected_facings=1)],
+        )
