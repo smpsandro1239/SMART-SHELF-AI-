@@ -148,20 +148,53 @@ class ShelfCellObservation:
     overlap_ratio: float
 
 
+def _read_detection_semantics(item: Any) -> tuple[str | None, float | None]:
+    def value(name: str):
+        return item.get(name) if isinstance(item, Mapping) else getattr(item, name, None)
+
+    label = value("label")
+    confidence = value("confidence")
+    if label is not None and (not isinstance(label, str) or not label.strip()):
+        raise ValueError("Detection label must be a non-empty string when provided")
+    if confidence is not None:
+        if (
+            isinstance(confidence, bool)
+            or not isinstance(confidence, (int, float))
+            or not 0 <= float(confidence) <= 1
+        ):
+            raise ValueError("Detection confidence must be between 0 and 1")
+        confidence = float(confidence)
+    return label.strip() if label is not None else None, confidence
+
+
 def compare_detections_to_cells(
     cells: Iterable[ShelfCell],
     detections: Iterable[Any],
     *,
     minimum_cell_overlap: float = 0.25,
+    empty_facing_labels: Iterable[str] = ("empty_facing",),
+    minimum_empty_confidence: float = 0.80,
 ) -> tuple[ShelfCellObservation, ...]:
     """Compare detections with explicit, calibrated cells.
 
-    An undetected cell is called EMPTY only when it is explicitly visible and
-    not marked occluded. This function never estimates stock depth or changes
-    inventory; missing/uncertain geometry must be represented as UNKNOWN.
+    EMPTY requires positive evidence from a configured empty-facing class above
+    the confidence threshold and an explicitly visible, non-occluded cell.
+    Absence of detections is UNKNOWN, never proof of vacancy. Conflicting
+    product and empty-facing detections are surfaced as CONFLICT. This function
+    never estimates stock depth or changes inventory.
     """
     if not 0 < minimum_cell_overlap <= 1:
         raise ValueError("minimum_cell_overlap must be in (0, 1]")
+    if (
+        isinstance(minimum_empty_confidence, bool)
+        or not isinstance(minimum_empty_confidence, (int, float))
+        or not 0 <= minimum_empty_confidence <= 1
+    ):
+        raise ValueError("minimum_empty_confidence must be between 0 and 1")
+    empty_labels = set(empty_facing_labels)
+    if any(not isinstance(label, str) or not label.strip() for label in empty_labels):
+        raise ValueError("empty_facing_labels must contain non-empty strings")
+    empty_labels = {label.strip() for label in empty_labels}
 
     cell_list = tuple(cells)
     if len({cell.cell_id for cell in cell_list}) != len(cell_list):
@@ -176,41 +209,57 @@ def compare_detections_to_cells(
     detection_boxes = []
     for index, detection in enumerate(detections):
         x1, y1, x2, y2, product_id = _read_box(detection)
-        detection_boxes.append((index, x1, y1, x2, y2, product_id))
+        label, confidence = _read_detection_semantics(detection)
+        detection_boxes.append((index, x1, y1, x2, y2, product_id, label, confidence))
 
     observations = []
     for cell in cell_list:
         cell_area = (cell.x_max - cell.x_min) * (cell.y_max - cell.y_min)
-        matches = []
+        product_matches = []
+        empty_matches = []
         strongest_overlap = 0.0
-        for index, x1, y1, x2, y2, product_id in detection_boxes:
+        for index, x1, y1, x2, y2, product_id, label, confidence in detection_boxes:
             intersection_width = max(0.0, min(cell.x_max, x2) - max(cell.x_min, x1))
             intersection_height = max(0.0, min(cell.y_max, y2) - max(cell.y_min, y1))
             overlap = (intersection_width * intersection_height) / cell_area
-            if overlap >= minimum_cell_overlap:
-                matches.append((index, product_id))
-                strongest_overlap = max(strongest_overlap, overlap)
+            if overlap < minimum_cell_overlap:
+                continue
+            strongest_overlap = max(strongest_overlap, overlap)
+            if label in empty_labels:
+                if confidence is not None and confidence >= minimum_empty_confidence:
+                    empty_matches.append((index, confidence))
+            else:
+                product_matches.append((index, product_id))
 
         product_ids = tuple(sorted(
-            {product_id for _, product_id in matches},
+            {product_id for _, product_id in product_matches},
             key=lambda value: (value is None, value if value is not None else 0),
         ))
-        detection_indices = tuple(index for index, _ in matches)
+        detection_indices = tuple(sorted(
+            [index for index, _ in product_matches]
+            + [index for index, _ in empty_matches]
+        ))
 
-        if matches:
-            known_ids = {product_id for _, product_id in matches if product_id is not None}
+        if product_matches and empty_matches:
+            status = "CONFLICT"
+        elif product_matches:
+            known_ids = {product_id for _, product_id in product_matches if product_id is not None}
             if cell.expected_product_id is not None and any(
                 product_id != cell.expected_product_id for product_id in known_ids
             ):
                 status = "MISPLACED"
-            elif any(product_id is None for _, product_id in matches):
+            elif any(product_id is None for _, product_id in product_matches):
                 status = "OCCUPIED_UNIDENTIFIED"
             else:
                 status = "OCCUPIED"
-        elif not cell.is_visible or cell.is_occluded:
-            status = "UNKNOWN"
-        else:
+        elif (
+            empty_matches
+            and cell.is_visible
+            and not cell.is_occluded
+        ):
             status = "EMPTY"
+        else:
+            status = "UNKNOWN"
 
         observations.append(ShelfCellObservation(
             cell_id=cell.cell_id,
