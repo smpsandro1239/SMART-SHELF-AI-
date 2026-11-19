@@ -147,3 +147,40 @@ def test_cell_without_explicit_visibility_calibration_is_unknown():
 def test_detection_product_id_must_be_an_integer():
     with pytest.raises(ValueError, match="positive integer"):
         group_detections_into_rows([box(0.1, 0.1, 0.4, 0.4, 1.5)])
+
+
+
+def test_cell_is_misplaced_when_expected_and_wrong_skus_are_both_detected():
+    result = compare_detections_to_cells(
+        [cell("A1", 0.0, 0.0, 0.5, 1.0, expected_product_id=10)],
+        [
+            box(0.05, 0.1, 0.2, 0.9, 10),
+            box(0.25, 0.1, 0.45, 0.9, 20),
+        ],
+    )
+
+    assert result[0].status == "MISPLACED"
+    assert result[0].observed_product_ids == (10, 20)
+
+
+def test_overlapping_planogram_cells_are_rejected():
+    with pytest.raises(ValueError, match="must not overlap"):
+        compare_detections_to_cells(
+            [
+                cell("A1", 0.0, 0.0, 0.6, 1.0),
+                cell("A2", 0.5, 0.0, 1.0, 1.0),
+            ],
+            [],
+        )
+
+
+def test_adjacent_planogram_cells_are_allowed():
+    result = compare_detections_to_cells(
+        [
+            cell("A1", 0.0, 0.0, 0.5, 1.0),
+            cell("A2", 0.5, 0.0, 1.0, 1.0),
+        ],
+        [],
+    )
+
+    assert [item.status for item in result] == ["EMPTY", "EMPTY"]
