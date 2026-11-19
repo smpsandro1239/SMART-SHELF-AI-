@@ -438,7 +438,8 @@
 - [x] Acrescentar testes SQLite de migração e expandir smoke PostgreSQL para testar SQL directo contra os guards.
 - [x] Confirmar migration PostgreSQL 16, API CI [44419928230](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44419928230), Quality Gates [44419928281](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44419928281) e Docker Compose [44419928382](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44419928382); **1179 passed, 1 skipped, 1 warning**.
 - [x] Implementar identidade individual de workers, credenciais com hash, scopes, expiração, rotação e revogação (migration 0060, validada em API CI [44431378398](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44431378398)).
-- [ ] Integrar a autenticação no middleware HTTP antes de expor endpoints; implementar leitura controlada por chamada e promoção de outputs condicionada ao fencing token actual.
+- [x] Criar a dependência FastAPI para pedidos assinados de workers, com scopes e anti-replay; manter as rotas de jobs fechadas.
+- [ ] Implementar leitura controlada por chamada e promoção de outputs condicionada ao fencing token actual.
 
 
 ## Máquina de estados e identidade imutável dos jobs — 2026-11-18
@@ -449,7 +450,7 @@
 - [x] Acrescentar testes de migration SQLite para transições ilegais, identidade imutável e reactivação terminal.
 - [x] Expandir o smoke PostgreSQL para tentar alterar a identidade de um job activo e reabrir um job concluído.
 - [x] Validar a migration 0058 em PostgreSQL 16, API CI [44421831066](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44421831066), Quality Gates [44421831076](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44421831076) e Docker Compose [44421831148](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44421831148): **1179 passed, 1 skipped, 1 warning**.
-- [ ] Implementar autenticação/identidade de workers antes de expor claims por HTTP.
+- [x] Implementar identidade individual e dependência de autenticação HTTP assinada antes de qualquer futura exposição de claims.
 - [ ] Implementar leitura de artefactos autorizada por chamada e promoção de outputs condicionada ao fencing token actual.
 
 
@@ -461,13 +462,14 @@
 - [ ] Investigar os estados dos checks de deployment separadamente: falhas de quota Vercel não equivalem a falhas dos testes API.
 
 
-## Autenticação de workers de datasets — próxima fronteira P0
+## Autenticação de workers de datasets — estado reconciliado
 
-- [ ] Definir identidade de serviço e credenciais individuais de worker, com emissão segura, expiração, rotação e revogação.
-- [ ] Exigir autenticação e scopes separados para claim, heartbeat, falha, conclusão, leitura de artefactos e promoção de outputs.
-- [ ] Não confiar em `worker_id` fornecido pelo cliente como prova de identidade; vinculá-lo à identidade autenticada.
-- [ ] Acrescentar testes negativos de tokens inválidos/expirados/revogados, scopes insuficientes, replay e isolamento entre workers.
-- [ ] Manter endpoints de jobs não expostos até a autenticação e autorização estarem ligadas aos handlers.
+- [x] Definir identidade de serviço e credenciais individuais com emissão local, expiração, rotação e revogação.
+- [x] Aplicar scopes separados para claim, heartbeat, falha e conclusão; reservar leitura/publicação até existirem os respetivos serviços.
+- [x] Derivar `worker_id` exclusivamente do principal autenticado.
+- [x] Testar credenciais inválidas/expiradas/revogadas, scopes insuficientes, replay e isolamento entre workers.
+- [x] Implementar dependência FastAPI de pedidos assinados com timestamp e nonce único.
+- [x] Manter endpoints de jobs não expostos até leitura de artefactos e publicação fenced estarem implementadas.
 
 
 ## Autenticação individual de workers de datasets — 19-11-2026
