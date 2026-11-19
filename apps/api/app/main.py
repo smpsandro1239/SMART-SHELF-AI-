@@ -173,9 +173,9 @@ async def require_api_authentication(request: Request, call_next):
             })
         )
         supervisor_or_admin = (
+            path.startswith("/api/v1/observation-alerts")
             or (path.startswith("/api/v1/shelves/") and "/planograms" in path)
             or path.startswith("/api/v1/planograms/")
-            path.startswith("/api/v1/observation-alerts")
             or (method == "POST" and path.endswith("/observation-alerts/evaluate"))
             or (method == "POST" and path == "/api/v1/tasks/from-operational-decision")
             or (method == "POST" and (path in {"/api/v1/sales/daily", "/api/v1/sales/import-csv", "/api/v1/warehouse/locations", "/api/v1/warehouse/placements", "/api/v1/warehouse/pallets", "/api/v1/warehouse/pallet-rotation/policies", "/api/v1/warehouse/pallet-rotation/simulate", "/api/v1/sales/hourly", "/api/v1/sales/traffic/hourly", "/api/v1/sales/hourly/batch", "/api/v1/sales/traffic/hourly/batch", "/api/v1/sales/hourly/import-csv", "/api/v1/sales/traffic/hourly/import-csv", "/api/v1/inventory/snapshots"} or (path.startswith("/api/v1/warehouse/pallets/") and path.endswith("/events"))))
