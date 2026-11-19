@@ -9,6 +9,7 @@ from uuid import uuid4
 import hashlib
 
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 
 from app import models
 from app.config import settings
@@ -16,6 +17,17 @@ from app.database import SessionLocal
 from app.dataset_job_artifact_reads import DatasetJobSourceIneligible, read_dataset_job_source_bytes
 from app.dataset_job_leases import claim_next_dataset_job, enqueue_dataset_job
 from app.dataset_worker_credentials import authenticate_dataset_worker, issue_dataset_worker_credential
+
+
+def _assert_integrity_rejected(db, statement, params, label):
+    try:
+        db.execute(text(statement), params)
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        return
+    db.rollback()
+    raise AssertionError(f"{label} was accepted")
 
 
 def main():
@@ -83,22 +95,18 @@ def main():
             ).one()
             audit_id = audit.id
             assert audit.bytes_read == len(payload) and audit.source_image_sha256 == digest
-            try:
-                db.execute(text(
-                    "UPDATE dataset_execution_job_artifact_reads SET bytes_read = 1 WHERE id = :id"
-                ), {"id": audit_id})
-                db.commit()
-                raise AssertionError("artifact read audit UPDATE was accepted")
-            except Exception:
-                db.rollback()
-            try:
-                db.execute(text(
-                    "DELETE FROM dataset_execution_job_artifact_reads WHERE id = :id"
-                ), {"id": audit_id})
-                db.commit()
-                raise AssertionError("artifact read audit DELETE was accepted")
-            except Exception:
-                db.rollback()
+            _assert_integrity_rejected(
+                db,
+                "UPDATE dataset_execution_job_artifact_reads SET bytes_read = 1 WHERE id = :id",
+                {"id": audit_id},
+                "artifact read audit UPDATE",
+            )
+            _assert_integrity_rejected(
+                db,
+                "DELETE FROM dataset_execution_job_artifact_reads WHERE id = :id",
+                {"id": audit_id},
+                "artifact read audit DELETE",
+            )
 
         blocker = SessionLocal()
         blocker.query(models.ShelfImage).filter_by(id=image_id).with_for_update().one()
