@@ -93,12 +93,14 @@ def test_unseen_or_occluded_cell_is_unknown_not_empty(visible, occluded):
 
 def test_confident_empty_facing_detection_confirms_vacancy():
     result = compare_detections_to_cells(
-        [cell("A1", 0.0, 0.0, 0.5, 1.0, expected_product_id=10)],
+        [cell("A1", 0.0, 0.0, 0.5, 1.0, expected_product_id=10, expected_facings=2)],
         [box(0.1, 0.1, 0.4, 0.9, label="empty_facing", confidence=0.95)],
     )
 
     assert result[0].status == "EMPTY"
     assert result[0].observed_product_ids == ()
+    assert result[0].observed_facings == 0
+    assert result[0].expected_facings == 2
     assert result[0].detection_indices == (0,)
     assert result[0].overlap_ratio == pytest.approx(0.48)
 
