@@ -1047,3 +1047,16 @@ Foi criado `apps/api/scripts/postgres_planogram_lifecycle_smoke.py` e integrado 
 - Docker Compose [44561359723](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44561359723): stack aprovada.
 
 O teste de concorrência confirma a serialização edição/ativação no serviço e no PostgreSQL. A integração worker/UI continua por fazer.
+
+
+## 2026-11-19 — Interface web de comparação de planogramas
+
+- SHA inicial desta ronda: `5f08ef753f3ba0edba4708c1b72ecaf0d3b36c72`.
+- Criado `apps/web/src/PlanogramComparison.tsx`, componente isolado que recebe as prateleiras/capturas carregadas pelo dashboard e usa o cliente HTTP autenticado existente.
+- Integrado no dashboard para ADMIN/SUPERVISOR, com seleção de prateleira e capturas em estado COMPLETED.
+- A interface mostra versão ativa, SHA-256 da imagem, modelo, origem de calibração, estado por célula, facings, IDs de deteções e sobreposição geométrica.
+- A semântica do backend é preservada: sem calibração de visibilidade a interface apresenta UNKNOWN e informa que não se pode inferir vazio/rutura. Não há escrita nem alteração de inventário.
+- Adicionados estilos responsivos e estados de erro/vazio/loading.
+- Documentação actualizada no README, TODO e ROADMAP.
+- Não foram executados testes locais nem CI nesta ronda; a validação de build/CI e a revisão manual permanecem pendentes.
+- Próxima tarefa: obter execução dos Quality Gates/Web CI; corrigir quaisquer erros TypeScript e depois acrescentar testes de componente para filtros de loja/prateleira e erros HTTP.
