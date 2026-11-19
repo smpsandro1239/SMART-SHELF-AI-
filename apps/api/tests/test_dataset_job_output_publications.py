@@ -72,14 +72,14 @@ def publication_setup(tmp_path, monkeypatch):
     )
     claim = claim_next_dataset_job(db, worker_id=worker_id, lease_seconds=300)
     assert claim is not None and claim.id == job.id
-    stage_dir = root / "staging" / str(job.id)
+    stage_dir = root / "staging" / str(job.id) / str(claim.fencing_token)
     stage_dir.mkdir(parents=True)
     stage_path = stage_dir / "model.bin"
     stage_path.write_bytes(payload)
     digest = hashlib.sha256(payload).hexdigest()
     complete_dataset_job(
         db, job_id=job.id, worker_id=worker_id, fencing_token=claim.fencing_token,
-        output_sha256=digest, staged_output_reference=f"staging/{job.id}/model.bin",
+        output_sha256=digest, staged_output_reference=f"staging/{job.id}/{claim.fencing_token}/model.bin",
     )
     principal = authenticate_dataset_worker(db, bearer_token=token)
     state = {
