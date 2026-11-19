@@ -698,3 +698,13 @@ Commit validado: `1e3499c8c80ef75494a29d06807469898471e4e1`.
 - Quality Gates [44421831076](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44421831076): compilação Python, testes API e build Web passaram.
 - Docker Compose [44421831148](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44421831148): stack de demonstração passou.
 - A validação acima cobre o commit `8d63a1748ae2fa9608e110ef8f8220dc7be30c7e`. A migration 0059, acrescentada para impedir INSERT em estado terminal, permanece pendente de CI.
+
+
+## 2026-11-19 — Cobertura negativa do estado inicial de jobs assíncronos
+
+- HEAD de trabalho: commits `0d7592b12a98ee11f16730591c30368637b30c32` (teste SQLite) e `f07d9d2fbc194dacd05e38a100c6937cde9da9f2` (smoke PostgreSQL).
+- A migration 0059 já impedia INSERT de jobs em estado diferente de `QUEUED` e metadados iniciais incompatíveis. A cobertura anterior testava sobretudo a inserção directamente em estado terminal.
+- O teste SQLite e o smoke PostgreSQL foram expandidos para tentar, individualmente, inserir jobs `QUEUED` com proprietário/expiração de lease, fencing token, contador de tentativas, digest/output, referência staging, falha ou timestamp terminal forjados.
+- A alteração acrescenta cobertura de regressão; não altera o contrato de produção nem relaxa as guards.
+- Validação pendente: não foram executados testes localmente nesta ronda e ainda não foi confirmada uma execução CI verde para estes commits.
+- Próximo passo: validar a migration 0059 e os oito casos negativos em PostgreSQL 16 e SQLite; depois avançar para autenticação de workers antes de expor operações de claim/heartbeat.
