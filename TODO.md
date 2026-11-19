@@ -566,3 +566,10 @@
 
 - [x] Acrescentar regressão que corrompe o destino publicado mantendo um staging antigo válido e confirma que o reconciliador não remove o staging quando o destino diverge da auditoria append-only.
 - [ ] Validar a nova regressão, a suite API, os Quality Gates e os smokes PostgreSQL 16 no CI.
+
+
+## Reconciliador de outputs — protecção contra symlinks (2026-11-19)
+
+- [x] Acrescentar regressão de limpeza em modo `--apply` para temporário antigo com nome interno mas implementado como symlink.
+- [x] Confirmar que o symlink não é candidato nem removido e que o destino externo permanece intacto.
+- [ ] Aguardar API CI, Quality Gates e Docker Compose no commit desta regressão.

@@ -1543,3 +1543,8 @@ Depois de rever o relatório, a limpeza efectiva exige `--apply`. O período pre
 Foi acrescentado um teste de segurança para o cenário em que o ficheiro publicado é alterado fora do fluxo normal, mas o staging antigo continua íntegro. O reconciliador em modo `--apply` tem de preservar o staging e reportar a divergência face à auditoria append-only; não pode tratar a existência da linha de publicação como prova suficiente de integridade do destino.
 
 A validação desta regressão fica dependente do CI do commit que a introduz. Não foram executados testes localmente nesta ronda.
+
+
+### Protecção adicional do reconciliador contra symlinks — 2026-11-19
+
+Foi acrescentada uma regressão que cria um temporário antigo com nome interno válido, mas que é um link simbólico para um ficheiro externo à área de promoção. Mesmo com `--apply`, o link não pode ser tratado como temporário regular, removido ou seguido; o destino externo tem de permanecer intacto. A validação CI desta alteração fica pendente até à conclusão dos workflows.

@@ -353,3 +353,40 @@ def test_output_reconciler_preserves_staging_when_published_destination_is_corru
         item["reason"] == "published bytes do not match the immutable audit row"
         for item in report["skipped"]
     )
+
+
+
+def test_output_reconciler_never_follows_or_removes_temporary_symlinks(
+    publication_setup,
+):
+    import os
+    from datetime import timedelta
+
+    from app.dataset_job_output_reconciliation import reconcile_dataset_job_output_files
+
+    state = publication_setup
+    temporary_dir = state["root"] / "published" / str(state["job"].id)
+    temporary_dir.mkdir(parents=True, exist_ok=True)
+
+    external_target = state["root"] / "outside-target.bin"
+    external_target.write_bytes(b"must remain untouched")
+
+    link = temporary_dir / (".promotion-" + "c" * 32 + ".tmp")
+    link.symlink_to(external_target)
+
+    old_timestamp = (models.utc_now() - timedelta(days=8)).timestamp()
+    os.utime(link, (old_timestamp, old_timestamp), follow_symlinks=False)
+
+    report = reconcile_dataset_job_output_files(
+        state["db"],
+        apply=True,
+        grace_seconds=7 * 86400,
+    )
+
+    assert report["removed_count"] == 0
+    assert link.is_symlink()
+    assert external_target.read_bytes() == b"must remain untouched"
+    assert not any(
+        item["reference"] == f"published/{state['job'].id}/{link.name}"
+        for item in report["temporary_candidates"]
+    )

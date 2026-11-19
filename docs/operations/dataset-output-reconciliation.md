@@ -40,3 +40,8 @@ O período de segurança predefinido é sete dias. O CLI aceita entre uma hora e
 A limpeza é best-effort e tem de ser executada periodicamente por um operador ou por uma futura tarefa operacional controlada. O modo `--apply` deve ser usado apenas depois de inspeccionar a simulação e confirmar a configuração de armazenamento. O reconciliador actual não limpa staging de jobs falhados/revogados sem referência de publicação, nem prova que um processo worker antigo deixou de escrever; essas categorias exigem um contrato de isolamento/permissões filesystem entre API e worker.
 
 A implementação actual suporta apenas o filesystem local configurado por `DATASET_OUTPUT_STORAGE_PATH`. Não equivale a um adapter de object storage nem a uma política de retenção/legal hold para artefactos derivados.
+
+
+## Regressão de symlinks
+
+A suite API inclui também um caso em que um nome de temporário válido aponta por symlink para um ficheiro externo. O reconciliador deve ignorar a entrada e preservar tanto o link como o destino. Esta cobertura complementa a regra de só remover ficheiros regulares e nunca seguir symlinks.

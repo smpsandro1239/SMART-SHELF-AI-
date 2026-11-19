@@ -801,3 +801,8 @@ Commit validado: `1e3499c8c80ef75494a29d06807469898471e4e1`.
 ## 2026-11-19 — Regressão de destino publicado adulterado
 
 Foi acrescentado um teste ao reconciliador de outputs para simular a adulteração do destino content-addressed depois de uma publicação auditada. Mesmo com o staging antigo e válido, o modo `apply` tem de preservar esse staging quando o SHA-256/tamanho do destino não correspondem à linha append-only. A regressão também verifica que o relatório identifica explicitamente a divergência. Validação CI pendente.
+
+
+## 2026-11-19 — Regressão de symlinks no reconciliador
+
+Adicionado teste de segurança para temporários de promoção cujo nome corresponde ao padrão interno mas cujo inode é um symlink. O teste executa o reconciliador em modo `apply` e verifica que o link é preservado, não aparece como candidato e o destino externo não é alterado. A validação CI deste commit está pendente.
