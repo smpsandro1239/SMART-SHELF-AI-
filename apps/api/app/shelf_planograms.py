@@ -42,6 +42,7 @@ def _lock_source_image(
     *,
     shelf_id: int | None = None,
     expected_sha256: str | None = None,
+    require_active: bool = True,
 ) -> models.ShelfImage | None:
     if image_id is None:
         return None
@@ -54,7 +55,7 @@ def _lock_source_image(
     )
     if image is None:
         raise ShelfPlanogramError("Calibration image not found")
-    if image.retention_status != "ACTIVE":
+    if require_active and image.retention_status != "ACTIVE":
         raise ShelfPlanogramError("Calibration image is not ACTIVE")
     if shelf_id is not None and image.shelf_id != shelf_id:
         raise ShelfPlanogramError("Calibration image must belong to the same shelf")
@@ -359,7 +360,7 @@ def retire_planogram(
     actor = _active_actor(db, actor_user_id)
     shelf_id, image_id, image_sha256 = _load_planogram_context(db, planogram_id)
     image = _lock_source_image(
-        db, image_id, shelf_id=shelf_id, expected_sha256=image_sha256
+        db, image_id, shelf_id=shelf_id, expected_sha256=image_sha256, require_active=False
     ) if image_id is not None else None
     shelf, store_id = _lock_shelf(db, shelf_id)
     _enforce_store_scope(actor, store_id)
