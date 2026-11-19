@@ -11,12 +11,14 @@ O provider está implementado como adaptador experimental CPU-first. A sua exist
 - Um input float32 com forma `[1, 3, H, W]`.
 - RGB, valores entre 0 e 1.
 - O tamanho quadrado é configurado por `VISION_INPUT_SIZE` (por defeito 640).
-- Um output com forma `[N, 6]` ou `[1, N, 6]`.
+- Um output float32 com forma `[N, 6]` ou `[1, N, 6]`.
+- Uma única entrada e uma única saída; o input tem de ser NCHW RGB com três canais e dimensões compatíveis com `VISION_INPUT_SIZE`.
+- `class_id` tem de ser inteiro não negativo; confiança e coordenadas têm de estar em `[0, 1]`.
 - Cada linha: `x1, y1, x2, y2, confidence, class_id`.
 - Coordenadas normalizadas entre 0 e 1 relativamente à imagem quadrada de entrada.
 - O modelo exportado tem de incluir NMS (Non-Maximum Suppression). O provider não interpreta raw YOLO heads nem executa NMS adicional.
 
-O provider desfaz o letterboxing, limita as caixas às dimensões originais e descarta caixas degeneradas, scores inválidos e deteções abaixo do limiar.
+O provider valida o contrato de metadados antes de inferir, desfaz o letterboxing, limita as caixas às dimensões originais e descarta caixas degeneradas e deteções abaixo do limiar. Scores, coordenadas e IDs não finitos/malformados são rejeitados.
 
 ### Extrator de embeddings (opcional)
 
@@ -47,7 +49,7 @@ VISION_CONFIDENCE_THRESHOLD=0.25
 VISION_MAX_DETECTIONS=300
 ```
 
-Para executar apenas deteção, deixar `VISION_EMBEDDING_MODEL_PATH` vazio. O mapa JSON tem de corresponder exactamente à ordem/IDs de classe exportados pelo modelo; alterar o mapa exige actualizar `VISION_MODEL_VERSION` e repetir a avaliação. Sem mapa de classes, o provider ONNX não arranca. Não ativar o modo `real` até os pesos e a sua licença estarem aprovados.
+Para executar apenas deteção, deixar `VISION_EMBEDDING_MODEL_PATH` vazio. O mapa JSON tem de corresponder exactamente à ordem/IDs de classe exportados pelo modelo; alterar o mapa exige actualizar `VISION_MODEL_VERSION` e repetir a avaliação. Sem mapa de classes, o provider ONNX não arranca. O `class_id` devolvido pelo modelo é preservado até à resolução da etiqueta; um ID ausente no mapa interrompe a análise em vez de ser convertido em `product`. Não ativar o modo `real` até os pesos e a sua licença estarem aprovados.
 
 O Compose monta a pasta de modelos em modo só de leitura. A API continua sem executar inferência: o processamento é feito pelo worker separado.
 
@@ -91,7 +93,7 @@ O provider utiliza ONNX Runtime CPU, NumPy e Pillow. O runtime permite carregar 
 
 - O provider espera output de deteção pós-NMS com seis colunas; não é um conversor universal de modelos YOLO.
 - O mapa de classes converte `class_id` em etiquetas semânticas, mas ainda não identifica SKU; o matching SKU continua dependente de embeddings/OCR e exemplares aprovados.
-- O provider não publica automaticamente o digest do modelo nem o mapa de classes na auditoria persistida; a versão configurada tem de ser gerida pelo operador.
+- O digest SHA-256 dos ficheiros de modelo, o fingerprint do mapa de classes e a versão explícita de pré/pós-processamento ainda não são persistidos na auditoria; esta é a próxima fronteira de proveniência.
 - O extrator é opcional e requer exemplares aprovados na mesma versão de embedding.
 - O provider não calcula quantidade física na prateleira, planograma, stock contabilístico ou quantidade a repor.
 - Não foram incluídos pesos ONNX no repositório nem executado benchmark de um modelo real.
