@@ -44,6 +44,29 @@ def test_dataset_job_fencing_guards_and_event_sequence(tmp_path):
                 "INSERT INTO dataset_execution_jobs (id,idempotency_key,request_sha256,release_fingerprint,approval_record_sha256,approval_report_sha256,mode,status,fencing_token,attempt_count,output_sha256,staged_output_reference,finished_at) VALUES "
                 "(2,'forged','" + "b" * 64 + "','" + "c" * 64 + "','" + "d" * 64 + "','" + "e" * 64 + "','training','SUCCEEDED',1,1,'" + "f" * 64 + "','staging/forged',CURRENT_TIMESTAMP)"
             )
+
+        invalid_initial_states = [
+            ("lease_owner", "'forged-worker'"),
+            ("lease_expires_at", "CURRENT_TIMESTAMP"),
+            ("fencing_token", "1"),
+            ("attempt_count", "1"),
+            ("output_sha256", "'" + "f" * 64 + "'"),
+            ("staged_output_reference", "'staging/forged/output'"),
+            ("failure_code", "'FORGED_FAILURE'"),
+            ("finished_at", "CURRENT_TIMESTAMP"),
+        ]
+        for index, (column, value) in enumerate(invalid_initial_states, start=10):
+            with pytest.raises(IntegrityError, match="initial QUEUED state"):
+                connection.exec_driver_sql(
+                    "INSERT INTO dataset_execution_jobs "
+                    "(id,idempotency_key,request_sha256,release_fingerprint,"
+                    "approval_record_sha256,approval_report_sha256,mode,status,"
+                    "fencing_token,attempt_count," + column + ") VALUES "
+                    f"({index},'forged-{index}','" + "b" * 64 + "','"
+                    + "c" * 64 + "','" + "d" * 64 + "','" + "e" * 64
+                    + "','training','QUEUED',0,0," + value + ")"
+                )
+
         connection.exec_driver_sql(
             "INSERT INTO dataset_execution_jobs (id,idempotency_key,request_sha256,release_fingerprint,approval_record_sha256,approval_report_sha256,mode,status,fencing_token,attempt_count) VALUES "
             "(1,'key','" + "b" * 64 + "','" + "c" * 64 + "','" + "d" * 64 + "','" + "e" * 64 + "','training','QUEUED',0,0)"
