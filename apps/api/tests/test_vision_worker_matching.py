@@ -744,3 +744,32 @@ def test_load_provider_rejects_mock_mode_in_production(monkeypatch):
     monkeypatch.setattr(worker.settings, "vision_provider_factory", "app.demo.vision:create_provider")
     with pytest.raises(ValueError, match="forbidden in production"):
         worker.load_provider()
+
+
+
+def test_worker_never_matches_non_product_semantic_classes(db, monkeypatch):
+    import app.vision_worker as worker
+
+    add_approved_exemplar(
+        db, db.info["product_id"], db.info["reviewer_id"], [1.0, 0.0, 0.0], "e"
+    )
+    monkeypatch.setattr(worker.settings, "vision_sku_match_labels", "product")
+    detection = DetectionResult(
+        label="empty_facing",
+        confidence=0.99,
+        x_min=0.1,
+        y_min=0.1,
+        x_max=0.8,
+        y_max=0.8,
+        embedding=[1.0, 0.0, 0.0],
+        embedding_model_version="embed-v1",
+    )
+
+    result = worker.resolve_sku_match(db, detection)
+
+    assert result == {
+        "product_id": None,
+        "status": "UNKNOWN",
+        "similarity": None,
+        "margin": None,
+    }
