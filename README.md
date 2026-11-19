@@ -1577,3 +1577,10 @@ Os eventos suportados são `RESTRICTION_APPLIED`, `RESTRICTION_RELEASED`, `LEGAL
 
 
 **Validação CI da migration 0065 (19-11-2026):** commit `b2247031a7d651a4efdc423f83bf7947723e27ff`. API CI [44519805058](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44519805058) passou com migration PostgreSQL 16, smoke concorrente de governação e **1244 testes aprovados, 1 ignorado e 1 aviso**. Quality Gates [44519805055](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44519805055) passou com compilação Python, suite API e build Web; Docker Compose [44519805067](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44519805067) também passou. O aviso é a depreciação `anyio.abc.BlockingPortal` emitida pelo `starlette.testclient`, sem falhas associadas.
+
+
+## Consumo seguro de outputs publicados — 2026-11-19
+
+O serviço interno `app.dataset_job_output_consumption.consume_dataset_job_output_bytes` é agora a fronteira única de leitura dos outputs publicados de jobs. Bloqueia a publicação durante a leitura, exige callback de autorização que devolva exactamente `True`, verifica a projecção append-only de restrição/legal hold, revalida todas as imagens de origem e só devolve bytes integralmente materializados depois de validar caminho canónico, ficheiro regular sem symlink, tamanho e SHA-256. A transacção e os locks permanecem sob controlo do caller.
+
+**Limites:** não foram criadas rotas HTTP, downloads públicos, streaming, exports, broker ou worker remoto. Os consumidores futuros têm de chamar este serviço dentro da transacção e fornecer uma política explícita de autorização. Cópias, caches, backups e derivados externos continuam fora da cobertura; não existe purga física.

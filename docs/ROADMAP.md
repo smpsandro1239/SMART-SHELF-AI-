@@ -563,3 +563,12 @@ Ver [decisão de governação de retenção dos outputs](architecture/dataset-ou
 - Quality Gates [44519805055](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44519805055): compilação Python, suite API e build Web aprovados.
 - Docker Compose [44519805067](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44519805067): aprovado.
 - O aviso Starlette/AnyIO é uma depreciação externa, sem falhas associadas.
+
+
+### Consumo governado de outputs publicados — 2026-11-19
+
+- [x] Centralizar a leitura integral de outputs publicados num serviço fail-closed.
+- [x] Consultar restrição/legal hold append-only e herdar elegibilidade de todas as fontes do job.
+- [x] Verificar identidade content-addressed, tipo regular, ausência de symlinks, tamanho e SHA-256.
+- [ ] Ligar cada endpoint/export/worker/cache/backup futuro a esta fronteira; manter interfaces externas desactivadas até existir autorização definida.
+- [ ] Definir propagação para derivados e armazenamento externo, matriz de permissões e política de retenção.

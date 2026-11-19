@@ -600,3 +600,112 @@ def test_output_governance_requires_explicit_authorization_and_valid_evidence(pu
             authorize=lambda _actor, _publication, _action: True,
         )
     assert db.query(models.DatasetExecutionJobOutputGovernanceEvent).count() == 0
+
+
+def test_published_output_consumer_returns_verified_bytes(publication_setup):
+    from app.dataset_job_output_consumption import consume_dataset_job_output_bytes
+
+    state = publication_setup
+    publication = promote_dataset_job_output(
+        state["db"], principal=state["principal"], job_id=state["job"].id,
+        fencing_token=state["claim"].fencing_token,
+    )
+    payload = consume_dataset_job_output_bytes(
+        state["db"], publication_id=publication.id,
+        authorize=lambda _publication, _job: True,
+    )
+    assert payload == state["payload"]
+
+
+def test_published_output_consumer_fails_closed_without_explicit_authorization(publication_setup):
+    from app.dataset_job_output_consumption import (
+        DatasetJobOutputAccessDenied, consume_dataset_job_output_bytes,
+    )
+
+    state = publication_setup
+    publication = promote_dataset_job_output(
+        state["db"], principal=state["principal"], job_id=state["job"].id,
+        fencing_token=state["claim"].fencing_token,
+    )
+    with pytest.raises(DatasetJobOutputAccessDenied):
+        consume_dataset_job_output_bytes(
+            state["db"], publication_id=publication.id, authorize=lambda _p, _j: None,
+        )
+
+
+@pytest.mark.parametrize("event_type", ["RESTRICTION_APPLIED", "LEGAL_HOLD_APPLIED"])
+def test_published_output_consumer_blocks_governance_events(publication_setup, event_type):
+    from app.dataset_job_output_consumption import (
+        DatasetJobOutputAccessDenied, consume_dataset_job_output_bytes,
+    )
+    from app.dataset_output_governance import append_output_governance_event
+
+    state = publication_setup
+    publication = promote_dataset_job_output(
+        state["db"], principal=state["principal"], job_id=state["job"].id,
+        fencing_token=state["claim"].fencing_token,
+    )
+    actor = models.User(
+        email=f"governance-{event_type.lower()}@example.test",
+        full_name="Governance Test Actor", password_hash="test-only-hash",
+        role="ADMIN", is_active=True,
+    )
+    state["db"].add(actor)
+    state["db"].flush()
+    append_output_governance_event(
+        state["db"], publication_id=publication.id, event_type=event_type,
+        actor_user_id=actor.id, reason="Automated regression test",
+        authorize=lambda _actor, _publication, _event: True,
+    )
+    state["db"].commit()
+    with pytest.raises(DatasetJobOutputAccessDenied):
+        consume_dataset_job_output_bytes(
+            state["db"], publication_id=publication.id,
+            authorize=lambda _publication, _job: True,
+        )
+
+
+@pytest.mark.parametrize(("retention_status", "legal_hold"), [("RESTRICTED", False), ("ACTIVE", True)])
+def test_published_output_consumer_inherits_source_restrictions(
+    publication_setup, retention_status, legal_hold,
+):
+    from app.dataset_job_output_consumption import (
+        DatasetJobOutputAccessDenied, consume_dataset_job_output_bytes,
+    )
+
+    state = publication_setup
+    publication = promote_dataset_job_output(
+        state["db"], principal=state["principal"], job_id=state["job"].id,
+        fencing_token=state["claim"].fencing_token,
+    )
+    source = state["db"].query(models.DatasetExecutionJobSource).filter_by(
+        job_id=state["job"].id
+    ).one()
+    image = state["db"].query(models.ShelfImage).filter_by(id=source.shelf_image_id).one()
+    image.retention_status = retention_status
+    image.legal_hold = legal_hold
+    state["db"].commit()
+    with pytest.raises(DatasetJobOutputAccessDenied):
+        consume_dataset_job_output_bytes(
+            state["db"], publication_id=publication.id,
+            authorize=lambda _publication, _job: True,
+        )
+
+
+def test_published_output_consumer_rejects_tampered_bytes(publication_setup):
+    from app.dataset_job_output_consumption import (
+        DatasetJobOutputReadIntegrityError, consume_dataset_job_output_bytes,
+    )
+
+    state = publication_setup
+    publication = promote_dataset_job_output(
+        state["db"], principal=state["principal"], job_id=state["job"].id,
+        fencing_token=state["claim"].fencing_token,
+    )
+    path = state["root"] / publication.published_output_reference
+    path.write_bytes(b"tampered output bytes")
+    with pytest.raises(DatasetJobOutputReadIntegrityError):
+        consume_dataset_job_output_bytes(
+            state["db"], publication_id=publication.id,
+            authorize=lambda _publication, _job: True,
+        )

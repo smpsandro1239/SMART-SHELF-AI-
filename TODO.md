@@ -620,3 +620,15 @@ Documento: `docs/architecture/dataset-output-artifact-governance.md`.
 - [ ] Aprovar matriz de permissões por perfil/loja, separação de funções e eventual aprovação independente para libertação de legal hold.
 - [ ] Integrar a projecção de governação em cada leitura/exportação efectiva de outputs antes de criar endpoints ou workers remotos.
 - [ ] Definir política de retenção, inventário externo e procedimento de recuperação; manter disposição física e purga desactivadas.
+
+
+## Leitura fail-closed de outputs publicados — 2026-11-19
+
+- [x] Criar fronteira interna de consumo integral de bytes para publicações canónicas.
+- [x] Bloquear leituras quando a projecção append-only indica restrição ou legal hold activo.
+- [x] Revalidar todas as fontes imutáveis (loja, SHA-256, estado ACTIVE e ausência de legal hold) sob locks ordenados.
+- [x] Exigir callback de autorização explícito e verificar referência canónica, ficheiro regular sem symlink, tamanho e SHA-256.
+- [x] Acrescentar regressões para leitura autorizada, ausência de autorização, restrição, legal hold, herança das fontes e adulteração dos bytes.
+- [ ] Integrar todos os consumidores reais futuros (API, exports, workers, caches e backups) exclusivamente através desta fronteira; nenhum endpoint/worker foi activado.
+- [ ] Definir política de autorização por perfil/loja e aprovação independente para libertar legal hold.
+- [ ] Definir inventário externo, propagação a derivados/cópias e política de retenção; manter purga física desactivada.

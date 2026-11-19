@@ -870,3 +870,14 @@ Commit validado: `b2247031a7d651a4efdc423f83bf7947723e27ff`.
 - A primeira execução revelou um erro de teste na ordem dos eventos de legal hold e uma dependência de ordem do smoke de bootstrap. Ambos foram corrigidos; a execução final passou.
 - O aviso restante é a depreciação `anyio.abc.BlockingPortal` no `starlette.testclient`; não está relacionado com esta alteração.
 - Não foram executados testes localmente; a validação indicada é a dos workflows GitHub Actions.
+
+
+## 2026-11-19 — Fronteira de consumo governado dos outputs publicados
+
+- Criado `app.dataset_job_output_consumption` para leitura integral e verificada de outputs publicados.
+- A operação bloqueia primeiro a publicação e o job, exige autorização explícita, consulta a projecção de eventos append-only e revalida a linhagem completa das fontes sob locks estáveis.
+- O caminho tem de corresponder à referência content-addressed canónica. A leitura usa descritores de directório, `O_NOFOLLOW`, valida ficheiro regular, tamanho, estabilidade do inode/metadados e SHA-256.
+- A função devolve bytes apenas depois de a leitura completa terminar; não suporta streams ou iteradores diferidos. O caller controla a transacção e deve mantê-la aberta até terminar o tratamento dos bytes.
+- Testes acrescentados para caminho autorizado, autorização ausente, restrição, legal hold, restrições herdadas das fontes e adulteração.
+- Não foram criados endpoints, downloads públicos, exports ou workers. Cópias externas, caches e backups ainda não são propagados.
+- Validação: a executar por GitHub Actions após o commit; não foram executados testes locais nesta sessão.
