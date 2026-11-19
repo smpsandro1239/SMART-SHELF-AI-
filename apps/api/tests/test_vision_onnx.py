@@ -287,3 +287,23 @@ def test_embedding_version_is_bound_to_embedding_weights(tmp_path, monkeypatch):
     assert first.model_version == second.model_version
     assert first.embedding_model_version != second.embedding_model_version
     assert first.embedding_model_version.startswith("embed-v1@")
+
+
+
+def test_provider_rejects_detector_replaced_during_session_load(tmp_path, monkeypatch):
+    import sys
+
+    detector = tmp_path / "detector.onnx"
+    detector.write_bytes(b"original")
+    calls = 0
+
+    def load_session(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        detector.write_bytes(b"replaced-during-load")
+        return fake_session()
+
+    monkeypatch.setitem(sys.modules, "onnxruntime", SimpleNamespace(InferenceSession=load_session))
+
+    with pytest.raises(ONNXConfigurationError, match="changed while loading"):
+        ONNXShelfVisionProvider(detector, class_labels={0: "product"})
