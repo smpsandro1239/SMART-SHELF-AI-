@@ -1708,3 +1708,13 @@ No código `4f3c9a9083b5ab2187a918927b48770ce2813cbf`:
 
 A validação é automatizada por CI. Não foi realizada validação manual com imagens reais nem com dataset anotado.
 
+
+
+## Comparação visual com planogramas — interface web (2026-11-19)
+
+- [x] Disponibilizar no dashboard um espaço de comparação para ADMIN/SUPERVISOR, com seleção de prateleira e captura cuja análise esteja concluída.
+- [x] Apresentar versão ativa, origem de calibração, SHA-256 da captura, versão do modelo e estado/contagens por célula.
+- [x] Manter a operação estritamente consultiva: a interface chama o endpoint read-only existente e não cria tarefas, observações ou movimentos de inventário.
+- [x] Explicitar na interface que ausência de deteções sem calibração de visibilidade permanece UNKNOWN; não é apresentada como rutura.
+- [ ] Validar o fluxo manualmente no browser com ADMIN, SUPERVISOR e EMPLOYEE e confirmar comportamento em dispositivos móveis.
+- [ ] Persistir resultados imutáveis de comparação e integrar o worker apenas depois de definir a política de retenção/proveniência dos resultados.
