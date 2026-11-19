@@ -155,15 +155,21 @@ def main():
             )
 
         # Governance is a separate event stream; it never mutates publication identity.
-        actor = models.User(
-            email=f"output-governance-{suffix}@example.test", store_id=None,
-            full_name="Output Governance Admin",
-            password_hash="smoke-only-not-a-real-password-hash",
-            role="ADMIN", is_active=True,
-        )
-        db.add(actor)
-        db.commit()
-        publication_id, actor_user_id = row.id, actor.id
+        with SessionLocal() as db:
+            publication_id = db.query(models.DatasetExecutionJobOutputPublication.id).filter_by(
+                job_id=job_id
+            ).scalar()
+            assert publication_id is not None
+            actor = models.User(
+                email=f"output-governance-{suffix}@example.test", store_id=None,
+                full_name="Output Governance Admin",
+                password_hash="smoke-only-not-a-real-password-hash",
+                role="ADMIN", is_active=True,
+            )
+            db.add(actor)
+            db.flush()
+            actor_user_id = actor.id
+            db.commit()
 
         from app.dataset_output_governance import (
             DatasetOutputGovernanceConflict,
