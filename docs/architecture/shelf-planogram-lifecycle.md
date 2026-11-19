@@ -76,8 +76,8 @@ Os motivos de ativação/retirada são obrigatórios (3–500 caracteres). Confl
 - As operações de escrita são transacionais e tratam conflitos de constraints como 409.
 - A migration mantém equivalência de guards entre PostgreSQL e SQLite.
 - A eliminação em cascata de células de um rascunho é permitida; células de versões ativas/retiradas permanecem protegidas.
-- Não existe ainda endpoint de edição de rascunhos, endpoint de comparação, interface React, ligação ao worker de visão ou calibração com imagens reais.
-- `expected_facings` está persistido, mas a contagem observada ainda precisa de calibração e integração no worker.
+- Existe edição atómica de rascunhos, endpoint read-only de comparação e interface React para ADMIN/SUPERVISOR. A comparação continua on-demand, não está persistida nem ligada ao worker; a calibração com imagens reais e a revisão humana permanecem por implementar.
+- `expected_facings` está persistido e o endpoint apresenta a contagem observada calculada a partir das deteções persistidas. A contagem continua experimental até validação com imagens reais, NMS/deduplicação calibradas e integração controlada no worker.
 - A deteção visual de espaços vazios/facings não altera inventário contabilístico.
 
 ## Validação CI
@@ -107,3 +107,12 @@ O script `apps/api/scripts/postgres_planogram_lifecycle_smoke.py` corre após a 
 O cenário concorrente usa duas sessões PostgreSQL: a primeira substitui todas as células de um DRAFT e mantém a transação aberta; a segunda tenta ativar o mesmo planograma. O teste confirma que a ativação fica à espera do lock da prateleira, e que depois do commit da edição a versão é ativada com as células novas. O resultado final é verificado na base de dados.
 
 No commit `46eb9bbc19a039d2e68183655fb07501a0c12ef8`, o smoke passou, API CI [44561359774](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44561359774) e Quality Gates [44561359524](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44561359524) passaram com **1334 passed, 1 skipped, 1 warning**, e Docker Compose [44561359723](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44561359723) passou.
+
+
+## Comparação read-only e interface
+
+A rota `GET /api/v1/shelves/{shelf_id}/planograms/comparison/{image_id}` compara uma captura `ACTIVE`/ `COMPLETED` com a versão `ACTIVE` da mesma prateleira. Exige `ADMIN` ou `SUPERVISOR`, aplica o âmbito da loja e devolve a proveniência da captura, modelo, planograma e calibração, além dos estados e deteções por célula.
+
+A interface `apps/web/src/PlanogramComparison.tsx` está integrada no dashboard para ADMIN/SUPERVISOR. Permite escolher a prateleira e uma captura concluída e apresenta o resultado sem criar tarefas, observações ou movimentos de inventário. A ausência de deteções sem calibração de visibilidade permanece `UNKNOWN`.
+
+A comparação é calculada on-demand e não é persistida. Esta decisão evita criar um histórico incompleto ou sem política de retenção/revogação antes de definir identidade do resultado, deduplicação, retenção da imagem fonte, versão do modelo, versão do planograma e comportamento perante alteração/revogação dos artefactos. O worker não deve gravar resultados de comparação até esse contrato estar definido.
