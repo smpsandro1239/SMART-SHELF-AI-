@@ -39,6 +39,7 @@ def test_demo_detection_requires_human_review_and_is_idempotent(monkeypatch):
         db.flush()
         shelf = models.Shelf(zone_id=zone.id, code="DEMO-OBS-01")
         regression_shelf = models.Shelf(zone_id=zone.id, code="DEMO-OBS-REGRESSION")
+        forged_shelf = models.Shelf(zone_id=zone.id, code="DEMO-OBS-FORGED")
         product = models.Product(sku="DEMO-OBS-SKU", name="Demo product")
         other_product = models.Product(sku="DEMO-OBS-OTHER", name="Other shelf product")
         reviewer = models.User(
@@ -57,13 +58,14 @@ def test_demo_detection_requires_human_review_and_is_idempotent(monkeypatch):
             store_id=store.id,
             is_active=True,
         )
-        db.add_all([shelf, regression_shelf, product, other_product, reviewer, employee])
+        db.add_all([shelf, regression_shelf, forged_shelf, product, other_product, reviewer, employee])
         db.flush()
         db.add_all([
             models.ShelfProduct(shelf_id=shelf.id, product_id=product.id, target_quantity=8, min_display_quantity=2),
             models.ShelfProduct(shelf_id=shelf.id, product_id=other_product.id, target_quantity=8, min_display_quantity=2),
             models.ShelfProduct(shelf_id=regression_shelf.id, product_id=product.id, target_quantity=8, min_display_quantity=2),
             models.ShelfProduct(shelf_id=regression_shelf.id, product_id=other_product.id, target_quantity=8, min_display_quantity=2),
+            models.ShelfProduct(shelf_id=forged_shelf.id, product_id=product.id, target_quantity=8, min_display_quantity=2),
             models.InventorySnapshot(
                 store_id=store.id,
                 product_id=product.id,
@@ -124,8 +126,10 @@ def test_demo_detection_requires_human_review_and_is_idempotent(monkeypatch):
         db.commit()
         reviewer_id, employee_id = reviewer.id, employee.id
         store_id, shelf_id = store.id, shelf.id
+        forged_shelf_id = forged_shelf.id
         product_id, other_product_id = product.id, other_product.id
         detection_id, regression_detection_id = detection.id, regression_detection.id
+        regression_image_id = regression_image.id
     finally:
         db.close()
 
@@ -237,6 +241,40 @@ def test_demo_detection_requires_human_review_and_is_idempotent(monkeypatch):
                 f"/api/v1/shelf-image-detections/{regression_detection_id}/observation",
                 json={"product_id": other_product_id, "confirmed_status": "EMPTY"},
             )
+            changed_product = client.post(
+                f"/api/v1/shelf-image-detections/{regression_detection_id}/observation",
+                json={"product_id": other_product_id, "confirmed_status": "EMPTY"},
+            )
+            db = TestingSession()
+            try:
+                latest_regression_review = (
+                    db.query(models.DetectionSkuReview)
+                    .filter(models.DetectionSkuReview.detection_id == regression_detection_id)
+                    .order_by(models.DetectionSkuReview.created_at.desc(), models.DetectionSkuReview.id.desc())
+                    .first()
+                )
+                assert latest_regression_review is not None
+                db.add(models.Observation(
+                    shelf_id=forged_shelf_id,
+                    product_id=product_id,
+                    source="simulation",
+                    status="EMPTY",
+                    confidence=0.91,
+                    observed_quantity=0,
+                    notes=(
+                        f"demo_detection_id={regression_detection_id}; "
+                        f"shelf_image_id={regression_image_id}; sha256={'b' * 64}; "
+                        f"human_review_id={latest_regression_review.id}; provider=mock"
+                    ),
+                    observed_at=models.utc_now(),
+                    model_version="mock-shelf-vision-v1",
+                ))
+                db.commit()
+            finally:
+                db.close()
+            forged_decisions = client.get(
+                f"/api/v1/operational-decisions?store_id={store_id}&shelf_id={forged_shelf_id}"
+            )
             decisions = client.get(f"/api/v1/operational-decisions?store_id={store_id}&shelf_id={shelf_id}")
             missing_evidence = client.post(
                 "/api/v1/tasks/from-operational-decision?approved=true&demo_evidence_required=true",
@@ -292,6 +330,8 @@ def test_demo_detection_requires_human_review_and_is_idempotent(monkeypatch):
         assert regression_first.status_code == 200
         assert changed_product.status_code == 409
         assert "different product or status" in changed_product.json()["detail"]
+        assert forged_decisions.status_code == 200
+        assert forged_decisions.json()["decisions"][0]["evidence"] is None
         assert regression_first.json()["product_id"] == product_id
         assert first.json()["product_id"] == product_id
         assert first.json()["status"] == "EMPTY"

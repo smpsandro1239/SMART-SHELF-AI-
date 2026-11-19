@@ -1024,3 +1024,11 @@ Critério global: nenhuma capacidade pode ser marcada como concluída sem códig
 - [x] Docker Compose [44606506450](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44606506450): passou.
 - [x] Corrigida a asserção do teste integrado para consultar apenas a prateleira operacional original, evitando colisão por `product_id` entre prateleiras distintas.
 - [ ] Prosseguir com auditoria handler-by-handler de autorização e isolamento multi-loja; não assumir cobertura total apenas com os smokes atuais.
+
+
+### Vinculação da evidência à prateleira observada — 2026-11-19
+
+- A auditoria identificou que a validação da evidência de demonstração confirmava imagem ativa, deteção, revisão SKU, produto e SHA-256, mas não ligava a imagem à mesma prateleira da observação.
+- A consulta de imagem usada para construir `evidence` exige agora também `ShelfImage.shelf_id == shelf.id`; uma referência válida de outra prateleira deixa de satisfazer o gate de evidência.
+- Acrescentado teste de regressão que injeta numa observação manual referências válidas a uma imagem/deteção/revisão de outra prateleira e exige `evidence == None`.
+- A alteração está publicada na branch principal, mas aguarda API CI, Quality Gates e Docker Compose; não considerar a proteção validada até os workflows terminarem.

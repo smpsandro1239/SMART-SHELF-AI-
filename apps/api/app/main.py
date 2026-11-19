@@ -7786,6 +7786,7 @@ def operational_decisions(
                 db.query(models.ShelfImage)
                 .filter(
                     models.ShelfImage.id == evidence_image_id,
+                    models.ShelfImage.shelf_id == shelf.id,
                     models.ShelfImage.retention_status == "ACTIVE",
                 )
                 .first()
