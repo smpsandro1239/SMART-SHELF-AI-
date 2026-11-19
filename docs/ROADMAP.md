@@ -713,3 +713,10 @@ A alteração foi validada no API CI [44588809660](https://github.com/smpsandro1
 - O endpoint comportou-se de forma conservadora; a alteração da revisão fez com que a decisão operacional deixasse de reconhecer a evidência do SKU A, pelo que o teste não podia continuar a esperar a criação da tarefa.
 - O teste foi corrigido para usar uma segunda deteção independente na mesma captura para o cenário SKU A → SKU B. Assim, a revisão de regressão não altera a evidência do fluxo de tarefas principal.
 - A validação da correção aguarda nova execução dos workflows API CI e Quality Gates; não declarar a suite aprovada até essa execução terminar.
+
+
+### Isolamento total do cenário de idempotência — 2026-11-19
+
+- A execução CI do commit `6e9a3147e33076316bef9feb72c4cf212e63d87b` confirmou que separar apenas a deteção não era suficiente: a deteção de regressão continuava na mesma prateleira e a observação adicional alterava a avaliação operacional usada pelo teste de criação de tarefas.
+- O cenário SKU A → SKU B foi movido para uma segunda prateleira, com imagem e deteção próprias, mantendo os mesmos produtos atribuídos. O fluxo operacional original passa a usar exclusivamente a prateleira e a evidência originais.
+- A correção aguarda nova execução integral do CI. A falha anterior foi **1 failed, 1342 passed, 1 skipped, 1 warning**; não considerar a suite aprovada.

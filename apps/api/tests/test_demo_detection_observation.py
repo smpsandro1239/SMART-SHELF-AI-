@@ -38,6 +38,7 @@ def test_demo_detection_requires_human_review_and_is_idempotent(monkeypatch):
         db.add(zone)
         db.flush()
         shelf = models.Shelf(zone_id=zone.id, code="DEMO-OBS-01")
+        regression_shelf = models.Shelf(zone_id=zone.id, code="DEMO-OBS-REGRESSION")
         product = models.Product(sku="DEMO-OBS-SKU", name="Demo product")
         other_product = models.Product(sku="DEMO-OBS-OTHER", name="Other shelf product")
         reviewer = models.User(
@@ -56,11 +57,13 @@ def test_demo_detection_requires_human_review_and_is_idempotent(monkeypatch):
             store_id=store.id,
             is_active=True,
         )
-        db.add_all([shelf, product, other_product, reviewer, employee])
+        db.add_all([shelf, regression_shelf, product, other_product, reviewer, employee])
         db.flush()
         db.add_all([
             models.ShelfProduct(shelf_id=shelf.id, product_id=product.id, target_quantity=8, min_display_quantity=2),
             models.ShelfProduct(shelf_id=shelf.id, product_id=other_product.id, target_quantity=8, min_display_quantity=2),
+            models.ShelfProduct(shelf_id=regression_shelf.id, product_id=product.id, target_quantity=8, min_display_quantity=2),
+            models.ShelfProduct(shelf_id=regression_shelf.id, product_id=other_product.id, target_quantity=8, min_display_quantity=2),
             models.InventorySnapshot(
                 store_id=store.id,
                 product_id=product.id,
@@ -94,8 +97,21 @@ def test_demo_detection_requires_human_review_and_is_idempotent(monkeypatch):
             y_max=0.6,
             model_version="mock-shelf-vision-v1",
         )
+        regression_image = models.ShelfImage(
+            shelf_id=regression_shelf.id,
+            original_filename="synthetic-regression.png",
+            storage_path="/tmp/synthetic-regression.png",
+            mime_type="image/png",
+            file_size_bytes=128,
+            sha256="b" * 64,
+            analysis_status="COMPLETED",
+            model_version="mock-shelf-vision-v1",
+            retention_status="ACTIVE",
+        )
+        db.add(regression_image)
+        db.flush()
         regression_detection = models.ShelfImageDetection(
-            shelf_image_id=image.id,
+            shelf_image_id=regression_image.id,
             label="empty_facing",
             confidence=0.91,
             x_min=0.5,
