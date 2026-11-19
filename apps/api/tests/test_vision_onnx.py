@@ -277,7 +277,7 @@ def test_embedding_version_is_bound_to_embedding_weights(tmp_path, monkeypatch):
     detector.write_bytes(b"detector")
     embedder.write_bytes(b"embedder-v1")
     def load_session(model_path, *args, **kwargs):
-        if Path(model_path) == embedder:
+        if str(model_path) == str(embedder):
             return fake_session(output_shape=(1, 256))
         return fake_session()
 
