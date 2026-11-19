@@ -231,3 +231,59 @@ def test_provider_rejects_symbolic_link_model_path(tmp_path):
 
     with pytest.raises(ONNXConfigurationError, match="symbolic links"):
         ONNXShelfVisionProvider(link, class_labels={0: "product"})
+
+
+
+def test_provider_effective_version_binds_weights_labels_and_preprocessing(tmp_path, monkeypatch):
+    import sys
+
+    detector = tmp_path / "detector.onnx"
+    detector.write_bytes(b"detector-v1")
+    monkeypatch.setitem(
+        sys.modules,
+        "onnxruntime",
+        SimpleNamespace(InferenceSession=lambda *args, **kwargs: fake_session()),
+    )
+
+    first = ONNXShelfVisionProvider(detector, model_version="catalog-detector", class_labels={0: "product"})
+    same = ONNXShelfVisionProvider(detector, model_version="catalog-detector", class_labels={0: "product"})
+    relabelled = ONNXShelfVisionProvider(detector, model_version="catalog-detector", class_labels={0: "carton"})
+
+    assert first.model_version == same.model_version
+    assert first.model_version != relabelled.model_version
+    assert first.model_version.endswith(_canonical_sha256({
+        "detector_sha256": first.detector_sha256,
+        "class_labels_sha256": first.class_labels_sha256,
+        "input_size": 640,
+        "confidence_threshold": 0.25,
+        "max_detections": 300,
+        "preprocessing_version": PREPROCESSING_VERSION,
+    }))
+
+
+def test_embedding_version_is_bound_to_embedding_weights(tmp_path, monkeypatch):
+    import sys
+
+    detector = tmp_path / "detector.onnx"
+    embedder = tmp_path / "embedder.onnx"
+    detector.write_bytes(b"detector")
+    embedder.write_bytes(b"embedder-v1")
+    monkeypatch.setitem(
+        sys.modules,
+        "onnxruntime",
+        SimpleNamespace(InferenceSession=lambda *args, **kwargs: fake_session(output_shape=(1, 256))),
+    )
+
+    first = ONNXShelfVisionProvider(
+        detector, embedder, model_version="detector-v1",
+        embedding_model_version="embed-v1", class_labels={0: "product"},
+    )
+    embedder.write_bytes(b"embedder-v2")
+    second = ONNXShelfVisionProvider(
+        detector, embedder, model_version="detector-v1",
+        embedding_model_version="embed-v1", class_labels={0: "product"},
+    )
+
+    assert first.model_version == second.model_version
+    assert first.embedding_model_version != second.embedding_model_version
+    assert first.embedding_model_version.startswith("embed-v1@")
