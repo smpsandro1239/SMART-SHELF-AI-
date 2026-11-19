@@ -1537,3 +1537,9 @@ python -m app.dataset_job_output_reconciliation --grace-hours 168
 Depois de rever o relatório, a limpeza efectiva exige `--apply`. O período predefinido é sete dias. O reconciliador só remove temporários internos antigos e staging cuja linha append-only, job `SUCCEEDED`, fencing token, destino publicado, SHA-256 e tamanho coincidam. Preserva jobs concluídos sem publicação, ficheiros recentes, symlinks, referências desconhecidas e conteúdos divergentes. Não remove artefactos publicados, directórios vazios, staging de jobs falhados sem referência auditada nem dados de object storage. Ver [procedimento operacional](docs/operations/dataset-output-reconciliation.md).
 
 **Validação inicial:** Quality Gates [44484598129](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44484598129) passou com compilação Python, suite API e build Web; Docker Compose [44484598370](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44484598370) passou. API CI [44484598295](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44484598295), incluindo os smokes PostgreSQL e a suite API, passou. Não foram executados testes localmente.
+
+### Regressão adicional do reconciliador — 2026-11-19
+
+Foi acrescentado um teste de segurança para o cenário em que o ficheiro publicado é alterado fora do fluxo normal, mas o staging antigo continua íntegro. O reconciliador em modo `--apply` tem de preservar o staging e reportar a divergência face à auditoria append-only; não pode tratar a existência da linha de publicação como prova suficiente de integridade do destino.
+
+A validação desta regressão fica dependente do CI do commit que a introduz. Não foram executados testes localmente nesta ronda.

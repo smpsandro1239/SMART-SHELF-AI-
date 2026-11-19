@@ -797,3 +797,7 @@ Commit validado: `1e3499c8c80ef75494a29d06807469898471e4e1`.
 - **Testes:** testes de serviço e migration SQLite; smoke PostgreSQL com duas sessões concorrentes, publicação idempotente, rejeição de token forjado e imutabilidade da auditoria.
 - **Validação final:** commit `46006afcc5167e04f77037f985e65981a78248e3`; API CI [44480661837](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44480661837) — **1231 passed, 1 skipped, 1 warning** e smokes PostgreSQL 16 aprovados; Quality Gates [44480661851](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44480661851) e Docker Compose [44480661813](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44480661813) passaram.
 - **Limites:** filesystem local apenas; sem object storage, catálogo de outputs/retention, endpoint HTTP de jobs, broker ou worker remoto. A execução assíncrona continua não operacional.
+
+## 2026-11-19 — Regressão de destino publicado adulterado
+
+Foi acrescentado um teste ao reconciliador de outputs para simular a adulteração do destino content-addressed depois de uma publicação auditada. Mesmo com o staging antigo e válido, o modo `apply` tem de preservar esse staging quando o SHA-256/tamanho do destino não correspondem à linha append-only. A regressão também verifica que o relatório identifica explicitamente a divergência. Validação CI pendente.

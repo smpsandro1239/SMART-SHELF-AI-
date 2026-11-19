@@ -561,3 +561,8 @@
 - [ ] Integrar publicação no catálogo de artefactos derivados e propagar a governação de retenção aos outputs.
 - [ ] Criar rotas HTTP internas com `require_dataset_worker('outputs:publish')`, só depois de definir o contrato completo das restantes operações de jobs.
 - [ ] Integrar broker e worker remoto de treino/inferência; a execução assíncrona continua não operacional.
+
+## Reconciliador de outputs — cobertura de integridade adicional
+
+- [x] Acrescentar regressão que corrompe o destino publicado mantendo um staging antigo válido e confirma que o reconciliador não remove o staging quando o destino diverge da auditoria append-only.
+- [ ] Validar a nova regressão, a suite API, os Quality Gates e os smokes PostgreSQL 16 no CI.

@@ -503,3 +503,7 @@ A tabela de publicação é append-only e as triggers PostgreSQL/SQLite impedem 
 **Validação concluída no commit `46006afcc5167e04f77037f985e65981a78248e3`:** API CI [44480661837](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44480661837) passou com PostgreSQL 16, smoke concorrente e **1231 testes aprovados, 1 ignorado e 1 aviso**; Quality Gates [44480661851](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44480661851) e Docker Compose [44480661813](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44480661813) também passaram.
 
 **Riscos e próximas prioridades P0/P1:** automatizar limpeza/reconciliação de temporários órfãos após crash; integrar outputs no catálogo de artefactos derivados e propagar retenção/legal hold; separar permissões filesystem entre staging e publicação para o futuro worker; só depois criar handlers HTTP internos, broker e worker remoto. Não expor endpoints nem declarar execução assíncrona operacional enquanto estes elementos não estiverem concluídos.
+
+## Reconciliador: preservação perante destino adulterado — 2026-11-19
+
+Foi acrescentada cobertura para a divergência entre o destino publicado e a auditoria imutável. O staging só pode ser removido quando o destino publicado e o próprio staging correspondem simultaneamente ao digest e tamanho registados. A nova regressão verifica que um destino adulterado impede a limpeza, mesmo quando o staging ainda contém os bytes esperados. A execução CI desta cobertura está pendente.

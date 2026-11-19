@@ -315,3 +315,41 @@ def test_output_reconciler_preserves_staging_without_publication_or_with_wrong_d
     assert state["stage_path"].exists()
     assert (state["root"] / publication.published_output_reference).read_bytes() == state["payload"]
 
+
+
+def test_output_reconciler_preserves_staging_when_published_destination_is_corrupted(
+    publication_setup,
+):
+    import os
+    from datetime import timedelta
+
+    from app.dataset_job_output_reconciliation import reconcile_dataset_job_output_files
+
+    state = publication_setup
+    publication = promote_dataset_job_output(
+        state["db"],
+        principal=state["principal"],
+        job_id=state["job"].id,
+        fencing_token=state["claim"].fencing_token,
+    )
+
+    state["stage_path"].parent.mkdir(parents=True, exist_ok=True)
+    state["stage_path"].write_bytes(state["payload"])
+    old_timestamp = (models.utc_now() - timedelta(days=8)).timestamp()
+    os.utime(state["stage_path"], (old_timestamp, old_timestamp))
+
+    published_path = state["root"] / publication.published_output_reference
+    published_path.write_bytes(b"corrupted published bytes")
+
+    report = reconcile_dataset_job_output_files(
+        state["db"], apply=True, grace_seconds=7 * 86400
+    )
+
+    assert report["removed_count"] == 0
+    assert state["stage_path"].exists()
+    assert state["stage_path"].read_bytes() == state["payload"]
+    assert published_path.read_bytes() == b"corrupted published bytes"
+    assert any(
+        item["reason"] == "published bytes do not match the immutable audit row"
+        for item in report["skipped"]
+    )
