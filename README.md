@@ -1697,3 +1697,14 @@ O aviso restante é a depreciação externa `anyio.abc.BlockingPortal` emitida p
 
 
 Documentação detalhada: [ciclo de vida dos planogramas](docs/architecture/shelf-planogram-lifecycle.md).
+
+### Validação da comparação read-only — 2026-11-19
+
+No código `4f3c9a9083b5ab2187a918927b48770ce2813cbf`:
+
+- [API CI](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44563920216): aprovado, **1337 testes aprovados, 1 ignorado e 1 aviso**, incluindo migrações e smoke PostgreSQL 16 de planogramas.
+- [Quality Gates](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44564178983): aprovado, **1337 testes aprovados, 1 ignorado e 1 aviso**, compilação Python e build TypeScript/produção Web.
+- [Docker Compose smoke](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44563920224): stack, readiness, seed e worker aprovados.
+
+A validação é automatizada por CI. Não foi realizada validação manual com imagens reais nem com dataset anotado.
+
