@@ -57,6 +57,7 @@ def planogram_api(monkeypatch):
             "product_a": product_a.id, "product_b": product_b.id,
             **{key: value.id for key, value in users.items()},
         }
+        db.commit()
 
     def override_get_db():
         db = session_factory()
