@@ -638,3 +638,12 @@ A migration 0068 persiste `expected_facings` opcional por célula, com constrain
 Validação no commit `3d9f338e5bdf50a9674f53d05da1ad99e23faa01`: API CI [44560333697](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44560333697) e Quality Gates [44560333600](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44560333600) com **1334 testes aprovados, 1 ignorado e 1 aviso**; Docker Compose [44560333624](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44560333624) aprovado.
 
 **Próximas prioridades:** smoke PostgreSQL dedicado à constraint e corrida edição/ativação; integrar comparação no worker e UI; calibrar a contagem com dataset real. `observed_facings` continua a contar caixas frontais detetadas, não unidades em profundidade.
+
+
+## 2026-11-19 — Smoke PostgreSQL de planogramas e concorrência
+
+O API CI inclui agora um smoke PostgreSQL 16 dedicado à migration 0068 e ao ciclo de vida dos planogramas. São verificadas as constraints de `expected_facings`, a imutabilidade de células ACTIVE, a unicidade da versão ativa e uma corrida entre substituição de células DRAFT e ativação em sessões distintas. A ativação tem de esperar pelo commit da edição e usar a geometria substituída.
+
+Validação no commit `46eb9bbc19a039d2e68183655fb07501a0c12ef8`: API CI [44561359774](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44561359774) e Quality Gates [44561359524](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44561359524) com **1334 testes aprovados, 1 ignorado e 1 aviso**; Docker Compose [44561359723](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44561359723) aprovado.
+
+**Próxima fronteira:** ligar a versão ativa ao worker, persistir resultados de comparação rastreáveis por imagem/planograma/modelo e apresentar revisão humana. Não alterar inventário automaticamente.

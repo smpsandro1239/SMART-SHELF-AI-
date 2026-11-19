@@ -869,5 +869,16 @@ Critério global: nenhuma capacidade pode ser marcada como concluída sem códig
 - [x] Expor `PUT /api/v1/planograms/{planogram_id}/cells`; CORS permite PUT e middleware mantém ADMIN/SUPERVISOR.
 - [x] Testar constraints SQLite, valores inválidos, round-trip HTTP, substituição de células e recusa após ativação.
 - [x] Validar no commit `3d9f338e5bdf50a9674f53d05da1ad99e23faa01`: API CI [44560333697](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44560333697) e Quality Gates [44560333600](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44560333600) com **1334 passed, 1 skipped, 1 warning**; Docker Compose [44560333624](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44560333624) aprovado.
-- [ ] Acrescentar smoke PostgreSQL específico para constraints de `expected_facings` e concorrência entre edição de DRAFT e ativação.
+- [x] Acrescentar smoke PostgreSQL específico para constraints de `expected_facings` e concorrência entre edição de DRAFT e ativação.
 - [ ] Integrar planogramas persistidos no worker/comparador e criar revisão visual React; a contagem continua a ser número de deteções frontais, não unidades em profundidade.
+
+
+### Oitava sequência — smoke PostgreSQL dedicado a planogramas (2026-11-19)
+
+- [x] Criar `apps/api/scripts/postgres_planogram_lifecycle_smoke.py` e integrá-lo no workflow API CI após as restantes verificações PostgreSQL.
+- [x] Verificar no PostgreSQL as constraints de `expected_facings`: valor positivo e SKU obrigatório.
+- [x] Verificar imutabilidade de células ACTIVE e unicidade de uma versão ACTIVE por prateleira.
+- [x] Criar corrida real entre substituição de células DRAFT e ativação em duas sessões PostgreSQL; a ativação tem de esperar pelo commit da edição.
+- [x] Validar no commit `46eb9bbc19a039d2e68183655fb07501a0c12ef8`: smoke PostgreSQL dedicado passou; API CI [44561359774](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44561359774) com **1334 passed, 1 skipped, 1 warning**; Quality Gates [44561359524](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44561359524) com o mesmo resultado; Docker Compose [44561359723](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44561359723) aprovado.
+- [ ] Ligar o planograma ativo ao worker e persistir resultados de comparação por imagem/modelo/versão, sem efeitos sobre inventário.
+- [ ] Criar UI de revisão e validar a contagem de facings com dataset real anotado.

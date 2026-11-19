@@ -1017,3 +1017,21 @@ Foram acrescentados testes de serviço, migração SQLite e API para valores inv
 - Docker Compose [44560333624](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44560333624): stack aprovada.
 
 **Limites:** não existe ainda smoke PostgreSQL específico para a constraint de `expected_facings` nem teste concorrente entre edição e ativação. A comparação ainda não está integrada no worker/UI e não foi calibrada com imagens reais.
+
+
+## 2026-11-19 — Smoke PostgreSQL dedicado a planogramas
+
+Foi criado `apps/api/scripts/postgres_planogram_lifecycle_smoke.py` e integrado no workflow API CI. O smoke executa contra PostgreSQL 16 e verifica:
+
+- CHECK constraint de `expected_facings`: rejeita zero e ausência de SKU esperado.
+- Imutabilidade das células após ativação.
+- Índice único parcial: não permite duas versões ACTIVE na mesma prateleira.
+- Concorrência real em duas sessões: uma transação substitui as células de um DRAFT enquanto outra tenta ativá-lo. A ativação fica bloqueada no lock da prateleira até a edição fazer commit e ativa a nova geometria.
+
+**Validação final no commit `46eb9bbc19a039d2e68183655fb07501a0c12ef8`:**
+- Smoke PostgreSQL dedicado passou.
+- API CI [44561359774](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44561359774): PostgreSQL 16/migrações e **1334 passed, 1 skipped, 1 warning**.
+- Quality Gates [44561359524](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44561359524): compilação Python, suite API e build Web aprovados; **1334 passed, 1 skipped, 1 warning**.
+- Docker Compose [44561359723](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44561359723): stack aprovada.
+
+O teste de concorrência confirma a serialização edição/ativação no serviço e no PostgreSQL. A integração worker/UI continua por fazer.

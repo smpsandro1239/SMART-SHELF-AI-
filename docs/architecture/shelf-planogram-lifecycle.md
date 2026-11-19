@@ -98,3 +98,12 @@ A migration `0068_shelf_planogram_expected_facings` adiciona `expected_facings I
 O endpoint `PUT /api/v1/planograms/{planogram_id}/cells` substitui o conjunto completo de células de um rascunho. A operação valida o conjunto inteiro antes de apagar, bloqueia imagem de calibração, prateleira e planograma pela ordem global definida, revalida SKUs e executa DELETE + INSERT na mesma transação. Se qualquer validação ou trigger falhar, a transação é revertida e as células anteriores permanecem.
 
 A rota devolve 409 se o planograma já não estiver em DRAFT. A ativação e edição competem pelo mesmo lock da prateleira/planograma, evitando que a substituição de células ultrapasse a transição para ACTIVE.
+
+
+## Smoke PostgreSQL de constraints e concorrência
+
+O script `apps/api/scripts/postgres_planogram_lifecycle_smoke.py` corre após a aplicação de todas as migrations no API CI. Além das constraints de `expected_facings`, testa a imutabilidade das células ACTIVE e a unicidade de uma versão ACTIVE por prateleira.
+
+O cenário concorrente usa duas sessões PostgreSQL: a primeira substitui todas as células de um DRAFT e mantém a transação aberta; a segunda tenta ativar o mesmo planograma. O teste confirma que a ativação fica à espera do lock da prateleira, e que depois do commit da edição a versão é ativada com as células novas. O resultado final é verificado na base de dados.
+
+No commit `46eb9bbc19a039d2e68183655fb07501a0c12ef8`, o smoke passou, API CI [44561359774](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44561359774) e Quality Gates [44561359524](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44561359524) passaram com **1334 passed, 1 skipped, 1 warning**, e Docker Compose [44561359723](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44561359723) passou.
