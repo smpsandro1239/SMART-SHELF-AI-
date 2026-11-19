@@ -81,7 +81,7 @@ jobs:
           DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/smart_shelf_ci
           APP_ENV: test
         run: python scripts/postgres_dataset_job_artifact_read_smoke.py
-      - name: Verify PostgreSQL fenced dataset output publication
+      - name: Verify PostgreSQL fenced dataset output publication and governance
         env:
           DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/smart_shelf_ci
           APP_ENV: test

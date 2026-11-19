@@ -2,7 +2,7 @@
 
 ## Estado
 
-Decisão de arquitectura e auditoria concluídas. A elegibilidade fail-closed na promoção está implementada através do serviço e da migration 0064; a cobertura multi-origem passou no CI. Os eventos de governação próprios do output, a política de retenção e a disposição física permanecem pendentes. Este documento não autoriza eliminação física nem define prazos comerciais ou legais de retenção.
+Decisão de arquitectura e auditoria concluídas. A elegibilidade fail-closed na promoção está implementada através do serviço e da migration 0064; a cobertura multi-origem passou no CI. A migration 0065 e o serviço interno de eventos append-only de governação estão agora implementados; a política de autorização por perfil/loja, a exposição HTTP, a integração de bloqueio em consumidores e a disposição física permanecem pendentes. Este documento não autoriza eliminação física nem define prazos comerciais ou legais de retenção.
 
 ## Contexto observado
 
@@ -55,3 +55,14 @@ A verificação não define prazos de retenção nem permite purga: limita-se a 
 ## Cobertura multi-origem acrescentada — 2026-11-19
 
 Os testes de promoção passam a construir jobs com duas fontes internas, incluindo submissão deliberada fora da ordem crescente dos IDs. A segunda fonte é tornada `RESTRICTED` ou recebe legal hold durante a preparação, e a promoção tem de falhar sem publicar nem remover staging. O contrato SQLite da migration 0064 testa também uma publicação com uma fonte válida e outra restrita. O smoke PostgreSQL 16 usa duas fontes e aplica o hold concorrente à segunda. Esta extensão de cobertura passou no API CI [44516774051](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44516774051), incluindo o smoke PostgreSQL 16; Quality Gates [44516774058](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44516774058) e Docker Compose [44516774048](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44516774048) também passaram. A suite terminou com 1241 testes aprovados, 1 ignorado e 1 aviso. A cobertura não altera a decisão de não permitir purga física sem política aprovada.
+
+
+## Eventos append-only de governação — migration 0065
+
+A migration `0065_dataset_output_governance_events` cria `dataset_execution_job_output_governance_events`, uma cronologia separada ligada por FK à publicação canónica. A publicação original não é alterada e não são duplicados hash, tamanho ou caminho do output.
+
+O vocabulário inicial é limitado a quatro transições: `RESTRICTION_APPLIED`, `RESTRICTION_RELEASED`, `LEGAL_HOLD_APPLIED` e `LEGAL_HOLD_RELEASED`. Cada evento exige actor humano activo, motivo não vazio, sequência consecutiva por publicação e timestamp. A evidência externa é opcional, mas a referência e o SHA-256 têm de ser fornecidos em conjunto. O campo `details` aceita apenas um objecto JSON limitado a 16 KiB pelo serviço.
+
+Os triggers PostgreSQL e SQLite serializam a sequência na linha da publicação, rejeitam transições duplicadas/ilegais e impedem UPDATE/DELETE. O serviço `app.dataset_output_governance.append_output_governance_event` bloqueia a publicação e o actor, exige um callback de autorização que devolva explicitamente `True`, valida motivo/evidência/metadados e deixa commit/rollback a cargo do chamador. `get_output_governance_state` reconstrói a projecção de restrição e legal hold a partir da sequência imutável.
+
+**Limites deliberados:** não foi inventada uma matriz de permissões para restrição/libertação de outputs. O callback obrigatório é a fronteira de autorização para futuras integrações; não existe endpoint HTTP nem callback permissivo por omissão. A projecção ainda não está ligada ao serviço de leitura/publicação de bytes, porque não há consumidor HTTP/worker remoto de outputs. Não se implementou política temporal, aprovação independente, executor de disposição ou purga física. A migration e os testes SQLite/serviço estão cobertos pela suite; a validação concorrente PostgreSQL 16 depende do API CI do commit que introduz esta migration.

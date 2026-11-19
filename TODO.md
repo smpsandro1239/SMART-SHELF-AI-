@@ -605,3 +605,18 @@ Documento: `docs/architecture/dataset-output-artifact-governance.md`.
 - [x] Validar os novos cenários, migration 0064, suite API, Quality Gates e Docker Compose no CI no commit `01abce944e7d883ea53aca17a09ac589701fdfc9`: API CI [44516774051](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44516774051), Quality Gates [44516774058](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44516774058) e Docker Compose [44516774048](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44516774048) passaram; **1241 passed, 1 skipped, 1 warning**.
 - [ ] Prosseguir com eventos append-only de governação ligados à publicação, sem alterar a linha canónica.
 - [ ] Não activar disposição física até existir política aprovada de retenção, cobertura de cópias externas e aprovação independente.
+
+
+## Governação append-only de outputs publicados — migration 0065 (2026-11-19)
+
+- [x] Criar eventos de restrição/restauro e legal hold/libertação ligados à publicação canónica, sem alterar ou duplicar a identidade do output.
+- [x] Registar actor humano activo, motivo obrigatório, timestamp, evidência opcional com referência + SHA-256 e detalhes JSON limitados.
+- [x] Impor sequência consecutiva por publicação, transições válidas e bloqueio concorrente da publicação em PostgreSQL; criar guards equivalentes em SQLite.
+- [x] Proteger eventos contra UPDATE/DELETE e impedir remoção da publicação/actor referenciados através de FK RESTRICT.
+- [x] Implementar serviço interno com callback de autorização obrigatório e projecção de estado derivada da cronologia.
+- [x] Acrescentar testes SQLite para sequência, transições, actor inactivo, imutabilidade e downgrade, mais testes de serviço para autorização, evidência e estado.
+- [x] Integrar smoke PostgreSQL 16 para concorrência de dois pedidos, sequência, legal hold e imutabilidade dos eventos.
+- [ ] Executar e confirmar API CI, Quality Gates e Docker Compose no commit que introduz a migration 0065.
+- [ ] Aprovar matriz de permissões por perfil/loja, separação de funções e eventual aprovação independente para libertação de legal hold.
+- [ ] Integrar a projecção de governação em cada leitura/exportação efectiva de outputs antes de criar endpoints ou workers remotos.
+- [ ] Definir política de retenção, inventário externo e procedimento de recuperação; manter disposição física e purga desactivadas.

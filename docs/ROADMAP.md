@@ -545,3 +545,13 @@ Ver [decisão de governação de retenção dos outputs](architecture/dataset-ou
 - Quality Gates [44516774058](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44516774058): compilação Python, suite API e build Web aprovados.
 - Docker Compose [44516774048](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44516774048): aprovado.
 - O aviso Starlette/AnyIO é uma depreciação externa; sem falhas associadas.
+
+
+### Governação append-only dos outputs publicados — 2026-11-19
+
+- Implementada migration 0065 e modelo para eventos separados da publicação canónica.
+- Implementados eventos de restrição/restauro e legal hold/libertação, actor activo, motivo, evidência e detalhes JSON limitados.
+- Triggers PostgreSQL/SQLite impõem sequência consecutiva, máquina de estados por tipo de evento e imutabilidade UPDATE/DELETE.
+- Serviço interno exige callback de autorização positivo; a projecção de estado deriva a situação efectiva da cronologia.
+- Testes SQLite e smoke concorrente PostgreSQL acrescentados; aguarda CI do commit.
+- Permanecem em aberto a matriz de permissões, integração com consumidores de bytes, endpoints/worker remoto, política de retenção e disposição física.

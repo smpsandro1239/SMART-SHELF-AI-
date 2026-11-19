@@ -513,3 +513,90 @@ def test_promotion_revalidates_every_source_not_only_first_source(
     ).count() == 0
     assert stage_path.read_bytes() == payload
     assert not list((state["root"] / "published").rglob("*.artifact"))
+
+
+def test_output_governance_events_are_ordered_and_state_is_derived(publication_setup):
+    from app.dataset_output_governance import append_output_governance_event, get_output_governance_state
+
+    state = publication_setup
+    db = state["db"]
+    publication = promote_dataset_job_output(
+        db, principal=state["principal"], job_id=state["job"].id,
+        fencing_token=state["claim"].fencing_token,
+    )
+    actor = models.User(
+        email="output-governance-admin@example.test", store_id=None,
+        full_name="Output Governance Admin",
+        password_hash="test-only-not-a-real-password-hash", role="ADMIN", is_active=True,
+    )
+    db.add(actor)
+    db.commit()
+
+    def authorize(user, current_publication, event_type):
+        return user.role == "ADMIN" and current_publication.id == publication.id and event_type in {
+            "RESTRICTION_APPLIED", "RESTRICTION_RELEASED",
+            "LEGAL_HOLD_APPLIED", "LEGAL_HOLD_RELEASED",
+        }
+
+    transitions = [
+        ("RESTRICTION_APPLIED", True, False),
+        ("LEGAL_HOLD_APPLIED", True, True),
+        ("RESTRICTION_RELEASED", False, True),
+        ("LEGAL_HOLD_RELEASED", False, False),
+    ]
+    for sequence, (event_type, restricted, legal_hold) in enumerate(transitions, start=1):
+        event = append_output_governance_event(
+            db, publication_id=publication.id, event_type=event_type,
+            actor_user_id=actor.id, reason=f"Reviewed transition {sequence}",
+            authorize=authorize, details={"case": f"TEST-{sequence}"},
+        )
+        assert event.sequence_number == sequence
+        db.commit()
+        projection = get_output_governance_state(db, publication_id=publication.id)
+        assert projection.sequence_number == sequence
+        assert projection.restricted is restricted
+        assert projection.legal_hold is legal_hold
+        assert projection.blocked is (restricted or legal_hold)
+
+
+def test_output_governance_requires_explicit_authorization_and_valid_evidence(publication_setup):
+    from app.dataset_output_governance import (
+        DatasetOutputGovernanceAuthorizationError,
+        DatasetOutputGovernanceError,
+        append_output_governance_event,
+    )
+
+    state = publication_setup
+    db = state["db"]
+    publication = promote_dataset_job_output(
+        db, principal=state["principal"], job_id=state["job"].id,
+        fencing_token=state["claim"].fencing_token,
+    )
+    actor = models.User(
+        email="output-governance-denied@example.test", store_id=None,
+        full_name="Output Governance User",
+        password_hash="test-only-not-a-real-password-hash", role="EMPLOYEE", is_active=True,
+    )
+    db.add(actor)
+    db.commit()
+
+    with pytest.raises(DatasetOutputGovernanceAuthorizationError):
+        append_output_governance_event(
+            db, publication_id=publication.id, event_type="RESTRICTION_APPLIED",
+            actor_user_id=actor.id, reason="Request denied",
+            authorize=lambda _actor, _publication, _action: False,
+        )
+    with pytest.raises(DatasetOutputGovernanceError, match="supplied together"):
+        append_output_governance_event(
+            db, publication_id=publication.id, event_type="RESTRICTION_APPLIED",
+            actor_user_id=actor.id, reason="Evidence pair validation",
+            authorize=lambda _actor, _publication, _action: True,
+            evidence_reference="ticket://CASE-1",
+        )
+    with pytest.raises(DatasetOutputGovernanceError, match="non-whitespace"):
+        append_output_governance_event(
+            db, publication_id=publication.id, event_type="RESTRICTION_APPLIED",
+            actor_user_id=actor.id, reason="   ",
+            authorize=lambda _actor, _publication, _action: True,
+        )
+    assert db.query(models.DatasetExecutionJobOutputGovernanceEvent).count() == 0

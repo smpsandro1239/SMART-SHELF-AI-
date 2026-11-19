@@ -1143,3 +1143,38 @@ class DatasetExecutionJobOutputPublication(Base):
     published_output_reference: Mapped[str] = mapped_column(String(600), nullable=False)
     bytes_published: Mapped[int] = mapped_column(Integer, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+
+class DatasetExecutionJobOutputGovernanceEvent(Base):
+    """Append-only restriction and legal-hold history for one published output."""
+    __tablename__ = "dataset_execution_job_output_governance_events"
+    __table_args__ = (
+        UniqueConstraint("publication_id", "sequence_number", name="uq_dataset_output_governance_publication_sequence"),
+        CheckConstraint("sequence_number > 0", name="ck_dataset_output_governance_sequence_positive"),
+        CheckConstraint(
+            "event_type IN ('RESTRICTION_APPLIED', 'RESTRICTION_RELEASED', 'LEGAL_HOLD_APPLIED', 'LEGAL_HOLD_RELEASED')",
+            name="ck_dataset_output_governance_event_type",
+        ),
+        CheckConstraint("length(trim(reason)) > 0", name="ck_dataset_output_governance_reason_nonempty"),
+        CheckConstraint(
+            "(evidence_reference IS NULL AND evidence_sha256 IS NULL) OR "
+            "(evidence_reference IS NOT NULL AND length(evidence_reference) > 0 "
+            "AND evidence_sha256 IS NOT NULL AND length(evidence_sha256) = 64)",
+            name="ck_dataset_output_governance_evidence_pair",
+        ),
+        Index("ix_dataset_output_governance_publication_sequence", "publication_id", "sequence_number"),
+        Index("ix_dataset_output_governance_actor_created", "actor_user_id", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    publication_id: Mapped[int] = mapped_column(
+        ForeignKey("dataset_execution_job_output_publications.id", ondelete="RESTRICT"), nullable=False,
+    )
+    sequence_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    event_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    actor_user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    evidence_reference: Mapped[str | None] = mapped_column(String(600), nullable=True)
+    evidence_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    details: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)

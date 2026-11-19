@@ -1,3 +1,4 @@
+import time
 """PostgreSQL smoke for atomic, fenced dataset output publication and audit guards."""
 
 from concurrent.futures import ThreadPoolExecutor, TimeoutError
@@ -149,8 +150,120 @@ def main():
                     "staged": f"staging/{job_id}/{token_value}/model.bin",
                     "published": f"published/{job_id}/forged.artifact",
                 },
+
                 "stale fencing token publication",
             )
+
+        # Governance is a separate event stream; it never mutates publication identity.
+        actor = models.User(
+            email=f"output-governance-{suffix}@example.test", store_id=None,
+            full_name="Output Governance Admin",
+            password_hash="smoke-only-not-a-real-password-hash",
+            role="ADMIN", is_active=True,
+        )
+        db.add(actor)
+        db.commit()
+        publication_id, actor_user_id = row.id, actor.id
+
+        from app.dataset_output_governance import (
+            DatasetOutputGovernanceConflict,
+            append_output_governance_event,
+            get_output_governance_state,
+        )
+
+        first_authorized, release_first, second_started = Event(), Event(), Event()
+
+        def first_restriction_writer():
+            with SessionLocal() as event_db:
+                def pause_authorization(user, publication, action):
+                    assert user.id == actor_user_id
+                    assert publication.id == publication_id
+                    assert action == "RESTRICTION_APPLIED"
+                    first_authorized.set()
+                    if not release_first.wait(timeout=15):
+                        raise TimeoutError("governance race was not released")
+                    return True
+                event = append_output_governance_event(
+                    event_db, publication_id=publication_id,
+                    event_type="RESTRICTION_APPLIED", actor_user_id=actor_user_id,
+                    reason="Concurrent restriction smoke", authorize=pause_authorization,
+                )
+                event_db.commit()
+                return event.sequence_number
+
+        def second_restriction_writer():
+            with SessionLocal() as event_db:
+                second_started.set()
+                try:
+                    append_output_governance_event(
+                        event_db, publication_id=publication_id,
+                        event_type="RESTRICTION_APPLIED", actor_user_id=actor_user_id,
+                        reason="Concurrent duplicate restriction smoke",
+                        authorize=lambda _user, _publication, _action: True,
+                    )
+                    event_db.commit()
+                    return "unexpectedly-accepted"
+                except DatasetOutputGovernanceConflict:
+                    event_db.rollback()
+                    return "rejected-after-first-commit"
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            first_future = executor.submit(first_restriction_writer)
+            assert first_authorized.wait(timeout=10)
+            second_future = executor.submit(second_restriction_writer)
+            assert second_started.wait(timeout=10)
+            deadline = time.monotonic() + 8
+            blocked = False
+            while time.monotonic() < deadline:
+                with SessionLocal() as observer:
+                    waiting = observer.execute(text("""
+                        SELECT COUNT(*) FROM pg_stat_activity
+                        WHERE wait_event_type = 'Lock'
+                          AND query ILIKE '%dataset_execution_job_output_publications%'
+                    """)).scalar_one()
+                if waiting:
+                    blocked = True
+                    break
+                time.sleep(0.05)
+            release_first.set()
+            assert blocked, "second governance writer did not wait on the publication row lock"
+            assert first_future.result(timeout=10) == 1
+            assert second_future.result(timeout=10) == "rejected-after-first-commit"
+
+        with SessionLocal() as event_db:
+            projection = get_output_governance_state(event_db, publication_id=publication_id)
+            assert projection.restricted is True and projection.legal_hold is False
+            hold = append_output_governance_event(
+                event_db, publication_id=publication_id,
+                event_type="LEGAL_HOLD_APPLIED", actor_user_id=actor_user_id,
+                reason="Preserve output during governance smoke",
+                authorize=lambda user, publication, _action: user.role == "ADMIN" and publication.id == publication_id,
+                evidence_reference=f"ticket://output-governance/{suffix}",
+                evidence_sha256="a" * 64,
+                details={"source": "postgres-smoke"},
+            )
+            event_db.commit()
+            assert hold.sequence_number == 2
+            _assert_rejected(
+                event_db,
+                "UPDATE dataset_execution_job_output_governance_events SET reason='tampered' WHERE id=:id",
+                {"id": hold.id}, "output governance event UPDATE",
+            )
+            _assert_rejected(
+                event_db,
+                "DELETE FROM dataset_execution_job_output_governance_events WHERE id=:id",
+                {"id": hold.id}, "output governance event DELETE",
+            )
+            _assert_rejected(
+                event_db,
+                "INSERT INTO dataset_execution_job_output_governance_events "
+                "(publication_id,sequence_number,event_type,actor_user_id,reason,details,created_at) "
+                "VALUES (:publication,4,'LEGAL_HOLD_RELEASED',:actor,'forged sequence','{}',now())",
+                {"publication": publication_id, "actor": actor_user_id},
+                "output governance sequence gap",
+            )
+            projection = get_output_governance_state(event_db, publication_id=publication_id)
+            assert projection.restricted is True and projection.legal_hold is True
 
         # A source may become restricted after completion but before promotion.
         held_payload = payload + b" source-retention-race"
@@ -306,8 +419,9 @@ def main():
             assert (revoked_stage / "model.bin").read_bytes() == revoked_payload
     settings.dataset_output_storage_path = original_root
     print(
-        "PostgreSQL output publication smoke passed: concurrent promotion was idempotent, "
-        "digest/fencing/audit guards held, and revocation committed during lock-free preparation."
+        "PostgreSQL output publication/governance smoke passed: fenced publication, "
+        "multi-source retention, concurrent event sequencing, restriction/legal-hold projection "
+        "and immutable governance audit guards."
     )
 
 

@@ -846,3 +846,15 @@ Adicionado teste de segurança para temporários de promoção cujo nome corresp
 - Docker Compose [44516774048](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44516774048): stack, readiness, seed e perfis demonstrativos aprovados.
 - Aviso remanescente: depreciação de `anyio.abc.BlockingPortal` emitida pelo `starlette.testclient`; não provocou falhas.
 - Nenhum teste foi executado localmente nesta sessão; a evidência é dos workflows GitHub Actions.
+
+
+## 2026-11-19 — Eventos append-only de governação dos outputs (migration 0065)
+
+- Criada a tabela `dataset_execution_job_output_governance_events`, separada da publicação canónica, com FK RESTRICT para publicação e actor humano.
+- Eventos limitados a restrição aplicada/libertada e legal hold aplicado/libertado. A sequência é consecutiva por publicação; os triggers PostgreSQL bloqueiam a publicação para serializar escritores e SQLite aplica as mesmas regras de sequência/transição.
+- UPDATE/DELETE dos eventos são recusados ao nível da base de dados. Actor inactivo, motivo vazio, evidência incompleta e transições repetidas/ilegais também são recusados.
+- Criado `app.dataset_output_governance`: callback de autorização obrigatório, locks da publicação/actor, validação do motivo e da evidência, append de evento e leitura da projecção de estado.
+- Testes acrescentados para migration SQLite, downgrade, autorização negativa, evidência e estados independentes de restrição/legal hold.
+- O smoke PostgreSQL da publicação foi alargado para disputar duas restrições concorrentes na mesma publicação, observar o lock PostgreSQL, exigir um único evento aceite, aplicar legal hold e testar imutabilidade/sequence guard.
+- **Validação:** pendente da execução dos workflows no commit desta alteração. Não foram executados testes localmente nesta sessão.
+- **Decisão:** não foi escolhida uma matriz de permissões por perfil nem uma regra de dupla aprovação para libertar legal hold. O serviço exige callback de autorização obrigatório; não existe endpoint HTTP. Não foi criada purga física nem política de retenção temporal.
