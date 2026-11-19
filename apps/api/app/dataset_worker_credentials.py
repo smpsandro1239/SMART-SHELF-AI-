@@ -219,7 +219,7 @@ def authenticate_dataset_worker(db: Session, *, bearer_token: str) -> DatasetWor
     supplied_digest = hashlib.sha256(supplied_secret.encode("ascii")).hexdigest()
     expected_digest = credential.secret_sha256 if credential is not None else "0" * 64
     digest_matches = hmac.compare_digest(supplied_digest, expected_digest)
-    now = _now()
+    now = _utc(_now())
     if (
         credential is None
         or not digest_matches
