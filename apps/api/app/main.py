@@ -55,6 +55,13 @@ from app.pallet_rotation import evaluate_pallet_rotation, PalletRotationInputErr
 from app.pallet_portfolio import (
     allocate_ready_replacements, build_pallet_portfolio_plan, PalletPortfolioInputError,
 )
+from app.shelf_planograms import (
+    ShelfPlanogramError,
+    activate_planogram,
+    create_draft_planogram,
+    load_active_planogram_for_shelf,
+    retire_planogram,
+)
 from app.pallet_rotation_forecast_bridge import enrich_pallet_candidates_with_hourly_profiles
 from app.pallet_rotation_windows import recommend_low_traffic_window
 from app.hourly_patterns import build_weekday_hour_profile
@@ -88,6 +95,7 @@ from app.schemas import (
     WarehouseLocationCreate, WarehouseProductProfileCreate, WarehousePlacementCreate,
     ProductPackagingLevelCreate, StorePalletCreate, StorePalletRead,
     PalletRotationPolicyCreate, PalletRotationPolicyRead, PalletRotationPolicyUpdate, PalletRotationEventRead, PalletLifecycleUpdate, PalletRotationSimulationRequest,
+    ShelfPlanogramCreate, ShelfPlanogramLifecycleRequest, ShelfPlanogramRead,
 )
 
 app = FastAPI(title=settings.app_name, version="0.2.0", description="Operational API for SMART SHELF AI.")
@@ -165,6 +173,8 @@ async def require_api_authentication(request: Request, call_next):
             })
         )
         supervisor_or_admin = (
+            or (path.startswith("/api/v1/shelves/") and "/planograms" in path)
+            or path.startswith("/api/v1/planograms/")
             path.startswith("/api/v1/observation-alerts")
             or (method == "POST" and path.endswith("/observation-alerts/evaluate"))
             or (method == "POST" and path == "/api/v1/tasks/from-operational-decision")
@@ -457,6 +467,180 @@ def list_shelves(request: Request, db: Session = Depends(get_db)):
     if actor is not None and actor.role != "ADMIN":
         query = query.filter(models.Zone.store_id == actor.store_id)
     return query.order_by(models.Shelf.id).all()
+
+
+def _planogram_http_error(exc: ShelfPlanogramError) -> HTTPException:
+    message = str(exc)
+    if "not found" in message.lower():
+        status_code = 404
+    elif "not allowed" in message.lower() or "only admin or supervisor" in message.lower():
+        status_code = 403
+    elif message.startswith("Only a ") or "already" in message.lower():
+        status_code = 409
+    else:
+        status_code = 422
+    return HTTPException(status_code=status_code, detail=message)
+
+
+def _require_planogram_actor(db: Session, request: Request):
+    actor = _request_user(db, request)
+    if actor is None:
+        raise HTTPException(status_code=401, detail="Authenticated user required")
+    if not actor.is_active or actor.role not in {"ADMIN", "SUPERVISOR"}:
+        raise HTTPException(status_code=403, detail="Supervisor role required")
+    return actor
+
+
+def _planogram_shelf_scope(db: Session, shelf_id: int, actor: models.User) -> models.Shelf:
+    shelf = (
+        db.query(models.Shelf)
+        .join(models.Zone, models.Shelf.zone_id == models.Zone.id)
+        .filter(models.Shelf.id == shelf_id)
+        .first()
+    )
+    if shelf is None:
+        raise HTTPException(status_code=404, detail="Shelf not found")
+    _enforce_store_scope(actor, shelf.zone.store_id)
+    return shelf
+
+
+@app.post(
+    "/api/v1/shelves/{shelf_id}/planograms",
+    response_model=ShelfPlanogramRead,
+    status_code=201,
+    tags=["planograms"],
+)
+def create_shelf_planogram(
+    shelf_id: int,
+    payload: ShelfPlanogramCreate,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    actor = _require_planogram_actor(db, request)
+    _planogram_shelf_scope(db, shelf_id, actor)
+    try:
+        item = create_draft_planogram(
+            db,
+            shelf_id=shelf_id,
+            actor_user_id=actor.id,
+            cells=payload.cells,
+            calibration_source=payload.calibration_source,
+            calibration_image_id=payload.calibration_image_id,
+            calibration_image_sha256=payload.calibration_image_sha256,
+        )
+        db.commit()
+        db.refresh(item)
+        return item
+    except ShelfPlanogramError as exc:
+        db.rollback()
+        raise _planogram_http_error(exc) from exc
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Planogram changed concurrently; retry with current shelf state") from exc
+
+
+@app.get(
+    "/api/v1/shelves/{shelf_id}/planograms",
+    response_model=list[ShelfPlanogramRead],
+    tags=["planograms"],
+)
+def list_shelf_planograms(
+    shelf_id: int,
+    request: Request,
+    limit: int = 100,
+    offset: int = 0,
+    db: Session = Depends(get_db),
+):
+    actor = _require_planogram_actor(db, request)
+    _planogram_shelf_scope(db, shelf_id, actor)
+    return (
+        db.query(models.ShelfPlanogram)
+        .filter(models.ShelfPlanogram.shelf_id == shelf_id)
+        .order_by(models.ShelfPlanogram.version.desc(), models.ShelfPlanogram.id.desc())
+        .offset(max(0, offset))
+        .limit(max(1, min(limit, 200)))
+        .all()
+    )
+
+
+@app.get(
+    "/api/v1/shelves/{shelf_id}/planograms/active",
+    response_model=ShelfPlanogramRead | None,
+    tags=["planograms"],
+)
+def get_active_shelf_planogram(
+    shelf_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    actor = _require_planogram_actor(db, request)
+    _planogram_shelf_scope(db, shelf_id, actor)
+    try:
+        return load_active_planogram_for_shelf(
+            db, shelf_id=shelf_id, actor_user_id=actor.id
+        )
+    except ShelfPlanogramError as exc:
+        raise _planogram_http_error(exc) from exc
+
+
+@app.post(
+    "/api/v1/planograms/{planogram_id}/activate",
+    response_model=ShelfPlanogramRead,
+    tags=["planograms"],
+)
+def activate_shelf_planogram(
+    planogram_id: int,
+    payload: ShelfPlanogramLifecycleRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    actor = _require_planogram_actor(db, request)
+    try:
+        item = activate_planogram(
+            db,
+            planogram_id=planogram_id,
+            actor_user_id=actor.id,
+            reason=payload.reason,
+        )
+        db.commit()
+        db.refresh(item)
+        return item
+    except ShelfPlanogramError as exc:
+        db.rollback()
+        raise _planogram_http_error(exc) from exc
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Planogram lifecycle changed concurrently; refresh and retry") from exc
+
+
+@app.post(
+    "/api/v1/planograms/{planogram_id}/retire",
+    response_model=ShelfPlanogramRead,
+    tags=["planograms"],
+)
+def retire_shelf_planogram(
+    planogram_id: int,
+    payload: ShelfPlanogramLifecycleRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    actor = _require_planogram_actor(db, request)
+    try:
+        item = retire_planogram(
+            db,
+            planogram_id=planogram_id,
+            actor_user_id=actor.id,
+            reason=payload.reason,
+        )
+        db.commit()
+        db.refresh(item)
+        return item
+    except ShelfPlanogramError as exc:
+        db.rollback()
+        raise _planogram_http_error(exc) from exc
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Planogram lifecycle changed concurrently; refresh and retry") from exc
 
 
 @app.post("/api/v1/observations", response_model=ObservationRead, status_code=201, tags=["observations"])

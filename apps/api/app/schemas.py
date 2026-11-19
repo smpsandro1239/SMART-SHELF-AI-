@@ -1160,3 +1160,69 @@ class PalletRotationPolicyUpdate(BaseModel):
         if "is_enabled" in self.model_fields_set and self.is_enabled is None:
             raise ValueError("is_enabled cannot be null")
         return self
+
+
+
+class ShelfPlanogramCellCreate(BaseModel):
+    cell_code: str = Field(min_length=1, max_length=80)
+    row_index: int = Field(ge=0, le=10_000)
+    column_index: int = Field(ge=0, le=10_000)
+    x_min: float = Field(ge=0, le=1, allow_inf_nan=False)
+    y_min: float = Field(ge=0, le=1, allow_inf_nan=False)
+    x_max: float = Field(ge=0, le=1, allow_inf_nan=False)
+    y_max: float = Field(ge=0, le=1, allow_inf_nan=False)
+    expected_product_id: int | None = Field(default=None, gt=0)
+
+    @model_validator(mode="after")
+    def validate_geometry(self):
+        if self.x_min >= self.x_max or self.y_min >= self.y_max:
+            raise ValueError("Cell bounds must have positive width and height")
+        return self
+
+
+class ShelfPlanogramCreate(BaseModel):
+    calibration_source: Literal["MANUAL", "IMAGE"] = "MANUAL"
+    calibration_image_id: int | None = Field(default=None, gt=0)
+    calibration_image_sha256: str | None = Field(default=None, min_length=64, max_length=64)
+    cells: list[ShelfPlanogramCellCreate] = Field(min_length=1, max_length=500)
+
+
+class ShelfPlanogramLifecycleRequest(BaseModel):
+    reason: str = Field(min_length=3, max_length=500)
+
+
+class ShelfPlanogramCellRead(BaseModel):
+    id: int
+    planogram_id: int
+    cell_code: str
+    row_index: int
+    column_index: int
+    x_min: float
+    y_min: float
+    x_max: float
+    y_max: float
+    expected_product_id: int | None
+    created_at: datetime
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ShelfPlanogramRead(BaseModel):
+    id: int
+    shelf_id: int
+    version: int
+    status: Literal["DRAFT", "ACTIVE", "RETIRED"]
+    calibration_source: Literal["MANUAL", "IMAGE"]
+    calibration_image_id: int | None
+    calibration_image_sha256: str | None
+    created_by_user_id: int
+    created_at: datetime
+    activated_by_user_id: int | None
+    activated_at: datetime | None
+    activation_reason: str | None
+    retired_by_user_id: int | None
+    retired_at: datetime | None
+    retirement_reason: str | None
+    cells: list[ShelfPlanogramCellRead]
+    model_config = ConfigDict(from_attributes=True)
+
+
