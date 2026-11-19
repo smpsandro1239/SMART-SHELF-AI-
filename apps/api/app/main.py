@@ -63,6 +63,7 @@ from app.shelf_planograms import (
     replace_draft_planogram_cells,
     retire_planogram,
 )
+from app.shelf_planogram_comparison import compare_active_planogram_detections
 from app.pallet_rotation_forecast_bridge import enrich_pallet_candidates_with_hourly_profiles
 from app.pallet_rotation_windows import recommend_low_traffic_window
 from app.hourly_patterns import build_weekday_hour_profile
@@ -97,6 +98,7 @@ from app.schemas import (
     ProductPackagingLevelCreate, StorePalletCreate, StorePalletRead,
     PalletRotationPolicyCreate, PalletRotationPolicyRead, PalletRotationPolicyUpdate, PalletRotationEventRead, PalletLifecycleUpdate, PalletRotationSimulationRequest,
     ShelfPlanogramCreate, ShelfPlanogramCellsReplace, ShelfPlanogramLifecycleRequest, ShelfPlanogramRead,
+    ShelfPlanogramComparisonRead,
 )
 
 app = FastAPI(title=settings.app_name, version="0.2.0", description="Operational API for SMART SHELF AI.")
@@ -612,6 +614,69 @@ def get_active_shelf_planogram(
         )
     except ShelfPlanogramError as exc:
         raise _planogram_http_error(exc) from exc
+
+
+@app.get(
+    "/api/v1/shelves/{shelf_id}/planograms/comparison/{image_id}",
+    response_model=ShelfPlanogramComparisonRead,
+    tags=["planograms"],
+)
+def compare_shelf_image_with_active_planogram(
+    shelf_id: int,
+    image_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Compare a completed active capture with the current approved shelf layout."""
+    actor = _require_planogram_actor(db, request)
+    _planogram_shelf_scope(db, shelf_id, actor)
+    image = (
+        db.query(models.ShelfImage)
+        .filter(
+            models.ShelfImage.id == image_id,
+            models.ShelfImage.shelf_id == shelf_id,
+        )
+        .first()
+    )
+    if image is None:
+        raise HTTPException(status_code=404, detail="Shelf image not found")
+    if image.retention_status != "ACTIVE":
+        raise HTTPException(status_code=404, detail="Shelf image is not available")
+    if image.analysis_status != "COMPLETED":
+        raise HTTPException(status_code=409, detail="Shelf image analysis is not completed")
+
+    try:
+        planogram = load_active_planogram_for_shelf(
+            db, shelf_id=shelf_id, actor_user_id=actor.id
+        )
+    except ShelfPlanogramError as exc:
+        raise _planogram_http_error(exc) from exc
+    if planogram is None:
+        raise HTTPException(status_code=409, detail="Shelf has no active planogram")
+
+    detections = (
+        db.query(models.ShelfImageDetection)
+        .filter(models.ShelfImageDetection.shelf_image_id == image.id)
+        .order_by(models.ShelfImageDetection.id.asc())
+        .all()
+    )
+    try:
+        cells = compare_active_planogram_detections(planogram, detections)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail="Planogram comparison is unavailable") from exc
+
+    return {
+        "shelf_image_id": image.id,
+        "shelf_id": shelf_id,
+        "image_sha256": image.sha256,
+        "model_version": image.model_version,
+        "planogram_id": planogram.id,
+        "planogram_version": planogram.version,
+        "calibration_source": planogram.calibration_source,
+        "calibration_image_id": planogram.calibration_image_id,
+        "calibration_image_sha256": planogram.calibration_image_sha256,
+        "cells": cells,
+    }
 
 
 @app.post(
