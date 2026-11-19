@@ -616,3 +616,8 @@ O comparador de células foi endurecido para não inferir vazio apenas porque o 
 - API CI [44553140735](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44553140735): **1311 passed, 1 skipped, 1 warning**; Quality Gates [44553235687](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44553235687) e Docker Compose [44553140813](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44553140813) aprovados.
 
 **Pendente:** persistir/versionar planogramas e calibração, ligar o comparador ao worker e UI, validar o threshold com imagens reais anotadas. A evidência `EMPTY` continua a não alterar inventário.
+## 2026-11-19 — Quinta sequência: conformidade de facings
+
+As células calibradas suportam agora um número esperado de facings por SKU. O comparador calcula quantas deteções de produto frontais se associam a cada célula e devolve `UNDER_FACED`, `OVER_FACED` ou `OCCUPIED` quando a contagem é inferior, superior ou exacta. `MISPLACED`, `OCCUPIED_UNIDENTIFIED` e `CONFLICT` mantêm precedência para preservar a incerteza.
+
+`observed_facings` conta caixas pós-NMS associadas à célula; não representa unidades em profundidade nem stock disponível. A deduplicação e calibração de caixas com imagens reais são necessárias antes de usar esta contagem operacionalmente. Persistência de planogramas, API e interface continuam pendentes.
