@@ -1138,3 +1138,11 @@ O teste de concorrência confirma a serialização edição/ativação no servi�
 - O digest continua a excluir apenas o seu próprio campo; os resultados por célula fazem parte da identidade.
 - Acrescentados testes para ordenação de chaves, alteração de estado de célula, digest próprio, versão não suportada e NaN.
 - Validação CI pendente.
+
+
+### Correção do isolamento do teste de idempotência SKU — 2026-11-19
+
+- A primeira execução do CI após a alteração identificou uma falha no teste integrado: a revisão SKU B usada para testar a colisão de idempotência era aplicada à mesma deteção que alimentava o fluxo operacional de tarefas.
+- O endpoint comportou-se de forma conservadora; a alteração da revisão fez com que a decisão operacional deixasse de reconhecer a evidência do SKU A, pelo que o teste não podia continuar a esperar a criação da tarefa.
+- O teste foi corrigido para usar uma segunda deteção independente na mesma captura para o cenário SKU A → SKU B. Assim, a revisão de regressão não altera a evidência do fluxo de tarefas principal.
+- A validação da correção aguarda nova execução dos workflows API CI e Quality Gates; não declarar a suite aprovada até essa execução terminar.

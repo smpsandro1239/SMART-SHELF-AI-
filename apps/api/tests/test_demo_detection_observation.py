@@ -94,11 +94,22 @@ def test_demo_detection_requires_human_review_and_is_idempotent(monkeypatch):
             y_max=0.6,
             model_version="mock-shelf-vision-v1",
         )
-        db.add(detection)
+        regression_detection = models.ShelfImageDetection(
+            shelf_image_id=image.id,
+            label="empty_facing",
+            confidence=0.91,
+            x_min=0.5,
+            y_min=0.2,
+            x_max=0.8,
+            y_max=0.6,
+            model_version="mock-shelf-vision-v1",
+        )
+        db.add_all([detection, regression_detection])
         db.commit()
         reviewer_id, employee_id = reviewer.id, employee.id
         store_id, shelf_id = store.id, shelf.id
-        product_id, other_product_id, detection_id = product.id, other_product.id, detection.id
+        product_id, other_product_id = product.id, other_product.id
+        detection_id, regression_detection_id = detection.id, regression_detection.id
     finally:
         db.close()
 
@@ -179,7 +190,24 @@ def test_demo_detection_requires_human_review_and_is_idempotent(monkeypatch):
             db = TestingSession()
             try:
                 db.add(models.DetectionSkuReview(
-                    detection_id=detection_id,
+                    detection_id=regression_detection_id,
+                    selected_product_id=product_id,
+                    decision="CORRECTED",
+                    reviewer_user_id=reviewer_id,
+                    notes="Regressão: SKU inicial para a deteção isolada.",
+                ))
+                db.commit()
+            finally:
+                db.close()
+
+            regression_first = client.post(
+                f"/api/v1/shelf-image-detections/{regression_detection_id}/observation",
+                json={"product_id": product_id, "confirmed_status": "EMPTY"},
+            )
+            db = TestingSession()
+            try:
+                db.add(models.DetectionSkuReview(
+                    detection_id=regression_detection_id,
                     selected_product_id=other_product_id,
                     decision="CORRECTED",
                     reviewer_user_id=reviewer_id,
@@ -190,7 +218,7 @@ def test_demo_detection_requires_human_review_and_is_idempotent(monkeypatch):
                 db.close()
 
             changed_product = client.post(
-                f"/api/v1/shelf-image-detections/{detection_id}/observation",
+                f"/api/v1/shelf-image-detections/{regression_detection_id}/observation",
                 json={"product_id": other_product_id, "confirmed_status": "EMPTY"},
             )
             decisions = client.get(f"/api/v1/operational-decisions?store_id={store_id}")
@@ -245,8 +273,10 @@ def test_demo_detection_requires_human_review_and_is_idempotent(monkeypatch):
         assert first.status_code == 200
         assert second.status_code == 200
         assert first.json()["id"] == second.json()["id"]
+        assert regression_first.status_code == 200
         assert changed_product.status_code == 409
         assert "different product or status" in changed_product.json()["detail"]
+        assert regression_first.json()["product_id"] == product_id
         assert first.json()["product_id"] == product_id
         assert first.json()["status"] == "EMPTY"
         assert first.json()["observed_quantity"] == 0

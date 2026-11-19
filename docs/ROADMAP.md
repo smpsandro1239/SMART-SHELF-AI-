@@ -705,3 +705,11 @@ A comparação passou a bloquear a captura e a imagem de calibração em ordem c
 ### Validação CI — comparação e retenção serializadas (19-11-2026)
 
 A alteração foi validada no API CI [44588809660](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44588809660), Quality Gates [44589016727](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44589016727) e Docker Compose [44588809507](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44588809507). O API CI executou o smoke PostgreSQL 16 de planogramas, incluindo a corrida comparação/retenção, e a suite terminou com **1342 testes aprovados, 1 ignorado e 1 aviso**. O Quality Gates confirmou também compilação Python e build TypeScript/produção Web. A comparação continua read-only e não persistida.
+
+
+### Correção do isolamento do teste de idempotência SKU — 2026-11-19
+
+- A primeira execução do CI após a alteração identificou uma falha no teste integrado: a revisão SKU B usada para testar a colisão de idempotência era aplicada à mesma deteção que alimentava o fluxo operacional de tarefas.
+- O endpoint comportou-se de forma conservadora; a alteração da revisão fez com que a decisão operacional deixasse de reconhecer a evidência do SKU A, pelo que o teste não podia continuar a esperar a criação da tarefa.
+- O teste foi corrigido para usar uma segunda deteção independente na mesma captura para o cenário SKU A → SKU B. Assim, a revisão de regressão não altera a evidência do fluxo de tarefas principal.
+- A validação da correção aguarda nova execução dos workflows API CI e Quality Gates; não declarar a suite aprovada até essa execução terminar.
