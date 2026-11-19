@@ -96,6 +96,42 @@ def main():
         else:
             raise AssertionError("database accepted a job inserted directly in terminal state")
 
+    forged_initial_metadata = [
+        ("lease_owner", "'forged-worker'"),
+        ("lease_expires_at", "now() + INTERVAL '60 seconds'"),
+        ("fencing_token", "1"),
+        ("attempt_count", "1"),
+        ("output_sha256", "'" + "f" * 64 + "'"),
+        ("staged_output_reference", "'staging/forged/output'"),
+        ("failure_code", "'FORGED_FAILURE'"),
+        ("finished_at", "now()"),
+    ]
+    for index, (column, value) in enumerate(forged_initial_metadata, start=1):
+        with SessionLocal() as db:
+            try:
+                db.execute(text(
+                    "INSERT INTO dataset_execution_jobs ("
+                    "idempotency_key, request_sha256, release_fingerprint, "
+                    "approval_record_sha256, approval_report_sha256, mode, "
+                    "status, fencing_token, attempt_count, " + column + ") "
+                    "VALUES ("
+                    ":key, :request_digest, :release_digest, :approval_digest, "
+                    ":report_digest, 'training', 'QUEUED', 0, 0, " + value + ")"
+                ), {
+                    "key": f"pg-forged-initial-{suffix}-{index}",
+                    "request_digest": "b" * 64,
+                    "release_digest": "c" * 64,
+                    "approval_digest": "d" * 64,
+                    "report_digest": "e" * 64,
+                })
+                db.commit()
+            except IntegrityError:
+                db.rollback()
+            else:
+                raise AssertionError(
+                    f"database accepted forged initial job metadata: {column}"
+                )
+
     barrier = Barrier(2)
     with ThreadPoolExecutor(max_workers=2) as executor:
         results = list(executor.map(
