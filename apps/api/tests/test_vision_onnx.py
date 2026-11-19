@@ -276,14 +276,10 @@ def test_embedding_version_is_bound_to_embedding_weights(tmp_path, monkeypatch):
     embedder = tmp_path / "embedder.onnx"
     detector.write_bytes(b"detector")
     embedder.write_bytes(b"embedder-v1")
-    session_calls = 0
-
-    def load_session(*args, **kwargs):
-        nonlocal session_calls
-        session_calls += 1
-        return fake_session(
-            output_shape=(1, 256) if session_calls == 2 else (1, "detections", 6)
-        )
+    def load_session(model_path, *args, **kwargs):
+        if Path(model_path) == embedder:
+            return fake_session(output_shape=(1, 256))
+        return fake_session()
 
     monkeypatch.setitem(
         sys.modules,
