@@ -117,6 +117,7 @@ class ShelfCell:
     x_max: float
     y_max: float
     expected_product_id: int | None = None
+    expected_facings: int | None = None
     is_visible: bool = False
     is_occluded: bool = False
 
@@ -134,6 +135,14 @@ class ShelfCell:
             or self.expected_product_id <= 0
         ):
             raise ValueError("expected_product_id must be a positive integer or None")
+        if self.expected_facings is not None and (
+            isinstance(self.expected_facings, bool)
+            or not isinstance(self.expected_facings, int)
+            or self.expected_facings <= 0
+        ):
+            raise ValueError("expected_facings must be a positive integer or None")
+        if self.expected_facings is not None and self.expected_product_id is None:
+            raise ValueError("expected_facings requires expected_product_id")
         if not isinstance(self.is_visible, bool) or not isinstance(self.is_occluded, bool):
             raise ValueError("Cell visibility flags must be booleans")
 
@@ -143,6 +152,8 @@ class ShelfCellObservation:
     cell_id: str
     status: str
     expected_product_id: int | None
+    expected_facings: int | None
+    observed_facings: int
     observed_product_ids: tuple[int | None, ...]
     detection_indices: tuple[int, ...]
     overlap_ratio: float
@@ -250,6 +261,10 @@ def compare_detections_to_cells(
                 status = "MISPLACED"
             elif any(product_id is None for _, product_id in product_matches):
                 status = "OCCUPIED_UNIDENTIFIED"
+            elif cell.expected_facings is not None and len(product_matches) < cell.expected_facings:
+                status = "UNDER_FACED"
+            elif cell.expected_facings is not None and len(product_matches) > cell.expected_facings:
+                status = "OVER_FACED"
             else:
                 status = "OCCUPIED"
         elif (
@@ -265,6 +280,8 @@ def compare_detections_to_cells(
             cell_id=cell.cell_id,
             status=status,
             expected_product_id=cell.expected_product_id,
+            expected_facings=cell.expected_facings,
+            observed_facings=len(product_matches),
             observed_product_ids=product_ids,
             detection_indices=detection_indices,
             overlap_ratio=round(strongest_overlap, 6),
