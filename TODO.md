@@ -580,7 +580,7 @@
 - [x] Auditar o catálogo de referências externas, os snapshots de inventário, os eventos de disposição e a linhagem das fontes dos jobs.
 - [x] Confirmar que a publicação append-only existente é a identidade canónica do output e que o catálogo por imagem não representa correctamente outputs multi-origem.
 - [x] Documentar o modelo alvo, a herança de restrições, os limites de inventário externo e as decisões de negócio em aberto.
-- [ ] Implementar eventos append-only de governação/retenção ligados à publicação, sem alterar a linha imutável da publicação.
+- [x] Implementar eventos append-only de governação/retenção ligados à publicação, sem alterar a linha imutável da publicação; migration 0065, serviço interno, guards SQLite/PostgreSQL e validação CI concluídos.
 - [x] Implementar elegibilidade fail-closed que revalida todas as fontes do job sob locks por ID crescente; migration 0064 aplica guard equivalente no INSERT.
 - [x] Acrescentar testes de migration SQLite e smoke PostgreSQL 16 para holds/restrições concorrentes em outputs multi-origem.
 - [ ] Definir política aprovada de retenção e cobertura externa antes de activar qualquer disposição física.
