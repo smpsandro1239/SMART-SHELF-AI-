@@ -467,3 +467,20 @@
 - [ ] Não confiar em `worker_id` fornecido pelo cliente como prova de identidade; vinculá-lo à identidade autenticada.
 - [ ] Acrescentar testes negativos de tokens inválidos/expirados/revogados, scopes insuficientes, replay e isolamento entre workers.
 - [ ] Manter endpoints de jobs não expostos até a autenticação e autorização estarem ligadas aos handlers.
+
+
+## Autenticação individual de workers de datasets — 19-11-2026
+
+- [x] Criar identidades de serviço separadas das contas JWT humanas e persistir workers, credenciais e eventos de segurança.
+- [x] Emitir credenciais bearer individuais de elevada entropia; guardar apenas SHA-256 do segredo e comparar em tempo constante.
+- [x] Implementar scopes allow-list para claim, heartbeat, conclusão, falha, leitura de artefactos e publicação de outputs; não aceitar wildcard.
+- [x] Implementar validade limitada (60 segundos a 90 dias; predefinição 30 dias), rotação transacional, revogação individual e desativação do worker.
+- [x] Vincular wrappers de lease ao `worker_id` derivado do principal autenticado; não aceitar identidade declarada separadamente.
+- [x] Criar CLI local confiável para issue/rotate/revoke/disable; não criar endpoint HTTP público de emissão.
+- [x] Acrescentar testes unitários para segredo incorrecto, token desconhecido/malformado, expiração, revogação, rotação, desativação, scopes e identidade no claim.
+- [x] Integrar smoke PostgreSQL para ciclo de vida de credenciais e imutabilidade dos eventos de segurança.
+- [ ] Confirmar API CI, migration PostgreSQL 16, smoke dedicado e Quality Gates no HEAD desta ronda.
+- [ ] Integrar autenticação no futuro middleware/handlers HTTP antes de expor qualquer endpoint de jobs.
+- [ ] Implementar assinatura por pedido/nonce ou mecanismo equivalente anti-replay; a credencial bearer actual é reutilizável.
+- [ ] Implementar leitura de artefactos autorizada por chamada (`artifacts:read`) e promoção de outputs condicionada ao fencing token actual (`outputs:publish`).
+- [ ] Não marcar o worker como operacional: ainda não existe broker/worker de treino, API HTTP de jobs nem integração real de armazenamento/publicação.
