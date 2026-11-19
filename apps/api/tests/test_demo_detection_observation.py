@@ -237,7 +237,7 @@ def test_demo_detection_requires_human_review_and_is_idempotent(monkeypatch):
                 f"/api/v1/shelf-image-detections/{regression_detection_id}/observation",
                 json={"product_id": other_product_id, "confirmed_status": "EMPTY"},
             )
-            decisions = client.get(f"/api/v1/operational-decisions?store_id={store_id}")
+            decisions = client.get(f"/api/v1/operational-decisions?store_id={store_id}&shelf_id={shelf_id}")
             missing_evidence = client.post(
                 "/api/v1/tasks/from-operational-decision?approved=true&demo_evidence_required=true",
                 json={"store_id": store_id, "shelf_id": shelf_id, "product_id": other_product_id},

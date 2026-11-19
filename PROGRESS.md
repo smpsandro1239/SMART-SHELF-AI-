@@ -1153,3 +1153,10 @@ O teste de concorrência confirma a serialização edição/ativação no servi�
 - A execução CI do commit `6e9a3147e33076316bef9feb72c4cf212e63d87b` confirmou que separar apenas a deteção não era suficiente: a deteção de regressão continuava na mesma prateleira e a observação adicional alterava a avaliação operacional usada pelo teste de criação de tarefas.
 - O cenário SKU A → SKU B foi movido para uma segunda prateleira, com imagem e deteção próprias, mantendo os mesmos produtos atribuídos. O fluxo operacional original passa a usar exclusivamente a prateleira e a evidência originais.
 - A correção aguarda nova execução integral do CI. A falha anterior foi **1 failed, 1342 passed, 1 skipped, 1 warning**; não considerar a suite aprovada.
+
+
+### Precisão do âmbito da asserção de decisões — 2026-11-19
+
+- O CI do commit `43ddc0f54c52552eb3168a5f9ab301e49668e431` confirmou que a segunda prateleira isolou a revisão SKU, mas o teste continuava a consultar todas as prateleiras da loja e a construir um dicionário apenas por `product_id`. Como os mesmos SKUs existem nas duas prateleiras, a linha da prateleira de regressão podia substituir a evidência da prateleira operacional na asserção.
+- A consulta de decisões no teste foi restringida à prateleira original, que é o âmbito efetivamente validado pelo fluxo de criação de tarefa. A prateleira secundária continua a testar exclusivamente a colisão de idempotência SKU A → SKU B.
+- A correção aguarda nova execução do API CI e Quality Gates; a execução anterior terminou com **1 failed, 1342 passed, 1 skipped, 1 warning**.
