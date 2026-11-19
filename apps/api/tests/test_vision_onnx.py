@@ -3,7 +3,14 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from app.vision_onnx import ONNXConfigurationError, ONNXShelfVisionProvider
+from app.vision_onnx import (
+    ONNXConfigurationError,
+    ONNXShelfVisionProvider,
+    PREPROCESSING_VERSION,
+    _canonical_sha256,
+    _fingerprinted_version,
+    _sha256_file,
+)
 
 
 def provider_without_runtime():
@@ -175,3 +182,52 @@ def test_analyze_aborts_when_model_returns_unmapped_class_id(tmp_path):
 
     with pytest.raises(ValueError, match="unknown class_id"):
         provider.analyze(image_path)
+
+
+
+def test_model_sha256_is_streamed_and_changes_with_file_content(tmp_path):
+    model = tmp_path / "detector.onnx"
+    model.write_bytes(b"model-a")
+    first = _sha256_file(model)
+    model.write_bytes(b"model-b")
+    second = _sha256_file(model)
+
+    assert len(first) == 64
+    assert first != second
+
+
+def test_effective_model_version_fingerprint_is_stable_and_content_sensitive():
+    payload = {
+        "detector_sha256": "a" * 64,
+        "class_labels_sha256": "b" * 64,
+        "input_size": 640,
+        "confidence_threshold": 0.25,
+        "max_detections": 300,
+        "preprocessing_version": PREPROCESSING_VERSION,
+    }
+    first = _fingerprinted_version("shelf-model-v1", _canonical_sha256(payload))
+    second = _fingerprinted_version("shelf-model-v1", _canonical_sha256(payload))
+    changed = _fingerprinted_version(
+        "shelf-model-v1",
+        _canonical_sha256({**payload, "confidence_threshold": 0.30}),
+    )
+
+    assert first == second
+    assert first != changed
+    assert len(first) <= 100
+    assert first.startswith("shelf-model-v1@")
+
+
+def test_effective_model_version_rejects_invalid_fingerprint():
+    with pytest.raises(ONNXConfigurationError, match="SHA-256"):
+        _fingerprinted_version("model-v1", "not-a-digest")
+
+
+def test_provider_rejects_symbolic_link_model_path(tmp_path):
+    model = tmp_path / "detector.onnx"
+    model.write_bytes(b"model")
+    link = tmp_path / "detector-link.onnx"
+    link.symlink_to(model)
+
+    with pytest.raises(ONNXConfigurationError, match="symbolic links"):
+        ONNXShelfVisionProvider(link, class_labels={0: "product"})
