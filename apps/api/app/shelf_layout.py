@@ -166,6 +166,12 @@ def compare_detections_to_cells(
     cell_list = tuple(cells)
     if len({cell.cell_id for cell in cell_list}) != len(cell_list):
         raise ValueError("Shelf cell IDs must be unique")
+    for index, cell in enumerate(cell_list):
+        for other in cell_list[index + 1:]:
+            overlap_width = min(cell.x_max, other.x_max) - max(cell.x_min, other.x_min)
+            overlap_height = min(cell.y_max, other.y_max) - max(cell.y_min, other.y_min)
+            if overlap_width > 0 and overlap_height > 0:
+                raise ValueError("Shelf cells must not overlap")
 
     detection_boxes = []
     for index, detection in enumerate(detections):
@@ -193,9 +199,11 @@ def compare_detections_to_cells(
 
         if matches:
             known_ids = {product_id for _, product_id in matches if product_id is not None}
-            if cell.expected_product_id is not None and known_ids and cell.expected_product_id not in known_ids:
+            if cell.expected_product_id is not None and any(
+                product_id != cell.expected_product_id for product_id in known_ids
+            ):
                 status = "MISPLACED"
-            elif any(product_id is None for _, product_id in matches) and not known_ids:
+            elif any(product_id is None for _, product_id in matches):
                 status = "OCCUPIED_UNIDENTIFIED"
             else:
                 status = "OCCUPIED"
