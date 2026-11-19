@@ -268,31 +268,35 @@ def revalidate_dataset_worker_principal(
     required_scope: str,
 ) -> DatasetWorkerPrincipal:
     """Recheck persisted worker, credential and scope under locks for each operation."""
-    require_dataset_worker_scope(principal, required_scope=required_scope)
-    worker = db.query(models.DatasetWorker).filter_by(
-        worker_id=principal.worker_id
-    ).with_for_update(read=True).populate_existing().first()
-    credential = db.query(models.DatasetWorkerCredential).filter_by(
-        credential_id=principal.credential_id,
-        worker_id=principal.worker_id,
-    ).with_for_update(read=True).populate_existing().first()
-    now = _utc(_now())
-    if (
-        worker is None
-        or worker.status != "ACTIVE"
-        or credential is None
-        or credential.revoked_at is not None
-        or _utc(credential.expires_at) <= now
-    ):
-        raise DatasetWorkerAuthenticationError("worker credential is no longer active")
-    scopes = frozenset(credential.scopes or [])
-    if required_scope not in scopes:
-        raise DatasetWorkerAuthorizationError("worker credential lacks the required scope")
-    return DatasetWorkerPrincipal(
-        worker_id=worker.worker_id,
-        credential_id=credential.credential_id,
-        scopes=scopes,
-    )
+    try:
+        require_dataset_worker_scope(principal, required_scope=required_scope)
+        worker = db.query(models.DatasetWorker).filter_by(
+            worker_id=principal.worker_id
+        ).with_for_update(read=True).populate_existing().first()
+        credential = db.query(models.DatasetWorkerCredential).filter_by(
+            credential_id=principal.credential_id,
+            worker_id=principal.worker_id,
+        ).with_for_update(read=True).populate_existing().first()
+        now = _utc(_now())
+        if (
+            worker is None
+            or worker.status != "ACTIVE"
+            or credential is None
+            or credential.revoked_at is not None
+            or _utc(credential.expires_at) <= now
+        ):
+            raise DatasetWorkerAuthenticationError("worker credential is no longer active")
+        scopes = frozenset(credential.scopes or [])
+        if required_scope not in scopes:
+            raise DatasetWorkerAuthorizationError("worker credential lacks the required scope")
+        return DatasetWorkerPrincipal(
+            worker_id=worker.worker_id,
+            credential_id=credential.credential_id,
+            scopes=scopes,
+        )
+    except Exception:
+        db.rollback()
+        raise
 
 
 def claim_dataset_job_for_worker(
