@@ -922,3 +922,12 @@ Critério global: nenhuma capacidade pode ser marcada como concluída sem códig
 - [x] Documentar a distinção entre a captura comparada e a referência de calibração por imagem.
 - [ ] Confirmar a nova cobertura no API CI e Quality Gates.
 - [ ] Definir contrato append-only para resultados e decisões humanas antes de criar persistência.
+
+
+### Identidade reproduzível da comparação — 2026-11-19
+
+- [x] Acrescentar versão explícita do esquema de comparação.
+- [x] Calcular SHA-256 determinístico sobre a proveniência completa e os resultados por célula, usando JSON canónico.
+- [x] Acrescentar teste HTTP que confirma digest de 64 caracteres e estabilidade entre consultas idênticas.
+- [ ] Confirmar API CI e Quality Gates antes de considerar a identidade validada.
+- [ ] Persistir snapshots e decisões humanas apenas numa fase seguinte, com retenção e triggers append-only.

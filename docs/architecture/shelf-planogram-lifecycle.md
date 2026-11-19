@@ -121,3 +121,8 @@ A comparação é calculada on-demand e não é persistida. Esta decisão evita 
 ### Retenção da captura usada na comparação
 
 A rota de comparação só aceita capturas com `retention_status = ACTIVE` e análise `COMPLETED`. Estados `RESTRICTED`, `PENDING_PURGE` e `PURGED` são tratados como indisponíveis e devolvem HTTP 404, sem expor deteções nem o resultado da comparação. Esta verificação é feita em cada pedido, não apenas no momento em que a captura é selecionada na interface. A restrição aplica-se à imagem de origem da comparação; a calibração por imagem é representada pelo seu ID e digest imutáveis no planograma, não sendo necessário voltar a ler o ficheiro de calibração para executar a comparação geométrica.
+
+
+### Identidade determinística da comparação
+
+Cada resposta inclui `comparison_schema_version` e `comparison_sha256`. O digest é calculado sobre uma representação JSON canónica (chaves ordenadas, separadores estáveis e sem valores NaN) que inclui a captura e o seu SHA-256, versão do modelo, identidade/versão do planograma, proveniência da calibração e resultados por célula. A versão do esquema faz parte do conteúdo autenticado pelo digest. Isto permite identificar uma mesma evidência de forma repetível e prepara a persistência append-only; não é uma assinatura digital nem substitui a validação de retenção. A resposta continua on-demand e não é gravada na base de dados.

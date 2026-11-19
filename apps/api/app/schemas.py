@@ -1249,6 +1249,8 @@ class ShelfPlanogramCellComparisonRead(BaseModel):
 
 
 class ShelfPlanogramComparisonRead(BaseModel):
+    comparison_schema_version: int
+    comparison_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     shelf_image_id: int
     shelf_id: int
     image_sha256: str

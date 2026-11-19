@@ -1733,3 +1733,6 @@ A validação é automatizada por CI. Não foi realizada validação manual com 
 
 
 A comparação de planogramas valida a retenção em cada consulta: apenas capturas `ACTIVE` e com análise `COMPLETED` podem ser comparadas. Imagens `RESTRICTED`, `PENDING_PURGE` ou `PURGED` devolvem HTTP 404 e não disponibilizam deteções nem resultados.
+
+
+As respostas de comparação incluem ainda a versão do esquema e um SHA-256 determinístico sobre a captura, proveniência do modelo/planograma/calibração e resultados por célula. Este identificador prepara a futura persistência auditável; não representa uma assinatura digital e não altera o carácter read-only da consulta.

@@ -1079,3 +1079,12 @@ O teste de concorrência confirma a serialização edição/ativação no servi�
 - Documentada a distinção entre a captura de comparação e a referência histórica de calibração por imagem.
 - Não foi criada persistência de resultados: continua dependente de um contrato de retenção, identidade/versionamento e auditoria append-only.
 - Aguardam-se os workflows CI do commit desta alteração antes de declarar a cobertura validada.
+
+
+## 2026-11-19 — Identidade determinística da comparação
+
+- A resposta da comparação passou a expor `comparison_schema_version` e `comparison_sha256`.
+- O digest SHA-256 é calculado sobre JSON canónico e inclui captura/digest, versão do modelo, identidade e versão do planograma, calibração e células comparadas.
+- O teste HTTP de proveniência confirma que chamadas repetidas para a mesma evidência produzem o mesmo digest.
+- O digest é um identificador reproduzível, não uma assinatura digital. A comparação continua on-demand e não persistida.
+- A validação CI do novo contrato está pendente.

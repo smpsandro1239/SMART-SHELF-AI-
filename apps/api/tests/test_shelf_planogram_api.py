@@ -478,6 +478,15 @@ def test_planogram_comparison_returns_image_calibration_provenance(planogram_api
     assert result["calibration_source"] == "IMAGE"
     assert result["calibration_image_id"] == calibration_image_id
     assert result["calibration_image_sha256"] == calibration_sha256
+    assert result["comparison_schema_version"] == 1
+    assert len(result["comparison_sha256"]) == 64
+
+    repeated = client.get(
+        f"/api/v1/shelves/{ids['shelf_a']}/planograms/comparison/{calibration_image_id}",
+        headers=headers,
+    )
+    assert repeated.status_code == 200, repeated.text
+    assert repeated.json()["comparison_sha256"] == result["comparison_sha256"]
 
 
 @pytest.mark.parametrize("retention_status", ["RESTRICTED", "PENDING_PURGE", "PURGED"])

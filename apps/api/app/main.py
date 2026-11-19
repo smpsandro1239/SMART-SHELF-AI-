@@ -63,7 +63,7 @@ from app.shelf_planograms import (
     replace_draft_planogram_cells,
     retire_planogram,
 )
-from app.shelf_planogram_comparison import compare_active_planogram_detections
+from app.shelf_planogram_comparison import (\n    COMPARISON_SCHEMA_VERSION,\n    compare_active_planogram_detections,\n    comparison_fingerprint,\n)
 from app.pallet_rotation_forecast_bridge import enrich_pallet_candidates_with_hourly_profiles
 from app.pallet_rotation_windows import recommend_low_traffic_window
 from app.hourly_patterns import build_weekday_hour_profile
@@ -665,7 +665,8 @@ def compare_shelf_image_with_active_planogram(
     except ValueError as exc:
         raise HTTPException(status_code=409, detail="Planogram comparison is unavailable") from exc
 
-    return {
+    result = {
+        "comparison_schema_version": COMPARISON_SCHEMA_VERSION,
         "shelf_image_id": image.id,
         "shelf_id": shelf_id,
         "image_sha256": image.sha256,
@@ -677,6 +678,8 @@ def compare_shelf_image_with_active_planogram(
         "calibration_image_sha256": planogram.calibration_image_sha256,
         "cells": cells,
     }
+    result["comparison_sha256"] = comparison_fingerprint(result)
+    return result
 
 
 @app.post(
