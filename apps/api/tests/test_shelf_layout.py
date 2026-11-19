@@ -3,11 +3,16 @@ import pytest
 from app.shelf_layout import ShelfCell, compare_detections_to_cells, group_detections_into_rows
 
 
-def box(x1, y1, x2, y2, product_id=None):
-    return {
+def box(x1, y1, x2, y2, product_id=None, *, label=None, confidence=None):
+    result = {
         "x_min": x1, "y_min": y1, "x_max": x2, "y_max": y2,
         "product_id": product_id,
     }
+    if label is not None:
+        result["label"] = label
+    if confidence is not None:
+        result["confidence"] = confidence
+    return result
 
 
 def test_groups_products_into_rows_and_orders_positions_left_to_right():
@@ -63,13 +68,13 @@ def cell(cell_id, x1, y1, x2, y2, expected_product_id=None, *, visible=True, occ
     )
 
 
-def test_explicit_visible_cell_without_detection_is_empty_not_inventory_zero():
+def test_explicit_visible_cell_without_detection_is_unknown_not_empty():
     result = compare_detections_to_cells(
         [cell("A1", 0.0, 0.0, 0.5, 1.0, expected_product_id=10)],
         [],
     )
 
-    assert result[0].status == "EMPTY"
+    assert result[0].status == "UNKNOWN"
     assert result[0].expected_product_id == 10
     assert result[0].observed_product_ids == ()
     assert result[0].overlap_ratio == 0
@@ -83,6 +88,51 @@ def test_unseen_or_occluded_cell_is_unknown_not_empty(visible, occluded):
     )
 
     assert result[0].status == "UNKNOWN"
+
+
+def test_confident_empty_facing_detection_confirms_vacancy():
+    result = compare_detections_to_cells(
+        [cell("A1", 0.0, 0.0, 0.5, 1.0, expected_product_id=10)],
+        [box(0.1, 0.1, 0.4, 0.9, label="empty_facing", confidence=0.95)],
+    )
+
+    assert result[0].status == "EMPTY"
+    assert result[0].observed_product_ids == ()
+    assert result[0].detection_indices == (0,)
+    assert result[0].overlap_ratio == pytest.approx(0.48)
+
+
+def test_low_confidence_empty_facing_is_unknown():
+    result = compare_detections_to_cells(
+        [cell("A1", 0.0, 0.0, 0.5, 1.0, expected_product_id=10)],
+        [box(0.1, 0.1, 0.4, 0.9, label="empty_facing", confidence=0.79)],
+    )
+
+    assert result[0].status == "UNKNOWN"
+    assert result[0].detection_indices == ()
+
+
+def test_empty_facing_on_occluded_cell_is_unknown():
+    result = compare_detections_to_cells(
+        [cell("A1", 0.0, 0.0, 0.5, 1.0, visible=True, occluded=True)],
+        [box(0.1, 0.1, 0.4, 0.9, label="empty_facing", confidence=0.99)],
+    )
+
+    assert result[0].status == "UNKNOWN"
+
+
+def test_product_and_empty_facing_conflict_is_not_silently_resolved():
+    result = compare_detections_to_cells(
+        [cell("A1", 0.0, 0.0, 0.5, 1.0, expected_product_id=10)],
+        [
+            box(0.1, 0.1, 0.4, 0.9, 10, label="product", confidence=0.95),
+            box(0.1, 0.1, 0.4, 0.9, label="empty_facing", confidence=0.96),
+        ],
+    )
+
+    assert result[0].status == "CONFLICT"
+    assert result[0].observed_product_ids == (10,)
+    assert result[0].detection_indices == (0, 1)
 
 
 def test_cell_detection_is_occupied_and_preserves_detection_provenance():
@@ -122,7 +172,7 @@ def test_detection_outside_cell_does_not_fill_it():
         [box(0.7, 0.1, 0.9, 0.9, 10)],
     )
 
-    assert result[0].status == "EMPTY"
+    assert result[0].status == "UNKNOWN"
 
 
 def test_duplicate_cell_ids_and_invalid_overlap_are_rejected():
@@ -133,6 +183,13 @@ def test_duplicate_cell_ids_and_invalid_overlap_are_rejected():
         )
     with pytest.raises(ValueError, match="minimum_cell_overlap"):
         compare_detections_to_cells([], [], minimum_cell_overlap=0)
+    with pytest.raises(ValueError, match="minimum_empty_confidence"):
+        compare_detections_to_cells([], [], minimum_empty_confidence=1.1)
+    with pytest.raises(ValueError, match="Detection confidence"):
+        compare_detections_to_cells(
+            [cell("A1", 0, 0, 1, 1, visible=True)],
+            [box(0.1, 0.1, 0.9, 0.9, label="empty_facing", confidence=float("nan"))],
+        )
 
 
 
@@ -183,4 +240,4 @@ def test_adjacent_planogram_cells_are_allowed():
         [],
     )
 
-    assert [item.status for item in result] == ["EMPTY", "EMPTY"]
+    assert [item.status for item in result] == ["UNKNOWN", "UNKNOWN"]
