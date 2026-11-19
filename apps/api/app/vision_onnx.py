@@ -87,6 +87,7 @@ class ONNXShelfVisionProvider:
         max_detections: int = 300,
         providers: list[str] | None = None,
         class_labels: dict[int, str] | None = None,
+        sku_match_labels: set[str] | None = None,
     ):
         self.detector_path = Path(detector_path)
         self.embedding_path = Path(embedding_path) if embedding_path else None
@@ -109,9 +110,13 @@ class ONNXShelfVisionProvider:
                 raise ONNXConfigurationError("Class labels must be non-empty strings of at most 120 characters")
             normalized_labels[class_id] = label.strip()
         self.class_labels = normalized_labels
+        self.sku_match_labels = set(sku_match_labels if sku_match_labels is not None else {"product"})
+        if not self.sku_match_labels or not self.sku_match_labels.issubset(set(normalized_labels.values())):
+            raise ONNXConfigurationError("VISION_SKU_MATCH_LABELS must be a non-empty subset of configured class labels")
         self.class_labels_sha256 = _canonical_sha256({
             str(class_id): label for class_id, label in sorted(normalized_labels.items())
         })
+        self.sku_match_labels_sha256 = _canonical_sha256(sorted(self.sku_match_labels))
         if self.detector_path.is_symlink() or (self.embedding_path and self.embedding_path.is_symlink()):
             raise ONNXConfigurationError("Model paths must not be symbolic links")
         self.detector_sha256 = _sha256_file(self.detector_path)
@@ -119,6 +124,7 @@ class ONNXShelfVisionProvider:
         detector_fingerprint = _canonical_sha256({
             "detector_sha256": self.detector_sha256,
             "class_labels_sha256": self.class_labels_sha256,
+            "sku_match_labels_sha256": self.sku_match_labels_sha256,
             "input_size": self.input_size,
             "confidence_threshold": self.confidence_threshold,
             "max_detections": self.max_detections,
@@ -310,7 +316,7 @@ class ONNXShelfVisionProvider:
             if label is None:
                 raise ValueError(f"Detector returned unknown class_id: {class_id}")
             box = (score, x1, y1, x2, y2)
-            embedding = self._embedding(image, box)
+            embedding = self._embedding(image, box) if label in self.sku_match_labels else None
             detections.append(DetectionResult(
                 label=label,
                 confidence=score,
@@ -344,6 +350,11 @@ def create_provider() -> ONNXShelfVisionProvider:
     except (TypeError, ValueError, json.JSONDecodeError) as exc:
         raise ONNXConfigurationError("VISION_CLASS_LABELS_JSON must be a JSON object mapping class IDs to labels") from exc
     embedding_version = os.getenv("VISION_EMBEDDING_MODEL_VERSION", "shelf-embedding-v1").strip()
+    sku_match_labels = {
+        label.strip()
+        for label in os.getenv("VISION_SKU_MATCH_LABELS", "product").split(",")
+        if label.strip()
+    }
     if not detector:
         raise ONNXConfigurationError("VISION_DETECTOR_MODEL_PATH is required")
     if not version:
@@ -359,4 +370,5 @@ def create_provider() -> ONNXShelfVisionProvider:
         confidence_threshold=_env_float("VISION_CONFIDENCE_THRESHOLD", 0.25),
         max_detections=_env_int("VISION_MAX_DETECTIONS", 300, 1, 2000),
         class_labels=class_labels,
+        sku_match_labels=sku_match_labels,
     )
