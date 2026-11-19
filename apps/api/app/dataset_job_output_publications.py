@@ -40,14 +40,14 @@ def _utc(value):
 def _safe_parts(reference: str, *, job_id: int, fencing_token: int) -> tuple[str, ...]:
     if not isinstance(reference, str) or not _REFERENCE.fullmatch(reference):
         raise DatasetJobOutputUnavailable("staged output reference is invalid")
-    path = PurePosixPath(reference)
+    parts = tuple(reference.split("/"))
     if (
-        path.is_absolute() or len(path.parts) < 4 or path.parts[0] != "staging"
-        or path.parts[1] != str(job_id) or path.parts[2] != str(fencing_token)
-        or any(part in {"", ".", ".."} for part in path.parts) or "\\" in reference
+        len(parts) < 4 or parts[0] != "staging"
+        or parts[1] != str(job_id) or parts[2] != str(fencing_token)
+        or any(part in {"", ".", ".."} for part in parts) or "\\" in reference
     ):
         raise DatasetJobOutputUnavailable("staged output must be scoped to this job and fencing token")
-    return path.parts
+    return parts
 
 
 def _open_dirs(root: Path, parts: tuple[str, ...], *, create: bool) -> int:
