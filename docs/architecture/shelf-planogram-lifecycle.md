@@ -8,10 +8,10 @@ A comparação visual continua a ser consultiva. Não cria movimentos de invent�
 
 ## Modelo e ciclo de vida
 
-A migration `0067_shelf_planograms` cria:
+As migrations `0067_shelf_planograms` e `0068_shelf_planogram_expected_facings` criam e evoluem:
 
 - `shelf_planograms`: versão sequencial por prateleira, estado, origem de calibração e metadados de criação/ativação/retirada.
-- `shelf_planogram_cells`: código, posição na grelha, bounding box normalizada e SKU esperado opcional.
+- `shelf_planogram_cells`: código, posição na grelha, bounding box normalizada, SKU esperado opcional e `expected_facings` opcional.
 
 Cada prateleira pode ter no máximo uma versão `ACTIVE`. As transições permitidas são:
 
@@ -19,7 +19,7 @@ Cada prateleira pode ter no máximo uma versão `ACTIVE`. As transições permit
 DRAFT -> ACTIVE -> RETIRED
 ```
 
-A ativação de uma versão nova retira a anterior na mesma transação. Versões ativadas não podem ser eliminadas nem ter as células alteradas. As células de um `DRAFT` podem ser alteradas ao nível da base de dados, mas ainda não existe endpoint HTTP para editar/substituir o conjunto de células. A API cria a versão completa no momento da criação; uma correção operacional exige, por enquanto, criar outra versão.
+A ativação de uma versão nova retira a anterior na mesma transação. Versões ativadas não podem ser eliminadas nem ter as células alteradas. As células de um `DRAFT` podem ser substituídas atomicamente através de `PUT /api/v1/planograms/{planogram_id}/cells`. Depois da ativação, os triggers impedem alterações às células.
 
 As versões e células têm constraints e triggers PostgreSQL/SQLite para identidade imutável, sequência por prateleira, transições de estado, SKU elegível, geometria não degenerada/não sobreposta e preservação do histórico. A ativação usa também um índice único parcial para impedir duas versões ativas na mesma prateleira.
 
@@ -41,6 +41,7 @@ Todas as rotas exigem Bearer JWT e perfil `ADMIN` ou `SUPERVISOR`. O supervisor 
 | POST | `/api/v1/shelves/{shelf_id}/planograms` | Criar uma nova versão `DRAFT` com todas as células |
 | GET | `/api/v1/shelves/{shelf_id}/planograms` | Listar histórico por versão descendente; aceita `limit` e `offset` |
 | GET | `/api/v1/shelves/{shelf_id}/planograms/active` | Obter a versão ativa; devolve `null` quando não existe |
+| PUT | `/api/v1/planograms/{planogram_id}/cells` | Substituir atomicamente as células de uma versão DRAFT |
 | POST | `/api/v1/planograms/{planogram_id}/activate` | Ativar a versão e retirar a anterior |
 | POST | `/api/v1/planograms/{planogram_id}/retire` | Retirar a versão ativa sem apagar histórico |
 
@@ -58,13 +59,14 @@ Exemplo de criação:
       "y_min": 0.0,
       "x_max": 0.5,
       "y_max": 1.0,
-      "expected_product_id": 42
+      "expected_product_id": 42,
+      "expected_facings": 3
     }
   ]
 }
 ```
 
-Para calibração por imagem, enviar `calibration_source: "IMAGE"`, `calibration_image_id` e `calibration_image_sha256`. Cada célula tem coordenadas em `[0,1]), largura/altura positivas, código único e posição de grelha única. Um SKU esperado tem de estar ativo e atribuído à mesma prateleira.
+Para calibração por imagem, enviar `calibration_source: "IMAGE"`, `calibration_image_id` e `calibration_image_sha256`. `expected_facings` é opcional, positivo e exige SKU esperado. Cada célula tem coordenadas em `[0,1]), largura/altura positivas, código único e posição de grelha única. Um SKU esperado tem de estar ativo e atribuído à mesma prateleira.
 
 Os motivos de ativação/retirada são obrigatórios (3–500 caracteres). Conflitos de ciclo de vida/concorrência devolvem HTTP 409; dados inválidos devolvem 422; prateleira/planograma inexistente devolve 404; perfil ou loja não autorizados devolvem 403.
 
@@ -75,15 +77,24 @@ Os motivos de ativação/retirada são obrigatórios (3–500 caracteres). Confl
 - A migration mantém equivalência de guards entre PostgreSQL e SQLite.
 - A eliminação em cascata de células de um rascunho é permitida; células de versões ativas/retiradas permanecem protegidas.
 - Não existe ainda endpoint de edição de rascunhos, endpoint de comparação, interface React, ligação ao worker de visão ou calibração com imagens reais.
-- `expected_facings` existe no comparador geométrico experimental, mas ainda não está persistido no modelo de planograma.
+- `expected_facings` está persistido, mas a contagem observada ainda precisa de calibração e integração no worker.
 - A deteção visual de espaços vazios/facings não altera inventário contabilístico.
 
 ## Validação CI
 
-No commit `dd262068bdf8178a8eddff0f103317aec8a3558b`:
+No commit `3d9f338e5bdf50a9674f53d05da1ad99e23faa01`:
 
-- [API CI](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44559057802): PostgreSQL 16, migrações e **1330 testes aprovados, 1 ignorado e 1 aviso**.
-- [Quality Gates](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44559057575): compilação Python, suite API e build TypeScript/produção Web aprovados.
-- [Docker Compose smoke](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44559057828): stack de demonstração aprovada.
+- [API CI](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44560333697): PostgreSQL 16, migrações e **1334 testes aprovados, 1 ignorado e 1 aviso**.
+- [Quality Gates](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44560333600): compilação Python, suite API e build TypeScript/produção Web aprovados.
+- [Docker Compose smoke](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44560333624): stack de demonstração aprovada.
 
 O aviso restante é a depreciação externa `anyio.abc.BlockingPortal` emitida pelo Starlette TestClient.
+
+
+## Migration 0068 — expected facings e edição de rascunhos
+
+A migration `0068_shelf_planogram_expected_facings` adiciona `expected_facings INTEGER NULL` a cada célula. A regra é `NULL` ou valor positivo associado a `expected_product_id`. PostgreSQL impõe CHECK constraint; SQLite impõe triggers para INSERT e UPDATE.
+
+O endpoint `PUT /api/v1/planograms/{planogram_id}/cells` substitui o conjunto completo de células de um rascunho. A operação valida o conjunto inteiro antes de apagar, bloqueia imagem de calibração, prateleira e planograma pela ordem global definida, revalida SKUs e executa DELETE + INSERT na mesma transação. Se qualquer validação ou trigger falhar, a transação é revertida e as células anteriores permanecem.
+
+A rota devolve 409 se o planograma já não estiver em DRAFT. A ativação e edição competem pelo mesmo lock da prateleira/planograma, evitando que a substituição de células ultrapasse a transição para ACTIVE.

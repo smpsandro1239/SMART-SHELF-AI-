@@ -629,3 +629,12 @@ Foi concluída a primeira fronteira HTTP do ciclo de vida dos planogramas: criar
 Validação final no commit `dd262068bdf8178a8eddff0f103317aec8a3558b`: API CI [44559057802](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44559057802) com PostgreSQL 16 e **1330 testes aprovados, 1 ignorado e 1 aviso**; Quality Gates [44559057575](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44559057575) e Docker Compose [44559057828](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44559057828) aprovados.
 
 **Próximas prioridades:** edição atómica de células em DRAFT, persistência de `expected_facings`, UI de planogramas, integração do comparador com o worker e validação por dataset real. Até lá, os planogramas são dados de configuração e não alteram stock.
+
+
+## 2026-11-19 — Facing targets persistidos e edição de DRAFT
+
+A migration 0068 persiste `expected_facings` opcional por célula, com constraint PostgreSQL e triggers SQLite que exigem valor positivo e SKU esperado. O serviço de planogramas valida o campo e o endpoint PUT substitui atomicamente as células de uma versão DRAFT. A operação partilha a ordem de locks de ativação; ACTIVE/RETIRED permanecem imutáveis.
+
+Validação no commit `3d9f338e5bdf50a9674f53d05da1ad99e23faa01`: API CI [44560333697](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44560333697) e Quality Gates [44560333600](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44560333600) com **1334 testes aprovados, 1 ignorado e 1 aviso**; Docker Compose [44560333624](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44560333624) aprovado.
+
+**Próximas prioridades:** smoke PostgreSQL dedicado à constraint e corrida edição/ativação; integrar comparação no worker e UI; calibrar a contagem com dataset real. `observed_facings` continua a contar caixas frontais detetadas, não unidades em profundidade.

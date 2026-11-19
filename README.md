@@ -1600,7 +1600,7 @@ A migration 0066_dataset_output_lineage acrescenta relações append-only entre 
 A matriz de autorização específica de outputs permanece deny-by-default para ADMIN, SUPERVISOR e EMPLOYEE enquanto não existir política aprovada. A proposta de aprovação independente de legal hold e o contrato de propagação para caches, exports, réplicas, backups e armazenamento externo estão documentados em docs/security/dataset-output-governance-approval.md e docs/operations/dataset-output-copy-propagation.md. Não existe integração externa nem purga física.
 
 
-# Planogramas versionados de prateleira
+## Planogramas versionados de prateleira
 
 ## Objectivo e limite de domínio
 
@@ -1610,10 +1610,10 @@ A comparação visual continua a ser consultiva. Não cria movimentos de invent�
 
 ## Modelo e ciclo de vida
 
-A migration `0067_shelf_planograms` cria:
+As migrations `0067_shelf_planograms` e `0068_shelf_planogram_expected_facings` criam e evoluem:
 
 - `shelf_planograms`: versão sequencial por prateleira, estado, origem de calibração e metadados de criação/ativação/retirada.
-- `shelf_planogram_cells`: código, posição na grelha, bounding box normalizada e SKU esperado opcional.
+- `shelf_planogram_cells`: código, posição na grelha, bounding box normalizada, SKU esperado opcional e `expected_facings` opcional (inteiro positivo que exige SKU esperado).
 
 Cada prateleira pode ter no máximo uma versão `ACTIVE`. As transições permitidas são:
 
@@ -1621,7 +1621,7 @@ Cada prateleira pode ter no máximo uma versão `ACTIVE`. As transições permit
 DRAFT -> ACTIVE -> RETIRED
 ```
 
-A ativação de uma versão nova retira a anterior na mesma transação. Versões ativadas não podem ser eliminadas nem ter as células alteradas. As células de um `DRAFT` podem ser alteradas ao nível da base de dados, mas ainda não existe endpoint HTTP para editar/substituir o conjunto de células. A API cria a versão completa no momento da criação; uma correção operacional exige, por enquanto, criar outra versão.
+A ativação de uma versão nova retira a anterior na mesma transação. Versões ativadas não podem ser eliminadas nem ter as células alteradas. As células de um `DRAFT` podem ser substituídas atomicamente pela API. Depois da ativação, os triggers impedem alterações às células.
 
 As versões e células têm constraints e triggers PostgreSQL/SQLite para identidade imutável, sequência por prateleira, transições de estado, SKU elegível, geometria não degenerada/não sobreposta e preservação do histórico. A ativação usa também um índice único parcial para impedir duas versões ativas na mesma prateleira.
 
@@ -1643,6 +1643,7 @@ Todas as rotas exigem Bearer JWT e perfil `ADMIN` ou `SUPERVISOR`. O supervisor 
 | POST | `/api/v1/shelves/{shelf_id}/planograms` | Criar uma nova versão `DRAFT` com todas as células |
 | GET | `/api/v1/shelves/{shelf_id}/planograms` | Listar histórico por versão descendente; aceita `limit` e `offset` |
 | GET | `/api/v1/shelves/{shelf_id}/planograms/active` | Obter a versão ativa; devolve `null` quando não existe |
+| PUT | `/api/v1/planograms/{planogram_id}/cells` | Substituir atomicamente as células de uma versão DRAFT |
 | POST | `/api/v1/planograms/{planogram_id}/activate` | Ativar a versão e retirar a anterior |
 | POST | `/api/v1/planograms/{planogram_id}/retire` | Retirar a versão ativa sem apagar histórico |
 
@@ -1660,13 +1661,14 @@ Exemplo de criação:
       "y_min": 0.0,
       "x_max": 0.5,
       "y_max": 1.0,
-      "expected_product_id": 42
+      "expected_product_id": 42,
+      "expected_facings": 3
     }
   ]
 }
 ```
 
-Para calibração por imagem, enviar `calibration_source: "IMAGE"`, `calibration_image_id` e `calibration_image_sha256`. Cada célula tem coordenadas em `[0,1]), largura/altura positivas, código único e posição de grelha única. Um SKU esperado tem de estar ativo e atribuído à mesma prateleira.
+Para calibração por imagem, enviar `calibration_source: "IMAGE"`, `calibration_image_id` e `calibration_image_sha256`. `expected_facings` é opcional, tem de ser positivo e exige `expected_product_id`. Cada célula tem coordenadas em `[0,1]), largura/altura positivas, código único e posição de grelha única. Um SKU esperado tem de estar ativo e atribuído à mesma prateleira.
 
 Os motivos de ativação/retirada são obrigatórios (3–500 caracteres). Conflitos de ciclo de vida/concorrência devolvem HTTP 409; dados inválidos devolvem 422; prateleira/planograma inexistente devolve 404; perfil ou loja não autorizados devolvem 403.
 
@@ -1676,16 +1678,19 @@ Os motivos de ativação/retirada são obrigatórios (3–500 caracteres). Confl
 - As operações de escrita são transacionais e tratam conflitos de constraints como 409.
 - A migration mantém equivalência de guards entre PostgreSQL e SQLite.
 - A eliminação em cascata de células de um rascunho é permitida; células de versões ativas/retiradas permanecem protegidas.
-- Não existe ainda endpoint de edição de rascunhos, endpoint de comparação, interface React, ligação ao worker de visão ou calibração com imagens reais.
-- `expected_facings` existe no comparador geométrico experimental, mas ainda não está persistido no modelo de planograma.
+- Não existe ainda endpoint de comparação, interface React, ligação ao worker de visão ou calibração com imagens reais.
+- `expected_facings` está persistido no planograma, mas a contagem observada continua experimental até validação com imagens reais e integração no worker.
 - A deteção visual de espaços vazios/facings não altera inventário contabilístico.
 
 ## Validação CI
 
-No commit `dd262068bdf8178a8eddff0f103317aec8a3558b`:
+No commit `3d9f338e5bdf50a9674f53d05da1ad99e23faa01`:
 
-- [API CI](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44559057802): PostgreSQL 16, migrações e **1330 testes aprovados, 1 ignorado e 1 aviso**.
-- [Quality Gates](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44559057575): compilação Python, suite API e build TypeScript/produção Web aprovados.
-- [Docker Compose smoke](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44559057828): stack de demonstração aprovada.
+- [API CI](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44560333697): PostgreSQL 16, migrações e **1334 testes aprovados, 1 ignorado e 1 aviso**.
+- [Quality Gates](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44560333600): compilação Python, suite API e build TypeScript/produção Web aprovados.
+- [Docker Compose smoke](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44560333624): stack de demonstração aprovada.
 
 O aviso restante é a depreciação externa `anyio.abc.BlockingPortal` emitida pelo Starlette TestClient.
+
+
+Documentação detalhada: [ciclo de vida dos planogramas](docs/architecture/shelf-planogram-lifecycle.md).

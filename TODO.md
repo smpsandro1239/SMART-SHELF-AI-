@@ -853,7 +853,21 @@ Critério global: nenhuma capacidade pode ser marcada como concluída sem códig
 - [x] Aplicar autorização ADMIN/SUPERVISOR no middleware e repetir validação de actor/loja no serviço; EMPLOYEE é recusado.
 - [x] Acrescentar testes HTTP para ciclo de vida, substituição de versão ativa, retirada, isolamento multi-loja, perfil e payload geométrico/SKU inválido.
 - [x] Validar no commit `dd262068bdf8178a8eddff0f103317aec8a3558b`: API CI [44559057802](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44559057802), **1330 passed, 1 skipped, 1 warning**; Quality Gates [44559057575](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44559057575) e Docker Compose [44559057828](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44559057828) aprovados.
-- [ ] Acrescentar edição/substituição atómica de células apenas enquanto DRAFT; preservar versões ACTIVE/RETIRED.
-- [ ] Persistir `expected_facings` e integrar a comparação geométrica com planogramas persistidos, worker e revisão humana.
+- [x] Acrescentar edição/substituição atómica de células apenas enquanto DRAFT; preservar versões ACTIVE/RETIRED.
+- [x] Persistir `expected_facings` por célula com constraint/trigger positivo e exigência de SKU esperado.
+- [ ] Integrar a comparação geométrica com planogramas persistidos, worker e revisão humana.
 - [ ] Criar interface React de histórico, edição de rascunho, ativação, comparação esperado/observado e revisão.
 - [ ] Validar com dataset real anotado; thresholds e contagens continuam experimentais e não podem alterar inventário.
+
+
+### Sétima sequência — facing targets persistidos e edição segura de DRAFT (2026-11-19)
+
+- [x] Criar migration `0068_shelf_planogram_expected_facings`, encadeada após 0067.
+- [x] Persistir `expected_facings` opcional por célula, exigindo valor inteiro positivo e SKU esperado; aplicar constraint PostgreSQL e triggers SQLite.
+- [x] Ligar o campo ao modelo SQLAlchemy, schemas HTTP, validação `ShelfCell` e serialização da API.
+- [x] Implementar substituição atómica do conjunto de células apenas em `DRAFT`, com a mesma ordem de locks imagem → prateleira → planograma e revalidação do SKU.
+- [x] Expor `PUT /api/v1/planograms/{planogram_id}/cells`; CORS permite PUT e middleware mantém ADMIN/SUPERVISOR.
+- [x] Testar constraints SQLite, valores inválidos, round-trip HTTP, substituição de células e recusa após ativação.
+- [x] Validar no commit `3d9f338e5bdf50a9674f53d05da1ad99e23faa01`: API CI [44560333697](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44560333697) e Quality Gates [44560333600](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44560333600) com **1334 passed, 1 skipped, 1 warning**; Docker Compose [44560333624](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44560333624) aprovado.
+- [ ] Acrescentar smoke PostgreSQL específico para constraints de `expected_facings` e concorrência entre edição de DRAFT e ativação.
+- [ ] Integrar planogramas persistidos no worker/comparador e criar revisão visual React; a contagem continua a ser número de deteções frontais, não unidades em profundidade.

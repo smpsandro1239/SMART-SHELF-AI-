@@ -1001,3 +1001,19 @@ A migration `0067_shelf_planograms` e o serviço de domínio passaram a ter uma 
 - Docker Compose [44559057828](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44559057828): stack aprovada.
 
 **Limites:** ainda não há endpoint de edição de rascunhos, persistência de `expected_facings`, UI React, integração do comparador no worker ou validação com dataset real. A API não altera inventário.
+
+
+## 2026-11-19 — Facing targets persistidos e edição atómica de rascunhos
+
+A migration `0068_shelf_planogram_expected_facings` acrescenta `expected_facings` às células. O campo é opcional; quando presente, tem de ser inteiro positivo e exige um SKU esperado. PostgreSQL usa CHECK constraint e SQLite usa triggers INSERT/UPDATE. O modelo, schemas e serviço de domínio validam a mesma regra.
+
+O serviço `replace_draft_planogram_cells` substitui todas as células numa transação, apenas quando o planograma está em `DRAFT`. A ordem de locks mantém-se imagem → prateleira → planograma; a imagem de calibração e a elegibilidade dos SKUs são revalidadas antes da substituição. Depois de ativado, o planograma não pode ser editado. A rota HTTP `PUT /api/v1/planograms/{planogram_id}/cells` aplica a mesma política ADMIN/SUPERVISOR e isolamento multi-loja.
+
+Foram acrescentados testes de serviço, migração SQLite e API para valores inválidos, associação obrigatória a SKU, round-trip de `expected_facings`, substituição de células e recusa de edição após ativação.
+
+**Validação final no commit `3d9f338e5bdf50a9674f53d05da1ad99e23faa01`:**
+- API CI [44560333697](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44560333697): PostgreSQL 16/migrações e **1334 passed, 1 skipped, 1 warning**.
+- Quality Gates [44560333600](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44560333600): compilação Python, suite API e build Web aprovados.
+- Docker Compose [44560333624](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44560333624): stack aprovada.
+
+**Limites:** não existe ainda smoke PostgreSQL específico para a constraint de `expected_facings` nem teste concorrente entre edição e ativação. A comparação ainda não está integrada no worker/UI e não foi calibrada com imagens reais.
