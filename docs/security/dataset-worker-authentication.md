@@ -124,3 +124,18 @@ A migration `0061_dataset_worker_request_nonces` guarda somente o SHA-256 do non
 **Validação:** API CI [44471171581](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44471171581) — migration PostgreSQL 16, smoke concorrente com duas sessões (**uma aceitação e uma rejeição**) e 1211 testes aprovados, 1 ignorado e 1 aviso; Quality Gates [44471171526](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44471171526); Docker Compose [44471171533](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44471171533).
 
 **Limites:** esta camada autentica e autoriza pedidos assinados, mas não cria endpoints, broker nem worker remoto. Os scopes `artifacts:read` e `outputs:publish` continuam sem handlers; a leitura de bytes deve revalidar retenção no momento do consumo e a publicação deve validar o fencing token actual.
+
+
+## Leitura de bytes de fontes de treino (`artifacts:read`) — migration 0062
+
+O serviço `app.dataset_job_artifact_reads.read_dataset_job_source_bytes` implementa leitura interna por chamada, sem expor caminhos ou URLs. A operação exige principal autenticado com `artifacts:read`, job em `LEASED`, `worker_id` do principal e fencing token actual. A imagem tem de constar da tabela imutável de fontes do job.
+
+A operação bloqueia job e hierarquia imagem/prateleira/zona até concluir a leitura; revalida loja, retenção e legal hold; revalida worker e credencial (estado, expiração, revogação e scope) na mesma transacção; abre o ficheiro com descritores de directório e `O_NOFOLLOW`; valida tamanho e SHA-256; devolve apenas os bytes em memória. Uma leitura bem-sucedida cria um registo em `dataset_execution_job_artifact_reads`.
+
+A migration `0062_dataset_job_artifact_reads` inclui triggers PostgreSQL/SQLite que validam lease actual, owner, fencing token, fonte imutável, loja, retenção, legal hold, worker/credencial activos e scope `artifacts:read`. A auditoria é append-only. O smoke PostgreSQL confirmou que uma restrição de retenção concorrente espera pelo lock da leitura e impede a leitura seguinte, sem criar novo registo de sucesso.
+
+As operações claim/heartbeat/complete/fail também revalidam o worker e a credencial no momento da operação, não confiando apenas no principal obtido alguns instantes antes pela dependência HTTP.
+
+**Validação:** API CI [44473560217](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44473560217), Quality Gates [44473560287](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44473560287) e Docker Compose [44473560252](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44473560252); suite API: 1223 passed, 1 skipped, 1 warning.
+
+**Limites:** o serviço ainda não está ligado a uma rota HTTP de jobs. A publicação de outputs com fencing (`outputs:publish`), broker e worker remoto permanecem pendentes.

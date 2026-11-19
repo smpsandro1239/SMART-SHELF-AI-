@@ -425,7 +425,8 @@
 - [x] Proteger identidade, fontes e eventos através de constraints/triggers PostgreSQL e SQLite.
 - [x] Acrescentar testes de idempotência, takeover, worker obsoleto, expiração e revogação por retenção.
 - [x] Validar migration PostgreSQL 16, suite API (**1177 passed, 1 skipped, 1 warning**) e smoke concorrente no API CI [44416138879](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44416138879); Quality Gates [44416138669](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44416138669) e Docker Compose [44416138628](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44416138628) também passaram.
-- [ ] Implementar worker/broker, serviço de leitura de artefactos e promoção de outputs com fencing; não publicar directamente a partir do worker.
+- [x] Implementar serviço de leitura de artefactos com scope, lease, retenção e auditoria append-only.
+- [ ] Implementar worker/broker e promoção de outputs com fencing; não publicar directamente a partir do worker.
 
 
 ## Fencing reforçado na base de dados — 2026-11-18
@@ -439,7 +440,8 @@
 - [x] Confirmar migration PostgreSQL 16, API CI [44419928230](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44419928230), Quality Gates [44419928281](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44419928281) e Docker Compose [44419928382](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44419928382); **1179 passed, 1 skipped, 1 warning**.
 - [x] Implementar identidade individual de workers, credenciais com hash, scopes, expiração, rotação e revogação (migration 0060, validada em API CI [44431378398](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44431378398)).
 - [x] Criar a dependência FastAPI para pedidos assinados de workers, com scopes e anti-replay; manter as rotas de jobs fechadas.
-- [ ] Implementar leitura controlada por chamada e promoção de outputs condicionada ao fencing token actual.
+- [x] Implementar leitura controlada por chamada com revalidação de retenção/loja/hash e auditoria.
+- [ ] Implementar promoção de outputs condicionada ao fencing token actual.
 
 
 ## Máquina de estados e identidade imutável dos jobs — 2026-11-18
@@ -485,8 +487,9 @@
 - [x] Validar migration PostgreSQL 16, smoke dedicado, suite API (**1202 passed, 1 skipped, 1 warning**), Quality Gates e Docker Compose no commit de código `d7c8412`: [API CI 44431378398](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44431378398), [Quality Gates 44431378324](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44431378324) e [Docker Compose 44431378349](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44431378349) passaram.
 - [x] Criar dependência FastAPI reutilizável `require_dataset_worker(scope)` para autenticar e autorizar futuros handlers HTTP; nenhuma rota de jobs foi exposta.
 - [x] Implementar assinatura HMAC-SHA-256 por pedido, timestamp e nonce único; replay rejeitado também sob concorrência PostgreSQL.
-- [ ] Implementar leitura de artefactos autorizada por chamada (`artifacts:read`) e promoção de outputs condicionada ao fencing token actual (`outputs:publish`).
-- [ ] Não marcar o worker como operacional: ainda não existe broker/worker de treino, API HTTP de jobs nem integração real de armazenamento/publicação.
+- [x] Implementar leitura de artefactos autorizada por chamada (`artifacts:read`), validada por lease, retenção e hash.
+- [ ] Implementar promoção de outputs condicionada ao fencing token actual (`outputs:publish`).
+- [x] Manter o worker marcado como não operacional: ainda não existe broker/worker de treino nem API HTTP de jobs; o serviço local de leitura de fontes está implementado, mas não existe publicação de outputs.
 
 - [x] Acrescentar guards SQL PostgreSQL/SQLite para imutabilidade de scopes/hash/validade/identidade, revogação unidireccional, credenciais não elimináveis e desativação não reversível; cobrir a migration 0060 com teste SQLite e smoke PostgreSQL.
 
@@ -500,6 +503,19 @@
 - [x] Cobrir assinatura adulterada, corpo/caminho/query/método divergentes, timestamp expirado, scope insuficiente e repetição HTTP.
 - [x] Validar migration PostgreSQL 16, smoke concorrente, suite API (**1211 passed, 1 skipped, 1 warning**), Quality Gates e Docker Compose nos runs [44471171581](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44471171581), [44471171526](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44471171526) e [44471171533](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44471171533).
 - [x] Manter as rotas de jobs não expostas; a dependência é uma fronteira reutilizável, não uma API de jobs já operacional.
-- [ ] Implementar serviço de leitura de bytes por chamada com revalidação de retenção/loja/hash e scope `artifacts:read`.
+- [x] Implementar serviço de leitura de bytes por chamada com revalidação de retenção/loja/hash, scope `artifacts:read`, caminho sem symlinks e auditoria append-only.
 - [ ] Implementar promotor de outputs que valide estado `SUCCEEDED`, digest e fencing token actual antes da publicação (`outputs:publish`).
+- [ ] Só depois integrar broker e worker remoto de treino; não declarar execução assíncrona operacional com base na persistência dos leases.
+
+
+## Leitura de fontes de treino e auditoria de acesso — 19-11-2026
+
+- [x] Implementar leitura de bytes por chamada com scope `artifacts:read`, job lease activo, worker autenticado e fencing token actual.
+- [x] Confirmar associação à fonte imutável, loja, retenção e legal hold sob locks da imagem/prateleira/zona.
+- [x] Abrir ficheiros através de descritores de directório e `O_NOFOLLOW`; impedir traversal e symlinks; validar tamanho e SHA-256 antes de devolver bytes em memória.
+- [x] Criar auditoria append-only `dataset_execution_job_artifact_reads`, com triggers SQL que validam lease, fonte, loja, retenção, credencial, worker e scope; UPDATE/DELETE proibidos.
+- [x] Revalidar credencial e scopes no momento das operações claim/heartbeat/complete/fail e durante a leitura, para fechar corridas de revogação/desactivação.
+- [x] Validar migration PostgreSQL 16, concorrência de retenção, imutabilidade da auditoria, Quality Gates, Docker Compose e **1223 passed, 1 skipped, 1 warning** nos runs [44473560217](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44473560217), [44473560287](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44473560287) e [44473560252](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44473560252).
+- [ ] Implementar promotor de outputs que valide estado `SUCCEEDED`, digest, worker/credential e fencing token actual antes da publicação (`outputs:publish`).
+- [ ] Definir protocolo de staging/publicação recuperável e compensação de ficheiros órfãos entre filesystem e transacção SQL.
 - [ ] Só depois integrar broker e worker remoto de treino; não declarar execução assíncrona operacional com base na persistência dos leases.

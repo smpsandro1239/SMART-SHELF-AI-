@@ -749,3 +749,16 @@ Commit validado: `1e3499c8c80ef75494a29d06807469898471e4e1`.
 - **Testes:** assinatura adulterada, método/caminho/query/corpo divergentes, timestamp expirado, scope insuficiente, repetição HTTP e constraints/downgrade da migration.
 - **Validação:** API CI [44471171581](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44471171581) passou com PostgreSQL 16, smoke de replay e **1211 passed, 1 skipped, 1 warning**; Quality Gates [44471171526](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44471171526) e Docker Compose [44471171533](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44471171533) passaram.
 - **Fronteira não implementada:** não existem rotas de jobs montadas, broker nem worker remoto. A dependência está pronta para uso por futuros handlers, mas não deve ser apresentada como endpoint operacional. Leitura autorizada de artefactos e promoção fenced continuam pendentes.
+
+
+## 2026-11-19 — Leitura segura e auditada de fontes de treino
+
+- **Base validada:** commit `c6b00478514812e094b960f5fefe4b6380b0fb9a`.
+- **Migration/modelo:** `0062_dataset_job_artifact_reads` e `DatasetExecutionJobArtifactRead`, com FKs, checks, índices e auditoria append-only.
+- **Serviço:** `read_dataset_job_source_bytes` exige `artifacts:read`, lease actual e fencing token, valida pertença ao job, bloqueia a hierarquia de imagem, confirma loja/retention/legal hold e volta a validar worker/credencial no momento da leitura.
+- **Filesystem:** leitura por descritores de directório e `O_NOFOLLOW`; traversal e symlinks rejeitados; tamanho e SHA-256 verificados; só os bytes em memória são devolvidos.
+- **SQL:** triggers PostgreSQL/SQLite impedem registos de leitura sem lease/fonte/loja/retention/worker/credencial/scope válidos e proíbem UPDATE/DELETE da auditoria.
+- **Corridas de revogação:** wrappers claim/heartbeat/complete/fail revalidam worker, credencial e scope no momento da operação; leitura repete a validação na transacção que segura os locks.
+- **Smoke PostgreSQL:** confirmou leitura bem-sucedida e auditada; uma restrição concorrente ficou bloqueada pelo lock de origem e, após commit, a leitura seguinte foi recusada sem novo registo de sucesso. O smoke também confirmou que UPDATE/DELETE da auditoria são rejeitados.
+- **Validação:** API CI [44473560217](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44473560217), Quality Gates [44473560287](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44473560287) e Docker Compose [44473560252](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44473560252) passaram; suite API: **1223 passed, 1 skipped, 1 warning**.
+- **Limites:** serviço de leitura disponível internamente, mas sem endpoint HTTP montado; promoção de outputs, broker e worker remoto continuam pendentes.

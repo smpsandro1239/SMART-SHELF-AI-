@@ -1486,4 +1486,20 @@ O cliente deriva a chave HMAC como SHA-256 do segredo da credencial; o servidor 
 - Quality Gates [44471171526](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44471171526): compilação Python, suite API e build TypeScript/produção Web passaram.
 - Docker Compose [44471171533](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44471171533): stack, readiness, seed e worker demonstrativo passaram.
 
-**Limites:** a dependência está pronta e testada através de uma aplicação FastAPI de teste, mas não existem ainda rotas de jobs montadas nem worker remoto. Os endpoints permanecem deliberadamente indisponíveis. Ao criar rotas, usar um prefixo de serviço separado (por exemplo, `/internal/v1/dataset-jobs`) e aplicar `Depends(require_dataset_worker(...))` em cada operação; não as colocar sob `/api/v1`, cuja middleware está reservada à autenticação JWT humana. `artifacts:read`, `outputs:publish`, broker, consumidor remoto e promotor fenced continuam por implementar.
+**Limites:** a dependência está pronta e testada através de uma aplicação FastAPI de teste, mas não existem ainda rotas de jobs montadas nem worker remoto. Os endpoints permanecem deliberadamente indisponíveis. Ao criar rotas, usar um prefixo de serviço separado (por exemplo, `/internal/v1/dataset-jobs`) e aplicar `Depends(require_dataset_worker(...))` em cada operação; não as colocar sob `/api/v1`, cuja middleware está reservada à autenticação JWT humana. O serviço de leitura `artifacts:read` foi entretanto implementado na migration 0062 e está descrito na secção mais recente; continua sem rota HTTP. `outputs:publish`, broker, consumidor remoto e promotor fenced continuam por implementar.
+
+
+## 2026-11-19 — Leitura de fontes de treino com lease, retenção e auditoria
+
+A migration `0062_dataset_job_artifact_reads` e o serviço `app.dataset_job_artifact_reads.read_dataset_job_source_bytes` implementam a leitura de bytes para um worker que já possui um principal autenticado. Cada leitura exige `artifacts:read`, job em estado `LEASED`, `worker_id` autenticado e `fencing_token` actual. O serviço confirma que a imagem pertence ao conjunto imutável de fontes do job e revalida a credencial e o scope na própria transacção da leitura.
+
+A leitura mantém locks sobre job, imagem, prateleira e zona até materializar os bytes. Revalida loja, retenção e legal hold; abre o ficheiro com descritores de directório e `O_NOFOLLOW` para impedir traversal/symlinks; confirma tamanho e SHA-256. Só devolve bytes em memória — nunca expõe caminho local ou URL. Cada leitura aceite cria um registo na tabela append-only `dataset_execution_job_artifact_reads`. Triggers PostgreSQL/SQLite verificam lease actual, associação à fonte, loja, retenção, worker/credencial activos e scope; UPDATE e DELETE são rejeitados.
+
+As operações de claim, heartbeat, complete e fail também revalidam worker, credencial e scopes no momento da operação, fechando a janela entre a autenticação HTTP e a utilização do principal.
+
+**Validação concluída no commit `c6b00478514812e094b960f5fefe4b6380b0fb9a`:**
+- API CI [44473560217](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44473560217): migration PostgreSQL 16, smoke de leitura e concorrência de retenção, smokes anteriores e **1223 testes aprovados, 1 ignorado e 1 aviso**.
+- Quality Gates [44473560287](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44473560287): compilação Python, suite API e TypeScript/build de produção passaram.
+- Docker Compose [44473560252](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44473560252): stack, readiness, seed e worker demonstrativo passaram.
+
+**Limites:** o serviço de leitura está implementado, mas não existe ainda uma rota HTTP de jobs que o exponha. A publicação de outputs com fencing (`outputs:publish`), broker e worker remoto continuam pendentes; a execução assíncrona não deve ser considerada operacional.

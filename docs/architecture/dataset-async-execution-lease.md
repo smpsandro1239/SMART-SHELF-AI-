@@ -176,3 +176,14 @@ A camada de credenciais individuais foi complementada por `app.dataset_worker_ht
 O smoke PostgreSQL usa duas sessões independentes e a mesma assinatura/nonce; o resultado exigido é uma única aceitação e uma rejeição de replay. Validação concluída no API CI [44471171581](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44471171581), juntamente com Quality Gates [44471171526](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44471171526) e Docker Compose [44471171533](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44471171533); a suite terminou com 1211 passed, 1 skipped e 1 warning.
 
 A dependência ainda não está ligada a rotas de jobs reais. As futuras rotas devem ficar fora do prefixo `/api/v1` da autenticação humana e aplicar o scope correspondente em cada handler. A leitura autorizada de artefactos, promoção fenced e worker remoto continuam pendentes.
+
+
+## Leitura de fontes de treino — migration 0062
+
+O serviço `app.dataset_job_artifact_reads.read_dataset_job_source_bytes` implementa a operação de leitura interna autorizada. Exige `artifacts:read`, job lease actual, worker autenticado e fencing token. A origem tem de pertencer ao conjunto imutável do job. O serviço bloqueia job e hierarquia imagem/prateleira/zona, confirma loja/retention/legal hold, revalida credencial e scope, lê com descritores de directório/`O_NOFOLLOW`, confirma tamanho e SHA-256 e devolve apenas bytes em memória.
+
+Cada leitura cria um registo append-only em `dataset_execution_job_artifact_reads`. Triggers PostgreSQL/SQLite validam lease, owner, fencing token, fonte, loja, hash, retenção, worker/credencial e scope; UPDATE/DELETE são proibidos. O smoke PostgreSQL confirmou serialização com uma restrição de retenção concorrente e ausência de auditoria de sucesso para a leitura recusada.
+
+As operações de claim, heartbeat, complete e fail também voltam a validar worker, credencial e scopes na operação. Validação final no API CI [44473560217](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44473560217), Quality Gates [44473560287](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44473560287) e Docker Compose [44473560252](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44473560252); 1223 testes aprovados, 1 ignorado e 1 aviso.
+
+O serviço não está ainda exposto por endpoint HTTP. Promoção de outputs com fencing, broker e worker remoto continuam por implementar.

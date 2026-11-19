@@ -463,3 +463,14 @@ A migration `0061_dataset_worker_request_nonces` e o módulo `app.dataset_worker
 **Decisão:** as futuras rotas de workers devem usar um prefixo separado da API humana, por exemplo `/internal/v1/dataset-jobs`, e aplicar a dependência em todos os handlers. Não expor rotas enquanto leitura autorizada de artefactos, publicação fenced e worker remoto não estiverem implementados. A tabela de nonces retém os digests durante 121 segundos; pedidos assinados posteriores limpam os expirados.
 
 **Próximas tarefas P0:** leitura de bytes autorizada por chamada (`artifacts:read`), promotor de outputs condicionado ao fencing token actual (`outputs:publish`), e só depois integração de broker/worker remoto.
+
+
+## 2026-11-19 — Leitura de fontes de treino com fencing e auditoria
+
+A migration `0062_dataset_job_artifact_reads` e o serviço `read_dataset_job_source_bytes` fecham a operação de leitura interna para jobs. O worker necessita do scope `artifacts:read`, lease não expirado, identidade autenticada e fencing token actual. O serviço valida a fonte imutável do job, revalida credencial/scope, bloqueia imagem/prateleira/zona, verifica loja, retenção, legal hold, caminho sem symlinks, tamanho e SHA-256, e só devolve bytes em memória.
+
+A tabela `dataset_execution_job_artifact_reads` regista cada leitura bem-sucedida e é append-only. Triggers SQL rejeitam inserções sem lease/fonte/loja/retention/worker/credencial/scope válidos e impedem UPDATE/DELETE. O smoke PostgreSQL confirmou que uma restrição de retenção concorrente espera pelos locks da leitura e que a leitura posterior é recusada sem criar auditoria de sucesso.
+
+**Validação concluída no commit `c6b00478514812e094b960f5fefe4b6380b0fb9a`:** API CI [44473560217](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44473560217), Quality Gates [44473560287](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44473560287) e Docker Compose [44473560252](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44473560252) passaram; suite API com **1223 testes aprovados, 1 ignorado e 1 aviso**.
+
+**Próxima fronteira P0:** implementar `outputs:publish` com validação do estado `SUCCEEDED`, digest e fencing token actual, protocolo de staging/publicação recuperável e compensação de ficheiros órfãos. Só depois integrar broker e worker remoto. O serviço de leitura existe, mas não está ainda exposto por endpoint HTTP; a execução assíncrona continua não operacional.
