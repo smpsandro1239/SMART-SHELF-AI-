@@ -654,3 +654,139 @@ Documento: `docs/architecture/dataset-output-artifact-governance.md`.
 - [ ] Integrar todos os consumidores reais futuros (API, exports, workers, caches e backups) exclusivamente através desta fronteira; nenhum endpoint/worker foi activado.
 - [ ] Definir política de autorização por perfil/loja e aprovação independente para libertar legal hold.
 - [ ] Definir inventário externo, propagação a derivados/cópias e política de retenção; manter purga física desactivada.
+
+## SMART-SHELF-AI — requisitos de visão computacional e inteligência de prateleira (2026-11-19)
+
+Objectivo: evoluir o projecto para uma plataforma de inteligência operacional de retalho que observe a disponibilidade real na prateleira, identifique desvios, recomende reposição e confirme a execução. Esta secção regista requisitos; nenhum item abaixo é considerado implementado apenas por estar planeado. Preservar os contratos existentes, isolamento multi-loja, validação humana, auditoria, retenção e governação fail-closed.
+
+### P0 — contratos, fiabilidade e evidência
+- [ ] Reconciliar README, ROADMAP, TODO e PROGRESS com o estado real dos módulos de visão; distinguir explicitamente implementado, experimental, mock, integrado mas não validado e operacional.
+- [ ] Confirmar o estado actual de CI no HEAD desta ronda (API CI/PostgreSQL 16, Quality Gates, Web CI e Docker Compose); registar SHA, runs e resultados sem reutilizar evidência de commits anteriores.
+- [ ] Auditar o contrato de saída do provider ONNX: classes, scores, bounding boxes, dimensões, coordenadas normalizadas/absolutas, formato de tensor, pré-processamento e pós-processamento.
+- [ ] Corrigir o mapeamento de class_id para etiquetas/classes versionadas; rejeitar classes desconhecidas ou índices fora do catálogo em vez de atribuir genericamente "product".
+- [ ] Validar metadados do modelo (formato, versão, hash SHA-256, input/output names, shapes, dtype, labels, threshold e versão do pré/pós-processamento) antes de carregar/inferir.
+- [ ] Definir configuração fail-closed para provider mock/demo versus provider real; impedir que resultados sintéticos sejam apresentados como deteções reais ou usados para alterar inventário.
+- [ ] Acrescentar testes de contrato e regressão para modelos inválidos, outputs malformados, classes desconhecidas, confiança fora de intervalo, boxes inválidas, imagens inválidas e falhas/timeout do provider.
+- [ ] Garantir que cada deteção e observação preserva proveniência: imagem/captura, loja, zona, prateleira, dispositivo, timestamp UTC, provider, model version, preprocessing version e correlation/request ID.
+- [ ] Definir estados explícitos para inferência indisponível, evidência insuficiente, baixa confiança e revisão humana; nunca converter falha de inferência em "prateleira vazia".
+- [ ] Verificar idempotência de reprocessamento, deduplicação de eventos e fencing/lease do worker; testar retry, timeout, crash e recuperação sem duplicar deteções ou tarefas.
+
+### P1 — dataset real e validação do modelo
+- [ ] Definir protocolo de recolha de imagens autorizado, consentimento/base legal aplicável, minimização, retenção e remoção de elementos pessoais desnecessários; não implementar reconhecimento facial.
+- [ ] Criar dataset representativo por loja, câmara, corredor, prateleira, SKU, embalagem, iluminação, ângulo, distância, oclusão e condições de captura.
+- [ ] Definir esquema de anotação versionado para bounding boxes/classes, SKU, facings, regiões/células da prateleira, espaços vazios, produto deslocado, oclusão e qualidade da imagem.
+- [ ] Criar processo de revisão/dupla anotação e adjudicação de rótulos ambíguos, com rastreabilidade do anotador e versão do dataset.
+- [ ] Separar treino/validação/teste por loja, câmara ou período temporal para evitar data leakage entre imagens quase duplicadas.
+- [ ] Implementar controlo de duplicados e near-duplicates, integridade SHA-256, manifestos imutáveis e linhagem entre dataset, split, treino, modelo e avaliação.
+- [ ] Definir baseline reproduzível e critérios mínimos de aceitação por classe/SKU/cenário antes de promover um modelo.
+- [ ] Medir precision, recall, F1, mAP por classe, matriz de confusão, falsos positivos/negativos, calibração de confiança, latência p50/p95 e consumo de memória/CPU/GPU.
+- [ ] Avaliar robustez a reflexos, embalagens semelhantes, alterações de packaging, iluminação, blur, ângulos, oclusões, pessoas/carrinhos e prateleiras parcialmente visíveis.
+- [ ] Criar relatório de avaliação versionado e mecanismo de aprovação/rollback de modelos; não promover automaticamente um modelo por ter terminado o treino.
+- [ ] Preparar conjunto de teste de regressão visual (golden set) e executar avaliação comparativa antes de cada alteração de modelo ou pré/pós-processamento.
+
+### P1 — identificação de produto, facings e espaços vazios
+- [ ] Completar o pipeline real de deteção ONNX com mapeamento de classes e integração validada com o catálogo de produtos/SKU.
+- [ ] Implementar matching de SKU com combinação controlada de detector, embeddings, OCR/código de barras e catálogo; registar scores e evidências concorrentes.
+- [ ] Definir limiares por classe/cenário e política de abstenção: correspondências ambíguas ou desconhecidas devem ir para revisão, não ser forçadas para um SKU.
+- [ ] Separar formalmente object detection, identificação SKU, contagem de facings visíveis e estimativa de unidades físicas; não inferir stock total a partir de faces visíveis.
+- [ ] Implementar detecção/segmentação de regiões de prateleira e células de exposição, incluindo coordenadas normalizadas e transformação para a geometria da imagem.
+- [ ] Implementar detecção de espaços vazios comparando células/posições esperadas com observações; distinguir vazio real, oclusão, área fora de imagem e falha de captura.
+- [ ] Implementar contagem de facings por SKU com associação espacial, supressão de duplicados e tratamento de produtos sobrepostos.
+- [ ] Implementar deteção de produto deslocado/misplaced e produto desconhecido, com evidência visual e confiança.
+- [ ] Introduzir estado de qualidade/visibilidade por região (occluded, blurred, glare, out_of_view, low_resolution) para impedir conclusões indevidas.
+- [ ] Comparar observações sucessivas e exigir persistência/consenso temporal configurável antes de criar alertas de rutura.
+- [ ] Criar testes com imagens sintéticas controladas e imagens reais anotadas para vazio, low stock, facings, deslocamento, oclusão e falsos vazios.
+
+### P1 — geometria de prateleiras e planogramas
+- [ ] Definir modelo de domínio para corredor, módulo, prateleira, segmento, célula/posição, coordenadas, capacidade, orientação e associação a loja/zona.
+- [ ] Definir API/serviços e migrations necessárias para planogramas versionados, com actor, motivo, vigência e histórico append-only ou auditável.
+- [ ] Permitir associar SKU esperado, número de facings esperado, capacidade máxima, prioridade e regras de exposição a cada posição.
+- [ ] Implementar importação/exportação validada de planogramas (formato documentado), com preview, validação de SKU/localização e rejeição de referências ambíguas.
+- [ ] Implementar comparação entre planograma activo e observação visual, produzindo desvios explicáveis: missing, misplaced, under-faced, over-faced e unknown.
+- [ ] Tratar alterações de planograma com versão efectiva por data/hora; reprocessamentos históricos devem usar a versão aplicável no momento da captura.
+- [ ] Criar interface para visualizar prateleira/células, esperado versus observado, evidência e revisão humana.
+- [ ] Acrescentar testes de isolamento multi-loja, concorrência de versões, histórico, importação inválida e comparação geométrica.
+
+### P1 — disponibilidade, inventário e decisão
+- [ ] Definir estados de disponibilidade distintos e documentados: AVAILABLE, LOW_STOCK, POSSIBLE_STOCKOUT, OUT_OF_STOCK, MISPLACED, UNKNOWN e NEEDS_REVIEW.
+- [ ] Implementar Shelf Availability Intelligence que combine evidência visual, consenso temporal, inventário, vendas e qualidade da observação, sem sobrepor nem duplicar o motor de decisões existente.
+- [ ] Separar explicitamente stock de exposição, stock de retaguarda, stock reservado, em trânsito e stock contabilístico; documentar fonte de verdade e timestamp de cada quantidade.
+- [ ] Definir regras para confirmar OUT_OF_STOCK: evidência visual persistente + reconciliação com fontes de inventário, com possibilidade de revisão humana e explicação da decisão.
+- [ ] Impedir que uma deteção visual, previsão ou recomendação altere directamente stock contabilístico; movimentos continuam a exigir operação autorizada e auditável.
+- [ ] Integrar alertas com tarefas existentes de reposição usando chave de deduplicação estável, prioridade, SKU, localização, quantidade sugerida, evidência e motivo.
+- [ ] Implementar ciclo de tarefa verificável: recomendada, aprovada/atribuída, iniciada, concluída, verificada e reconciliada; distinguir conclusão declarada de confirmação visual/física.
+- [ ] Definir política para tarefas obsoletas, alertas resolvidos, alterações de planograma e stock reposto entretanto; evitar tarefas duplicadas ou contraditórias.
+- [ ] Acrescentar explicabilidade: factores, fontes, timestamps, confiança, regras accionadas e motivo de abstenção/revisão.
+
+### P1 — previsão de procura e reposição
+- [ ] Evoluir baseline de média ponderada para previsão por SKU/loja com granularidade horária e diária, mantendo baseline comparável.
+- [ ] Avaliar sazonalidade, dia da semana, feriados, promoções, preço, tráfego e eventos comerciais quando existirem dados fiáveis e autorizados.
+- [ ] Integrar vendas/POS e movimentos de inventário com contratos, timestamps, deduplicação, reconciliação e isolamento por loja.
+- [ ] Calcular risco e horizonte temporal até rutura, explicitando incerteza e intervalo de previsão; não apresentar estimativas como certezas.
+- [ ] Calcular quantidade sugerida considerando procura prevista, stock de exposição, retaguarda, reservas, unidades logísticas, capacidade e lead time.
+- [ ] Definir métricas e backtesting temporal (WAPE, MAE/RMSE, bias e desempenho por SKU/loja); comparar com baseline e tratar séries esparsas/intermitentes.
+- [ ] Criar monitorização de drift e degradação, regras de fallback para baseline e revisão de previsões com dados insuficientes.
+- [ ] Garantir que previsão não cria encomendas nem movimentos físicos automaticamente sem política e aprovação explícitas.
+
+### P1 — dashboard e experiência operacional
+- [ ] Acrescentar indicadores OSA (On-Shelf Availability), taxa de rutura, duração da rutura, low-stock, conformidade de planograma e tempo de reposição.
+- [ ] Mostrar métricas com denominadores, período, cobertura de câmaras e qualidade da evidência; não misturar UNKNOWN com AVAILABLE.
+- [ ] Criar vista de prateleira com esperado/observado, células, facings, zonas vazias, SKU incerto e ligação à imagem/evidência autorizada.
+- [ ] Criar filtros por loja, zona, corredor, prateleira, SKU, estado, severidade e intervalo temporal com paginação e limites de consulta.
+- [ ] Mostrar tarefas e alertas com prioridade, idade humanizada, responsável, estado, evidência e acções permitidas por perfil.
+- [ ] Garantir acessibilidade por teclado/leitor de ecrã, contraste WCAG 2.2 AA, estados não dependentes apenas da cor e layouts móveis.
+- [ ] Implementar vistas comparativas multi-loja apenas para utilizadores autorizados e sem fuga de dados entre tenants.
+
+### P1/P2 — captura, dispositivos e operação Edge
+- [ ] Definir contrato comum Capture Device Gateway para câmaras IP/RTSP, upload móvel e robôs, com adaptadores isolados por fabricante.
+- [ ] Registar device_id, tipo, loja/zona/prateleira, estado, versão de firmware/configuração, timestamp UTC, sessão e origem da captura.
+- [ ] Implementar registo, associação, rotação/revogação de credenciais e health checks de dispositivos; nunca guardar segredos em logs.
+- [ ] Implementar agendamento/configuração de captura, limites de frequência/resolução e backpressure para evitar sobrecarga de rede/storage/worker.
+- [ ] Criar fluxo móvel/PWA para captura manual, validação humana, leitura de código de barras e conclusão de tarefa, com permissões mínimas.
+- [ ] Definir integração de robôs como fonte de observações e tarefas de inspeção; não permitir controlo físico autónomo sem safety case, limites e aprovação separados.
+- [ ] Desenhar Edge AI com inferência local, cache/buffer limitado, health monitoring e política de retenção local.
+- [ ] Implementar sincronização offline/online com outbox, IDs idempotentes, ordenação por origem, relógios desalinhados e resolução explícita de conflitos.
+- [ ] Definir política de degradação quando Edge, Cloud, câmara ou provider estiver indisponível; preservar observações pendentes sem inventar estados.
+- [ ] Validar segurança de rede, TLS, autenticação mútua quando aplicável, segmentação, actualizações e inventário de dispositivos.
+
+### P2 — eventos e integrações externas
+- [ ] Definir catálogo/versionamento de eventos de domínio: SHELF_LOW_STOCK, SHELF_OUT_OF_STOCK, PRODUCT_MISPLACED, PLANOGRAM_VIOLATION, RESTOCK_RECOMMENDED, RESTOCK_STARTED, RESTOCK_COMPLETED, INVENTORY_MISMATCH, CAMERA_OFFLINE e VISION_MODEL_UNAVAILABLE.
+- [ ] Definir envelope comum de evento com event_id, schema_version, occurred_at, recorded_at, tenant/store, source, correlation_id e idempotency_key.
+- [ ] Avaliar MQTT para comunicação Edge e broker/outbox para distribuição backend; escolher tecnologia após requisitos de entrega, retenção, ordering e operação.
+- [ ] Garantir outbox transaccional, retries com backoff, dead-letter/replay controlado, deduplicação e observabilidade; não assumir entrega exactly-once.
+- [ ] Criar adaptadores POS/ERP/WMS com contratos, autenticação, mapeamento de SKU/unidades, reconciliação, rate limits e testes de contrato.
+- [ ] Documentar que nenhuma integração externa é operacional até existir adapter implementado, credenciais configuradas e teste end-to-end demonstrável.
+
+### P0/P1 — segurança, privacidade e governação
+- [ ] Auditar autorização por endpoint/serviço para imagens, deteções, planogramas, dispositivos, eventos, tarefas e métricas, preservando isolamento multi-loja e deny-by-default.
+- [ ] Definir matriz de permissões por perfil e loja para revisão de deteções, aprovação de planogramas, gestão de modelos, dispositivos e tarefas.
+- [ ] Aplicar minimização de dados de vídeo/imagem, retenção configurável, redacção/mascaramento quando necessário e acesso auditado às evidências.
+- [ ] Garantir que thumbnails, crops, embeddings, exports, caches e outputs derivados herdam restrições, legal holds e linhagem das fontes.
+- [ ] Integrar cada transformação real no registo de derivação e no consumo governado de outputs; não criar bypasses ao serviço existente.
+- [ ] Inventariar cópias externas, object storage, réplicas e backups; manter purga física e restauração bloqueadas para cópias sem atestação/governação.
+- [ ] Definir gestão segura de modelos/datasets (assinatura/hash, origem, licença, aprovação, versão, rollback e acesso).
+- [ ] Definir auditoria de decisões automáticas e humanas com actor, motivo, evidência, versão do modelo/regra e resultado.
+- [ ] Rever ameaças específicas de imagens e modelos (upload malicioso, ficheiros enormes, decompression bombs, path traversal, prompt/data poisoning e supply chain de pesos).
+
+### P2 — piloto, operação e critérios de aceitação
+- [ ] Definir piloto supervisionado numa loja e secções delimitadas, com 50–100 SKUs como hipótese inicial ajustável após levantamento.
+- [ ] Executar primeiro em modo sombra: comparar previsões/deteções com validação humana sem gerar alterações de inventário ou tarefas automáticas irreversíveis.
+- [ ] Definir ground truth e amostragem por turno/loja/câmara; medir precision, recall, falsos positivos, falsos negativos e latência.
+- [ ] Medir OSA, duração de ruturas, tempo alerta→atribuição, tempo de reposição, taxa de conclusão e impacto operacional face a baseline.
+- [ ] Definir critérios de go/no-go por classe/SKU e cenário, limites de falsos alertas, disponibilidade, latência, privacidade e custo.
+- [ ] Realizar testes de carga, soak, falha de rede, reinício de worker, câmara offline, broker indisponível e recuperação de backlog.
+- [ ] Documentar runbooks, alertas, SLOs, backups/restauro, rotação de credenciais, rollback de modelo e resposta a incidentes.
+- [ ] Só declarar o piloto operacional após aprovação dos critérios, evidência reproduzível e validação do responsável da loja.
+
+### Sequência recomendada e dependências
+1. Fechar P0 de contratos, CI, proveniência e separação mock/real.
+2. Preparar dataset e avaliação antes de seleccionar/promover modelo real.
+3. Corrigir inferência ONNX e matching de SKU; depois implementar células, facings e espaços vazios.
+4. Implementar planogramas e comparação esperado/observado.
+5. Ligar consenso visual ao motor de disponibilidade, inventário e tarefas existentes.
+6. Evoluir previsão e indicadores OSA.
+7. Só depois operacionalizar gateway de dispositivos, Edge/offline, eventos e integrações externas.
+8. Executar piloto supervisionado e promover capacidades por evidência.
+
+Critério global: nenhuma capacidade pode ser marcada como concluída sem código, testes relevantes, isolamento/autorização, documentação e evidência CI; funcionalidades dependentes de dataset, câmaras, credenciais ou hardware devem permanecer explicitamente bloqueadas até validação real.
+
