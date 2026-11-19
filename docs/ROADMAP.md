@@ -414,3 +414,11 @@ Foi criado e integrado no API CI o smoke `postgres_dataset_eligibility_concurren
 - [x] API CI [44421831066](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44421831066): migration PostgreSQL 16, smoke de execução assíncrona e 1179 testes aprovados, 1 ignorado, 1 aviso.
 - [x] Quality Gates [44421831076](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44421831076) e Docker Compose [44421831148](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44421831148) passaram.
 - [ ] A migration 0059 de estado inicial obrigatório ainda aguarda validação.
+
+
+### Guard de estado inicial dos jobs assíncronos — 19-11-2026
+
+- [x] Acrescentar cobertura SQLite para os oito campos que não podem ser definidos num INSERT inicial de job.
+- [x] Acrescentar tentativas equivalentes no smoke PostgreSQL 16, com transacções independentes e rejeição esperada pela base de dados.
+- [ ] Confirmar execução PostgreSQL 16, suite API, Quality Gates e Docker Compose para os commits `0d7592b12a98ee11f16730591c30368637b30c32` e `f07d9d2fbc194dacd05e38a100c6937cde9da9f2`.
+- [ ] Implementar autenticação/identidade de workers antes de disponibilizar endpoints de claim/heartbeat; manter a API de jobs não exposta enquanto essa fronteira não existir.
