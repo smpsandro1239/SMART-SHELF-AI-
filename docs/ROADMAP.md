@@ -727,3 +727,12 @@ A alteração foi validada no API CI [44588809660](https://github.com/smpsandro1
 - O CI do commit `43ddc0f54c52552eb3168a5f9ab301e49668e431` confirmou que a segunda prateleira isolou a revisão SKU, mas o teste continuava a consultar todas as prateleiras da loja e a construir um dicionário apenas por `product_id`. Como os mesmos SKUs existem nas duas prateleiras, a linha da prateleira de regressão podia substituir a evidência da prateleira operacional na asserção.
 - A consulta de decisões no teste foi restringida à prateleira original, que é o âmbito efetivamente validado pelo fluxo de criação de tarefa. A prateleira secundária continua a testar exclusivamente a colisão de idempotência SKU A → SKU B.
 - A correção aguarda nova execução do API CI e Quality Gates; a execução anterior terminou com **1 failed, 1342 passed, 1 skipped, 1 warning**.
+
+
+### Validação integral — idempotência, comparação e isolamento — 2026-11-19
+
+- [x] API CI [44606506802](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44606506802): passou; PostgreSQL 16 e smokes de autorização de funcionários, retenção da fila de revisão, observações, revisão humana, legal hold e ciclo de vida de planogramas passaram; **1343 testes aprovados, 1 ignorado e 1 aviso**.
+- [x] Quality Gates [44606506118](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44606506118): passou; compilação Python, suite API (**1343 passed, 1 skipped, 1 warning**) e build TypeScript/produção Web aprovados.
+- [x] Docker Compose [44606506450](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44606506450): passou.
+- [x] Corrigida a asserção do teste integrado para consultar apenas a prateleira operacional original, evitando colisão por `product_id` entre prateleiras distintas.
+- [ ] Prosseguir com auditoria handler-by-handler de autorização e isolamento multi-loja; não assumir cobertura total apenas com os smokes atuais.
