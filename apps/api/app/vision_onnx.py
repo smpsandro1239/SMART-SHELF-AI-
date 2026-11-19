@@ -9,6 +9,7 @@ The detector must export post-NMS boxes. Raw YOLO head tensors are not accepted.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -42,6 +43,35 @@ def _env_float(name: str, default: float, minimum: float = 0.0, maximum: float =
     return value
 
 
+PREPROCESSING_VERSION = "rgb-letterbox-bilinear-114-v1"
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    try:
+        with path.open("rb") as stream:
+            for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                digest.update(chunk)
+    except OSError as exc:
+        raise ONNXConfigurationError(f"Cannot read model file for SHA-256: {path.name}") from exc
+    return digest.hexdigest()
+
+
+def _fingerprinted_version(configured_version: str, fingerprint: str) -> str:
+    base = configured_version.strip()
+    if not base:
+        raise ONNXConfigurationError("Model version cannot be empty")
+    if len(fingerprint) != 64 or any(char not in "0123456789abcdef" for char in fingerprint):
+        raise ONNXConfigurationError("Model fingerprint must be a SHA-256 hex digest")
+    # ShelfImageDetection.model_version is limited to 100 characters.
+    return f"{base[:32]}@{fingerprint}"
+
+
+def _canonical_sha256(payload: dict) -> str:
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
 class ONNXShelfVisionProvider:
     """Run an exported detector and optional image embedder with ONNX Runtime."""
 
@@ -60,8 +90,8 @@ class ONNXShelfVisionProvider:
     ):
         self.detector_path = Path(detector_path)
         self.embedding_path = Path(embedding_path) if embedding_path else None
-        self.model_version = model_version
-        self.embedding_model_version = embedding_model_version
+        self.configured_model_version = model_version.strip()
+        self.configured_embedding_model_version = embedding_model_version.strip()
         self.input_size = input_size
         self.confidence_threshold = confidence_threshold
         self.max_detections = max_detections
@@ -79,6 +109,34 @@ class ONNXShelfVisionProvider:
                 raise ONNXConfigurationError("Class labels must be non-empty strings of at most 120 characters")
             normalized_labels[class_id] = label.strip()
         self.class_labels = normalized_labels
+        self.class_labels_sha256 = _canonical_sha256({
+            str(class_id): label for class_id, label in sorted(normalized_labels.items())
+        })
+        if self.detector_path.is_symlink() or (self.embedding_path and self.embedding_path.is_symlink()):
+            raise ONNXConfigurationError("Model paths must not be symbolic links")
+        self.detector_sha256 = _sha256_file(self.detector_path)
+        self.embedding_sha256 = _sha256_file(self.embedding_path) if self.embedding_path else None
+        detector_fingerprint = _canonical_sha256({
+            "detector_sha256": self.detector_sha256,
+            "class_labels_sha256": self.class_labels_sha256,
+            "input_size": self.input_size,
+            "confidence_threshold": self.confidence_threshold,
+            "max_detections": self.max_detections,
+            "preprocessing_version": PREPROCESSING_VERSION,
+        })
+        self.model_version = _fingerprinted_version(self.configured_model_version, detector_fingerprint)
+        if self.embedding_sha256:
+            embedding_fingerprint = _canonical_sha256({
+                "embedding_sha256": self.embedding_sha256,
+                "input_size": self.input_size,
+                "preprocessing_version": PREPROCESSING_VERSION,
+            })
+            self.embedding_model_version = _fingerprinted_version(
+                self.configured_embedding_model_version, embedding_fingerprint
+            )
+        else:
+            self.embedding_model_version = None
+        self.preprocessing_version = PREPROCESSING_VERSION
         try:
             import onnxruntime as ort
             import numpy as np
