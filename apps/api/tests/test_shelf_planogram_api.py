@@ -226,3 +226,176 @@ def test_draft_planogram_cells_can_be_replaced_and_expected_facings_round_trip(p
         json=replacement, headers=headers,
     )
     assert denied.status_code == 409
+
+
+def test_active_planogram_comparison_returns_front_facing_counts_and_provenance(planogram_api):
+    client, ids = planogram_api
+    headers = _headers(ids["supervisor_a"], "SUPERVISOR")
+    created = client.post(
+        f"/api/v1/shelves/{ids['shelf_a']}/planograms",
+        json=_payload(ids["product_a"], expected_facings=2),
+        headers=headers,
+    )
+    assert created.status_code == 201, created.text
+    planogram_id = created.json()["id"]
+    activated = client.post(
+        f"/api/v1/planograms/{planogram_id}/activate",
+        json={"reason": "Approved comparison fixture"},
+        headers=headers,
+    )
+    assert activated.status_code == 200, activated.text
+
+    with main_module.SessionLocal() as db:
+        image = models.ShelfImage(
+            shelf_id=ids["shelf_a"],
+            original_filename="comparison.jpg",
+            storage_path=f"/tmp/planogram-comparison-{ids['shelf_a']}.jpg",
+            mime_type="image/jpeg",
+            file_size_bytes=128,
+            sha256="a" * 64,
+            analysis_status="COMPLETED",
+            model_version="detector-test-v1",
+            retention_status="ACTIVE",
+        )
+        db.add(image)
+        db.flush()
+        detection = models.ShelfImageDetection(
+            shelf_image_id=image.id,
+            product_id=ids["product_a"],
+            label="product",
+            confidence=0.97,
+            x_min=0.05,
+            y_min=0.10,
+            x_max=0.22,
+            y_max=0.90,
+            model_version="detector-test-v1",
+            sku_match_status="MATCHED",
+        )
+        db.add(detection)
+        db.commit()
+        image_id = image.id
+        detection_id = detection.id
+
+    response = client.get(
+        f"/api/v1/shelves/{ids['shelf_a']}/planograms/comparison/{image_id}",
+        headers=headers,
+    )
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["shelf_image_id"] == image_id
+    assert payload["image_sha256"] == "a" * 64
+    assert payload["model_version"] == "detector-test-v1"
+    assert payload["planogram_id"] == planogram_id
+    assert payload["planogram_version"] == 1
+    assert payload["cells"] == [{
+        "cell_code": "A1",
+        "status": "UNDER_FACED",
+        "expected_product_id": ids["product_a"],
+        "expected_facings": 2,
+        "observed_facings": 1,
+        "observed_product_ids": [ids["product_a"]],
+        "detection_ids": [detection_id],
+        "overlap_ratio": 0.306,
+    }]
+
+
+def test_planogram_comparison_never_infers_empty_without_visibility_calibration(planogram_api):
+    client, ids = planogram_api
+    headers = _headers(ids["supervisor_a"], "SUPERVISOR")
+    created = client.post(
+        f"/api/v1/shelves/{ids['shelf_a']}/planograms",
+        json=_payload(ids["product_a"]),
+        headers=headers,
+    )
+    planogram_id = created.json()["id"]
+    activated = client.post(
+        f"/api/v1/planograms/{planogram_id}/activate",
+        json={"reason": "Approved empty-state fixture"},
+        headers=headers,
+    )
+    assert activated.status_code == 200, activated.text
+
+    with main_module.SessionLocal() as db:
+        image = models.ShelfImage(
+            shelf_id=ids["shelf_a"],
+            original_filename="empty-facing.jpg",
+            storage_path=f"/tmp/planogram-empty-{ids['shelf_a']}.jpg",
+            mime_type="image/jpeg",
+            file_size_bytes=128,
+            sha256="b" * 64,
+            analysis_status="COMPLETED",
+            model_version="detector-test-v1",
+            retention_status="ACTIVE",
+        )
+        db.add(image)
+        db.flush()
+        db.add(models.ShelfImageDetection(
+            shelf_image_id=image.id,
+            product_id=None,
+            label="empty_facing",
+            confidence=0.99,
+            x_min=0.05,
+            y_min=0.10,
+            x_max=0.45,
+            y_max=0.90,
+            model_version="detector-test-v1",
+            sku_match_status="UNKNOWN",
+        ))
+        db.commit()
+        image_id = image.id
+
+    response = client.get(
+        f"/api/v1/shelves/{ids['shelf_a']}/planograms/comparison/{image_id}",
+        headers=headers,
+    )
+    assert response.status_code == 200, response.text
+    cell = response.json()["cells"][0]
+    assert cell["status"] == "UNKNOWN"
+    assert cell["observed_facings"] == 0
+
+
+def test_planogram_comparison_enforces_role_store_and_image_state(planogram_api):
+    client, ids = planogram_api
+    supervisor_a = _headers(ids["supervisor_a"], "SUPERVISOR")
+    created = client.post(
+        f"/api/v1/shelves/{ids['shelf_a']}/planograms",
+        json=_payload(ids["product_a"]),
+        headers=supervisor_a,
+    )
+    planogram_id = created.json()["id"]
+    client.post(
+        f"/api/v1/planograms/{planogram_id}/activate",
+        json={"reason": "Comparison authorization fixture"},
+        headers=supervisor_a,
+    )
+
+    with main_module.SessionLocal() as db:
+        image = models.ShelfImage(
+            shelf_id=ids["shelf_a"],
+            original_filename="pending.jpg",
+            storage_path=f"/tmp/planogram-pending-{ids['shelf_a']}.jpg",
+            mime_type="image/jpeg",
+            file_size_bytes=128,
+            sha256="c" * 64,
+            analysis_status="PENDING",
+            retention_status="ACTIVE",
+        )
+        db.add(image)
+        db.commit()
+        image_id = image.id
+
+    own_pending = client.get(
+        f"/api/v1/shelves/{ids['shelf_a']}/planograms/comparison/{image_id}",
+        headers=supervisor_a,
+    )
+    foreign = client.get(
+        f"/api/v1/shelves/{ids['shelf_b']}/planograms/comparison/{image_id}",
+        headers=supervisor_a,
+    )
+    employee = client.get(
+        f"/api/v1/shelves/{ids['shelf_a']}/planograms/comparison/{image_id}",
+        headers=_headers(ids["employee_a"], "EMPLOYEE"),
+    )
+    assert own_pending.status_code == 409
+    assert foreign.status_code == 403
+    assert employee.status_code == 403
