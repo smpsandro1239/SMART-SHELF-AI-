@@ -186,6 +186,71 @@ def main():
             get_output_governance_state,
         )
 
+        # A reader keeps the publication/job locks through byte materialization.
+        # A concurrent restriction must wait, then become visible to subsequent reads.
+        from app import dataset_job_output_consumption as output_consumption
+        reader_ready, release_reader = Event(), Event()
+        original_read = output_consumption._read_verified_file
+        def pause_verified_read(**kwargs):
+            result = original_read(**kwargs)
+            reader_ready.set()
+            if not release_reader.wait(timeout=20):
+                raise TimeoutError("consumer/restriction race was not released")
+            return result
+        output_consumption._read_verified_file = pause_verified_read
+        def concurrent_consume():
+            with SessionLocal() as read_db:
+                result = output_consumption.consume_dataset_job_output_bytes(
+                    read_db, publication_id=publication_id,
+                    authorize=lambda _publication, _job: True,
+                )
+                read_db.commit()
+                return result
+        def concurrent_restrict():
+            with SessionLocal() as restriction_db:
+                event = append_output_governance_event(
+                    restriction_db, publication_id=publication_id,
+                    event_type="RESTRICTION_APPLIED", actor_user_id=actor_user_id,
+                    reason="Concurrent reader/restriction serialization smoke",
+                    authorize=lambda _user, _publication, _action: True,
+                )
+                restriction_db.commit()
+                return event.sequence_number
+        try:
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                reader_future = executor.submit(concurrent_consume)
+                assert reader_ready.wait(timeout=10), "consumer did not reach verified byte read"
+                restriction_future = executor.submit(concurrent_restrict)
+                deadline = time.monotonic() + 8
+                blocked_reader = False
+                while time.monotonic() < deadline:
+                    with SessionLocal() as observer:
+                        waiting = observer.execute(text("""
+                            SELECT COUNT(*) FROM pg_stat_activity
+                            WHERE wait_event_type = 'Lock'
+                              AND query ILIKE '%dataset_execution_job_output_publications%'
+                        """)).scalar_one()
+                    if waiting:
+                        blocked_reader = True
+                        break
+                    time.sleep(0.05)
+                release_reader.set()
+                assert blocked_reader, "restriction did not wait for the active output consumer"
+                assert reader_future.result(timeout=10) == payload
+                assert restriction_future.result(timeout=10) == 1
+        finally:
+            release_reader.set()
+            output_consumption._read_verified_file = original_read
+        with SessionLocal() as release_db:
+            released = append_output_governance_event(
+                release_db, publication_id=publication_id,
+                event_type="RESTRICTION_RELEASED", actor_user_id=actor_user_id,
+                reason="Restore output after concurrency smoke",
+                authorize=lambda _user, _publication, _action: True,
+            )
+            release_db.commit()
+            assert released.sequence_number == 2
+
         first_authorized, release_first, second_started = Event(), Event(), Event()
 
         def first_restriction_writer():
@@ -242,7 +307,7 @@ def main():
                 time.sleep(0.05)
             release_first.set()
             assert blocked, "second governance writer did not wait on the publication row lock"
-            assert first_future.result(timeout=10) == 1
+            assert first_future.result(timeout=10) == 3
             assert second_future.result(timeout=10) == "rejected-after-first-commit"
 
         with SessionLocal() as event_db:
@@ -270,7 +335,7 @@ def main():
                 details={"source": "postgres-smoke"},
             )
             event_db.commit()
-            assert hold.sequence_number == 2
+            assert hold.sequence_number == 4
             _assert_rejected(
                 event_db,
                 "UPDATE dataset_execution_job_output_governance_events SET reason='tampered' WHERE id=:id",
@@ -285,7 +350,7 @@ def main():
                 event_db,
                 "INSERT INTO dataset_execution_job_output_governance_events "
                 "(publication_id,sequence_number,event_type,actor_user_id,reason,details,created_at) "
-                "VALUES (:publication,4,'LEGAL_HOLD_RELEASED',:actor,'forged sequence','{}',now())",
+                "VALUES (:publication,6,'LEGAL_HOLD_RELEASED',:actor,'forged sequence','{}',now())",
                 {"publication": publication_id, "actor": actor_user_id},
                 "output governance sequence gap",
             )

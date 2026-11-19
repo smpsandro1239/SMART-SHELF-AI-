@@ -80,3 +80,10 @@ Esta implementação é uma fronteira de serviço, não uma integração de prod
 ### Verificação de integração PostgreSQL
 
 O smoke PostgreSQL 16 exercita agora o serviço de consumo sobre uma publicação real: primeiro confirma a devolução dos bytes com autorização positiva; depois persiste uma restrição através da cronologia append-only e confirma que a leitura é recusada. A suite SQLite também cobre a tentativa de substituir o destino publicado por um symlink, preservando o ficheiro externo.
+
+
+### Concorrência entre consumo e restrição
+
+O smoke PostgreSQL de publicação exercita agora duas sessões independentes: a primeira autoriza e materializa bytes através de consume_dataset_job_output_bytes, mantendo a transacção aberta; a segunda tenta anexar RESTRICTION_APPLIED. A segunda sessão tem de aguardar pelo lock da publicação. Depois do commit da leitura, a restrição é registada e as leituras subsequentes ficam bloqueadas pela projecção append-only. O smoke liberta a restrição antes de continuar os restantes cenários.
+
+Esta cobertura valida a ordem de serialização entre leitura e governação em PostgreSQL 16. Não define papéis de negócio, não prova aprovação independente e não cobre cópias externas, caches, backups ou consumidores remotos.

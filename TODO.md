@@ -1,3 +1,10 @@
+## Consumo concorrente e governação de outputs (2026-11-19)
+
+- [x] Confirmar API CI, Quality Gates e Docker Compose do commit anterior e5a372d00199d441b6089254133f04dfd7f99e10: os três workflows terminaram com sucesso. API CI executou migrações PostgreSQL 16, smokes operacionais e suite API; Quality Gates concluiu testes API/compilação Python e build Web; Docker Compose validou readiness, seed e worker.
+- [x] Acrescentar ao smoke PostgreSQL duas sessões concorrentes para provar que RESTRICTION_APPLIED espera pelo consumidor que mantém o lock da publicação, e que a restrição só fica efectiva depois do commit da leitura.
+- [ ] Confirmar os três workflows da alteração concorrente antes de marcar a cobertura como validada.
+- [ ] Não implementar libertação independente de legal hold nem matriz HTTP por perfil/loja sem decisão de política aprovada; documentar as decisões necessárias.
+
 ## Reconciliação conservadora de outputs (2026-11-19)
 
 - [x] Criar `app.dataset_job_output_reconciliation` com modo read-only por defeito e `--apply` explícito.

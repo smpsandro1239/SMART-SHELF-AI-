@@ -1584,3 +1584,10 @@ Os eventos suportados são `RESTRICTION_APPLIED`, `RESTRICTION_RELEASED`, `LEGAL
 O serviço interno `app.dataset_job_output_consumption.consume_dataset_job_output_bytes` é agora a fronteira única de leitura dos outputs publicados de jobs. Bloqueia a publicação durante a leitura, exige callback de autorização que devolva exactamente `True`, verifica a projecção append-only de restrição/legal hold, revalida todas as imagens de origem e só devolve bytes integralmente materializados depois de validar caminho canónico, ficheiro regular sem symlink, tamanho e SHA-256. A transacção e os locks permanecem sob controlo do caller. A suite inclui rejeição explícita de symlinks; o smoke PostgreSQL 16 valida a leitura autorizada e confirma que uma restrição persistida bloqueia o mesmo caminho de consumo.
 
 **Limites:** não foram criadas rotas HTTP, downloads públicos, streaming, exports, broker ou worker remoto. Os consumidores futuros têm de chamar este serviço dentro da transacção e fornecer uma política explícita de autorização. Cópias, caches, backups e derivados externos continuam fora da cobertura; não existe purga física.
+
+
+## 2026-11-19 — Serialização entre consumo e restrição de outputs
+
+O smoke PostgreSQL de publicação/consumo foi reforçado para cobrir a corrida entre uma leitura autorizada e a aplicação de uma restrição. O consumidor materializa e verifica os bytes mantendo os locks da publicação; uma segunda sessão tenta aplicar RESTRICTION_APPLIED e tem de ficar bloqueada até o consumidor terminar a transacção. Depois da leitura, a restrição é persistida e libertada no próprio smoke para permitir os cenários seguintes. Esta validação prova a serialização da fronteira de leitura com a governação, não define a política de quem pode restringir/libertar.
+
+Validação pendente: API CI/PostgreSQL 16, Quality Gates e Docker Compose no commit desta alteração. Não foram executados testes localmente.

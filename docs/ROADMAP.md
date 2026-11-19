@@ -1,3 +1,10 @@
+### Consumo concorrente e restrição de outputs — 2026-11-19
+
+- Confirmados como aprovados no commit anterior: API CI 44536740007, Quality Gates 44536740024 e Docker Compose 44536739957.
+- O smoke PostgreSQL passa a testar a serialização real entre leitura verificada e aplicação concorrente de restrição, usando sessões independentes e observação de locks em pg_stat_activity.
+- A validação da alteração aguarda API CI, Quality Gates e Docker Compose.
+- Próximas dependências: matriz de autorização por perfil/loja, política de aprovação independente para libertação de legal hold, linhagem/catálogo de derivados e inventário explícito de cópias externas, caches e backups. Não presumir regras comerciais ou legais.
+
 ### Reconciliação conservadora de outputs (2026-11-19)
 
 - Implementado CLI manual com simulação por defeito e `--apply` explícito, período de segurança configurável (7 dias por omissão).

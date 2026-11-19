@@ -1,3 +1,11 @@
+## 2026-11-19 — Verificação CI e corrida consumo/restrição de outputs
+
+- HEAD inicial: e5a372d00199d441b6089254133f04dfd7f99e10.
+- Confirmados como concluídos com sucesso os workflows API CI 44536740007, Quality Gates 44536740024 e Docker Compose 44536739957. API CI incluiu migrações PostgreSQL 16, smokes operacionais e suite API; Quality Gates executou API, compilação Python, TypeScript e build de produção Web; Docker Compose confirmou arranque, readiness, seed e worker.
+- Acrescentado ao smoke PostgreSQL um cenário concorrente: a leitura de bytes mantém os locks da publicação enquanto outra sessão tenta aplicar uma restrição. A restrição só pode confirmar depois do commit da leitura; o evento é depois libertado para não contaminar os restantes cenários do smoke.
+- Não foram executados testes localmente. A validação da alteração aguarda os workflows do novo commit.
+- Limites: este cenário valida serialização PostgreSQL, não define quem pode restringir/libertar; a política de autorização HTTP, aprovação independente, catálogo de derivados e cobertura de backups/caches continuam por definir/integrar.
+
 ## 2026-11-19 — Reconciliação conservadora de outputs de datasets
 
 - HEAD inicial: `e5545ffe3e6b620f143174488bc1f43b4eecd3a5`.
