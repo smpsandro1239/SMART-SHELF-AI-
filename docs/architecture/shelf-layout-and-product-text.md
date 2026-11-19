@@ -60,10 +60,11 @@ Estados devolvidos:
 
 - `OCCUPIED`: existe pelo menos uma deteção associada à célula.
 - `OCCUPIED_UNIDENTIFIED`: existe deteção, mas não há SKU identificado.
-- `EMPTY`: não existe deteção e a célula foi explicitamente marcada como visível e não ocluída.
-- `MISPLACED`: a célula tem SKU esperado e as deteções identificadas apontam para outro SKU.
-- `UNKNOWN`: não há calibração explícita de visibilidade, a célula está fora de vista ou está ocluída.
+- `EMPTY`: existe deteção positiva com label `empty_facing`, confiança igual/superior ao limiar configurado e intersecção geométrica suficiente; a célula também tem de estar explicitamente visível e não ocluída.
+- `MISPLACED`: a célula tem SKU esperado e pelo menos uma deteção identificada aponta para outro SKU.
+- `CONFLICT`: a mesma célula recebe evidência de produto e de espaço vazio; o comparador não escolhe silenciosamente uma das hipóteses.
+- `UNKNOWN`: não há deteções, a evidência de vazio tem confiança insuficiente, falta visibilidade calibrada ou a célula está ocluída.
 
-A associação usa a fracção da área da célula coberta pela caixa e um limiar configurável. O resultado preserva os índices das deteções e os IDs observados para permitir rastreabilidade. Uma célula criada sem visibilidade explicitamente confirmada começa em `UNKNOWN`; ausência de deteção nunca é suficiente, por si só, para declarar vazio.
+A associação usa a fracção da área da célula coberta pela caixa e limiares configuráveis. O limiar de confiança para `empty_facing` é 0,80 por omissão e deve ser calibrado com dados reais. O resultado preserva os índices das deteções e os IDs observados para permitir rastreabilidade. **A ausência de deteção nunca declara uma célula vazia**: sem evidência positiva de `empty_facing`, o estado é `UNKNOWN`. Uma célula criada sem visibilidade explicitamente confirmada também começa em `UNKNOWN`.
 
 **Limites actuais:** este é um comparador geométrico puro, sem persistência, API de planogramas, segmentação automática de prateleiras ou integração no worker. As células têm de ser fornecidas por uma fonte calibrada/revista. Os estados são evidência visual, não stock contabilístico, e não criam movimentos nem tarefas.
