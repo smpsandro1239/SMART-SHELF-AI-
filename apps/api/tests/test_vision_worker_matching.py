@@ -704,3 +704,43 @@ def test_stale_processing_recovery_rejects_negative_timeout(db):
 
     with pytest.raises(ValueError, match="must be non-negative"):
         worker.requeue_stale_processing_images(db, stale_after_seconds=-1)
+
+
+
+def test_load_provider_requires_explicit_mode(monkeypatch):
+    import app.vision_worker as worker
+    from app.vision import VisionProviderNotConfigured
+
+    monkeypatch.setattr(worker.settings, "vision_provider_mode", "disabled")
+    monkeypatch.setattr(worker.settings, "vision_provider_factory", "")
+    with pytest.raises(VisionProviderNotConfigured, match="VISION_PROVIDER_MODE=disabled"):
+        worker.load_provider()
+
+
+def test_load_provider_allows_only_the_known_demo_factory_in_mock_mode(monkeypatch):
+    import app.vision_worker as worker
+
+    monkeypatch.setattr(worker.settings, "vision_provider_mode", "mock")
+    monkeypatch.setattr(worker.settings, "app_env", "development")
+    monkeypatch.setattr(worker.settings, "vision_provider_factory", "app.demo.vision:create_provider")
+    provider = worker.load_provider()
+    assert provider.__class__.__name__ == "MockShelfVisionProvider"
+
+
+def test_load_provider_rejects_demo_factory_in_real_mode(monkeypatch):
+    import app.vision_worker as worker
+
+    monkeypatch.setattr(worker.settings, "vision_provider_mode", "real")
+    monkeypatch.setattr(worker.settings, "vision_provider_factory", "app.demo.vision:create_provider")
+    with pytest.raises(ValueError, match="cannot be loaded in real mode"):
+        worker.load_provider()
+
+
+def test_load_provider_rejects_mock_mode_in_production(monkeypatch):
+    import app.vision_worker as worker
+
+    monkeypatch.setattr(worker.settings, "vision_provider_mode", "mock")
+    monkeypatch.setattr(worker.settings, "app_env", "production")
+    monkeypatch.setattr(worker.settings, "vision_provider_factory", "app.demo.vision:create_provider")
+    with pytest.raises(ValueError, match="forbidden in production"):
+        worker.load_provider()
