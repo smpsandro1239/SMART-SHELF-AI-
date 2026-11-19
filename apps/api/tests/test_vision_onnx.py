@@ -20,6 +20,8 @@ def provider_without_runtime():
     provider.confidence_threshold = 0.25
     provider.max_detections = 20
     provider.class_labels = {0: "product", 1: "empty_facing"}
+    provider.sku_match_labels = {"product"}
+    provider.embedding_model_version = "embed-v1"
     return provider
 
 
@@ -307,3 +309,65 @@ def test_provider_rejects_detector_replaced_during_session_load(tmp_path, monkey
 
     with pytest.raises(ONNXConfigurationError, match="changed while loading"):
         ONNXShelfVisionProvider(detector, class_labels={0: "product"})
+
+
+
+def test_provider_rejects_sku_match_labels_not_present_in_class_map(tmp_path):
+    model = tmp_path / "detector.onnx"
+    model.write_bytes(b"not-a-real-model")
+
+    with pytest.raises(ONNXConfigurationError, match="subset"):
+        ONNXShelfVisionProvider(
+            model,
+            class_labels={0: "product"},
+            sku_match_labels={"product", "empty_facing"},
+        )
+
+
+def test_non_product_detection_does_not_generate_sku_embedding(tmp_path):
+    from PIL import Image
+
+    image_path = tmp_path / "shelf.png"
+    Image.new("RGB", (640, 640), "white").save(image_path)
+    provider = provider_without_runtime()
+    provider._image = Image
+    provider._detector_input = "images"
+    provider._detector_output = "detections"
+    provider._embedder = object()
+    provider._detector = SimpleNamespace(
+        run=lambda outputs, inputs: [np.array([[0.1, 0.1, 0.5, 0.5, 0.95, 1]], dtype=np.float32)]
+    )
+    embedding_calls = []
+    provider._embedding = lambda image, box: embedding_calls.append(box) or [1.0, 0.0]
+    provider.model_version = "test-model"
+
+    result = provider.analyze(image_path)
+
+    assert result.detections[0].label == "empty_facing"
+    assert result.detections[0].embedding is None
+    assert embedding_calls == []
+
+
+def test_product_detection_can_generate_sku_embedding(tmp_path):
+    from PIL import Image
+
+    image_path = tmp_path / "shelf.png"
+    Image.new("RGB", (640, 640), "white").save(image_path)
+    provider = provider_without_runtime()
+    provider._image = Image
+    provider._detector_input = "images"
+    provider._detector_output = "detections"
+    provider._embedder = object()
+    provider._detector = SimpleNamespace(
+        run=lambda outputs, inputs: [np.array([[0.1, 0.1, 0.5, 0.5, 0.95, 0]], dtype=np.float32)]
+    )
+    embedding_calls = []
+    provider._embedding = lambda image, box: embedding_calls.append(box) or [1.0, 0.0]
+    provider.model_version = "test-model"
+
+    result = provider.analyze(image_path)
+
+    assert result.detections[0].label == "product"
+    assert result.detections[0].embedding == [1.0, 0.0]
+    assert result.detections[0].embedding_model_version == "embed-v1"
+    assert len(embedding_calls) == 1
