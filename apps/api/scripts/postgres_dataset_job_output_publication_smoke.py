@@ -65,6 +65,15 @@ def main():
                 analysis_status="COMPLETED", retention_status="ACTIVE", legal_hold=False,
             )
             db.add(image)
+            db.flush()
+            second_image = models.ShelfImage(
+                shelf_id=shelf.id, original_filename="second-source.bin",
+                storage_path="/not-read-by-publication-smoke/second-source.bin",
+                mime_type="application/octet-stream", file_size_bytes=11,
+                sha256=hashlib.sha256(b"abcdefghijk").hexdigest(),
+                analysis_status="COMPLETED", retention_status="ACTIVE", legal_hold=False,
+            )
+            db.add(second_image)
             db.commit()
             token, credential = issue_dataset_worker_credential(
                 db, worker_id=worker_id,
@@ -77,10 +86,16 @@ def main():
                     "status": "APPROVED", "mode": "training",
                     "record_sha256": "b" * 64, "gate_report_sha256": "c" * 64,
                 },
-                sources=[{
-                    "shelf_image_id": image.id, "store_id": store.id,
-                    "source_image_sha256": image.sha256,
-                }],
+                sources=[
+                    {
+                        "shelf_image_id": second_image.id, "store_id": store.id,
+                        "source_image_sha256": second_image.sha256,
+                    },
+                    {
+                        "shelf_image_id": image.id, "store_id": store.id,
+                        "source_image_sha256": image.sha256,
+                    },
+                ],
             )
             claim = claim_next_dataset_job(db, worker_id=worker_id, lease_seconds=300)
             assert claim is not None and claim.id == job.id
@@ -94,6 +109,7 @@ def main():
             principal = authenticate_dataset_worker(db, bearer_token=token)
             job_id, token_value, credential_id = job.id, claim.fencing_token, credential.credential_id
             source_image_id, source_store_id = image.id, store.id
+            second_source_image_id, second_source_sha256 = second_image.id, second_image.sha256
 
         barrier = Barrier(2)
         def publish():
@@ -143,8 +159,12 @@ def main():
             held_job = enqueue_dataset_job(
                 db, idempotency_key=f"output-smoke-source-hold-{suffix}", release_fingerprint="f" * 64,
                 approval_evidence={"status":"APPROVED","mode":"training","record_sha256":"b"*64,"gate_report_sha256":"c"*64},
-                sources=[{"shelf_image_id":source_image_id,"store_id":source_store_id,
-                          "source_image_sha256":hashlib.sha256(b"0123456789").hexdigest()}],
+                sources=[
+                    {"shelf_image_id":second_source_image_id,"store_id":source_store_id,
+                     "source_image_sha256":second_source_sha256},
+                    {"shelf_image_id":source_image_id,"store_id":source_store_id,
+                     "source_image_sha256":hashlib.sha256(b"0123456789").hexdigest()},
+                ],
             )
             held_claim = claim_next_dataset_job(db, worker_id=worker_id, lease_seconds=300)
             assert held_claim is not None and held_claim.id == held_job.id
@@ -172,7 +192,7 @@ def main():
                 return "unexpectedly-published"
         def apply_source_hold():
             with SessionLocal() as db:
-                image = db.query(models.ShelfImage).filter_by(id=source_image_id).with_for_update().one()
+                image = db.query(models.ShelfImage).filter_by(id=second_source_image_id).with_for_update().one()
                 image.legal_hold = True
                 db.commit()
         output_publications._prepare_verified_bytes = pause_source_publication
@@ -192,7 +212,7 @@ def main():
         with SessionLocal() as db:
             assert db.query(models.DatasetExecutionJobOutputPublication).filter_by(job_id=held_job_id).count() == 0
             assert (held_stage / "model.bin").read_bytes() == held_payload
-            image = db.query(models.ShelfImage).filter_by(id=source_image_id).one()
+            image = db.query(models.ShelfImage).filter_by(id=second_source_image_id).one()
             image.legal_hold = False
             db.commit()
 

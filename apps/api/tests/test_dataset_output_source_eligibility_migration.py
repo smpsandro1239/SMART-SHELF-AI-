@@ -37,11 +37,14 @@ def test_output_publication_rejects_restricted_or_held_sources(tmp_path):
         db.exec_driver_sql("INSERT INTO zones VALUES (1,10)")
         db.exec_driver_sql("INSERT INTO shelves VALUES (1,1)")
         db.exec_driver_sql("INSERT INTO shelf_images VALUES (1,1,?,'ACTIVE',0)", (digest,))
+        second_digest = "e" * 64
+        db.exec_driver_sql("INSERT INTO shelf_images VALUES (2,1,?,'ACTIVE',0)", (second_digest,))
         db.exec_driver_sql("INSERT INTO dataset_workers VALUES ('worker-a','ACTIVE')")
         db.exec_driver_sql("INSERT INTO dataset_worker_credentials VALUES ('credential-a','worker-a',NULL,'2099-01-01T00:00:00+00:00','[\"outputs:publish\"]')")
         insert_job = "INSERT INTO dataset_execution_jobs VALUES (?, 'SUCCEEDED',3,?,?)"
         insert_event = "INSERT INTO dataset_execution_job_events VALUES (?, ?,4,'SUCCEEDED',3,'worker-a',?)"
         insert_source = "INSERT INTO dataset_execution_job_sources VALUES (?, ?,1,10,?)"
+        insert_second_source = "INSERT INTO dataset_execution_job_sources VALUES (?, ?,2,10,?)"
         insert_pub = ("INSERT INTO dataset_execution_job_output_publications "
           "(job_id,worker_id,credential_id,fencing_token,output_sha256,staged_output_reference,published_output_reference,bytes_published,created_at) "
           "VALUES (?,?,?,?,?,?,?,?,?)")
@@ -56,6 +59,19 @@ def test_output_publication_rejects_restricted_or_held_sources(tmp_path):
                     db.exec_driver_sql(insert_pub,args)
             else:
                 db.exec_driver_sql(insert_pub,args)
+
+        # One ineligible member must block the complete multi-source publication,
+        # even when another source is still ACTIVE and has a matching digest.
+        db.exec_driver_sql("UPDATE shelf_images SET retention_status='ACTIVE',legal_hold=0 WHERE id=1")
+        db.exec_driver_sql(insert_job, (4,digest,"staging/4/3/model.bin"))
+        db.exec_driver_sql(insert_event, (4,4,'{"output_sha256":"' + digest + '"}'))
+        db.exec_driver_sql(insert_source, (4,4,digest))
+        db.exec_driver_sql(insert_second_source, (5,4,second_digest))
+        db.exec_driver_sql("UPDATE shelf_images SET retention_status='RESTRICTED' WHERE id=2")
+        multi_args=(4,"worker-a","credential-a",3,digest,"staging/4/3/model.bin","published/4/3-output.artifact",20,"2026-11-19T00:00:00+00:00")
+        with pytest.raises(IntegrityError, match="source"):
+            db.exec_driver_sql(insert_pub,multi_args)
+
         with Operations.context(MigrationContext.configure(db)):
             m64.downgrade()
             m63.downgrade()

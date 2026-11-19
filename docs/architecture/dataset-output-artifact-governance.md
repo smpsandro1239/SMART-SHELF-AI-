@@ -50,3 +50,8 @@ A auditoria identificou que a elegibilidade era confirmada no enqueue, claim e c
 A implementação acrescenta uma revalidação final de todas as linhas `dataset_execution_job_sources`, confirmando a cadeia loja/imagem, o SHA-256 original, `retention_status = ACTIVE` e `legal_hold = false`. As imagens, prateleiras e zonas são bloqueadas por ID crescente até ao commit. A migration `0064_dataset_output_source_eligibility` replica a regra no INSERT SQL para evitar bypass do serviço. A publicação falha fechada e preserva o staging se uma fonte estiver inelegível.
 
 A verificação não define prazos de retenção nem permite purga: limita-se a impedir a criação/publicação do derivado quando a origem já não é elegível. A validação PostgreSQL 16 e os workflows permanecem pendentes até conclusão do CI.
+
+
+## Cobertura multi-origem acrescentada — 2026-11-19
+
+Os testes de promoção passam a construir jobs com duas fontes internas, incluindo submissão deliberada fora da ordem crescente dos IDs. A segunda fonte é tornada `RESTRICTED` ou recebe legal hold durante a preparação, e a promoção tem de falhar sem publicar nem remover staging. O contrato SQLite da migration 0064 testa também uma publicação com uma fonte válida e outra restrita. O smoke PostgreSQL 16 usa duas fontes e aplica o hold concorrente à segunda. Esta extensão de cobertura aguarda validação CI; não altera a decisão de não permitir purga física sem política aprovada.

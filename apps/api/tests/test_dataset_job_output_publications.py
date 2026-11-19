@@ -417,3 +417,99 @@ def test_promotion_revalidates_sources_after_output_preparation(publication_setu
     published_root = state["root"] / "published"
     assert not list(published_root.rglob("*.artifact"))
     assert not list(published_root.rglob("*.tmp"))
+
+
+
+@pytest.mark.parametrize(("retention_status", "legal_hold"), [("RESTRICTED", False), ("ACTIVE", True)])
+def test_promotion_revalidates_every_source_not_only_first_source(
+    publication_setup, monkeypatch, retention_status, legal_hold
+):
+    from app import dataset_job_output_publications as publications
+
+    state = publication_setup
+    db = state["db"]
+    original_source = db.query(models.DatasetExecutionJobSource).filter_by(
+        job_id=state["job"].id
+    ).one()
+    original_image = db.query(models.ShelfImage).filter_by(id=original_source.shelf_image_id).one()
+    second_digest = hashlib.sha256(b"second immutable source").hexdigest()
+    second_image = models.ShelfImage(
+        shelf_id=original_image.shelf_id,
+        original_filename="second-source.bin",
+        storage_path="/not-read-by-this-test/second-source.bin",
+        mime_type="application/octet-stream",
+        file_size_bytes=22,
+        sha256=second_digest,
+        analysis_status="COMPLETED",
+        retention_status="ACTIVE",
+        legal_hold=False,
+    )
+    db.add(second_image)
+    db.flush()
+    second_image_id = second_image.id
+
+    payload = b"multi-source model output fixture"
+    digest = hashlib.sha256(payload).hexdigest()
+    job = enqueue_dataset_job(
+        db,
+        idempotency_key=f"multi-source-output-{retention_status}-{legal_hold}",
+        release_fingerprint="e" * 64,
+        approval_evidence={
+            "status": "APPROVED", "mode": "training",
+            "record_sha256": "b" * 64, "gate_report_sha256": "c" * 64,
+        },
+        # Deliberately submit sources in reverse ID order. The eligibility
+        # helper must lock and validate the complete set in stable ID order.
+        sources=[
+            {
+                "shelf_image_id": second_image_id,
+                "store_id": original_source.store_id,
+                "source_image_sha256": second_digest,
+            },
+            {
+                "shelf_image_id": original_source.shelf_image_id,
+                "store_id": original_source.store_id,
+                "source_image_sha256": original_source.source_image_sha256,
+            },
+        ],
+    )
+    claim = claim_next_dataset_job(db, worker_id=state["worker_id"], lease_seconds=300)
+    assert claim is not None and claim.id == job.id
+    stage_dir = state["root"] / "staging" / str(job.id) / str(claim.fencing_token)
+    stage_dir.mkdir(parents=True)
+    stage_path = stage_dir / "model.bin"
+    stage_path.write_bytes(payload)
+    complete_dataset_job(
+        db,
+        job_id=job.id,
+        worker_id=state["worker_id"],
+        fencing_token=claim.fencing_token,
+        output_sha256=digest,
+        staged_output_reference=f"staging/{job.id}/{claim.fencing_token}/model.bin",
+    )
+    original_prepare = publications._prepare_verified_bytes
+
+    def prepare_then_restrict_second_source(**kwargs):
+        result = original_prepare(**kwargs)
+        image = db.query(models.ShelfImage).filter_by(id=second_image_id).one()
+        image.retention_status = retention_status
+        image.legal_hold = legal_hold
+        db.commit()
+        return result
+
+    monkeypatch.setattr(
+        publications, "_prepare_verified_bytes", prepare_then_restrict_second_source
+    )
+    with pytest.raises(DatasetJobSourceIneligible):
+        promote_dataset_job_output(
+            db,
+            principal=state["principal"],
+            job_id=job.id,
+            fencing_token=claim.fencing_token,
+        )
+
+    assert db.query(models.DatasetExecutionJobOutputPublication).filter_by(
+        job_id=job.id
+    ).count() == 0
+    assert stage_path.read_bytes() == payload
+    assert not list((state["root"] / "published").rglob("*.artifact"))

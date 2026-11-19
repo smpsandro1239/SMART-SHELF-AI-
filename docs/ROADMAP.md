@@ -529,3 +529,11 @@ Ver [decisão de governação de retenção dos outputs](architecture/dataset-ou
 - [x] Impedir INSERT SQL directo se qualquer fonte estiver ausente, com loja/hash divergente, RESTRICTED ou sob legal hold (PostgreSQL e SQLite).
 - [x] Acrescentar testes SQLite para restrição/legal hold e smoke PostgreSQL para a corrida entre hold e promoção.
 - [ ] Validar migration 0064, suite API e workflows de CI.
+
+
+### Promoção de outputs — cobertura multi-origem (2026-11-19)
+
+- Regressões SQLite/serviço acrescentadas para duas fontes, entrada fora da ordem dos IDs e inelegibilidade da segunda origem por restrição ou legal hold.
+- Migration 0064 coberta com trigger a rejeitar publicação quando apenas uma das fontes está inelegível.
+- Smoke PostgreSQL 16 alargado para job multi-origem e corrida de legal hold sobre a segunda imagem durante a preparação.
+- Validação CI pendente no commit desta ronda; não declarar a cobertura PostgreSQL concluída antes do API CI.

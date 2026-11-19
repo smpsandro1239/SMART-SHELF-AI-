@@ -595,3 +595,13 @@ Documento: `docs/architecture/dataset-output-artifact-governance.md`.
 - [x] Acrescentar guard SQL PostgreSQL/SQLite para rejeitar publicações sem fontes elegíveis.
 - [x] Acrescentar regressões SQLite para fonte RESTRICTED e legal hold e smoke PostgreSQL concorrente para hold aplicado durante a preparação.
 - [ ] Validar migration 0064, suite API, smoke PostgreSQL 16, Quality Gates e Docker Compose no CI.
+
+
+## Revalidação multi-origem da publicação — 2026-11-19
+
+- [x] Acrescentar regressões de serviço com duas fontes imutáveis, ordem de entrada inversa aos IDs e bloqueio quando a segunda fonte passa a `RESTRICTED` ou recebe `legal_hold`.
+- [x] Alargar o teste SQLite da migration 0064 para provar que uma única fonte inelegível bloqueia a publicação multi-origem, mesmo com outra fonte elegível.
+- [x] Alargar o smoke PostgreSQL 16 para publicar jobs com duas fontes e aplicar o legal hold concorrente à segunda origem durante a preparação.
+- [ ] Validar os novos cenários, migration 0064, suite API, Quality Gates e Docker Compose no CI.
+- [ ] Prosseguir com eventos append-only de governação ligados à publicação, sem alterar a linha canónica.
+- [ ] Não activar disposição física até existir política aprovada de retenção, cobertura de cópias externas e aprovação independente.

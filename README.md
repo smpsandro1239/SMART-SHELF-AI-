@@ -1558,3 +1558,10 @@ A auditoria confirmou que os outputs publicados já têm uma identidade append-o
 ### Revalidação das fontes antes da promoção de outputs — 2026-11-19
 
 A promoção de um output volta a validar todas as imagens imutáveis do job depois da preparação/hash do ficheiro e antes da publicação. A validação confirma loja, SHA-256, estado `ACTIVE` e ausência de legal hold, mantendo os locks até ao commit da auditoria. A migration `0064_dataset_output_source_eligibility` acrescenta a mesma barreira ao INSERT SQL em PostgreSQL/SQLite. O smoke PostgreSQL e os testes de regressão desta alteração têm de passar antes de a garantia ser declarada validada. Ver [governação dos outputs](docs/architecture/dataset-output-artifact-governance.md).
+
+
+### Cobertura multi-origem da publicação e retenção — 2026-11-19
+
+A promoção de outputs valida a totalidade das fontes imutáveis de cada job, não apenas uma origem representativa. A cobertura acrescentada cria jobs com duas imagens da mesma loja, submete as fontes fora da ordem dos IDs e torna inelegível a segunda origem durante a preparação do output. Tanto uma restrição `RESTRICTED` como um `legal_hold` activo têm de bloquear a publicação, preservar o staging e impedir a criação da linha de publicação. O smoke PostgreSQL 16 executa igualmente a corrida com duas fontes e aplica o hold à segunda imagem durante a preparação. A validação CI desta extensão fica pendente até os workflows do commit correspondente terminarem.
+
+Esta cobertura não define prazos de retenção, não cria um catálogo de derivados e não autoriza purga física.

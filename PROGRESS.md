@@ -827,3 +827,13 @@ Adicionado teste de segurança para temporários de promoção cujo nome corresp
 - Criada migration `0064_dataset_output_source_eligibility` com trigger PostgreSQL que bloqueia as linhas de origem e trigger SQLite equivalente para impedir INSERT directo de publicação quando alguma fonte não é elegível.
 - Acrescentados testes SQLite para RESTRICTED/legal hold e cenário concorrente PostgreSQL que aplica legal hold durante a fase lock-free de preparação.
 - Código e documentação publicados; validação CI pendente.
+
+
+## 2026-11-19 — Cobertura multi-origem na publicação de outputs
+
+- Reforçada a regressão de serviço para jobs com duas imagens de origem. A lista é submetida deliberadamente fora da ordem dos IDs; a revalidação deve abranger ambas e manter a ordem estável de locks.
+- A segunda origem é alterada durante a preparação do output: tanto `RESTRICTED` como `legal_hold` devem impedir a publicação. O teste verifica que não existe linha de publicação e que o staging original permanece intacto.
+- A migration SQLite 0064 passa a ter um cenário com duas fontes, uma activa e outra restrita, para demonstrar que o trigger bloqueia a publicação completa.
+- O smoke PostgreSQL foi alargado a jobs multi-origem e aplica o legal hold concorrente à segunda imagem, não à primeira.
+- **Validação:** pendente dos workflows disparados pelo commit desta alteração. Nenhum teste local foi executado através desta sessão.
+- **Limites:** não foram introduzidos eventos de governação de outputs, política de retenção nem purga física. A próxima decisão técnica é desenhar os eventos append-only sem alterar a publicação canónica.
