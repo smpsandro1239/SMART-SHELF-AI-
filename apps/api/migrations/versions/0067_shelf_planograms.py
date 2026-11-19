@@ -37,12 +37,12 @@ def upgrade() -> None:
         ),
         sa.CheckConstraint(
             "(activated_by_user_id IS NULL AND activated_at IS NULL AND activation_reason IS NULL) "
-            "OR (activated_by_user_id IS NOT NULL AND activated_at IS NOT NULL AND length(trim(activation_reason)) > 0)",
+            "OR (activated_by_user_id IS NOT NULL AND activated_at IS NOT NULL AND activation_reason IS NOT NULL AND length(trim(activation_reason)) > 0)",
             name="ck_shelf_planogram_activation_metadata",
         ),
         sa.CheckConstraint(
             "(retired_by_user_id IS NULL AND retired_at IS NULL AND retirement_reason IS NULL) "
-            "OR (retired_by_user_id IS NOT NULL AND retired_at IS NOT NULL AND length(trim(retirement_reason)) > 0)",
+            "OR (retired_by_user_id IS NOT NULL AND retired_at IS NOT NULL AND retirement_reason IS NOT NULL AND length(trim(retirement_reason)) > 0)",
             name="ck_shelf_planogram_retirement_metadata",
         ),
         sa.CheckConstraint(
@@ -51,6 +51,8 @@ def upgrade() -> None:
             "OR (status = 'RETIRED' AND activated_at IS NOT NULL AND retired_at IS NOT NULL)",
             name="ck_shelf_planogram_status_timestamps",
         ),
+        sa.CheckConstraint("activated_at IS NULL OR activated_at >= created_at", name="ck_shelf_planogram_activation_after_creation"),
+        sa.CheckConstraint("retired_at IS NULL OR retired_at >= activated_at", name="ck_shelf_planogram_retirement_after_activation"),
     )
     op.create_index("ix_shelf_planograms_shelf_id", "shelf_planograms", ["shelf_id"])
     op.create_index("ix_shelf_planograms_status", "shelf_planograms", ["status"])
@@ -62,6 +64,7 @@ def upgrade() -> None:
         postgresql_where=sa.text("status = 'ACTIVE'"),
         sqlite_where=sa.text("status = 'ACTIVE'"),
     )
+    op.create_index("ix_shelf_planograms_calibration_image_id", "shelf_planograms", ["calibration_image_id"])
     op.create_index(
         "ix_shelf_planograms_shelf_status_version",
         "shelf_planograms",
@@ -84,6 +87,7 @@ def upgrade() -> None:
         sa.UniqueConstraint("planogram_id", "cell_code", name="uq_shelf_planogram_cell_code"),
         sa.UniqueConstraint("planogram_id", "row_index", "column_index", name="uq_shelf_planogram_cell_grid_position"),
         sa.CheckConstraint("row_index >= 0 AND column_index >= 0", name="ck_shelf_planogram_cell_grid_nonnegative"),
+        sa.CheckConstraint("length(trim(cell_code)) > 0", name="ck_shelf_planogram_cell_code_nonempty"),
         sa.CheckConstraint(
             "x_min >= 0 AND x_min < x_max AND x_max <= 1 "
             "AND y_min >= 0 AND y_min < y_max AND y_max <= 1",
@@ -218,6 +222,13 @@ def upgrade() -> None:
             RETURNS trigger LANGUAGE plpgsql AS $function$
             DECLARE parent_status TEXT; parent_shelf_id INTEGER; overlap_found BOOLEAN;
             BEGIN
+                IF TG_OP = 'UPDATE' THEN
+                    SELECT status INTO parent_status FROM shelf_planograms
+                    WHERE id = OLD.planogram_id FOR UPDATE;
+                    IF parent_status IS DISTINCT FROM 'DRAFT' THEN
+                        RAISE EXCEPTION 'only DRAFT planograms can change cells' USING ERRCODE = '23514';
+                    END IF;
+                END IF;
                 SELECT status, shelf_id INTO parent_status, parent_shelf_id
                 FROM shelf_planograms WHERE id = NEW.planogram_id FOR UPDATE;
                 IF parent_status IS DISTINCT FROM 'DRAFT' THEN
@@ -373,6 +384,9 @@ def upgrade() -> None:
             BEFORE UPDATE ON shelf_planogram_cells
             BEGIN
                 SELECT CASE WHEN NOT EXISTS (
+                    SELECT 1 FROM shelf_planograms WHERE id = OLD.planogram_id AND status = 'DRAFT'
+                ) THEN RAISE(ABORT, 'only DRAFT planograms can change cells') END;
+                SELECT CASE WHEN NOT EXISTS (
                     SELECT 1 FROM shelf_planograms WHERE id = NEW.planogram_id AND status = 'DRAFT'
                 ) THEN RAISE(ABORT, 'only DRAFT planograms can change cells') END;
                 SELECT CASE WHEN NEW.expected_product_id IS NOT NULL AND NOT EXISTS (
@@ -423,6 +437,7 @@ def downgrade() -> None:
     op.drop_index("ix_shelf_planogram_cells_expected_product_id", table_name="shelf_planogram_cells")
     op.drop_index("ix_shelf_planogram_cells_planogram_id", table_name="shelf_planogram_cells")
     op.drop_table("shelf_planogram_cells")
+    op.drop_index("ix_shelf_planograms_calibration_image_id", table_name="shelf_planograms")
     op.drop_index("ix_shelf_planograms_shelf_status_version", table_name="shelf_planograms")
     op.drop_index("uq_shelf_planogram_one_active_per_shelf", table_name="shelf_planograms")
     op.drop_index("ix_shelf_planograms_status", table_name="shelf_planograms")
