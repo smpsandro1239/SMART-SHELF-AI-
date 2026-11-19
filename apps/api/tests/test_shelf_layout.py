@@ -55,7 +55,7 @@ def test_touching_boxes_do_not_merge_into_same_row():
 
 
 
-def cell(cell_id, x1, y1, x2, y2, expected_product_id=None, *, visible=True, occluded=False):
+def cell(cell_id, x1, y1, x2, y2, expected_product_id=None, *, expected_facings=None, visible=True, occluded=False):
     return ShelfCell(
         cell_id=cell_id,
         x_min=x1,
@@ -63,6 +63,7 @@ def cell(cell_id, x1, y1, x2, y2, expected_product_id=None, *, visible=True, occ
         x_max=x2,
         y_max=y2,
         expected_product_id=expected_product_id,
+        expected_facings=expected_facings,
         is_visible=visible,
         is_occluded=occluded,
     )
@@ -155,6 +156,77 @@ def test_cell_with_only_wrong_sku_is_misplaced():
 
     assert result[0].status == "MISPLACED"
     assert result[0].observed_product_ids == (20,)
+
+
+def test_under_faced_cell_reports_observed_and_expected_front_facings():
+    result = compare_detections_to_cells(
+        [cell("A1", 0.0, 0.0, 0.5, 1.0, 10, expected_facings=3)],
+        [
+            box(0.05, 0.1, 0.20, 0.9, 10),
+            box(0.25, 0.1, 0.40, 0.9, 10),
+        ],
+    )
+
+    assert result[0].status == "UNDER_FACED"
+    assert result[0].expected_facings == 3
+    assert result[0].observed_facings == 2
+
+
+def test_over_faced_cell_reports_excess_front_facings():
+    result = compare_detections_to_cells(
+        [cell("A1", 0.0, 0.0, 0.5, 1.0, 10, expected_facings=2)],
+        [
+            box(0.02, 0.1, 0.14, 0.9, 10),
+            box(0.17, 0.1, 0.29, 0.9, 10),
+            box(0.32, 0.1, 0.44, 0.9, 10),
+        ],
+    )
+
+    assert result[0].status == "OVER_FACED"
+    assert result[0].expected_facings == 2
+    assert result[0].observed_facings == 3
+
+
+def test_exact_planogram_facings_are_occupied():
+    result = compare_detections_to_cells(
+        [cell("A1", 0.0, 0.0, 0.5, 1.0, 10, expected_facings=2)],
+        [
+            box(0.05, 0.1, 0.20, 0.9, 10),
+            box(0.25, 0.1, 0.40, 0.9, 10),
+        ],
+    )
+
+    assert result[0].status == "OCCUPIED"
+    assert result[0].observed_facings == result[0].expected_facings == 2
+
+
+def test_wrong_sku_takes_precedence_over_facing_count():
+    result = compare_detections_to_cells(
+        [cell("A1", 0.0, 0.0, 0.5, 1.0, 10, expected_facings=3)],
+        [box(0.1, 0.1, 0.4, 0.9, 20)],
+    )
+
+    assert result[0].status == "MISPLACED"
+    assert result[0].observed_facings == 1
+
+
+def test_unknown_sku_does_not_claim_under_facing():
+    result = compare_detections_to_cells(
+        [cell("A1", 0.0, 0.0, 0.5, 1.0, 10, expected_facings=3)],
+        [box(0.1, 0.1, 0.4, 0.9, None)],
+    )
+
+    assert result[0].status == "OCCUPIED_UNIDENTIFIED"
+    assert result[0].observed_facings == 1
+
+
+def test_expected_facings_requires_expected_product_and_positive_integer():
+    with pytest.raises(ValueError, match="requires expected_product_id"):
+        cell("A1", 0, 0, 1, 1, expected_facings=2)
+    with pytest.raises(ValueError, match="positive integer"):
+        cell("A1", 0, 0, 1, 1, 10, expected_facings=0)
+    with pytest.raises(ValueError, match="positive integer"):
+        cell("A1", 0, 0, 1, 1, 10, expected_facings=True)
 
 
 def test_unidentified_detection_is_not_reported_as_empty():
