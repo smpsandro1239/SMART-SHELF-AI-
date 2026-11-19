@@ -141,7 +141,7 @@ def test_planogram_database_rejects_invalid_versions_cells_and_skus(tmp_path):
         with pytest.raises(IntegrityError, match="bbox_normalized"):
             _insert_cell(db, first, "BAD-BOX", 0.8, 0.0, 0.7, 1.0, row=1, column=0)
         with pytest.raises(IntegrityError, match="cell_code_nonempty"):
-            _insert_cell(db, first, " ", 0.0, 0.0, 0.1, 1.0, row=1, column=1)
+            _insert_cell(db, first, " ", 0.7, 0.0, 0.8, 1.0, row=1, column=1)
     engine.dispose()
 
 
