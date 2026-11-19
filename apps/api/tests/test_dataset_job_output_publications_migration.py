@@ -36,7 +36,7 @@ def test_output_publication_migration_guards_fencing_scope_and_append_only(tmp_p
         with Operations.context(MigrationContext.configure(connection)):
             migration.upgrade()
         digest = "a" * 64
-        staged = "staging/1/model.bin"
+        staged = "staging/1/3/model.bin"
         connection.exec_driver_sql(
             "INSERT INTO dataset_execution_jobs VALUES (1,'SUCCEEDED',3,?,?)", (digest, staged)
         )
