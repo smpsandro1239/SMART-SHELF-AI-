@@ -126,3 +126,12 @@ A rota de comparação só aceita capturas com `retention_status = ACTIVE` e an�
 ### Identidade determinística da comparação
 
 Cada resposta inclui `comparison_schema_version` e `comparison_sha256`. O digest é calculado sobre uma representação JSON canónica (chaves ordenadas, separadores estáveis e sem valores NaN) que inclui a captura e o seu SHA-256, versão do modelo, identidade/versão do planograma, proveniência da calibração e resultados por célula. A versão do esquema faz parte do conteúdo autenticado pelo digest. Isto permite identificar uma mesma evidência de forma repetível e prepara a persistência append-only; não é uma assinatura digital nem substitui a validação de retenção. A resposta continua on-demand e não é gravada na base de dados.
+
+
+### Serialização da comparação com retenção e ciclo de vida do planograma
+
+A comparação bloqueia primeiro, por ID crescente, a captura consultada e a imagem de calibração da versão ativa (quando existe). Só depois bloqueia a prateleira e a versão ativa do planograma. Esta ordem é compatível com as operações de retenção e com a ativação/retirada/edição, que também começam pela imagem de calibração antes da prateleira.
+
+A versão ativa é descoberta inicialmente apenas para identificar a imagem de calibração a bloquear. Depois dos locks, a API volta a carregar a versão ativa. Se a versão tiver mudado entretanto, devolve HTTP 409 e exige nova consulta; não usa uma calibração que não tenha sido bloqueada. A captura é revalidada como ACTIVE/COMPLETED sob lock antes de carregar deteções. O lock da captura mantém-se durante a construção da resposta, pelo que uma restrição concorrente espera pela conclusão da leitura; a consulta seguinte já rejeita a captura restringida.
+
+O smoke PostgreSQL `postgres_planogram_lifecycle_smoke.py` exercita duas sessões concorrentes: mantém os locks de comparação e tenta restringir a captura noutra transação. A restrição tem de esperar; depois do commit da leitura, a imagem é restringida e uma comparação subsequente falha de forma fechada. A comparação continua read-only e não persiste resultados nem altera inventário.

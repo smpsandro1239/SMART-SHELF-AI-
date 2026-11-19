@@ -1326,3 +1326,8 @@ A evidência de aprovação é incorporada na fingerprint da release através do
 Para imagens internas, as verificações de ficheiros, COCO, splits, qualidade e revisão decorrem antes da aquisição dos locks operacionais. Depois de validar a elegibilidade, a mesma sessão permanece aberta durante a criação da release e até o consumidor síncrono terminar. O timeout, um erro do processo ou qualquer excepção desencadeiam rollback/fecho da sessão.
 
 **Fora do âmbito:** não é uma lease distribuída. Um processo que se destaque, submeta trabalho a uma fila remota ou devolva antes de terminar o treino deixa de estar coberto pelos locks. Esses consumidores exigem um protocolo de claim/lease com fencing antes de serem suportados.
+
+
+### Concorrência da comparação com retenção
+
+A rota de comparação adquire locks PostgreSQL sobre a captura e a imagem de calibração por ordem crescente de ID, antes de bloquear a prateleira e o planograma ativo. Se a versão ativa mudar durante a aquisição dos locks, a API devolve 409 para permitir nova consulta. A retenção não pode restringir a captura enquanto a resposta está a ser construída; após a restrição, pedidos seguintes devolvem 404. O smoke PostgreSQL de planogramas verifica esta serialização com duas sessões independentes.
