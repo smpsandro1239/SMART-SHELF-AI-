@@ -820,5 +820,6 @@ Critério global: nenhuma capacidade pode ser marcada como concluída sem códig
 - [x] Revalidar a whitelist no worker para providers alternativos; uma classe não elegível nunca consulta o catálogo de exemplares.
 - [x] Incluir a whitelist no fingerprint do detector, para que alterações de semântica gerem uma nova identidade de modelo.
 - [x] Acrescentar testes de provider e worker para impedir matching indevido de espaços vazios.
+- [x] Validar a terceira sequência em CI no HEAD `c43b420d2e836daab53f2db5db6a3ddb2dea98f8`: 1307 testes aprovados, 1 ignorado e 1 aviso; Quality Gates, API CI/PostgreSQL 16 e Docker Compose aprovados.
 - [ ] Ligar deteções `empty_facing` a células calibradas e à evidência de visibilidade, sem as confundir com ausência de captura ou oclusão.
 - [ ] Construir matriz de classes/SKU por modelo aprovado e validar com dataset real anotado.
