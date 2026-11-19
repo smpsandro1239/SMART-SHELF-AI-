@@ -157,12 +157,11 @@ def test_image_calibration_requires_active_same_shelf_matching_digest(tmp_path):
         planogram_id = _insert_planogram(db, version=1, source="IMAGE", image_id=20, image_sha="a" * 64)
         _insert_cell(db, planogram_id, "A1", 0.0, 0.0, 1.0, 1.0)
         _activate(db, planogram_id)
+        second = _insert_planogram(db, version=2, source="IMAGE", image_id=20, image_sha="a" * 64)
+        _insert_cell(db, second, "B1", 0.0, 0.0, 1.0, 1.0)
         db.exec_driver_sql("UPDATE shelf_images SET retention_status='RESTRICTED' WHERE id=20")
         with pytest.raises(IntegrityError, match="not eligible"):
-            db.exec_driver_sql(
-                "UPDATE shelf_planograms SET status='DRAFT',activated_by_user_id=NULL,activated_at=NULL,activation_reason=NULL WHERE id=?",
-                (planogram_id,),
-            )
+            _activate(db, second)
     engine.dispose()
 
 
