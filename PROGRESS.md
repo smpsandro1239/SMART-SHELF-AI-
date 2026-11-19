@@ -1070,3 +1070,12 @@ O teste de concorrência confirma a serialização edição/ativação no servi�
 - Actualizado o TODO para distinguir a consulta visual já entregue da persistência append-only, integração worker e revisão humana ainda pendentes.
 - A comparação mantém-se read-only e on-demand. A persistência fica deliberadamente bloqueada até existir política de retenção, identidade/versionamento do resultado e comportamento definido perante revogação da imagem/modelo/planograma.
 - Os dois novos testes ainda necessitam de execução no CI; não declarar validação concluída antes dos workflows terminarem.
+
+
+## 2026-11-19 — Reforço da proteção de retenção nas comparações
+
+- Reconfirmado que o endpoint valida `retention_status == ACTIVE` em cada pedido e só depois consulta deteções.
+- Acrescentado teste parametrizado para os estados RESTRICTED, PENDING_PURGE e PURGED, todos com resposta HTTP 404 e sem exposição do resultado.
+- Documentada a distinção entre a captura de comparação e a referência histórica de calibração por imagem.
+- Não foi criada persistência de resultados: continua dependente de um contrato de retenção, identidade/versionamento e auditoria append-only.
+- Aguardam-se os workflows CI do commit desta alteração antes de declarar a cobertura validada.

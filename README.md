@@ -1730,3 +1730,6 @@ A validação é automatizada por CI. Não foi realizada validação manual com 
 - [ ] Executar e confirmar API CI/Quality Gates para os novos testes.
 - [ ] Validar manualmente a interface com perfis ADMIN, SUPERVISOR e EMPLOYEE.
 - [ ] Definir contrato de persistência append-only e retenção antes de integrar comparação no worker.
+
+
+A comparação de planogramas valida a retenção em cada consulta: apenas capturas `ACTIVE` e com análise `COMPLETED` podem ser comparadas. Imagens `RESTRICTED`, `PENDING_PURGE` ou `PURGED` devolvem HTTP 404 e não disponibilizam deteções nem resultados.

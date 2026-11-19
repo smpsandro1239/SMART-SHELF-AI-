@@ -911,5 +911,14 @@ Critério global: nenhuma capacidade pode ser marcada como concluída sem códig
 
 - [x] Cobrir HTTP 409 quando existe captura concluída mas não existe planograma ativo na prateleira.
 - [x] Cobrir a devolução da proveniência completa quando a versão ativa foi calibrada por imagem.
-- [ ] Confirmar estes testes no API CI com SQLite e PostgreSQL 16.
+- [x] Acrescentar cobertura parametrizada para impedir comparações com imagens RESTRICTED, PENDING_PURGE e PURGED; aguarda confirmação do CI para esta alteração.
 - [ ] Definir política append-only, retenção e invalidação dos resultados antes de persistir comparações.
+
+
+### Proteção de retenção na comparação de planogramas — 2026-11-19
+
+- [x] Confirmar que a API verifica o estado de retenção da captura em cada pedido e não devolve deteções para imagens indisponíveis.
+- [x] Acrescentar testes parametrizados para RESTRICTED, PENDING_PURGE e PURGED, esperando HTTP 404.
+- [x] Documentar a distinção entre a captura comparada e a referência de calibração por imagem.
+- [ ] Confirmar a nova cobertura no API CI e Quality Gates.
+- [ ] Definir contrato append-only para resultados e decisões humanas antes de criar persistência.

@@ -116,3 +116,8 @@ A rota `GET /api/v1/shelves/{shelf_id}/planograms/comparison/{image_id}` compara
 A interface `apps/web/src/PlanogramComparison.tsx` está integrada no dashboard para ADMIN/SUPERVISOR. Permite escolher a prateleira e uma captura concluída e apresenta o resultado sem criar tarefas, observações ou movimentos de inventário. A ausência de deteções sem calibração de visibilidade permanece `UNKNOWN`.
 
 A comparação é calculada on-demand e não é persistida. Esta decisão evita criar um histórico incompleto ou sem política de retenção/revogação antes de definir identidade do resultado, deduplicação, retenção da imagem fonte, versão do modelo, versão do planograma e comportamento perante alteração/revogação dos artefactos. O worker não deve gravar resultados de comparação até esse contrato estar definido.
+
+
+### Retenção da captura usada na comparação
+
+A rota de comparação só aceita capturas com `retention_status = ACTIVE` e análise `COMPLETED`. Estados `RESTRICTED`, `PENDING_PURGE` e `PURGED` são tratados como indisponíveis e devolvem HTTP 404, sem expor deteções nem o resultado da comparação. Esta verificação é feita em cada pedido, não apenas no momento em que a captura é selecionada na interface. A restrição aplica-se à imagem de origem da comparação; a calibração por imagem é representada pelo seu ID e digest imutáveis no planograma, não sendo necessário voltar a ler o ficheiro de calibração para executar a comparação geométrica.

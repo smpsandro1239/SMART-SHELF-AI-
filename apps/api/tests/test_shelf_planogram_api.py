@@ -478,3 +478,45 @@ def test_planogram_comparison_returns_image_calibration_provenance(planogram_api
     assert result["calibration_source"] == "IMAGE"
     assert result["calibration_image_id"] == calibration_image_id
     assert result["calibration_image_sha256"] == calibration_sha256
+
+
+@pytest.mark.parametrize("retention_status", ["RESTRICTED", "PENDING_PURGE", "PURGED"])
+def test_planogram_comparison_rejects_unavailable_retained_images(planogram_api, retention_status):
+    client, ids = planogram_api
+    headers = _headers(ids["supervisor_a"], "SUPERVISOR")
+    created = client.post(
+        f"/api/v1/shelves/{ids['shelf_a']}/planograms",
+        json=_payload(ids["product_a"]),
+        headers=headers,
+    )
+    assert created.status_code == 201, created.text
+    planogram_id = created.json()["id"]
+    activated = client.post(
+        f"/api/v1/planograms/{planogram_id}/activate",
+        json={"reason": "Retention guard fixture"},
+        headers=headers,
+    )
+    assert activated.status_code == 200, activated.text
+
+    with main_module.SessionLocal() as db:
+        image = models.ShelfImage(
+            shelf_id=ids["shelf_a"],
+            original_filename=f"unavailable-{retention_status.lower()}.jpg",
+            storage_path=f"/tmp/planogram-{retention_status.lower()}-{ids['shelf_a']}.jpg",
+            mime_type="image/jpeg",
+            file_size_bytes=128,
+            sha256="f" * 64,
+            analysis_status="COMPLETED",
+            model_version="detector-test-v1",
+            retention_status=retention_status,
+        )
+        db.add(image)
+        db.commit()
+        image_id = image.id
+
+    response = client.get(
+        f"/api/v1/shelves/{ids['shelf_a']}/planograms/comparison/{image_id}",
+        headers=headers,
+    )
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Shelf image is not available"
