@@ -48,7 +48,8 @@ def upgrade() -> None:
                 INTO j_status, j_digest, j_staged, j_token
                 FROM dataset_execution_jobs WHERE id = NEW.job_id FOR UPDATE;
                 IF NOT FOUND OR j_status <> 'SUCCEEDED' OR j_digest <> NEW.output_sha256
-                   OR j_staged <> NEW.staged_output_reference OR j_token <> NEW.fencing_token THEN
+                   OR j_staged <> NEW.staged_output_reference OR j_token <> NEW.fencing_token
+                   OR NEW.staged_output_reference NOT LIKE ('staging/' || NEW.job_id::text || '/' || NEW.fencing_token::text || '/%') THEN
                     RAISE EXCEPTION 'publication requires matching successful job and fencing token' USING ERRCODE = '23514';
                 END IF;
                 SELECT worker_id, fencing_token, details->>'output_sha256'
@@ -104,6 +105,7 @@ def upgrade() -> None:
                 WHERE j.id = NEW.job_id AND j.status = 'SUCCEEDED'
                   AND j.fencing_token = NEW.fencing_token AND j.output_sha256 = NEW.output_sha256
                   AND j.staged_output_reference = NEW.staged_output_reference
+                  AND NEW.staged_output_reference LIKE ('staging/' || NEW.job_id || '/' || NEW.fencing_token || '/%')
                   AND e.worker_id = NEW.worker_id AND e.fencing_token = NEW.fencing_token
                   AND json_extract(e.details, '$.output_sha256') = NEW.output_sha256
                   AND w.status = 'ACTIVE' AND c.revoked_at IS NULL
