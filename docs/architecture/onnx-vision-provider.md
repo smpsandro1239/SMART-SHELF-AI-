@@ -27,7 +27,7 @@ O provider valida o contrato de metadados antes de inferir, desfaz o letterboxin
 - O provider normaliza o vetor L2 antes de o entregar ao matching.
 - `VISION_EMBEDDING_MODEL_VERSION` identifica os vetores e tem de coincidir com a versão usada nos exemplares aprovados do catálogo.
 
-Sem extrator de embeddings, as caixas são persistidas como deteções visuais sem SKU identificado; o matching abstém com `UNKNOWN`.
+Sem extrator de embeddings, as caixas são persistidas como deteções visuais sem SKU identificado; o matching abstém com `UNKNOWN`. Só etiquetas incluídas em `VISION_SKU_MATCH_LABELS` podem gerar embeddings e entrar no matching de SKU. Por omissão, apenas `product` é elegível; classes como `empty_facing` continuam a ser evidência visual, nunca candidatos de catálogo. O worker repete esta whitelist antes de consultar exemplares, protegendo também providers alternativos.
 
 ## 2. Configuração local
 
@@ -39,6 +39,7 @@ Exemplo de variáveis no ficheiro `.env` da raiz:
 VISION_PROVIDER_MODE=real
 VISION_PROVIDER_FACTORY=app.vision_onnx:create_provider
 VISION_CLASS_LABELS_JSON={"0":"product","1":"empty_facing"}
+VISION_SKU_MATCH_LABELS=product
 VISION_MODELS_DIR=./models
 VISION_DETECTOR_MODEL_PATH=/models/shelf-detector.onnx
 VISION_EMBEDDING_MODEL_PATH=/models/product-embedder.onnx
@@ -92,7 +93,7 @@ O provider utiliza ONNX Runtime CPU, NumPy e Pillow. O runtime permite carregar 
 ## 6. Limitações conhecidas
 
 - O provider espera output de deteção pós-NMS com seis colunas; não é um conversor universal de modelos YOLO.
-- O mapa de classes converte `class_id` em etiquetas semânticas, mas ainda não identifica SKU; o matching SKU continua dependente de embeddings/OCR e exemplares aprovados.
+- O mapa de classes converte `class_id` em etiquetas semânticas, mas ainda não identifica SKU; apenas labels explicitamente autorizadas em `VISION_SKU_MATCH_LABELS` geram embeddings/entram no matching. `empty_facing` não pode ser associado a um SKU.
 - O digest SHA-256 dos ficheiros e o fingerprint da configuração ficam incorporados na versão efectiva persistida em `model_version`/`embedding_model_version` (sem migration adicional). O provider recusa symlinks e volta a calcular o digest depois de abrir a sessão ONNX para detectar substituição concorrente durante o carregamento. A persistência de campos separados para cada digest e um manifesto assinado continuam pendentes.
 - O extrator é opcional e requer exemplares aprovados na mesma versão de embedding.
 - O provider não calcula quantidade física na prateleira, planograma, stock contabilístico ou quantidade a repor.
