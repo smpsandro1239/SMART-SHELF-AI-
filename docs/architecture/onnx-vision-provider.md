@@ -68,7 +68,7 @@ Para processamento contínuo:
 python -m app.vision_worker --poll-interval 5
 ```
 
-O worker exige `VISION_PROVIDER_MODE=real` e `VISION_PROVIDER_FACTORY` para inferência real. O modo `disabled` é o default das Settings fora do Compose; termina sem processar imagens. O Compose usa explicitamente `mock` para o percurso local de demonstração. O modo `mock` só aceita `app.demo.vision:create_provider` e é recusado em `APP_ENV=production`. A API não deve iniciar inferência síncrona durante o upload.
+O worker exige uma escolha explícita de `VISION_PROVIDER_MODE`: `disabled` recusa processamento, `mock` só aceita `app.demo.vision:create_provider` e é recusado em `APP_ENV=production`, e `real` recusa o provider determinístico de demonstração. Para inferência real, configurar `VISION_PROVIDER_FACTORY=app.vision_onnx:create_provider`, pesos autorizados e o mapa `VISION_CLASS_LABELS_JSON`. O modo `disabled` é o default das Settings; o Compose usa explicitamente `mock` para o percurso local. A API não deve iniciar inferência síncrona durante o upload.
 
 ## 4. Dependências e execução
 
@@ -97,3 +97,14 @@ O provider utiliza ONNX Runtime CPU, NumPy e Pillow. O runtime permite carregar 
 - O extrator é opcional e requer exemplares aprovados na mesma versão de embedding.
 - O provider não calcula quantidade física na prateleira, planograma, stock contabilístico ou quantidade a repor.
 - Não foram incluídos pesos ONNX no repositório nem executado benchmark de um modelo real.
+
+
+## 7. Geometria explícita de células — estado experimental
+
+`app.shelf_layout` inclui agora `ShelfCell` e `compare_detections_to_cells`, que comparam caixas normalizadas com células fornecidas por calibração/planograma. O comparador devolve `OCCUPIED`, `OCCUPIED_UNIDENTIFIED`, `MISPLACED`, `EMPTY` ou `UNKNOWN`, preservando os índices das deteções e os SKU observados.
+
+- Uma célula só pode ser considerada `EMPTY` quando a visibilidade foi explicitamente confirmada (`is_visible=True`) e não está marcada como ocluída.
+- A visibilidade por omissão é falsa; uma célula sem calibração fica `UNKNOWN`.
+- Células sobrepostas ou IDs duplicados são rejeitados.
+- O comparador não cria planogramas, não estima profundidade/unidades físicas e não altera inventário.
+- A geometria ainda não está persistida nem ligada à API, ao detector de regiões ou à interface. Os resultados são um primitivo determinístico para testes e futura integração supervisionada.
