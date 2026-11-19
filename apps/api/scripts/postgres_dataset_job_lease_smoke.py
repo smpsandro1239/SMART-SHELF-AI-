@@ -109,14 +109,36 @@ def main():
     for index, (column, value) in enumerate(forged_initial_metadata, start=1):
         with SessionLocal() as db:
             try:
+                columns = [
+                    "idempotency_key",
+                    "request_sha256",
+                    "release_fingerprint",
+                    "approval_record_sha256",
+                    "approval_report_sha256",
+                    "mode",
+                    "status",
+                ]
+                values = [
+                    ":key",
+                    ":request_digest",
+                    ":release_digest",
+                    ":approval_digest",
+                    ":report_digest",
+                    "'training'",
+                    "'QUEUED'",
+                ]
+                if column in {"fencing_token", "attempt_count"}:
+                    columns.append(column)
+                    values.append(value)
+                else:
+                    columns.extend(["fencing_token", "attempt_count", column])
+                    values.extend(["0", "0", value])
                 db.execute(text(
                     "INSERT INTO dataset_execution_jobs ("
-                    "idempotency_key, request_sha256, release_fingerprint, "
-                    "approval_record_sha256, approval_report_sha256, mode, "
-                    "status, fencing_token, attempt_count, " + column + ") "
-                    "VALUES ("
-                    ":key, :request_digest, :release_digest, :approval_digest, "
-                    ":report_digest, 'training', 'QUEUED', 0, 0, " + value + ")"
+                    + ", ".join(columns)
+                    + ") VALUES ("
+                    + ", ".join(values)
+                    + ")"
                 ), {
                     "key": f"pg-forged-initial-{suffix}-{index}",
                     "request_digest": "b" * 64,
