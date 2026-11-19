@@ -35,7 +35,7 @@ def issue(db, *, worker_id="worker-a", scopes=None, rotate=False):
     return issue_dataset_worker_credential(
         db,
         worker_id=worker_id,
-        scopes=scopes or ["jobs:claim", "jobs:heartbeat"],
+        scopes=["jobs:claim", "jobs:heartbeat"] if scopes is None else scopes,
         rotate=rotate,
     )
 
