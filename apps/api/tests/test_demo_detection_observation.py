@@ -271,6 +271,24 @@ def test_demo_detection_requires_human_review_and_is_idempotent(monkeypatch):
             forged_decisions = client.get(
                 f"/api/v1/operational-decisions?store_id={store_id}&shelf_id={forged_shelf_id}"
             )
+            forged_api_observation = client.post(
+                "/api/v1/observations",
+                json={
+                    "shelf_id": forged_shelf_id,
+                    "product_id": product_id,
+                    "source": "simulation",
+                    "status": "EMPTY",
+                    "confidence": 0.91,
+                    "observed_quantity": 0,
+                    "notes": (
+                        f"demo_detection_id={regression_detection_id}; "
+                        f"shelf_image_id={regression_image_id}; sha256={'b' * 64}; "
+                        f"human_review_id={latest_regression_review.id}; "
+                        "human_confirmed_status=EMPTY; human_status_confirmed_by_user_id="
+                        f"{reviewer_id}; human_status_confirmed_at=2026-11-19T20:00:00+00:00"
+                    ),
+                },
+            )
             decisions = client.get(f"/api/v1/operational-decisions?store_id={store_id}&shelf_id={shelf_id}")
             missing_evidence = client.post(
                 "/api/v1/tasks/from-operational-decision?approved=true&demo_evidence_required=true",
@@ -328,6 +346,8 @@ def test_demo_detection_requires_human_review_and_is_idempotent(monkeypatch):
         assert "different product or status" in changed_product.json()["detail"]
         assert forged_decisions.status_code == 200
         assert forged_decisions.json()["decisions"][0]["evidence"] is None
+        assert forged_api_observation.status_code == 422
+        assert "only be created through the reviewed detection endpoint" in forged_api_observation.json()["detail"]
         assert regression_first.json()["product_id"] == product_id
         assert first.json()["product_id"] == product_id
         assert first.json()["status"] == "EMPTY"

@@ -755,6 +755,19 @@ def create_observation(payload: ObservationCreate, request: Request, db: Session
     actor = _request_user(db, request)
     if actor is not None and actor.role != "ADMIN" and shelf_scope.zone.store_id != actor.store_id:
         raise HTTPException(status_code=403, detail="Access to this shelf is not allowed")
+    reserved_demo_evidence_fields = (
+        "demo_detection_id=",
+        "shelf_image_id=",
+        "human_review_id=",
+        "human_confirmed_status=",
+        "human_status_confirmed_by_user_id=",
+        "human_status_confirmed_at=",
+    )
+    if payload.notes and any(marker in payload.notes for marker in reserved_demo_evidence_fields):
+        raise HTTPException(
+            status_code=422,
+            detail="Demo detection evidence metadata can only be created through the reviewed detection endpoint",
+        )
     if payload.product_id is not None:
         shelf_product = (
             db.query(models.ShelfProduct)
@@ -7780,8 +7793,9 @@ def operational_decisions(
                 evidence_image_id = int(evidence_fields.get("shelf_image_id", ""))
                 evidence_detection_id = int(evidence_fields.get("demo_detection_id", ""))
                 evidence_review_id = int(evidence_fields.get("human_review_id", ""))
+                evidence_confirmed_by_id = int(evidence_fields.get("human_status_confirmed_by_user_id", ""))
             except (TypeError, ValueError):
-                evidence_image_id = evidence_detection_id = evidence_review_id = 0
+                evidence_image_id = evidence_detection_id = evidence_review_id = evidence_confirmed_by_id = 0
             evidence_image = (
                 db.query(models.ShelfImage)
                 .filter(
@@ -7809,6 +7823,10 @@ def operational_decisions(
                 .first()
                 if evidence_detection_id > 0 else None
             )
+            evidence_confirmer = (
+                db.get(models.User, evidence_confirmed_by_id)
+                if evidence_confirmed_by_id > 0 else None
+            )
             if (
                 evidence_image is not None
                 and evidence_detection is not None
@@ -7818,6 +7836,12 @@ def operational_decisions(
                 and latest_evidence_review.decision in {"CONFIRMED", "CORRECTED"}
                 and evidence_fields.get("provider") == "mock"
                 and evidence_fields.get("sha256") == evidence_image.sha256
+                and evidence_fields.get("human_confirmed_status") == observation.status
+                and evidence_fields.get("human_status_confirmed_at")
+                and evidence_confirmer is not None
+                and evidence_confirmer.is_active
+                and evidence_confirmer.role in {"ADMIN", "SUPERVISOR"}
+                and (evidence_confirmer.role == "ADMIN" or evidence_confirmer.store_id == zone.store_id)
             ):
                 demo_evidence = {
                     "observation_id": observation.id,

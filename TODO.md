@@ -1032,3 +1032,12 @@ Critério global: nenhuma capacidade pode ser marcada como concluída sem códig
 - A consulta de imagem usada para construir `evidence` exige agora também `ShelfImage.shelf_id == shelf.id`; uma referência válida de outra prateleira deixa de satisfazer o gate de evidência.
 - Acrescentado teste de regressão que injeta numa observação manual referências válidas a uma imagem/deteção/revisão de outra prateleira e exige `evidence == None`.
 - A alteração está publicada na branch principal, mas aguarda API CI, Quality Gates e Docker Compose; não considerar a proteção validada até os workflows terminarem.
+
+
+### Proteção contra falsificação de metadados de evidência — 2026-11-19
+
+- A observação manual genérica aceita texto livre; sem uma fronteira explícita, um utilizador autenticado poderia tentar introduzir os marcadores internos usados pelo fluxo de demonstração.
+- O endpoint genérico rejeita agora os campos reservados de proveniência (`demo_detection_id`, imagem, revisão e confirmação humana), reservando-os para a rota de deteção revista.
+- A avaliação de evidência exige também estado humano confirmado igual ao estado da observação, timestamp de confirmação e utilizador confirmador ativo ADMIN/SUPERVISOR com âmbito de loja válido.
+- O teste integrado tenta criar metadados de demonstração através do endpoint genérico e espera HTTP 422, além de verificar que uma referência cruzada de prateleira não produz evidência elegível.
+- Validação CI pendente no commit seguinte.
