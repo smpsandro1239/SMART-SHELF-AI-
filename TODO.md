@@ -855,7 +855,7 @@ Critério global: nenhuma capacidade pode ser marcada como concluída sem códig
 - [x] Validar no commit `dd262068bdf8178a8eddff0f103317aec8a3558b`: API CI [44559057802](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44559057802), **1330 passed, 1 skipped, 1 warning**; Quality Gates [44559057575](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44559057575) e Docker Compose [44559057828](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44559057828) aprovados.
 - [x] Acrescentar edição/substituição atómica de células apenas enquanto DRAFT; preservar versões ACTIVE/RETIRED.
 - [x] Persistir `expected_facings` por célula com constraint/trigger positivo e exigência de SKU esperado.
-- [ ] Integrar a comparação geométrica com planogramas persistidos, worker e revisão humana.
+- [ ] Integrar a comparação geométrica no worker e criar revisão humana; a interface React já permite consulta on-demand sem escrita.
 - [ ] Criar interface React de histórico, edição de rascunho, ativação, comparação esperado/observado e revisão.
 - [ ] Validar com dataset real anotado; thresholds e contagens continuam experimentais e não podem alterar inventário.
 
@@ -870,7 +870,7 @@ Critério global: nenhuma capacidade pode ser marcada como concluída sem códig
 - [x] Testar constraints SQLite, valores inválidos, round-trip HTTP, substituição de células e recusa após ativação.
 - [x] Validar no commit `3d9f338e5bdf50a9674f53d05da1ad99e23faa01`: API CI [44560333697](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44560333697) e Quality Gates [44560333600](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44560333600) com **1334 passed, 1 skipped, 1 warning**; Docker Compose [44560333624](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44560333624) aprovado.
 - [x] Acrescentar smoke PostgreSQL específico para constraints de `expected_facings` e concorrência entre edição de DRAFT e ativação.
-- [ ] Integrar planogramas persistidos no worker/comparador e criar revisão visual React; a contagem continua a ser número de deteções frontais, não unidades em profundidade.
+- [ ] Integrar planogramas persistidos no worker com contrato de persistência/retenção aprovado; a revisão visual React já existe, e a contagem continua a ser número de deteções frontais, não unidades em profundidade.
 
 
 ### Nona sequência — comparação read-only entre captura e planograma ativo (2026-11-19)
@@ -905,3 +905,11 @@ Critério global: nenhuma capacidade pode ser marcada como concluída sem códig
 - [x] Manter a semântica conservadora UNKNOWN sem calibração de visibilidade e não alterar inventário.
 - [ ] Executar build TypeScript/Vite e Quality Gates para validar a integração.
 - [ ] Fazer validação manual de teclado, leitor de ecrã, contraste e browser móvel.
+
+
+### Reforço de cobertura da comparação de planogramas — 2026-11-19
+
+- [x] Cobrir HTTP 409 quando existe captura concluída mas não existe planograma ativo na prateleira.
+- [x] Cobrir a devolução da proveniência completa quando a versão ativa foi calibrada por imagem.
+- [ ] Confirmar estes testes no API CI com SQLite e PostgreSQL 16.
+- [ ] Definir política append-only, retenção e invalidação dos resultados antes de persistir comparações.
