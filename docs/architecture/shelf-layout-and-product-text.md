@@ -54,17 +54,19 @@ O adaptador PaddleOCR experimental e os passos de instalação isolada estão do
 
 ## Células calibradas e deteção de posições vazias
 
-O módulo também disponibiliza `ShelfCell`, `ShelfCellObservation` e `compare_detections_to_cells` para comparar caixas normalizadas com células explícitas fornecidas por uma calibração de câmara ou planograma revisto. Cada célula tem um identificador estável, limites normalizados, SKU esperado opcional e indicadores de visibilidade/oclusão. Por segurança, `is_visible` começa em `false`: a calibração tem de confirmar explicitamente que a região está observável.
+O módulo também disponibiliza `ShelfCell`, `ShelfCellObservation` e `compare_detections_to_cells` para comparar caixas normalizadas com células explícitas fornecidas por uma calibração de câmara ou planograma revisto. Cada célula tem um identificador estável, limites normalizados, SKU esperado opcional, número de facings esperado e indicadores de visibilidade/oclusão. `expected_facings` é opcional, tem de ser positivo e exige SKU esperado. Por segurança, `is_visible` começa em `false`: a calibração tem de confirmar explicitamente que a região está observável.
 
 Estados devolvidos:
 
-- `OCCUPIED`: existe pelo menos uma deteção associada à célula.
+- `OCCUPIED`: existe deteção identificada e, quando configurado, o número de facings observados coincide com o esperado.
+- `UNDER_FACED`: foram observados menos facings do SKU esperado do que o planograma prevê.
+- `OVER_FACED`: foram observados mais facings do SKU esperado do que o planograma prevê.
 - `OCCUPIED_UNIDENTIFIED`: existe deteção, mas não há SKU identificado.
 - `EMPTY`: existe deteção positiva com label `empty_facing`, confiança igual/superior ao limiar configurado e intersecção geométrica suficiente; a célula também tem de estar explicitamente visível e não ocluída.
 - `MISPLACED`: a célula tem SKU esperado e pelo menos uma deteção identificada aponta para outro SKU.
 - `CONFLICT`: a mesma célula recebe evidência de produto e de espaço vazio; o comparador não escolhe silenciosamente uma das hipóteses.
 - `UNKNOWN`: não há deteções, a evidência de vazio tem confiança insuficiente, falta visibilidade calibrada ou a célula está ocluída.
 
-A associação usa a fracção da área da célula coberta pela caixa e limiares configuráveis. O limiar de confiança para `empty_facing` é 0,80 por omissão e deve ser calibrado com dados reais. O resultado preserva os índices das deteções e os IDs observados para permitir rastreabilidade. **A ausência de deteção nunca declara uma célula vazia**: sem evidência positiva de `empty_facing`, o estado é `UNKNOWN`. Uma célula criada sem visibilidade explicitamente confirmada também começa em `UNKNOWN`.
+A associação usa a fracção da área da célula coberta pela caixa e limiares configuráveis. O limiar de confiança para `empty_facing` é 0,80 por omissão e deve ser calibrado com dados reais. O resultado preserva os índices das deteções, IDs observados, facings esperados/observados e sobreposição para permitir rastreabilidade. `observed_facings` conta apenas objetos de produto detectados na frente; não estima unidades em profundidade, retaguarda ou stock contabilístico. **A ausência de deteção nunca declara uma célula vazia**: sem evidência positiva de `empty_facing`, o estado é `UNKNOWN`. Uma célula criada sem visibilidade explicitamente confirmada também começa em `UNKNOWN`.
 
 **Limites actuais:** este é um comparador geométrico puro, sem persistência, API de planogramas, segmentação automática de prateleiras ou integração no worker. As células têm de ser fornecidas por uma fonte calibrada/revista. Os estados são evidência visual, não stock contabilístico, e não criam movimentos nem tarefas.
