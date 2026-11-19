@@ -92,3 +92,35 @@ A migration 0060 aplica guards equivalentes em PostgreSQL e SQLite:
 - eventos de segurança não aceitam UPDATE nem DELETE.
 
 O teste SQLite `test_dataset_worker_credentials_migration.py` verifica estes guards e o smoke `postgres_dataset_worker_credentials_smoke.py` testa as proteções em PostgreSQL 16. Validação CI: [API CI 44431378398](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44431378398), [Quality Gates 44431378324](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44431378324) e [Docker Compose 44431378349](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44431378349); 1202 testes aprovados, 1 ignorado e 1 aviso.
+
+
+## Assinatura de pedidos e proteção anti-replay (migration 0061)
+
+A credencial bearer continua a identificar o worker, mas deixa de ser suficiente para autorizar um pedido protegido. A dependência FastAPI `require_dataset_worker(scope)` exige também:
+
+- `X-Worker-Timestamp`: Unix time em segundos, dentro de ±60 segundos;
+- `X-Worker-Nonce`: valor aleatório Base64URL, com pelo menos 128 bits de entropia;
+- `X-Worker-Signature`: HMAC-SHA-256 em hexadecimal minúsculo.
+
+A representação canónica assinada contém, por esta ordem, `SSW1`, credential ID, timestamp, nonce, método HTTP em maiúsculas, request-target exacto (caminho + query tal como recebido) e SHA-256 do corpo, separados por newline. O cliente deriva a chave HMAC como SHA-256 do segredo que recebeu uma única vez. O servidor usa o digest SHA-256 já persistido como chave de verificação; o segredo original não é armazenado.
+
+Exemplo de integração futura num handler:
+
+```python
+from fastapi import APIRouter, Depends
+from app.dataset_worker_http import require_dataset_worker
+
+router = APIRouter(prefix="/internal/v1/dataset-jobs")
+
+@router.post("/claim")
+def claim_dataset_job(principal=Depends(require_dataset_worker("jobs:claim"))):
+    ...
+```
+
+O exemplo ilustra apenas a aplicação da dependência; não existe ainda router/endpoint de jobs montado. A autenticação humana global protege `/api/v1`; por isso, as rotas de serviço futuras devem ficar num prefixo separado, com a dependência de worker em cada operação.
+
+A migration `0061_dataset_worker_request_nonces` guarda somente o SHA-256 do nonce, credential ID, timestamp e expiração. Uma restrição única por credencial/nonce serializa repetições concorrentes. A janela do timestamp é ±60 segundos e o registo do nonce dura 121 segundos, tempo suficiente para cobrir todo o período em que o timestamp pode ser aceite. Nonces expirados são removidos no próximo pedido assinado. O nonce é consumido e confirmado numa transacção própria antes do handler; mesmo que a operação de negócio falhe, uma repetição tem de usar um nonce novo.
+
+**Validação:** API CI [44471171581](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44471171581) — migration PostgreSQL 16, smoke concorrente com duas sessões (**uma aceitação e uma rejeição**) e 1211 testes aprovados, 1 ignorado e 1 aviso; Quality Gates [44471171526](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44471171526); Docker Compose [44471171533](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44471171533).
+
+**Limites:** esta camada autentica e autoriza pedidos assinados, mas não cria endpoints, broker nem worker remoto. Os scopes `artifacts:read` e `outputs:publish` continuam sem handlers; a leitura de bytes deve revalidar retenção no momento do consumo e a publicação deve validar o fencing token actual.

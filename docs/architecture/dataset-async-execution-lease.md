@@ -167,3 +167,12 @@ Além dos hashes e scopes verificados pelo serviço, a migration 0060 impede alt
 **Validação no commit de código `d7c84125d35a5fff5d2254a3ee33a08cd41edcc7`:** [API CI 44431378398](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44431378398), [Quality Gates 44431378324](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44431378324) e [Docker Compose 44431378349](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44431378349) passaram; suite API com 1202 testes aprovados, 1 ignorado e 1 aviso.
 
 A autenticação ainda não está ligada a endpoints HTTP, e o bearer token ainda não tem assinatura por pedido/nonce. Não expor rotas de jobs até essas duas lacunas e a autorização de leitura/publicação estarem resolvidas.
+
+
+## Autenticação de pedidos de workers — migration 0061
+
+A camada de credenciais individuais foi complementada por `app.dataset_worker_http.require_dataset_worker(scope)`. A dependência valida bearer, timestamp (±60 s), nonce, assinatura HMAC-SHA-256, método, request-target exacto e hash do corpo. A migration `0061_dataset_worker_request_nonces` persiste o digest do nonce com unicidade por credencial e expiração de 121 s. A transacção de consumo do nonce é confirmada antes da execução do handler.
+
+O smoke PostgreSQL usa duas sessões independentes e a mesma assinatura/nonce; o resultado exigido é uma única aceitação e uma rejeição de replay. Validação concluída no API CI [44471171581](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44471171581), juntamente com Quality Gates [44471171526](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44471171526) e Docker Compose [44471171533](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44471171533); a suite terminou com 1211 passed, 1 skipped e 1 warning.
+
+A dependência ainda não está ligada a rotas de jobs reais. As futuras rotas devem ficar fora do prefixo `/api/v1` da autenticação humana e aplicar o scope correspondente em cada handler. A leitura autorizada de artefactos, promoção fenced e worker remoto continuam pendentes.

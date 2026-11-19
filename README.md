@@ -1467,3 +1467,23 @@ Documentação: [autenticação de workers](docs/security/dataset-worker-authent
 **Estado nesta revisão:** implementação validada em CI. A migration 0060 protege também os dados a nível SQL: identidade, hash, scopes e validade das credenciais são imutáveis; a revogação e a desativação são unidireccionais; credenciais não podem ser eliminadas; `last_used_at` é monotónico; eventos são append-only. A autenticação bearer ainda não impede replay de pedidos. Não existem endpoints HTTP de jobs. Assinatura por pedido/nonce, integração HTTP, leitura autorizada de bytes e promoção de outputs com fencing continuam pendentes. Os scopes `artifacts:read` e `outputs:publish` estão reservados, não implementados.
 
 **Validação concluída no commit de código `d7c84125d35a5fff5d2254a3ee33a08cd41edcc7`:** API CI [44431378398](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44431378398) passou com migration PostgreSQL 16, smoke dedicado de credenciais/imutabilidade e **1202 testes aprovados, 1 ignorado e 1 aviso**; Quality Gates [44431378324](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44431378324) passou com compilação Python, suite API e build Web; Docker Compose [44431378349](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44431378349) também passou. A evidência é CI automatizado; não representa ainda integração HTTP nem worker remoto operacional.
+
+
+## 2026-11-19 — Assinatura de pedidos e proteção anti-replay dos workers
+
+A autenticação de workers passou da credencial bearer simples para pedidos assinados individualmente. A migration `0061_dataset_worker_request_nonces` cria uma tabela de nonces temporários, ligada à credencial, com unicidade por credencial e digest do nonce. O nonce em claro não é persistido.
+
+A dependência FastAPI `app.dataset_worker_http.require_dataset_worker(scope)` valida:
+- `Authorization: Bearer` com a credencial individual já provisionada;
+- `X-Worker-Timestamp`, limitado a uma janela de ±60 segundos;
+- `X-Worker-Nonce`, aleatório e único por credencial;
+- `X-Worker-Signature`, HMAC-SHA-256 sobre versão, ID da credencial, timestamp, nonce, método HTTP, caminho + query exactos e SHA-256 do corpo.
+
+O cliente deriva a chave HMAC como SHA-256 do segredo da credencial; o servidor usa o digest SHA-256 já persistido, sem armazenar o segredo em claro. A aceitação do nonce é transaccional e ocorre antes do handler. Repetições concorrentes com o mesmo nonce resultam exactamente numa aceitação e numa rejeição. Nonces expirados são limpos durante pedidos assinados posteriores.
+
+**Validação concluída no commit `7bb67412cdb6b63b8221a2a29a12d7347005a451`:**
+- API CI [44471171581](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44471171581): migration PostgreSQL 16, smoke concorrente de replay, restantes smokes e **1211 testes aprovados, 1 ignorado e 1 aviso**.
+- Quality Gates [44471171526](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44471171526): compilação Python, suite API e build TypeScript/produção Web passaram.
+- Docker Compose [44471171533](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44471171533): stack, readiness, seed e worker demonstrativo passaram.
+
+**Limites:** a dependência está pronta e testada através de uma aplicação FastAPI de teste, mas não existem ainda rotas de jobs montadas nem worker remoto. Os endpoints permanecem deliberadamente indisponíveis. Ao criar rotas, usar um prefixo de serviço separado (por exemplo, `/internal/v1/dataset-jobs`) e aplicar `Depends(require_dataset_worker(...))` em cada operação; não as colocar sob `/api/v1`, cuja middleware está reservada à autenticação JWT humana. `artifacts:read`, `outputs:publish`, broker, consumidor remoto e promotor fenced continuam por implementar.

@@ -481,9 +481,23 @@
 - [x] Acrescentar testes unitários para segredo incorrecto, token desconhecido/malformado, expiração, revogação, rotação, desativação, scopes e identidade no claim.
 - [x] Integrar smoke PostgreSQL para ciclo de vida de credenciais e imutabilidade dos eventos de segurança.
 - [x] Validar migration PostgreSQL 16, smoke dedicado, suite API (**1202 passed, 1 skipped, 1 warning**), Quality Gates e Docker Compose no commit de código `d7c8412`: [API CI 44431378398](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44431378398), [Quality Gates 44431378324](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44431378324) e [Docker Compose 44431378349](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44431378349) passaram.
-- [ ] Integrar autenticação no futuro middleware/handlers HTTP antes de expor qualquer endpoint de jobs.
-- [ ] Implementar assinatura por pedido/nonce ou mecanismo equivalente anti-replay; a credencial bearer actual é reutilizável.
+- [x] Criar dependência FastAPI reutilizável `require_dataset_worker(scope)` para autenticar e autorizar futuros handlers HTTP; nenhuma rota de jobs foi exposta.
+- [x] Implementar assinatura HMAC-SHA-256 por pedido, timestamp e nonce único; replay rejeitado também sob concorrência PostgreSQL.
 - [ ] Implementar leitura de artefactos autorizada por chamada (`artifacts:read`) e promoção de outputs condicionada ao fencing token actual (`outputs:publish`).
 - [ ] Não marcar o worker como operacional: ainda não existe broker/worker de treino, API HTTP de jobs nem integração real de armazenamento/publicação.
 
 - [x] Acrescentar guards SQL PostgreSQL/SQLite para imutabilidade de scopes/hash/validade/identidade, revogação unidireccional, credenciais não elimináveis e desativação não reversível; cobrir a migration 0060 com teste SQLite e smoke PostgreSQL.
+
+
+## Pedidos assinados de workers e proteção anti-replay — 19-11-2026
+
+- [x] Criar migration `0061_dataset_worker_request_nonces` com FK para a credencial, digest do nonce, timestamp, expiração, índice de limpeza e unicidade por credencial/nonce.
+- [x] Implementar assinatura HMAC-SHA-256 vinculada à credencial, método, request-target exacto, timestamp, nonce e hash do corpo.
+- [x] Implementar dependência FastAPI `require_dataset_worker(scope)`, com respostas 401/403, validação da janela temporal e consumo transaccional do nonce antes do handler.
+- [x] Impedir replay concorrente: duas sessões PostgreSQL a submeterem o mesmo pedido produzem exactamente uma aceitação e uma rejeição.
+- [x] Cobrir assinatura adulterada, corpo/caminho/query/método divergentes, timestamp expirado, scope insuficiente e repetição HTTP.
+- [x] Validar migration PostgreSQL 16, smoke concorrente, suite API (**1211 passed, 1 skipped, 1 warning**), Quality Gates e Docker Compose nos runs [44471171581](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44471171581), [44471171526](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44471171526) e [44471171533](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44471171533).
+- [x] Manter as rotas de jobs não expostas; a dependência é uma fronteira reutilizável, não uma API de jobs já operacional.
+- [ ] Implementar serviço de leitura de bytes por chamada com revalidação de retenção/loja/hash e scope `artifacts:read`.
+- [ ] Implementar promotor de outputs que valide estado `SUCCEEDED`, digest e fencing token actual antes da publicação (`outputs:publish`).
+- [ ] Só depois integrar broker e worker remoto de treino; não declarar execução assíncrona operacional com base na persistência dos leases.

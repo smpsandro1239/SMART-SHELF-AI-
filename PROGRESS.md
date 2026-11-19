@@ -737,3 +737,15 @@ Commit validado: `1e3499c8c80ef75494a29d06807469898471e4e1`.
 **Limitações explícitas:** a credencial é bearer reutilizável e não previne replay; falta assinatura por pedido/nonce. Não há endpoints HTTP de jobs, broker/worker de treino, leitura de bytes por chamada ou promotor fenced. `artifacts:read` e `outputs:publish` são scopes reservados, sem handlers implementados.
 
 - **Hardening SQL adicional:** migration 0060 impede UPDATE/DELETE de campos imutáveis de credenciais, bloqueia eliminação de credenciais, impede reativar workers desativados e mantém eventos append-only; teste SQLite e smoke PostgreSQL passaram no CI acima.
+
+
+## 2026-11-19 — Pedidos assinados e anti-replay de workers
+
+- **Base de implementação:** commit `d5e0a5b35d1dd2af1d46c4eaac60822155ac37dc`; correcção da tradução de nonce duplicado para erro de replay no commit `7bb67412cdb6b63b8221a2a29a12d7347005a451`.
+- **Migration:** `0061_dataset_worker_request_nonces`, com digest do nonce, timestamp, expiração, FK para a credencial e restrição única por credencial/nonce.
+- **Assinatura:** HMAC-SHA-256 sobre versão, credential ID, timestamp, nonce, método, request-target exacto e SHA-256 do corpo. O cliente deriva a chave do segredo da credencial; o servidor usa o hash persistido.
+- **HTTP:** novo módulo `app.dataset_worker_http` com `require_dataset_worker(scope)`; autentica, verifica assinatura, aplica janela temporal de ±60 segundos e scope, e consome o nonce numa transacção própria antes do handler.
+- **Replay:** o smoke PostgreSQL usa duas sessões concorrentes com o mesmo pedido; exactamente uma é aceite e a outra recebe `DatasetWorkerReplayError`. O primeiro CI detectou uma importação em falta de `IntegrityError`; a correcção foi aplicada e a nova execução passou.
+- **Testes:** assinatura adulterada, método/caminho/query/corpo divergentes, timestamp expirado, scope insuficiente, repetição HTTP e constraints/downgrade da migration.
+- **Validação:** API CI [44471171581](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44471171581) passou com PostgreSQL 16, smoke de replay e **1211 passed, 1 skipped, 1 warning**; Quality Gates [44471171526](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44471171526) e Docker Compose [44471171533](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44471171533) passaram.
+- **Fronteira não implementada:** não existem rotas de jobs montadas, broker nem worker remoto. A dependência está pronta para uso por futuros handlers, mas não deve ser apresentada como endpoint operacional. Leitura autorizada de artefactos e promoção fenced continuam pendentes.

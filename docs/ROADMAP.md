@@ -452,3 +452,14 @@ Foi criado e integrado no API CI o smoke `postgres_dataset_eligibility_concurren
 5. A credencial só pode ser emitida pelo CLI local confiável; a operação em produção precisa de secret manager, TLS e procedimento de provisionamento controlado.
 
 Referência de implementação: [Autenticação e autorização de workers](security/dataset-worker-authentication.md).
+
+
+## 2026-11-19 — Autenticação HTTP assinada e proteção contra replay
+
+A migration `0061_dataset_worker_request_nonces` e o módulo `app.dataset_worker_http` implementam uma fronteira reutilizável para pedidos de workers. A dependência `require_dataset_worker(scope)` exige bearer individual, timestamp com tolerância de 60 segundos, nonce aleatório, assinatura HMAC-SHA-256 e scope específico. A assinatura cobre a identidade da credencial, método, caminho/query exactos e SHA-256 do corpo. O servidor persiste apenas o digest do nonce, com unicidade por credencial, e confirma-o antes de entregar o principal ao handler.
+
+**Validação concluída no commit `7bb67412cdb6b63b8221a2a29a12d7347005a451`:** API CI [44471171581](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44471171581) passou em PostgreSQL 16, incluindo duas sessões concorrentes que reutilizam o mesmo nonce (**uma aceite, uma rejeitada**) e **1211 testes aprovados, 1 ignorado e 1 aviso**. Quality Gates [44471171526](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44471171526) e Docker Compose [44471171533](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44471171533) também passaram.
+
+**Decisão:** as futuras rotas de workers devem usar um prefixo separado da API humana, por exemplo `/internal/v1/dataset-jobs`, e aplicar a dependência em todos os handlers. Não expor rotas enquanto leitura autorizada de artefactos, publicação fenced e worker remoto não estiverem implementados. A tabela de nonces retém os digests durante 121 segundos; pedidos assinados posteriores limpam os expirados.
+
+**Próximas tarefas P0:** leitura de bytes autorizada por chamada (`artifacts:read`), promotor de outputs condicionado ao fencing token actual (`outputs:publish`), e só depois integração de broker/worker remoto.
