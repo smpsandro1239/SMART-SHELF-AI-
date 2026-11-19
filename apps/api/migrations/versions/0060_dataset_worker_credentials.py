@@ -81,6 +81,56 @@ def upgrade() -> None:
     bind = op.get_bind()
     if bind.dialect.name == "postgresql":
         op.execute("""
+            CREATE OR REPLACE FUNCTION enforce_dataset_worker_identity_0060()
+            RETURNS trigger LANGUAGE plpgsql AS $function$
+            BEGIN
+                IF NEW.worker_id IS DISTINCT FROM OLD.worker_id
+                   OR NEW.created_at IS DISTINCT FROM OLD.created_at
+                   OR (OLD.status = 'DISABLED' AND NEW.status IS DISTINCT FROM OLD.status)
+                   OR (OLD.status = NEW.status AND NEW.disabled_at IS DISTINCT FROM OLD.disabled_at)
+                   OR (OLD.status = 'ACTIVE' AND NEW.status = 'DISABLED' AND NEW.disabled_at IS NULL) THEN
+                    RAISE EXCEPTION 'dataset worker identity and disablement are immutable'
+                        USING ERRCODE = '23514';
+                END IF;
+                RETURN NEW;
+            END;
+            $function$
+        """)
+        op.execute("""
+            CREATE TRIGGER trg_dataset_worker_identity_0060
+            BEFORE UPDATE ON dataset_workers
+            FOR EACH ROW EXECUTE FUNCTION enforce_dataset_worker_identity_0060()
+        """)
+        op.execute("""
+            CREATE OR REPLACE FUNCTION enforce_dataset_worker_credential_0060()
+            RETURNS trigger LANGUAGE plpgsql AS $function$
+            BEGIN
+                IF NEW.id IS DISTINCT FROM OLD.id
+                   OR NEW.credential_id IS DISTINCT FROM OLD.credential_id
+                   OR NEW.worker_id IS DISTINCT FROM OLD.worker_id
+                   OR NEW.secret_sha256 IS DISTINCT FROM OLD.secret_sha256
+                   OR NEW.scopes IS DISTINCT FROM OLD.scopes
+                   OR NEW.created_at IS DISTINCT FROM OLD.created_at
+                   OR NEW.expires_at IS DISTINCT FROM OLD.expires_at
+                   OR (OLD.revoked_at IS NOT NULL AND NEW.revoked_at IS DISTINCT FROM OLD.revoked_at)
+                   OR (OLD.replaced_by_credential_id IS NOT NULL
+                       AND NEW.replaced_by_credential_id IS DISTINCT FROM OLD.replaced_by_credential_id)
+                   OR (OLD.last_used_at IS NOT NULL
+                       AND NEW.last_used_at IS NOT NULL
+                       AND NEW.last_used_at < OLD.last_used_at) THEN
+                    RAISE EXCEPTION 'dataset worker credential identity and grants are immutable'
+                        USING ERRCODE = '23514';
+                END IF;
+                RETURN NEW;
+            END;
+            $function$
+        """)
+        op.execute("""
+            CREATE TRIGGER trg_dataset_worker_credential_0060
+            BEFORE UPDATE ON dataset_worker_credentials
+            FOR EACH ROW EXECUTE FUNCTION enforce_dataset_worker_credential_0060()
+        """)
+        op.execute("""
             CREATE OR REPLACE FUNCTION prevent_dataset_worker_event_mutation_0060()
             RETURNS trigger LANGUAGE plpgsql AS $function$
             BEGIN
@@ -95,6 +145,37 @@ def upgrade() -> None:
             FOR EACH ROW EXECUTE FUNCTION prevent_dataset_worker_event_mutation_0060()
         """)
     elif bind.dialect.name == "sqlite":
+        op.execute("""
+            CREATE TRIGGER trg_dataset_worker_identity_0060
+            BEFORE UPDATE ON dataset_workers
+            WHEN NEW.worker_id <> OLD.worker_id
+              OR NEW.created_at <> OLD.created_at
+              OR (OLD.status = 'DISABLED' AND NEW.status <> OLD.status)
+              OR (OLD.status = NEW.status AND NEW.disabled_at IS NOT OLD.disabled_at)
+              OR (OLD.status = 'ACTIVE' AND NEW.status = 'DISABLED' AND NEW.disabled_at IS NULL)
+            BEGIN
+                SELECT RAISE(ABORT, 'dataset worker identity and disablement are immutable');
+            END
+        """)
+        op.execute("""
+            CREATE TRIGGER trg_dataset_worker_credential_0060
+            BEFORE UPDATE ON dataset_worker_credentials
+            WHEN NEW.id <> OLD.id
+              OR NEW.credential_id <> OLD.credential_id
+              OR NEW.worker_id <> OLD.worker_id
+              OR NEW.secret_sha256 <> OLD.secret_sha256
+              OR NEW.scopes <> OLD.scopes
+              OR NEW.created_at <> OLD.created_at
+              OR NEW.expires_at <> OLD.expires_at
+              OR (OLD.revoked_at IS NOT NULL AND NEW.revoked_at IS NOT OLD.revoked_at)
+              OR (OLD.replaced_by_credential_id IS NOT NULL
+                  AND NEW.replaced_by_credential_id IS NOT OLD.replaced_by_credential_id)
+              OR (OLD.last_used_at IS NOT NULL AND NEW.last_used_at IS NOT NULL
+                  AND julianday(NEW.last_used_at) < julianday(OLD.last_used_at))
+            BEGIN
+                SELECT RAISE(ABORT, 'dataset worker credential identity and grants are immutable');
+            END
+        """)
         op.execute("""
             CREATE TRIGGER trg_dataset_worker_events_no_update_0060
             BEFORE UPDATE ON dataset_worker_events
@@ -116,8 +197,14 @@ def downgrade() -> None:
     if bind.dialect.name == "postgresql":
         op.execute("DROP TRIGGER IF EXISTS trg_dataset_worker_events_append_only_0060 ON dataset_worker_events")
         op.execute("DROP FUNCTION IF EXISTS prevent_dataset_worker_event_mutation_0060()")
+        op.execute("DROP TRIGGER IF EXISTS trg_dataset_worker_credential_0060 ON dataset_worker_credentials")
+        op.execute("DROP FUNCTION IF EXISTS enforce_dataset_worker_credential_0060()")
+        op.execute("DROP TRIGGER IF EXISTS trg_dataset_worker_identity_0060 ON dataset_workers")
+        op.execute("DROP FUNCTION IF EXISTS enforce_dataset_worker_identity_0060()")
     elif bind.dialect.name == "sqlite":
         op.execute("DROP TRIGGER IF EXISTS trg_dataset_worker_events_no_update_0060")
+        op.execute("DROP TRIGGER IF EXISTS trg_dataset_worker_identity_0060")
+        op.execute("DROP TRIGGER IF EXISTS trg_dataset_worker_credential_0060")
         op.execute("DROP TRIGGER IF EXISTS trg_dataset_worker_events_no_delete_0060")
     op.drop_index("ix_dataset_worker_events_worker_created", table_name="dataset_worker_events")
     op.drop_index("ix_dataset_worker_events_worker_id", table_name="dataset_worker_events")
