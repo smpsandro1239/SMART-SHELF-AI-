@@ -261,11 +261,47 @@ def require_dataset_worker_scope(
         raise DatasetWorkerAuthorizationError("worker credential lacks the required scope")
 
 
+def revalidate_dataset_worker_principal(
+    db: Session,
+    *,
+    principal: DatasetWorkerPrincipal,
+    required_scope: str,
+) -> DatasetWorkerPrincipal:
+    """Recheck persisted worker, credential and scope under locks for each operation."""
+    require_dataset_worker_scope(principal, required_scope=required_scope)
+    worker = db.query(models.DatasetWorker).filter_by(
+        worker_id=principal.worker_id
+    ).with_for_update(read=True).populate_existing().first()
+    credential = db.query(models.DatasetWorkerCredential).filter_by(
+        credential_id=principal.credential_id,
+        worker_id=principal.worker_id,
+    ).with_for_update(read=True).populate_existing().first()
+    now = _utc(_now())
+    if (
+        worker is None
+        or worker.status != "ACTIVE"
+        or credential is None
+        or credential.revoked_at is not None
+        or _utc(credential.expires_at) <= now
+    ):
+        raise DatasetWorkerAuthenticationError("worker credential is no longer active")
+    scopes = frozenset(credential.scopes or [])
+    if required_scope not in scopes:
+        raise DatasetWorkerAuthorizationError("worker credential lacks the required scope")
+    return DatasetWorkerPrincipal(
+        worker_id=worker.worker_id,
+        credential_id=credential.credential_id,
+        scopes=scopes,
+    )
+
+
 def claim_dataset_job_for_worker(
     db: Session, *, principal: DatasetWorkerPrincipal, lease_seconds: int = 300
 ):
     """Claim a job using only the identity established by credential authentication."""
-    require_dataset_worker_scope(principal, required_scope="jobs:claim")
+    principal = revalidate_dataset_worker_principal(
+        db, principal=principal, required_scope="jobs:claim"
+    )
     from app.dataset_job_leases import claim_next_dataset_job
 
     return claim_next_dataset_job(
@@ -277,9 +313,15 @@ def heartbeat_dataset_job_for_worker(
     db: Session, *, principal: DatasetWorkerPrincipal,
     job_id: int, fencing_token: int, lease_seconds: int = 300,
 ):
-    require_dataset_worker_scope(principal, required_scope="jobs:heartbeat")
-    from app.dataset_job_leases import heartbeat_dataset_job
+    from app.dataset_job_leases import _owned_lease, heartbeat_dataset_job
 
+    _owned_lease(
+        db, job_id=job_id, worker_id=principal.worker_id,
+        fencing_token=fencing_token,
+    )
+    principal = revalidate_dataset_worker_principal(
+        db, principal=principal, required_scope="jobs:heartbeat"
+    )
     return heartbeat_dataset_job(
         db, job_id=job_id, worker_id=principal.worker_id,
         fencing_token=fencing_token, lease_seconds=lease_seconds,
@@ -290,9 +332,15 @@ def complete_dataset_job_for_worker(
     db: Session, *, principal: DatasetWorkerPrincipal, job_id: int,
     fencing_token: int, output_sha256: str, staged_output_reference: str,
 ):
-    require_dataset_worker_scope(principal, required_scope="jobs:complete")
-    from app.dataset_job_leases import complete_dataset_job
+    from app.dataset_job_leases import _owned_lease, complete_dataset_job
 
+    _owned_lease(
+        db, job_id=job_id, worker_id=principal.worker_id,
+        fencing_token=fencing_token,
+    )
+    principal = revalidate_dataset_worker_principal(
+        db, principal=principal, required_scope="jobs:complete"
+    )
     return complete_dataset_job(
         db, job_id=job_id, worker_id=principal.worker_id,
         fencing_token=fencing_token, output_sha256=output_sha256,
@@ -304,9 +352,15 @@ def fail_dataset_job_for_worker(
     db: Session, *, principal: DatasetWorkerPrincipal,
     job_id: int, fencing_token: int, failure_code: str,
 ):
-    require_dataset_worker_scope(principal, required_scope="jobs:fail")
-    from app.dataset_job_leases import fail_dataset_job
+    from app.dataset_job_leases import _owned_lease, fail_dataset_job
 
+    _owned_lease(
+        db, job_id=job_id, worker_id=principal.worker_id,
+        fencing_token=fencing_token,
+    )
+    principal = revalidate_dataset_worker_principal(
+        db, principal=principal, required_scope="jobs:fail"
+    )
     return fail_dataset_job(
         db, job_id=job_id, worker_id=principal.worker_id,
         fencing_token=fencing_token, failure_code=failure_code,
