@@ -1,3 +1,5 @@
+from types import SimpleNamespace
+
 import numpy as np
 import pytest
 
@@ -93,3 +95,83 @@ def test_provider_rejects_invalid_class_catalog(tmp_path):
 
     with pytest.raises(ONNXConfigurationError, match="Class IDs"):
         ONNXShelfVisionProvider(model, class_labels={-1: "product"})
+
+
+
+def fake_session(input_type="tensor(float)", output_type="tensor(float)", input_shape=(1, 3, 640, 640), output_shape=(1, "detections", 6)):
+    return SimpleNamespace(
+        get_inputs=lambda: [SimpleNamespace(name="images", type=input_type, shape=list(input_shape))],
+        get_outputs=lambda: [SimpleNamespace(name="detections", type=output_type, shape=list(output_shape))],
+    )
+
+
+def test_detector_contract_accepts_documented_float32_nchw_post_nms_output():
+    ONNXShelfVisionProvider._validate_detector_contract(fake_session(), 640)
+
+
+@pytest.mark.parametrize(
+    "session, message",
+    [
+        (fake_session(input_type="tensor(uint8)"), "float32"),
+        (fake_session(input_shape=(1, 1, 640, 640)), "3 RGB channels"),
+        (fake_session(input_shape=(1, 3, 320, 640)), "VISION_INPUT_SIZE"),
+        (fake_session(output_shape=(1, 84, 8400)), "6 values"),
+        (fake_session(output_shape=(1, 100, 7)), "6 values"),
+    ],
+)
+def test_detector_contract_rejects_incompatible_model_metadata(session, message):
+    with pytest.raises(ONNXConfigurationError, match=message):
+        ONNXShelfVisionProvider._validate_detector_contract(session, 640)
+
+
+def test_embedding_contract_requires_float32_rgb_tensor():
+    session = fake_session(output_shape=(1, 256))
+    ONNXShelfVisionProvider._validate_embedding_contract(session, 640)
+
+
+def test_embedding_contract_rejects_wrong_input_dtype():
+    session = fake_session(input_type="tensor(uint8)", output_shape=(1, 256))
+    with pytest.raises(ONNXConfigurationError, match="float32"):
+        ONNXShelfVisionProvider._validate_embedding_contract(session, 640)
+
+
+def test_analyze_uses_configured_label_for_class_id(tmp_path):
+    from PIL import Image
+
+    image_path = tmp_path / "shelf.png"
+    Image.new("RGB", (640, 640), "white").save(image_path)
+    provider = provider_without_runtime()
+    provider._image = Image
+    provider._detector_input = "images"
+    provider._detector_output = "detections"
+    provider._embedder = None
+    provider._detector = SimpleNamespace(
+        run=lambda outputs, inputs: [np.array([[0.1, 0.1, 0.5, 0.5, 0.95, 1]], dtype=np.float32)]
+    )
+    provider.model_version = "test-model"
+    provider.class_labels = {1: "empty_facing"}
+
+    result = provider.analyze(image_path)
+
+    assert len(result.detections) == 1
+    assert result.detections[0].label == "empty_facing"
+
+
+def test_analyze_aborts_when_model_returns_unmapped_class_id(tmp_path):
+    from PIL import Image
+
+    image_path = tmp_path / "shelf.png"
+    Image.new("RGB", (640, 640), "white").save(image_path)
+    provider = provider_without_runtime()
+    provider._image = Image
+    provider._detector_input = "images"
+    provider._detector_output = "detections"
+    provider._embedder = None
+    provider._detector = SimpleNamespace(
+        run=lambda outputs, inputs: [np.array([[0.1, 0.1, 0.5, 0.5, 0.95, 9]], dtype=np.float32)]
+    )
+    provider.model_version = "test-model"
+    provider.class_labels = {0: "product"}
+
+    with pytest.raises(ValueError, match="unknown class_id"):
+        provider.analyze(image_path)
