@@ -162,8 +162,8 @@ def test_under_faced_cell_reports_observed_and_expected_front_facings():
     result = compare_detections_to_cells(
         [cell("A1", 0.0, 0.0, 0.5, 1.0, 10, expected_facings=3)],
         [
-            box(0.05, 0.1, 0.20, 0.9, 10),
-            box(0.25, 0.1, 0.40, 0.9, 10),
+            box(0.05, 0.1, 0.22, 0.9, 10),
+            box(0.25, 0.1, 0.42, 0.9, 10),
         ],
     )
 
@@ -176,9 +176,9 @@ def test_over_faced_cell_reports_excess_front_facings():
     result = compare_detections_to_cells(
         [cell("A1", 0.0, 0.0, 0.5, 1.0, 10, expected_facings=2)],
         [
-            box(0.02, 0.1, 0.14, 0.9, 10),
-            box(0.17, 0.1, 0.29, 0.9, 10),
-            box(0.32, 0.1, 0.44, 0.9, 10),
+            box(0.02, 0.1, 0.19, 0.9, 10),
+            box(0.17, 0.1, 0.34, 0.9, 10),
+            box(0.32, 0.1, 0.49, 0.9, 10),
         ],
     )
 
