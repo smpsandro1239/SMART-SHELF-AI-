@@ -154,7 +154,7 @@ def test_cell_is_misplaced_when_expected_and_wrong_skus_are_both_detected():
     result = compare_detections_to_cells(
         [cell("A1", 0.0, 0.0, 0.5, 1.0, expected_product_id=10)],
         [
-            box(0.05, 0.1, 0.2, 0.9, 10),
+            box(0.05, 0.1, 0.25, 0.9, 10),
             box(0.25, 0.1, 0.45, 0.9, 20),
         ],
     )
