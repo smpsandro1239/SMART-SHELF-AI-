@@ -1060,3 +1060,13 @@ O teste de concorrência confirma a serialização edição/ativação no servi�
 - Documentação actualizada no README, TODO e ROADMAP.
 - Não foram executados testes locais nem CI nesta ronda; a validação de build/CI e a revisão manual permanecem pendentes.
 - Próxima tarefa: obter execução dos Quality Gates/Web CI; corrigir quaisquer erros TypeScript e depois acrescentar testes de componente para filtros de loja/prateleira e erros HTTP.
+
+
+## 2026-11-19 — Reforço de testes e reconciliação documental de planogramas
+
+- Acrescentados testes HTTP para a resposta HTTP 409 quando não existe planograma ativo, mesmo que a captura esteja concluída e disponível.
+- Acrescentado teste de proveniência de calibração por imagem: criação da captura de calibração, criação/ativação do planograma e verificação do ID e SHA-256 devolvidos pela comparação.
+- Actualizada a documentação de arquitectura e o README para reflectir a interface React já integrada, eliminando a afirmação obsoleta de que não existe UI.
+- Actualizado o TODO para distinguir a consulta visual já entregue da persistência append-only, integração worker e revisão humana ainda pendentes.
+- A comparação mantém-se read-only e on-demand. A persistência fica deliberadamente bloqueada até existir política de retenção, identidade/versionamento do resultado e comportamento definido perante revogação da imagem/modelo/planograma.
+- Os dois novos testes ainda necessitam de execução no CI; não declarar validação concluída antes dos workflows terminarem.
