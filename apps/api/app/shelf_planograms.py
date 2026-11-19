@@ -435,6 +435,113 @@ def retire_planogram(
     return planogram
 
 
+
+
+def load_active_planogram_for_comparison(
+    db: Session,
+    *,
+    shelf_id: int,
+    actor_user_id: int,
+    comparison_image_id: int,
+) -> tuple[models.ShelfImage, models.ShelfPlanogram | None]:
+    """Lock capture/calibration images before shelf and planogram rows."""
+    actor = _active_actor(db, actor_user_id)
+    candidate = (
+        db.query(
+            models.ShelfPlanogram.id,
+            models.ShelfPlanogram.calibration_image_id,
+            models.ShelfPlanogram.calibration_image_sha256,
+        )
+        .filter(
+            models.ShelfPlanogram.shelf_id == shelf_id,
+            models.ShelfPlanogram.status == "ACTIVE",
+        )
+        .first()
+    )
+    candidate_id = candidate.id if candidate is not None else None
+    calibration_image_id = (
+        candidate.calibration_image_id if candidate is not None else None
+    )
+    calibration_sha256 = (
+        candidate.calibration_image_sha256 if candidate is not None else None
+    )
+
+    image_ids = sorted({
+        comparison_image_id,
+        *([calibration_image_id] if calibration_image_id is not None else []),
+    })
+    locked_images: dict[int, models.ShelfImage] = {}
+    for image_id in image_ids:
+        image = (
+            db.query(models.ShelfImage)
+            .filter(models.ShelfImage.id == image_id)
+            .with_for_update()
+            .populate_existing()
+            .first()
+        )
+        if image is None:
+            if image_id == comparison_image_id:
+                raise ShelfPlanogramError("Shelf image not found")
+            raise ShelfPlanogramError("Planogram calibration image not found")
+        locked_images[image_id] = image
+
+    comparison_image = locked_images[comparison_image_id]
+    if comparison_image.shelf_id != shelf_id:
+        raise ShelfPlanogramError("Shelf image not found")
+    if comparison_image.retention_status != "ACTIVE":
+        raise ShelfPlanogramError("Shelf image is not available")
+    if comparison_image.analysis_status != "COMPLETED":
+        raise ShelfPlanogramError("Shelf image analysis is not completed")
+
+    calibration_image = (
+        locked_images.get(calibration_image_id)
+        if calibration_image_id is not None
+        else None
+    )
+    if calibration_image is not None and (
+        calibration_image.shelf_id != shelf_id
+        or calibration_image.retention_status != "ACTIVE"
+        or calibration_image.sha256 != calibration_sha256
+    ):
+        raise ShelfPlanogramError(
+            "Active planogram calibration source is no longer eligible"
+        )
+
+    shelf, store_id = _lock_shelf(db, shelf_id)
+    _enforce_store_scope(actor, store_id)
+    planogram = (
+        db.query(models.ShelfPlanogram)
+        .filter(
+            models.ShelfPlanogram.shelf_id == shelf_id,
+            models.ShelfPlanogram.status == "ACTIVE",
+        )
+        .with_for_update()
+        .populate_existing()
+        .first()
+    )
+    current_id = planogram.id if planogram is not None else None
+    if current_id != candidate_id:
+        raise ShelfPlanogramError(
+            "Active planogram changed concurrently; retry comparison"
+        )
+    if planogram is None:
+        return comparison_image, None
+    if calibration_image is not None and (
+        calibration_image.shelf_id != shelf.id
+        or calibration_image.retention_status != "ACTIVE"
+        or calibration_image.sha256 != planogram.calibration_image_sha256
+    ):
+        raise ShelfPlanogramError(
+            "Active planogram calibration source is no longer eligible"
+        )
+    _validate_cell_products(
+        db,
+        shelf.id,
+        tuple({"expected_product_id": cell.expected_product_id} for cell in planogram.cells),
+    )
+    return comparison_image, planogram
+
+
 def load_active_planogram_for_shelf(
     db: Session, *, shelf_id: int, actor_user_id: int
 ) -> models.ShelfPlanogram | None:

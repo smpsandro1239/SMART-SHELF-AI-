@@ -245,10 +245,124 @@ def main() -> None:
 
     print(
         "PostgreSQL planogram smoke passed: expected_facings constraints, "
-        "active-cell immutability, one-active-per-shelf and DRAFT-edit/activation "
-        "serialization verified."
+        "active-cell immutability, one-active-per-shelf, DRAFT-edit/activation "
+        "and comparison/retention serialization verified."
     )
 
+
+
+
+    # A comparison holds capture and calibration images while reading. A
+    # concurrent retention restriction must wait, and the next read must fail.
+    from app.shelf_planograms import load_active_planogram_for_comparison
+
+    with SessionLocal() as db:
+        calibration_image = models.ShelfImage(
+            shelf_id=shelf_id,
+            original_filename=f"comparison-calibration-{suffix}.jpg",
+            storage_path=f"/tmp/comparison-calibration-{suffix}.jpg",
+            mime_type="image/jpeg",
+            file_size_bytes=128,
+            sha256="a" * 64,
+            analysis_status="COMPLETED",
+            model_version="calibration-smoke-v1",
+            retention_status="ACTIVE",
+        )
+        comparison_image = models.ShelfImage(
+            shelf_id=shelf_id,
+            original_filename=f"comparison-capture-{suffix}.jpg",
+            storage_path=f"/tmp/comparison-capture-{suffix}.jpg",
+            mime_type="image/jpeg",
+            file_size_bytes=128,
+            sha256="b" * 64,
+            analysis_status="COMPLETED",
+            model_version="detector-smoke-v1",
+            retention_status="ACTIVE",
+        )
+        db.add_all([calibration_image, comparison_image])
+        db.commit()
+        calibration_image_id = calibration_image.id
+        comparison_image_id = comparison_image.id
+
+    with SessionLocal() as db:
+        calibrated = create_draft_planogram(
+            db,
+            shelf_id=shelf_id,
+            actor_user_id=actor_id,
+            cells=[_cell("CMP-A1", product_id, x_min=0.0, x_max=0.5, facings=2)],
+            calibration_source="IMAGE",
+            calibration_image_id=calibration_image_id,
+            calibration_image_sha256="a" * 64,
+        )
+        db.commit()
+        calibrated_id = calibrated.id
+    with SessionLocal() as db:
+        activate_planogram(
+            db,
+            planogram_id=calibrated_id,
+            actor_user_id=actor_id,
+            reason="Activate comparison calibration",
+        )
+        db.commit()
+
+    comparison_locked = Event()
+    release_comparison = Event()
+    restriction_started = Event()
+
+    def hold_comparison_read():
+        with SessionLocal() as db:
+            image, active = load_active_planogram_for_comparison(
+                db,
+                shelf_id=shelf_id,
+                actor_user_id=actor_id,
+                comparison_image_id=comparison_image_id,
+            )
+            assert image.id == comparison_image_id
+            assert active is not None and active.id == calibrated_id
+            comparison_locked.set()
+            if not release_comparison.wait(timeout=15):
+                raise TimeoutError("Timed out waiting to release comparison locks")
+            db.rollback()
+
+    def restrict_comparison_capture():
+        if not comparison_locked.wait(timeout=15):
+            raise TimeoutError("Comparison did not acquire source image locks")
+        with SessionLocal() as db:
+            restriction_started.set()
+            db.execute(
+                update(models.ShelfImage)
+                .where(models.ShelfImage.id == comparison_image_id)
+                .values(retention_status="RESTRICTED")
+            )
+            db.commit()
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        read_future = executor.submit(hold_comparison_read)
+        if not comparison_locked.wait(timeout=15):
+            raise TimeoutError("Comparison did not become ready")
+        restriction_future = executor.submit(restrict_comparison_capture)
+        if not restriction_started.wait(timeout=15):
+            raise TimeoutError("Retention restriction did not start")
+        time.sleep(0.3)
+        if restriction_future.done():
+            raise AssertionError("Retention restriction bypassed comparison lock")
+        release_comparison.set()
+        read_future.result(timeout=15)
+        restriction_future.result(timeout=15)
+
+    with SessionLocal() as db:
+        try:
+            load_active_planogram_for_comparison(
+                db,
+                shelf_id=shelf_id,
+                actor_user_id=actor_id,
+                comparison_image_id=comparison_image_id,
+            )
+        except ValueError as exc:
+            assert "not available" in str(exc).lower()
+            db.rollback()
+        else:
+            raise AssertionError("Restricted comparison image remained eligible")
 
 if __name__ == "__main__":
     main()

@@ -60,6 +60,7 @@ from app.shelf_planograms import (
     activate_planogram,
     create_draft_planogram,
     load_active_planogram_for_shelf,
+    load_active_planogram_for_comparison,
     replace_draft_planogram_cells,
     retire_planogram,
 )
@@ -482,8 +483,15 @@ def _planogram_http_error(exc: ShelfPlanogramError) -> HTTPException:
         status_code = 404
     elif "not allowed" in message.lower() or "only admin or supervisor" in message.lower():
         status_code = 403
-    elif message.startswith("Only a ") or "already" in message.lower():
+    elif (
+        message.startswith("Only a ")
+        or "already" in message.lower()
+        or "changed concurrently" in message.lower()
+        or "not completed" in message.lower()
+    ):
         status_code = 409
+    elif "not available" in message.lower():
+        status_code = 404
     else:
         status_code = 422
     return HTTPException(status_code=status_code, detail=message)
@@ -634,24 +642,12 @@ def compare_shelf_image_with_active_planogram(
     """Compare a completed active capture with the current approved shelf layout."""
     actor = _require_planogram_actor(db, request)
     _planogram_shelf_scope(db, shelf_id, actor)
-    image = (
-        db.query(models.ShelfImage)
-        .filter(
-            models.ShelfImage.id == image_id,
-            models.ShelfImage.shelf_id == shelf_id,
-        )
-        .first()
-    )
-    if image is None:
-        raise HTTPException(status_code=404, detail="Shelf image not found")
-    if image.retention_status != "ACTIVE":
-        raise HTTPException(status_code=404, detail="Shelf image is not available")
-    if image.analysis_status != "COMPLETED":
-        raise HTTPException(status_code=409, detail="Shelf image analysis is not completed")
-
     try:
-        planogram = load_active_planogram_for_shelf(
-            db, shelf_id=shelf_id, actor_user_id=actor.id
+        image, planogram = load_active_planogram_for_comparison(
+            db,
+            shelf_id=shelf_id,
+            actor_user_id=actor.id,
+            comparison_image_id=image_id,
         )
     except ShelfPlanogramError as exc:
         raise _planogram_http_error(exc) from exc
