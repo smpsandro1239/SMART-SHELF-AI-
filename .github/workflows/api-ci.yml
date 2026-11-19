@@ -81,16 +81,17 @@ jobs:
           DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/smart_shelf_ci
           APP_ENV: test
         run: python scripts/postgres_dataset_job_artifact_read_smoke.py
-      - name: Verify PostgreSQL fenced dataset output publication and governance
-        env:
-          DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/smart_shelf_ci
-          APP_ENV: test
-        run: python scripts/postgres_dataset_job_output_publication_smoke.py
       - name: Verify PostgreSQL concurrent first-admin bootstrap
         env:
           DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/smart_shelf_ci
           APP_ENV: test
         run: python scripts/postgres_admin_bootstrap_concurrency_smoke.py
+
+      - name: Verify PostgreSQL fenced dataset output publication and governance
+        env:
+          DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/smart_shelf_ci
+          APP_ENV: test
+        run: python scripts/postgres_dataset_job_output_publication_smoke.py
       - name: Verify PostgreSQL pallet lifecycle event append-only protection
         working-directory: apps/api
         env:
