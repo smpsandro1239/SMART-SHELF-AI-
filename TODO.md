@@ -450,3 +450,11 @@
 - [x] Validar a migration 0058 em PostgreSQL 16, API CI [44421831066](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44421831066), Quality Gates [44421831076](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44421831076) e Docker Compose [44421831148](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44421831148): **1179 passed, 1 skipped, 1 warning**.
 - [ ] Implementar autenticação/identidade de workers antes de expor claims por HTTP.
 - [ ] Implementar leitura de artefactos autorizada por chamada e promoção de outputs condicionada ao fencing token actual.
+
+
+## Guard de estado inicial dos jobs assíncronos — 19-11-2026
+
+- [x] Expandir o teste de migration SQLite 0059 para rejeitar individualmente `lease_owner`, `lease_expires_at`, `fencing_token`, `attempt_count`, `output_sha256`, `staged_output_reference`, `failure_code` e `finished_at` em novos jobs.
+- [x] Expandir o smoke PostgreSQL para tentar os mesmos oito metadados forjados em INSERTs independentes.
+- [ ] Validar migration, smoke PostgreSQL, suite API, Quality Gates e Docker Compose no CI dos commits desta ronda.
+- [ ] Investigar os estados dos checks de deployment separadamente: falhas de quota Vercel não equivalem a falhas dos testes API.
