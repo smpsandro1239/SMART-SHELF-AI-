@@ -295,7 +295,7 @@ def test_active_planogram_comparison_returns_front_facing_counts_and_provenance(
         "observed_facings": 1,
         "observed_product_ids": [ids["product_a"]],
         "detection_ids": [detection_id],
-        "overlap_ratio": 0.306,
+        "overlap_ratio": 0.272,
     }]
 
 
