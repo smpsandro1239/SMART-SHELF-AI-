@@ -666,3 +666,8 @@ Validação no commit `46eb9bbc19a039d2e68183655fb07501a0c12ef8`: API CI [445613
 - O acesso visual é exposto apenas a ADMIN/SUPERVISOR; a API mantém a validação JWT e o isolamento por loja.
 - A interface não cria observações/tarefas nem altera inventário. Sem calibração de visibilidade continua a apresentar UNKNOWN.
 - Build/CI e validação manual ainda pendentes. Próxima sequência: validar build; acrescentar testes de componente; depois avaliar persistência append-only das comparações com retenção/proveniência explícitas.
+
+
+## 2026-11-19 — Comparação de planogramas: serialização com retenção
+
+A comparação passou a bloquear a captura e a imagem de calibração em ordem crescente de ID, seguidas da prateleira e do planograma ativo. A versão ativa é recarregada após os locks; uma mudança concorrente resulta em HTTP 409. A captura é revalidada como ACTIVE/COMPLETED sob lock e a restrição de retenção fica serializada com a leitura. O smoke PostgreSQL dedicado foi alargado para testar a concorrência real entre comparação e restrição da captura. A validação desta alteração está pendente dos workflows disparados pelo commit. A comparação continua on-demand, read-only e não altera inventário.
