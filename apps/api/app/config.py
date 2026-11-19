@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     max_dataset_output_bytes: int = Field(default=2147483648, ge=1024, le=10737418240)
     vision_provider_factory: str = ""
     vision_provider_mode: str = "disabled"
+    vision_sku_match_labels: str = "product"
     ocr_provider_factory: str = ""
     ocr_provider_name: str = "paddleocr"
     ocr_model_version: str = "PP-OCRv5-pt"
