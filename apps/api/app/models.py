@@ -1118,3 +1118,28 @@ class DatasetExecutionJobArtifactRead(Base):
     source_image_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
     bytes_read: Mapped[int] = mapped_column(Integer, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+
+class DatasetExecutionJobOutputPublication(Base):
+    """Append-only record of a verified, lease-fenced dataset output promotion."""
+    __tablename__ = "dataset_execution_job_output_publications"
+    __table_args__ = (
+        CheckConstraint("fencing_token > 0", name="ck_dataset_job_output_publication_fencing_positive"),
+        CheckConstraint("length(output_sha256) = 64", name="ck_dataset_job_output_publication_digest"),
+        CheckConstraint("bytes_published > 0", name="ck_dataset_job_output_publication_bytes_positive"),
+        CheckConstraint("published_output_reference LIKE 'published/%'", name="ck_dataset_job_output_publication_reference"),
+        UniqueConstraint("job_id", name="uq_dataset_job_output_publication_job"),
+        UniqueConstraint("published_output_reference", name="uq_dataset_job_output_publication_reference"),
+        Index("ix_dataset_job_output_publications_worker_created", "worker_id", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    job_id: Mapped[int] = mapped_column(ForeignKey("dataset_execution_jobs.id", ondelete="RESTRICT"), nullable=False)
+    worker_id: Mapped[str] = mapped_column(ForeignKey("dataset_workers.worker_id", ondelete="RESTRICT"), nullable=False)
+    credential_id: Mapped[str] = mapped_column(ForeignKey("dataset_worker_credentials.credential_id", ondelete="RESTRICT"), nullable=False)
+    fencing_token: Mapped[int] = mapped_column(Integer, nullable=False)
+    output_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    staged_output_reference: Mapped[str] = mapped_column(String(600), nullable=False)
+    published_output_reference: Mapped[str] = mapped_column(String(600), nullable=False)
+    bytes_published: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)

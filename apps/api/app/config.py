@@ -12,6 +12,8 @@ class Settings(BaseSettings):
     cors_allowed_origins: str = "http://localhost:5173"
     image_storage_path: str = "./storage/shelf-images"
     max_image_upload_bytes: int = Field(default=10485760, ge=1024, le=52428800)
+    dataset_output_storage_path: str = "./storage/dataset-outputs"
+    max_dataset_output_bytes: int = Field(default=2147483648, ge=1024, le=10737418240)
     vision_provider_factory: str = ""
     ocr_provider_factory: str = ""
     ocr_provider_name: str = "paddleocr"
