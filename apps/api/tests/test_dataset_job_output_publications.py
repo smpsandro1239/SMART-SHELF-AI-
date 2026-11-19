@@ -212,3 +212,36 @@ def test_wrong_worker_or_fencing_token_cannot_promote(publication_setup):
             state["db"], principal=state["principal"], job_id=state["job"].id,
             fencing_token=state["claim"].fencing_token + 1,
         )
+
+def test_large_output_preparation_releases_db_transaction_and_rechecks_revocation(
+    publication_setup, monkeypatch
+):
+    from app import dataset_job_output_publications as publications
+
+    state = publication_setup
+    original_prepare = publications._prepare_verified_bytes
+
+    def prepare_then_revoke(**kwargs):
+        # The file copy/hash phase must not retain even a read transaction.
+        assert not state["db"].in_transaction()
+        result = original_prepare(**kwargs)
+        credential = state["db"].query(models.DatasetWorkerCredential).filter_by(
+            credential_id=state["principal"].credential_id
+        ).one()
+        credential.revoked_at = models.utc_now()
+        state["db"].commit()
+        return result
+
+    monkeypatch.setattr(publications, "_prepare_verified_bytes", prepare_then_revoke)
+    with pytest.raises(DatasetWorkerAuthorizationError):
+        promote_dataset_job_output(
+            state["db"], principal=state["principal"], job_id=state["job"].id,
+            fencing_token=state["claim"].fencing_token,
+        )
+
+    assert state["db"].query(models.DatasetExecutionJobOutputPublication).count() == 0
+    assert state["stage_path"].exists()
+    published_root = state["root"] / "published"
+    assert not list(published_root.rglob("*.artifact"))
+    assert not list(published_root.rglob("*.tmp"))
+

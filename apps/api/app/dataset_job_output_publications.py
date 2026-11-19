@@ -1,4 +1,9 @@
-"""Fenced, content-verified promotion of completed dataset job outputs."""
+"""Fenced, content-verified promotion of completed dataset job outputs.
+
+Large file reads, hashing and copying happen before acquiring database row locks.
+The final transaction revalidates the job and worker authority, performs only the
+no-clobber filesystem link, and records the append-only publication.
+"""
 from __future__ import annotations
 
 import hashlib
@@ -53,12 +58,11 @@ def _safe_parts(reference: str, *, job_id: int, fencing_token: int) -> tuple[str
 def _open_dirs(root: Path, parts: tuple[str, ...], *, create: bool) -> int:
     root.mkdir(parents=True, exist_ok=True, mode=0o700)
     flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_DIRECTORY", 0)
-    nofollow = getattr(os, "O_NOFOLLOW", 0)
-    current = os.open(root.resolve(strict=True), flags | nofollow)
+    current = os.open(root.resolve(strict=True), flags | getattr(os, "O_NOFOLLOW", 0))
     try:
         for part in parts:
             try:
-                nxt = os.open(part, flags | nofollow, dir_fd=current)
+                nxt = os.open(part, flags | getattr(os, "O_NOFOLLOW", 0), dir_fd=current)
             except FileNotFoundError:
                 if not create:
                     raise
@@ -66,7 +70,7 @@ def _open_dirs(root: Path, parts: tuple[str, ...], *, create: bool) -> int:
                     os.mkdir(part, mode=0o700, dir_fd=current)
                 except FileExistsError:
                     pass
-                nxt = os.open(part, flags | nofollow, dir_fd=current)
+                nxt = os.open(part, flags | getattr(os, "O_NOFOLLOW", 0), dir_fd=current)
             os.close(current)
             current = nxt
         return current
@@ -101,30 +105,39 @@ def _digest_existing(directory_fd: int, name: str, maximum: int) -> tuple[str, i
         os.close(fd)
 
 
-def _promote_verified_bytes(
+def _prepare_verified_bytes(
     *, root: Path, staged: tuple[str, ...], published: tuple[str, ...], expected_digest: str
-) -> int:
-    """Copy from a pinned source descriptor to a private temp file, then link no-clobber."""
+) -> tuple[str | None, int]:
+    """Verify/copy bytes to a private temp file without holding database locks.
+
+    A pre-existing deterministic destination is fully hashed here, outside the
+    final transaction. The returned temp file is in the destination directory,
+    so the final no-clobber hard link is a short local filesystem operation.
+    """
     source_dir = destination_dir = source_fd = temp_fd = None
     temp_name = f".promotion-{secrets.token_hex(16)}.tmp"
     maximum = settings.max_dataset_output_bytes
     try:
+        destination_dir = _open_dirs(root, published[:-1], create=True)
         try:
-            source_dir = _open_dirs(root, staged[:-1], create=False)
-            source_flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
-            source_fd = os.open(staged[-1], source_flags, dir_fd=source_dir)
-        except FileNotFoundError:
-            destination_dir = _open_dirs(root, published[:-1], create=True)
-            actual, size = _digest_existing(destination_dir, published[-1], maximum)
-            if actual != expected_digest:
+            existing_digest, existing_size = _digest_existing(destination_dir, published[-1], maximum)
+        except DatasetJobOutputUnavailable:
+            existing_digest = None
+            existing_size = 0
+        if existing_digest is not None:
+            if existing_digest != expected_digest:
                 raise DatasetJobOutputIntegrityError("orphaned published output has an unexpected digest")
-            return size
+            return None, existing_size
 
+        source_dir = _open_dirs(root, staged[:-1], create=False)
+        source_flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+        source_fd = os.open(staged[-1], source_flags, dir_fd=source_dir)
         metadata = os.fstat(source_fd)
         if not stat.S_ISREG(metadata.st_mode) or metadata.st_size <= 0 or metadata.st_size > maximum:
-            raise DatasetJobOutputUnavailable("staged output must be a non-empty regular file within the configured limit")
+            raise DatasetJobOutputUnavailable(
+                "staged output must be a non-empty regular file within the configured limit"
+            )
 
-        destination_dir = _open_dirs(root, published[:-1], create=True)
         temp_flags = (
             os.O_WRONLY | os.O_CREAT | os.O_EXCL
             | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
@@ -150,30 +163,15 @@ def _promote_verified_bytes(
         os.fsync(temp_fd)
         os.close(temp_fd)
         temp_fd = None
-
-        try:
-            os.link(
-                temp_name, published[-1], src_dir_fd=destination_dir,
-                dst_dir_fd=destination_dir, follow_symlinks=False,
-            )
-        except FileExistsError:
-            existing_digest, existing_size = _digest_existing(destination_dir, published[-1], maximum)
-            if existing_digest != expected_digest or existing_size != total:
-                raise DatasetJobOutputIntegrityError("published destination already contains different bytes")
-        os.fsync(destination_dir)
-        os.unlink(temp_name, dir_fd=destination_dir)
+        prepared_name = temp_name
         temp_name = ""
-        os.fsync(destination_dir)
-        try:
-            os.unlink(staged[-1], dir_fd=source_dir)
-            os.fsync(source_dir)
-        except FileNotFoundError:
-            pass
-        return total
+        return prepared_name, total
+    except DatasetJobOutputUnavailable:
+        raise
     except OSError as exc:
         if isinstance(exc, FileNotFoundError):
             raise DatasetJobOutputUnavailable("staged output or its directory is missing") from exc
-        raise DatasetJobOutputUnavailable("staged output could not be safely promoted") from exc
+        raise DatasetJobOutputUnavailable("staged output could not be safely prepared") from exc
     finally:
         if temp_fd is not None:
             os.close(temp_fd)
@@ -190,46 +188,116 @@ def _promote_verified_bytes(
             os.close(source_dir)
 
 
+def _publish_prepared_temp(
+    *, root: Path, published: tuple[str, ...], temp_name: str | None
+) -> None:
+    if temp_name is None:
+        return
+    directory_fd = _open_dirs(root, published[:-1], create=False)
+    try:
+        os.link(
+            temp_name, published[-1], src_dir_fd=directory_fd,
+            dst_dir_fd=directory_fd, follow_symlinks=False,
+        )
+        os.fsync(directory_fd)
+        os.unlink(temp_name, dir_fd=directory_fd)
+        os.fsync(directory_fd)
+    except FileExistsError as exc:
+        # Another publisher or an out-of-band writer won the no-clobber race.
+        # Never hash a potentially large file while holding database row locks.
+        raise DatasetJobOutputConflict("published destination appeared during finalization; retry promotion") from exc
+    except OSError as exc:
+        raise DatasetJobOutputUnavailable("prepared output could not be atomically published") from exc
+    finally:
+        try:
+            os.unlink(temp_name, dir_fd=directory_fd)
+        except FileNotFoundError:
+            pass
+        os.close(directory_fd)
+
+
+def _remove_staged_output(root: Path, staged: tuple[str, ...]) -> None:
+    """Best-effort post-commit cleanup; failures leave recoverable staging debris."""
+    directory_fd = None
+    try:
+        directory_fd = _open_dirs(root, staged[:-1], create=False)
+        os.unlink(staged[-1], dir_fd=directory_fd)
+        os.fsync(directory_fd)
+    except FileNotFoundError:
+        pass
+    except OSError:
+        # Publication and its audit row are already committed. A later orphan
+        # reconciler can safely remove this staging reference.
+        pass
+    finally:
+        if directory_fd is not None:
+            os.close(directory_fd)
+
+
+def _load_and_validate(
+    db: Session, *, principal: DatasetWorkerPrincipal, job_id: int,
+    fencing_token: int, lock_rows: bool,
+):
+    job_query = db.query(models.DatasetExecutionJob).filter_by(id=job_id)
+    if lock_rows:
+        job_query = job_query.with_for_update()
+    job = job_query.populate_existing().first()
+    if (
+        job is None or job.status != "SUCCEEDED" or job.fencing_token != fencing_token
+        or not isinstance(job.output_sha256, str) or not _SHA256.fullmatch(job.output_sha256)
+        or not job.staged_output_reference
+    ):
+        raise DatasetJobLeaseLost("job is not successfully completed with this fencing token")
+
+    event = db.query(models.DatasetExecutionJobEvent).filter_by(
+        job_id=job_id, event_type="SUCCEEDED"
+    ).order_by(models.DatasetExecutionJobEvent.sequence_number.desc()).first()
+    if (
+        event is None or event.worker_id != principal.worker_id
+        or event.fencing_token != fencing_token
+        or (event.details or {}).get("output_sha256") != job.output_sha256
+    ):
+        raise DatasetJobLeaseLost("principal does not match the successful terminal fencing event")
+
+    worker_query = db.query(models.DatasetWorker).filter_by(worker_id=principal.worker_id)
+    credential_query = db.query(models.DatasetWorkerCredential).filter_by(
+        credential_id=principal.credential_id, worker_id=principal.worker_id
+    )
+    if lock_rows:
+        worker_query = worker_query.with_for_update(read=True)
+        credential_query = credential_query.with_for_update(read=True)
+    worker = worker_query.populate_existing().first()
+    credential = credential_query.populate_existing().first()
+    if (
+        worker is None or worker.status != "ACTIVE" or credential is None
+        or credential.revoked_at is not None or _utc(credential.expires_at) <= _utc(models.utc_now())
+        or "outputs:publish" not in set(credential.scopes or [])
+    ):
+        raise DatasetWorkerAuthorizationError("worker credential is inactive or lacks outputs:publish")
+    return job
+
+
 def promote_dataset_job_output(
     db: Session, *, principal: DatasetWorkerPrincipal, job_id: int, fencing_token: int
 ) -> models.DatasetExecutionJobOutputPublication:
-    """Publish only the output recorded by this worker's successful fencing event."""
+    """Prepare bytes lock-free, then publish and audit under a short fenced transaction."""
     if isinstance(job_id, bool) or not isinstance(job_id, int) or job_id <= 0:
         raise DatasetJobError("job_id must be a positive integer")
     if isinstance(fencing_token, bool) or not isinstance(fencing_token, int) or fencing_token <= 0:
         raise DatasetJobError("fencing_token must be a positive integer")
+
+    temp_name = None
+    staged = None
+    root = Path(settings.dataset_output_storage_path)
+    if not root.is_absolute():
+        root = Path.cwd() / root
     try:
-        job = db.query(models.DatasetExecutionJob).filter_by(id=job_id).with_for_update().populate_existing().first()
-        if (
-            job is None or job.status != "SUCCEEDED" or job.fencing_token != fencing_token
-            or not isinstance(job.output_sha256, str) or not _SHA256.fullmatch(job.output_sha256)
-            or not job.staged_output_reference
-        ):
-            raise DatasetJobLeaseLost("job is not successfully completed with this fencing token")
-
-        event = db.query(models.DatasetExecutionJobEvent).filter_by(
-            job_id=job_id, event_type="SUCCEEDED"
-        ).order_by(models.DatasetExecutionJobEvent.sequence_number.desc()).first()
-        if (
-            event is None or event.worker_id != principal.worker_id
-            or event.fencing_token != fencing_token
-            or (event.details or {}).get("output_sha256") != job.output_sha256
-        ):
-            raise DatasetJobLeaseLost("principal does not match the successful terminal fencing event")
-
-        worker = db.query(models.DatasetWorker).filter_by(
-            worker_id=principal.worker_id
-        ).with_for_update(read=True).populate_existing().first()
-        credential = db.query(models.DatasetWorkerCredential).filter_by(
-            credential_id=principal.credential_id, worker_id=principal.worker_id
-        ).with_for_update(read=True).populate_existing().first()
-        if (
-            worker is None or worker.status != "ACTIVE" or credential is None
-            or credential.revoked_at is not None or _utc(credential.expires_at) <= _utc(models.utc_now())
-            or "outputs:publish" not in set(credential.scopes or [])
-        ):
-            raise DatasetWorkerAuthorizationError("worker credential is inactive or lacks outputs:publish")
-
+        # Read-only preflight authorizes access to the path but deliberately
+        # takes no row locks. Roll back before hashing/copying potentially GiB.
+        job = _load_and_validate(
+            db, principal=principal, job_id=job_id,
+            fencing_token=fencing_token, lock_rows=False,
+        )
         existing = db.query(models.DatasetExecutionJobOutputPublication).filter_by(job_id=job_id).first()
         if existing is not None:
             if (
@@ -243,23 +311,49 @@ def promote_dataset_job_output(
 
         staged = _safe_parts(job.staged_output_reference, job_id=job_id, fencing_token=fencing_token)
         destination_ref = f"published/{job_id}/{fencing_token}-{job.output_sha256}.artifact"
-        root = Path(settings.dataset_output_storage_path)
-        if not root.is_absolute():
-            root = Path.cwd() / root
-        byte_count = _promote_verified_bytes(
-            root=root, staged=staged, published=PurePosixPath(destination_ref).parts,
-            expected_digest=job.output_sha256,
+        published = PurePosixPath(destination_ref).parts
+        expected_digest = job.output_sha256
+        staged_reference = job.staged_output_reference
+        db.rollback()
+
+        temp_name, byte_count = _prepare_verified_bytes(
+            root=root, staged=staged, published=published, expected_digest=expected_digest,
         )
+
+        # Reacquire locks only after all streaming I/O and hashing have finished.
+        job = _load_and_validate(
+            db, principal=principal, job_id=job_id,
+            fencing_token=fencing_token, lock_rows=True,
+        )
+        if job.output_sha256 != expected_digest or job.staged_output_reference != staged_reference:
+            raise DatasetJobLeaseLost("completed output changed during publication preparation")
+
+        existing = db.query(models.DatasetExecutionJobOutputPublication).filter_by(job_id=job_id).first()
+        if existing is not None:
+            if (
+                existing.worker_id != principal.worker_id or existing.fencing_token != fencing_token
+                or existing.output_sha256 != expected_digest
+                or existing.staged_output_reference != staged_reference
+            ):
+                raise DatasetJobOutputConflict("job already has a different published output")
+            db.commit()
+            return existing
+
+        _publish_prepared_temp(root=root, published=published, temp_name=temp_name)
+        temp_name = None
         publication = models.DatasetExecutionJobOutputPublication(
             job_id=job_id, worker_id=principal.worker_id,
             credential_id=principal.credential_id, fencing_token=fencing_token,
-            output_sha256=job.output_sha256, staged_output_reference=job.staged_output_reference,
+            output_sha256=expected_digest, staged_output_reference=staged_reference,
             published_output_reference=destination_ref, bytes_published=byte_count,
             created_at=models.utc_now(),
         )
         db.add(publication)
         db.commit()
         db.refresh(publication)
+
+        # Staging cleanup is intentionally after the durable audit commit.
+        _remove_staged_output(root, staged)
         return publication
     except (
         DatasetWorkerAuthorizationError, DatasetJobLeaseLost, DatasetJobOutputUnavailable,
@@ -273,3 +367,15 @@ def promote_dataset_job_output(
     except Exception:
         db.rollback()
         raise
+    finally:
+        if temp_name is not None and staged is not None:
+            try:
+                directory_fd = _open_dirs(root, ("published", str(job_id)), create=False)
+                try:
+                    os.unlink(temp_name, dir_fd=directory_fd)
+                except FileNotFoundError:
+                    pass
+                finally:
+                    os.close(directory_fd)
+            except OSError:
+                pass
