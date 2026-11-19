@@ -50,3 +50,20 @@ A combinação de resultados visuais e OCR está especificada em [Fusão de evid
 ## Provider OCR opcional
 
 O adaptador PaddleOCR experimental e os passos de instalação isolada estão documentados em [Provider OCR PaddleOCR](paddleocr-provider.md). Ainda não existe integração no worker nem inferência real validada.
+
+
+## Células calibradas e deteção de posições vazias
+
+O módulo também disponibiliza `ShelfCell` e `compare_detections_to_cells` para comparar caixas normalizadas com células explícitas fornecidas por uma calibração de câmara ou planograma revisto. Cada célula tem um identificador estável, limites normalizados, SKU esperado opcional e indicadores de visibilidade/oclusão.
+
+Estados devolvidos:
+
+- `OCCUPIED`: existe pelo menos uma deteção associada à célula.
+- `OCCUPIED_UNIDENTIFIED`: existe deteção, mas não há SKU identificado.
+- `EMPTY`: não existe deteção e a célula foi explicitamente marcada como visível e não ocluída.
+- `MISPLACED`: a célula tem SKU esperado e as deteções identificadas apontam para outro SKU.
+- `UNKNOWN`: não há calibração explícita de visibilidade, a célula está fora de vista ou está ocluída.
+
+A associação usa a fracção da área da célula coberta pela caixa e um limiar configurável. O resultado preserva os índices das deteções e os IDs observados para permitir rastreabilidade. Uma célula criada sem visibilidade explicitamente confirmada começa em `UNKNOWN`; ausência de deteção nunca é suficiente, por si só, para declarar vazio.
+
+**Limites actuais:** este é um comparador geométrico puro, sem persistência, API de planogramas, segmentação automática de prateleiras ou integração no worker. As células têm de ser fornecidas por uma fonte calibrada/revista. Os estados são evidência visual, não stock contabilístico, e não criam movimentos nem tarefas.
