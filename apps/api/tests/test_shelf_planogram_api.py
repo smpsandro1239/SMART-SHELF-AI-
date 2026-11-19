@@ -399,3 +399,82 @@ def test_planogram_comparison_enforces_role_store_and_image_state(planogram_api)
     assert own_pending.status_code == 409
     assert foreign.status_code == 403
     assert employee.status_code == 403
+
+
+def test_planogram_comparison_requires_an_active_planogram(planogram_api):
+    client, ids = planogram_api
+    headers = _headers(ids["supervisor_a"], "SUPERVISOR")
+    with main_module.SessionLocal() as db:
+        image = models.ShelfImage(
+            shelf_id=ids["shelf_a"],
+            original_filename="without-planogram.jpg",
+            storage_path=f"/tmp/planogram-no-active-{ids['shelf_a']}.jpg",
+            mime_type="image/jpeg",
+            file_size_bytes=128,
+            sha256="d" * 64,
+            analysis_status="COMPLETED",
+            model_version="detector-test-v1",
+            retention_status="ACTIVE",
+        )
+        db.add(image)
+        db.commit()
+        image_id = image.id
+
+    response = client.get(
+        f"/api/v1/shelves/{ids['shelf_a']}/planograms/comparison/{image_id}",
+        headers=headers,
+    )
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Shelf has no active planogram"
+
+
+def test_planogram_comparison_returns_image_calibration_provenance(planogram_api):
+    client, ids = planogram_api
+    headers = _headers(ids["supervisor_a"], "SUPERVISOR")
+    calibration_sha256 = "e" * 64
+
+    with main_module.SessionLocal() as db:
+        calibration = models.ShelfImage(
+            shelf_id=ids["shelf_a"],
+            original_filename="calibration.jpg",
+            storage_path=f"/tmp/planogram-calibration-{ids['shelf_a']}.jpg",
+            mime_type="image/jpeg",
+            file_size_bytes=128,
+            sha256=calibration_sha256,
+            analysis_status="COMPLETED",
+            model_version="calibration-model-v1",
+            retention_status="ACTIVE",
+        )
+        db.add(calibration)
+        db.commit()
+        calibration_image_id = calibration.id
+
+    payload = _payload(ids["product_a"], expected_facings=2)
+    payload.update({
+        "calibration_source": "IMAGE",
+        "calibration_image_id": calibration_image_id,
+        "calibration_image_sha256": calibration_sha256,
+    })
+    created = client.post(
+        f"/api/v1/shelves/{ids['shelf_a']}/planograms",
+        json=payload,
+        headers=headers,
+    )
+    assert created.status_code == 201, created.text
+    planogram_id = created.json()["id"]
+    activated = client.post(
+        f"/api/v1/planograms/{planogram_id}/activate",
+        json={"reason": "Approved image calibration fixture"},
+        headers=headers,
+    )
+    assert activated.status_code == 200, activated.text
+
+    response = client.get(
+        f"/api/v1/shelves/{ids['shelf_a']}/planograms/comparison/{calibration_image_id}",
+        headers=headers,
+    )
+    assert response.status_code == 200, response.text
+    result = response.json()
+    assert result["calibration_source"] == "IMAGE"
+    assert result["calibration_image_id"] == calibration_image_id
+    assert result["calibration_image_sha256"] == calibration_sha256
