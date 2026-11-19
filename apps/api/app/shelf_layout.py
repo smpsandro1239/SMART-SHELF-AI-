@@ -38,7 +38,11 @@ def _read_box(item: Any) -> tuple[float, float, float, float, int | None]:
     product_id = value("product_id")
     if not (0 <= x1 < x2 <= 1 and 0 <= y1 < y2 <= 1):
         raise ValueError("Detection coordinates must be valid and normalized to [0, 1]")
-    if product_id is not None and (isinstance(product_id, bool) or int(product_id) <= 0):
+    if product_id is not None and (
+        isinstance(product_id, bool)
+        or not isinstance(product_id, int)
+        or product_id <= 0
+    ):
         raise ValueError("product_id must be a positive integer or None")
     return x1, y1, x2, y2, int(product_id) if product_id is not None else None
 
@@ -113,7 +117,7 @@ class ShelfCell:
     x_max: float
     y_max: float
     expected_product_id: int | None = None
-    is_visible: bool = True
+    is_visible: bool = False
     is_occluded: bool = False
 
     def __post_init__(self) -> None:
