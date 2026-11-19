@@ -709,3 +709,26 @@ def test_published_output_consumer_rejects_tampered_bytes(publication_setup):
             state["db"], publication_id=publication.id,
             authorize=lambda _publication, _job: True,
         )
+
+
+def test_published_output_consumer_rejects_symlink(publication_setup):
+    from app.dataset_job_output_consumption import (
+        DatasetJobOutputReadIntegrityError, consume_dataset_job_output_bytes,
+    )
+
+    state = publication_setup
+    publication = promote_dataset_job_output(
+        state["db"], principal=state["principal"], job_id=state["job"].id,
+        fencing_token=state["claim"].fencing_token,
+    )
+    target = state["root"] / "outside-target.bin"
+    target.write_bytes(state["payload"])
+    published = state["root"] / publication.published_output_reference
+    published.unlink()
+    published.symlink_to(target)
+    with pytest.raises(DatasetJobOutputReadIntegrityError):
+        consume_dataset_job_output_bytes(
+            state["db"], publication_id=publication.id,
+            authorize=lambda _publication, _job: True,
+        )
+    assert target.read_bytes() == state["payload"]

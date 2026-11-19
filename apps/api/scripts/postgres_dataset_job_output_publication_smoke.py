@@ -128,6 +128,15 @@ def main():
             row = db.query(models.DatasetExecutionJobOutputPublication).filter_by(job_id=job_id).one()
             assert row.bytes_published == len(payload) and row.output_sha256 == digest
             assert (root / row.published_output_reference).read_bytes() == payload
+            from app.dataset_job_output_consumption import consume_dataset_job_output_bytes
+            consumed = consume_dataset_job_output_bytes(
+                db, publication_id=row.id,
+                authorize=lambda publication, output_job: (
+                    publication.id == row.id and output_job.id == job_id
+                ),
+            )
+            assert consumed == payload
+            db.commit()
             _assert_rejected(
                 db,
                 "UPDATE dataset_execution_job_output_publications SET bytes_published=1 WHERE id=:id",
@@ -239,6 +248,18 @@ def main():
         with SessionLocal() as event_db:
             projection = get_output_governance_state(event_db, publication_id=publication_id)
             assert projection.restricted is True and projection.legal_hold is False
+            from app.dataset_job_output_consumption import (
+                DatasetJobOutputAccessDenied, consume_dataset_job_output_bytes,
+            )
+            try:
+                consume_dataset_job_output_bytes(
+                    event_db, publication_id=publication_id,
+                    authorize=lambda _publication, _job: True,
+                )
+            except DatasetJobOutputAccessDenied:
+                event_db.rollback()
+            else:
+                raise AssertionError("restricted output was readable through the consumer")
             hold = append_output_governance_event(
                 event_db, publication_id=publication_id,
                 event_type="LEGAL_HOLD_APPLIED", actor_user_id=actor_user_id,

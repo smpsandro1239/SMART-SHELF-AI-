@@ -75,3 +75,8 @@ A leitura de bytes de uma publicação deve passar por `app.dataset_job_output_c
 A operação é síncrona e integral: não devolve streams nem referências diferidas. O caller controla a transacção e não deve libertar os locks antes de terminar o consumo. A ordem de locks desta fronteira começa pela publicação e pelo job, seguindo-se as imagens/prateleiras/zonas em ordem crescente. A governação de outputs também começa pela publicação, permitindo serializar uma restrição concorrente com uma leitura.
 
 Esta implementação é uma fronteira de serviço, não uma integração de produto: não cria endpoints, downloads, exports, workers, broker ou autorização por perfil. Todos os consumidores futuros devem reutilizá-la. Cópias externas, caches, backups e derivados não estão abrangidos; purga física continua proibida até existir política aprovada.
+
+
+### Verificação de integração PostgreSQL
+
+O smoke PostgreSQL 16 exercita agora o serviço de consumo sobre uma publicação real: primeiro confirma a devolução dos bytes com autorização positiva; depois persiste uma restrição através da cronologia append-only e confirma que a leitura é recusada. A suite SQLite também cobre a tentativa de substituir o destino publicado por um symlink, preservando o ficheiro externo.

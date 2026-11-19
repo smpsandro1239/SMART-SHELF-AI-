@@ -881,3 +881,11 @@ Commit validado: `b2247031a7d651a4efdc423f83bf7947723e27ff`.
 - Testes acrescentados para caminho autorizado, autorização ausente, restrição, legal hold, restrições herdadas das fontes e adulteração.
 - Não foram criados endpoints, downloads públicos, exports ou workers. Cópias externas, caches e backups ainda não são propagados.
 - Validação: a executar por GitHub Actions após o commit; não foram executados testes locais nesta sessão.
+
+
+### Validação PostgreSQL da fronteira de consumo — 2026-11-19
+
+- O smoke PostgreSQL 16 passou a consumir o output publicado através do serviço, com autorização explícita, e comparar os bytes devolvidos.
+- Depois de persistir uma restrição append-only, o mesmo caminho de consumo tem de lançar `DatasetJobOutputAccessDenied`.
+- Foi acrescentado teste SQLite de symlink no destino publicado: o link é rejeitado e o ficheiro externo permanece intacto.
+- A validação CI desta extensão fica pendente até à conclusão dos workflows do commit correspondente.

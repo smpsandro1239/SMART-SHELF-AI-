@@ -628,7 +628,8 @@ Documento: `docs/architecture/dataset-output-artifact-governance.md`.
 - [x] Bloquear leituras quando a projecção append-only indica restrição ou legal hold activo.
 - [x] Revalidar todas as fontes imutáveis (loja, SHA-256, estado ACTIVE e ausência de legal hold) sob locks ordenados.
 - [x] Exigir callback de autorização explícito e verificar referência canónica, ficheiro regular sem symlink, tamanho e SHA-256.
-- [x] Acrescentar regressões para leitura autorizada, ausência de autorização, restrição, legal hold, herança das fontes e adulteração dos bytes.
+- [x] Acrescentar regressões para leitura autorizada, ausência de autorização, restrição, legal hold, herança das fontes, adulteração dos bytes e rejeição de symlinks.
+- [x] Estender o smoke PostgreSQL 16 para validar leitura autorizada real e bloqueio da leitura após aplicação concorrente de restrição.
 - [ ] Integrar todos os consumidores reais futuros (API, exports, workers, caches e backups) exclusivamente através desta fronteira; nenhum endpoint/worker foi activado.
 - [ ] Definir política de autorização por perfil/loja e aprovação independente para libertar legal hold.
 - [ ] Definir inventário externo, propagação a derivados/cópias e política de retenção; manter purga física desactivada.
