@@ -125,8 +125,8 @@ def read_dataset_job_source_bytes(
     Bytes are fully materialised and SHA-256 checked before the audit record is
     committed and the bytes are returned. No stream, path or storage URL escapes.
     """
-    require_dataset_worker_scope(principal, required_scope="artifacts:read")
     try:
+        require_dataset_worker_scope(principal, required_scope="artifacts:read")
         _owned_lease(
             db, job_id=job_id, worker_id=principal.worker_id,
             fencing_token=fencing_token,
