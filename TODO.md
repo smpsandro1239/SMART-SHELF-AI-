@@ -704,16 +704,16 @@ Objectivo: evoluir o projecto para uma plataforma de inteligência operacional d
 - [ ] Implementar contagem de facings por SKU com associação espacial, supressão de duplicados e tratamento de produtos sobrepostos.
 - [ ] Implementar deteção de produto deslocado/misplaced e produto desconhecido, com evidência visual e confiança.
 - [ ] Introduzir estado de qualidade/visibilidade por região (occluded, blurred, glare, out_of_view, low_resolution) para impedir conclusões indevidas.
-- [ ] Comparar observações sucessivas e exigir persistência/consenso temporal configurável antes de criar alertas de rutura.
+- [x] Implementar consenso temporal configurável e alertas persistentes/idempotentes com resolução humana e auditoria. Falta ligar observações reais do worker e calibrar thresholds com imagens reais autorizadas.
 - [ ] Criar testes com imagens sintéticas controladas e imagens reais anotadas para vazio, low stock, facings, deslocamento, oclusão e falsos vazios.
 
 ### P1 — geometria de prateleiras e planogramas
 - [x] Implementar comparador puro entre deteções e células calibradas, com IDs únicos, coordenadas normalizadas, SKU esperado opcional, proveniência das deteções e estado UNKNOWN por omissão quando a visibilidade não é confirmada.
 - [ ] Definir modelo de domínio para corredor, módulo, prateleira, segmento, célula/posição, coordenadas, capacidade, orientação e associação a loja/zona.
-- [ ] Definir API/serviços e migrations necessárias para planogramas versionados, com actor, motivo, vigência e histórico append-only ou auditável.
-- [ ] Permitir associar SKU esperado, número de facings esperado, capacidade máxima, prioridade e regras de exposição a cada posição.
+- [x] Implementar API/serviços e migrations para planogramas versionados, com actor, motivo, ciclo de vida e histórico; migrations 0067/0068 e smoke PostgreSQL dedicados validados.
+- [x] Persistir SKU esperado e número de facings esperado por célula, com validação e constraints. Capacidade máxima, prioridade e regras avançadas de exposição continuam pendentes.
 - [ ] Implementar importação/exportação validada de planogramas (formato documentado), com preview, validação de SKU/localização e rejeição de referências ambíguas.
-- [ ] Implementar comparação entre planograma activo e observação visual, produzindo desvios explicáveis: missing, misplaced, under-faced, over-faced e unknown.
+- [x] Implementar endpoint read-only de comparação entre planograma activo e observação visual, com estados por célula, SKU/facings esperados e observados, proveniência e fingerprint. Integração persistente no worker e validação real continuam pendentes.
 - [ ] Tratar alterações de planograma com versão efectiva por data/hora; reprocessamentos históricos devem usar a versão aplicável no momento da captura.
 - [ ] Criar interface para visualizar prateleira/células, esperado versus observado, evidência e revisão humana.
 - [ ] Acrescentar testes de isolamento multi-loja, concorrência de versões, histórico, importação inválida e comparação geométrica.
@@ -788,6 +788,24 @@ Objectivo: evoluir o projecto para uma plataforma de inteligência operacional d
 - [ ] Realizar testes de carga, soak, falha de rede, reinício de worker, câmara offline, broker indisponível e recuperação de backlog.
 - [ ] Documentar runbooks, alertas, SLOs, backups/restauro, rotação de credenciais, rollback de modelo e resposta a incidentes.
 - [ ] Só declarar o piloto operacional após aprovação dos critérios, evidência reproduzível e validação do responsável da loja.
+
+### REA adicional — Visionplatform.ai: monitorização contínua por câmaras (2026-11-19)
+
+- [x] Analisar o artigo e comparar cada capacidade com o código, README, REA externa e TODO actual; matriz em `docs/architecture/visionplatform-shelf-stockout-analysis.md`.
+- [x] Confirmar cobertura já existente: captura por sessão (câmara fixa/robô/telemóvel), consenso temporal e alertas persistentes, `empty_facing`, comparador de células, planogramas versionados, `expected_facings`, comparação read-only e motor de reposição/tarefas.
+- [ ] Implementar adaptadores CCTV/VMS existentes (RTSP/ONVIF quando suportado), descoberta/associação de streams a prateleiras, health checks, credenciais e permissões; não exigir câmaras novas sem avaliar a infraestrutura existente.
+- [ ] Definir e medir SLO de quase tempo real ponta a ponta (captura, inferência, consenso, alerta e notificação), p50/p95, frequência de amostragem, backpressure e comportamento perante falhas.
+- [ ] Criar monitorização da cobertura/saúde das câmaras: online/offline, última captura, idade da evidência, qualidade, oclusão, zonas sem cobertura e indisponibilidade do provider; ausência de captura deve resultar em UNKNOWN.
+- [ ] Avaliar profundidade/multi-view/RGB-D para distinguir lacunas visuais de produtos colocados atrás da primeira fila; investigação opcional, sem inferir stock oculto a partir de uma imagem 2D.
+- [ ] Acrescentar share-of-shelf por SKU/marca e evolução de facings/participação face ao planograma, com denominadores, perspectiva, cobertura e qualidade da imagem explícitos.
+- [ ] Versionar embalagens/imagens de referência por SKU e vigência; medir confusões entre variantes e definir curadoria rápida de novos SKUs/packaging.
+- [ ] Avaliar few-shot/semi-supervised learning para adaptação a novos SKUs apenas em experiências controladas, com dataset/licença aprovados, avaliação independente e promoção/rollback humano.
+- [ ] Completar o contrato de alerta accionável reutilizando o motor existente: SKU, loja/zona/corredor/prateleira/célula, severidade, confiança, primeira/última ocorrência, evidência, tarefa e estado de resolução.
+- [ ] Definir política de vídeo local/Edge e minimização de frames; não implementar reconhecimento facial, contagem de pessoas ou analytics de clientes.
+- [ ] Ligar a captura/observações reais do worker ao consenso e alertas existentes; executar primeiro em shadow mode e só depois encaminhar tarefas com validação humana.
+- [ ] Validar os resultados no piloto por iluminação, reflexos, blur, ângulo, oclusão, packaging, densidade, SKU e câmara; não importar métricas comerciais (90%+, 2,5x) como metas ou resultados próprios.
+
+**Nota de reconciliação:** os itens antigos 713–716 sobre criação de planogramas versionados, facings esperados e comparação activa já têm implementação API/modelo; os itens de UI e importação/exportação continuam parcialmente pendentes. O consenso temporal e os alertas persistentes também já existem, mas ainda não recebem automaticamente observações reais do worker. Ver a matriz de cobertura na REA acima.
 
 ### Sequência recomendada e dependências
 1. Fechar P0 de contratos, CI, proveniência e separação mock/real.

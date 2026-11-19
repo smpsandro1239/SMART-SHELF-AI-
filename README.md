@@ -28,6 +28,10 @@ O guião completo, as limitações, os comandos de teste e a lista de capturas e
 
 > **Transparência:** o backend inclui lojas, zonas, prateleiras, catálogo, observações, inventário, recomendações, tarefas, autenticação, captura de imagens e um worker de inferência com provider configurável. Existe uma aplicação web inicial com dashboard e fluxo de captura. Ainda não existe modelo de visão real configurado ou treinado, PWA nem integração POS/ERP/WMS operacional. Os mockups são ilustrativos e não representam dados reais.
 
+## REA — monitorização contínua de prateleiras por câmaras
+
+Foi analisado o artigo da Visionplatform.ai sobre deteção de ruturas por câmaras. A maior parte das capacidades já está contemplada ou parcialmente implementada: captura multi-origem, consenso temporal, alertas persistentes, deteção de vazios, facings, planogramas e reposição assistida. A análise identificou lacunas específicas em CCTV/VMS contínuo, SLO de latência, saúde/cobertura de câmaras, profundidade, share-of-shelf e versionamento de embalagens. Ver [análise e matriz de cobertura](docs/architecture/visionplatform-shelf-stockout-analysis.md). As métricas comerciais do artigo não são assumidas como resultados ou metas do nosso sistema.
+
 ## Contrato de evidência de comparação de planogramas
 
 A comparação de captura com planograma permanece read-only. Antes de persistir resultados ou ligar o worker, foi definido um contrato técnico proposto para identidade, snapshots canónicos, idempotência, revisão humana append-only, retenção/linhagem e concorrência: [contrato de evidência](docs/architecture/planogram-comparison-evidence-contract.md). A persistência continua bloqueada até aprovação da política de derivados/legal hold e resolução das lacunas do manifesto de inferência e da precedência das revisões SKU.
