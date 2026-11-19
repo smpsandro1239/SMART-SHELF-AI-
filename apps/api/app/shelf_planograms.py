@@ -431,4 +431,9 @@ def load_active_planogram_for_shelf(
         or image.sha256 != planogram.calibration_image_sha256
     ):
         raise ShelfPlanogramError("Active planogram calibration source is no longer eligible")
+    _validate_cell_products(
+        db,
+        shelf.id,
+        tuple({"expected_product_id": cell.expected_product_id} for cell in planogram.cells),
+    )
     return planogram
