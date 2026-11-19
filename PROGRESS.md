@@ -958,3 +958,19 @@ HEAD de código validado: `c43b420d2e836daab53f2db5db6a3ddb2dea98f8`.
 - Docker Compose [44551987356](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44551987356): stack de demonstração aprovada.
 - As falhas iniciais foram de fixtures: classe de catálogo não elegível, fixture de sessão do embedder a reutilizar contrato do detector e caixa de SKU esperado com sobreposição abaixo do limiar. Os fixtures foram corrigidos e a nova execução passou.
 - Os dois checks Vercel continuam a reportar `build-rate-limit` (limite de builds da conta), não uma falha de compilação do frontend; o build Web do Quality Gates passou.
+
+## Visão computacional — evidência positiva para espaços vazios (2026-11-19)
+
+A quarta sequência corrige uma ambiguidade de negócio importante no comparador geométrico: ausência de deteções não prova que a célula está vazia.
+
+- `compare_detections_to_cells` separa deteções `empty_facing` das deteções de produto.
+- `EMPTY` exige uma deteção positiva `empty_facing`, confiança >= 0,80 (configurável), sobreposição geométrica mínima e célula marcada como visível e não ocluída.
+- Sem deteções, com confiança insuficiente ou com a célula ocluída/fora de vista, o estado é `UNKNOWN`.
+- Evidência simultânea de produto e vazio na mesma célula gera `CONFLICT`, sem resolução silenciosa.
+- Os resultados preservam índices de deteção, IDs de produto e sobreposição máxima para auditoria/revisão.
+- Testes acrescentados para vazio positivo, threshold, oclusão, ausência de deteção, conflito e scores inválidos.
+- API CI [44553140735](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44553140735): PostgreSQL 16 e suite API aprovados; **1311 passed, 1 skipped, 1 warning**.
+- Quality Gates [44553235687](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44553235687): testes API, compilação Python e build Web aprovados.
+- Docker Compose [44553140813](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44553140813): stack de demonstração aprovada.
+
+**Limites:** o comparador continua puro e não está ligado ao worker/API. As células têm de vir de calibração ou planograma externo; não há ainda persistência nem calibração real do threshold. O estado `EMPTY` é evidência visual da célula, não stock contabilístico.
