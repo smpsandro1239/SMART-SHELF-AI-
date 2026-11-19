@@ -408,8 +408,8 @@ def upgrade() -> None:
             CREATE TRIGGER trg_shelf_planogram_cell_delete_guard_0067
             BEFORE DELETE ON shelf_planogram_cells
             BEGIN
-                SELECT CASE WHEN NOT EXISTS (
-                    SELECT 1 FROM shelf_planograms WHERE id = OLD.planogram_id AND status = 'DRAFT'
+                SELECT CASE WHEN EXISTS (
+                    SELECT 1 FROM shelf_planograms WHERE id = OLD.planogram_id AND status <> 'DRAFT'
                 ) THEN RAISE(ABORT, 'only DRAFT planograms can change cells') END;
             END
         """)
