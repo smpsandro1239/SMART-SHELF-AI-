@@ -1088,3 +1088,13 @@ O teste de concorrência confirma a serialização edição/ativação no servi�
 - O teste HTTP de proveniência confirma que chamadas repetidas para a mesma evidência produzem o mesmo digest.
 - O digest é um identificador reproduzível, não uma assinatura digital. A comparação continua on-demand e não persistida.
 - A validação CI do novo contrato está pendente.
+
+
+## 2026-11-19 — Serialização da comparação de planogramas com retenção
+
+- Identificada uma janela de concorrência: o endpoint verificava a retenção da captura sem bloquear a linha da imagem e só depois carregava o planograma ativo.
+- Criado `load_active_planogram_for_comparison`: bloqueia captura e calibração em ordem crescente de ID, valida ACTIVE/COMPLETED, bloqueia a prateleira e o planograma, e revalida a identidade da versão ativa.
+- Alterações concorrentes de versão devolvem HTTP 409; capturas restringidas continuam a devolver HTTP 404.
+- O smoke PostgreSQL mantém uma comparação aberta enquanto outra sessão tenta restringir a captura; a restrição deve esperar e a consulta posterior deve falhar.
+- A comparação permanece read-only, não persistida e sem efeitos no inventário.
+- Validação CI desta alteração pendente.
