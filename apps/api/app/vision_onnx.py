@@ -9,6 +9,7 @@ The detector must export post-NMS boxes. Raw YOLO head tensors are not accepted.
 """
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 
@@ -55,6 +56,7 @@ class ONNXShelfVisionProvider:
         confidence_threshold: float = 0.25,
         max_detections: int = 300,
         providers: list[str] | None = None,
+        class_labels: dict[int, str] | None = None,
     ):
         self.detector_path = Path(detector_path)
         self.embedding_path = Path(embedding_path) if embedding_path else None
@@ -67,6 +69,16 @@ class ONNXShelfVisionProvider:
             raise ONNXConfigurationError("VISION_DETECTOR_MODEL_PATH does not point to a file")
         if self.embedding_path and not self.embedding_path.is_file():
             raise ONNXConfigurationError("VISION_EMBEDDING_MODEL_PATH does not point to a file")
+        if not isinstance(class_labels, dict) or not class_labels:
+            raise ONNXConfigurationError("VISION_CLASS_LABELS_JSON must define at least one class")
+        normalized_labels = {}
+        for class_id, label in class_labels.items():
+            if isinstance(class_id, bool) or not isinstance(class_id, int) or class_id < 0:
+                raise ONNXConfigurationError("Class IDs must be non-negative integers")
+            if not isinstance(label, str) or not label.strip() or len(label.strip()) > 120:
+                raise ONNXConfigurationError("Class labels must be non-empty strings of at most 120 characters")
+            normalized_labels[class_id] = label.strip()
+        self.class_labels = normalized_labels
         try:
             import onnxruntime as ort
             import numpy as np
@@ -132,11 +144,18 @@ class ONNXShelfVisionProvider:
         _, _, scale, pad_x, pad_y = transform
         detections = []
         for row in values:
-            x1, y1, x2, y2, score, _class_id = map(float, row)
-            if not all(np.isfinite(v) for v in (x1, y1, x2, y2, score)):
-                continue
+            x1, y1, x2, y2, score, raw_class_id = map(float, row)
+            if not all(np.isfinite(v) for v in (x1, y1, x2, y2, score, raw_class_id)):
+                raise ValueError("Detector output contains non-finite values")
+            if raw_class_id < 0 or not raw_class_id.is_integer():
+                raise ValueError("Detector class_id must be a non-negative integer")
+            if not 0 <= score <= 1:
+                raise ValueError("Detector confidence must be between 0 and 1")
             if score < self.confidence_threshold:
                 continue
+            if not all(0 <= coordinate <= 1 for coordinate in (x1, y1, x2, y2)):
+                raise ValueError("Detector coordinates must be normalized to [0, 1]")
+            class_id = int(raw_class_id)
             # Coordinates are normalized against the square model input.
             x1 = (x1 * self.input_size - pad_x) / scale
             x2 = (x2 * self.input_size - pad_x) / scale
@@ -146,7 +165,7 @@ class ONNXShelfVisionProvider:
             y1, y2 = max(0.0, min(height, y1)), max(0.0, min(height, y2))
             if x2 <= x1 or y2 <= y1:
                 continue
-            detections.append((score, x1 / width, y1 / height, x2 / width, y2 / height))
+            detections.append((score, class_id, x1 / width, y1 / height, x2 / width, y2 / height))
         detections.sort(key=lambda item: item[0], reverse=True)
         return detections[: self.max_detections]
 
@@ -180,11 +199,14 @@ class ONNXShelfVisionProvider:
         )[0]
         boxes = self._decode(raw, image.size, transform)
         detections = []
-        for score, x1, y1, x2, y2 in boxes:
+        for score, class_id, x1, y1, x2, y2 in boxes:
+            label = self.class_labels.get(class_id)
+            if label is None:
+                raise ValueError(f"Detector returned unknown class_id: {class_id}")
             box = (score, x1, y1, x2, y2)
             embedding = self._embedding(image, box)
             detections.append(DetectionResult(
-                label="product",
+                label=label,
                 confidence=score,
                 x_min=x1,
                 y_min=y1,
@@ -201,6 +223,20 @@ def create_provider() -> ONNXShelfVisionProvider:
     detector = os.getenv("VISION_DETECTOR_MODEL_PATH", "").strip()
     embedder = os.getenv("VISION_EMBEDDING_MODEL_PATH", "").strip() or None
     version = os.getenv("VISION_MODEL_VERSION", "shelf-onnx-v1").strip()
+    labels_raw = os.getenv("VISION_CLASS_LABELS_JSON", "").strip()
+    if not labels_raw:
+        raise ONNXConfigurationError("VISION_CLASS_LABELS_JSON is required for a real ONNX detector")
+    try:
+        labels_payload = json.loads(labels_raw)
+        if not isinstance(labels_payload, dict):
+            raise ValueError("class labels must be a JSON object")
+        class_labels = {}
+        for raw_id, label in labels_payload.items():
+            if not isinstance(raw_id, str) or not raw_id.isdecimal():
+                raise ValueError("class label keys must be non-negative integer strings")
+            class_labels[int(raw_id)] = label
+    except (TypeError, ValueError, json.JSONDecodeError) as exc:
+        raise ONNXConfigurationError("VISION_CLASS_LABELS_JSON must be a JSON object mapping class IDs to labels") from exc
     embedding_version = os.getenv("VISION_EMBEDDING_MODEL_VERSION", "shelf-embedding-v1").strip()
     if not detector:
         raise ONNXConfigurationError("VISION_DETECTOR_MODEL_PATH is required")
@@ -216,4 +252,5 @@ def create_provider() -> ONNXShelfVisionProvider:
         input_size=_env_int("VISION_INPUT_SIZE", 640, 32, 4096),
         confidence_threshold=_env_float("VISION_CONFIDENCE_THRESHOLD", 0.25),
         max_detections=_env_int("VISION_MAX_DETECTIONS", 300, 1, 2000),
+        class_labels=class_labels,
     )
