@@ -7,7 +7,7 @@
 - Testes acrescentados para dry-run, aplicação, staging sem publicação e digest divergente.
 - Commit de código: `8418fe44d927f6dec9768f4ca986c78fcd253eda`. Quality Gates `44484598129` passou (suite API, compilação Python, TypeScript e build Web); Docker Compose `44484598370` passou. API CI [44484598295](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44484598295) passou, incluindo smokes PostgreSQL e suite API.
 - Não foram executados testes localmente. A validação até agora provém de GitHub Actions.
-- Próxima tarefa: smoke PostgreSQL que observe revogação durante a preparação sem bloqueio; depois rever permissões/ownership separados entre API e worker antes de expandir a limpeza a staging de jobs falhados.
+- Próxima tarefa: rever permissões/ownership separados entre API e worker; só depois expandir a limpeza a staging de jobs falhados/revogados, sem assumir que processos antigos deixaram de escrever.
 
 ## 2026-11-19 — Redução da janela de locks na publicação de outputs
 
@@ -18,7 +18,7 @@
 - Novo teste: a preparação confirma que a sessão DB não mantém transacção; revoga a credencial durante a cópia e confirma que a revalidação final recusa a publicação, sem artefacto publicado nem linha de auditoria.
 - Commit de código: `5767468ad8058a593474695b2cb0dee9ef3118e7`; commit documental: `5e84a0cec8cc15ca829aa6eda1694d8013819858`.
 - API CI [44483199562](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44483199562) passou, incluindo migration PostgreSQL, smoke de publicação concorrente e suite API. Docker Compose [44483199541](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44483199541) passou. Quality Gates [44483436546](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44483436546) passou com compilação Python, suite API, TypeScript e build Web.
-- Não foram executados testes localmente; a evidência é exclusivamente GitHub Actions. O smoke PostgreSQL actual não força ainda a revogação durante a fase de cópia; essa corrida está coberta por teste SQLite e fica como reforço pendente.
+- Não foram executados testes localmente; a evidência é exclusivamente GitHub Actions. O smoke PostgreSQL `postgres_dataset_job_output_publication_smoke.py` foi reforçado: pausa a preparação numa thread, revoga a credencial numa segunda sessão e exige que a revogação confirme antes de libertar a preparação; a publicação tem de ser recusada depois. API CI [44485569053](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44485569053) passou.
 - Próxima tarefa: desenhar reconciliador idempotente de temporários/staging órfãos com período de segurança e provas de fencing/auditoria; depois integrar outputs no catálogo com herança de retenção/legal hold.
 
 ## 2026-11-18 — Gate de aprovação obrigatório na execução de datasets

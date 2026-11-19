@@ -19,7 +19,7 @@
 - [x] API CI [44483199562](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44483199562) passou no commit de código `5767468ad8058a593474695b2cb0dee9ef3118e7`, incluindo migrations PostgreSQL, smoke de publicação concorrente/fencing/auditoria e suite API.
 - [x] Quality Gates [44483436546](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44483436546) passou no commit documental `5e84a0cec8cc15ca829aa6eda1694d8013819858`: compilação Python, suite API, TypeScript e build Web de produção.
 - [x] Docker Compose [44483199541](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44483199541) passou no commit de código: build, arranque, readiness, seed e worker demonstrativo.
-- [ ] Acrescentar smoke PostgreSQL específico que prove que a revogação de uma credencial consegue confirmar enquanto a preparação/cópia do output está pausada; a regressão actual valida esta janela em SQLite e o smoke PostgreSQL actual valida publicação concorrente.
+- [x] Smoke PostgreSQL dedicado integrado em `postgres_dataset_job_output_publication_smoke.py`: a revogação confirma numa segunda sessão enquanto a preparação está pausada; depois, a revalidação final recusa a publicação. API CI [44485569053](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44485569053) passou.
 - [ ] Acrescentar reconciliação periódica e limpeza segura de temporários/staging órfãos; não apagar automaticamente ficheiros sem confirmar job, token, digest e registo de publicação.
 
 ## Gestão HTTP de integrações externas — percurso ADMIN e isolamento de loja (2026-11-18)

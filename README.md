@@ -1523,7 +1523,7 @@ A promoção é idempotente: se o ficheiro final existir devido a uma interrupç
 
 A leitura/cópia/hash do output decorre agora fora dos locks PostgreSQL. A fase final volta a validar job, evento terminal, worker, credencial, revogação, validade, scope e fencing token sob locks; só depois executa o hard link no-clobber e regista a publicação append-only. A remoção do staging ocorre após o commit. A regressão revoga a credencial durante a preparação e confirma a recusa na revalidação final.
 
-**Validação:** API CI [44483199562](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44483199562), Quality Gates [44483436546](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44483436546) e Docker Compose [44483199541](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44483199541) passaram. Não foram executados testes localmente. O smoke PostgreSQL actual confirma publicação concorrente; a corrida específica de revogação durante a cópia ainda não tem smoke PostgreSQL dedicado.
+**Validação:** API CI [44483199562](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44483199562), Quality Gates [44483436546](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44483436546) e Docker Compose [44483199541](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44483199541) passaram. Não foram executados testes localmente. O smoke PostgreSQL [44485569053](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44485569053) confirma também que a revogação da credencial consegue fazer commit enquanto a preparação está pausada e que a publicação é recusada na revalidação final.
 
 ### Reconciliação conservadora de outputs — 2026-11-19
 
