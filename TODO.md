@@ -823,3 +823,14 @@ Critério global: nenhuma capacidade pode ser marcada como concluída sem códig
 - [x] Validar a terceira sequência em CI no HEAD `c43b420d2e836daab53f2db5db6a3ddb2dea98f8`: 1307 testes aprovados, 1 ignorado e 1 aviso; Quality Gates, API CI/PostgreSQL 16 e Docker Compose aprovados.
 - [ ] Ligar deteções `empty_facing` a células calibradas e à evidência de visibilidade, sem as confundir com ausência de captura ou oclusão.
 - [ ] Construir matriz de classes/SKU por modelo aprovado e validar com dataset real anotado.
+### Quarta sequência — evidência positiva para espaços vazios (2026-11-19)
+
+- [x] Reconhecer `empty_facing` como evidência semântica separada de deteções de produto.
+- [x] Exigir confiança mínima configurável (0,80 por omissão), intersecção geométrica suficiente e célula explicitamente visível/não ocluída para devolver `EMPTY`.
+- [x] Tratar ausência de deteções e confiança insuficiente como `UNKNOWN`, nunca como prova de vazio.
+- [x] Devolver `CONFLICT` quando a mesma célula recebe simultaneamente deteção de produto e evidência de vazio.
+- [x] Preservar índices das deteções, SKU observados e sobreposição geométrica nos resultados.
+- [x] Acrescentar testes para vazio positivo, confiança baixa, oclusão, ausência de deteção, conflito e confidence inválida.
+- [x] Validar no HEAD de implementação `ad76a03964521bbcab61166d1245986a8a6c577c`: API CI **1311 passed, 1 skipped, 1 warning**; Quality Gates e Docker Compose aprovados.
+- [ ] Integrar o comparador no worker com células/planogramas persistidos e origem de calibração auditável; manter a integração desactivada até existir esse contrato.
+- [ ] Calibrar o threshold por classe/câmara com dataset real anotado; 0,80 é apenas um default conservador, não uma métrica validada.
