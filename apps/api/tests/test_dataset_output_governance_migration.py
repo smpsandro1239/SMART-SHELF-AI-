@@ -35,9 +35,11 @@ def test_output_governance_migration_enforces_sequence_state_and_append_only(tmp
         db.exec_driver_sql(insert, (10,1,"RESTRICTION_APPLIED",1,"incident confirmed",None,None,"{}",now))
         with pytest.raises(IntegrityError, match="already active"):
             db.exec_driver_sql(insert, (10,2,"RESTRICTION_APPLIED",1,"duplicate",None,None,"{}",now))
-        db.exec_driver_sql(insert, (10,2,"LEGAL_HOLD_APPLIED",1,"preserve evidence",None,None,"{}",now))
         with pytest.raises(IntegrityError, match="not active"):
-            db.exec_driver_sql(insert, (10,3,"LEGAL_HOLD_RELEASED",1,"invalid release",None,None,"{}",now))
+            db.exec_driver_sql(insert, (10,2,"LEGAL_HOLD_RELEASED",1,"invalid release",None,None,"{}",now))
+        db.exec_driver_sql(insert, (10,2,"LEGAL_HOLD_APPLIED",1,"preserve evidence",None,None,"{}",now))
+        with pytest.raises(IntegrityError, match="already active"):
+            db.exec_driver_sql(insert, (10,3,"LEGAL_HOLD_APPLIED",1,"duplicate hold",None,None,"{}",now))
         db.exec_driver_sql(insert, (10,3,"RESTRICTION_RELEASED",1,"review completed",None,None,"{}",now))
         db.exec_driver_sql(insert, (10,4,"LEGAL_HOLD_RELEASED",1,"hold cleared",None,None,"{}",now))
         with pytest.raises(IntegrityError, match="consecutive"):
