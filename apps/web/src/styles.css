@@ -317,3 +317,35 @@
   .mobile-nav-item{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:42px;flex:0 0 auto;padding:9px 12px;border:1px solid #d5dee7;border-radius:9px;background:#fff;color:#24394e;font-size:12px;font-weight:700;white-space:nowrap}
   .mobile-nav-item:active{background:#eaf2f8}
 }
+
+
+/* Read-only planogram comparison */
+.planogram-panel{margin-top:18px}
+.planogram-controls{display:grid;grid-template-columns:minmax(180px,1fr) minmax(220px,1.3fr) auto;align-items:end;gap:12px;margin-top:18px}
+.planogram-controls label{display:grid;gap:7px;color:#536477;font-size:10px;font-weight:700}
+.planogram-controls select{width:100%;min-width:0;border:1px solid #dfe6ed;border-radius:8px;padding:10px;background:#fff;color:#304255;font-size:11px}
+.planogram-controls button{min-height:36px}
+.planogram-hint,.planogram-provenance{font-size:10px;color:#8290a0;line-height:1.6}
+.planogram-error{margin-top:13px}
+.planogram-results{margin-top:18px;border-top:1px solid #edf0f3;padding-top:15px}
+.planogram-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px}
+.planogram-summary>div{display:grid;gap:5px;padding:11px;border:1px solid #e8edf2;border-radius:8px;background:#fafbfd;min-width:0}
+.planogram-summary span,.planogram-cell-metrics span,.planogram-overlap span{font-size:9px;color:#8290a0}
+.planogram-summary strong{font-size:12px;color:#304256;overflow-wrap:anywhere}
+.planogram-provenance{overflow-wrap:anywhere}
+.planogram-cell-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+.planogram-cell{border:1px solid #e8edf2;border-radius:9px;padding:12px;min-width:0}
+.planogram-cell-heading{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.planogram-cell-heading>strong{font-size:12px;color:#304256}
+.planogram-status{display:inline-flex;align-items:center;gap:4px;padding:5px 7px;border-radius:6px;background:#f0f3f6;color:#68798a;font-size:9px}
+.planogram-status.occupied{background:#e8f5ee;color:#237b57}
+.planogram-status.under_faced,.planogram-status.over_faced{background:#fff5df;color:#9a7128}
+.planogram-status.conflict,.planogram-status.misplaced{background:#fff0ed;color:#b44839}
+.planogram-cell-metrics{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:12px}
+.planogram-cell-metrics strong{color:#42566a;overflow-wrap:anywhere}
+.planogram-overlap{display:flex;justify-content:space-between;gap:10px;border-top:1px solid #edf0f3;margin-top:10px;padding-top:9px;font-size:9px}
+.planogram-overlap strong{font-size:10px;color:#42566a}
+.planogram-caveat{display:flex;align-items:flex-start;gap:7px;margin:14px 0 0;padding:10px;border-radius:8px;background:#f5f7fa;color:#6e7d8d;font-size:9px;line-height:1.5}
+.planogram-caveat svg{flex-shrink:0}
+@media(max-width:900px){.planogram-controls{grid-template-columns:1fr 1fr}.planogram-controls button{grid-column:1/-1;justify-content:center}}
+@media(max-width:600px){.planogram-controls,.planogram-cell-list{grid-template-columns:1fr}.planogram-controls button{grid-column:auto}.planogram-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.planogram-cell-metrics{grid-template-columns:1fr}}
