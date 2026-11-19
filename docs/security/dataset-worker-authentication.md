@@ -139,3 +139,16 @@ As operações claim/heartbeat/complete/fail também revalidam o worker e a cred
 **Validação:** API CI [44473560217](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44473560217), Quality Gates [44473560287](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44473560287) e Docker Compose [44473560252](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44473560252); suite API: 1223 passed, 1 skipped, 1 warning.
 
 **Limites:** o serviço ainda não está ligado a uma rota HTTP de jobs. A publicação de outputs com fencing (`outputs:publish`), broker e worker remoto permanecem pendentes.
+
+
+## Promoção de outputs com scope `outputs:publish` — migration 0063
+
+A publicação é uma operação distinta da conclusão do job. O worker conclui primeiro o job sob lease e fencing token actuais; o evento terminal `SUCCEEDED` fixa worker, token e digest. O promotor `app.dataset_job_output_publications.promote_dataset_job_output` só aceita esse mesmo worker/token, um job `SUCCEEDED` e uma credencial ainda activa com scope persistido `outputs:publish`. Não confia apenas nos scopes transportados pelo principal HTTP.
+
+O caminho de staging é limitado a `staging/{job_id}/{fencing_token}/...`. O serviço rejeita traversal e symlinks, verifica tamanho e SHA-256 e publica para um destino determinístico sem sobrescrita. A tabela `dataset_execution_job_output_publications` regista worker, credencial, token, digest e referências; triggers PostgreSQL/SQLite validam o evento terminal e tornam a auditoria append-only.
+
+A operação é idempotente perante uma interrupção entre filesystem e transacção SQL: se o destino já existir, o serviço verifica novamente o digest e pode concluir o registo de auditoria. O staging é removido após a publicação bem-sucedida.
+
+**Validação:** API CI [44480661837](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44480661837), com migration PostgreSQL 16, smoke concorrente e 1231 testes aprovados, 1 ignorado e 1 aviso; Quality Gates [44480661851](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44480661851) e Docker Compose [44480661813](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44480661813) passaram.
+
+**Limites:** não há endpoint HTTP que exponha a promoção, nem worker remoto/broker. A publicação usa filesystem local; o catálogo de artefactos derivados e a herança de retenção/legal hold ainda não estão integrados. A limpeza automática de temporários órfãos após crash abrupto continua pendente.

@@ -1503,3 +1503,18 @@ As operações de claim, heartbeat, complete e fail também revalidam worker, cr
 - Docker Compose [44473560252](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44473560252): stack, readiness, seed e worker demonstrativo passaram.
 
 **Limites:** o serviço de leitura está implementado, mas não existe ainda uma rota HTTP de jobs que o exponha. A publicação de outputs com fencing (`outputs:publish`), broker e worker remoto continuam pendentes; a execução assíncrona não deve ser considerada operacional.
+
+## 2026-11-19 — Promoção de outputs de datasets com fencing (migration 0063)
+
+A migration `0063_dataset_job_output_publications` e o modelo `DatasetExecutionJobOutputPublication` registam a publicação de um output por job, com worker, credencial, fencing token, SHA-256, referência de staging/destino, tamanho e timestamp. A auditoria é append-only. Triggers PostgreSQL/SQLite recusam publicações que não correspondam a um job `SUCCEEDED`, ao evento terminal do worker/token correctos, ao digest e à credencial activa com `outputs:publish`.
+
+O serviço `app.dataset_job_output_publications.promote_dataset_job_output` é uma fronteira interna, não um endpoint. Exige principal autenticado, token actual, evento terminal compatível e credencial activa. A referência de staging tem de estar dentro de `staging/{job_id}/{fencing_token}/`; traversal, caminhos não canónicos e symlinks são rejeitados através de descritores de directório e `O_NOFOLLOW`. O ficheiro é copiado para um temporário privado, verificado por tamanho e SHA-256 e publicado com hard link atómico sem sobrescrita. O destino determinístico é `published/{job_id}/{fencing_token}-{sha256}.artifact`.
+
+A promoção é idempotente: se o ficheiro final existir devido a uma interrupção entre filesystem e commit SQL, uma repetição volta a verificar o digest e conclui o registo de auditoria. O staging é removido após a promoção bem-sucedida. A configuração introduz `DATASET_OUTPUT_STORAGE_PATH` e `MAX_DATASET_OUTPUT_BYTES` (predefinição de 2 GiB).
+
+**Validação concluída no commit `46006afcc5167e04f77037f985e65981a78248e3`:**
+- API CI [44480661837](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44480661837): migration PostgreSQL 16, smoke de publicação concorrente/fencing/auditoria e **1231 testes aprovados, 1 ignorado e 1 aviso**.
+- Quality Gates [44480661851](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44480661851): compilação Python, suite API e build TypeScript/produção Web passaram.
+- Docker Compose [44480661813](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44480661813): stack, readiness, seed e worker demonstrativo passaram.
+
+**Limites:** a publicação usa filesystem local configurado; não existe ainda adapter para object storage nem catálogo de artefactos derivados com herança de retenção/legal hold. A limpeza automática de temporários órfãos após crash abrupto continua pendente. Não existem rotas HTTP de jobs, broker ou worker remoto de treino; por isso, a execução assíncrona continua não operacional e não deve ser apresentada como funcionalidade disponível.

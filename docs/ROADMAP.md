@@ -474,3 +474,14 @@ A tabela `dataset_execution_job_artifact_reads` regista cada leitura bem-sucedid
 **Validação concluída no commit `c6b00478514812e094b960f5fefe4b6380b0fb9a`:** API CI [44473560217](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44473560217), Quality Gates [44473560287](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44473560287) e Docker Compose [44473560252](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44473560252) passaram; suite API com **1223 testes aprovados, 1 ignorado e 1 aviso**.
 
 **Próxima fronteira P0:** implementar `outputs:publish` com validação do estado `SUCCEEDED`, digest e fencing token actual, protocolo de staging/publicação recuperável e compensação de ficheiros órfãos. Só depois integrar broker e worker remoto. O serviço de leitura existe, mas não está ainda exposto por endpoint HTTP; a execução assíncrona continua não operacional.
+
+
+## 2026-11-19 — Promoção de outputs de datasets com fencing
+
+A migration `0063_dataset_job_output_publications` e o serviço `app.dataset_job_output_publications.promote_dataset_job_output` implementam a promoção interna de outputs concluídos. A operação valida o estado `SUCCEEDED`, o fencing token actual, o evento terminal do worker, o digest do output e a credencial activa com `outputs:publish`. A referência de staging é limitada ao job/token, os caminhos são abertos sem seguir symlinks, o conteúdo é copiado para temporário privado e verificado por tamanho/SHA-256, e o destino é publicado com hard link atómico sem sobrescrita.
+
+A tabela de publicação é append-only e as triggers PostgreSQL/SQLite impedem inserções que não correspondam ao evento terminal e à autorização persistida. A referência final é determinística e content-addressed. Uma repetição após a promoção filesystem mas antes do commit SQL valida o destino existente e reconcilia a auditoria.
+
+**Validação concluída no commit `46006afcc5167e04f77037f985e65981a78248e3`:** API CI [44480661837](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44480661837) passou com PostgreSQL 16, smoke concorrente e **1231 testes aprovados, 1 ignorado e 1 aviso**; Quality Gates [44480661851](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44480661851) e Docker Compose [44480661813](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44480661813) também passaram.
+
+**Riscos e próximas prioridades P0/P1:** automatizar limpeza/reconciliação de temporários órfãos após crash; integrar outputs no catálogo de artefactos derivados e propagar retenção/legal hold; separar permissões filesystem entre staging e publicação para o futuro worker; só depois criar handlers HTTP internos, broker e worker remoto. Não expor endpoints nem declarar execução assíncrona operacional enquanto estes elementos não estiverem concluídos.

@@ -2,7 +2,7 @@
 
 ## Estado
 
-Contrato parcialmente implementado nas migrations `0056_dataset_execution_job_leases`, `0057_dataset_execution_fencing_guards` e `0058_dataset_execution_state_machine`, com modelos SQLAlchemy, serviço transaccional de leases, testes SQLite e smoke PostgreSQL. **Ainda não existe broker, worker de treino/inferência remoto nem promotor de outputs.** O processo de treino suportado continua a ser o consumidor local síncrono de `app.dataset_execution`.
+Contrato implementado até à promoção fenced de outputs nas migrations `0056`–`0063`: persistência de jobs, fencing, identidade de workers, pedidos assinados/anti-replay, leitura autorizada de fontes e serviço interno de publicação. **Ainda não existe broker, worker de treino/inferência remoto nem rotas HTTP de jobs.** O processo de treino suportado continua a ser o consumidor local síncrono de `app.dataset_execution`; a execução assíncrona não é operacional.
 
 ## Modelo de ameaça
 
@@ -187,3 +187,16 @@ Cada leitura cria um registo append-only em `dataset_execution_job_artifact_read
 As operações de claim, heartbeat, complete e fail também voltam a validar worker, credencial e scopes na operação. Validação final no API CI [44473560217](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44473560217), Quality Gates [44473560287](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44473560287) e Docker Compose [44473560252](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44473560252); 1223 testes aprovados, 1 ignorado e 1 aviso.
 
 O serviço não está ainda exposto por endpoint HTTP. Promoção de outputs com fencing, broker e worker remoto continuam por implementar.
+
+
+## Promoção de outputs — migration 0063
+
+A migration `0063_dataset_job_output_publications` cria uma tabela append-only por job, ligada ao worker e à credencial que publicam. O registo fixa fencing token, SHA-256, referência de staging, destino final, número de bytes e timestamp. Triggers PostgreSQL/SQLite validam o job `SUCCEEDED`, o digest e a referência persistidos, o fencing token actual, o evento terminal `SUCCEEDED` do mesmo worker/token e a credencial activa com `outputs:publish`. UPDATE e DELETE são rejeitados.
+
+O serviço `app.dataset_job_output_publications.promote_dataset_job_output` não aceita `worker_id` separado: deriva a identidade do principal autenticado. Revalida a credencial e o scope persistido dentro da transacção. A referência de staging tem de começar por `staging/{job_id}/{fencing_token}/`; caminhos não canónicos, traversal e symlinks são recusados.
+
+O ficheiro é aberto por descritores de directório com `O_NOFOLLOW`, copiado para um temporário privado e verificado por tamanho e SHA-256. A publicação usa hard link atómico sem sobrescrita para `published/{job_id}/{fencing_token}-{sha256}.artifact`. A referência final é determinística. Se o processo terminar depois da criação do destino mas antes do commit SQL, uma repetição verifica o digest do destino e conclui o registo de auditoria. A remoção do staging ocorre após a promoção bem-sucedida.
+
+**Validação:** API CI [44480661837](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44480661837) — migration PostgreSQL 16, smoke de duas sessões concorrentes e **1231 passed, 1 skipped, 1 warning**; Quality Gates [44480661851](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44480661851) e Docker Compose [44480661813](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44480661813) passaram.
+
+**Limitações:** filesystem local apenas; não existe adapter de object storage, catálogo de outputs com herança de retenção/legal hold, limpeza automática de temporários órfãos após crash, endpoint HTTP de jobs, broker ou worker remoto. A cópia e promoção continuam limitadas pelo `MAX_DATASET_OUTPUT_BYTES` e devem ser monitorizadas antes de workloads grandes.

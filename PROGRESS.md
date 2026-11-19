@@ -762,3 +762,15 @@ Commit validado: `1e3499c8c80ef75494a29d06807469898471e4e1`.
 - **Smoke PostgreSQL:** confirmou leitura bem-sucedida e auditada; uma restrição concorrente ficou bloqueada pelo lock de origem e, após commit, a leitura seguinte foi recusada sem novo registo de sucesso. O smoke também confirmou que UPDATE/DELETE da auditoria são rejeitados.
 - **Validação:** API CI [44473560217](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44473560217), Quality Gates [44473560287](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44473560287) e Docker Compose [44473560252](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44473560252) passaram; suite API: **1223 passed, 1 skipped, 1 warning**.
 - **Limites:** serviço de leitura disponível internamente, mas sem endpoint HTTP montado; promoção de outputs, broker e worker remoto continuam pendentes.
+
+
+## 2026-11-19 — Promoção de outputs com fencing e auditoria
+
+- **Migration/modelo:** `0063_dataset_job_output_publications` e `DatasetExecutionJobOutputPublication`, com FKs, checks, unicidade por job/destino e auditoria append-only.
+- **Autorização:** `promote_dataset_job_output` exige job `SUCCEEDED`, token actual, evento terminal do mesmo worker/token/digest e credencial activa com scope persistido `outputs:publish`.
+- **Filesystem:** staging limitado a `staging/{job_id}/{fencing_token}/`; rejeita traversal e symlinks; copia para temporário privado, confirma tamanho/SHA-256 e publica por hard link atómico sem sobrescrita para destino determinístico.
+- **Recuperação:** se o destino foi criado mas o commit SQL não ficou registado, uma nova chamada verifica o digest e completa a auditoria. A limpeza automática de temporários órfãos após crash abrupto continua pendente.
+- **Auditoria SQL:** triggers PostgreSQL/SQLite validam o evento terminal, job, token, digest, worker, credencial e scope; UPDATE/DELETE são rejeitados.
+- **Testes:** testes de serviço e migration SQLite; smoke PostgreSQL com duas sessões concorrentes, publicação idempotente, rejeição de token forjado e imutabilidade da auditoria.
+- **Validação final:** commit `46006afcc5167e04f77037f985e65981a78248e3`; API CI [44480661837](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44480661837) — **1231 passed, 1 skipped, 1 warning** e smokes PostgreSQL 16 aprovados; Quality Gates [44480661851](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44480661851) e Docker Compose [44480661813](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44480661813) passaram.
+- **Limites:** filesystem local apenas; sem object storage, catálogo de outputs/retention, endpoint HTTP de jobs, broker ou worker remoto. A execução assíncrona continua não operacional.
