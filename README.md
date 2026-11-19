@@ -1449,3 +1449,8 @@ O claim inicial, heartbeat e takeover continuam sujeitos às regras de lease/fen
 **Validação da migration 0058:** API CI [44421831066](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44421831066) passou com migration PostgreSQL 16, smoke de fencing/estado e **1179 testes aprovados, 1 ignorado e 1 aviso**; Quality Gates [44421831076](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44421831076) e Docker Compose [44421831148](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44421831148) também passaram. A protecção adicional contra INSERT terminal (migration 0059) foi acrescentada depois desta execução e ainda aguarda CI. Não existe ainda broker/worker, autenticação de workers, serviço de leitura de bytes por chamada nem promotor fenced de outputs.
 
 A migration 0059 também protege o INSERT: um job novo só pode entrar em `QUEUED`, com counters a zero e sem lease, output, falha ou timestamp terminal. A validação desta extensão aguarda o CI do commit seguinte.
+
+
+### Cobertura negativa do estado inicial dos jobs assíncronos — 19-11-2026
+
+A migration `0059_dataset_execution_initial_state` exige que cada job seja inserido em `QUEUED`, sem lease, contadores incrementados, output, referência staging, falha ou timestamp terminal. A cobertura de regressão foi expandida no teste SQLite e no smoke PostgreSQL para tentar cada um destes metadados forjados individualmente. Os testes foram acrescentados nos commits `0d7592b12a98ee11f16730591c30368637b30c32` e `f07d9d2fbc194dacd05e38a100c6937cde9da9f2`. **Estado: validação CI pendente**; não declarar esta extensão certificada até a migration, o smoke PostgreSQL, a suite API, Quality Gates e Docker Compose passarem.
