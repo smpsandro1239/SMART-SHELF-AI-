@@ -882,7 +882,7 @@ Critério global: nenhuma capacidade pode ser marcada como concluída sem códig
 - [x] Manter a comparação read-only: não cria observações, tarefas nem movimentos e não altera inventário.
 - [x] Falhar de forma conservadora: sem calibração de visibilidade por captura, ausência de deteções e `empty_facing` não podem produzir `EMPTY`.
 - [x] Acrescentar testes HTTP para facings inferiores, proveniência, não inferência de vazio, imagem ainda pendente, perfil EMPLOYEE e isolamento multi-loja.
-- [ ] Confirmar API CI, Quality Gates e Docker Compose no HEAD desta sequência.
+- [x] Validar no código `4f3c9a9083b5ab2187a918927b48770ce2813cbf`: API CI [44563920216](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44563920216) passou com **1337 passed, 1 skipped, 1 warning**, incluindo PostgreSQL 16 e smoke de planogramas; Quality Gates [44564178983](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44564178983) passou com os mesmos resultados, compilação Python e build TypeScript/produção Web; Docker Compose [44563920224](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44563920224) passou.
 - [ ] Integrar persistência auditável de resultados por imagem/modelo/versão e consumo no worker, com tratamento explícito de retenção da calibração.
 - [ ] Criar UI React de revisão visual e validação com dataset real anotado.
 
