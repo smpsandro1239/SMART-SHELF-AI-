@@ -603,7 +603,7 @@ Documento: `docs/architecture/dataset-output-artifact-governance.md`.
 - [x] Alargar o teste SQLite da migration 0064 para provar que uma única fonte inelegível bloqueia a publicação multi-origem, mesmo com outra fonte elegível.
 - [x] Alargar o smoke PostgreSQL 16 para publicar jobs com duas fontes e aplicar o legal hold concorrente à segunda origem durante a preparação.
 - [x] Validar os novos cenários, migration 0064, suite API, Quality Gates e Docker Compose no CI no commit `01abce944e7d883ea53aca17a09ac589701fdfc9`: API CI [44516774051](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44516774051), Quality Gates [44516774058](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44516774058) e Docker Compose [44516774048](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44516774048) passaram; **1241 passed, 1 skipped, 1 warning**.
-- [ ] Prosseguir com eventos append-only de governação ligados à publicação, sem alterar a linha canónica.
+- [x] Prosseguir com eventos append-only de governação ligados à publicação, sem alterar a linha canónica; implementação na migration 0065 e validação CI registada na secção seguinte.
 - [ ] Não activar disposição física até existir política aprovada de retenção, cobertura de cópias externas e aprovação independente.
 
 
