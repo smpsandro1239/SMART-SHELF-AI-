@@ -25,6 +25,7 @@ from app.dataset_worker_credentials import (
     DatasetWorkerPrincipal,
     authenticate_dataset_worker,
     issue_dataset_worker_credential,
+    revoke_dataset_worker_credential,
 )
 
 
@@ -195,6 +196,37 @@ def test_expired_lease_cannot_read_source_bytes(reader_setup):
     state["job"].lease_expires_at = models.utc_now() - timedelta(seconds=1)
     state["db"].commit()
     with pytest.raises(DatasetJobLeaseLost):
+        read_dataset_job_source_bytes(
+            state["db"], principal=state["principal"], job_id=state["job"].id,
+            fencing_token=state["claim"].fencing_token, shelf_image_id=state["image"].id,
+        )
+    assert state["db"].query(models.DatasetExecutionJobArtifactRead).count() == 0
+
+
+def test_credential_revoked_after_http_authentication_is_rechecked_before_read(reader_setup):
+    state = reader_setup
+    state["db"].commit()
+    with state["factory"]() as revoker:
+        assert revoke_dataset_worker_credential(
+            revoker, credential_id=state["principal"].credential_id
+        )
+    with pytest.raises(DatasetWorkerAuthorizationError):
+        read_dataset_job_source_bytes(
+            state["db"], principal=state["principal"], job_id=state["job"].id,
+            fencing_token=state["claim"].fencing_token, shelf_image_id=state["image"].id,
+        )
+    assert state["db"].query(models.DatasetExecutionJobArtifactRead).count() == 0
+
+
+def test_persisted_credential_scope_is_rechecked_not_trusted_from_principal(reader_setup):
+    state = reader_setup
+    state["db"].commit()
+    credential = state["db"].query(models.DatasetWorkerCredential).filter_by(
+        credential_id=state["principal"].credential_id
+    ).one()
+    credential.scopes = ["jobs:claim"]
+    state["db"].commit()
+    with pytest.raises(DatasetWorkerAuthorizationError):
         read_dataset_job_source_bytes(
             state["db"], principal=state["principal"], job_id=state["job"].id,
             fencing_token=state["claim"].fencing_token, shelf_image_id=state["image"].id,
