@@ -82,16 +82,19 @@ def main():
             )
             claim = claim_next_dataset_job(db, worker_id=f"pg-reader-{suffix}", lease_seconds=300)
             assert claim is not None and claim.id == job.id
+            job_id = job.id
+            fencing_token = claim.fencing_token
+            worker_id = f"pg-reader-{suffix}"
             principal = authenticate_dataset_worker(db, bearer_token=token)
             result = read_dataset_job_source_bytes(
-                db, principal=principal, job_id=job.id,
-                fencing_token=claim.fencing_token, shelf_image_id=image_id,
+                db, principal=principal, job_id=job_id,
+                fencing_token=fencing_token, shelf_image_id=image_id,
             )
             assert result == payload
 
         with SessionLocal() as db:
             audit = db.query(models.DatasetExecutionJobArtifactRead).filter_by(
-                job_id=job.id
+                job_id=job_id
             ).one()
             audit_id = audit.id
             assert audit.bytes_read == len(payload) and audit.source_image_sha256 == digest
@@ -122,8 +125,8 @@ def main():
                 reader_started.set()
                 try:
                     read_dataset_job_source_bytes(
-                        db, principal=principal, job_id=job.id,
-                        fencing_token=claim.fencing_token, shelf_image_id=image_id,
+                        db, principal=principal, job_id=job_id,
+                        fencing_token=fencing_token, shelf_image_id=image_id,
                     )
                     return "unexpectedly-allowed"
                 except DatasetJobSourceIneligible:
@@ -162,7 +165,7 @@ def main():
 
         with SessionLocal() as db:
             count = db.query(models.DatasetExecutionJobArtifactRead).filter_by(
-                job_id=job.id
+                job_id=job_id
             ).count()
             assert count == 1, f"restricted concurrent read created an audit row: {count}"
 
