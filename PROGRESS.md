@@ -909,3 +909,22 @@ Commit validado: `b2247031a7d651a4efdc423f83bf7947723e27ff`.
 - Depois de persistir uma restrição append-only, o mesmo caminho de consumo tem de lançar `DatasetJobOutputAccessDenied`.
 - Foi acrescentado teste SQLite de symlink no destino publicado: o link é rejeitado e o ficheiro externo permanece intacto.
 - A validação CI desta extensão fica pendente até à conclusão dos workflows do commit correspondente.
+
+
+## Visão computacional — primeira sequência técnica concluída (2026-11-19)
+
+HEAD validado: `69b9bba60a070933589d162ad9279ab4487c0a3b`.
+
+- O provider ONNX deixou de descartar `class_id`: exige `VISION_CLASS_LABELS_JSON`, valida IDs/labels e rejeita classes devolvidas pelo modelo que não constem do catálogo configurado.
+- Os contratos de input/output ONNX são verificados antes da inferência: float32, NCHW RGB, dimensão configurada, batch compatível, um input/output e seis valores por deteção pós-NMS.
+- O worker usa `VISION_PROVIDER_MODE=disabled|mock|real`; o mock só aceita a factory determinística de demonstração e é recusado em produção. O Compose declara explicitamente o modo mock.
+- `app.shelf_layout` ganhou `ShelfCell`, `ShelfCellObservation` e `compare_detections_to_cells`. Uma célula sem visibilidade calibrada começa em `UNKNOWN`; só uma célula explicitamente visível e não ocluída sem deteções pode ser `EMPTY`. O comparador não altera inventário.
+- Testes adicionados para classes, confiança, metadados ONNX, provider modes, ocupação, célula vazia, oclusão, desconhecido, deslocamento e proveniência das deteções.
+- API CI [44548878740](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44548878740): **1293 passed, 1 skipped, 1 warning**.
+- Quality Gates [44548878678](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44548878678): build TypeScript/produção Web e compilação/testes API aprovados.
+- Docker Compose [44548878709](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44548878709): stack de demonstração e verificações do worker aprovadas.
+- O aviso remanescente é a depreciação Starlette/AnyIO; mensagens ERROR observadas nos logs PostgreSQL pertencem a testes de restrições negativas e o workflow terminou com sucesso.
+
+**Limites:** não há pesos ONNX comerciais no repositório, dataset anotado nem benchmark de inferência real. As células são fornecidas por calibração/planograma revisto; ainda não há persistência, API nem integração no worker. O estado `EMPTY` é evidência visual local, nunca stock contabilístico.
+
+**Próxima sequência proposta:** reforçar identidade/proveniência do modelo (SHA-256 do detector e embedder, fingerprint do mapa de classes e versão de pré-processamento), endurecer validação de imagens/outputs, e ligar a saída semântica à camada de matching sem transformar etiquetas genéricas em SKU.
