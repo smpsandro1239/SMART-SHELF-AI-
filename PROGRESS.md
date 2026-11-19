@@ -940,3 +940,12 @@ A segunda sequência reforçou a proveniência do provider ONNX sem alterar o sc
 - Os fingerprints ficam dentro dos campos de versão já persistidos nas deteções; não se afirma que exista ainda um manifesto assinado nem colunas dedicadas de auditoria.
 - **Compatibilidade deliberadamente fail-closed:** exemplares SKU aprovados com uma versão anterior do embedder não correspondem à nova versão fingerprintada. É necessário gerar e aprovar exemplares usando a nova versão efectiva antes de obter matches.
 - Foram acrescentados testes de estabilidade, alteração de pesos/labels/configuração, symlink e substituição concorrente. Validação CI pendente para esta sequência.
+
+## Visão computacional — whitelist semântica para matching SKU (2026-11-19)
+
+- Foi adicionada a configuração `VISION_SKU_MATCH_LABELS` (por omissão `product`) para limitar as classes que podem gerar embeddings e consultar o catálogo.
+- O provider ONNX não executa o embedder para classes não elegíveis, por exemplo `empty_facing`.
+- `resolve_sku_match` repete a validação no worker, pelo que providers alternativos também não podem associar classes não elegíveis a SKU, mesmo que forneçam embeddings.
+- A whitelist faz parte do fingerprint do detector; alterar as classes elegíveis altera a identidade efectiva da configuração.
+- Foram acrescentados testes de provider e worker para provar que uma deteção `empty_facing` não é correspondida a exemplares de produto.
+- Validação CI pendente; não existe ainda dataset real anotado nem ligação das classes de vazio ao comparador de células.
