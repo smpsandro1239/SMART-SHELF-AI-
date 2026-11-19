@@ -54,7 +54,7 @@ O adaptador PaddleOCR experimental e os passos de instalação isolada estão do
 
 ## Células calibradas e deteção de posições vazias
 
-O módulo também disponibiliza `ShelfCell` e `compare_detections_to_cells` para comparar caixas normalizadas com células explícitas fornecidas por uma calibração de câmara ou planograma revisto. Cada célula tem um identificador estável, limites normalizados, SKU esperado opcional e indicadores de visibilidade/oclusão.
+O módulo também disponibiliza `ShelfCell`, `ShelfCellObservation` e `compare_detections_to_cells` para comparar caixas normalizadas com células explícitas fornecidas por uma calibração de câmara ou planograma revisto. Cada célula tem um identificador estável, limites normalizados, SKU esperado opcional e indicadores de visibilidade/oclusão. Por segurança, `is_visible` começa em `false`: a calibração tem de confirmar explicitamente que a região está observável.
 
 Estados devolvidos:
 
