@@ -3,7 +3,7 @@
 - O endpoint de criação de observação a partir de deteção demo exige agora `confirmed_status`, separado da revisão de SKU.
 - A API rejeita estados em falta ou incompatíveis com a classe da deteção; a proveniência regista o estado, o utilizador confirmador e o timestamp UTC.
 - O comportamento continua restrito ao provider mock/demo e não constitui validação de visão computacional real.
-- Testes de regressão HTTP acrescentados; aguarda CI do novo commit.
+- Testes de regressão HTTP acrescentados. A primeira API CI identificou um smoke PostgreSQL com payload desactualizado; o script foi alinhado para enviar `confirmed_status=EMPTY`, mantendo a prova de serialização com o lock da imagem. Aguarda nova execução CI.
 
 ### Contrato de evidência de comparação de planogramas — 2026-11-19
 

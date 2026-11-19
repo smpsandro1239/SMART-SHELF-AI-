@@ -4,6 +4,7 @@
 - [x] Exigir `confirmed_status` no contrato HTTP; rejeitar ausência (422) e divergência face à classe da deteção (409).
 - [x] Registar estado, utilizador confirmador e timestamp UTC na proveniência da observação; preservar a idempotência por deteção.
 - [x] Acrescentar regressões HTTP para falta de confirmação, estado incompatível, revisão SKU obrigatória e repetição idempotente.
+- [x] Atualizar o smoke PostgreSQL de retenção para enviar `confirmed_status=EMPTY` e continuar a testar o lock da imagem antes da validação do estado de retenção.
 - [ ] Validar API CI/Quality Gates e confirmar o resultado do commit desta alteração.
 
 ## Evidência de comparação de planogramas — contrato antes da persistência (2026-11-19)

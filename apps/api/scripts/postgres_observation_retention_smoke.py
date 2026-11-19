@@ -142,7 +142,7 @@ def main() -> None:
             with TestClient(app) as client:
                 response = client.post(
                     f"/api/v1/shelf-image-detections/{detection_id}/observation",
-                    json={"product_id": product_id},
+                    json={"product_id": product_id, "confirmed_status": "EMPTY"},
                     headers={"Authorization": f"Bearer {token}"},
                 )
             request_result["status_code"] = response.status_code

@@ -4,7 +4,8 @@
 - O contrato exige agora `confirmed_status`; o estado tem de corresponder à classe de demonstração e ficam registados estado, ID do utilizador confirmador e timestamp UTC na proveniência.
 - A ausência de confirmação é rejeitada pela validação HTTP (422); um estado incompatível é rejeitado com 409. A revisão SKU continua obrigatória e independente.
 - Foram acrescentados testes para ausência, divergência, revisão obrigatória e idempotência.
-- Validação CI pendente; não foram executados testes localmente nesta ronda.
+- A primeira execução API CI revelou que o smoke PostgreSQL de retenção ainda enviava o contrato antigo (`product_id` sem `confirmed_status`), terminando antes de adquirir o lock da imagem. O payload do smoke foi alinhado com o contrato novo (`confirmed_status=EMPTY`), preservando a verificação concorrente.
+- A validação CI da correção permanece pendente; não foram executados testes localmente nesta ronda.
 
 ## 2026-11-19 — Comparação read-only de captura com planograma ativo
 
