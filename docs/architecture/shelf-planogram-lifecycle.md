@@ -135,3 +135,8 @@ A comparação bloqueia primeiro, por ID crescente, a captura consultada e a ima
 A versão ativa é descoberta inicialmente apenas para identificar a imagem de calibração a bloquear. Depois dos locks, a API volta a carregar a versão ativa. Se a versão tiver mudado entretanto, devolve HTTP 409 e exige nova consulta; não usa uma calibração que não tenha sido bloqueada. A captura é revalidada como ACTIVE/COMPLETED sob lock antes de carregar deteções. O lock da captura mantém-se durante a construção da resposta, pelo que uma restrição concorrente espera pela conclusão da leitura; a consulta seguinte já rejeita a captura restringida.
 
 O smoke PostgreSQL `postgres_planogram_lifecycle_smoke.py` exercita duas sessões concorrentes: mantém os locks de comparação e tenta restringir a captura noutra transação. A restrição tem de esperar; depois do commit da leitura, a imagem é restringida e uma comparação subsequente falha de forma fechada. A comparação continua read-only e não persiste resultados nem altera inventário.
+
+
+### Integridade do fingerprint da comparação
+
+A função de fingerprint aceita apenas a versão de esquema actualmente suportada. A versão é fixada no payload canónico, não pode ser substituída por um campo fornecido pelo chamador, e valores não JSON/NaN/infinitos são rejeitados por `allow_nan=False`. O digest ignora apenas o próprio campo `comparison_sha256`; alterações nos resultados por célula alteram a identidade. Os testes cobrem ordem de chaves, binding dos resultados, exclusão do digest próprio, versão desconhecida e valores não finitos.

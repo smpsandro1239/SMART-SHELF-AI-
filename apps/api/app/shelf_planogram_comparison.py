@@ -71,9 +71,20 @@ def comparison_fingerprint(snapshot: dict) -> str:
     The digest is an identity/provenance aid, not a digital signature. It is
     deterministic for the same JSON-compatible evidence and schema version.
     """
+    if not isinstance(snapshot, dict):
+        raise TypeError("Comparison snapshot must be a dictionary")
+    schema_version = snapshot.get(
+        "comparison_schema_version", COMPARISON_SCHEMA_VERSION
+    )
+    if (
+        not isinstance(schema_version, int)
+        or isinstance(schema_version, bool)
+        or schema_version != COMPARISON_SCHEMA_VERSION
+    ):
+        raise ValueError("Unsupported comparison schema version")
     payload = {
-        "comparison_schema_version": COMPARISON_SCHEMA_VERSION,
         **{key: value for key, value in snapshot.items() if key != "comparison_sha256"},
+        "comparison_schema_version": COMPARISON_SCHEMA_VERSION,
     }
     canonical = json.dumps(
         payload,

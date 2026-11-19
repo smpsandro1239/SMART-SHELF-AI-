@@ -529,3 +529,34 @@ def test_planogram_comparison_rejects_unavailable_retained_images(planogram_api,
     )
     assert response.status_code == 404
     assert response.json()["detail"] == "Shelf image is not available"
+
+
+def test_comparison_fingerprint_is_canonical_and_binds_schema_and_cell_results():
+    from app.shelf_planogram_comparison import comparison_fingerprint
+
+    snapshot = {
+        "comparison_schema_version": 1,
+        "shelf_id": 17,
+        "cells": [{"cell_code": "A1", "status": "UNKNOWN"}],
+    }
+    reordered = {
+        "cells": [{"status": "UNKNOWN", "cell_code": "A1"}],
+        "shelf_id": 17,
+        "comparison_schema_version": 1,
+    }
+    changed = {
+        **snapshot,
+        "cells": [{"cell_code": "A1", "status": "OCCUPIED"}],
+    }
+
+    assert comparison_fingerprint(snapshot) == comparison_fingerprint(reordered)
+    assert comparison_fingerprint(snapshot) != comparison_fingerprint(changed)
+    assert comparison_fingerprint({
+        **snapshot,
+        "comparison_sha256": "0" * 64,
+    }) == comparison_fingerprint(snapshot)
+
+    with pytest.raises(ValueError, match="Unsupported comparison schema version"):
+        comparison_fingerprint({**snapshot, "comparison_schema_version": 2})
+    with pytest.raises(ValueError):
+        comparison_fingerprint({**snapshot, "non_finite": float("nan")})

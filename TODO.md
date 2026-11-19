@@ -941,3 +941,11 @@ Critério global: nenhuma capacidade pode ser marcada como concluída sem códig
 - [x] Alargar o smoke PostgreSQL para provar que a restrição de retenção espera pela comparação e que a consulta seguinte rejeita a imagem.
 - [x] Validar API CI/PostgreSQL 16 [44588809660](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44588809660), Quality Gates [44589016727](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44589016727) e Docker Compose [44588809507](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44588809507): os três passaram; API CI/Quality Gates executaram **1342 testes aprovados, 1 ignorado e 1 aviso**, e o smoke PostgreSQL de comparação/retenção passou.
 - [ ] Definir contrato de retenção/versionamento para snapshots persistidos; manter a comparação on-demand e read-only.
+
+
+## Fingerprint de comparação — contrato canónico — 2026-11-19
+
+- [x] Rejeitar versões de esquema não suportadas antes de calcular o digest.
+- [x] Fixar a versão do esquema no payload canónico, impedindo override pelo chamador.
+- [x] Testar independência da ordem das chaves, binding dos resultados por célula, exclusão do próprio digest e rejeição de NaN.
+- [ ] Confirmar API CI e Quality Gates do novo contrato.

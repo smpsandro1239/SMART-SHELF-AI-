@@ -1106,3 +1106,11 @@ O teste de concorrência confirma a serialização edição/ativação no servi�
 - Quality Gates [44589016727](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44589016727): passou; compilação Python, suite API com o mesmo resultado e build TypeScript/produção Web aprovados.
 - Docker Compose [44588809507](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44588809507): passou.
 - A evidência confirma a serialização PostgreSQL entre comparação e restrição; não representa validação manual com imagens reais nem autoriza persistência/integração no worker.
+
+
+## 2026-11-19 — Endurecimento do fingerprint de comparação
+
+- O cálculo SHA-256 rejeita versões de esquema desconhecidas e força a versão suportada no payload canónico.
+- O digest continua a excluir apenas o seu próprio campo; os resultados por célula fazem parte da identidade.
+- Acrescentados testes para ordenação de chaves, alteração de estado de célula, digest próprio, versão não suportada e NaN.
+- Validação CI pendente.
