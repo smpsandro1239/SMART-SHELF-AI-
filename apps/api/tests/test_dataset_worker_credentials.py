@@ -83,10 +83,12 @@ def test_wrong_secret_is_rejected(db):
         authenticate_dataset_worker(db, bearer_token=tampered)
 
 
-def test_expired_credential_is_rejected(db):
+def test_expired_credential_is_rejected(db, monkeypatch):
     token, record = issue(db)
-    record.expires_at = models.utc_now() - timedelta(seconds=1)
-    db.commit()
+    expiry_boundary = record.expires_at + timedelta(seconds=1)
+    monkeypatch.setattr(
+        "app.dataset_worker_credentials._now", lambda: expiry_boundary
+    )
     with pytest.raises(DatasetWorkerAuthenticationError):
         authenticate_dataset_worker(db, bearer_token=token)
 
