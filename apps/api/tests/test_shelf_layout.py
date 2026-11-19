@@ -193,8 +193,8 @@ def test_exact_planogram_facings_are_occupied():
     result = compare_detections_to_cells(
         [cell("A1", 0.0, 0.0, 0.5, 1.0, 10, expected_facings=2)],
         [
-            box(0.05, 0.1, 0.20, 0.9, 10),
-            box(0.25, 0.1, 0.40, 0.9, 10),
+            box(0.05, 0.1, 0.22, 0.9, 10),
+            box(0.25, 0.1, 0.42, 0.9, 10),
         ],
     )
 
