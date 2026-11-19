@@ -1680,7 +1680,7 @@ Os motivos de ativação/retirada são obrigatórios (3–500 caracteres). Confl
 - A migration mantém equivalência de guards entre PostgreSQL e SQLite.
 - A eliminação em cascata de células de um rascunho é permitida; células de versões ativas/retiradas permanecem protegidas.
 - Existe endpoint read-only de comparação on-demand entre uma captura `COMPLETED`/`ACTIVE` e o planograma `ACTIVE` da mesma prateleira; devolve estado por célula, facings esperados/observados, IDs das deteções, SHA-256 da imagem e versões do planograma/modelo.
-- A comparação ainda não é persistida, não está ligada ao worker nem tem interface React ou fluxo de revisão humana.
+- A comparação já tem interface React para ADMIN/SUPERVISOR, mas continua calculada on-demand: não é persistida, não está ligada ao worker e ainda não existe fluxo de revisão humana.
 - Sem calibração explícita de visibilidade por célula, a ausência de produto e a classe `empty_facing` permanecem `UNKNOWN`; o endpoint nunca declara `EMPTY` apenas por ausência de deteções.
 - `expected_facings` está persistido no planograma, mas a contagem observada continua experimental até validação com imagens reais e deduplicação/NMS calibradas.
 - A deteção visual de espaços vazios/facings não altera inventário contabilístico.
@@ -1718,3 +1718,15 @@ A validação é automatizada por CI. Não foi realizada validação manual com 
 - [x] Explicitar na interface que ausência de deteções sem calibração de visibilidade permanece UNKNOWN; não é apresentada como rutura.
 - [ ] Validar o fluxo manualmente no browser com ADMIN, SUPERVISOR e EMPLOYEE e confirmar comportamento em dispositivos móveis.
 - [ ] Persistir resultados imutáveis de comparação e integrar o worker apenas depois de definir a política de retenção/proveniência dos resultados.
+
+
+### Estado actualizado da comparação de planogramas — 2026-11-19
+
+- [x] Interface React `PlanogramComparison` integrada no dashboard para ADMIN/SUPERVISOR.
+- [x] Seleção de prateleira e captura concluída; consulta ao endpoint read-only autenticado.
+- [x] Apresentação de versão do planograma, modelo, SHA-256 da captura, origem/digest da calibração e resultados por célula.
+- [x] Estados vazios, erros HTTP, carregamento e layout responsivo.
+- [x] Testes adicionais para prateleira sem planograma ativo e proveniência de calibração por imagem.
+- [ ] Executar e confirmar API CI/Quality Gates para os novos testes.
+- [ ] Validar manualmente a interface com perfis ADMIN, SUPERVISOR e EMPLOYEE.
+- [ ] Definir contrato de persistência append-only e retenção antes de integrar comparação no worker.
