@@ -211,12 +211,12 @@ class ShelfPlanogram(Base):
         ),
         CheckConstraint(
             "(activated_by_user_id IS NULL AND activated_at IS NULL AND activation_reason IS NULL) "
-            "OR (activated_by_user_id IS NOT NULL AND activated_at IS NOT NULL AND length(trim(activation_reason)) > 0)",
+            "OR (activated_by_user_id IS NOT NULL AND activated_at IS NOT NULL AND activation_reason IS NOT NULL AND length(trim(activation_reason)) > 0)",
             name="ck_shelf_planogram_activation_metadata",
         ),
         CheckConstraint(
             "(retired_by_user_id IS NULL AND retired_at IS NULL AND retirement_reason IS NULL) "
-            "OR (retired_by_user_id IS NOT NULL AND retired_at IS NOT NULL AND length(trim(retirement_reason)) > 0)",
+            "OR (retired_by_user_id IS NOT NULL AND retired_at IS NOT NULL AND retirement_reason IS NOT NULL AND length(trim(retirement_reason)) > 0)",
             name="ck_shelf_planogram_retirement_metadata",
         ),
         CheckConstraint(
@@ -225,6 +225,8 @@ class ShelfPlanogram(Base):
             "OR (status = 'RETIRED' AND activated_at IS NOT NULL AND retired_at IS NOT NULL)",
             name="ck_shelf_planogram_status_timestamps",
         ),
+        CheckConstraint("activated_at IS NULL OR activated_at >= created_at", name="ck_shelf_planogram_activation_after_creation"),
+        CheckConstraint("retired_at IS NULL OR retired_at >= activated_at", name="ck_shelf_planogram_retirement_after_activation"),
         Index(
             "uq_shelf_planogram_one_active_per_shelf",
             "shelf_id",
@@ -269,6 +271,7 @@ class ShelfPlanogramCell(Base):
         UniqueConstraint("planogram_id", "cell_code", name="uq_shelf_planogram_cell_code"),
         UniqueConstraint("planogram_id", "row_index", "column_index", name="uq_shelf_planogram_cell_grid_position"),
         CheckConstraint("row_index >= 0 AND column_index >= 0", name="ck_shelf_planogram_cell_grid_nonnegative"),
+        CheckConstraint("length(trim(cell_code)) > 0", name="ck_shelf_planogram_cell_code_nonempty"),
         CheckConstraint(
             "x_min >= 0 AND x_min < x_max AND x_max <= 1 "
             "AND y_min >= 0 AND y_min < y_max AND y_max <= 1",
