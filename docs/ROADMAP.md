@@ -420,5 +420,13 @@ Foi criado e integrado no API CI o smoke `postgres_dataset_eligibility_concurren
 
 - [x] Acrescentar cobertura SQLite para os oito campos que não podem ser definidos num INSERT inicial de job.
 - [x] Acrescentar tentativas equivalentes no smoke PostgreSQL 16, com transacções independentes e rejeição esperada pela base de dados.
-- [ ] Confirmar execução PostgreSQL 16, suite API, Quality Gates e Docker Compose para os commits `0d7592b12a98ee11f16730591c30368637b30c32` e `f07d9d2fbc194dacd05e38a100c6937cde9da9f2`.
+- [x] Corrigir os INSERTs de teste sem colunas duplicadas e validar PostgreSQL 16, smoke de leases/fencing e suite API (**1179 passed, 1 skipped, 1 warning**) no API CI [44428496117](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44428496117); Quality Gates [44428496156](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44428496156) e Docker Compose [44428496204](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44428496204) passaram.
 - [ ] Implementar autenticação/identidade de workers antes de disponibilizar endpoints de claim/heartbeat; manter a API de jobs não exposta enquanto essa fronteira não existir.
+
+
+### Próxima prioridade — autenticação de workers de datasets (19-11-2026)
+
+- [ ] Definir credenciais individuais, emissão segura, expiração, rotação e revogação de workers.
+- [ ] Vincular `worker_id` à identidade autenticada e autorizar scopes por operação.
+- [ ] Testar tokens inválidos/expirados/revogados, scopes insuficientes, replay e isolamento entre workers.
+- [ ] Manter endpoints de jobs não expostos até a autenticação estar integrada.

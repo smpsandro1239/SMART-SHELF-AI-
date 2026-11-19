@@ -708,3 +708,14 @@ Commit validado: `1e3499c8c80ef75494a29d06807469898471e4e1`.
 - A alteração acrescenta cobertura de regressão; não altera o contrato de produção nem relaxa as guards.
 - Validação pendente: não foram executados testes localmente nesta ronda e ainda não foi confirmada uma execução CI verde para estes commits.
 - Próximo passo: validar a migration 0059 e os oito casos negativos em PostgreSQL 16 e SQLite; depois avançar para autenticação de workers antes de expor operações de claim/heartbeat.
+
+
+## 2026-11-19 — Correção e validação da migration 0059 (estado inicial de jobs)
+
+- SHA inicial desta correção: `ef10bd76921b3868812c81611a1e313125c193a4`.
+- A execução anterior revelou que os testes SQLite aceitavam silenciosamente INSERTs com colunas duplicadas para `fencing_token`/`attempt_count`; o smoke PostgreSQL terminava com `DuplicateColumn` antes de testar a trigger.
+- Corrigidos `apps/api/tests/test_dataset_job_fencing_guards_migration.py` e `apps/api/scripts/postgres_dataset_job_lease_smoke.py`: a lista de colunas e os valores é agora construída sem duplicações, de modo que cada um dos oito metadados inválidos é realmente submetido à base de dados.
+- API CI [44428496117](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44428496117) passou: migration PostgreSQL 16, todos os smokes operacionais (incluindo leases/fencing) e **1179 testes aprovados, 1 ignorado e 1 aviso**.
+- Quality Gates [44428496156](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44428496156) passou com compilação Python, suite API e build TypeScript/produção Web. Docker Compose [44428496204](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44428496204) também passou.
+- A migration de produção não foi alterada nesta correção; foi corrigida a cobertura de regressão que a exercita. Não foi executado pytest localmente nesta ronda.
+- Próxima prioridade: implementar identidade/autenticação individual de workers antes de expor operações de claim/heartbeat; depois serviço de leitura controlada e promotor fenced.

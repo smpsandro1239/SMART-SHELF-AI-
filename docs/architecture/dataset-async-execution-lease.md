@@ -143,3 +143,10 @@ A migration `0058_dataset_execution_state_machine` materializa as transições j
 - Estados terminais não aceitam UPDATE; a identidade do job (ID, idempotency key, hashes, modo e `created_at`) é imutável.
 
 A trigger PostgreSQL e a trigger SQLite cobrem a mesma máquina de estados. Os testes de migration exercitam transições ilegais e alterações à identidade; o smoke PostgreSQL tenta mutar um job activo e reabrir um job concluído. A validação runtime da migration 0058 permanece pendente até os workflows CI desta revisão terminarem.
+
+
+## Validação do estado inicial dos jobs — migration 0059 (19-11-2026)
+
+A migration `0059_dataset_execution_initial_state` foi validada em PostgreSQL 16 pelo API CI [44428496117](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44428496117). A cobertura SQLite e o smoke PostgreSQL tentam individualmente inserir jobs `QUEUED` com proprietário/expiração de lease, fencing token, contador de tentativas, digest/output, referência staging, falha ou timestamp terminal. A primeira versão dos testes continha colunas duplicadas nas tentativas de alterar os counters; a correcção constrói dinamicamente a lista de colunas e valores e foi validada com **1179 testes aprovados, 1 ignorado e 1 aviso**. Quality Gates [44428496156](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44428496156) e Docker Compose [44428496204](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44428496204) também passaram.
+
+A validação confirma o estado inicial dos registos e os guards de lease/fencing. **Não autentica workers**: `worker_id` continua a ser um identificador declarado pelo chamador do serviço interno. Não existem endpoints públicos de jobs, e devem continuar ausentes até existir identidade de serviço, credenciais individuais, autorização por scope, expiração/rotação/revogação e testes de replay.

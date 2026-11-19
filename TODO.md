@@ -458,3 +458,12 @@
 - [x] Expandir o smoke PostgreSQL para tentar os mesmos oito metadados forjados em INSERTs independentes.
 - [ ] Validar migration, smoke PostgreSQL, suite API, Quality Gates e Docker Compose no CI dos commits desta ronda.
 - [ ] Investigar os estados dos checks de deployment separadamente: falhas de quota Vercel não equivalem a falhas dos testes API.
+
+
+## Autenticação de workers de datasets — próxima fronteira P0
+
+- [ ] Definir identidade de serviço e credenciais individuais de worker, com emissão segura, expiração, rotação e revogação.
+- [ ] Exigir autenticação e scopes separados para claim, heartbeat, falha, conclusão, leitura de artefactos e promoção de outputs.
+- [ ] Não confiar em `worker_id` fornecido pelo cliente como prova de identidade; vinculá-lo à identidade autenticada.
+- [ ] Acrescentar testes negativos de tokens inválidos/expirados/revogados, scopes insuficientes, replay e isolamento entre workers.
+- [ ] Manter endpoints de jobs não expostos até a autenticação e autorização estarem ligadas aos handlers.
