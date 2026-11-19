@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import os
 import stat
+from datetime import timezone
 from pathlib import Path
 
 from sqlalchemy.exc import IntegrityError
@@ -38,6 +39,10 @@ class DatasetJobSourceUnavailable(FileNotFoundError):
 
 class DatasetJobSourceIntegrityError(RuntimeError):
     """The stored bytes differ from the immutable source digest or size."""
+
+
+def _utc(value):
+    return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value.astimezone(timezone.utc)
 
 
 def _read_regular_file_without_symlinks(
@@ -158,6 +163,29 @@ def read_dataset_job_source_bytes(
             or image.sha256 != source.source_image_sha256
         ):
             raise DatasetJobSourceIneligible("dataset job source changed or is restricted")
+
+        # Revalidate the persisted worker and credential after acquiring the
+        # source locks. This closes the gap between HTTP authentication and the
+        # actual byte read if the credential was revoked or the worker disabled.
+        worker = db.query(models.DatasetWorker).filter_by(
+            worker_id=principal.worker_id
+        ).with_for_update(read=True).populate_existing().first()
+        credential = db.query(models.DatasetWorkerCredential).filter_by(
+            credential_id=principal.credential_id,
+            worker_id=principal.worker_id,
+        ).with_for_update(read=True).populate_existing().first()
+        now = models.utc_now()
+        if (
+            worker is None
+            or worker.status != "ACTIVE"
+            or credential is None
+            or credential.revoked_at is not None
+            or _utc(credential.expires_at) <= _utc(now)
+            or "artifacts:read" not in set(credential.scopes or [])
+        ):
+            raise DatasetWorkerAuthorizationError(
+                "worker credential is no longer active or lacks artifacts:read"
+            )
 
         payload = _read_regular_file_without_symlinks(
             storage_path=image.storage_path,
