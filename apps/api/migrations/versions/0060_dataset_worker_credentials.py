@@ -115,6 +115,7 @@ def upgrade() -> None:
                    OR (OLD.revoked_at IS NOT NULL AND NEW.revoked_at IS DISTINCT FROM OLD.revoked_at)
                    OR (OLD.replaced_by_credential_id IS NOT NULL
                        AND NEW.replaced_by_credential_id IS DISTINCT FROM OLD.replaced_by_credential_id)
+                   OR (OLD.last_used_at IS NOT NULL AND NEW.last_used_at IS NULL)
                    OR (OLD.last_used_at IS NOT NULL
                        AND NEW.last_used_at IS NOT NULL
                        AND NEW.last_used_at < OLD.last_used_at) THEN
@@ -170,6 +171,7 @@ def upgrade() -> None:
               OR (OLD.revoked_at IS NOT NULL AND NEW.revoked_at IS NOT OLD.revoked_at)
               OR (OLD.replaced_by_credential_id IS NOT NULL
                   AND NEW.replaced_by_credential_id IS NOT OLD.replaced_by_credential_id)
+              OR (OLD.last_used_at IS NOT NULL AND NEW.last_used_at IS NULL)
               OR (OLD.last_used_at IS NOT NULL AND NEW.last_used_at IS NOT NULL
                   AND julianday(NEW.last_used_at) < julianday(OLD.last_used_at))
             BEGIN
