@@ -1004,3 +1004,66 @@ class DatasetExecutionJobEvent(Base):
     worker_id: Mapped[str | None] = mapped_column(String(160), nullable=True)
     details: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+
+
+class DatasetWorker(Base):
+    """Registered non-human identity allowed to process dataset execution jobs."""
+    __tablename__ = "dataset_workers"
+    __table_args__ = (
+        CheckConstraint("status IN ('ACTIVE', 'DISABLED')", name="ck_dataset_worker_status"),
+        Index("ix_dataset_workers_status_created", "status", "created_at"),
+    )
+
+    worker_id: Mapped[str] = mapped_column(String(160), primary_key=True)
+    status: Mapped[str] = mapped_column(String(12), default="ACTIVE", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    disabled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class DatasetWorkerCredential(Base):
+    """Hashed, individually revocable credential for one dataset worker."""
+    __tablename__ = "dataset_worker_credentials"
+    __table_args__ = (
+        UniqueConstraint("credential_id", name="uq_dataset_worker_credential_public_id"),
+        CheckConstraint("length(secret_sha256) = 64", name="ck_dataset_worker_credential_digest"),
+        CheckConstraint("expires_at > created_at", name="ck_dataset_worker_credential_expiry"),
+        Index("ix_dataset_worker_credentials_worker_expiry", "worker_id", "expires_at"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    credential_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    worker_id: Mapped[str] = mapped_column(
+        ForeignKey("dataset_workers.worker_id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    secret_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    scopes: Mapped[list] = mapped_column(JSON, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    replaced_by_credential_id: Mapped[str | None] = mapped_column(
+        ForeignKey("dataset_worker_credentials.credential_id", ondelete="RESTRICT"), nullable=True
+    )
+
+
+class DatasetWorkerEvent(Base):
+    """Append-only security audit event for worker and credential lifecycle changes."""
+    __tablename__ = "dataset_worker_events"
+    __table_args__ = (
+        CheckConstraint(
+            "event_type IN ('WORKER_REGISTERED', 'CREDENTIAL_ISSUED', 'CREDENTIAL_ROTATED', "
+            "'CREDENTIAL_REVOKED', 'WORKER_DISABLED')",
+            name="ck_dataset_worker_event_type",
+        ),
+        Index("ix_dataset_worker_events_worker_created", "worker_id", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    worker_id: Mapped[str] = mapped_column(
+        ForeignKey("dataset_workers.worker_id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    credential_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    event_type: Mapped[str] = mapped_column(String(24), nullable=False)
+    details: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
