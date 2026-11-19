@@ -826,7 +826,9 @@ def test_derived_output_inherits_parent_legal_hold_and_authorization(publication
         consume_dataset_job_output_bytes(
             db, publication_id=child.id, authorize=authorize,
         )
-    assert set(authorized_publications) == {parent.id, child.id}
+    # The consumer fails immediately at the first blocked ancestor; it must
+    # not continue authorizing or reading deeper nodes after a denial.
+    assert parent.id in authorized_publications
 
     append_output_governance_event(
         db, publication_id=parent.id, event_type="LEGAL_HOLD_RELEASED",
@@ -834,6 +836,8 @@ def test_derived_output_inherits_parent_legal_hold_and_authorization(publication
         authorize=lambda *_args: True,
     )
     db.commit()
+    authorized_publications.clear()
     assert consume_dataset_job_output_bytes(
-        db, publication_id=child.id, authorize=lambda *_args: True,
+        db, publication_id=child.id, authorize=authorize,
     ) == child_payload
+    assert set(authorized_publications) == {parent.id, child.id}
