@@ -39,7 +39,7 @@ def upgrade() -> None:
             RETURNS trigger LANGUAGE plpgsql AS $function$
             DECLARE
                 job_status TEXT;
-                lease_owner TEXT;
+                job_lease_owner TEXT;
                 lease_token INTEGER;
                 lease_expiry TIMESTAMPTZ;
                 source_store_id INTEGER;
@@ -56,10 +56,10 @@ def upgrade() -> None:
                 image_size INTEGER;
             BEGIN
                 SELECT status, lease_owner, fencing_token, lease_expires_at
-                INTO job_status, lease_owner, lease_token, lease_expiry
-                FROM dataset_execution_jobs WHERE id = NEW.job_id FOR UPDATE;
+                INTO job_status, job_lease_owner, lease_token, lease_expiry
+                FROM dataset_execution_jobs AS j WHERE j.id = NEW.job_id FOR UPDATE OF j;
                 IF NOT FOUND OR job_status <> 'LEASED'
-                   OR lease_owner <> NEW.worker_id
+                   OR job_lease_owner <> NEW.worker_id
                    OR lease_token <> NEW.fencing_token
                    OR lease_expiry IS NULL OR lease_expiry <= clock_timestamp() THEN
                     RAISE EXCEPTION 'dataset artifact read requires the current unexpired job lease'
