@@ -818,3 +818,12 @@ Adicionado teste de segurança para temporários de promoção cujo nome corresp
 - Documento criado: `docs/architecture/dataset-output-artifact-governance.md`.
 - Implementação de esquema/serviços permanece pendente porque a política de retenção, os poderes de legal hold e a cobertura externa ainda não estão aprovados. Nenhum comportamento destrutivo foi introduzido.
 - Estado dos workflows do commit `57ca70f`: Docker Compose [44510497825](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44510497825) passou; Quality Gates [44510497768](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44510497768) passou; API CI [44510497835](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44510497835) ainda estava em execução na última consulta.
+
+
+## 2026-11-19 — Fecho da corrida retenção/publicação de outputs
+
+- Identificada uma janela de TOCTOU: a conclusão do job validava fontes, mas a promoção apenas revalidava job/worker/credencial depois da preparação dos bytes.
+- Implementada revalidação de todas as fontes imutáveis através de `validate_internal_image_eligibility` na transacção final, com locks de imagem/prateleira/zona por ID crescente. Falha fechada se o job não tiver fontes ou se qualquer origem estiver ausente, mudar de loja/hash, ficar RESTRICTED ou receber legal hold.
+- Criada migration `0064_dataset_output_source_eligibility` com trigger PostgreSQL que bloqueia as linhas de origem e trigger SQLite equivalente para impedir INSERT directo de publicação quando alguma fonte não é elegível.
+- Acrescentados testes SQLite para RESTRICTED/legal hold e cenário concorrente PostgreSQL que aplica legal hold durante a fase lock-free de preparação.
+- Código e documentação publicados; validação CI pendente.

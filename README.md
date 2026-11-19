@@ -1553,3 +1553,8 @@ Foi acrescentada uma regressão que cria um temporário antigo com nome interno 
 ### Governação de retenção dos outputs assíncronos — decisão arquitectural
 
 A auditoria confirmou que os outputs publicados já têm uma identidade append-only em `dataset_execution_job_output_publications` e que as fontes do job estão ligadas por `dataset_execution_job_sources`. O catálogo `shelf_image_artifact_references` é específico de uma imagem/loja e não deve ser reutilizado como catálogo canónico de outputs que podem ter várias origens. A publicação existente será a raiz do artefacto; eventos de governação separados deverão registar retenção/legal hold sem alterar a publicação. A implementação e os testes PostgreSQL/SQLite continuam pendentes. Não existe autorização para purga física por idade. Ver [governação de retenção dos outputs](docs/architecture/dataset-output-artifact-governance.md).
+
+
+### Revalidação das fontes antes da promoção de outputs — 2026-11-19
+
+A promoção de um output volta a validar todas as imagens imutáveis do job depois da preparação/hash do ficheiro e antes da publicação. A validação confirma loja, SHA-256, estado `ACTIVE` e ausência de legal hold, mantendo os locks até ao commit da auditoria. A migration `0064_dataset_output_source_eligibility` acrescenta a mesma barreira ao INSERT SQL em PostgreSQL/SQLite. O smoke PostgreSQL e os testes de regressão desta alteração têm de passar antes de a garantia ser declarada validada. Ver [governação dos outputs](docs/architecture/dataset-output-artifact-governance.md).

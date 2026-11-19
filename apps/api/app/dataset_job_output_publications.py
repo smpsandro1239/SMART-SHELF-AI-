@@ -20,10 +20,15 @@ from sqlalchemy.orm import Session
 from app import models
 from app.config import settings
 from app.dataset_job_leases import DatasetJobError, DatasetJobLeaseLost
+from app.dataset_operational_eligibility import validate_internal_image_eligibility
 from app.dataset_worker_credentials import DatasetWorkerAuthorizationError, DatasetWorkerPrincipal
 
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _REFERENCE = re.compile(r"^staging/[A-Za-z0-9._/-]{1,590}$")
+
+
+class DatasetJobSourceIneligible(DatasetJobError):
+    """One or more immutable job sources are no longer eligible for publication."""
 
 
 class DatasetJobOutputUnavailable(FileNotFoundError):
@@ -248,6 +253,21 @@ def _load_and_validate(
         or not job.staged_output_reference
     ):
         raise DatasetJobLeaseLost("job is not successfully completed with this fencing token")
+
+    if lock_rows:
+        sources = db.query(models.DatasetExecutionJobSource).filter_by(job_id=job.id).order_by(
+            models.DatasetExecutionJobSource.shelf_image_id.asc()
+        ).all()
+        if not sources:
+            raise DatasetJobSourceIneligible("dataset job has no immutable source records")
+        errors, report = validate_internal_image_eligibility(db, [{
+            "source_type": "internal", "shelf_image_id": source.shelf_image_id,
+            "store_id": source.store_id, "source_image_sha256": source.source_image_sha256,
+        } for source in sources])
+        if errors or report.get("status") != "APPROVED":
+            raise DatasetJobSourceIneligible(
+                "one or more dataset job sources are no longer eligible for output publication"
+            )
 
     event = db.query(models.DatasetExecutionJobEvent).filter_by(
         job_id=job_id, event_type="SUCCEEDED"

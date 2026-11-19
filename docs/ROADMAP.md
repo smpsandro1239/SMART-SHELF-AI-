@@ -520,3 +520,12 @@ Foi acrescentada cobertura para a divergência entre o destino publicado e a aud
 - [ ] Manter purga física desactivada até existir política de retenção e cobertura externa aprovadas.
 
 Ver [decisão de governação de retenção dos outputs](architecture/dataset-output-artifact-governance.md).
+
+
+### Revalidação de fontes na promoção de outputs — 19-11-2026
+
+- [x] Revalidar as fontes imutáveis do job na transacção final de promoção, depois da preparação do ficheiro.
+- [x] Manter locks de imagem/prateleira/zona até ao commit da publicação, com ordem por ID crescente.
+- [x] Impedir INSERT SQL directo se qualquer fonte estiver ausente, com loja/hash divergente, RESTRICTED ou sob legal hold (PostgreSQL e SQLite).
+- [x] Acrescentar testes SQLite para restrição/legal hold e smoke PostgreSQL para a corrida entre hold e promoção.
+- [ ] Validar migration 0064, suite API e workflows de CI.

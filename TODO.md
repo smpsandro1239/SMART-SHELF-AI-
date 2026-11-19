@@ -586,3 +586,12 @@
 - [ ] Definir política aprovada de retenção e cobertura externa antes de activar qualquer disposição física.
 
 Documento: `docs/architecture/dataset-output-artifact-governance.md`.
+
+
+## Promoção de outputs — revalidação das fontes (2026-11-19)
+
+- [x] Identificar a janela entre conclusão do job e promoção em que uma fonte pode passar a RESTRICTED ou receber legal hold.
+- [x] Revalidar todas as fontes imutáveis sob locks depois da preparação dos bytes e antes da promoção filesystem/auditoria.
+- [x] Acrescentar guard SQL PostgreSQL/SQLite para rejeitar publicações sem fontes elegíveis.
+- [x] Acrescentar regressões SQLite para fonte RESTRICTED e legal hold e smoke PostgreSQL concorrente para hold aplicado durante a preparação.
+- [ ] Validar migration 0064, suite API, smoke PostgreSQL 16, Quality Gates e Docker Compose no CI.

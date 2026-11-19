@@ -41,3 +41,12 @@ A linhagem de entrada do job já está persistida em `dataset_execution_job_sour
 - Processo e evidência aceitável para destruição/anonimização.
 
 Até estas decisões serem aprovadas, o comportamento seguro é preservar os outputs e bloquear qualquer operação destrutiva. O reconciliador actual continua limitado à limpeza de temporários que cumprem os seus critérios técnicos; não é um motor de retenção.
+
+
+## Revalidação transaccional antes da promoção
+
+A auditoria identificou que a elegibilidade era confirmada no enqueue, claim e conclusão do job, mas não na fronteira final de promoção. Uma restrição ou legal hold aplicado depois de `SUCCEEDED` e durante a preparação do output podia, portanto, não ser observado.
+
+A implementação acrescenta uma revalidação final de todas as linhas `dataset_execution_job_sources`, confirmando a cadeia loja/imagem, o SHA-256 original, `retention_status = ACTIVE` e `legal_hold = false`. As imagens, prateleiras e zonas são bloqueadas por ID crescente até ao commit. A migration `0064_dataset_output_source_eligibility` replica a regra no INSERT SQL para evitar bypass do serviço. A publicação falha fechada e preserva o staging se uma fonte estiver inelegível.
+
+A verificação não define prazos de retenção nem permite purga: limita-se a impedir a criação/publicação do derivado quando a origem já não é elegível. A validação PostgreSQL 16 e os workflows permanecem pendentes até conclusão do CI.

@@ -18,6 +18,7 @@ from app import dataset_job_output_publications as output_publications
 from app.dataset_job_output_publications import promote_dataset_job_output
 from app.dataset_worker_credentials import (
     DatasetWorkerAuthorizationError,
+    DatasetJobSourceIneligible,
     authenticate_dataset_worker,
     issue_dataset_worker_credential,
     revoke_dataset_worker_credential,
@@ -132,6 +133,66 @@ def main():
                 },
                 "stale fencing token publication",
             )
+
+        # A source may become restricted after completion but before promotion.
+        held_payload = payload + b" source-retention-race"
+        held_digest = hashlib.sha256(held_payload).hexdigest()
+        with SessionLocal() as db:
+            held_job = enqueue_dataset_job(
+                db, idempotency_key=f"output-smoke-source-hold-{suffix}", release_fingerprint="f" * 64,
+                approval_evidence={"status":"APPROVED","mode":"training","record_sha256":"b"*64,"gate_report_sha256":"c"*64},
+                sources=[{"shelf_image_id":source_image_id,"store_id":source_store_id,
+                          "source_image_sha256":hashlib.sha256(b"0123456789").hexdigest()}],
+            )
+            held_claim = claim_next_dataset_job(db, worker_id=worker_id, lease_seconds=300)
+            assert held_claim is not None and held_claim.id == held_job.id
+            held_stage = root / "staging" / str(held_job.id) / str(held_claim.fencing_token)
+            held_stage.mkdir(parents=True)
+            (held_stage / "model.bin").write_bytes(held_payload)
+            complete_dataset_job(db, job_id=held_job.id, worker_id=worker_id, fencing_token=held_claim.fencing_token,
+                output_sha256=held_digest, staged_output_reference=f"staging/{held_job.id}/{held_claim.fencing_token}/model.bin")
+            held_job_id, held_token = held_job.id, held_claim.fencing_token
+
+        source_prepared, source_resume = Event(), Event()
+        original_prepare = output_publications._prepare_verified_bytes
+        def pause_source_publication(**kwargs):
+            result = original_prepare(**kwargs)
+            source_prepared.set()
+            if not source_resume.wait(timeout=20):
+                raise TimeoutError("source-retention race was not released")
+            return result
+        def publish_after_source_hold():
+            with SessionLocal() as db:
+                try:
+                    promote_dataset_job_output(db, principal=principal, job_id=held_job_id, fencing_token=held_token)
+                except DatasetJobSourceIneligible:
+                    return "rejected-after-source-hold"
+                return "unexpectedly-published"
+        def apply_source_hold():
+            with SessionLocal() as db:
+                image = db.query(models.ShelfImage).filter_by(id=source_image_id).with_for_update().one()
+                image.legal_hold = True
+                db.commit()
+        output_publications._prepare_verified_bytes = pause_source_publication
+        try:
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                publication_future = executor.submit(publish_after_source_hold)
+                if not source_prepared.wait(timeout=10):
+                    source_resume.set()
+                    publication_future.result(timeout=20)
+                    raise AssertionError("publication did not reach source preparation")
+                executor.submit(apply_source_hold).result(timeout=5)
+                source_resume.set()
+                assert publication_future.result(timeout=20) == "rejected-after-source-hold"
+        finally:
+            source_resume.set()
+            output_publications._prepare_verified_bytes = original_prepare
+        with SessionLocal() as db:
+            assert db.query(models.DatasetExecutionJobOutputPublication).filter_by(job_id=held_job_id).count() == 0
+            assert (held_stage / "model.bin").read_bytes() == held_payload
+            image = db.query(models.ShelfImage).filter_by(id=source_image_id).one()
+            image.legal_hold = False
+            db.commit()
 
         # Hold the promotion in its lock-free preparation phase while a second
         # PostgreSQL session revokes the credential. The revocation must commit

@@ -13,6 +13,7 @@ from app.dataset_job_leases import claim_next_dataset_job, complete_dataset_job,
 from app.dataset_job_output_publications import (
     DatasetJobOutputIntegrityError,
     DatasetJobOutputUnavailable,
+    DatasetJobSourceIneligible,
     promote_dataset_job_output,
 )
 from app.dataset_worker_credentials import (
@@ -390,3 +391,29 @@ def test_output_reconciler_never_follows_or_removes_temporary_symlinks(
         item["reference"] == f"published/{state['job'].id}/{link.name}"
         for item in report["temporary_candidates"]
     )
+
+
+@pytest.mark.parametrize(("retention_status", "legal_hold"), [("RESTRICTED", False), ("ACTIVE", True)])
+def test_promotion_revalidates_sources_after_output_preparation(publication_setup, monkeypatch, retention_status, legal_hold):
+    from app import dataset_job_output_publications as publications
+    state = publication_setup
+    original_prepare = publications._prepare_verified_bytes
+
+    def prepare_then_restrict_source(**kwargs):
+        result = original_prepare(**kwargs)
+        source = state["db"].query(models.DatasetExecutionJobSource).filter_by(job_id=state["job"].id).one()
+        image = state["db"].query(models.ShelfImage).filter_by(id=source.shelf_image_id).one()
+        image.retention_status = retention_status
+        image.legal_hold = legal_hold
+        state["db"].commit()
+        return result
+
+    monkeypatch.setattr(publications, "_prepare_verified_bytes", prepare_then_restrict_source)
+    with pytest.raises(DatasetJobSourceIneligible):
+        promote_dataset_job_output(state["db"], principal=state["principal"], job_id=state["job"].id,
+                                   fencing_token=state["claim"].fencing_token)
+    assert state["db"].query(models.DatasetExecutionJobOutputPublication).count() == 0
+    assert state["stage_path"].exists()
+    published_root = state["root"] / "published"
+    assert not list(published_root.rglob("*.artifact"))
+    assert not list(published_root.rglob("*.tmp"))
