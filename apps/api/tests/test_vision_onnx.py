@@ -261,6 +261,7 @@ def test_provider_effective_version_binds_weights_labels_and_preprocessing(tmp_p
     assert first.model_version.endswith(_canonical_sha256({
         "detector_sha256": first.detector_sha256,
         "class_labels_sha256": first.class_labels_sha256,
+        "sku_match_labels_sha256": first.sku_match_labels_sha256,
         "input_size": 640,
         "confidence_threshold": 0.25,
         "max_detections": 300,
