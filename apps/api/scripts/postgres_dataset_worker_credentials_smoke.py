@@ -89,6 +89,13 @@ def main():
             "direct mutation of a credential secret digest",
         )
         db.rollback()
+        _rejected(
+            lambda: db.query(models.DatasetWorkerCredential).filter_by(
+                credential_id=first.credential_id
+            ).delete(),
+            "direct deletion of a credential",
+        )
+        db.rollback()
         assert authenticate_dataset_worker(db, bearer_token=second_token).worker_id == worker_id
         db.commit()
 
