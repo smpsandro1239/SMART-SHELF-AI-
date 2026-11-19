@@ -150,11 +150,15 @@ class ONNXShelfVisionProvider:
         self._image = Image
         selected_providers = providers or ["CPUExecutionProvider"]
         self._detector = ort.InferenceSession(str(self.detector_path), providers=selected_providers)
+        if self.detector_path.is_symlink() or _sha256_file(self.detector_path) != self.detector_sha256:
+            raise ONNXConfigurationError("Detector model changed while loading")
         self._detector_input = self._single_input_name(self._detector, "detector")
         self._detector_output = self._single_output_name(self._detector, "detector")
         self._validate_detector_contract(self._detector, self.input_size)
         if self.embedding_path:
             self._embedder = ort.InferenceSession(str(self.embedding_path), providers=selected_providers)
+            if self.embedding_path.is_symlink() or _sha256_file(self.embedding_path) != self.embedding_sha256:
+                raise ONNXConfigurationError("Embedding model changed while loading")
             self._embedding_input = self._single_input_name(self._embedder, "embedding")
             self._embedding_output = self._single_output_name(self._embedder, "embedding")
             self._validate_embedding_contract(self._embedder, self.input_size)
