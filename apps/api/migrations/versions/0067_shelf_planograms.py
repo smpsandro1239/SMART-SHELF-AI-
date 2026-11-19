@@ -269,7 +269,7 @@ def upgrade() -> None:
             BEGIN
                 SELECT status INTO parent_status FROM shelf_planograms
                 WHERE id = OLD.planogram_id FOR UPDATE;
-                IF parent_status IS DISTINCT FROM 'DRAFT' THEN
+                IF parent_status IS NOT NULL AND parent_status <> 'DRAFT' THEN
                     RAISE EXCEPTION 'only DRAFT planograms can change cells' USING ERRCODE = '23514';
                 END IF;
                 RETURN OLD;
@@ -383,8 +383,8 @@ def upgrade() -> None:
             CREATE TRIGGER trg_shelf_planogram_cell_update_guard_0067
             BEFORE UPDATE ON shelf_planogram_cells
             BEGIN
-                SELECT CASE WHEN NOT EXISTS (
-                    SELECT 1 FROM shelf_planograms WHERE id = OLD.planogram_id AND status = 'DRAFT'
+                SELECT CASE WHEN EXISTS (
+                    SELECT 1 FROM shelf_planograms WHERE id = OLD.planogram_id AND status <> 'DRAFT'
                 ) THEN RAISE(ABORT, 'only DRAFT planograms can change cells') END;
                 SELECT CASE WHEN NOT EXISTS (
                     SELECT 1 FROM shelf_planograms WHERE id = NEW.planogram_id AND status = 'DRAFT'
