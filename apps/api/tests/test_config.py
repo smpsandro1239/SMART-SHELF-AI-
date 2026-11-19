@@ -122,3 +122,30 @@ def test_development_keeps_local_defaults_available(monkeypatch):
     settings = Settings(_env_file=None, app_env="development")
 
     assert settings.jwt_secret_key == "INSECURE-DEVELOPMENT-KEY-CHANGE-ME"
+
+
+@pytest.mark.parametrize("mode", ["disabled", "mock", "real"])
+def test_vision_provider_mode_accepts_supported_values(mode):
+    settings = Settings(_env_file=None, vision_provider_mode=mode)
+    assert settings.vision_provider_mode == mode
+
+
+def test_vision_provider_mode_is_normalized():
+    settings = Settings(_env_file=None, vision_provider_mode=" REAL ")
+    assert settings.vision_provider_mode == "real"
+
+
+def test_vision_provider_mode_rejects_unknown_value():
+    with pytest.raises(ValidationError, match="VISION_PROVIDER_MODE"):
+        Settings(_env_file=None, vision_provider_mode="automatic")
+
+
+def test_production_rejects_mock_vision_provider_mode():
+    with pytest.raises(ValidationError, match="cannot use VISION_PROVIDER_MODE=mock"):
+        Settings(
+            _env_file=None,
+            app_env="production",
+            jwt_secret_key="j" * 32,
+            bootstrap_admin_key="b" * 32,
+            vision_provider_mode="mock",
+        )
