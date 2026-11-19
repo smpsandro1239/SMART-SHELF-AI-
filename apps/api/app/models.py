@@ -1068,3 +1068,23 @@ class DatasetWorkerEvent(Base):
     event_type: Mapped[str] = mapped_column(String(24), nullable=False)
     details: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+
+class DatasetWorkerRequestNonce(Base):
+    """Short-lived nonce used to reject replayed signed worker requests."""
+    __tablename__ = "dataset_worker_request_nonces"
+    __table_args__ = (
+        UniqueConstraint("credential_id", "nonce_sha256", name="uq_dataset_worker_request_nonce_credential_digest"),
+        CheckConstraint("length(nonce_sha256) = 64", name="ck_dataset_worker_request_nonce_digest"),
+        Index("ix_dataset_worker_request_nonces_expires", "expires_at"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    credential_id: Mapped[str] = mapped_column(
+        ForeignKey("dataset_worker_credentials.credential_id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    nonce_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    request_timestamp: Mapped[int] = mapped_column(Integer, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)

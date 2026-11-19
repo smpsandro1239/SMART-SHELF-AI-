@@ -213,19 +213,33 @@ def authenticate_dataset_worker(db: Session, *, bearer_token: str) -> DatasetWor
     if match is None:
         raise DatasetWorkerAuthenticationError("invalid worker credential")
     credential_id, supplied_secret = match.groups()
-    credential = db.query(models.DatasetWorkerCredential).filter_by(
+    candidate = db.query(models.DatasetWorkerCredential).filter_by(
         credential_id=credential_id
     ).first()
     supplied_digest = hashlib.sha256(supplied_secret.encode("ascii")).hexdigest()
-    expected_digest = credential.secret_sha256 if credential is not None else "0" * 64
+    if candidate is None:
+        credential = None
+        worker = None
+        expected_digest = "0" * 64
+    else:
+        # Lock order matches issuance and worker disablement: worker, then credential.
+        # A shared worker lock permits concurrent authenticators but serialises disablement.
+        worker = db.query(models.DatasetWorker).filter_by(
+            worker_id=candidate.worker_id
+        ).with_for_update(read=True).populate_existing().first()
+        credential = db.query(models.DatasetWorkerCredential).filter_by(
+            credential_id=credential_id
+        ).with_for_update().populate_existing().first()
+        expected_digest = credential.secret_sha256 if credential is not None else "0" * 64
     digest_matches = hmac.compare_digest(supplied_digest, expected_digest)
     now = _utc(_now())
     if (
         credential is None
+        or worker is None
         or not digest_matches
         or credential.revoked_at is not None
         or _utc(credential.expires_at) <= now
-        or credential.worker.status != "ACTIVE"
+        or worker.status != "ACTIVE"
     ):
         raise DatasetWorkerAuthenticationError("invalid worker credential")
     credential.last_used_at = now
@@ -296,3 +310,130 @@ def fail_dataset_job_for_worker(
         db, job_id=job_id, worker_id=principal.worker_id,
         fencing_token=fencing_token, failure_code=failure_code,
     )
+
+
+_REQUEST_SIGNATURE_VERSION = "SSW1"
+_REQUEST_TIMESTAMP_TOLERANCE_SECONDS = 60
+_REQUEST_NONCE_TTL_SECONDS = 2 * _REQUEST_TIMESTAMP_TOLERANCE_SECONDS + 1
+_NONCE = re.compile(r"^[A-Za-z0-9_-]{22,86}$")
+_SIGNATURE = re.compile(r"^[0-9a-f]{64}$")
+
+
+class DatasetWorkerRequestSignatureError(DatasetWorkerAuthenticationError):
+    """Signed worker request is malformed, stale or has an invalid signature."""
+
+
+class DatasetWorkerReplayError(DatasetWorkerAuthenticationError):
+    """A signed worker request nonce has already been consumed."""
+
+
+def _canonical_worker_request(
+    *, credential_id: str, method: str, request_target: str,
+    body: bytes, timestamp: int, nonce: str,
+) -> bytes:
+    if not isinstance(method, str) or not re.fullmatch(r"[A-Za-z]{1,16}", method):
+        raise DatasetWorkerRequestSignatureError("invalid signed request method")
+    if (
+        not isinstance(request_target, str)
+        or not request_target.startswith("/")
+        or any(ord(char) < 33 or ord(char) > 126 for char in request_target)
+    ):
+        raise DatasetWorkerRequestSignatureError("invalid signed request target")
+    if not isinstance(body, bytes):
+        raise DatasetWorkerRequestSignatureError("request body must be bytes")
+    if isinstance(timestamp, bool) or not isinstance(timestamp, int) or timestamp <= 0:
+        raise DatasetWorkerRequestSignatureError("invalid signed request timestamp")
+    if not isinstance(nonce, str) or not _NONCE.fullmatch(nonce):
+        raise DatasetWorkerRequestSignatureError("invalid signed request nonce")
+    fields = (
+        _REQUEST_SIGNATURE_VERSION,
+        credential_id,
+        str(timestamp),
+        nonce,
+        method.upper(),
+        request_target,
+        hashlib.sha256(body).hexdigest(),
+    )
+    return "\n".join(fields).encode("ascii")
+
+
+def sign_dataset_worker_request(
+    *, bearer_token: str, method: str, request_target: str,
+    body: bytes, timestamp: int, nonce: str,
+) -> str:
+    """Client helper: derive the HMAC key from the secret in the worker token."""
+    match = _CREDENTIAL.fullmatch(bearer_token) if isinstance(bearer_token, str) else None
+    if match is None:
+        raise DatasetWorkerRequestSignatureError("invalid worker credential")
+    credential_id, secret = match.groups()
+    canonical = _canonical_worker_request(
+        credential_id=credential_id, method=method, request_target=request_target,
+        body=body, timestamp=timestamp, nonce=nonce,
+    )
+    signing_key = hashlib.sha256(secret.encode("ascii")).digest()
+    return hmac.new(signing_key, canonical, hashlib.sha256).hexdigest()
+
+
+def verify_dataset_worker_request(
+    db: Session,
+    *,
+    bearer_token: str,
+    method: str,
+    request_target: str,
+    body: bytes,
+    timestamp: int,
+    nonce: str,
+    signature: str,
+    required_scope: str,
+    now: datetime | None = None,
+) -> DatasetWorkerPrincipal:
+    """Authenticate, authorise and atomically consume a signed request nonce.
+
+    The nonce transaction commits before the protected handler runs. A handler
+    retry must therefore use a fresh nonce, even if its business transaction rolls back.
+    """
+    current_time = _utc(now or _now())
+    if isinstance(timestamp, bool) or not isinstance(timestamp, int) or timestamp <= 0:
+        raise DatasetWorkerRequestSignatureError("invalid signed request timestamp")
+    if abs(current_time.timestamp() - timestamp) > _REQUEST_TIMESTAMP_TOLERANCE_SECONDS:
+        raise DatasetWorkerRequestSignatureError("signed request timestamp is outside the accepted window")
+
+    principal = authenticate_dataset_worker(db, bearer_token=bearer_token)
+    require_dataset_worker_scope(principal, required_scope=required_scope)
+    credential = db.query(models.DatasetWorkerCredential).filter_by(
+        credential_id=principal.credential_id
+    ).first()
+    if credential is None:
+        raise DatasetWorkerAuthenticationError("invalid worker credential")
+
+    canonical = _canonical_worker_request(
+        credential_id=principal.credential_id, method=method,
+        request_target=request_target, body=body, timestamp=timestamp, nonce=nonce,
+    )
+    signing_key = bytes.fromhex(credential.secret_sha256)
+    expected_signature = hmac.new(signing_key, canonical, hashlib.sha256).hexdigest()
+    if not isinstance(signature, str) or not _SIGNATURE.fullmatch(signature):
+        raise DatasetWorkerRequestSignatureError("invalid worker request signature")
+    if not hmac.compare_digest(expected_signature, signature):
+        raise DatasetWorkerRequestSignatureError("invalid worker request signature")
+
+    nonce_digest = hashlib.sha256(nonce.encode("ascii")).hexdigest()
+    try:
+        db.query(models.DatasetWorkerRequestNonce).filter(
+            models.DatasetWorkerRequestNonce.expires_at <= current_time
+        ).delete(synchronize_session=False)
+        db.add(models.DatasetWorkerRequestNonce(
+            credential_id=principal.credential_id,
+            nonce_sha256=nonce_digest,
+            request_timestamp=timestamp,
+            expires_at=current_time + timedelta(seconds=_REQUEST_NONCE_TTL_SECONDS),
+            created_at=current_time,
+        ))
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise DatasetWorkerReplayError("worker request nonce has already been used") from exc
+    except Exception:
+        db.rollback()
+        raise
+    return principal
