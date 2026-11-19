@@ -657,3 +657,12 @@ O API CI inclui agora um smoke PostgreSQL 16 dedicado à migration 0068 e ao cic
 Validação no commit `46eb9bbc19a039d2e68183655fb07501a0c12ef8`: API CI [44561359774](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44561359774) e Quality Gates [44561359524](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44561359524) com **1334 testes aprovados, 1 ignorado e 1 aviso**; Docker Compose [44561359723](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44561359723) aprovado.
 
 **Próxima fronteira:** ligar a versão ativa ao worker, persistir resultados de comparação rastreáveis por imagem/planograma/modelo e apresentar revisão humana. Não alterar inventário automaticamente.
+
+
+### Interface React de comparação de planogramas — 2026-11-19
+
+- Criado componente dedicado no frontend para selecionar prateleira e captura concluída e consultar o endpoint de comparação read-only.
+- A interface apresenta a versão ativa, proveniência da captura/calibração, versão do modelo, resultados por célula, facings e deteções associadas.
+- O acesso visual é exposto apenas a ADMIN/SUPERVISOR; a API mantém a validação JWT e o isolamento por loja.
+- A interface não cria observações/tarefas nem altera inventário. Sem calibração de visibilidade continua a apresentar UNKNOWN.
+- Build/CI e validação manual ainda pendentes. Próxima sequência: validar build; acrescentar testes de componente; depois avaliar persistência append-only das comparações com retenção/proveniência explícitas.
