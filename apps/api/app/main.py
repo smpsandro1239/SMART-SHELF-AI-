@@ -3117,6 +3117,7 @@ def create_observation_from_demo_detection(
         return existing
     observation_status = payload.confirmed_status
     observed_quantity = 0 if observation_status == "EMPTY" else None
+    confirmed_at = models.utc_now()
     observation = models.Observation(
         shelf_id=image.shelf_id,
         product_id=payload.product_id,
@@ -3126,9 +3127,11 @@ def create_observation_from_demo_detection(
         observed_quantity=observed_quantity,
         notes=(
             f"{marker} shelf_image_id={image.id}; sha256={image.sha256}; "
-            f"human_review_id={latest_review.id}; human_confirmed_status={observation_status}; provider=mock"
+            f"human_review_id={latest_review.id}; human_confirmed_status={observation_status}; "
+            f"human_status_confirmed_by_user_id={actor.id}; "
+            f"human_status_confirmed_at={confirmed_at.isoformat()}; provider=mock"
         ),
-        observed_at=models.utc_now(),
+        observed_at=confirmed_at,
         model_version=detection.model_version,
     )
     db.add(observation)

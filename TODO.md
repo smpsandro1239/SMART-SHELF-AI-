@@ -2,7 +2,7 @@
 
 - [x] Separar a revisão humana do SKU da confirmação humana do estado da prateleira no endpoint de observação demo.
 - [x] Exigir `confirmed_status` no contrato HTTP; rejeitar ausência (422) e divergência face à classe da deteção (409).
-- [x] Registar o estado confirmado na proveniência da observação e preservar a idempotência por deteção.
+- [x] Registar estado, utilizador confirmador e timestamp UTC na proveniência da observação; preservar a idempotência por deteção.
 - [x] Acrescentar regressões HTTP para falta de confirmação, estado incompatível, revisão SKU obrigatória e repetição idempotente.
 - [ ] Validar API CI/Quality Gates e confirmar o resultado do commit desta alteração.
 

@@ -229,6 +229,8 @@ def test_demo_detection_requires_human_review_and_is_idempotent(monkeypatch):
         assert first.json()["observed_quantity"] == 0
         assert f"sha256={'a' * 64}" in first.json()["notes"]
         assert "human_confirmed_status=EMPTY" in first.json()["notes"]
+        assert f"human_status_confirmed_by_user_id={reviewer_id}" in first.json()["notes"]
+        assert "human_status_confirmed_at=" in first.json()["notes"]
         assert decisions.status_code == 200
         by_product = {row["product_id"]: row for row in decisions.json()["decisions"]}
         assert by_product[product_id]["replenishment_assessment"] is not None

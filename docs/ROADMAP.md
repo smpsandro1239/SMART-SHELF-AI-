@@ -1,7 +1,7 @@
 ### Confirmação humana explícita de observações demo — 2026-11-19
 
 - O endpoint de criação de observação a partir de deteção demo exige agora `confirmed_status`, separado da revisão de SKU.
-- A API rejeita estados em falta ou incompatíveis com a classe da deteção; a confirmação fica registada na proveniência da observação.
+- A API rejeita estados em falta ou incompatíveis com a classe da deteção; a proveniência regista o estado, o utilizador confirmador e o timestamp UTC.
 - O comportamento continua restrito ao provider mock/demo e não constitui validação de visão computacional real.
 - Testes de regressão HTTP acrescentados; aguarda CI do novo commit.
 
