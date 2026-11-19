@@ -10,6 +10,7 @@ def provider_without_runtime():
     provider.input_size = 640
     provider.confidence_threshold = 0.25
     provider.max_detections = 20
+    provider.class_labels = {0: "product", 1: "empty_facing"}
     return provider
 
 
@@ -22,7 +23,8 @@ def test_decode_maps_letterboxed_boxes_back_to_original_image():
     boxes = provider._decode(raw, (640, 320), transform)
 
     assert len(boxes) == 1
-    score, x1, y1, x2, y2 = boxes[0]
+    score, class_id, x1, y1, x2, y2 = boxes[0]
+    assert class_id == 0
     assert score == pytest.approx(0.95)
     assert (x1, y1, x2, y2) == pytest.approx((0.1, 0.25, 0.9, 0.75))
 
@@ -47,3 +49,47 @@ def test_decode_rejects_unknown_detector_output_shape():
 def test_provider_requires_existing_detector_file(tmp_path):
     with pytest.raises(ONNXConfigurationError, match="does not point to a file"):
         ONNXShelfVisionProvider(tmp_path / "missing.onnx")
+
+
+
+def test_decode_preserves_class_id_for_semantic_mapping():
+    provider = provider_without_runtime()
+    raw = np.array([[0.1, 0.1, 0.5, 0.5, 0.95, 1]], dtype=np.float32)
+
+    boxes = provider._decode(raw, (640, 640), (640, 640, 1, 0, 0))
+
+    assert boxes[0][1] == 1
+
+
+@pytest.mark.parametrize("class_id", [-1, 1.5, np.nan])
+def test_decode_rejects_invalid_class_ids(class_id):
+    provider = provider_without_runtime()
+    raw = np.array([[0.1, 0.1, 0.5, 0.5, 0.95, class_id]], dtype=np.float32)
+
+    with pytest.raises(ValueError, match="class_id|non-finite"):
+        provider._decode(raw, (640, 640), (640, 640, 1, 0, 0))
+
+
+@pytest.mark.parametrize("confidence", [-0.01, 1.01, np.nan])
+def test_decode_rejects_invalid_confidence(confidence):
+    provider = provider_without_runtime()
+    raw = np.array([[0.1, 0.1, 0.5, 0.5, confidence, 0]], dtype=np.float32)
+
+    with pytest.raises(ValueError, match="confidence|non-finite"):
+        provider._decode(raw, (640, 640), (640, 640, 1, 0, 0))
+
+
+def test_provider_rejects_missing_or_empty_class_catalog(tmp_path):
+    model = tmp_path / "detector.onnx"
+    model.write_bytes(b"not-a-real-model")
+
+    with pytest.raises(ONNXConfigurationError, match="VISION_CLASS_LABELS_JSON"):
+        ONNXShelfVisionProvider(model, class_labels={})
+
+
+def test_provider_rejects_invalid_class_catalog(tmp_path):
+    model = tmp_path / "detector.onnx"
+    model.write_bytes(b"not-a-real-model")
+
+    with pytest.raises(ONNXConfigurationError, match="Class IDs"):
+        ONNXShelfVisionProvider(model, class_labels={-1: "product"})
