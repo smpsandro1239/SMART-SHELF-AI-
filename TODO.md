@@ -565,14 +565,14 @@
 ## Reconciliador de outputs — cobertura de integridade adicional
 
 - [x] Acrescentar regressão que corrompe o destino publicado mantendo um staging antigo válido e confirma que o reconciliador não remove o staging quando o destino diverge da auditoria append-only.
-- [ ] Validar a nova regressão, a suite API, os Quality Gates e os smokes PostgreSQL 16 no CI.
+- [x] Validar a nova regressão, a suite API, os Quality Gates e os smokes PostgreSQL 16 no CI no commit `54d2454629fb324e1fc1aca1c1be43db538a4dca`: API CI [44514111929](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44514111929), Quality Gates [44514111949](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44514111949) e Docker Compose [44514111942](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44514111942) passaram.
 
 
 ## Reconciliador de outputs — protecção contra symlinks (2026-11-19)
 
 - [x] Acrescentar regressão de limpeza em modo `--apply` para temporário antigo com nome interno mas implementado como symlink.
 - [x] Confirmar que o symlink não é candidato nem removido e que o destino externo permanece intacto.
-- [ ] Aguardar API CI, Quality Gates e Docker Compose no commit desta regressão.
+- [x] Validar API CI [44514111929](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44514111929), Quality Gates [44514111949](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44514111949) e Docker Compose [44514111942](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44514111942): os três workflows passaram.
 
 
 ## Governação de retenção dos outputs de jobs — decisão arquitectural (2026-11-19)
@@ -581,8 +581,8 @@
 - [x] Confirmar que a publicação append-only existente é a identidade canónica do output e que o catálogo por imagem não representa correctamente outputs multi-origem.
 - [x] Documentar o modelo alvo, a herança de restrições, os limites de inventário externo e as decisões de negócio em aberto.
 - [ ] Implementar eventos append-only de governação/retenção ligados à publicação, sem alterar a linha imutável da publicação.
-- [ ] Implementar elegibilidade fail-closed que revalide todas as fontes do job sob locks por ID crescente.
-- [ ] Acrescentar testes de migration SQLite e smoke PostgreSQL 16 para holds/restrições concorrentes em outputs multi-origem.
+- [x] Implementar elegibilidade fail-closed que revalida todas as fontes do job sob locks por ID crescente; migration 0064 aplica guard equivalente no INSERT.
+- [x] Acrescentar testes de migration SQLite e smoke PostgreSQL 16 para holds/restrições concorrentes em outputs multi-origem.
 - [ ] Definir política aprovada de retenção e cobertura externa antes de activar qualquer disposição física.
 
 Documento: `docs/architecture/dataset-output-artifact-governance.md`.
@@ -594,7 +594,7 @@ Documento: `docs/architecture/dataset-output-artifact-governance.md`.
 - [x] Revalidar todas as fontes imutáveis sob locks depois da preparação dos bytes e antes da promoção filesystem/auditoria.
 - [x] Acrescentar guard SQL PostgreSQL/SQLite para rejeitar publicações sem fontes elegíveis.
 - [x] Acrescentar regressões SQLite para fonte RESTRICTED e legal hold e smoke PostgreSQL concorrente para hold aplicado durante a preparação.
-- [ ] Validar migration 0064, suite API, smoke PostgreSQL 16, Quality Gates e Docker Compose no CI.
+- [x] Validar migration 0064, suite API, smoke PostgreSQL 16, Quality Gates e Docker Compose no CI no commit `01abce944e7d883ea53aca17a09ac589701fdfc9`: API CI [44516774051](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44516774051) (**1241 passed, 1 skipped, 1 warning**), Quality Gates [44516774058](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44516774058) e Docker Compose [44516774048](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44516774048) passaram.
 
 
 ## Revalidação multi-origem da publicação — 2026-11-19
@@ -602,6 +602,6 @@ Documento: `docs/architecture/dataset-output-artifact-governance.md`.
 - [x] Acrescentar regressões de serviço com duas fontes imutáveis, ordem de entrada inversa aos IDs e bloqueio quando a segunda fonte passa a `RESTRICTED` ou recebe `legal_hold`.
 - [x] Alargar o teste SQLite da migration 0064 para provar que uma única fonte inelegível bloqueia a publicação multi-origem, mesmo com outra fonte elegível.
 - [x] Alargar o smoke PostgreSQL 16 para publicar jobs com duas fontes e aplicar o legal hold concorrente à segunda origem durante a preparação.
-- [ ] Validar os novos cenários, migration 0064, suite API, Quality Gates e Docker Compose no CI.
+- [x] Validar os novos cenários, migration 0064, suite API, Quality Gates e Docker Compose no CI no commit `01abce944e7d883ea53aca17a09ac589701fdfc9`: API CI [44516774051](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44516774051), Quality Gates [44516774058](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44516774058) e Docker Compose [44516774048](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44516774048) passaram; **1241 passed, 1 skipped, 1 warning**.
 - [ ] Prosseguir com eventos append-only de governação ligados à publicação, sem alterar a linha canónica.
 - [ ] Não activar disposição física até existir política aprovada de retenção, cobertura de cópias externas e aprovação independente.

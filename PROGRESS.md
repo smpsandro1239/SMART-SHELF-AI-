@@ -837,3 +837,12 @@ Adicionado teste de segurança para temporários de promoção cujo nome corresp
 - O smoke PostgreSQL foi alargado a jobs multi-origem e aplica o legal hold concorrente à segunda imagem, não à primeira.
 - **Validação:** pendente dos workflows disparados pelo commit desta alteração. Nenhum teste local foi executado através desta sessão.
 - **Limites:** não foram introduzidos eventos de governação de outputs, política de retenção nem purga física. A próxima decisão técnica é desenhar os eventos append-only sem alterar a publicação canónica.
+
+
+### Validação final da cobertura multi-origem — commit `01abce944e7d883ea53aca17a09ac589701fdfc9`
+
+- API CI [44516774051](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44516774051): **1241 passed, 1 skipped, 1 warning**; migration e smokes PostgreSQL 16 aprovados, incluindo promoção multi-origem e legal hold concorrente sobre a segunda fonte.
+- Quality Gates [44516774058](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44516774058): compilação Python, suite API e build TypeScript/produção aprovados.
+- Docker Compose [44516774048](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44516774048): stack, readiness, seed e perfis demonstrativos aprovados.
+- Aviso remanescente: depreciação de `anyio.abc.BlockingPortal` emitida pelo `starlette.testclient`; não provocou falhas.
+- Nenhum teste foi executado localmente nesta sessão; a evidência é dos workflows GitHub Actions.

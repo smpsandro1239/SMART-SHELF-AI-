@@ -537,3 +537,11 @@ Ver [decisão de governação de retenção dos outputs](architecture/dataset-ou
 - Migration 0064 coberta com trigger a rejeitar publicação quando apenas uma das fontes está inelegível.
 - Smoke PostgreSQL 16 alargado para job multi-origem e corrida de legal hold sobre a segunda imagem durante a preparação.
 - Validação CI pendente no commit desta ronda; não declarar a cobertura PostgreSQL concluída antes do API CI.
+
+
+### Validação final — publicação multi-origem e retenção (2026-11-19)
+
+- API CI [44516774051](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44516774051): **1241 passed, 1 skipped, 1 warning**, incluindo migration 0064 e smoke PostgreSQL 16 com duas fontes e hold concorrente sobre a segunda.
+- Quality Gates [44516774058](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44516774058): compilação Python, suite API e build Web aprovados.
+- Docker Compose [44516774048](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44516774048): aprovado.
+- O aviso Starlette/AnyIO é uma depreciação externa; sem falhas associadas.
