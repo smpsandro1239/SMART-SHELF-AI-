@@ -63,7 +63,11 @@ from app.shelf_planograms import (
     replace_draft_planogram_cells,
     retire_planogram,
 )
-from app.shelf_planogram_comparison import (\n    COMPARISON_SCHEMA_VERSION,\n    compare_active_planogram_detections,\n    comparison_fingerprint,\n)
+from app.shelf_planogram_comparison import (
+    COMPARISON_SCHEMA_VERSION,
+    compare_active_planogram_detections,
+    comparison_fingerprint,
+)
 from app.pallet_rotation_forecast_bridge import enrich_pallet_candidates_with_hourly_profiles
 from app.pallet_rotation_windows import recommend_low_traffic_window
 from app.hourly_patterns import build_weekday_hour_profile
