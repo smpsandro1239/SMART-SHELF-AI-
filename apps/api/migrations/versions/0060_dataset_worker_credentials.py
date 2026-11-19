@@ -132,6 +132,20 @@ def upgrade() -> None:
             FOR EACH ROW EXECUTE FUNCTION enforce_dataset_worker_credential_0060()
         """)
         op.execute("""
+            CREATE OR REPLACE FUNCTION prevent_dataset_worker_credential_delete_0060()
+            RETURNS trigger LANGUAGE plpgsql AS $function$
+            BEGIN
+                RAISE EXCEPTION 'dataset worker credentials cannot be deleted'
+                    USING ERRCODE = '23514';
+            END;
+            $function$
+        """)
+        op.execute("""
+            CREATE TRIGGER trg_dataset_worker_credential_no_delete_0060
+            BEFORE DELETE ON dataset_worker_credentials
+            FOR EACH ROW EXECUTE FUNCTION prevent_dataset_worker_credential_delete_0060()
+        """)
+        op.execute("""
             CREATE OR REPLACE FUNCTION prevent_dataset_worker_event_mutation_0060()
             RETURNS trigger LANGUAGE plpgsql AS $function$
             BEGIN
@@ -179,6 +193,13 @@ def upgrade() -> None:
             END
         """)
         op.execute("""
+            CREATE TRIGGER trg_dataset_worker_credential_no_delete_0060
+            BEFORE DELETE ON dataset_worker_credentials
+            BEGIN
+                SELECT RAISE(ABORT, 'dataset worker credentials cannot be deleted');
+            END
+        """)
+        op.execute("""
             CREATE TRIGGER trg_dataset_worker_events_no_update_0060
             BEFORE UPDATE ON dataset_worker_events
             BEGIN
@@ -199,6 +220,8 @@ def downgrade() -> None:
     if bind.dialect.name == "postgresql":
         op.execute("DROP TRIGGER IF EXISTS trg_dataset_worker_events_append_only_0060 ON dataset_worker_events")
         op.execute("DROP FUNCTION IF EXISTS prevent_dataset_worker_event_mutation_0060()")
+        op.execute("DROP TRIGGER IF EXISTS trg_dataset_worker_credential_no_delete_0060 ON dataset_worker_credentials")
+        op.execute("DROP FUNCTION IF EXISTS prevent_dataset_worker_credential_delete_0060()")
         op.execute("DROP TRIGGER IF EXISTS trg_dataset_worker_credential_0060 ON dataset_worker_credentials")
         op.execute("DROP FUNCTION IF EXISTS enforce_dataset_worker_credential_0060()")
         op.execute("DROP TRIGGER IF EXISTS trg_dataset_worker_identity_0060 ON dataset_workers")
@@ -207,6 +230,7 @@ def downgrade() -> None:
         op.execute("DROP TRIGGER IF EXISTS trg_dataset_worker_events_no_update_0060")
         op.execute("DROP TRIGGER IF EXISTS trg_dataset_worker_identity_0060")
         op.execute("DROP TRIGGER IF EXISTS trg_dataset_worker_credential_0060")
+        op.execute("DROP TRIGGER IF EXISTS trg_dataset_worker_credential_no_delete_0060")
         op.execute("DROP TRIGGER IF EXISTS trg_dataset_worker_events_no_delete_0060")
     op.drop_index("ix_dataset_worker_events_worker_created", table_name="dataset_worker_events")
     op.drop_index("ix_dataset_worker_events_worker_id", table_name="dataset_worker_events")
