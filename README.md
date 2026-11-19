@@ -1454,3 +1454,14 @@ A migration 0059 também protege o INSERT: um job novo só pode entrar em `QUEUE
 ### Cobertura negativa do estado inicial dos jobs assíncronos — 19-11-2026
 
 A migration `0059_dataset_execution_initial_state` exige que cada job seja inserido em `QUEUED`, sem lease, contadores incrementados, output, referência staging, falha ou timestamp terminal. A cobertura de regressão foi expandida no teste SQLite e no smoke PostgreSQL para tentar cada um destes metadados forjados individualmente. Os testes foram acrescentados nos commits `0d7592b12a98ee11f16730591c30368637b30c32` e `f07d9d2fbc194dacd05e38a100c6937cde9da9f2`. **Validação concluída:** API CI [44428496117](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44428496117), Quality Gates [44428496156](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44428496156) e Docker Compose [44428496204](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44428496204) passaram. A suite terminou com 1179 testes aprovados, 1 ignorado e 1 aviso; migration PostgreSQL 16 e smoke concorrente de leases/fencing passaram.
+
+
+## 2026-11-19 — Primeira implementação de identidade e credenciais individuais dos workers
+
+A próxima camada de segurança dos jobs assíncronos foi iniciada. A migration `0060_dataset_worker_credentials` acrescenta identidades de serviço (`dataset_workers`), credenciais individuais (`dataset_worker_credentials`) e eventos de segurança append-only (`dataset_worker_events`). O módulo `apps/api/app/dataset_worker_credentials.py` emite credenciais bearer aleatórias, persiste apenas SHA-256 do segredo, valida expiração/estado/revogação, suporta rotação e desativação e aplica scopes explícitos. O comando local `python -m app.dataset_worker_admin` faz o provisionamento sem criar uma rota HTTP pública.
+
+Os wrappers de claim, heartbeat, conclusão e falha obtêm o `worker_id` do principal autenticado, em vez de o aceitar como argumento independente. Os testes cobrem segredo inválido, credenciais desconhecidas, expiração, revogação, rotação, desativação, scopes e vínculo da identidade no claim. Foi integrado no API CI o smoke PostgreSQL `postgres_dataset_worker_credentials_smoke.py`, incluindo tentativas de UPDATE/DELETE aos eventos de segurança.
+
+Documentação: [autenticação de workers](docs/security/dataset-worker-authentication.md) e [contrato de execução assíncrona](docs/architecture/dataset-async-execution-lease.md).
+
+**Estado nesta revisão:** implementação e testes adicionados; a validação CI da migration 0060, do smoke PostgreSQL e da suite completa ainda tem de terminar com sucesso. Não existem endpoints HTTP de jobs. A autenticação por bearer ainda não impede replay de pedidos; assinatura por pedido/nonce, leitura autorizada de bytes e promoção de outputs com fencing continuam pendentes. Os scopes `artifacts:read` e `outputs:publish` estão reservados, não implementados.
