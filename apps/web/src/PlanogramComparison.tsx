@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import { ScanSearch, AlertCircle, CheckCircle2, HelpCircle } from "lucide-react";
 
 type Shelf = { id: number; code: string; description: string | null };
@@ -69,7 +69,7 @@ export default function PlanogramComparison({ shelves, captures, request }: Prop
 
   const selectedShelf = shelves.find(item => String(item.id) === shelfId);
 
-  async function runComparison(event: React.FormEvent<HTMLFormElement>) {
+  async function runComparison(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!shelfId || !captureId) {
       setError("Seleciona uma prateleira e uma captura analisada.");
