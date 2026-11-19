@@ -1518,3 +1518,9 @@ A promoção é idempotente: se o ficheiro final existir devido a uma interrupç
 - Docker Compose [44480661813](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44480661813): stack, readiness, seed e worker demonstrativo passaram.
 
 **Limites:** a publicação usa filesystem local configurado; não existe ainda adapter para object storage nem catálogo de artefactos derivados com herança de retenção/legal hold. A limpeza automática de temporários órfãos após crash abrupto continua pendente. Não existem rotas HTTP de jobs, broker ou worker remoto de treino; por isso, a execução assíncrona continua não operacional e não deve ser apresentada como funcionalidade disponível.
+
+### Redução da janela de locks na publicação — 2026-11-19
+
+A leitura/cópia/hash do output decorre agora fora dos locks PostgreSQL. A fase final volta a validar job, evento terminal, worker, credencial, revogação, validade, scope e fencing token sob locks; só depois executa o hard link no-clobber e regista a publicação append-only. A remoção do staging ocorre após o commit. A regressão revoga a credencial durante a preparação e confirma a recusa na revalidação final.
+
+**Validação:** API CI [44483199562](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44483199562), Quality Gates [44483436546](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44483436546) e Docker Compose [44483199541](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44483199541) passaram. Não foram executados testes localmente. O smoke PostgreSQL actual confirma publicação concorrente; a corrida específica de revogação durante a cópia ainda não tem smoke PostgreSQL dedicado.

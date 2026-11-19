@@ -73,7 +73,7 @@ A promoção não deve manter locks de job/worker/credencial durante leitura, c�
 
 A revogação que confirme durante a preparação tem de ser observada pela revalidação final e bloquear a publicação. O staging só é removido depois do commit SQL. Se o processo cair após o hard link mas antes do commit, o destino determinístico é verificado por digest fora dos locks e a auditoria pode ser concluída numa repetição. A limpeza do staging é best-effort após commit; a limpeza abrangente de temporários e staging órfãos exige um reconciliador dedicado e ainda não está implementada.
 
-A secção crítica final continua a incluir uma operação de filesystem local (link + fsync do directório), mas não inclui cópia nem hashing proporcional ao tamanho do output. O smoke PostgreSQL deve continuar a verificar publicação concorrente e, adicionalmente, que revogação durante a fase de preparação não fica bloqueada pela cópia.
+A secção crítica final continua a incluir uma operação de filesystem local (link + fsync do directório), mas não inclui cópia nem hashing proporcional ao tamanho do output. A regressão SQLite que revoga a credencial durante a preparação passou na suite API. O smoke PostgreSQL actual valida publicação concorrente, fencing e auditoria append-only, mas ainda não observa a revogação a confirmar enquanto a cópia está pausada; esse cenário permanece como reforço de validação.
 
 ## Persistência e auditoria exigidas
 

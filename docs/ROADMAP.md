@@ -3,7 +3,9 @@
 - A preparação/cópia/hash do output foi retirada da transacção com locks PostgreSQL; a autorização é revalidada sob locks imediatamente antes da publicação final.
 - A secção crítica contém apenas o hard link no-clobber e o registo append-only. O staging é limpo após commit e a reconciliação de um destino criado antes de um crash verifica o digest fora dos locks.
 - Teste de regressão cobre revogação durante a preparação e exige recusa sem publicação.
-- Código integrado na main: 5767468ad8058a593474695b2cb0dee9ef3118e7. A validação CI deste commit está pendente.
+- Código integrado na `main`: `5767468ad8058a593474695b2cb0dee9ef3118e7`; documentação: `5e84a0cec8cc15ca829aa6eda1694d8013819858`.
+- Validação concluída: API CI [44483199562](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44483199562), Quality Gates [44483436546](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44483436546) e Docker Compose [44483199541](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44483199541) passaram. A evidência é CI; não foram executados testes localmente.
+- O teste de revogação durante preparação está validado na suite SQLite. Falta um smoke PostgreSQL dedicado que observe a revogação a confirmar antes de a fase de cópia terminar.
 - Próxima prioridade: reconciliador de temporários e staging órfãos; depois catálogo de outputs com herança de retenção/legal hold.
 
 ### Auditoria HTTP de integrações externas — percurso ADMIN (2026-11-18)

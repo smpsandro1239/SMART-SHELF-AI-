@@ -5,7 +5,9 @@
 - A promoção foi dividida em preflight sem locks, preparação de um temporário privado com verificação integral de tamanho/digest e transacção final curta. A fase final volta a bloquear e revalidar o job, evento terminal, worker, credencial, expiração, revogação, scope e fencing token antes do hard link sem sobrescrita e do INSERT append-only.
 - O staging só é removido depois do commit SQL. Uma falha de limpeza deixa o staging recuperável; uma interrupção após o hard link mas antes do commit continua reconciliável pela verificação do destino, efectuada fora dos locks.
 - Novo teste: a preparação confirma que a sessão DB não mantém transacção; revoga a credencial durante a cópia e confirma que a revalidação final recusa a publicação, sem artefacto publicado nem linha de auditoria.
-- Commit de código: 5767468ad8058a593474695b2cb0dee9ef3118e7. CI ainda pendente; não afirmar validação concluída. Não foram executados testes localmente.
+- Commit de código: `5767468ad8058a593474695b2cb0dee9ef3118e7`; commit documental: `5e84a0cec8cc15ca829aa6eda1694d8013819858`.
+- API CI [44483199562](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44483199562) passou, incluindo migration PostgreSQL, smoke de publicação concorrente e suite API. Docker Compose [44483199541](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44483199541) passou. Quality Gates [44483436546](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44483436546) passou com compilação Python, suite API, TypeScript e build Web.
+- Não foram executados testes localmente; a evidência é exclusivamente GitHub Actions. O smoke PostgreSQL actual não força ainda a revogação durante a fase de cópia; essa corrida está coberta por teste SQLite e fica como reforço pendente.
 - Próxima tarefa: desenhar reconciliador idempotente de temporários/staging órfãos com período de segurança e provas de fencing/auditoria; depois integrar outputs no catálogo com herança de retenção/legal hold.
 
 ## 2026-11-18 — Gate de aprovação obrigatório na execução de datasets
