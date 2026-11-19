@@ -66,6 +66,11 @@ jobs:
           DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/smart_shelf_ci
           APP_ENV: test
         run: python scripts/postgres_dataset_job_lease_smoke.py
+      - name: Verify PostgreSQL dataset worker credential lifecycle and audit immutability
+        env:
+          DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/smart_shelf_ci
+          APP_ENV: test
+        run: python scripts/postgres_dataset_worker_credentials_smoke.py
       - name: Verify PostgreSQL concurrent first-admin bootstrap
         env:
           DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/smart_shelf_ci
