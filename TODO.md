@@ -661,12 +661,12 @@ Objectivo: evoluir o projecto para uma plataforma de inteligência operacional d
 
 ### P0 — contratos, fiabilidade e evidência
 - [ ] Reconciliar README, ROADMAP, TODO e PROGRESS com o estado real dos módulos de visão; distinguir explicitamente implementado, experimental, mock, integrado mas não validado e operacional.
-- [ ] Confirmar o estado actual de CI no HEAD desta ronda (API CI/PostgreSQL 16, Quality Gates, Web CI e Docker Compose); registar SHA, runs e resultados sem reutilizar evidência de commits anteriores.
+- [x] Confirmar o estado actual de CI no HEAD desta ronda (API CI/PostgreSQL 16, Quality Gates, Web CI e Docker Compose); registar SHA, runs e resultados sem reutilizar evidência de commits anteriores. (HEAD `69b9bba60a070933589d162ad9279ab4487c0a3b`; API CI, Quality Gates e Docker Compose aprovados.)
 - [ ] Auditar o contrato de saída do provider ONNX: classes, scores, bounding boxes, dimensões, coordenadas normalizadas/absolutas, formato de tensor, pré-processamento e pós-processamento.
-- [ ] Corrigir o mapeamento de class_id para etiquetas/classes versionadas; rejeitar classes desconhecidas ou índices fora do catálogo em vez de atribuir genericamente "product".
-- [ ] Validar metadados do modelo (formato, versão, hash SHA-256, input/output names, shapes, dtype, labels, threshold e versão do pré/pós-processamento) antes de carregar/inferir.
-- [ ] Definir configuração fail-closed para provider mock/demo versus provider real; impedir que resultados sintéticos sejam apresentados como deteções reais ou usados para alterar inventário.
-- [ ] Acrescentar testes de contrato e regressão para modelos inválidos, outputs malformados, classes desconhecidas, confiança fora de intervalo, boxes inválidas, imagens inválidas e falhas/timeout do provider.
+- [x] Corrigir o mapeamento de class_id para etiquetas/classes versionadas; rejeitar classes desconhecidas ou índices fora do catálogo em vez de atribuir genericamente "product". (Configuração obrigatória `VISION_CLASS_LABELS_JSON`; classes inválidas/desconhecidas rejeitadas.)
+- [ ] Validar metadados do modelo (formato, versão, hash SHA-256, input/output names, shapes, dtype, labels, threshold e versão do pré/pós-processamento) antes de carregar/inferir. (Shapes/dtype, número de inputs/outputs e contrato das seis colunas são agora validados; hash/manifesto assinado e versão do pré/pós-processamento continuam pendentes.)
+- [x] Definir configuração fail-closed para provider mock/demo versus provider real; impedir que resultados sintéticos sejam apresentados como deteções reais ou usados para alterar inventário. (`VISION_PROVIDER_MODE=disabled|mock|real`; modo mock limitado ao provider demo e bloqueado em produção.)
+- [ ] Acrescentar testes de contrato e regressão para modelos inválidos, outputs malformados, classes desconhecidas, confiança fora de intervalo, boxes inválidas, imagens inválidas e falhas/timeout do provider. (Já cobertos metadados incompatíveis, class_id inválido/desconhecido, confiança inválida e mapeamento semântico; faltam imagens inválidas, timeout e matriz completa de boxes.)
 - [ ] Garantir que cada deteção e observação preserva proveniência: imagem/captura, loja, zona, prateleira, dispositivo, timestamp UTC, provider, model version, preprocessing version e correlation/request ID.
 - [ ] Definir estados explícitos para inferência indisponível, evidência insuficiente, baixa confiança e revisão humana; nunca converter falha de inferência em "prateleira vazia".
 - [ ] Verificar idempotência de reprocessamento, deduplicação de eventos e fencing/lease do worker; testar retry, timeout, crash e recuperação sem duplicar deteções ou tarefas.
@@ -690,7 +690,7 @@ Objectivo: evoluir o projecto para uma plataforma de inteligência operacional d
 - [ ] Definir limiares por classe/cenário e política de abstenção: correspondências ambíguas ou desconhecidas devem ir para revisão, não ser forçadas para um SKU.
 - [ ] Separar formalmente object detection, identificação SKU, contagem de facings visíveis e estimativa de unidades físicas; não inferir stock total a partir de faces visíveis.
 - [ ] Implementar detecção/segmentação de regiões de prateleira e células de exposição, incluindo coordenadas normalizadas e transformação para a geometria da imagem.
-- [ ] Implementar detecção de espaços vazios comparando células/posições esperadas com observações; distinguir vazio real, oclusão, área fora de imagem e falha de captura.
+- [ ] Implementar detecção de espaços vazios comparando células/posições esperadas com observações; distinguir vazio real, oclusão, área fora de imagem e falha de captura. (Comparador geométrico puro de células calibradas implementado; estados EMPTY/UNKNOWN/OCCUPIED/MISPLACED preservam evidência. Falta ligar a planogramas persistidos, visibilidade real e worker.)
 - [ ] Implementar contagem de facings por SKU com associação espacial, supressão de duplicados e tratamento de produtos sobrepostos.
 - [ ] Implementar deteção de produto deslocado/misplaced e produto desconhecido, com evidência visual e confiança.
 - [ ] Introduzir estado de qualidade/visibilidade por região (occluded, blurred, glare, out_of_view, low_resolution) para impedir conclusões indevidas.
@@ -698,6 +698,7 @@ Objectivo: evoluir o projecto para uma plataforma de inteligência operacional d
 - [ ] Criar testes com imagens sintéticas controladas e imagens reais anotadas para vazio, low stock, facings, deslocamento, oclusão e falsos vazios.
 
 ### P1 — geometria de prateleiras e planogramas
+- [x] Implementar comparador puro entre deteções e células calibradas, com IDs únicos, coordenadas normalizadas, SKU esperado opcional, proveniência das deteções e estado UNKNOWN por omissão quando a visibilidade não é confirmada.
 - [ ] Definir modelo de domínio para corredor, módulo, prateleira, segmento, célula/posição, coordenadas, capacidade, orientação e associação a loja/zona.
 - [ ] Definir API/serviços e migrations necessárias para planogramas versionados, com actor, motivo, vigência e histórico append-only ou auditável.
 - [ ] Permitir associar SKU esperado, número de facings esperado, capacidade máxima, prioridade e regras de exposição a cada posição.
@@ -790,3 +791,13 @@ Objectivo: evoluir o projecto para uma plataforma de inteligência operacional d
 
 Critério global: nenhuma capacidade pode ser marcada como concluída sem código, testes relevantes, isolamento/autorização, documentação e evidência CI; funcionalidades dependentes de dataset, câmaras, credenciais ou hardware devem permanecer explicitamente bloqueadas até validação real.
 
+
+
+### Fecho da primeira sequência técnica — 2026-11-19
+
+- [x] Mapear classes ONNX por configuração explícita e rejeitar IDs desconhecidos.
+- [x] Validar shapes/dtypes e contrato dos tensores antes de executar inferência.
+- [x] Separar modos disabled/mock/real e bloquear mock em produção.
+- [x] Comparar deteções com células calibradas e preservar estados de incerteza.
+- [x] Validar a sequência em CI: 1293 testes aprovados, 1 ignorado, 1 aviso; build Web, Quality Gates e Docker Compose aprovados.
+- [ ] Não declarar deteção comercial operacional: faltam pesos aprovados, dataset anotado, calibração e integração persistente das células/planogramas.
