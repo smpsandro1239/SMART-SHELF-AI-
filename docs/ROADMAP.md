@@ -413,7 +413,7 @@ Foi criado e integrado no API CI o smoke `postgres_dataset_eligibility_concurren
 
 - [x] API CI [44421831066](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44421831066): migration PostgreSQL 16, smoke de execução assíncrona e 1179 testes aprovados, 1 ignorado, 1 aviso.
 - [x] Quality Gates [44421831076](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44421831076) e Docker Compose [44421831148](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44421831148) passaram.
-- [ ] A migration 0059 de estado inicial obrigatório ainda aguarda validação.
+- [x] A migration 0059 de estado inicial obrigatório foi validada no API CI [44428496117](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44428496117), com PostgreSQL 16, smoke de leases/fencing e 1179 testes aprovados, 1 ignorado e 1 aviso; Quality Gates [44428496156](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44428496156) e Docker Compose [44428496204](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44428496204) passaram.
 
 
 ### Guard de estado inicial dos jobs assíncronos — 19-11-2026
