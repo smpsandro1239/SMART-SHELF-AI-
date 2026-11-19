@@ -1,3 +1,18 @@
+### Idempotência estrita da confirmação de observações — 2026-11-19
+
+- Corrigida a deduplicação por deteção para não devolver uma observação de SKU A quando uma revisão humana posterior já selecionou SKU B.
+- O replay só é idempotente quando o produto e o estado coincidem; pedidos com identidade diferente recebem HTTP 409, preservando a observação original.
+- Foi acrescentado teste HTTP de regressão para revisão SKU posterior e tentativa de reutilização da deteção com outro produto.
+- A validação do novo commit está pendente dos workflows API CI/PostgreSQL, Quality Gates e Docker Compose.
+
+### Confirmação humana explícita de observações demo — validação concluída (2026-11-19)
+
+- API CI [44596254264](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44596254264) passou com PostgreSQL 16, smokes operacionais e **1343 testes aprovados, 1 ignorado e 1 aviso**.
+- Quality Gates [44596254489](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44596254489) passou com compilação Python, suite API e build TypeScript/produção Web.
+- Docker Compose [44596254260](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44596254260) passou com arranque, readiness, seed, worker e perfis de demonstração.
+- A correção do smoke PostgreSQL de retenção foi validada. A nova regra de confirmação humana está coberta por testes API e pelo smoke de concorrência.
+- A evidência é CI automatizado; não houve validação manual com imagens reais.
+
 ### Confirmação humana explícita de observações demo — 2026-11-19
 
 - O endpoint de criação de observação a partir de deteção demo exige agora `confirmed_status`, separado da revisão de SKU.

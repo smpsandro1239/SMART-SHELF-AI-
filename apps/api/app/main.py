@@ -3114,6 +3114,14 @@ def create_observation_from_demo_detection(
         .first()
     )
     if existing is not None:
+        if existing.product_id != payload.product_id or existing.status != payload.confirmed_status:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "This detection already has an observation for a different product or status; "
+                    "a new reviewed detection is required to record a changed SKU"
+                ),
+            )
         return existing
     observation_status = payload.confirmed_status
     observed_quantity = 0 if observation_status == "EMPTY" else None

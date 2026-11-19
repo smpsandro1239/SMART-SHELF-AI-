@@ -173,6 +173,26 @@ def test_demo_detection_requires_human_review_and_is_idempotent(monkeypatch):
                 f"/api/v1/shelf-image-detections/{detection_id}/observation",
                 json={"product_id": product_id, "confirmed_status": "EMPTY"},
             )
+
+            # A later SKU review must not make the original idempotency key
+            # silently return an observation for a different product.
+            db = TestingSession()
+            try:
+                db.add(models.DetectionSkuReview(
+                    detection_id=detection_id,
+                    selected_product_id=other_product_id,
+                    decision="CORRECTED",
+                    reviewer_user_id=reviewer_id,
+                    notes="Regressão: SKU revisto depois da observação inicial.",
+                ))
+                db.commit()
+            finally:
+                db.close()
+
+            changed_product = client.post(
+                f"/api/v1/shelf-image-detections/{detection_id}/observation",
+                json={"product_id": other_product_id, "confirmed_status": "EMPTY"},
+            )
             decisions = client.get(f"/api/v1/operational-decisions?store_id={store_id}")
             missing_evidence = client.post(
                 "/api/v1/tasks/from-operational-decision?approved=true&demo_evidence_required=true",
@@ -225,6 +245,9 @@ def test_demo_detection_requires_human_review_and_is_idempotent(monkeypatch):
         assert first.status_code == 200
         assert second.status_code == 200
         assert first.json()["id"] == second.json()["id"]
+        assert changed_product.status_code == 409
+        assert "different product or status" in changed_product.json()["detail"]
+        assert first.json()["product_id"] == product_id
         assert first.json()["status"] == "EMPTY"
         assert first.json()["observed_quantity"] == 0
         assert f"sha256={'a' * 64}" in first.json()["notes"]

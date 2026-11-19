@@ -1,3 +1,18 @@
+## 2026-11-19 — Idempotência estrita da observação após revisão SKU posterior
+
+- A revisão da implementação revelou que o endpoint podia devolver uma observação anterior para SKU A depois de uma revisão posterior ter selecionado SKU B, porque a deduplicação só identificava a deteção.
+- O endpoint passa a devolver o registo existente apenas quando o produto e o estado coincidem com o pedido repetido. Uma tentativa com identidade diferente recebe HTTP 409; a observação original e a sua proveniência permanecem inalteradas.
+- Foi acrescentado um teste HTTP de regressão para a sequência SKU A → nova revisão SKU B → repetição para SKU B, verificando conflito e preservação da observação A.
+- A validação CI/PostgreSQL desta correção fica pendente da execução dos workflows do novo commit. Não foram executados testes localmente.
+
+## 2026-11-19 — Validação da confirmação humana explícita
+
+- O commit 2aec1463af6ee24998eab1ac6be862dfdb21a5b8 foi validado pelos três workflows: API CI [44596254264](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44596254264), Quality Gates [44596254489](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44596254489) e Docker Compose [44596254260](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44596254260).
+- API CI executou PostgreSQL 16 e todos os smokes operacionais, incluindo o smoke de confirmação de observação/retenção; suite: **1343 passed, 1 skipped, 1 warning**.
+- Quality Gates confirmou compilação Python, suite API e build TypeScript/produção Web. Docker Compose confirmou arranque, readiness, seed, worker e os três perfis.
+- O aviso é a depreciação externa anyio.abc.BlockingPortal do Starlette TestClient.
+- Esta validação é de CI; não substitui testes manuais com câmaras/datasets reais.
+
 ## 2026-11-19 — Separação entre revisão SKU e confirmação do estado demo
 
 - Identificada uma lacuna no endpoint `POST /api/v1/shelf-image-detections/{detection_id}/observation`: a revisão humana do SKU era suficiente para converter `empty_facing` em observação `EMPTY`, sem confirmação explícita do estado.

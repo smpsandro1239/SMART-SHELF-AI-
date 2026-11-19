@@ -1,3 +1,10 @@
+## Idempotência da observação perante revisão SKU posterior — 2026-11-19
+
+- [x] Identificar que a chave de idempotência por deteção devolvia uma observação anterior mesmo quando uma revisão SKU posterior alterava o produto pedido.
+- [x] Tornar o replay estrito: a observação existente só é devolvida quando produto e estado coincidem; alterações de identidade devolvem HTTP 409 sem modificar o registo original.
+- [x] Acrescentar regressão HTTP que cria a observação para SKU A, regista revisão posterior para SKU B e confirma que o segundo pedido é rejeitado e a observação A permanece intacta.
+- [ ] Validar API CI/PostgreSQL, Quality Gates e Docker Compose no commit desta correção.
+
 ## Confirmação humana explícita do estado das observações demo — 2026-11-19
 
 - [x] Separar a revisão humana do SKU da confirmação humana do estado da prateleira no endpoint de observação demo.
@@ -5,7 +12,7 @@
 - [x] Registar estado, utilizador confirmador e timestamp UTC na proveniência da observação; preservar a idempotência por deteção.
 - [x] Acrescentar regressões HTTP para falta de confirmação, estado incompatível, revisão SKU obrigatória e repetição idempotente.
 - [x] Atualizar o smoke PostgreSQL de retenção para enviar `confirmed_status=EMPTY` e continuar a testar o lock da imagem antes da validação do estado de retenção.
-- [ ] Validar API CI/Quality Gates e confirmar o resultado do commit desta alteração.
+- [x] Validar API CI/Quality Gates e confirmar o resultado do commit 2aec1463af6ee24998eab1ac6be862dfdb21a5b8: API CI [44596254264](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44596254264) (1343 passed, 1 skipped, 1 warning), Quality Gates [44596254489](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44596254489) e Docker Compose [44596254260](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44596254260) passaram.
 
 ## Evidência de comparação de planogramas — contrato antes da persistência (2026-11-19)
 
