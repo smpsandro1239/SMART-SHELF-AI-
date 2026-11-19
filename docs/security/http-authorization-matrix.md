@@ -421,3 +421,8 @@ Isto não altera permissões existentes noutras famílias de recursos. O facto d
 - Não expor rotas até existir política aprovada e testes JWT/PostgreSQL por operação e loja.
 
 As decisões pendentes e a proposta de aprovação independente estão em dataset-output-governance-approval.md.
+
+
+## Validação CI mais recente — 19-11-2026
+
+O API CI [44606506802](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44606506802) passou, incluindo os smokes PostgreSQL 16 de autorização de sessões de captura, avaliação SKU revista, listagem de funcionários e fila de revisão/retention. A suite API terminou com **1343 testes aprovados, 1 ignorado e 1 aviso**. O resultado confirma estes cenários específicos; não fecha a auditoria global dos 128 endpoints versionados.
