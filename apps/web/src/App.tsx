@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import PlanogramComparison from "./PlanogramComparison";
 import {
   Activity, AlertTriangle, ArrowDownToLine, ArrowUpRight, Boxes, CheckCircle2,
   CircleUserRound, Clock3, LogOut, PackageSearch, RefreshCw, ShieldCheck,
@@ -963,7 +964,8 @@ export default function App() {
               </div>
             </article>
           </section>
-          {(user?.role === "ADMIN" || user?.role === "SUPERVISOR") && <PlanogramComparison shelves={shelves} captures={captures} request={request} />}\n          {(user?.role === "ADMIN" || user?.role === "SUPERVISOR") && <section id="review-queue" className="panel review-queue-panel">
+          {(user?.role === "ADMIN" || user?.role === "SUPERVISOR") && <PlanogramComparison shelves={shelves} captures={captures} request={request} />}
+          {(user?.role === "ADMIN" || user?.role === "SUPERVISOR") && <section id="review-queue" className="panel review-queue-panel">
             <div className="panel-heading">
               <div><p className="eyebrow">CONTROLO DE QUALIDADE</p><h2>Fila de revisão de SKU</h2><p className="muted">Sugestões da fusão visual + OCR que aguardam decisão humana.</p></div>
               <span className="subtle-pill">{reviewQueue.length} itens prioritários</span>
