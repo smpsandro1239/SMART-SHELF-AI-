@@ -621,3 +621,11 @@ O comparador de células foi endurecido para não inferir vazio apenas porque o 
 As células calibradas suportam agora um número esperado de facings por SKU. O comparador calcula quantas deteções de produto frontais se associam a cada célula e devolve `UNDER_FACED`, `OVER_FACED` ou `OCCUPIED` quando a contagem é inferior, superior ou exacta. `MISPLACED`, `OCCUPIED_UNIDENTIFIED` e `CONFLICT` mantêm precedência para preservar a incerteza.
 
 `observed_facings` conta caixas pós-NMS associadas à célula; não representa unidades em profundidade nem stock disponível. A deduplicação e calibração de caixas com imagens reais são necessárias antes de usar esta contagem operacionalmente. Persistência de planogramas, API e interface continuam pendentes.
+
+## 2026-11-19 — API de planogramas versionados
+
+Foi concluída a primeira fronteira HTTP do ciclo de vida dos planogramas: criar DRAFT com células, consultar histórico, ler versão ativa, ativar e retirar. A autorização é restrita a ADMIN/SUPERVISOR e o isolamento de loja é repetido no serviço de domínio. A ativação substitui a versão ativa anterior de forma transacional; as versões ativadas/retiradas mantêm o histórico.
+
+Validação final no commit `dd262068bdf8178a8eddff0f103317aec8a3558b`: API CI [44559057802](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44559057802) com PostgreSQL 16 e **1330 testes aprovados, 1 ignorado e 1 aviso**; Quality Gates [44559057575](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44559057575) e Docker Compose [44559057828](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44559057828) aprovados.
+
+**Próximas prioridades:** edição atómica de células em DRAFT, persistência de `expected_facings`, UI de planogramas, integração do comparador com o worker e validação por dataset real. Até lá, os planogramas são dados de configuração e não alteram stock.

@@ -983,3 +983,21 @@ A quarta sequência corrige uma ambiguidade de negócio importante no comparador
 - Testes cobrem contagem inferior/excedente/exacta, prioridade de SKU errado, SKU desconhecido, validação de `expected_facings` e célula vazia com zero facings observados.
 - Limite: a contagem é número de caixas pós-NMS associadas, não quantidade física em profundidade. Deduplicação/calibração com imagens reais e integração persistente continuam pendentes.
 - Validação CI pendente para esta sequência.
+
+## 2026-11-19 — API HTTP de planogramas versionados
+
+A migration `0067_shelf_planograms` e o serviço de domínio passaram a ter uma fronteira HTTP autenticada:
+
+- Criadas rotas para criar versões DRAFT com células, consultar histórico, obter versão ativa, ativar e retirar planogramas.
+- Os motivos de ativação/retirada são obrigatórios; a ativação substitui a versão anterior na mesma transação.
+- Middleware e handlers exigem ADMIN/SUPERVISOR; o serviço revalida actor ativo e âmbito da loja. Supervisores ficam limitados à sua loja; funcionários EMPLOYEE não acedem.
+- A resposta inclui os metadados de ciclo de vida e as células normalizadas. O histórico é ordenado por versão descendente e tem paginação limitada.
+- Corrigido o trigger SQLite de DELETE de células: a cascata de eliminação de um DRAFT não pode ser confundida com alteração de uma versão protegida.
+- As primeiras execuções de CI identificaram um bloco mal formado no middleware e uma fixture que não fazia commit dos utilizadores de teste; ambos foram corrigidos antes da validação final.
+
+**Validação final no commit `dd262068bdf8178a8eddff0f103317aec8a3558b`:**
+- API CI [44559057802](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44559057802): PostgreSQL 16/migrações e **1330 passed, 1 skipped, 1 warning**.
+- Quality Gates [44559057575](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44559057575): compilação Python, suite API e build Web aprovados.
+- Docker Compose [44559057828](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44559057828): stack aprovada.
+
+**Limites:** ainda não há endpoint de edição de rascunhos, persistência de `expected_facings`, UI React, integração do comparador no worker ou validação com dataset real. A API não altera inventário.

@@ -843,3 +843,17 @@ Critério global: nenhuma capacidade pode ser marcada como concluída sem códig
 - [x] Preservar valores esperados/observados e testar limites, contagens, células vazias e prioridades de estado.
 - [ ] Ligar `observed_facings` a detecções persistidas com NMS e deduplicação calibradas; não assumir que cada caixa é um facing físico sem validação.
 - [ ] Persistir estes campos em planogramas versionados e expor comparação esperado/observado por API/UI.
+
+### Sexta sequência — API HTTP de planogramas versionados (2026-11-19)
+
+- [x] Corrigir o trigger SQLite de eliminação das células em cascata: só bloquear DELETE de células quando o planograma pai ainda existe e não está em DRAFT.
+- [x] Expor criação de versões DRAFT com células validadas, origem de calibração e digest opcional.
+- [x] Expor histórico paginado e leitura da versão ativa por prateleira.
+- [x] Expor ativação e retirada com motivo obrigatório; ativar uma versão retira a anterior na mesma transação.
+- [x] Aplicar autorização ADMIN/SUPERVISOR no middleware e repetir validação de actor/loja no serviço; EMPLOYEE é recusado.
+- [x] Acrescentar testes HTTP para ciclo de vida, substituição de versão ativa, retirada, isolamento multi-loja, perfil e payload geométrico/SKU inválido.
+- [x] Validar no commit `dd262068bdf8178a8eddff0f103317aec8a3558b`: API CI [44559057802](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44559057802), **1330 passed, 1 skipped, 1 warning**; Quality Gates [44559057575](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44559057575) e Docker Compose [44559057828](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44559057828) aprovados.
+- [ ] Acrescentar edição/substituição atómica de células apenas enquanto DRAFT; preservar versões ACTIVE/RETIRED.
+- [ ] Persistir `expected_facings` e integrar a comparação geométrica com planogramas persistidos, worker e revisão humana.
+- [ ] Criar interface React de histórico, edição de rascunho, ativação, comparação esperado/observado e revisão.
+- [ ] Validar com dataset real anotado; thresholds e contagens continuam experimentais e não podem alterar inventário.
