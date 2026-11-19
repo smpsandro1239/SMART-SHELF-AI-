@@ -1736,3 +1736,8 @@ A comparação de planogramas valida a retenção em cada consulta: apenas captu
 
 
 As respostas de comparação incluem ainda a versão do esquema e um SHA-256 determinístico sobre a captura, proveniência do modelo/planograma/calibração e resultados por célula. Este identificador prepara a futura persistência auditável; não representa uma assinatura digital e não altera o carácter read-only da consulta.
+
+
+### 2026-11-19 — Comparação serializada com retenção
+
+A comparação de planogramas bloqueia a captura e a imagem de calibração (por ordem crescente de ID), depois a prateleira e a versão ativa do planograma. A versão ativa é revalidada após os locks; uma alteração concorrente devolve HTTP 409 para nova consulta. Uma restrição de retenção concorrente aguarda a leitura protegida e os pedidos posteriores deixam de expor a captura. A comparação continua read-only e não é persistida.
