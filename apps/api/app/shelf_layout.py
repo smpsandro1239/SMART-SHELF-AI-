@@ -100,3 +100,112 @@ def group_detections_into_rows(
             ) for item in ordered),
         ))
     return tuple(result)
+
+
+
+@dataclass(frozen=True)
+class ShelfCell:
+    """Expected display cell supplied by a reviewed planogram or calibration."""
+
+    cell_id: str
+    x_min: float
+    y_min: float
+    x_max: float
+    y_max: float
+    expected_product_id: int | None = None
+    is_visible: bool = True
+    is_occluded: bool = False
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.cell_id, str) or not self.cell_id.strip():
+            raise ValueError("cell_id must be a non-empty string")
+        if not (
+            0 <= self.x_min < self.x_max <= 1
+            and 0 <= self.y_min < self.y_max <= 1
+        ):
+            raise ValueError("Shelf cell coordinates must be normalized and non-degenerate")
+        if self.expected_product_id is not None and (
+            isinstance(self.expected_product_id, bool)
+            or self.expected_product_id <= 0
+        ):
+            raise ValueError("expected_product_id must be a positive integer or None")
+        if not isinstance(self.is_visible, bool) or not isinstance(self.is_occluded, bool):
+            raise ValueError("Cell visibility flags must be booleans")
+
+
+@dataclass(frozen=True)
+class ShelfCellObservation:
+    cell_id: str
+    status: str
+    expected_product_id: int | None
+    observed_product_ids: tuple[int | None, ...]
+    detection_indices: tuple[int, ...]
+    overlap_ratio: float
+
+
+def compare_detections_to_cells(
+    cells: Iterable[ShelfCell],
+    detections: Iterable[Any],
+    *,
+    minimum_cell_overlap: float = 0.25,
+) -> tuple[ShelfCellObservation, ...]:
+    """Compare detections with explicit, calibrated cells.
+
+    An undetected cell is called EMPTY only when it is explicitly visible and
+    not marked occluded. This function never estimates stock depth or changes
+    inventory; missing/uncertain geometry must be represented as UNKNOWN.
+    """
+    if not 0 < minimum_cell_overlap <= 1:
+        raise ValueError("minimum_cell_overlap must be in (0, 1]")
+
+    cell_list = tuple(cells)
+    if len({cell.cell_id for cell in cell_list}) != len(cell_list):
+        raise ValueError("Shelf cell IDs must be unique")
+
+    detection_boxes = []
+    for index, detection in enumerate(detections):
+        x1, y1, x2, y2, product_id = _read_box(detection)
+        detection_boxes.append((index, x1, y1, x2, y2, product_id))
+
+    observations = []
+    for cell in cell_list:
+        cell_area = (cell.x_max - cell.x_min) * (cell.y_max - cell.y_min)
+        matches = []
+        strongest_overlap = 0.0
+        for index, x1, y1, x2, y2, product_id in detection_boxes:
+            intersection_width = max(0.0, min(cell.x_max, x2) - max(cell.x_min, x1))
+            intersection_height = max(0.0, min(cell.y_max, y2) - max(cell.y_min, y1))
+            overlap = (intersection_width * intersection_height) / cell_area
+            if overlap >= minimum_cell_overlap:
+                matches.append((index, product_id))
+                strongest_overlap = max(strongest_overlap, overlap)
+
+        product_ids = tuple(sorted(
+            {product_id for _, product_id in matches},
+            key=lambda value: (value is None, value if value is not None else 0),
+        ))
+        detection_indices = tuple(index for index, _ in matches)
+
+        if matches:
+            known_ids = {product_id for _, product_id in matches if product_id is not None}
+            if cell.expected_product_id is not None and known_ids and cell.expected_product_id not in known_ids:
+                status = "MISPLACED"
+            elif any(product_id is None for _, product_id in matches) and not known_ids:
+                status = "OCCUPIED_UNIDENTIFIED"
+            else:
+                status = "OCCUPIED"
+        elif not cell.is_visible or cell.is_occluded:
+            status = "UNKNOWN"
+        else:
+            status = "EMPTY"
+
+        observations.append(ShelfCellObservation(
+            cell_id=cell.cell_id,
+            status=status,
+            expected_product_id=cell.expected_product_id,
+            observed_product_ids=product_ids,
+            detection_indices=detection_indices,
+            overlap_ratio=round(strongest_overlap, 6),
+        ))
+
+    return tuple(observations)
