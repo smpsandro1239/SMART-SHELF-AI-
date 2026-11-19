@@ -2,7 +2,7 @@
 
 from uuid import uuid4
 
-from sqlalchemy import update
+from sqlalchemy import text, update
 from sqlalchemy.exc import IntegrityError
 
 from app import models
@@ -71,6 +71,24 @@ def main():
             "previous credential after rotation",
         )
         db.rollback()
+        _rejected(
+            lambda: db.execute(text("""
+                UPDATE dataset_worker_credentials
+                SET scopes = '["outputs:publish"]'::json
+                WHERE credential_id = :credential_id
+            """), {"credential_id": first.credential_id}),
+            "direct mutation of a credential's scopes",
+        )
+        db.rollback()
+        _rejected(
+            lambda: db.execute(text("""
+                UPDATE dataset_worker_credentials
+                SET secret_sha256 = :digest
+                WHERE credential_id = :credential_id
+            """), {"credential_id": first.credential_id, "digest": "a" * 64}),
+            "direct mutation of a credential secret digest",
+        )
+        db.rollback()
         assert authenticate_dataset_worker(db, bearer_token=second_token).worker_id == worker_id
         db.commit()
 
@@ -89,6 +107,15 @@ def main():
         db.commit()
         assert disable_dataset_worker(db, worker_id=disabled_id)
         db.commit()
+        _rejected(
+            lambda: db.execute(text("""
+                UPDATE dataset_workers
+                SET status = 'ACTIVE', disabled_at = NULL
+                WHERE worker_id = :worker_id
+            """), {"worker_id": disabled_id}),
+            "direct reactivation of a disabled worker",
+        )
+        db.rollback()
         _rejected(
             lambda: authenticate_dataset_worker(db, bearer_token=disabled_token),
             "credential belonging to disabled worker",
