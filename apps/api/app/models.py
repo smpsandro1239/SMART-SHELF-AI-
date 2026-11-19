@@ -1045,6 +1045,7 @@ class DatasetWorkerCredential(Base):
     replaced_by_credential_id: Mapped[str | None] = mapped_column(
         ForeignKey("dataset_worker_credentials.credential_id", ondelete="RESTRICT"), nullable=True
     )
+    worker: Mapped["DatasetWorker"] = relationship()
 
 
 class DatasetWorkerEvent(Base):
