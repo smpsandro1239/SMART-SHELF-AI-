@@ -94,10 +94,12 @@ class ONNXShelfVisionProvider:
         self._detector = ort.InferenceSession(str(self.detector_path), providers=selected_providers)
         self._detector_input = self._single_input_name(self._detector, "detector")
         self._detector_output = self._single_output_name(self._detector, "detector")
+        self._validate_detector_contract(self._detector, self.input_size)
         if self.embedding_path:
             self._embedder = ort.InferenceSession(str(self.embedding_path), providers=selected_providers)
             self._embedding_input = self._single_input_name(self._embedder, "embedding")
             self._embedding_output = self._single_output_name(self._embedder, "embedding")
+            self._validate_embedding_contract(self._embedder, self.input_size)
         else:
             self._embedder = None
             self._embedding_input = None
@@ -116,6 +118,48 @@ class ONNXShelfVisionProvider:
         if len(outputs) != 1:
             raise ONNXConfigurationError(f"{label} model must expose exactly one output")
         return outputs[0].name
+
+    @staticmethod
+    def _validate_detector_contract(session, input_size: int) -> None:
+        input_meta = session.get_inputs()[0]
+        output_meta = session.get_outputs()[0]
+        if input_meta.type != "tensor(float)" or output_meta.type != "tensor(float)":
+            raise ONNXConfigurationError("Detector input and output must use float32 tensors")
+        input_shape = input_meta.shape
+        output_shape = output_meta.shape
+        if not isinstance(input_shape, (list, tuple)) or len(input_shape) != 4:
+            raise ONNXConfigurationError("Detector input must have NCHW rank 4")
+        if input_shape[1] != 3:
+            raise ONNXConfigurationError("Detector input must have exactly 3 RGB channels")
+        for dimension in input_shape[2:]:
+            if isinstance(dimension, int) and dimension != input_size:
+                raise ONNXConfigurationError("Detector input height and width must match VISION_INPUT_SIZE")
+        if isinstance(input_shape[0], int) and input_shape[0] != 1:
+            raise ONNXConfigurationError("Detector input batch size must be 1 or dynamic")
+        if not isinstance(output_shape, (list, tuple)) or len(output_shape) not in (2, 3):
+            raise ONNXConfigurationError("Detector output must have rank 2 or 3")
+        if output_shape[-1] != 6:
+            raise ONNXConfigurationError("Detector output must expose exactly 6 values per detection")
+
+    @staticmethod
+    def _validate_embedding_contract(session, input_size: int) -> None:
+        input_meta = session.get_inputs()[0]
+        output_meta = session.get_outputs()[0]
+        if input_meta.type != "tensor(float)" or output_meta.type != "tensor(float)":
+            raise ONNXConfigurationError("Embedding input and output must use float32 tensors")
+        input_shape = input_meta.shape
+        output_shape = output_meta.shape
+        if not isinstance(input_shape, (list, tuple)) or len(input_shape) != 4:
+            raise ONNXConfigurationError("Embedding input must have NCHW rank 4")
+        if input_shape[1] != 3:
+            raise ONNXConfigurationError("Embedding input must have exactly 3 RGB channels")
+        for dimension in input_shape[2:]:
+            if isinstance(dimension, int) and dimension != input_size:
+                raise ONNXConfigurationError("Embedding input height and width must match VISION_INPUT_SIZE")
+        if isinstance(input_shape[0], int) and input_shape[0] != 1:
+            raise ONNXConfigurationError("Embedding input batch size must be 1 or dynamic")
+        if not isinstance(output_shape, (list, tuple)) or not output_shape:
+            raise ONNXConfigurationError("Embedding output must be a non-empty tensor")
 
     def _preprocess(self, image):
         np = self._np
