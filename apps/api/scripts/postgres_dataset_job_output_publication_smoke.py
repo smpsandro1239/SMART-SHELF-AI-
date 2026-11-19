@@ -1,9 +1,9 @@
 """PostgreSQL smoke for atomic, fenced dataset output publication and audit guards."""
 
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, TimeoutError
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from threading import Barrier
+from threading import Barrier, Event
 from uuid import uuid4
 import hashlib
 
@@ -14,8 +14,14 @@ from app import models
 from app.config import settings
 from app.database import SessionLocal
 from app.dataset_job_leases import claim_next_dataset_job, complete_dataset_job, enqueue_dataset_job
+from app import dataset_job_output_publications as output_publications
 from app.dataset_job_output_publications import promote_dataset_job_output
-from app.dataset_worker_credentials import authenticate_dataset_worker, issue_dataset_worker_credential
+from app.dataset_worker_credentials import (
+    DatasetWorkerAuthorizationError,
+    authenticate_dataset_worker,
+    issue_dataset_worker_credential,
+    revoke_dataset_worker_credential,
+)
 
 
 def _assert_rejected(db, statement, params, label):
@@ -84,6 +90,7 @@ def main():
             )
             principal = authenticate_dataset_worker(db, bearer_token=token)
             job_id, token_value, credential_id = job.id, claim.fencing_token, credential.credential_id
+            source_image_id, source_store_id = image.id, store.id
 
         barrier = Barrier(2)
         def publish():
@@ -125,10 +132,99 @@ def main():
                 },
                 "stale fencing token publication",
             )
+
+        # Hold the promotion in its lock-free preparation phase while a second
+        # PostgreSQL session revokes the credential. The revocation must commit
+        # before preparation is released; final revalidation must then reject.
+        revoked_payload = payload + b" revocation-race"
+        revoked_digest = hashlib.sha256(revoked_payload).hexdigest()
+        with SessionLocal() as db:
+            revoked_job = enqueue_dataset_job(
+                db, idempotency_key=f"output-smoke-revoke-{suffix}",
+                release_fingerprint="e" * 64,
+                approval_evidence={
+                    "status": "APPROVED", "mode": "training",
+                    "record_sha256": "b" * 64, "gate_report_sha256": "c" * 64,
+                },
+                sources=[{
+                    "shelf_image_id": source_image_id, "store_id": source_store_id,
+                    "source_image_sha256": hashlib.sha256(b"0123456789").hexdigest(),
+                }],
+            )
+            revoked_claim = claim_next_dataset_job(db, worker_id=worker_id, lease_seconds=300)
+            assert revoked_claim is not None and revoked_claim.id == revoked_job.id
+            revoked_stage = root / "staging" / str(revoked_job.id) / str(revoked_claim.fencing_token)
+            revoked_stage.mkdir(parents=True)
+            (revoked_stage / "model.bin").write_bytes(revoked_payload)
+            complete_dataset_job(
+                db, job_id=revoked_job.id, worker_id=worker_id,
+                fencing_token=revoked_claim.fencing_token, output_sha256=revoked_digest,
+                staged_output_reference=(
+                    f"staging/{revoked_job.id}/{revoked_claim.fencing_token}/model.bin"
+                ),
+            )
+            revoked_job_id, revoked_token = revoked_job.id, revoked_claim.fencing_token
+
+        prepared = Event()
+        resume = Event()
+        original_prepare = output_publications._prepare_verified_bytes
+
+        def pause_after_prepare(**kwargs):
+            prepared_result = original_prepare(**kwargs)
+            prepared.set()
+            if not resume.wait(timeout=20):
+                raise TimeoutError("test did not release prepared output")
+            return prepared_result
+
+        def publish_revocation_race():
+            with SessionLocal() as db:
+                try:
+                    promote_dataset_job_output(
+                        db, principal=principal, job_id=revoked_job_id,
+                        fencing_token=revoked_token,
+                    )
+                except DatasetWorkerAuthorizationError:
+                    return "rejected-after-revocation"
+                return "unexpectedly-published"
+
+        def revoke_credential():
+            with SessionLocal() as db:
+                return revoke_dataset_worker_credential(db, credential_id=credential_id)
+
+        output_publications._prepare_verified_bytes = pause_after_prepare
+        try:
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                publication_future = executor.submit(publish_revocation_race)
+                if not prepared.wait(timeout=10):
+                    resume.set()
+                    publication_future.result(timeout=20)
+                    raise AssertionError("publication did not reach lock-free preparation")
+                revocation_future = executor.submit(revoke_credential)
+                try:
+                    revoked = revocation_future.result(timeout=5)
+                except TimeoutError:
+                    resume.set()
+                    try:
+                        publication_future.result(timeout=20)
+                    except Exception:
+                        pass
+                    raise AssertionError("credential revocation blocked during output preparation")
+                assert revoked is True
+                resume.set()
+                assert publication_future.result(timeout=20) == "rejected-after-revocation"
+        finally:
+            resume.set()
+            output_publications._prepare_verified_bytes = original_prepare
+
+        with SessionLocal() as db:
+            assert db.query(models.DatasetExecutionJobOutputPublication).filter_by(
+                job_id=revoked_job_id
+            ).count() == 0
+            assert (revoked_stage / "model.bin").read_bytes() == revoked_payload
     settings.dataset_output_storage_path = original_root
     print(
         "PostgreSQL output publication smoke passed: concurrent promotion was idempotent, "
-        "digest and fencing guards held, and publication audit remained append-only."
+        "digest/fencing/audit guards held, and revocation committed during lock-free preparation."
     )
 
 
