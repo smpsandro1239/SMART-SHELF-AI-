@@ -931,3 +931,13 @@ Critério global: nenhuma capacidade pode ser marcada como concluída sem códig
 - [x] Acrescentar teste HTTP que confirma digest de 64 caracteres e estabilidade entre consultas idênticas.
 - [ ] Confirmar API CI e Quality Gates antes de considerar a identidade validada.
 - [ ] Persistir snapshots e decisões humanas apenas numa fase seguinte, com retenção e triggers append-only.
+
+
+## Concorrência da comparação de planogramas — 2026-11-19
+
+- [x] Bloquear captura e imagem de calibração por ordem crescente de ID antes da prateleira e do planograma.
+- [x] Recarregar a versão ativa após os locks e devolver HTTP 409 se a versão tiver mudado durante a aquisição.
+- [x] Revalidar retenção ACTIVE e análise COMPLETED da captura sob lock antes de consultar deteções.
+- [x] Alargar o smoke PostgreSQL para provar que a restrição de retenção espera pela comparação e que a consulta seguinte rejeita a imagem.
+- [ ] Confirmar API CI/PostgreSQL 16 e Quality Gates antes de marcar a cobertura como validada.
+- [ ] Definir contrato de retenção/versionamento para snapshots persistidos; manter a comparação on-demand e read-only.
