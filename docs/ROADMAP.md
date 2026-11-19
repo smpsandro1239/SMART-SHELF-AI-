@@ -441,7 +441,7 @@ Foi criado e integrado no API CI o smoke `postgres_dataset_eligibility_concurren
 - CLI de provisionamento local; nenhuma rota HTTP pública de emissão foi criada.
 - Testes SQLite e smoke PostgreSQL de ciclo de vida e imutabilidade integrados no workflow API CI.
 
-**Validação:** pendente de conclusão dos workflows disparados pelo HEAD da ronda. Não declarar migration/serviço validados até API CI e Quality Gates ficarem verdes.
+**Validação concluída no commit de código `d7c84125d35a5fff5d2254a3ee33a08cd41edcc7`:** API CI [44431378398](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44431378398) passou (PostgreSQL 16, smoke de credenciais e **1202 passed, 1 skipped, 1 warning**), Quality Gates [44431378324](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44431378324) e Docker Compose [44431378349](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44431378349) também passaram.
 
 **Riscos e trabalho restante:**
 1. A autenticação bearer não é anti-replay; falta assinatura por pedido/nonce ou protocolo equivalente.

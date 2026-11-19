@@ -80,3 +80,15 @@ A validade predefinida é 30 dias; o serviço limita a validade a 90 dias e reje
 ## Validação exigida
 
 Os testes unitários cobrem credenciais malformadas/desconhecidas, segredo incorreto, expiração, revogação, rotação, desativação, scopes inválidos/insuficientes e vinculação do claim à identidade autenticada. O smoke PostgreSQL valida o ciclo de vida e tenta UPDATE/DELETE directos aos eventos append-only. Só marcar a migration e o serviço como validados depois de API CI e Quality Gates passarem no commit correspondente.
+
+## Integridade imposta pela base de dados
+
+A migration 0060 aplica guards equivalentes em PostgreSQL e SQLite:
+
+- worker_id e created_at do worker são imutáveis; ACTIVE só pode transitar para DISABLED e nunca ser reativado;
+- id, credential_id, worker_id, hash, scopes, created_at e expires_at da credencial são imutáveis;
+- revoked_at e replaced_by_credential_id só podem transitar de NULL para um valor; last_used_at não pode recuar nem ser apagado;
+- credenciais não podem ser eliminadas;
+- eventos de segurança não aceitam UPDATE nem DELETE.
+
+O teste SQLite `test_dataset_worker_credentials_migration.py` verifica estes guards e o smoke `postgres_dataset_worker_credentials_smoke.py` testa as proteções em PostgreSQL 16. Validação CI: [API CI 44431378398](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44431378398), [Quality Gates 44431378324](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44431378324) e [Docker Compose 44431378349](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44431378349); 1202 testes aprovados, 1 ignorado e 1 aviso.

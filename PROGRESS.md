@@ -732,6 +732,8 @@ Commit validado: `1e3499c8c80ef75494a29d06807469898471e4e1`.
 - **PostgreSQL:** `postgres_dataset_worker_credentials_smoke.py` foi integrado no API CI e testa o ciclo de vida e a imutabilidade dos eventos.
 - **Documentação:** README, TODO, roadmap, contrato de leases e novo guia de segurança actualizados.
 
-**Estado de validação:** os workflows API CI e Quality Gates do HEAD desta ronda ainda têm de ser consultados. Não foi executado pytest local nem se declara validação PostgreSQL até os passos CI concluírem.
+**Validação concluída no commit de código `d7c84125d35a5fff5d2254a3ee33a08cd41edcc7`:** API CI [44431378398](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44431378398) passou com PostgreSQL 16, smoke dedicado e **1202 passed, 1 skipped, 1 warning**; Quality Gates [44431378324](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44431378324) passou; Docker Compose [44431378349](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44431378349) passou. Não foi executado pytest local; a evidência é a execução CI.
 
 **Limitações explícitas:** a credencial é bearer reutilizável e não previne replay; falta assinatura por pedido/nonce. Não há endpoints HTTP de jobs, broker/worker de treino, leitura de bytes por chamada ou promotor fenced. `artifacts:read` e `outputs:publish` são scopes reservados, sem handlers implementados.
+
+- **Hardening SQL adicional:** migration 0060 impede UPDATE/DELETE de campos imutáveis de credenciais, bloqueia eliminação de credenciais, impede reativar workers desativados e mantém eventos append-only; teste SQLite e smoke PostgreSQL passaram no CI acima.

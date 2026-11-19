@@ -479,8 +479,10 @@
 - [x] Criar CLI local confiável para issue/rotate/revoke/disable; não criar endpoint HTTP público de emissão.
 - [x] Acrescentar testes unitários para segredo incorrecto, token desconhecido/malformado, expiração, revogação, rotação, desativação, scopes e identidade no claim.
 - [x] Integrar smoke PostgreSQL para ciclo de vida de credenciais e imutabilidade dos eventos de segurança.
-- [ ] Confirmar API CI, migration PostgreSQL 16, smoke dedicado e Quality Gates no HEAD desta ronda.
+- [x] Validar migration PostgreSQL 16, smoke dedicado, suite API (**1202 passed, 1 skipped, 1 warning**), Quality Gates e Docker Compose no commit de código `d7c8412`: [API CI 44431378398](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44431378398), [Quality Gates 44431378324](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44431378324) e [Docker Compose 44431378349](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44431378349) passaram.
 - [ ] Integrar autenticação no futuro middleware/handlers HTTP antes de expor qualquer endpoint de jobs.
 - [ ] Implementar assinatura por pedido/nonce ou mecanismo equivalente anti-replay; a credencial bearer actual é reutilizável.
 - [ ] Implementar leitura de artefactos autorizada por chamada (`artifacts:read`) e promoção de outputs condicionada ao fencing token actual (`outputs:publish`).
 - [ ] Não marcar o worker como operacional: ainda não existe broker/worker de treino, API HTTP de jobs nem integração real de armazenamento/publicação.
+
+- [x] Acrescentar guards SQL PostgreSQL/SQLite para imutabilidade de scopes/hash/validade/identidade, revogação unidireccional, credenciais não elimináveis e desativação não reversível; cobrir a migration 0060 com teste SQLite e smoke PostgreSQL.

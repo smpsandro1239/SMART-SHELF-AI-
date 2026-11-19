@@ -159,3 +159,11 @@ A migration `0060_dataset_worker_credentials` acrescenta identidades de serviço
 O módulo `app.dataset_worker_credentials` autentica a credencial, valida o estado do worker e a expiração, compara hashes em tempo constante e devolve um principal cujo `worker_id` provém do registo autenticado. Wrappers para claim, heartbeat, complete e fail aplicam scopes e usam apenas a identidade do principal. O CLI `python -m app.dataset_worker_admin` permite provisionamento, rotação, revogação e desativação local; não foi criado endpoint público de emissão.
 
 **Limites importantes:** a integração HTTP ainda não existe e os endpoints de jobs continuam fechados. A credencial é bearer reutilizável: ainda não existe assinatura por pedido, nonce ou prevenção de replay. `artifacts:read` e `outputs:publish` são scopes reservados até existirem o serviço de leitura por chamada e o promotor fenced. Ver [Autenticação de workers de datasets](../security/dataset-worker-authentication.md). A validação PostgreSQL/CI desta migration e do smoke de imutabilidade tem de ser confirmada antes de marcar a tarefa como concluída.
+
+### Guards SQL de credenciais e identidade do worker — validados
+
+Além dos hashes e scopes verificados pelo serviço, a migration 0060 impede alterações SQL directas à identidade, segredo, scopes e validade das credenciais; proíbe a eliminação de credenciais; torna a revogação unidireccional; mantém `last_used_at` monotónico; impede reativar workers desativados; e mantém eventos append-only em PostgreSQL e SQLite. A suite inclui um contrato de migration SQLite e o API CI inclui um smoke PostgreSQL de rotação, revogação, desativação e tentativas de adulteração.
+
+**Validação no commit de código `d7c84125d35a5fff5d2254a3ee33a08cd41edcc7`:** [API CI 44431378398](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44431378398), [Quality Gates 44431378324](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44431378324) e [Docker Compose 44431378349](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44431378349) passaram; suite API com 1202 testes aprovados, 1 ignorado e 1 aviso.
+
+A autenticação ainda não está ligada a endpoints HTTP, e o bearer token ainda não tem assinatura por pedido/nonce. Não expor rotas de jobs até essas duas lacunas e a autorização de leitura/publicação estarem resolvidas.
