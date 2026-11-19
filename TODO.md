@@ -1,3 +1,15 @@
+## Reconciliação conservadora de outputs (2026-11-19)
+
+- [x] Criar `app.dataset_job_output_reconciliation` com modo read-only por defeito e `--apply` explícito.
+- [x] Remover apenas temporários `.promotion-*.tmp` regulares e antigos, respeitando o período de segurança configurado.
+- [x] Remover staging apenas quando existe publicação append-only correspondente e destino/staging confirmam o mesmo digest e tamanho.
+- [x] Preservar jobs `SUCCEEDED` sem publicação, symlinks, ficheiros recentes, jobs desconhecidos e conteúdos divergentes.
+- [x] Acrescentar testes para dry-run, aplicação, preservação de staging sem publicação e mismatch de digest.
+- [x] Documentar o procedimento e os limites operacionais em `docs/operations/dataset-output-reconciliation.md`.
+- [x] Quality Gates [44484598129](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44484598129) e Docker Compose [44484598370](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44484598370) passaram.
+- [x] API CI [44484598295](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44484598295) passou, incluindo smokes PostgreSQL e suite API.
+- [ ] Definir isolamento filesystem e reconciliação de staging de jobs falhados/revogados; o módulo actual não assume que workers antigos deixaram de escrever.
+
 ## Publicação de outputs — reduzir janela de locks (2026-11-19)
 
 - [x] Separar preparação do ficheiro (leitura, cópia, limite de tamanho e SHA-256) da transacção final, sem locks de linhas durante operações de I/O potencialmente longas.

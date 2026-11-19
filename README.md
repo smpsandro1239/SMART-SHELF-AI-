@@ -1524,3 +1524,16 @@ A promoção é idempotente: se o ficheiro final existir devido a uma interrupç
 A leitura/cópia/hash do output decorre agora fora dos locks PostgreSQL. A fase final volta a validar job, evento terminal, worker, credencial, revogação, validade, scope e fencing token sob locks; só depois executa o hard link no-clobber e regista a publicação append-only. A remoção do staging ocorre após o commit. A regressão revoga a credencial durante a preparação e confirma a recusa na revalidação final.
 
 **Validação:** API CI [44483199562](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44483199562), Quality Gates [44483436546](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44483436546) e Docker Compose [44483199541](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44483199541) passaram. Não foram executados testes localmente. O smoke PostgreSQL actual confirma publicação concorrente; a corrida específica de revogação durante a cópia ainda não tem smoke PostgreSQL dedicado.
+
+### Reconciliação conservadora de outputs — 2026-11-19
+
+O módulo `app.dataset_job_output_reconciliation` permite identificar temporários de promoção antigos e staging que permaneceu depois de uma publicação auditada. A execução é manual e read-only por defeito:
+
+```bash
+cd apps/api
+python -m app.dataset_job_output_reconciliation --grace-hours 168
+```
+
+Depois de rever o relatório, a limpeza efectiva exige `--apply`. O período predefinido é sete dias. O reconciliador só remove temporários internos antigos e staging cuja linha append-only, job `SUCCEEDED`, fencing token, destino publicado, SHA-256 e tamanho coincidam. Preserva jobs concluídos sem publicação, ficheiros recentes, symlinks, referências desconhecidas e conteúdos divergentes. Não remove artefactos publicados, directórios vazios, staging de jobs falhados sem referência auditada nem dados de object storage. Ver [procedimento operacional](docs/operations/dataset-output-reconciliation.md).
+
+**Validação inicial:** Quality Gates [44484598129](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44484598129) passou com compilação Python, suite API e build Web; Docker Compose [44484598370](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44484598370) passou. API CI [44484598295](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44484598295), incluindo os smokes PostgreSQL e a suite API, passou. Não foram executados testes localmente.

@@ -1,3 +1,11 @@
+### Reconciliação conservadora de outputs (2026-11-19)
+
+- Implementado CLI manual com simulação por defeito e `--apply` explícito, período de segurança configurável (7 dias por omissão).
+- Temporários privados antigos só são removidos se forem ficheiros regulares com nome interno esperado. Staging só é removido quando publicação append-only, job, token, digest e tamanho coincidem e o destino publicado foi revalidado.
+- Jobs `SUCCEEDED` sem publicação, symlinks, caminhos desconhecidos, ficheiros recentes e conteúdos divergentes são preservados. Sem scheduler e sem suporte a object storage.
+- Quality Gates [44484598129](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44484598129) e Docker Compose [44484598370](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44484598370) passaram; API CI [44484598295](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44484598295) passou, incluindo smokes PostgreSQL e suite API.
+- Procedimento: [dataset-output-reconciliation.md](operations/dataset-output-reconciliation.md).
+
 ### Publicação de outputs — redução de locks (2026-11-19)
 
 - A preparação/cópia/hash do output foi retirada da transacção com locks PostgreSQL; a autorização é revalidada sob locks imediatamente antes da publicação final.

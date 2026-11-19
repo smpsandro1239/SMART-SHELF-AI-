@@ -75,6 +75,14 @@ A revogação que confirme durante a preparação tem de ser observada pela reva
 
 A secção crítica final continua a incluir uma operação de filesystem local (link + fsync do directório), mas não inclui cópia nem hashing proporcional ao tamanho do output. A regressão SQLite que revoga a credencial durante a preparação passou na suite API. O smoke PostgreSQL actual valida publicação concorrente, fencing e auditoria append-only, mas ainda não observa a revogação a confirmar enquanto a cópia está pausada; esse cenário permanece como reforço de validação.
 
+### Reconciliação do filesystem de outputs
+
+O CLI `python -m app.dataset_job_output_reconciliation` executa uma simulação read-only por defeito; a eliminação exige `--apply` e respeita um período mínimo de segurança (sete dias por omissão). Temporários de promoção só são removidos se corresponderem ao padrão privado e forem ficheiros regulares antigos. Um ficheiro de staging só é removido depois de a publicação append-only, o job `SUCCEEDED`, o fencing token, a referência de destino e os digests/tamanhos de staging e destino coincidirem.
+
+Jobs `SUCCEEDED` sem registo de publicação são preservados para permitir retry. Também são preservados symlinks, ficheiros recentes, referências desconhecidas e conteúdos divergentes. A ferramenta não remove directórios vazios, outputs publicados, staging de jobs falhados sem referência auditada nem object storage. Não existe scheduler: a execução é manual e tem de ser revista por operador. O isolamento de permissões filesystem entre API e worker continua necessário antes de alargar a política de limpeza.
+
+Consultar o procedimento em `docs/operations/dataset-output-reconciliation.md`.
+
 ## Persistência e auditoria exigidas
 
 A implementação deve usar:

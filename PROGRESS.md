@@ -1,3 +1,14 @@
+## 2026-11-19 — Reconciliação conservadora de outputs de datasets
+
+- HEAD inicial: `e5545ffe3e6b620f143174488bc1f43b4eecd3a5`.
+- Criado `app.dataset_job_output_reconciliation` e CLI `python -m app.dataset_job_output_reconciliation`. O modo predefinido é simulação; `--apply` é obrigatório para apagar e o período predefinido é sete dias.
+- Temporários de promoção só são elegíveis se o nome interno corresponder ao padrão, forem ficheiros regulares e excederem a idade mínima. Staging só é removido com uma publicação append-only correspondente, job `SUCCEEDED`, fencing token actual, destino canónico e correspondência de SHA-256/tamanho entre staging, destino e auditoria.
+- Jobs `SUCCEEDED` sem publicação, symlinks, referências desconhecidas, ficheiros recentes e conteúdos divergentes são preservados. Não existe scheduler; a limpeza é manual. Jobs falhados/revogados sem referência de publicação e object storage ficam fora do âmbito.
+- Testes acrescentados para dry-run, aplicação, staging sem publicação e digest divergente.
+- Commit de código: `8418fe44d927f6dec9768f4ca986c78fcd253eda`. Quality Gates `44484598129` passou (suite API, compilação Python, TypeScript e build Web); Docker Compose `44484598370` passou. API CI [44484598295](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44484598295) passou, incluindo smokes PostgreSQL e suite API.
+- Não foram executados testes localmente. A validação até agora provém de GitHub Actions.
+- Próxima tarefa: smoke PostgreSQL que observe revogação durante a preparação sem bloqueio; depois rever permissões/ownership separados entre API e worker antes de expandir a limpeza a staging de jobs falhados.
+
 ## 2026-11-19 — Redução da janela de locks na publicação de outputs
 
 - HEAD inicial: 223e6699f54e0e8de7ada29cbad3619645e236f6.
