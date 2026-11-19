@@ -1234,3 +1234,30 @@ class ShelfPlanogramRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class ShelfPlanogramCellComparisonRead(BaseModel):
+    cell_code: str
+    status: Literal[
+        "UNKNOWN", "EMPTY", "CONFLICT", "MISPLACED",
+        "OCCUPIED_UNIDENTIFIED", "UNDER_FACED", "OVER_FACED", "OCCUPIED",
+    ]
+    expected_product_id: int | None
+    expected_facings: int | None
+    observed_facings: int
+    observed_product_ids: list[int | None]
+    detection_ids: list[int]
+    overlap_ratio: float = Field(ge=0, le=1)
+
+
+class ShelfPlanogramComparisonRead(BaseModel):
+    shelf_image_id: int
+    shelf_id: int
+    image_sha256: str
+    model_version: str | None
+    planogram_id: int
+    planogram_version: int
+    calibration_source: Literal["MANUAL", "IMAGE"]
+    calibration_image_id: int | None
+    calibration_image_sha256: str | None
+    cells: list[ShelfPlanogramCellComparisonRead]
+
+
