@@ -191,7 +191,7 @@ def compare_detections_to_cells(
         or not 0 <= minimum_empty_confidence <= 1
     ):
         raise ValueError("minimum_empty_confidence must be between 0 and 1")
-    empty_labels = set(empty_facing_labels)
+    empty_labels = {empty_facing_labels} if isinstance(empty_facing_labels, str) else set(empty_facing_labels)
     if any(not isinstance(label, str) or not label.strip() for label in empty_labels):
         raise ValueError("empty_facing_labels must contain non-empty strings")
     empty_labels = {label.strip() for label in empty_labels}
