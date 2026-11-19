@@ -241,10 +241,6 @@ def test_demo_detection_requires_human_review_and_is_idempotent(monkeypatch):
                 f"/api/v1/shelf-image-detections/{regression_detection_id}/observation",
                 json={"product_id": other_product_id, "confirmed_status": "EMPTY"},
             )
-            changed_product = client.post(
-                f"/api/v1/shelf-image-detections/{regression_detection_id}/observation",
-                json={"product_id": other_product_id, "confirmed_status": "EMPTY"},
-            )
             db = TestingSession()
             try:
                 latest_regression_review = (
