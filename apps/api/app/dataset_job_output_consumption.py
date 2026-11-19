@@ -21,7 +21,7 @@ from app.dataset_job_output_publications import _open_dirs
 from app.dataset_operational_eligibility import validate_internal_image_eligibility
 from app.dataset_output_governance import get_output_governance_state
 
-_REFERENCE = re.compile(r"^published/[1-9][0-9]*/[1-9][0-9]*-[0-9a-f]{64}\\.artifact$")
+_REFERENCE = re.compile(r"^published/[1-9][0-9]*/[1-9][0-9]*-[0-9a-f]{64}\.artifact$")
 
 
 class DatasetJobOutputAccessDenied(PermissionError):
