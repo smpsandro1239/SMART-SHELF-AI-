@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     dataset_output_storage_path: str = "./storage/dataset-outputs"
     max_dataset_output_bytes: int = Field(default=2147483648, ge=1024, le=10737418240)
     vision_provider_factory: str = ""
+    vision_provider_mode: str = "disabled"
     ocr_provider_factory: str = ""
     ocr_provider_name: str = "paddleocr"
     ocr_model_version: str = "PP-OCRv5-pt"
@@ -30,6 +31,10 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_production_secrets(self):
+        vision_mode = self.vision_provider_mode.strip().lower()
+        if vision_mode not in {"disabled", "mock", "real"}:
+            raise ValueError("VISION_PROVIDER_MODE must be disabled, mock or real")
+        self.vision_provider_mode = vision_mode
         if self.app_env.lower() == "production":
             placeholder_markers = (
                 "replace_with",
@@ -49,6 +54,8 @@ class Settings(BaseSettings):
                 raise ValueError("Production requires a unique, non-placeholder BOOTSTRAP_ADMIN_KEY with at least 32 characters")
             if self.jwt_secret_key == self.bootstrap_admin_key:
                 raise ValueError("JWT_SECRET_KEY and BOOTSTRAP_ADMIN_KEY must be different secrets")
+            if vision_mode == "mock":
+                raise ValueError("Production cannot use VISION_PROVIDER_MODE=mock")
         return self
 
 
