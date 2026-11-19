@@ -109,7 +109,7 @@ def upgrade() -> None:
                    OR NEW.credential_id IS DISTINCT FROM OLD.credential_id
                    OR NEW.worker_id IS DISTINCT FROM OLD.worker_id
                    OR NEW.secret_sha256 IS DISTINCT FROM OLD.secret_sha256
-                   OR NEW.scopes IS DISTINCT FROM OLD.scopes
+                   OR NEW.scopes::text IS DISTINCT FROM OLD.scopes::text
                    OR NEW.created_at IS DISTINCT FROM OLD.created_at
                    OR NEW.expires_at IS DISTINCT FROM OLD.expires_at
                    OR (OLD.revoked_at IS NOT NULL AND NEW.revoked_at IS DISTINCT FROM OLD.revoked_at)
