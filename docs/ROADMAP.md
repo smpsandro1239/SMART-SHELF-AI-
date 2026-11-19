@@ -430,3 +430,24 @@ Foi criado e integrado no API CI o smoke `postgres_dataset_eligibility_concurren
 - [ ] Vincular `worker_id` à identidade autenticada e autorizar scopes por operação.
 - [ ] Testar tokens inválidos/expirados/revogados, scopes insuficientes, replay e isolamento entre workers.
 - [ ] Manter endpoints de jobs não expostos até a autenticação estar integrada.
+
+
+## 2026-11-19 — Autenticação individual de workers (implementação inicial; CI pendente)
+
+**Implementado no código:**
+- Migration `0060_dataset_worker_credentials`: identidades de workers, credenciais individuais e eventos de segurança append-only.
+- Credencial bearer com segredo aleatório de 256 bits, hash SHA-256 persistido, comparação em tempo constante, validade máxima de 90 dias, rotação, revogação e desativação.
+- Scopes explícitos sem wildcard; wrappers de claim/heartbeat/complete/fail derivam a identidade exclusivamente do principal autenticado.
+- CLI de provisionamento local; nenhuma rota HTTP pública de emissão foi criada.
+- Testes SQLite e smoke PostgreSQL de ciclo de vida e imutabilidade integrados no workflow API CI.
+
+**Validação:** pendente de conclusão dos workflows disparados pelo HEAD da ronda. Não declarar migration/serviço validados até API CI e Quality Gates ficarem verdes.
+
+**Riscos e trabalho restante:**
+1. A autenticação bearer não é anti-replay; falta assinatura por pedido/nonce ou protocolo equivalente.
+2. O middleware/handlers HTTP ainda não autenticam workers e os endpoints de jobs permanecem não expostos.
+3. Os scopes `artifacts:read` e `outputs:publish` são apenas reservados; faltam leitura de bytes por chamada e promoção com fencing.
+4. Não existe broker nem worker remoto de treino; a persistência de leases não equivale a execução operacional.
+5. A credencial só pode ser emitida pelo CLI local confiável; a operação em produção precisa de secret manager, TLS e procedimento de provisionamento controlado.
+
+Referência de implementação: [Autenticação e autorização de workers](security/dataset-worker-authentication.md).
