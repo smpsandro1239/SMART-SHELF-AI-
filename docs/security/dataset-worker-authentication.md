@@ -79,7 +79,7 @@ A validade predefinida é 30 dias; o serviço limita a validade a 90 dias e reje
 
 ## Validação exigida
 
-Os testes unitários cobrem credenciais malformadas/desconhecidas, segredo incorreto, expiração, revogação, rotação, desativação, scopes inválidos/insuficientes e vinculação do claim à identidade autenticada. O smoke PostgreSQL valida o ciclo de vida e tenta UPDATE/DELETE directos aos eventos append-only. Só marcar a migration e o serviço como validados depois de API CI e Quality Gates passarem no commit correspondente.
+Os testes unitários cobrem credenciais malformadas/desconhecidas, segredo incorreto, expiração, revogação, rotação, desativação, scopes inválidos/insuficientes e vinculação do claim à identidade autenticada. O teste de migration SQLite cobre os guards de imutabilidade; o smoke PostgreSQL valida o ciclo de vida e tenta adulterar/eliminar credenciais e eventos. Validação concluída no commit de código `d7c84125d35a5fff5d2254a3ee33a08cd41edcc7`: API CI [44431378398](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44431378398) e Quality Gates [44431378324](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44431378324) passaram; suite API com 1202 testes aprovados, 1 ignorado e 1 aviso.
 
 ## Integridade imposta pela base de dados
 

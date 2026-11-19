@@ -437,7 +437,8 @@
 - [x] Impor sequência consecutiva de eventos e impedir eventos posteriores ao estado terminal, preservando o evento terminal legítimo.
 - [x] Acrescentar testes SQLite de migração e expandir smoke PostgreSQL para testar SQL directo contra os guards.
 - [x] Confirmar migration PostgreSQL 16, API CI [44419928230](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44419928230), Quality Gates [44419928281](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44419928281) e Docker Compose [44419928382](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44419928382); **1179 passed, 1 skipped, 1 warning**.
-- [ ] Implementar autenticação de workers, leitura controlada por chamada e promoção de outputs condicionada ao fencing token actual.
+- [x] Implementar identidade individual de workers, credenciais com hash, scopes, expiração, rotação e revogação (migration 0060, validada em API CI [44431378398](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44431378398)).
+- [ ] Integrar a autenticação no middleware HTTP antes de expor endpoints; implementar leitura controlada por chamada e promoção de outputs condicionada ao fencing token actual.
 
 
 ## Máquina de estados e identidade imutável dos jobs — 2026-11-18

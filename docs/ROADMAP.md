@@ -424,15 +424,16 @@ Foi criado e integrado no API CI o smoke `postgres_dataset_eligibility_concurren
 - [ ] Implementar autenticação/identidade de workers antes de disponibilizar endpoints de claim/heartbeat; manter a API de jobs não exposta enquanto essa fronteira não existir.
 
 
-### Próxima prioridade — autenticação de workers de datasets (19-11-2026)
+### Autenticação de workers de datasets — estado atualizado (19-11-2026)
 
-- [ ] Definir credenciais individuais, emissão segura, expiração, rotação e revogação de workers.
-- [ ] Vincular `worker_id` à identidade autenticada e autorizar scopes por operação.
-- [ ] Testar tokens inválidos/expirados/revogados, scopes insuficientes, replay e isolamento entre workers.
-- [ ] Manter endpoints de jobs não expostos até a autenticação estar integrada.
+- [x] Definir credenciais individuais, emissão segura, expiração, rotação e revogação de workers.
+- [x] Vincular `worker_id` à identidade autenticada e autorizar scopes por operação.
+- [x] Testar tokens inválidos/expirados/revogados, scopes insuficientes e vínculo de identidade entre worker e credencial.
+- [ ] Implementar assinatura por pedido/nonce e testes anti-replay.
+- [x] Manter endpoints de jobs não expostos enquanto a autenticação HTTP não estiver integrada.
 
 
-## 2026-11-19 — Autenticação individual de workers (implementação inicial; CI pendente)
+## 2026-11-19 — Autenticação individual de workers (implementação inicial validada)
 
 **Implementado no código:**
 - Migration `0060_dataset_worker_credentials`: identidades de workers, credenciais individuais e eventos de segurança append-only.
