@@ -949,3 +949,12 @@ A segunda sequência reforçou a proveniência do provider ONNX sem alterar o sc
 - A whitelist faz parte do fingerprint do detector; alterar as classes elegíveis altera a identidade efectiva da configuração.
 - Foram acrescentados testes de provider e worker para provar que uma deteção `empty_facing` não é correspondida a exemplares de produto.
 - Validação CI pendente; não existe ainda dataset real anotado nem ligação das classes de vazio ao comparador de células.
+### Validação da terceira sequência — 2026-11-19
+
+HEAD de código validado: `c43b420d2e836daab53f2db5db6a3ddb2dea98f8`.
+
+- API CI [44551987378](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44551987378): PostgreSQL 16, migrations e testes de concorrência aprovados; **1307 passed, 1 skipped, 1 warning**.
+- Quality Gates [44551987148](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44551987148): testes API/compilação Python e build TypeScript/produção Web aprovados.
+- Docker Compose [44551987356](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44551987356): stack de demonstração aprovada.
+- As falhas iniciais foram de fixtures: classe de catálogo não elegível, fixture de sessão do embedder a reutilizar contrato do detector e caixa de SKU esperado com sobreposição abaixo do limiar. Os fixtures foram corrigidos e a nova execução passou.
+- Os dois checks Vercel continuam a reportar `build-rate-limit` (limite de builds da conta), não uma falha de compilação do frontend; o build Web do Quality Gates passou.
