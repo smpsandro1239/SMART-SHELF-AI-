@@ -1,3 +1,17 @@
+## Governação de derivados, autorização e cópias — 2026-11-19
+
+- [x] Confirmar API CI, Quality Gates e Docker Compose do commit anterior 9f6e871520a1d63b1f148bcc7578c546a41d090e: os três workflows passaram.
+- [x] Definir matriz conservadora específica de outputs: ADMIN/SUPERVISOR/EMPLOYEE sem autorização implícita; workers sem scopes de governação; callback positivo obrigatório por publicação ancestral.
+- [x] Documentar fluxo proposto de aprovação independente de libertação de legal hold, mantendo-o desactivado até decisão do responsável do produto/jurídico.
+- [x] Implementar migration 0066_dataset_output_lineage, modelo e serviço para relações pai → derivado append-only, com rejeição de ciclos e actor activo.
+- [x] Integrar a linhagem no consumo: locks de publicações por ID, estabilidade da cadeia, autorização e governação em todos os ancestrais e revalidação das fontes de todos os jobs.
+- [x] Documentar contrato de propagação para caches, exports, réplicas, object storage e backups; não declarar integração externa.
+- [ ] Executar/confirmar API CI PostgreSQL 16, Quality Gates e Docker Compose para a migration 0066 e novos testes.
+- [ ] Acrescentar smoke PostgreSQL dedicado para ciclo concorrente/linhagem e legal hold herdado.
+- [ ] Implementar workflow append-only de pedidos/aprovações após aprovação da política de funções, âmbito, evidência e excepções.
+- [ ] Ligar cada transformação real ao registo de derivação; a função existe, mas não há worker de transformação integrado.
+- [ ] Criar inventário de cópias externas e adapters com atestação; até lá, bloquear serve/restore de cópias não inventariadas e manter purga física desactivada.
+
 ## Consumo concorrente e governação de outputs (2026-11-19)
 
 - [x] Confirmar API CI, Quality Gates e Docker Compose do commit anterior e5a372d00199d441b6089254133f04dfd7f99e10: os três workflows terminaram com sucesso. API CI executou migrações PostgreSQL 16, smokes operacionais e suite API; Quality Gates concluiu testes API/compilação Python e build Web; Docker Compose validou readiness, seed e worker.

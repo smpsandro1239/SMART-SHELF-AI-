@@ -1,3 +1,13 @@
+### 2026-11-19 — Linhagem e propagação de governação de outputs
+
+- CI anterior confirmado: API CI 44538123392, Quality Gates 44538123460 e Docker Compose 44538123417 passaram no SHA inicial.
+- Migration 0066 e modelo append-only de arestas pai → derivado; ciclos rejeitados por serviço e trigger; callback explícito e actor activo.
+- Consumo governado percorre ancestrais, adquire locks de publicações em ordem crescente, detecta alterações concorrentes da cadeia, autoriza todos os nós e herda restrições/legal holds e elegibilidade de todas as fontes.
+- Matriz de autorização específica de outputs permanece deny-by-default; não há endpoints de gestão nem scopes de governação para workers.
+- Proposta de aprovação independente documentada, sem activar fluxo até decisões do responsável do produto/jurídico.
+- Contrato de propagação para caches, exports, object storage, réplicas e backups documentado. Nenhum adapter ou inventário externo foi presumido.
+- Validação do novo commit pendente: PostgreSQL 16, API CI, Quality Gates e Docker Compose. Próximo passo: smoke PostgreSQL de linhagem/ciclo/hold herdado e ligação do registo ao futuro worker de transformação.
+
 ### Consumo concorrente e restrição de outputs — 2026-11-19
 
 - Confirmados como aprovados no commit anterior: API CI 44536740007, Quality Gates 44536740024 e Docker Compose 44536739957.

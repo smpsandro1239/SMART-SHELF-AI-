@@ -20,6 +20,7 @@ from app.config import settings
 from app.dataset_job_output_publications import _open_dirs
 from app.dataset_operational_eligibility import validate_internal_image_eligibility
 from app.dataset_output_governance import get_output_governance_state
+from app.dataset_output_lineage import lock_dataset_output_lineage
 
 _REFERENCE = re.compile(r"^published/[1-9][0-9]*/[1-9][0-9]*-[0-9a-f]{64}\.artifact$")
 
@@ -98,45 +99,53 @@ def consume_dataset_job_output_bytes(
     if isinstance(publication_id, bool) or not isinstance(publication_id, int) or publication_id <= 0:
         raise ValueError("publication_id must be a positive integer")
 
-    publication = (
-        db.query(models.DatasetExecutionJobOutputPublication)
-        .filter_by(id=publication_id)
-        .with_for_update()
-        .populate_existing()
-        .one_or_none()
-    )
+    lineage = lock_dataset_output_lineage(db, publication_id=publication_id)
+    publications_by_id = {item.id: item for item in lineage}
+    publication = publications_by_id.get(publication_id)
     if publication is None:
         raise LookupError("dataset output publication was not found")
 
-    job = (
+    job_ids = sorted({item.job_id for item in lineage})
+    jobs = (
         db.query(models.DatasetExecutionJob)
-        .filter_by(id=publication.job_id)
+        .filter(models.DatasetExecutionJob.id.in_(job_ids))
+        .order_by(models.DatasetExecutionJob.id.asc())
         .with_for_update()
         .populate_existing()
-        .one_or_none()
+        .all()
     )
-    if job is None or job.status != "SUCCEEDED":
-        raise DatasetJobOutputAccessDenied("published output job is not in SUCCEEDED state")
-    if not callable(authorize) or authorize(publication, job) is not True:
-        raise DatasetJobOutputAccessDenied("output consumer was not explicitly authorized")
+    jobs_by_id = {item.id: item for item in jobs}
+    if set(jobs_by_id) != set(job_ids):
+        raise DatasetJobOutputAccessDenied("output lineage references a missing execution job")
 
-    governance = get_output_governance_state(db, publication_id=publication.id)
-    if governance.blocked:
-        reasons = []
-        if governance.restricted:
-            reasons.append("restriction_active")
-        if governance.legal_hold:
-            reasons.append("legal_hold_active")
-        raise DatasetJobOutputAccessDenied("published output is blocked: " + ", ".join(reasons))
+    for lineage_publication in lineage:
+        lineage_job = jobs_by_id[lineage_publication.job_id]
+        if lineage_job.status != "SUCCEEDED":
+            raise DatasetJobOutputAccessDenied("an output in the derived lineage is not SUCCEEDED")
+        if not callable(authorize) or authorize(lineage_publication, lineage_job) is not True:
+            raise DatasetJobOutputAccessDenied("consumer is not authorized for every output in the lineage")
+        governance = get_output_governance_state(db, publication_id=lineage_publication.id)
+        if governance.blocked:
+            reasons = []
+            if governance.restricted:
+                reasons.append("restriction_active")
+            if governance.legal_hold:
+                reasons.append("legal_hold_active")
+            raise DatasetJobOutputAccessDenied(
+                "published output lineage is blocked: " + ", ".join(reasons)
+            )
 
     sources = (
         db.query(models.DatasetExecutionJobSource)
-        .filter_by(job_id=job.id)
+        .filter(models.DatasetExecutionJobSource.job_id.in_(job_ids))
         .order_by(models.DatasetExecutionJobSource.shelf_image_id.asc())
         .all()
     )
-    if not sources:
-        raise DatasetJobOutputAccessDenied("published output has no immutable source lineage")
+    source_counts = {job_id: 0 for job_id in job_ids}
+    for source in sources:
+        source_counts[source.job_id] += 1
+    if any(count == 0 for count in source_counts.values()):
+        raise DatasetJobOutputAccessDenied("an output in the derived lineage has no immutable source lineage")
     errors, report = validate_internal_image_eligibility(db, [{
         "source_type": "internal",
         "shelf_image_id": source.shelf_image_id,
@@ -144,8 +153,9 @@ def consume_dataset_job_output_bytes(
         "source_image_sha256": source.source_image_sha256,
     } for source in sources])
     if errors or report.get("status") != "APPROVED":
-        raise DatasetJobOutputAccessDenied("one or more output source images are no longer eligible")
+        raise DatasetJobOutputAccessDenied("one or more derived output source images are no longer eligible")
 
+    job = jobs_by_id[publication.job_id]
     expected_reference = (
         f"published/{job.id}/{publication.fencing_token}-{publication.output_sha256}.artifact"
     )

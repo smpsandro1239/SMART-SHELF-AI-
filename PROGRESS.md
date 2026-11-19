@@ -1,3 +1,15 @@
+## 2026-11-19 — Linhagem de outputs, autorização e propagação
+
+- SHA inicial: 9f6e871520a1d63b1f148bcc7578c546a41d090e.
+- API CI 44538123392, Quality Gates 44538123460 e Docker Compose 44538123417 terminaram com sucesso no commit inicial. API CI concluiu migrações PostgreSQL 16, smokes operacionais e suite API.
+- Definida a matriz deny-by-default para operações de outputs, sem presumir que ADMIN possui autoridade legal ou que SUPERVISOR tem âmbito sobre outputs multi-origem.
+- Documentada a proposta de aprovação independente: pedido e aprovação distintos, identidades diferentes, hold activo até commit atómico de aprovação + evento de libertação. O fluxo não foi activado porque faltam decisões de produto/jurídico.
+- Implementada migration 0066_dataset_output_lineage, modelo DatasetExecutionJobOutputLineage e serviço app.dataset_output_lineage. A relação é append-only, rejeita ciclos e exige actor activo e callback de autorização.
+- O consumidor de outputs passa a bloquear a cadeia ancestral em ordem crescente, verificar estabilidade da linhagem, autorizar cada publicação, aplicar a governação de cada nó e revalidar as fontes de todos os jobs. Um hold/restrição num pai bloqueia os descendentes.
+- Documentado o contrato para propagação em caches, exports, object storage, réplicas e backups; não existem ainda adapters externos nem inventário completo.
+- Testes acrescentados para ciclos/imutabilidade da migration SQLite e para herança de legal hold no consumidor. Não foram executados testes localmente. A validação CI desta alteração está pendente.
+- Riscos abertos: falta smoke PostgreSQL específico da linhagem; o registo de derivação não está ligado a worker real; a matriz de autorização e a aprovação legal continuam por aprovar; cópias externas não estão inventariadas; purga física permanece desactivada.
+
 ## 2026-11-19 — Verificação CI e corrida consumo/restrição de outputs
 
 - HEAD inicial: e5a372d00199d441b6089254133f04dfd7f99e10.

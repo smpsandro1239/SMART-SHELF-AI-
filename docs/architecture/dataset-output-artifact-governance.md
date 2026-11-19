@@ -87,3 +87,12 @@ O smoke PostgreSQL 16 exercita agora o serviço de consumo sobre uma publicaçã
 O smoke PostgreSQL de publicação exercita agora duas sessões independentes: a primeira autoriza e materializa bytes através de consume_dataset_job_output_bytes, mantendo a transacção aberta; a segunda tenta anexar RESTRICTION_APPLIED. A segunda sessão tem de aguardar pelo lock da publicação. Depois do commit da leitura, a restrição é registada e as leituras subsequentes ficam bloqueadas pela projecção append-only. O smoke liberta a restrição antes de continuar os restantes cenários.
 
 Esta cobertura valida a ordem de serialização entre leitura e governação em PostgreSQL 16. Não define papéis de negócio, não prova aprovação independente e não cobre cópias externas, caches, backups ou consumidores remotos.
+
+
+## Linhagem de outputs derivados — migration 0066
+
+A migration 0066_dataset_output_lineage introduz arestas append-only parent_publication_id → child_publication_id. A publicação continua a ser a identidade canónica; a tabela de linhagem não duplica hash, tamanho nem caminho. A relação exige publicações existentes, actor humano activo, motivo, unicidade da aresta e rejeição de ciclos, com guards equivalentes em PostgreSQL e SQLite.
+
+O serviço app.dataset_output_lineage.register_dataset_output_derivation exige autorização callback positiva. O integrador tem de provar que a transformação realmente consumiu o pai; a mera existência de duas publicações não é evidência suficiente. O serviço de consumo resolve e bloqueia a cadeia ancestral em ordem crescente de ID, confirma que a cadeia não mudou durante a aquisição dos locks, autoriza cada publicação, verifica o estado de governação de cada nó e revalida as fontes imutáveis de todos os jobs. Qualquer hold, restrição, job ausente, fonte inelegível ou callback negativo bloqueia o consumo do descendente.
+
+Limites: a ligação de derivação ainda não é chamada por um worker de transformação real, broker, endpoint ou adapter externo. A autorização de registo depende de callback fornecido pelo futuro integrador. A migration/trigger PostgreSQL e o smoke concorrente dedicado ainda aguardam CI. A cobertura SQLite e a integração do consumidor fazem parte da suite API. Caches, exports, backups e object storage continuam sujeitos ao contrato em ../operations/dataset-output-copy-propagation.md; não há purge físico.

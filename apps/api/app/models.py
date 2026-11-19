@@ -1145,6 +1145,23 @@ class DatasetExecutionJobOutputPublication(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
 
 
+class DatasetExecutionJobOutputLineage(Base):
+    """Immutable parent/derived publication edge; edges point parent -> child."""
+    __tablename__ = "dataset_execution_job_output_lineage"
+    __table_args__ = (
+        CheckConstraint("parent_publication_id <> child_publication_id", name="ck_dataset_output_lineage_not_self"),
+        UniqueConstraint("parent_publication_id", "child_publication_id", name="uq_dataset_output_lineage_edge"),
+        Index("ix_dataset_output_lineage_child", "child_publication_id", "parent_publication_id"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    parent_publication_id: Mapped[int] = mapped_column(ForeignKey("dataset_execution_job_output_publications.id", ondelete="RESTRICT"), nullable=False)
+    child_publication_id: Mapped[int] = mapped_column(ForeignKey("dataset_execution_job_output_publications.id", ondelete="RESTRICT"), nullable=False)
+    actor_user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+
 class DatasetExecutionJobOutputGovernanceEvent(Base):
     """Append-only restriction and legal-hold history for one published output."""
     __tablename__ = "dataset_execution_job_output_governance_events"

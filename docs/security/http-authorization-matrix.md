@@ -395,3 +395,29 @@ Foi acrescentado teste HTTP/JWT para criação de raiz/descendente, pai inexiste
 O teste `test_admin_registers_artifact_parent_lineage_over_http` exercita `POST /api/v1/shelf-images/{image_id}/artifacts` e a listagem associada com JWT ADMIN real. Confirma criação de referência raiz e descendente, persistência/devolução de `parent_reference_id`, retry exactamente idempotente, conflito quando a mesma identidade é reapresentada com outra linhagem, rejeição de pai inexistente, pai de outra imagem na mesma loja e pai de outra loja. A listagem final confirma que as referências recusadas não foram persistidas.
 
 **Validação:** o teste foi executado pela suite API no API CI [44410444406](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44410444406), commit `33425007fc016b220c3f49f95078444189fd1ec9`. O teste HTTP usa SQLite isolado; não constitui smoke PostgreSQL individual do endpoint. A política ADMIN-only já é exercida pelos testes de governação de artefactos externos, que verificam 403 para SUPERVISOR/EMPLOYEE e ausência de efeitos laterais. A auditoria global handler-a-handler permanece aberta.
+
+
+## Governação de outputs de jobs — matriz conservadora
+
+A governação de outputs publicados ainda não tem endpoints HTTP humanos. O serviço de eventos exige callback de autorização explícito e a leitura exige autorização positiva para cada publicação da cadeia de derivados. Por isso, a matriz operacional actual é deny-by-default:
+
+| Operação | ADMIN | SUPERVISOR | EMPLOYEE | Worker |
+|---|---|---|---|---|
+| Consultar/consumir output publicado | Não exposto; sem política | Não exposto; sem política | Não exposto; sem política | Não existe rota; serviço exige callback |
+| Aplicar restrição | Não autorizado por omissão | Não autorizado | Não autorizado | Sem scope |
+| Libertar restrição | Não autorizado por omissão | Não autorizado | Não autorizado | Sem scope |
+| Aplicar legal hold | Não autorizado por omissão | Não autorizado | Não autorizado | Sem scope |
+| Libertar legal hold | Não autorizado por omissão | Não autorizado | Não autorizado | Sem scope |
+| Registar relação pai → derivado | Callback obrigatório; sem política de produto | Callback obrigatório; sem política de produto | Callback obrigatório; sem política de produto | Sem rota/scope para declarar linhagem |
+
+Isto não altera permissões existentes noutras famílias de recursos. O facto de ADMIN ter acesso global a determinados ecrãs não concede autoridade legal sobre outputs. A associação a uma loja também não pode ser inferida a partir do utilizador: jobs podem conter várias fontes e a linhagem pode abranger mais de uma publicação.
+
+### Contrato técnico obrigatório para futuros handlers
+
+- Resolver o utilizador activo na base de dados; nunca confiar no claim role do JWT como fonte de autorização.
+- Determinar o âmbito a partir das fontes imutáveis de toda a cadeia; não aceitar store_id fornecido pelo cliente como prova.
+- Autorizar cada publicação ancestral e a publicação pedida; qualquer decisão ausente, ambígua ou negativa bloqueia.
+- Para workers, manter identidade/scopes separados da identidade humana. artifacts:read e outputs:publish não concedem poderes de governação.
+- Não expor rotas até existir política aprovada e testes JWT/PostgreSQL por operação e loja.
+
+As decisões pendentes e a proposta de aprovação independente estão em dataset-output-governance-approval.md.

@@ -1591,3 +1591,10 @@ O serviço interno `app.dataset_job_output_consumption.consume_dataset_job_outpu
 O smoke PostgreSQL de publicação/consumo foi reforçado para cobrir a corrida entre uma leitura autorizada e a aplicação de uma restrição. O consumidor materializa e verifica os bytes mantendo os locks da publicação; uma segunda sessão tenta aplicar RESTRICTION_APPLIED e tem de ficar bloqueada até o consumidor terminar a transacção. Depois da leitura, a restrição é persistida e libertada no próprio smoke para permitir os cenários seguintes. Esta validação prova a serialização da fronteira de leitura com a governação, não define a política de quem pode restringir/libertar.
 
 Validação pendente: API CI/PostgreSQL 16, Quality Gates e Docker Compose no commit desta alteração. Não foram executados testes localmente.
+
+
+## Governação de outputs derivados — 2026-11-19
+
+A migration 0066_dataset_output_lineage acrescenta relações append-only entre publicações de outputs, com rejeição de ciclos. O consumo governado resolve a cadeia ancestral, autoriza cada publicação, bloqueia perante qualquer restrição/legal hold ancestral e revalida as fontes de todos os jobs da cadeia. O registo de uma relação pai → derivado exige callback explícito; não existe ainda worker/endpoint que prove e registe automaticamente a transformação.
+
+A matriz de autorização específica de outputs permanece deny-by-default para ADMIN, SUPERVISOR e EMPLOYEE enquanto não existir política aprovada. A proposta de aprovação independente de legal hold e o contrato de propagação para caches, exports, réplicas, backups e armazenamento externo estão documentados em docs/security/dataset-output-governance-approval.md e docs/operations/dataset-output-copy-propagation.md. Não existe integração externa nem purga física.

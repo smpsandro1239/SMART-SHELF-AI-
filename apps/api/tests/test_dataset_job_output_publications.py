@@ -732,3 +732,108 @@ def test_published_output_consumer_rejects_symlink(publication_setup):
             authorize=lambda _publication, _job: True,
         )
     assert target.read_bytes() == state["payload"]
+
+
+def _create_second_published_output(state, *, suffix="derived"):
+    db = state["db"]
+    source = db.query(models.DatasetExecutionJobSource).filter_by(job_id=state["job"].id).one()
+    payload = f"derived output fixture {suffix}".encode()
+    digest = hashlib.sha256(payload).hexdigest()
+    job = enqueue_dataset_job(
+        db, idempotency_key=f"output-lineage-{suffix}", release_fingerprint=("f" if suffix == "derived" else "a") * 64,
+        approval_evidence={
+            "status": "APPROVED", "mode": "training",
+            "record_sha256": "b" * 64, "gate_report_sha256": "c" * 64,
+        },
+        sources=[{
+            "shelf_image_id": source.shelf_image_id,
+            "store_id": source.store_id,
+            "source_image_sha256": source.source_image_sha256,
+        }],
+    )
+    claim = claim_next_dataset_job(db, worker_id=state["worker_id"], lease_seconds=300)
+    assert claim is not None and claim.id == job.id
+    stage_dir = state["root"] / "staging" / str(job.id) / str(claim.fencing_token)
+    stage_dir.mkdir(parents=True)
+    stage_path = stage_dir / "derived.bin"
+    stage_path.write_bytes(payload)
+    complete_dataset_job(
+        db, job_id=job.id, worker_id=state["worker_id"],
+        fencing_token=claim.fencing_token, output_sha256=digest,
+        staged_output_reference=f"staging/{job.id}/{claim.fencing_token}/derived.bin",
+    )
+    publication = promote_dataset_job_output(
+        db, principal=state["principal"], job_id=job.id,
+        fencing_token=claim.fencing_token,
+    )
+    return publication, payload
+
+
+def test_derived_output_inherits_parent_legal_hold_and_authorization(publication_setup):
+    from app.dataset_job_output_consumption import (
+        DatasetJobOutputAccessDenied, consume_dataset_job_output_bytes,
+    )
+    from app.dataset_output_governance import append_output_governance_event
+    from app.dataset_output_lineage import (
+        DatasetOutputLineageConflict, register_dataset_output_derivation,
+    )
+
+    state = publication_setup
+    db = state["db"]
+    parent = promote_dataset_job_output(
+        db, principal=state["principal"], job_id=state["job"].id,
+        fencing_token=state["claim"].fencing_token,
+    )
+    child, child_payload = _create_second_published_output(state)
+    actor = models.User(
+        email="output-lineage-admin@example.test", store_id=None,
+        full_name="Output Lineage Admin",
+        password_hash="test-only-hash", role="ADMIN", is_active=True,
+    )
+    db.add(actor)
+    db.commit()
+
+    register_dataset_output_derivation(
+        db, parent_publication_id=parent.id, child_publication_id=child.id,
+        actor_user_id=actor.id, reason="Child output was produced from parent output",
+        authorize=lambda user, parent_row, child_row: (
+            user.role == "ADMIN" and parent_row.id == parent.id and child_row.id == child.id
+        ),
+    )
+    db.commit()
+
+    with pytest.raises(DatasetOutputLineageConflict, match="cycle"):
+        register_dataset_output_derivation(
+            db, parent_publication_id=child.id, child_publication_id=parent.id,
+            actor_user_id=actor.id, reason="Attempted reverse edge",
+            authorize=lambda *_args: True,
+        )
+    db.rollback()
+
+    append_output_governance_event(
+        db, publication_id=parent.id, event_type="LEGAL_HOLD_APPLIED",
+        actor_user_id=actor.id, reason="Preserve the parent and every derived output",
+        authorize=lambda *_args: True,
+    )
+    db.commit()
+
+    authorized_publications = []
+    def authorize(publication, job):
+        authorized_publications.append(publication.id)
+        return True
+
+    with pytest.raises(DatasetJobOutputAccessDenied, match="lineage is blocked"):
+        consume_dataset_job_output_bytes(
+            db, publication_id=child.id, authorize=authorize,
+        )
+    assert set(authorized_publications) == {parent.id, child.id}
+
+    append_output_governance_event(
+        db, publication_id=parent.id, event_type="LEGAL_HOLD_RELEASED",
+        actor_user_id=actor.id, reason="Test fixture releases the hold after assertion",
+        authorize=lambda *_args: True,
+    )
+    db.commit()
+    assert consume_dataset_job_output_bytes(
+        db, publication_id=child.id, authorize=lambda *_args: True,
+    ) == child_payload
