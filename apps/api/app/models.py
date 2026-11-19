@@ -1088,3 +1088,33 @@ class DatasetWorkerRequestNonce(Base):
     request_timestamp: Mapped[int] = mapped_column(Integer, nullable=False)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+
+class DatasetExecutionJobArtifactRead(Base):
+    """Append-only audit record for a worker reading one approved job source."""
+    __tablename__ = "dataset_execution_job_artifact_reads"
+    __table_args__ = (
+        CheckConstraint("fencing_token > 0", name="ck_dataset_job_artifact_read_fencing_positive"),
+        CheckConstraint("length(source_image_sha256) = 64", name="ck_dataset_job_artifact_read_digest"),
+        CheckConstraint("bytes_read > 0", name="ck_dataset_job_artifact_read_bytes_positive"),
+        Index("ix_dataset_job_artifact_reads_job_created", "job_id", "created_at", "id"),
+        Index("ix_dataset_job_artifact_reads_image_created", "shelf_image_id", "created_at", "id"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    job_id: Mapped[int] = mapped_column(
+        ForeignKey("dataset_execution_jobs.id", ondelete="RESTRICT"), nullable=False
+    )
+    shelf_image_id: Mapped[int] = mapped_column(
+        ForeignKey("shelf_images.id", ondelete="RESTRICT"), nullable=False
+    )
+    worker_id: Mapped[str] = mapped_column(
+        ForeignKey("dataset_workers.worker_id", ondelete="RESTRICT"), nullable=False
+    )
+    credential_id: Mapped[str] = mapped_column(
+        ForeignKey("dataset_worker_credentials.credential_id", ondelete="RESTRICT"), nullable=False
+    )
+    fencing_token: Mapped[int] = mapped_column(Integer, nullable=False)
+    source_image_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    bytes_read: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
