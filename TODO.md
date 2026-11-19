@@ -801,3 +801,14 @@ Critério global: nenhuma capacidade pode ser marcada como concluída sem códig
 - [x] Comparar deteções com células calibradas e preservar estados de incerteza.
 - [x] Validar a sequência em CI: 1293 testes aprovados, 1 ignorado, 1 aviso; build Web, Quality Gates e Docker Compose aprovados.
 - [ ] Não declarar deteção comercial operacional: faltam pesos aprovados, dataset anotado, calibração e integração persistente das células/planogramas.
+
+
+### Segunda sequência — proveniência criptográfica do provider ONNX (2026-11-19)
+
+- [x] Calcular SHA-256 dos pesos por leitura em blocos, sem carregar o ficheiro completo para memória.
+- [x] Fingerprint determinístico do detector que inclui pesos, mapa de classes, tamanho de entrada, threshold, máximo de deteções e versão de pré-processamento.
+- [x] Fingerprint independente do embedder; embeddings novos passam a usar uma versão efectiva vinculada aos pesos e ao pré-processamento.
+- [x] Recusar modelos apontados por symlink e detectar substituição dos ficheiros durante a abertura das sessões ONNX.
+- [x] Testar estabilidade do fingerprint, alteração de pesos/labels/configuração, symlink e substituição concorrente.
+- [ ] Persistir digests e manifesto como campos auditáveis separados, com origem/licença/assinatura e processo de aprovação/rollback.
+- [ ] Definir migração operacional dos exemplares aprovados para a nova versão efectiva do embedder; versões antigas devem continuar identificáveis, sem correspondência cruzada.
