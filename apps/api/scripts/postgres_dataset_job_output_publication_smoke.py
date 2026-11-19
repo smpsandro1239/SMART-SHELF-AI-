@@ -15,10 +15,12 @@ from app.config import settings
 from app.database import SessionLocal
 from app.dataset_job_leases import claim_next_dataset_job, complete_dataset_job, enqueue_dataset_job
 from app import dataset_job_output_publications as output_publications
-from app.dataset_job_output_publications import promote_dataset_job_output
+from app.dataset_job_output_publications import (
+    DatasetJobSourceIneligible,
+    promote_dataset_job_output,
+)
 from app.dataset_worker_credentials import (
     DatasetWorkerAuthorizationError,
-    DatasetJobSourceIneligible,
     authenticate_dataset_worker,
     issue_dataset_worker_credential,
     revoke_dataset_worker_credential,
