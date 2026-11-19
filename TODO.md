@@ -873,6 +873,19 @@ Critério global: nenhuma capacidade pode ser marcada como concluída sem códig
 - [ ] Integrar planogramas persistidos no worker/comparador e criar revisão visual React; a contagem continua a ser número de deteções frontais, não unidades em profundidade.
 
 
+### Nona sequência — comparação read-only entre captura e planograma ativo (2026-11-19)
+
+- [x] Criar serviço puro para comparar deteções persistidas com células de uma versão ACTIVE, ordenadas deterministicamente por linha/coluna.
+- [x] Expor endpoint autenticado `GET /api/v1/shelves/{shelf_id}/planograms/comparison/{image_id}`, limitado a ADMIN/SUPERVISOR e ao âmbito da loja.
+- [x] Exigir imagem da mesma prateleira, retenção ACTIVE e análise COMPLETED; exigir planograma ACTIVE e revalidar a elegibilidade da sua calibração/SKUs.
+- [x] Devolver por célula estado, SKU esperado/observado, facings esperados/observados, IDs das deteções e sobreposição, juntamente com SHA-256 da captura e versões do modelo/planograma.
+- [x] Manter a comparação read-only: não cria observações, tarefas nem movimentos e não altera inventário.
+- [x] Falhar de forma conservadora: sem calibração de visibilidade por captura, ausência de deteções e `empty_facing` não podem produzir `EMPTY`.
+- [x] Acrescentar testes HTTP para facings inferiores, proveniência, não inferência de vazio, imagem ainda pendente, perfil EMPLOYEE e isolamento multi-loja.
+- [ ] Confirmar API CI, Quality Gates e Docker Compose no HEAD desta sequência.
+- [ ] Integrar persistência auditável de resultados por imagem/modelo/versão e consumo no worker, com tratamento explícito de retenção da calibração.
+- [ ] Criar UI React de revisão visual e validação com dataset real anotado.
+
 ### Oitava sequência — smoke PostgreSQL dedicado a planogramas (2026-11-19)
 
 - [x] Criar `apps/api/scripts/postgres_planogram_lifecycle_smoke.py` e integrá-lo no workflow API CI após as restantes verificações PostgreSQL.
