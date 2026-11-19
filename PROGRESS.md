@@ -719,3 +719,19 @@ Commit validado: `1e3499c8c80ef75494a29d06807469898471e4e1`.
 - Quality Gates [44428496156](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44428496156) passou com compilação Python, suite API e build TypeScript/produção Web. Docker Compose [44428496204](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44428496204) também passou.
 - A migration de produção não foi alterada nesta correção; foi corrigida a cobertura de regressão que a exercita. Não foi executado pytest localmente nesta ronda.
 - Próxima prioridade: implementar identidade/autenticação individual de workers antes de expor operações de claim/heartbeat; depois serviço de leitura controlada e promotor fenced.
+
+
+## 2026-11-19 — Implementação de credenciais individuais para workers
+
+- **Base inicial:** `709b48abef7106e99175f4a3b38b567279f9ca39`.
+- **Migration/modelos:** `0060_dataset_worker_credentials`, `DatasetWorker`, `DatasetWorkerCredential`, `DatasetWorkerEvent`.
+- **Serviço:** `app.dataset_worker_credentials` emite credenciais aleatórias, persiste apenas SHA-256, autentica principal de worker, verifica scopes e suporta rotação/revogação/desativação.
+- **Identidade:** wrappers de claim, heartbeat, complete e fail obtêm `worker_id` do principal autenticado; não recebem identidade alternativa do chamador.
+- **Provisionamento:** `python -m app.dataset_worker_admin` com operações issue/rotate/revoke/disable; emissão sem endpoint HTTP.
+- **Testes:** `test_dataset_worker_credentials.py` cobre autenticação, segredo errado, token desconhecido/malformado, expiração, revogação, rotação, scopes, desativação e claim vinculado ao principal.
+- **PostgreSQL:** `postgres_dataset_worker_credentials_smoke.py` foi integrado no API CI e testa o ciclo de vida e a imutabilidade dos eventos.
+- **Documentação:** README, TODO, roadmap, contrato de leases e novo guia de segurança actualizados.
+
+**Estado de validação:** os workflows API CI e Quality Gates do HEAD desta ronda ainda têm de ser consultados. Não foi executado pytest local nem se declara validação PostgreSQL até os passos CI concluírem.
+
+**Limitações explícitas:** a credencial é bearer reutilizável e não previne replay; falta assinatura por pedido/nonce. Não há endpoints HTTP de jobs, broker/worker de treino, leitura de bytes por chamada ou promotor fenced. `artifacts:read` e `outputs:publish` são scopes reservados, sem handlers implementados.
