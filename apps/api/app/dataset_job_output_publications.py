@@ -4,7 +4,9 @@ from __future__ import annotations
 import hashlib
 import os
 import re
+import secrets
 import stat
+from datetime import timezone
 from pathlib import Path, PurePosixPath
 
 from sqlalchemy.exc import IntegrityError
@@ -31,14 +33,20 @@ class DatasetJobOutputConflict(DatasetJobError):
     """A different output has already been published for this job."""
 
 
-def _safe_parts(reference: str) -> tuple[str, ...]:
+def _utc(value):
+    return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value.astimezone(timezone.utc)
+
+
+def _safe_parts(reference: str, *, job_id: int, fencing_token: int) -> tuple[str, ...]:
     if not isinstance(reference, str) or not _REFERENCE.fullmatch(reference):
         raise DatasetJobOutputUnavailable("staged output reference is invalid")
     path = PurePosixPath(reference)
-    if path.is_absolute() or len(path.parts) < 3 or path.parts[0] != "staging":
-        raise DatasetJobOutputUnavailable("staged output must be inside staging/")
-    if any(part in {"", ".", ".."} for part in path.parts) or "\\" in reference:
-        raise DatasetJobOutputUnavailable("staged output reference contains an unsafe component")
+    if (
+        path.is_absolute() or len(path.parts) < 4 or path.parts[0] != "staging"
+        or path.parts[1] != str(job_id) or path.parts[2] != str(fencing_token)
+        or any(part in {"", ".", ".."} for part in path.parts) or "\\" in reference
+    ):
+        raise DatasetJobOutputUnavailable("staged output must be scoped to this job and fencing token")
     return path.parts
 
 
@@ -67,16 +75,16 @@ def _open_dirs(root: Path, parts: tuple[str, ...], *, create: bool) -> int:
         raise
 
 
-def _digest_file(directory_fd: int, name: str, maximum: int) -> tuple[str, int]:
+def _digest_existing(directory_fd: int, name: str, maximum: int) -> tuple[str, int]:
     flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
     try:
         fd = os.open(name, flags, dir_fd=directory_fd)
     except OSError as exc:
-        raise DatasetJobOutputUnavailable("output is missing, inaccessible or a symlink") from exc
+        raise DatasetJobOutputUnavailable("published output is missing, inaccessible or a symlink") from exc
     try:
         info = os.fstat(fd)
         if not stat.S_ISREG(info.st_mode) or info.st_size <= 0 or info.st_size > maximum:
-            raise DatasetJobOutputUnavailable("output must be a non-empty regular file within the configured limit")
+            raise DatasetJobOutputUnavailable("published output is not a permitted regular file")
         digest, size = hashlib.sha256(), 0
         while True:
             chunk = os.read(fd, 1024 * 1024)
@@ -84,63 +92,108 @@ def _digest_file(directory_fd: int, name: str, maximum: int) -> tuple[str, int]:
                 break
             size += len(chunk)
             if size > maximum:
-                raise DatasetJobOutputUnavailable("output exceeds the configured size limit")
+                raise DatasetJobOutputUnavailable("published output exceeds the configured size limit")
             digest.update(chunk)
         if size != info.st_size:
-            raise DatasetJobOutputIntegrityError("output changed while being hashed")
+            raise DatasetJobOutputIntegrityError("published output changed while being hashed")
         return digest.hexdigest(), size
     finally:
         os.close(fd)
 
 
-def _atomic_promote(root: Path, staged: tuple[str, ...], published: tuple[str, ...], digest: str) -> int:
-    src_fd = dst_fd = None
+def _promote_verified_bytes(
+    *, root: Path, staged: tuple[str, ...], published: tuple[str, ...], expected_digest: str
+) -> int:
+    """Copy from a pinned source descriptor to a private temp file, then link no-clobber."""
+    source_dir = destination_dir = source_fd = temp_fd = None
+    temp_name = f".promotion-{secrets.token_hex(16)}.tmp"
     maximum = settings.max_dataset_output_bytes
     try:
-        src_fd = _open_dirs(root, staged[:-1], create=False)
-        dst_fd = _open_dirs(root, published[:-1], create=True)
         try:
-            actual, size = _digest_file(src_fd, staged[-1], maximum)
-            if actual != digest:
-                raise DatasetJobOutputIntegrityError("staged output digest differs from the completed job")
-        except DatasetJobOutputUnavailable:
-            actual, size = _digest_file(dst_fd, published[-1], maximum)
-            if actual != digest:
+            source_dir = _open_dirs(root, staged[:-1], create=False)
+            source_flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+            source_fd = os.open(staged[-1], source_flags, dir_fd=source_dir)
+        except FileNotFoundError:
+            destination_dir = _open_dirs(root, published[:-1], create=True)
+            actual, size = _digest_existing(destination_dir, published[-1], maximum)
+            if actual != expected_digest:
                 raise DatasetJobOutputIntegrityError("orphaned published output has an unexpected digest")
             return size
+
+        metadata = os.fstat(source_fd)
+        if not stat.S_ISREG(metadata.st_mode) or metadata.st_size <= 0 or metadata.st_size > maximum:
+            raise DatasetJobOutputUnavailable("staged output must be a non-empty regular file within the configured limit")
+
+        destination_dir = _open_dirs(root, published[:-1], create=True)
+        temp_flags = (
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL
+            | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+        )
+        temp_fd = os.open(temp_name, temp_flags, 0o600, dir_fd=destination_dir)
+        digest, total = hashlib.sha256(), 0
+        while True:
+            chunk = os.read(source_fd, 1024 * 1024)
+            if not chunk:
+                break
+            total += len(chunk)
+            if total > maximum:
+                raise DatasetJobOutputUnavailable("staged output exceeds the configured size limit")
+            digest.update(chunk)
+            view = memoryview(chunk)
+            while view:
+                written = os.write(temp_fd, view)
+                if written <= 0:
+                    raise DatasetJobOutputUnavailable("could not write verified output to publication staging")
+                view = view[written:]
+        if total != metadata.st_size or digest.hexdigest() != expected_digest:
+            raise DatasetJobOutputIntegrityError("staged output size or SHA-256 differs from the completed job")
+        os.fsync(temp_fd)
+        os.close(temp_fd)
+        temp_fd = None
+
         try:
-            os.link(staged[-1], published[-1], src_dir_fd=src_fd, dst_dir_fd=dst_fd, follow_symlinks=False)
+            os.link(
+                temp_name, published[-1], src_dir_fd=destination_dir,
+                dst_dir_fd=destination_dir, follow_symlinks=False,
+            )
         except FileExistsError:
-            actual, existing_size = _digest_file(dst_fd, published[-1], maximum)
-            if actual != digest or existing_size != size:
+            existing_digest, existing_size = _digest_existing(destination_dir, published[-1], maximum)
+            if existing_digest != expected_digest or existing_size != total:
                 raise DatasetJobOutputIntegrityError("published destination already contains different bytes")
-        except OSError as exc:
-            raise DatasetJobOutputUnavailable("atomic no-clobber publication failed") from exc
-        actual, published_size = _digest_file(dst_fd, published[-1], maximum)
-        if actual != digest or published_size != size:
-            raise DatasetJobOutputIntegrityError("published output failed post-link verification")
-        os.fsync(dst_fd)
+        os.fsync(destination_dir)
+        os.unlink(temp_name, dir_fd=destination_dir)
+        temp_name = ""
+        os.fsync(destination_dir)
         try:
-            os.unlink(staged[-1], dir_fd=src_fd)
-            os.fsync(src_fd)
+            os.unlink(staged[-1], dir_fd=source_dir)
+            os.fsync(source_dir)
         except FileNotFoundError:
             pass
-        return size
+        return total
+    except OSError as exc:
+        if isinstance(exc, FileNotFoundError):
+            raise DatasetJobOutputUnavailable("staged output or its directory is missing") from exc
+        raise DatasetJobOutputUnavailable("staged output could not be safely promoted") from exc
     finally:
-        if dst_fd is not None:
-            os.close(dst_fd)
-        if src_fd is not None:
-            os.close(src_fd)
+        if temp_fd is not None:
+            os.close(temp_fd)
+        if destination_dir is not None and temp_name:
+            try:
+                os.unlink(temp_name, dir_fd=destination_dir)
+            except FileNotFoundError:
+                pass
+        if source_fd is not None:
+            os.close(source_fd)
+        if destination_dir is not None:
+            os.close(destination_dir)
+        if source_dir is not None:
+            os.close(source_dir)
 
 
 def promote_dataset_job_output(
     db: Session, *, principal: DatasetWorkerPrincipal, job_id: int, fencing_token: int
 ) -> models.DatasetExecutionJobOutputPublication:
-    """Publish only the output recorded by this worker's successful fencing event.
-
-    The destination is deterministic and immutable. If a process crashes after
-    the filesystem link but before SQL commit, a retry verifies and reconciles it.
-    """
+    """Publish only the output recorded by this worker's successful fencing event."""
     if isinstance(job_id, bool) or not isinstance(job_id, int) or job_id <= 0:
         raise DatasetJobError("job_id must be a positive integer")
     if isinstance(fencing_token, bool) or not isinstance(fencing_token, int) or fencing_token <= 0:
@@ -172,7 +225,7 @@ def promote_dataset_job_output(
         ).with_for_update(read=True).populate_existing().first()
         if (
             worker is None or worker.status != "ACTIVE" or credential is None
-            or credential.revoked_at is not None or credential.expires_at <= models.utc_now()
+            or credential.revoked_at is not None or _utc(credential.expires_at) <= _utc(models.utc_now())
             or "outputs:publish" not in set(credential.scopes or [])
         ):
             raise DatasetWorkerAuthorizationError("worker credential is inactive or lacks outputs:publish")
@@ -188,21 +241,21 @@ def promote_dataset_job_output(
             db.commit()
             return existing
 
-        staged = _safe_parts(job.staged_output_reference)
+        staged = _safe_parts(job.staged_output_reference, job_id=job_id, fencing_token=fencing_token)
         destination_ref = f"published/{job_id}/{fencing_token}-{job.output_sha256}.artifact"
         root = Path(settings.dataset_output_storage_path)
         if not root.is_absolute():
             root = Path.cwd() / root
-        byte_count = _atomic_promote(
-            root, staged, PurePosixPath(destination_ref).parts, job.output_sha256
+        byte_count = _promote_verified_bytes(
+            root=root, staged=staged, published=PurePosixPath(destination_ref).parts,
+            expected_digest=job.output_sha256,
         )
         publication = models.DatasetExecutionJobOutputPublication(
             job_id=job_id, worker_id=principal.worker_id,
             credential_id=principal.credential_id, fencing_token=fencing_token,
-            output_sha256=job.output_sha256,
-            staged_output_reference=job.staged_output_reference,
-            published_output_reference=destination_ref,
-            bytes_published=byte_count, created_at=models.utc_now(),
+            output_sha256=job.output_sha256, staged_output_reference=job.staged_output_reference,
+            published_output_reference=destination_ref, bytes_published=byte_count,
+            created_at=models.utc_now(),
         )
         db.add(publication)
         db.commit()
