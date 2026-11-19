@@ -1,3 +1,12 @@
+## Publicação de outputs — reduzir janela de locks (2026-11-19)
+
+- [x] Separar preparação do ficheiro (leitura, cópia, limite de tamanho e SHA-256) da transacção final, sem locks de linhas durante operações de I/O potencialmente longas.
+- [x] Revalidar job, evento terminal, fencing token, worker, credencial, revogação, validade e scope depois da preparação e sob locks na transacção final.
+- [x] Limitar a secção crítica a hard link sem sobrescrita e registo append-only; remover staging apenas depois do commit.
+- [x] Acrescentar regressão que revoga a credencial durante a preparação e exige recusa na revalidação final, sem publicar bytes nem registar auditoria.
+- [ ] Validar suite API, smoke PostgreSQL concorrente, Quality Gates e Docker Compose no CI do commit 5767468ad8058a593474695b2cb0dee9ef3118e7.
+- [ ] Acrescentar reconciliação periódica e limpeza segura de temporários/staging órfãos; não apagar automaticamente ficheiros sem confirmar job, token, digest e registo de publicação.
+
 ## Gestão HTTP de integrações externas — percurso ADMIN e isolamento de loja (2026-11-18)
 
 - [x] Acrescentar teste JWT HTTP do percurso ADMIN para criar, listar, consultar cobertura e revogar uma integração.

@@ -1,3 +1,13 @@
+## 2026-11-19 — Redução da janela de locks na publicação de outputs
+
+- HEAD inicial: 223e6699f54e0e8de7ada29cbad3619645e236f6.
+- O promotor anterior mantinha locks do job, worker e credencial durante a cópia e o cálculo SHA-256 do output. Para outputs próximos do limite de 2 GiB, isso podia atrasar revogação de credenciais e operações concorrentes.
+- A promoção foi dividida em preflight sem locks, preparação de um temporário privado com verificação integral de tamanho/digest e transacção final curta. A fase final volta a bloquear e revalidar o job, evento terminal, worker, credencial, expiração, revogação, scope e fencing token antes do hard link sem sobrescrita e do INSERT append-only.
+- O staging só é removido depois do commit SQL. Uma falha de limpeza deixa o staging recuperável; uma interrupção após o hard link mas antes do commit continua reconciliável pela verificação do destino, efectuada fora dos locks.
+- Novo teste: a preparação confirma que a sessão DB não mantém transacção; revoga a credencial durante a cópia e confirma que a revalidação final recusa a publicação, sem artefacto publicado nem linha de auditoria.
+- Commit de código: 5767468ad8058a593474695b2cb0dee9ef3118e7. CI ainda pendente; não afirmar validação concluída. Não foram executados testes localmente.
+- Próxima tarefa: desenhar reconciliador idempotente de temporários/staging órfãos com período de segurança e provas de fencing/auditoria; depois integrar outputs no catálogo com herança de retenção/legal hold.
+
 ## 2026-11-18 — Gate de aprovação obrigatório na execução de datasets
 
 - Base de trabalho: commit documental `39d90e7a75934037fab9c5281d13a19def6e2fb6`.

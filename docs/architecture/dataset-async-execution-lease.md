@@ -67,6 +67,14 @@ Um lease expirado não é, por si só, um estado terminal. Um novo worker pode r
 - Um worker antigo nunca escreve para um alias estável ou caminho de produção.
 - Se a promoção externa falhar, o job mantém evidência da conclusão e a promoção pode ser repetida idempotentemente; o artefacto não é anunciado como disponível antes da confirmação.
 
+### Janela de locks na promoção de outputs
+
+A promoção não deve manter locks de job/worker/credencial durante leitura, cópia, hashing ou fsync de outputs grandes. O serviço executa um preflight sem locks, prepara um temporário privado no directório de destino e valida tamanho e SHA-256. Depois faz rollback da transacção de leitura e inicia a fase final: bloqueia novamente job, worker e credencial, relê o evento terminal e revalida estado, fencing token, validade, revogação e scope. Sob esses locks executa apenas o hard link atómico sem sobrescrita e o INSERT append-only.
+
+A revogação que confirme durante a preparação tem de ser observada pela revalidação final e bloquear a publicação. O staging só é removido depois do commit SQL. Se o processo cair após o hard link mas antes do commit, o destino determinístico é verificado por digest fora dos locks e a auditoria pode ser concluída numa repetição. A limpeza do staging é best-effort após commit; a limpeza abrangente de temporários e staging órfãos exige um reconciliador dedicado e ainda não está implementada.
+
+A secção crítica final continua a incluir uma operação de filesystem local (link + fsync do directório), mas não inclui cópia nem hashing proporcional ao tamanho do output. O smoke PostgreSQL deve continuar a verificar publicação concorrente e, adicionalmente, que revogação durante a fase de preparação não fica bloqueada pela cópia.
+
 ## Persistência e auditoria exigidas
 
 A implementação deve usar:
