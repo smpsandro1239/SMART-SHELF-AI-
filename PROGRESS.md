@@ -806,3 +806,15 @@ Foi acrescentado um teste ao reconciliador de outputs para simular a adulteraç�
 ## 2026-11-19 — Regressão de symlinks no reconciliador
 
 Adicionado teste de segurança para temporários de promoção cujo nome corresponde ao padrão interno mas cujo inode é um symlink. O teste executa o reconciliador em modo `apply` e verifica que o link é preservado, não aparece como candidato e o destino externo não é alterado. A validação CI deste commit está pendente.
+
+
+## 2026-11-19 — Auditoria arquitectural da retenção de outputs
+
+- Confirmado HEAD inicial `57ca70f29d51aa7c80fbd25a4ab9db13d9220658`.
+- Lidos o protocolo autónomo, README integral por blocos, TODO, PROGRESS, roadmap e documentação de retenção relacionada.
+- A publicação `dataset_execution_job_output_publications` já é um registo canónico append-only; as fontes imutáveis estão ligadas pelo job através de `dataset_execution_job_sources`.
+- O catálogo `shelf_image_artifact_references` é por imagem/loja e as suas declarações não provam cobertura integral; não deve ser reutilizado directamente para um output que pode depender de várias imagens.
+- Decisão: preservar a publicação como raiz, acrescentar eventos de governação separados e avaliar todas as fontes sob locks. Não duplicar hashes/caminhos numa segunda tabela nem activar purga por idade.
+- Documento criado: `docs/architecture/dataset-output-artifact-governance.md`.
+- Implementação de esquema/serviços permanece pendente porque a política de retenção, os poderes de legal hold e a cobertura externa ainda não estão aprovados. Nenhum comportamento destrutivo foi introduzido.
+- Estado dos workflows do commit `57ca70f`: Docker Compose [44510497825](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44510497825) passou; Quality Gates [44510497768](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44510497768) passou; API CI [44510497835](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44510497835) ainda estava em execução na última consulta.

@@ -1548,3 +1548,8 @@ A validação desta regressão fica dependente do CI do commit que a introduz. N
 ### Protecção adicional do reconciliador contra symlinks — 2026-11-19
 
 Foi acrescentada uma regressão que cria um temporário antigo com nome interno válido, mas que é um link simbólico para um ficheiro externo à área de promoção. Mesmo com `--apply`, o link não pode ser tratado como temporário regular, removido ou seguido; o destino externo tem de permanecer intacto. A validação CI desta alteração fica pendente até à conclusão dos workflows.
+
+
+### Governação de retenção dos outputs assíncronos — decisão arquitectural
+
+A auditoria confirmou que os outputs publicados já têm uma identidade append-only em `dataset_execution_job_output_publications` e que as fontes do job estão ligadas por `dataset_execution_job_sources`. O catálogo `shelf_image_artifact_references` é específico de uma imagem/loja e não deve ser reutilizado como catálogo canónico de outputs que podem ter várias origens. A publicação existente será a raiz do artefacto; eventos de governação separados deverão registar retenção/legal hold sem alterar a publicação. A implementação e os testes PostgreSQL/SQLite continuam pendentes. Não existe autorização para purga física por idade. Ver [governação de retenção dos outputs](docs/architecture/dataset-output-artifact-governance.md).

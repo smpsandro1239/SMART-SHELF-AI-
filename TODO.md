@@ -573,3 +573,16 @@
 - [x] Acrescentar regressão de limpeza em modo `--apply` para temporário antigo com nome interno mas implementado como symlink.
 - [x] Confirmar que o symlink não é candidato nem removido e que o destino externo permanece intacto.
 - [ ] Aguardar API CI, Quality Gates e Docker Compose no commit desta regressão.
+
+
+## Governação de retenção dos outputs de jobs — decisão arquitectural (2026-11-19)
+
+- [x] Auditar o catálogo de referências externas, os snapshots de inventário, os eventos de disposição e a linhagem das fontes dos jobs.
+- [x] Confirmar que a publicação append-only existente é a identidade canónica do output e que o catálogo por imagem não representa correctamente outputs multi-origem.
+- [x] Documentar o modelo alvo, a herança de restrições, os limites de inventário externo e as decisões de negócio em aberto.
+- [ ] Implementar eventos append-only de governação/retenção ligados à publicação, sem alterar a linha imutável da publicação.
+- [ ] Implementar elegibilidade fail-closed que revalide todas as fontes do job sob locks por ID crescente.
+- [ ] Acrescentar testes de migration SQLite e smoke PostgreSQL 16 para holds/restrições concorrentes em outputs multi-origem.
+- [ ] Definir política aprovada de retenção e cobertura externa antes de activar qualquer disposição física.
+
+Documento: `docs/architecture/dataset-output-artifact-governance.md`.

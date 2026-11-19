@@ -507,3 +507,16 @@ A tabela de publicação é append-only e as triggers PostgreSQL/SQLite impedem 
 ## Reconciliador: preservação perante destino adulterado — 2026-11-19
 
 Foi acrescentada cobertura para a divergência entre o destino publicado e a auditoria imutável. O staging só pode ser removido quando o destino publicado e o próprio staging correspondem simultaneamente ao digest e tamanho registados. A nova regressão verifica que um destino adulterado impede a limpeza, mesmo quando o staging ainda contém os bytes esperados. A execução CI desta cobertura está pendente.
+
+
+### Governação de outputs assíncronos — decisão arquitectural (19-11-2026)
+
+- [x] Auditar os registos existentes de publicação, linhagem de fontes e catálogo externo por imagem.
+- [x] Decidir que `dataset_execution_job_output_publications` é a raiz canónica do output; evitar catálogo duplicado e associação artificial a uma única imagem.
+- [x] Documentar a herança de restrições de todas as fontes e a necessidade de eventos de governação append-only separados.
+- [ ] Implementar eventos de retenção/legal hold associados à publicação, sem mutação da auditoria de publicação.
+- [ ] Implementar avaliação fail-closed e locks de todas as imagens de origem em ordem crescente.
+- [ ] Validar concorrência e migration em PostgreSQL 16 e SQLite.
+- [ ] Manter purga física desactivada até existir política de retenção e cobertura externa aprovadas.
+
+Ver [decisão de governação de retenção dos outputs](architecture/dataset-output-artifact-governance.md).
