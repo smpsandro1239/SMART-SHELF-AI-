@@ -126,6 +126,7 @@ class ShelfCell:
             raise ValueError("Shelf cell coordinates must be normalized and non-degenerate")
         if self.expected_product_id is not None and (
             isinstance(self.expected_product_id, bool)
+            or not isinstance(self.expected_product_id, int)
             or self.expected_product_id <= 0
         ):
             raise ValueError("expected_product_id must be a positive integer or None")
