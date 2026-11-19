@@ -72,6 +72,8 @@ def test_worker_credentials_and_events_are_database_guarded(tmp_path):
             connection.exec_driver_sql(
                 "UPDATE dataset_worker_credentials SET last_used_at=NULL WHERE id=1"
             )
+        with pytest.raises(IntegrityError, match="cannot be deleted"):
+            connection.exec_driver_sql("DELETE FROM dataset_worker_credentials WHERE id=1")
 
         with pytest.raises(IntegrityError, match="append-only"):
             connection.exec_driver_sql(
