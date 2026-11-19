@@ -16,6 +16,7 @@ from app.dataset_worker_credentials import (
     issue_dataset_worker_credential,
     require_dataset_worker_scope,
     revoke_dataset_worker_credential,
+    heartbeat_dataset_job_for_worker,
 )
 
 
@@ -201,3 +202,61 @@ def test_authenticated_claim_rejects_missing_scope_before_claiming(db):
     principal = authenticate_dataset_worker(db, bearer_token=token)
     with pytest.raises(DatasetWorkerAuthorizationError):
         claim_dataset_job_for_worker(db, principal=principal)
+
+
+def test_authenticated_claim_rechecks_worker_disablement_after_token_authentication(db):
+    from app.dataset_worker_credentials import claim_dataset_job_for_worker
+
+    token, _credential = issue(db, worker_id="disabled-after-auth", scopes=["jobs:claim"])
+    principal = authenticate_dataset_worker(db, bearer_token=token)
+    db.commit()
+    assert disable_dataset_worker(db, worker_id="disabled-after-auth")
+    with pytest.raises(DatasetWorkerAuthenticationError):
+        claim_dataset_job_for_worker(db, principal=principal)
+
+
+def test_authenticated_heartbeat_rechecks_credential_revocation_after_token_authentication(db):
+    from app.dataset_job_leases import enqueue_dataset_job
+    from app.dataset_worker_credentials import claim_dataset_job_for_worker
+
+    store = models.Store(code="WORKER-REVOKE-STORE", name="Worker revoke store")
+    db.add(store)
+    db.flush()
+    zone = models.Zone(store_id=store.id, name="Worker revoke zone")
+    db.add(zone)
+    db.flush()
+    shelf = models.Shelf(zone_id=zone.id, code="WORKER-REVOKE-SHELF")
+    db.add(shelf)
+    db.flush()
+    image = models.ShelfImage(
+        shelf_id=shelf.id, original_filename="worker-revoke.jpg",
+        storage_path="/tmp/worker-revoke.jpg", mime_type="image/jpeg",
+        file_size_bytes=12, sha256="a" * 64,
+        analysis_status="COMPLETED", retention_status="ACTIVE", legal_hold=False,
+    )
+    db.add(image)
+    db.flush()
+    enqueue_dataset_job(
+        db, idempotency_key="worker-revoke-job", release_fingerprint="d" * 64,
+        approval_evidence={
+            "status": "APPROVED", "mode": "training",
+            "record_sha256": "b" * 64, "gate_report_sha256": "c" * 64,
+        },
+        sources=[{
+            "shelf_image_id": image.id, "store_id": store.id,
+            "source_image_sha256": image.sha256,
+        }],
+    )
+    token, credential = issue(
+        db, worker_id="revoked-after-auth",
+        scopes=["jobs:claim", "jobs:heartbeat"],
+    )
+    principal = authenticate_dataset_worker(db, bearer_token=token)
+    claimed = claim_dataset_job_for_worker(db, principal=principal)
+    assert claimed is not None
+    assert revoke_dataset_worker_credential(db, credential_id=credential.credential_id)
+    with pytest.raises(DatasetWorkerAuthenticationError):
+        heartbeat_dataset_job_for_worker(
+            db, principal=principal, job_id=claimed.id,
+            fencing_token=claimed.fencing_token,
+        )
