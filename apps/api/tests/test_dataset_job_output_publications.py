@@ -245,3 +245,73 @@ def test_large_output_preparation_releases_db_transaction_and_rechecks_revocatio
     assert not list(published_root.rglob("*.artifact"))
     assert not list(published_root.rglob("*.tmp"))
 
+def test_output_reconciler_dry_run_then_removes_only_verified_old_files(publication_setup):
+    import os
+    from datetime import timedelta
+
+    from app.dataset_job_output_reconciliation import reconcile_dataset_job_output_files
+
+    state = publication_setup
+    publication = promote_dataset_job_output(
+        state["db"], principal=state["principal"], job_id=state["job"].id,
+        fencing_token=state["claim"].fencing_token,
+    )
+    state["stage_path"].parent.mkdir(parents=True, exist_ok=True)
+    state["stage_path"].write_bytes(state["payload"])
+    old_timestamp = (models.utc_now() - timedelta(days=8)).timestamp()
+    os.utime(state["stage_path"], (old_timestamp, old_timestamp))
+
+    temporary_dir = state["root"] / "published" / str(state["job"].id)
+    temporary_dir.mkdir(parents=True, exist_ok=True)
+    old_temp = temporary_dir / (".promotion-" + "a" * 32 + ".tmp")
+    old_temp.write_bytes(b"abandoned temp")
+    os.utime(old_temp, (old_timestamp, old_timestamp))
+    recent_temp = temporary_dir / (".promotion-" + "b" * 32 + ".tmp")
+    recent_temp.write_bytes(b"still recent")
+
+    dry_run = reconcile_dataset_job_output_files(state["db"], grace_seconds=7 * 86400)
+    assert dry_run["mode"] == "dry-run"
+    assert dry_run["candidate_count"] == 2
+    assert state["stage_path"].exists() and old_temp.exists() and recent_temp.exists()
+
+    applied = reconcile_dataset_job_output_files(
+        state["db"], apply=True, grace_seconds=7 * 86400
+    )
+    assert applied["removed_count"] == 2
+    assert not state["stage_path"].exists()
+    assert not old_temp.exists()
+    assert recent_temp.exists()
+    assert (state["root"] / publication.published_output_reference).read_bytes() == state["payload"]
+
+
+def test_output_reconciler_preserves_staging_without_publication_or_with_wrong_digest(
+    publication_setup
+):
+    import os
+    from datetime import timedelta
+
+    from app.dataset_job_output_reconciliation import reconcile_dataset_job_output_files
+
+    state = publication_setup
+    old_timestamp = (models.utc_now() - timedelta(days=8)).timestamp()
+    os.utime(state["stage_path"], (old_timestamp, old_timestamp))
+    no_publication = reconcile_dataset_job_output_files(
+        state["db"], apply=True, grace_seconds=7 * 86400
+    )
+    assert no_publication["removed_count"] == 0
+    assert state["stage_path"].exists()
+
+    publication = promote_dataset_job_output(
+        state["db"], principal=state["principal"], job_id=state["job"].id,
+        fencing_token=state["claim"].fencing_token,
+    )
+    state["stage_path"].parent.mkdir(parents=True, exist_ok=True)
+    state["stage_path"].write_bytes(b"tampered staging bytes")
+    os.utime(state["stage_path"], (old_timestamp, old_timestamp))
+    mismatch = reconcile_dataset_job_output_files(
+        state["db"], apply=True, grace_seconds=7 * 86400
+    )
+    assert mismatch["removed_count"] == 0
+    assert state["stage_path"].exists()
+    assert (state["root"] / publication.published_output_reference).read_bytes() == state["payload"]
+
