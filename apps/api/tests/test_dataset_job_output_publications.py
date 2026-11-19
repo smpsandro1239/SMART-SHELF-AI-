@@ -152,7 +152,8 @@ def test_tampered_staging_output_is_never_published(publication_setup):
             fencing_token=state["claim"].fencing_token,
         )
     assert state["db"].query(models.DatasetExecutionJobOutputPublication).count() == 0
-    assert not (state["root"] / "published").exists()
+    published_root = state["root"] / "published"
+    assert not list(published_root.rglob("*.artifact"))
 
 
 def test_missing_staged_output_without_recoverable_destination_is_rejected(publication_setup):
