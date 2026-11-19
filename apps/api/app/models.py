@@ -195,6 +195,105 @@ class ShelfProduct(Base):
     product: Mapped[Product] = relationship(back_populates="shelf_links")
 
 
+class ShelfPlanogram(Base):
+    """Versioned, human-calibrated geometry for one physical shelf."""
+
+    __tablename__ = "shelf_planograms"
+    __table_args__ = (
+        UniqueConstraint("shelf_id", "version", name="uq_shelf_planogram_shelf_version"),
+        CheckConstraint("version > 0", name="ck_shelf_planogram_version_positive"),
+        CheckConstraint("status IN ('DRAFT', 'ACTIVE', 'RETIRED')", name="ck_shelf_planogram_status"),
+        CheckConstraint("calibration_source IN ('MANUAL', 'IMAGE')", name="ck_shelf_planogram_calibration_source"),
+        CheckConstraint(
+            "(calibration_source = 'MANUAL' AND calibration_image_id IS NULL AND calibration_image_sha256 IS NULL) "
+            "OR (calibration_source = 'IMAGE' AND calibration_image_id IS NOT NULL AND length(calibration_image_sha256) = 64)",
+            name="ck_shelf_planogram_calibration_reference",
+        ),
+        CheckConstraint(
+            "(activated_by_user_id IS NULL AND activated_at IS NULL AND activation_reason IS NULL) "
+            "OR (activated_by_user_id IS NOT NULL AND activated_at IS NOT NULL AND length(trim(activation_reason)) > 0)",
+            name="ck_shelf_planogram_activation_metadata",
+        ),
+        CheckConstraint(
+            "(retired_by_user_id IS NULL AND retired_at IS NULL AND retirement_reason IS NULL) "
+            "OR (retired_by_user_id IS NOT NULL AND retired_at IS NOT NULL AND length(trim(retirement_reason)) > 0)",
+            name="ck_shelf_planogram_retirement_metadata",
+        ),
+        CheckConstraint(
+            "(status = 'DRAFT' AND activated_at IS NULL AND retired_at IS NULL) "
+            "OR (status = 'ACTIVE' AND activated_at IS NOT NULL AND retired_at IS NULL) "
+            "OR (status = 'RETIRED' AND activated_at IS NOT NULL AND retired_at IS NOT NULL)",
+            name="ck_shelf_planogram_status_timestamps",
+        ),
+        Index(
+            "uq_shelf_planogram_one_active_per_shelf",
+            "shelf_id",
+            unique=True,
+            sqlite_where=text("status = 'ACTIVE'"),
+            postgresql_where=text("status = 'ACTIVE'"),
+        ),
+        Index("ix_shelf_planograms_shelf_status_version", "shelf_id", "status", "version"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    shelf_id: Mapped[int] = mapped_column(ForeignKey("shelves.id", ondelete="RESTRICT"), nullable=False, index=True)
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(String(12), default="DRAFT", nullable=False, index=True)
+    calibration_source: Mapped[str] = mapped_column(String(8), default="MANUAL", nullable=False)
+    calibration_image_id: Mapped[int | None] = mapped_column(
+        ForeignKey("shelf_images.id", ondelete="RESTRICT"), nullable=True, index=True
+    )
+    calibration_image_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_by_user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    activated_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="RESTRICT"), nullable=True
+    )
+    activated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    activation_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    retired_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="RESTRICT"), nullable=True
+    )
+    retired_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    retirement_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    cells: Mapped[list["ShelfPlanogramCell"]] = relationship(
+        back_populates="planogram", cascade="all, delete-orphan", order_by="ShelfPlanogramCell.row_index, ShelfPlanogramCell.column_index"
+    )
+
+
+class ShelfPlanogramCell(Base):
+    """One expected facing position in a versioned shelf planogram."""
+
+    __tablename__ = "shelf_planogram_cells"
+    __table_args__ = (
+        UniqueConstraint("planogram_id", "cell_code", name="uq_shelf_planogram_cell_code"),
+        UniqueConstraint("planogram_id", "row_index", "column_index", name="uq_shelf_planogram_cell_grid_position"),
+        CheckConstraint("row_index >= 0 AND column_index >= 0", name="ck_shelf_planogram_cell_grid_nonnegative"),
+        CheckConstraint(
+            "x_min >= 0 AND x_min < x_max AND x_max <= 1 "
+            "AND y_min >= 0 AND y_min < y_max AND y_max <= 1",
+            name="ck_shelf_planogram_cell_bbox_normalized",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    planogram_id: Mapped[int] = mapped_column(
+        ForeignKey("shelf_planograms.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    cell_code: Mapped[str] = mapped_column(String(80), nullable=False)
+    row_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    column_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    x_min: Mapped[float] = mapped_column(Float, nullable=False)
+    y_min: Mapped[float] = mapped_column(Float, nullable=False)
+    x_max: Mapped[float] = mapped_column(Float, nullable=False)
+    y_max: Mapped[float] = mapped_column(Float, nullable=False)
+    expected_product_id: Mapped[int | None] = mapped_column(
+        ForeignKey("products.id", ondelete="RESTRICT"), nullable=True, index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    planogram: Mapped[ShelfPlanogram] = relationship(back_populates="cells")
+
+
 class WarehouseLocation(Base):
     """Physical warehouse bin with measurable capacity and picking distance."""
     __tablename__ = "warehouse_locations"
