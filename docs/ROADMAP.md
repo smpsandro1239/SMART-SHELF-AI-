@@ -589,3 +589,18 @@ Ver [decisão de governação de retenção dos outputs](architecture/dataset-ou
 - [x] Verificar identidade content-addressed, tipo regular, ausência de symlinks, tamanho e SHA-256.
 - [ ] Ligar cada endpoint/export/worker/cache/backup futuro a esta fronteira; manter interfaces externas desactivadas até existir autorização definida.
 - [ ] Definir propagação para derivados e armazenamento externo, matriz de permissões e política de retenção.
+
+
+## 2026-11-19 — Primeira sequência de visão computacional
+
+Foi concluída a primeira fatia técnica para tornar o contrato ONNX mais seguro e preparar a análise geométrica de prateleiras:
+
+1. O provider preserva `class_id), resolve-o através de `VISION_CLASS_LABELS_JSON` e falha perante IDs desconhecidos; as etiquetas não são tratadas como SKU.
+2. Os metadados ONNX são verificados antes da inferência: dtype float32, input NCHW RGB, dimensões, batch e output pós-NMS de seis colunas. Os valores de saída são validados quanto a finitude e intervalos.
+3. O worker exige modo explícito `disabled`, `mock` ou `real`; mock só aceita a factory de demonstração e é bloqueado em produção.
+4. `app.shelf_layout` introduz células geométricas fornecidas por calibração/planograma, comparação com bounding boxes, deteção de ocupação/deslocamento e estados `EMPTY`/ `UNKNOWN` que respeitam visibilidade e oclusão.
+5. Os testes cobrem classes, outputs inválidos, contratos de tensor, isolamento dos providers, células sobrepostas, SKU mistos, ocupação, vazio e incerteza.
+
+**Limites ainda activos:** não há pesos ONNX aprovados nem dataset comercial anotado; a validação do modelo ainda não verifica digest/assinatura/proveniência do artefacto. As células não estão persistidas, versionadas, expostas por API nem integradas no worker ou frontend. `EMPTY` é uma observação visual de uma célula calibrada, não uma contagem de inventário nem prova de stock contabilístico zero.
+
+A validação de CI dos commits de implementação está registada em [API CI](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44550166795), [Docker Compose smoke](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44550166747) e [Quality Gates](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44550378666); consultar os estados finais antes de considerar esta sequência validada.
