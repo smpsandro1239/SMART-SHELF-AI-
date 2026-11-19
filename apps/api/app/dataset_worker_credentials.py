@@ -244,3 +244,55 @@ def require_dataset_worker_scope(
         raise DatasetWorkerAuthorizationError("unknown worker operation scope")
     if required_scope not in principal.scopes:
         raise DatasetWorkerAuthorizationError("worker credential lacks the required scope")
+
+
+def claim_dataset_job_for_worker(
+    db: Session, *, principal: DatasetWorkerPrincipal, lease_seconds: int = 300
+):
+    """Claim a job using only the identity established by credential authentication."""
+    require_dataset_worker_scope(principal, required_scope="jobs:claim")
+    from app.dataset_job_leases import claim_next_dataset_job
+
+    return claim_next_dataset_job(
+        db, worker_id=principal.worker_id, lease_seconds=lease_seconds
+    )
+
+
+def heartbeat_dataset_job_for_worker(
+    db: Session, *, principal: DatasetWorkerPrincipal,
+    job_id: int, fencing_token: int, lease_seconds: int = 300,
+):
+    require_dataset_worker_scope(principal, required_scope="jobs:heartbeat")
+    from app.dataset_job_leases import heartbeat_dataset_job
+
+    return heartbeat_dataset_job(
+        db, job_id=job_id, worker_id=principal.worker_id,
+        fencing_token=fencing_token, lease_seconds=lease_seconds,
+    )
+
+
+def complete_dataset_job_for_worker(
+    db: Session, *, principal: DatasetWorkerPrincipal, job_id: int,
+    fencing_token: int, output_sha256: str, staged_output_reference: str,
+):
+    require_dataset_worker_scope(principal, required_scope="jobs:complete")
+    from app.dataset_job_leases import complete_dataset_job
+
+    return complete_dataset_job(
+        db, job_id=job_id, worker_id=principal.worker_id,
+        fencing_token=fencing_token, output_sha256=output_sha256,
+        staged_output_reference=staged_output_reference,
+    )
+
+
+def fail_dataset_job_for_worker(
+    db: Session, *, principal: DatasetWorkerPrincipal,
+    job_id: int, fencing_token: int, failure_code: str,
+):
+    require_dataset_worker_scope(principal, required_scope="jobs:fail")
+    from app.dataset_job_leases import fail_dataset_job
+
+    return fail_dataset_job(
+        db, job_id=job_id, worker_id=principal.worker_id,
+        fencing_token=fencing_token, failure_code=failure_code,
+    )
