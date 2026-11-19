@@ -3088,6 +3088,24 @@ def create_observation_from_demo_detection(
     )
     if assignment is None:
         raise HTTPException(status_code=422, detail="Selected product is not actively assigned to this shelf")
+    status_by_label = {
+        "empty_facing": "EMPTY",
+        "low_stock": "LOW_STOCK",
+        "wrong_product": "MISPLACED",
+        "product_not_found": "UNKNOWN",
+    }
+    suggested_status = status_by_label.get(detection.label.lower())
+    if suggested_status is None:
+        raise HTTPException(status_code=422, detail="Detection label is not supported by the demo observation flow")
+    if payload.confirmed_status != suggested_status:
+        raise HTTPException(
+            status_code=409,
+            detail="The explicitly confirmed observation status must match the reviewed demo detection label",
+        )
+
+    # SKU review and observation-state confirmation are separate human decisions.
+    # A model label is only a suggestion and must never create an EMPTY/LOW_STOCK
+    # observation without an explicit status confirmation in this demo endpoint.
     marker = f"demo_detection_id={detection.id};"
     existing = (
         db.query(models.Observation)
@@ -3097,15 +3115,7 @@ def create_observation_from_demo_detection(
     )
     if existing is not None:
         return existing
-    status_by_label = {
-        "empty_facing": "EMPTY",
-        "low_stock": "LOW_STOCK",
-        "wrong_product": "MISPLACED",
-        "product_not_found": "UNKNOWN",
-    }
-    observation_status = status_by_label.get(detection.label.lower())
-    if observation_status is None:
-        raise HTTPException(status_code=422, detail="Detection label is not supported by the demo observation flow")
+    observation_status = payload.confirmed_status
     observed_quantity = 0 if observation_status == "EMPTY" else None
     observation = models.Observation(
         shelf_id=image.shelf_id,
@@ -3116,7 +3126,7 @@ def create_observation_from_demo_detection(
         observed_quantity=observed_quantity,
         notes=(
             f"{marker} shelf_image_id={image.id}; sha256={image.sha256}; "
-            f"human_review_id={latest_review.id}; provider=mock"
+            f"human_review_id={latest_review.id}; human_confirmed_status={observation_status}; provider=mock"
         ),
         observed_at=models.utc_now(),
         model_version=detection.model_version,

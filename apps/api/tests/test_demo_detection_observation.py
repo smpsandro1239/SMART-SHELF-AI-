@@ -114,7 +114,7 @@ def test_demo_detection_requires_human_review_and_is_idempotent(monkeypatch):
         with TestClient(app) as client:
             denied = client.post(
                 f"/api/v1/shelf-image-detections/{detection_id}/observation",
-                json={"product_id": product_id},
+                json={"product_id": product_id, "confirmed_status": "EMPTY"},
             )
             assert denied.status_code == 409
             assert "human SKU review" in denied.json()["detail"]
@@ -132,6 +132,19 @@ def test_demo_detection_requires_human_review_and_is_idempotent(monkeypatch):
             finally:
                 db.close()
 
+            missing_status = client.post(
+                f"/api/v1/shelf-image-detections/{detection_id}/observation",
+                json={"product_id": product_id},
+            )
+            assert missing_status.status_code == 422
+
+            mismatched_status = client.post(
+                f"/api/v1/shelf-image-detections/{detection_id}/observation",
+                json={"product_id": product_id, "confirmed_status": "LOW_STOCK"},
+            )
+            assert mismatched_status.status_code == 409
+            assert "confirmed observation status" in mismatched_status.json()["detail"]
+
             executed_statements = []
 
             def record_statement(connection, cursor, statement, parameters, context, executemany):
@@ -145,7 +158,7 @@ def test_demo_detection_requires_human_review_and_is_idempotent(monkeypatch):
             try:
                 first = client.post(
                     f"/api/v1/shelf-image-detections/{detection_id}/observation",
-                    json={"product_id": product_id},
+                    json={"product_id": product_id, "confirmed_status": "EMPTY"},
                 )
             finally:
                 event.remove(ENGINE, "before_cursor_execute", record_statement)
@@ -158,7 +171,7 @@ def test_demo_detection_requires_human_review_and_is_idempotent(monkeypatch):
 
             second = client.post(
                 f"/api/v1/shelf-image-detections/{detection_id}/observation",
-                json={"product_id": product_id},
+                json={"product_id": product_id, "confirmed_status": "EMPTY"},
             )
             decisions = client.get(f"/api/v1/operational-decisions?store_id={store_id}")
             missing_evidence = client.post(
@@ -215,6 +228,7 @@ def test_demo_detection_requires_human_review_and_is_idempotent(monkeypatch):
         assert first.json()["status"] == "EMPTY"
         assert first.json()["observed_quantity"] == 0
         assert f"sha256={'a' * 64}" in first.json()["notes"]
+        assert "human_confirmed_status=EMPTY" in first.json()["notes"]
         assert decisions.status_code == 200
         by_product = {row["product_id"]: row for row in decisions.json()["decisions"]}
         assert by_product[product_id]["replenishment_assessment"] is not None

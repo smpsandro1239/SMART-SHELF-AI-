@@ -1,3 +1,11 @@
+## 2026-11-19 — Separação entre revisão SKU e confirmação do estado demo
+
+- Identificada uma lacuna no endpoint `POST /api/v1/shelf-image-detections/{detection_id}/observation`: a revisão humana do SKU era suficiente para converter `empty_facing` em observação `EMPTY`, sem confirmação explícita do estado.
+- O contrato exige agora `confirmed_status`; o estado tem de corresponder à classe de demonstração e fica registado nas notas de proveniência.
+- A ausência de confirmação é rejeitada pela validação HTTP (422); um estado incompatível é rejeitado com 409. A revisão SKU continua obrigatória e independente.
+- Foram acrescentados testes para ausência, divergência, revisão obrigatória e idempotência.
+- Validação CI pendente; não foram executados testes localmente nesta ronda.
+
 ## 2026-11-19 — Comparação read-only de captura com planograma ativo
 
 - HEAD inicial da implementação: `b8865e1ff4d86577cfc51039c4f3092242911517`; commit da implementação do serviço/API: `c484074f6e84bfa231d3e202a2bbc39eccd027d7`; testes e correção da expectativa geométrica: `4f3c9a9083b5ab2187a918927b48770ce2813cbf`.

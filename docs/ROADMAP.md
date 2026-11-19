@@ -1,3 +1,10 @@
+### Confirmação humana explícita de observações demo — 2026-11-19
+
+- O endpoint de criação de observação a partir de deteção demo exige agora `confirmed_status`, separado da revisão de SKU.
+- A API rejeita estados em falta ou incompatíveis com a classe da deteção; a confirmação fica registada na proveniência da observação.
+- O comportamento continua restrito ao provider mock/demo e não constitui validação de visão computacional real.
+- Testes de regressão HTTP acrescentados; aguarda CI do novo commit.
+
 ### Contrato de evidência de comparação de planogramas — 2026-11-19
 
 - A validação do fingerprint foi concluída no commit db7f8b423d14b0011609ff154874014cd122dfac: API CI [44589714790](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44589714790), Quality Gates [44589714764](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44589714764) e Docker Compose [44589714845](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44589714845) passaram.

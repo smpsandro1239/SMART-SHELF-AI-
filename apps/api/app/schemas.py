@@ -51,8 +51,9 @@ class ObservationCreate(BaseModel):
 
 
 class DetectionObservationCreate(BaseModel):
-    """Human-selected SKU for a reviewed demonstration detection."""
+    """Human-confirmed SKU and observation state for a demo detection."""
     product_id: int = Field(gt=0)
+    confirmed_status: ObservationStatus
 
 
 class ObservationRead(BaseModel):

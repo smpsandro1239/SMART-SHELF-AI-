@@ -39,12 +39,14 @@ Estas credenciais são exclusivamente locais. Altera-as antes de expor o ambient
 2. **01:00–02:00 — Seleção:** escolher a zona e a prateleira `DEMO-A1`.
 3. **02:00–03:00 — Captura:** carregar `synthetic-shelf.png`; a API cria uma sessão e guarda o ficheiro, SHA-256, timestamp e proveniência.
 4. **03:00–04:00 — Análise:** aguardar o worker; o provider mock emite uma deteção `empty_facing` com bounding box e confiança. O resultado é sintético e explicitamente identificado como DEMO.
-5. **04:00–05:00 — Observação:** rever a evidência e selecionar `DEMO-001` (Leite meio-gordo 1 L), associado à prateleira `DEMO-A1`, para usar o cenário de stock baixo. Não aceitar automaticamente uma identidade de produto que o mock não consegue provar.
+5. **04:00–05:00 — Observação:** rever a evidência e selecionar `DEMO-001` (Leite meio-gordo 1 L), associado à prateleira `DEMO-A1`. Confirmar também explicitamente o estado sugerido (`EMPTY` para `empty_facing`, `LOW_STOCK` para `low_stock`, `MISPLACED` para `wrong_product` ou `UNKNOWN` para `product_not_found`). A revisão do SKU e a confirmação do estado são decisões humanas separadas; não aceitar automaticamente nenhuma delas a partir do mock.
 6. **05:00–06:00 — Recomendação:** consultar a decisão operacional, inventário disponível e quantidade sugerida.
 7. **06:00–07:00 — Aprovação:** ADMIN/SUPERVISOR confirma quantidade e stock. A tarefa é atribuída ao EMPLOYEE; a tarefa mostra também a miniatura da imagem de evidência e o SHA-256. Não há movimento automático de inventário.
 8. **07:00–08:30 — Execução:** terminar sessão, entrar como EMPLOYEE, iniciar a tarefa, registar quantidade efetivamente reposta e concluir.
 9. **08:30–09:30 — Reconciliação:** voltar ao SUPERVISOR e aprovar a reconciliação com motivo. Se a evidência de stock estiver desatualizada ou insuficiente, a API bloqueia a operação conforme ADR-008.
 10. **09:30–10:00 — Resultado:** consultar tarefa, evidência, eventos de auditoria, movimento e snapshot resultante no dashboard.
+
+Para criar a observação através de `POST /api/v1/shelf-image-detections/{detection_id}/observation`, o corpo deve incluir ambos os campos, por exemplo `{"product_id": 1, "confirmed_status": "EMPTY"}`. O estado confirmado tem de corresponder à classe de demonstração e a revisão humana do SKU tem de continuar válida. A ausência do estado devolve 422; uma confirmação incompatível devolve 409. A operação é idempotente por deteção e não altera directamente o inventário contabilístico.
 
 ## Comandos de validação
 
