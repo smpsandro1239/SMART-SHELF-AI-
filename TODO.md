@@ -616,7 +616,7 @@ Documento: `docs/architecture/dataset-output-artifact-governance.md`.
 - [x] Implementar serviço interno com callback de autorização obrigatório e projecção de estado derivada da cronologia.
 - [x] Acrescentar testes SQLite para sequência, transições, actor inactivo, imutabilidade e downgrade, mais testes de serviço para autorização, evidência e estado.
 - [x] Integrar smoke PostgreSQL 16 para concorrência de dois pedidos, sequência, legal hold e imutabilidade dos eventos.
-- [ ] Executar e confirmar API CI, Quality Gates e Docker Compose no commit que introduz a migration 0065.
+- [x] Validar migration 0065 em PostgreSQL 16, smokes de governação/concorrência e suite API no commit `b2247031a7d651a4efdc423f83bf7947723e27ff`: API CI [44519805058](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44519805058) e Quality Gates [44519805055](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44519805055) passaram com **1244 passed, 1 skipped, 1 warning**; Docker Compose [44519805067](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44519805067) passou.
 - [ ] Aprovar matriz de permissões por perfil/loja, separação de funções e eventual aprovação independente para libertação de legal hold.
 - [ ] Integrar a projecção de governação em cada leitura/exportação efectiva de outputs antes de criar endpoints ou workers remotos.
 - [ ] Definir política de retenção, inventário externo e procedimento de recuperação; manter disposição física e purga desactivadas.

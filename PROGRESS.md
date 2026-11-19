@@ -858,3 +858,15 @@ Adicionado teste de segurança para temporários de promoção cujo nome corresp
 - O smoke PostgreSQL da publicação foi alargado para disputar duas restrições concorrentes na mesma publicação, observar o lock PostgreSQL, exigir um único evento aceite, aplicar legal hold e testar imutabilidade/sequence guard.
 - **Validação:** pendente da execução dos workflows no commit desta alteração. Não foram executados testes localmente nesta sessão.
 - **Decisão:** não foi escolhida uma matriz de permissões por perfil nem uma regra de dupla aprovação para libertar legal hold. O serviço exige callback de autorização obrigatório; não existe endpoint HTTP. Não foi criada purga física nem política de retenção temporal.
+
+
+## 2026-11-19 — Validação final da governação append-only dos outputs
+
+Commit validado: `b2247031a7d651a4efdc423f83bf7947723e27ff`.
+
+- **API CI [44519805058](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44519805058):** migration PostgreSQL 16, smoke de publicação e governação, concorrência de dois escritores na mesma publicação, transições, imutabilidade e suite API aprovados; **1244 passed, 1 skipped, 1 warning**.
+- **Quality Gates [44519805055](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44519805055):** compilação Python, suite API e build TypeScript/produção Web aprovados; **1244 passed, 1 skipped, 1 warning**.
+- **Docker Compose [44519805067](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44519805067):** stack demonstrativa aprovada.
+- A primeira execução revelou um erro de teste na ordem dos eventos de legal hold e uma dependência de ordem do smoke de bootstrap. Ambos foram corrigidos; a execução final passou.
+- O aviso restante é a depreciação `anyio.abc.BlockingPortal` no `starlette.testclient`; não está relacionado com esta alteração.
+- Não foram executados testes localmente; a validação indicada é a dos workflows GitHub Actions.

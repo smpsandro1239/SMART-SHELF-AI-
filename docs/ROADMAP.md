@@ -555,3 +555,11 @@ Ver [decisão de governação de retenção dos outputs](architecture/dataset-ou
 - Serviço interno exige callback de autorização positivo; a projecção de estado deriva a situação efectiva da cronologia.
 - Testes SQLite e smoke concorrente PostgreSQL acrescentados; aguarda CI do commit.
 - Permanecem em aberto a matriz de permissões, integração com consumidores de bytes, endpoints/worker remoto, política de retenção e disposição física.
+
+
+### Validação final da migration 0065 — 19-11-2026
+
+- API CI [44519805058](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44519805058): migration PostgreSQL 16 e smoke de governação concorrente aprovados; **1244 passed, 1 skipped, 1 warning**.
+- Quality Gates [44519805055](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44519805055): compilação Python, suite API e build Web aprovados.
+- Docker Compose [44519805067](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44519805067): aprovado.
+- O aviso Starlette/AnyIO é uma depreciação externa, sem falhas associadas.
