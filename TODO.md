@@ -834,3 +834,12 @@ Critério global: nenhuma capacidade pode ser marcada como concluída sem códig
 - [x] Validar no HEAD de implementação `ad76a03964521bbcab61166d1245986a8a6c577c`: API CI **1311 passed, 1 skipped, 1 warning**; Quality Gates e Docker Compose aprovados.
 - [ ] Integrar o comparador no worker com células/planogramas persistidos e origem de calibração auditável; manter a integração desactivada até existir esse contrato.
 - [ ] Calibrar o threshold por classe/câmara com dataset real anotado; 0,80 é apenas um default conservador, não uma métrica validada.
+### Quinta sequência — conformidade de facings com planograma (2026-11-19)
+
+- [x] Acrescentar `expected_facings` opcional às células, exigindo valor inteiro positivo e SKU esperado.
+- [x] Calcular `observed_facings` a partir das deteções de produto associadas à célula, excluindo classes `empty_facing`.
+- [x] Devolver `UNDER_FACED` e `OVER_FACED` quando a contagem frontal diverge do esperado; manter `OCCUPIED` quando coincide.
+- [x] Dar precedência a `MISPLACED`, `OCCUPIED_UNIDENTIFIED` e `CONFLICT` para não ocultar SKU errado, desconhecido ou evidência contraditória.
+- [x] Preservar valores esperados/observados e testar limites, contagens, células vazias e prioridades de estado.
+- [ ] Ligar `observed_facings` a detecções persistidas com NMS e deduplicação calibradas; não assumir que cada caixa é um facing físico sem validação.
+- [ ] Persistir estes campos em planogramas versionados e expor comparação esperado/observado por API/UI.
