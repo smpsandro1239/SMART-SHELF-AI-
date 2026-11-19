@@ -1646,6 +1646,7 @@ Todas as rotas exigem Bearer JWT e perfil `ADMIN` ou `SUPERVISOR`. O supervisor 
 | PUT | `/api/v1/planograms/{planogram_id}/cells` | Substituir atomicamente as células de uma versão DRAFT |
 | POST | `/api/v1/planograms/{planogram_id}/activate` | Ativar a versão e retirar a anterior |
 | POST | `/api/v1/planograms/{planogram_id}/retire` | Retirar a versão ativa sem apagar histórico |
+| GET | `/api/v1/shelves/{shelf_id}/planograms/comparison/{image_id}` | Comparar uma captura analisada com a versão ativa, sem alterar inventário |
 
 Exemplo de criação:
 
@@ -1678,8 +1679,10 @@ Os motivos de ativação/retirada são obrigatórios (3–500 caracteres). Confl
 - As operações de escrita são transacionais e tratam conflitos de constraints como 409.
 - A migration mantém equivalência de guards entre PostgreSQL e SQLite.
 - A eliminação em cascata de células de um rascunho é permitida; células de versões ativas/retiradas permanecem protegidas.
-- Não existe ainda endpoint de comparação, interface React, ligação ao worker de visão ou calibração com imagens reais.
-- `expected_facings` está persistido no planograma, mas a contagem observada continua experimental até validação com imagens reais e integração no worker.
+- Existe endpoint read-only de comparação on-demand entre uma captura `COMPLETED`/`ACTIVE` e o planograma `ACTIVE` da mesma prateleira; devolve estado por célula, facings esperados/observados, IDs das deteções, SHA-256 da imagem e versões do planograma/modelo.
+- A comparação ainda não é persistida, não está ligada ao worker nem tem interface React ou fluxo de revisão humana.
+- Sem calibração explícita de visibilidade por célula, a ausência de produto e a classe `empty_facing` permanecem `UNKNOWN`; o endpoint nunca declara `EMPTY` apenas por ausência de deteções.
+- `expected_facings` está persistido no planograma, mas a contagem observada continua experimental até validação com imagens reais e deduplicação/NMS calibradas.
 - A deteção visual de espaços vazios/facings não altera inventário contabilístico.
 
 ## Validação CI
