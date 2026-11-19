@@ -928,3 +928,15 @@ HEAD validado: `69b9bba60a070933589d162ad9279ab4487c0a3b`.
 **Limites:** não há pesos ONNX comerciais no repositório, dataset anotado nem benchmark de inferência real. As células são fornecidas por calibração/planograma revisto; ainda não há persistência, API nem integração no worker. O estado `EMPTY` é evidência visual local, nunca stock contabilístico.
 
 **Próxima sequência proposta:** reforçar identidade/proveniência do modelo (SHA-256 do detector e embedder, fingerprint do mapa de classes e versão de pré-processamento), endurecer validação de imagens/outputs, e ligar a saída semântica à camada de matching sem transformar etiquetas genéricas em SKU.
+
+## Visão computacional — identidade criptográfica do modelo (2026-11-19)
+
+A segunda sequência reforçou a proveniência do provider ONNX sem alterar o schema da base de dados:
+
+- SHA-256 dos pesos do detector e, quando configurado, do embedder, calculado por streaming em blocos de 1 MiB.
+- Fingerprint efectivo do detector combina digest dos pesos, fingerprint do mapa de classes, tamanho de entrada, limiar de confiança, máximo de deteções e versão fixa do pré-processamento.
+- Fingerprint do embedder é independente e combina os seus pesos, dimensão de entrada e versão de pré-processamento. A versão efectiva passa a ser `versão-configurada@SHA256`.
+- O provider recusa caminhos de modelo simbólicos e repete o hash depois de criar cada sessão ONNX, rejeitando substituição do ficheiro durante o carregamento.
+- Os fingerprints ficam dentro dos campos de versão já persistidos nas deteções; não se afirma que exista ainda um manifesto assinado nem colunas dedicadas de auditoria.
+- **Compatibilidade deliberadamente fail-closed:** exemplares SKU aprovados com uma versão anterior do embedder não correspondem à nova versão fingerprintada. É necessário gerar e aprovar exemplares usando a nova versão efectiva antes de obter matches.
+- Foram acrescentados testes de estabilidade, alteração de pesos/labels/configuração, symlink e substituição concorrente. Validação CI pendente para esta sequência.
