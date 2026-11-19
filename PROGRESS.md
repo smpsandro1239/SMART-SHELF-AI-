@@ -1,3 +1,15 @@
+## 2026-11-19 — Comparação read-only de captura com planograma ativo
+
+- HEAD inicial da implementação: `b8865e1ff4d86577cfc51039c4f3092242911517`; commit da implementação do serviço/API: `c484074f6e84bfa231d3e202a2bbc39eccd027d7`; testes e correção da expectativa geométrica: `4f3c9a9083b5ab2187a918927b48770ce2813cbf`.
+- Criado `app.shelf_planogram_comparison` para converter as células persistidas e comparar deteções guardadas, preservando os IDs de origem.
+- Adicionado `GET /api/v1/shelves/{shelf_id}/planograms/comparison/{image_id}`. Só aceita imagem da mesma prateleira com retenção ACTIVE e análise COMPLETED, exige ADMIN/SUPERVISOR e revalida o planograma ACTIVE, a imagem de calibração e os SKUs através do serviço existente.
+- A resposta inclui SHA-256 da captura, versão do modelo, versão do planograma e estados por célula com facings esperados/observados, produtos e IDs das deteções.
+- A comparação é calculada on-demand, sem escrita, sem criação de tarefas/observações e sem efeitos sobre inventário.
+- Segurança semântica: todas as células são tratadas como sem visibilidade calibrada nesta fase. Mesmo uma deteção `empty_facing` não gera `EMPTY`; a célula permanece `UNKNOWN` até existir evidência explícita de visibilidade para aquela captura.
+- Testes API acrescentados para `UNDER_FACED`, proveniência, não inferência de vazio, análise pendente, EMPLOYEE e isolamento entre lojas. Não foram executados testes localmente.
+- Workflows para o HEAD `4f3c9a9083b5ab2187a918927b48770ce2813cbf`: API CI [44563920216](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44563920216), Quality Gates [44563920207](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44563920207) e Docker Compose [44563920224](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44563920224) estavam em execução no momento deste registo; confirmar resultado antes de declarar validação.
+- Limites: resultado não é persistido, não está integrado no worker nem tem UI de revisão. Sem visibilidade calibrada, não existe conclusão de vazio. A contagem de facings continua dependente da qualidade das deteções/NMS e de validação com dataset real.
+
 ## 2026-11-19 — Linhagem de outputs, autorização e propagação
 
 - SHA inicial: 9f6e871520a1d63b1f148bcc7578c546a41d090e.
