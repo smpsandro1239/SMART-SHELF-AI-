@@ -895,3 +895,13 @@ Critério global: nenhuma capacidade pode ser marcada como concluída sem códig
 - [x] Validar no commit `46eb9bbc19a039d2e68183655fb07501a0c12ef8`: smoke PostgreSQL dedicado passou; API CI [44561359774](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44561359774) com **1334 passed, 1 skipped, 1 warning**; Quality Gates [44561359524](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44561359524) com o mesmo resultado; Docker Compose [44561359723](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44561359723) aprovado.
 - [ ] Ligar o planograma ativo ao worker e persistir resultados de comparação por imagem/modelo/versão, sem efeitos sobre inventário.
 - [ ] Criar UI de revisão e validar a contagem de facings com dataset real anotado.
+
+
+## Interface de comparação com planogramas — 2026-11-19
+
+- [x] Criar componente React dedicado para comparar uma captura concluída com o planograma ativo da respetiva prateleira.
+- [x] Restringir a apresentação ao percurso ADMIN/SUPERVISOR e reutilizar o endpoint com autenticação já existente.
+- [x] Apresentar proveniência, versão do planograma/modelo, estado por célula, facings e IDs das deteções.
+- [x] Manter a semântica conservadora UNKNOWN sem calibração de visibilidade e não alterar inventário.
+- [ ] Executar build TypeScript/Vite e Quality Gates para validar a integração.
+- [ ] Fazer validação manual de teclado, leitor de ecrã, contraste e browser móvel.
