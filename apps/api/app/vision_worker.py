@@ -187,7 +187,14 @@ def retry_failed_ocr_for_image(db: Session, image_id: int, provider) -> bool:
     return new_run is not None and new_run.status == "COMPLETED"
 
 def resolve_sku_match(db: Session, detection, registry_cache=None, *, store_id: int | None = None):
-    """Match only against approved exemplars; reuse one registry per model version."""
+    """Match only explicitly eligible object classes against approved exemplars."""
+    allowed_labels = {
+        label.strip()
+        for label in settings.vision_sku_match_labels.split(",")
+        if label.strip()
+    }
+    if detection.label not in allowed_labels:
+        return {"product_id": None, "status": "UNKNOWN", "similarity": None, "margin": None}
     if detection.embedding is None or not detection.embedding_model_version:
         return {"product_id": None, "status": "UNKNOWN", "similarity": None, "margin": None}
     try:
