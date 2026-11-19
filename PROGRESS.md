@@ -974,3 +974,12 @@ A quarta sequência corrige uma ambiguidade de negócio importante no comparador
 - Docker Compose [44553140813](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44553140813): stack de demonstração aprovada.
 
 **Limites:** o comparador continua puro e não está ligado ao worker/API. As células têm de vir de calibração ou planograma externo; não há ainda persistência nem calibração real do threshold. O estado `EMPTY` é evidência visual da célula, não stock contabilístico.
+## Visão computacional — comparação de facings com planograma (2026-11-19)
+
+- `ShelfCell` suporta `expected_facings` opcional, positivo e associado a um SKU esperado.
+- `ShelfCellObservation` expõe `expected_facings` e `observed_facings`; o contador considera apenas deteções de produto associadas à célula, nunca a classe `empty_facing`.
+- Foram introduzidos `UNDER_FACED` e `OVER_FACED`; `OCCUPIED` significa contagem frontal exacta quando o esperado está configurado.
+- Estados `MISPLACED`, `OCCUPIED_UNIDENTIFIED` e `CONFLICT` têm precedência sobre a comparação numérica para evitar mascarar SKU incorrecto/desconhecido ou evidência contraditória.
+- Testes cobrem contagem inferior/excedente/exacta, prioridade de SKU errado, SKU desconhecido, validação de `expected_facings` e célula vazia com zero facings observados.
+- Limite: a contagem é número de caixas pós-NMS associadas, não quantidade física em profundidade. Deduplicação/calibração com imagens reais e integração persistente continuam pendentes.
+- Validação CI pendente para esta sequência.
