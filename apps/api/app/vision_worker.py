@@ -29,11 +29,25 @@ logger = logging.getLogger("smart_shelf.vision_worker")
 
 
 def load_provider():
+    mode = settings.vision_provider_mode.strip().lower()
+    if mode == "disabled":
+        raise VisionProviderNotConfigured(
+            "VISION_PROVIDER_MODE=disabled; configure an explicit mock or real provider before processing images."
+        )
+    if mode not in {"mock", "real"}:
+        raise ValueError("VISION_PROVIDER_MODE must be disabled, mock or real")
     factory_path = settings.vision_provider_factory.strip()
     if not factory_path:
         raise VisionProviderNotConfigured(
-            "VISION_PROVIDER_FACTORY is empty; configure a real inference provider before processing images."
+            "VISION_PROVIDER_FACTORY is empty; configure the selected inference provider."
         )
+    is_demo_factory = factory_path == "app.demo.vision:create_provider"
+    if mode == "mock" and not is_demo_factory:
+        raise ValueError("VISION_PROVIDER_MODE=mock only permits app.demo.vision:create_provider")
+    if mode == "real" and is_demo_factory:
+        raise ValueError("The deterministic demo provider cannot be loaded in real mode")
+    if mode == "mock" and settings.app_env.lower() == "production":
+        raise ValueError("Mock vision providers are forbidden in production")
     module_name, separator, attribute = factory_path.partition(":")
     if not separator or not module_name or not attribute:
         raise ValueError("VISION_PROVIDER_FACTORY must use the format 'python.module:factory'")
