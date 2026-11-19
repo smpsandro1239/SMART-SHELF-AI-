@@ -377,10 +377,9 @@ def retire_planogram(
         raise ShelfPlanogramError("Only an ACTIVE planogram can be retired")
     if image is not None and (
         image.shelf_id != shelf.id
-        or image.retention_status != "ACTIVE"
         or image.sha256 != planogram.calibration_image_sha256
     ):
-        raise ShelfPlanogramError("Calibration image is no longer eligible")
+        raise ShelfPlanogramError("Calibration image identity no longer matches the planogram")
     planogram.status = "RETIRED"
     planogram.retired_by_user_id = actor.id
     planogram.retired_at = _now()
