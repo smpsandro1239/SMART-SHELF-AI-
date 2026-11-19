@@ -5,7 +5,7 @@
 - A resposta liga os resultados ao SHA-256 da captura, à versão do modelo e à versão do planograma; inclui estados e contagens por célula, sem modificar inventário.
 - Sem calibração de visibilidade por captura, o comparador nunca afirma EMPTY por ausência de deteções ou por `empty_facing`; usa UNKNOWN.
 - Testes API acrescentados para facings, proveniência, vazio conservador, estado pendente e autorização.
-- Validação CI pendente no momento do registo: API CI [44563920216](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44563920216), Quality Gates [44563920207](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44563920207), Docker Compose [44563920224](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44563920224).
+- Validação CI concluída: API CI [44563920216](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44563920216) com **1337 passed, 1 skipped, 1 warning** e PostgreSQL 16; Quality Gates [44564178983](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44564178983) com o mesmo resultado, compilação Python e build Web; Docker Compose [44563920224](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44563920224) aprovado.
 - Próximos passos: persistir resultados imutáveis por imagem/modelo/versão; ligar worker respeitando retenção e ordem de locks; criar UI de revisão; validar NMS/facings/visibilidade com dataset anotado.
 
 ### 2026-11-19 — Linhagem e propagação de governação de outputs
