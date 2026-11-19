@@ -812,3 +812,13 @@ Critério global: nenhuma capacidade pode ser marcada como concluída sem códig
 - [x] Testar estabilidade do fingerprint, alteração de pesos/labels/configuração, symlink e substituição concorrente.
 - [ ] Persistir digests e manifesto como campos auditáveis separados, com origem/licença/assinatura e processo de aprovação/rollback.
 - [ ] Definir migração operacional dos exemplares aprovados para a nova versão efectiva do embedder; versões antigas devem continuar identificáveis, sem correspondência cruzada.
+
+### Terceira sequência — semântica de classes e elegibilidade de SKU (2026-11-19)
+
+- [x] Definir whitelist explícita `VISION_SKU_MATCH_LABELS` para determinar quais classes semânticas podem produzir embeddings.
+- [x] Impedir geração de embeddings para classes não elegíveis (por omissão, `empty_facing` não é um produto).
+- [x] Revalidar a whitelist no worker para providers alternativos; uma classe não elegível nunca consulta o catálogo de exemplares.
+- [x] Incluir a whitelist no fingerprint do detector, para que alterações de semântica gerem uma nova identidade de modelo.
+- [x] Acrescentar testes de provider e worker para impedir matching indevido de espaços vazios.
+- [ ] Ligar deteções `empty_facing` a células calibradas e à evidência de visibilidade, sem as confundir com ausência de captura ou oclusão.
+- [ ] Construir matriz de classes/SKU por modelo aprovado e validar com dataset real anotado.
