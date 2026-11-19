@@ -149,3 +149,53 @@ def test_invalid_credential_lifetime_is_rejected(db, lifetime):
 def test_worker_ids_are_not_silently_normalised(db):
     with pytest.raises(DatasetWorkerCredentialError):
         issue(db, worker_id=" worker-a ")
+
+
+def test_authenticated_claim_uses_credential_identity_not_caller_input(db):
+    from app.dataset_job_leases import enqueue_dataset_job
+    from app.dataset_worker_credentials import claim_dataset_job_for_worker
+
+    store = models.Store(code="WORKER-AUTH-STORE", name="Worker auth store")
+    db.add(store)
+    db.flush()
+    zone = models.Zone(store_id=store.id, name="Worker auth zone")
+    db.add(zone)
+    db.flush()
+    shelf = models.Shelf(zone_id=zone.id, code="WORKER-AUTH-SHELF")
+    db.add(shelf)
+    db.flush()
+    image = models.ShelfImage(
+        shelf_id=shelf.id, original_filename="worker-auth.jpg",
+        storage_path="/tmp/worker-auth.jpg", mime_type="image/jpeg",
+        file_size_bytes=12, sha256="a" * 64,
+        analysis_status="COMPLETED", retention_status="ACTIVE", legal_hold=False,
+    )
+    db.add(image)
+    db.flush()
+    enqueue_dataset_job(
+        db, idempotency_key="worker-auth-job", release_fingerprint="d" * 64,
+        approval_evidence={
+            "status": "APPROVED", "mode": "training",
+            "record_sha256": "b" * 64, "gate_report_sha256": "c" * 64,
+        },
+        sources=[{
+            "shelf_image_id": image.id, "store_id": store.id,
+            "source_image_sha256": image.sha256,
+        }],
+    )
+
+    token, _credential = issue(db, worker_id="authenticated-worker", scopes=["jobs:claim"])
+    principal = authenticate_dataset_worker(db, bearer_token=token)
+    claimed = claim_dataset_job_for_worker(db, principal=principal)
+    assert claimed is not None
+    assert claimed.lease_owner == "authenticated-worker"
+    assert claimed.lease_owner == principal.worker_id
+
+
+def test_authenticated_claim_rejects_missing_scope_before_claiming(db):
+    from app.dataset_worker_credentials import claim_dataset_job_for_worker
+
+    token, _credential = issue(db, scopes=["jobs:heartbeat"])
+    principal = authenticate_dataset_worker(db, bearer_token=token)
+    with pytest.raises(DatasetWorkerAuthorizationError):
+        claim_dataset_job_for_worker(db, principal=principal)
