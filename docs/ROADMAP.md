@@ -671,3 +671,8 @@ Validação no commit `46eb9bbc19a039d2e68183655fb07501a0c12ef8`: API CI [445613
 ## 2026-11-19 — Comparação de planogramas: serialização com retenção
 
 A comparação passou a bloquear a captura e a imagem de calibração em ordem crescente de ID, seguidas da prateleira e do planograma ativo. A versão ativa é recarregada após os locks; uma mudança concorrente resulta em HTTP 409. A captura é revalidada como ACTIVE/COMPLETED sob lock e a restrição de retenção fica serializada com a leitura. O smoke PostgreSQL dedicado foi alargado para testar a concorrência real entre comparação e restrição da captura. A validação desta alteração está pendente dos workflows disparados pelo commit. A comparação continua on-demand, read-only e não altera inventário.
+
+
+### Validação CI — comparação e retenção serializadas (19-11-2026)
+
+A alteração foi validada no API CI [44588809660](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44588809660), Quality Gates [44589016727](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44589016727) e Docker Compose [44588809507](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44588809507). O API CI executou o smoke PostgreSQL 16 de planogramas, incluindo a corrida comparação/retenção, e a suite terminou com **1342 testes aprovados, 1 ignorado e 1 aviso**. O Quality Gates confirmou também compilação Python e build TypeScript/produção Web. A comparação continua read-only e não persistida.

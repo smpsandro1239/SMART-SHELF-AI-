@@ -1098,3 +1098,11 @@ O teste de concorrência confirma a serialização edição/ativação no servi�
 - O smoke PostgreSQL mantém uma comparação aberta enquanto outra sessão tenta restringir a captura; a restrição deve esperar e a consulta posterior deve falhar.
 - A comparação permanece read-only, não persistida e sem efeitos no inventário.
 - Validação CI desta alteração pendente.
+
+
+### Validação final da comparação serializada — 2026-11-19
+
+- API CI [44588809660](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44588809660): passou; migration PostgreSQL 16, todos os smokes operacionais, incluindo o smoke de comparação/retenção, e **1342 testes aprovados, 1 ignorado e 1 aviso**.
+- Quality Gates [44589016727](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44589016727): passou; compilação Python, suite API com o mesmo resultado e build TypeScript/produção Web aprovados.
+- Docker Compose [44588809507](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44588809507): passou.
+- A evidência confirma a serialização PostgreSQL entre comparação e restrição; não representa validação manual com imagens reais nem autoriza persistência/integração no worker.
