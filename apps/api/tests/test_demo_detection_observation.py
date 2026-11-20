@@ -250,6 +250,7 @@ def test_demo_detection_requires_human_review_and_is_idempotent(monkeypatch):
                     .first()
                 )
                 assert latest_regression_review is not None
+                latest_regression_review_id = latest_regression_review.id
                 db.add(models.Observation(
                     shelf_id=forged_shelf_id,
                     product_id=product_id,
@@ -260,7 +261,7 @@ def test_demo_detection_requires_human_review_and_is_idempotent(monkeypatch):
                     notes=(
                         f"demo_detection_id={regression_detection_id}; "
                         f"shelf_image_id={regression_image_id}; sha256={'b' * 64}; "
-                        f"human_review_id={latest_regression_review.id}; provider=mock"
+                        f"human_review_id={latest_regression_review_id}; provider=mock"
                     ),
                     observed_at=models.utc_now(),
                     model_version="mock-shelf-vision-v1",
