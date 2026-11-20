@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 from collections.abc import Callable
+import logging
 import os
 import re
 import secrets
@@ -26,6 +27,7 @@ from app.dataset_worker_credentials import DatasetWorkerAuthorizationError, Data
 
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _REFERENCE = re.compile(r"^staging/[A-Za-z0-9._/-]{1,590}$")
+logger = logging.getLogger(__name__)
 
 
 class DatasetJobSourceIneligible(DatasetJobError):
@@ -62,13 +64,27 @@ def _safe_parts(reference: str, *, job_id: int, fencing_token: int) -> tuple[str
 
 
 def _open_dirs(root: Path, parts: tuple[str, ...], *, create: bool) -> int:
-    root.mkdir(parents=True, exist_ok=True, mode=0o700)
+    """Open a directory chain without following symlinks.
+
+    In create mode, fsync every parent after confirming the next component
+    exists. This also repairs a previous attempt whose parent fsync failed.
+    """
+    root_path = Path(os.path.abspath(os.fspath(root)))
+    components = (*root_path.parts[1:], *parts)
+    if any(
+        not isinstance(part, str) or part in {"", ".", ".."}
+        or "/" in part or "\\" in part
+        for part in parts
+    ):
+        raise DatasetJobOutputUnavailable("directory path component is invalid")
+
     flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_DIRECTORY", 0)
-    current = os.open(root.resolve(strict=True), flags | getattr(os, "O_NOFOLLOW", 0))
+    nofollow = getattr(os, "O_NOFOLLOW", 0)
+    current = os.open(root_path.anchor, flags | nofollow)
     try:
-        for part in parts:
+        for part in components:
             try:
-                nxt = os.open(part, flags | getattr(os, "O_NOFOLLOW", 0), dir_fd=current)
+                nxt = os.open(part, flags | nofollow, dir_fd=current)
             except FileNotFoundError:
                 if not create:
                     raise
@@ -76,16 +92,23 @@ def _open_dirs(root: Path, parts: tuple[str, ...], *, create: bool) -> int:
                     os.mkdir(part, mode=0o700, dir_fd=current)
                 except FileExistsError:
                     pass
-                nxt = os.open(part, flags | getattr(os, "O_NOFOLLOW", 0), dir_fd=current)
-            os.close(current)
+                os.fsync(current)
+                nxt = os.open(part, flags | nofollow, dir_fd=current)
+            else:
+                if create:
+                    os.fsync(current)
+            previous = current
             current = nxt
+            os.close(previous)
         return current
     except Exception:
         os.close(current)
         raise
 
 
-def _digest_existing(directory_fd: int, name: str, maximum: int) -> tuple[str, int]:
+def _digest_existing(
+    directory_fd: int, name: str, maximum: int, *, sync: bool = False
+) -> tuple[str, int]:
     flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
     try:
         fd = os.open(name, flags, dir_fd=directory_fd)
@@ -104,8 +127,17 @@ def _digest_existing(directory_fd: int, name: str, maximum: int) -> tuple[str, i
             if size > maximum:
                 raise DatasetJobOutputUnavailable("published output exceeds the configured size limit")
             digest.update(chunk)
-        if size != info.st_size:
+        after = os.fstat(fd)
+        if (
+            size != info.st_size
+            or info.st_dev != after.st_dev
+            or info.st_ino != after.st_ino
+            or info.st_size != after.st_size
+            or info.st_mtime_ns != after.st_mtime_ns
+        ):
             raise DatasetJobOutputIntegrityError("published output changed while being hashed")
+        if sync:
+            os.fsync(fd)
         return digest.hexdigest(), size
     finally:
         os.close(fd)
@@ -126,13 +158,16 @@ def _prepare_verified_bytes(
     try:
         destination_dir = _open_dirs(root, published[:-1], create=True)
         try:
-            existing_digest, existing_size = _digest_existing(destination_dir, published[-1], maximum)
+            existing_digest, existing_size = _digest_existing(
+                destination_dir, published[-1], maximum, sync=True,
+            )
         except DatasetJobOutputUnavailable:
             existing_digest = None
             existing_size = 0
         if existing_digest is not None:
             if existing_digest != expected_digest:
                 raise DatasetJobOutputIntegrityError("orphaned published output has an unexpected digest")
+            os.fsync(destination_dir)
             return None, existing_size
 
         source_dir = _open_dirs(root, staged[:-1], create=False)
@@ -231,10 +266,16 @@ def _remove_staged_output(root: Path, staged: tuple[str, ...]) -> None:
         os.fsync(directory_fd)
     except FileNotFoundError:
         pass
-    except OSError:
+    except OSError as exc:
         # Publication and its audit row are already committed. A later orphan
-        # reconciler can safely remove this staging reference.
-        pass
+        # reconciler can safely remove this staging reference; after an fsync
+        # failure, a successful unlink may still reappear after a crash.
+        logger.warning(
+            "Dataset output staging cleanup deferred or durability unconfirmed "
+            "(job_id=%s, error_type=%s)",
+            staged[1],
+            type(exc).__name__,
+        )
     finally:
         if directory_fd is not None:
             os.close(directory_fd)
