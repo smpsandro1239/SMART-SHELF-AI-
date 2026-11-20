@@ -1,3 +1,10 @@
+## 2026-11-20 — Isolamento multi-loja nas mutações de planogramas
+
+- A auditoria confirmou que o serviço `shelf_planograms.py` obtém a loja através da prateleira bloqueada e valida o papel/loja antes de editar, ativar ou retirar planogramas.
+- Acrescentado teste HTTP de regressão com dois supervisores e duas lojas: o supervisor A tenta editar e ativar um rascunho da loja B, e depois retirar a versão ativa; as três operações devem devolver 403. O supervisor B ativa a sua versão e o histórico confirma que permanece ACTIVE após as tentativas.
+- Commit: `714fd49db7c3a25d9e9a1b2846f402b6f9704bbd`.
+- O teste foi adicionado ao repositório; ainda não foi executado localmente. A validação depende dos workflows GitHub associados ao commit.
+
 ## 2026-11-20 — Cobertura positiva da autorização de planogramas
 
 - Adicionado teste positivo para a rota real `POST /api/v1/shelves/{shelf_id}/planograms`.
