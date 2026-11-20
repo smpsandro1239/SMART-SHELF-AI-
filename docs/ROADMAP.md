@@ -916,3 +916,9 @@ A alteração foi validada no API CI [44588809660](https://github.com/smpsandro1
 ## 2026-11-20 — Teste dos locks da proveniência de outputs
 
 A primeira validação da alteração de locks falhou apenas no novo teste SQL: este executava uma query em SQLite sem criar o esquema e, por isso, não conseguia compilar a instrução PostgreSQL. A implementação foi separada em construtor de query e executor, permitindo inspeccionar o SQL PostgreSQL sem executar `FOR UPDATE` em SQLite. Commits de correcção: `d82ec0a` e `a2fbc1a`. A nova execução API CI/Quality Gates/Docker Compose permanece pendente.
+
+## 2026-11-20 — Robustez de publicação e recuperação de outputs
+
+A promoção de outputs locais passa a sincronizar cada componente da árvore de armazenamento, verificar e sincronizar ficheiros/destinos existentes antes de reutilização, e emitir avisos quando a limpeza de staging pós-commit não consegue confirmar durabilidade. Os erros anteriores ao commit mantêm o staging e não criam publicação SQL parcial. A reconciliação permanece conservadora e report-only para ficheiros sem publicação.
+
+Validação no commit `4beb3f002b809de8ef50f9990a377db2f7f7c36d`: API CI, Quality Gates e Docker Compose aprovados; 1404 testes aprovados, 1 ignorado e 1 aviso. Os limites de durabilidade do filesystem/volume físico estão documentados em `docs/operations/dataset-output-reconciliation.md`.
