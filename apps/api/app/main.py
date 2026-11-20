@@ -185,8 +185,28 @@ async def require_api_authentication(request: Request, call_next):
 
 
 def _request_user(db: Session, request: Request | None):
+    """Reload and revalidate the authenticated actor at the handler boundary.
+
+    Middleware authentication happens in a separate database session. The
+    account can be disabled, deleted, or have its role changed before the
+    handler opens its own session, so never let a missing/stale actor turn
+    into an unauthenticated store-scope bypass.
+    """
     user_id = getattr(getattr(request, "state", None), "user_id", None)
-    return db.get(models.User, user_id) if user_id is not None else None
+    actor = db.get(models.User, user_id) if user_id is not None else None
+
+    if settings.app_env != "test":
+        if actor is None or not actor.is_active:
+            raise HTTPException(status_code=401, detail="Authenticated user is no longer active")
+        denial = api_role_denial(
+            request.method,
+            request.url.path,
+            actor.role,
+        )
+        if denial is not None:
+            raise HTTPException(status_code=403, detail=denial)
+
+    return actor
 
 
 def _shelf_image_store_id(db: Session, image_id: int) -> int | None:
