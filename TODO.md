@@ -1090,3 +1090,11 @@ Critério global: nenhuma capacidade pode ser marcada como concluída sem códig
 - [ ] Confirmar API CI, Quality Gates e Docker Compose no commit que contém o teste.
 - [ ] Avaliar separadamente a recuperação de falhas de filesystem durante `fsync`, criação de hard link e remoção pós-commit; não assumir que o teste de falha SQL cobre essas janelas.
 
+## Evolução visual do frontend — melhoria futura (adiada a pedido)
+
+- [ ] Avaliar e integrar a skill [Impeccable](https://github.com/pbakaus/impeccable) no workflow de desenvolvimento do frontend.
+- [ ] Antes de qualquer redesign, definir com o responsável o público-alvo, os principais contextos de utilização e a personalidade visual da marca; verificar se já existe `.impeccable.md` com esse contexto.
+- [ ] Fazer auditoria visual das páginas existentes e propor um sistema coerente de design tokens, tipografia, cores, espaçamento, componentes, estados, acessibilidade e responsividade.
+- [ ] Implementar melhorias de forma incremental, preservando contratos API e fluxos funcionais, e validar screenshots nas dimensões suportadas.
+- Nota: não instalar nem alterar o frontend nesta fase; retomar apenas quando este tema for explicitamente reaberto.
+
