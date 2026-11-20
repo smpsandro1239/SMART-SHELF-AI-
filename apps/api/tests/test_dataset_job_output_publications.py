@@ -796,7 +796,11 @@ def test_derived_output_authorization_failure_rolls_back_publication_and_preserv
         parent_publication_id=parent.id
     ).count() == 0
     assert stage_path.read_bytes() == payload
-    assert not (state["root"] / "published" / str(job.id)).exists()
+    published_path = (
+        state["root"] / "published" / str(job.id)
+        / f"{claim.fencing_token}-{digest}.artifact"
+    )
+    assert not published_path.exists()
 
 
 def _create_second_published_output(
