@@ -1059,11 +1059,11 @@ Critério global: nenhuma capacidade pode ser marcada como concluída sem códig
 
 - [x] Acrescentar teste integrado do worker para timeout e falha genérica do provider.
 - [x] Confirmar que a falha termina a imagem em FAILED e regista apenas o tipo de erro, sem persistir deteções, observações ou snapshots de inventário.
-- [ ] Validar os testes no API CI, Quality Gates e Docker Compose do commit que contém esta cobertura.
+- [x] Validar no commit `4212aeab21bfe9182a485e10cfbd8a209d1d28ac`: [API CI 44652277501](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44652277501), [Quality Gates 44652277455](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44652277455) e [Docker Compose 44652278042](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44652278042) passaram; a suite API teve 1374 passed, 1 skipped e 1 warning; migrations e smokes PostgreSQL 16, compilação Python e build Web passaram. O aviso é a depreciação externa `anyio.abc.BlockingPortal` do Starlette TestClient. Validação CI, sem testes locais ou dados reais de visão.
 
 
 ## Fencing de resultados após takeover de lease — 2026-11-20
 
 - [x] Acrescentar teste integrado em que um segundo processamento assume a lease enquanto o primeiro provider ainda está a inferir.
 - [x] Confirmar que o resultado válido do worker antigo é descartado antes de persistir deteções, observações ou inventário.
-- [ ] Validar a regressão no API CI, Quality Gates e Docker Compose do commit desta alteração.
+- [x] Validar no commit `4212aeab21bfe9182a485e10cfbd8a209d1d28ac`: [API CI 44652277501](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44652277501), [Quality Gates 44652277455](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44652277455) e [Docker Compose 44652278042](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44652278042) passaram. A suite API terminou com 1374 passed, 1 skipped e 1 warning; o smoke PostgreSQL 16 validou recuperação `SKIP LOCKED`, takeover de lease com resultado válido obsoleto, mudança de retenção durante inferência e falha do provider após takeover. Validação CI, não teste manual.

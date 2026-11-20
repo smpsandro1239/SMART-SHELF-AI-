@@ -1,9 +1,10 @@
-## 2026-11-20 — Falhas de imagem e timeout no provider ONNX
+## 2026-11-20 — Falhas de imagem, timeout e fencing do worker
 
-- Acrescentados testes que garantem que uma imagem corrompida falha durante a leitura e não é convertida numa análise vazia.
-- Acrescentado teste que confirma que um timeout do runtime é propagado pelo provider, permitindo ao worker marcar a execução como FAILED em vez de persistir uma ausência de deteções.
-- A alteração de batch do output ONNX está publicada no commit `8431e0ca`; CI ainda em execução à data desta entrada. Estes novos testes também aguardam CI.
-- Não foram executados testes localmente.
+- Os testes do provider ONNX confirmam que imagens corrompidas e timeouts são propagados como falhas, em vez de serem convertidos numa análise vazia enganadora.
+- Os testes integrados do worker confirmam estado FAILED e ausência de deteções, observações ou snapshots de inventário após falha de inferência.
+- O teste de takeover confirma que um resultado válido produzido por um worker que perdeu a lease é descartado sem substituir o estado do novo claim.
+- Validação no commit `4212aeab21bfe9182a485e10cfbd8a209d1d28ac`: API CI [44652277501](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44652277501), Quality Gates [44652277455](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44652277455) e Docker Compose [44652278042](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44652278042) passaram. API CI: **1374 passed, 1 skipped, 1 warning**, com PostgreSQL 16 e smokes operacionais; Quality Gates confirmou compilação Python e build Web.
+- O aviso é a depreciação externa `anyio.abc.BlockingPortal` no Starlette TestClient. Não foram executados testes localmente; não houve avaliação com modelo ONNX/dataset real.
 
 ## 2026-11-20 — Validação ONNX e contrato de batch do output
 
@@ -1239,4 +1240,4 @@ O teste de concorrência confirma a serialização edição/ativação no servi�
 - Acrescentado teste integrado em que o provider simula a aquisição de uma nova lease e devolve uma inferência aparentemente válida.
 - O worker antigo tem de detetar a alteração do timestamp de claim e descartar o resultado sem persistir deteções, observações ou snapshots de inventário.
 - O teste complementa o cenário existente de perda de lease seguida de exceção: passa a cobrir também o caminho de sucesso obsoleto.
-- Validação GitHub Actions pendente. Não foram executados testes localmente.
+- Validação concluída no commit `4212aeab21bfe9182a485e10cfbd8a209d1d28ac`: API CI [44652277501](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44652277501), Quality Gates [44652277455](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44652277455) e Docker Compose [44652278042](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44652278042) passaram; API CI concluiu **1374 passed, 1 skipped, 1 warning** e os smokes PostgreSQL 16 passaram. Não foram executados testes localmente.
