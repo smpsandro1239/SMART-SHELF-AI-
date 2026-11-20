@@ -1180,4 +1180,4 @@ Critério global: nenhuma capacidade pode ser marcada como concluída sem códig
 - [x] Confirmar que o output e a linha de auditoria permanecem válidos e que o staging residual pode ser removido pelo reconciliador após o período de segurança, com digest/tamanho coincidentes.
 - [ ] Validar API CI e Quality Gates para os testes de falha de fsync e limpeza pós-commit.
 - [ ] Manter limpeza de staging órfão sem publicação em modo report-only até prova independente de quiescência dos workers.
-
+- [x] Testar isolamento multi-loja nas mutações por `planogram_id`: outro supervisor não pode editar um rascunho, ativar ou retirar um planograma de loja alheia; confirmar que o estado ACTIVE permanece inalterado.
