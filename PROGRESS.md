@@ -123,3 +123,27 @@
 - O teste agora compila `_output_sources_query` com o dialect PostgreSQL sem executar a query em SQLite.
 - Commits: `d82ec0a` (código/testabilidade) e `a2fbc1a` (teste).
 - A falha anterior é reproduzível nos logs do Quality Gates run `44829643260`; a correcção aguarda nova validação integral. Não foram executados testes localmente.
+
+## 2026-11-20 — Durabilidade da publicação de outputs no filesystem
+
+### Diagnóstico e TDD
+
+- Os primeiros testes de regressão foram adicionados antes da implementação: falha do `fsync` do ficheiro temporário, sincronização de cada entrada da árvore de directórios, retry após falha do directório-pai e sincronização do destino existente.
+- Quality Gates no commit `5e2d61b` confirmou **3 falhas, 1399 aprovados, 1 ignorado e 1 aviso**. As três falhas demonstraram ausência de sincronização da árvore e do destino recuperado.
+- Foi acrescentado o teste de falha do `fsync` de staging depois do commit; Quality Gates no commit `8f73f94` confirmou **4 falhas, 1399 aprovados, 1 ignorado e 1 aviso**. A quarta falha demonstrou que a limpeza pós-commit não emitia observabilidade.
+
+### Implementação
+
+- `_open_dirs` percorre a raiz absoluta e os componentes com `O_NOFOLLOW`, sincroniza o directório-pai após confirmar cada componente e volta a sincronizar componentes existentes em retries.
+- O destino preexistente é revalidado por tipo, tamanho, SHA-256 e estabilidade de identidade/metadados; o ficheiro e o directório são sincronizados antes da publicação SQL.
+- A falha de `fsync` no temporário aborta antes do commit e preserva staging. A falha de sincronização pós-commit na remoção de staging não reverte uma publicação já confirmada; gera aviso com job ID e tipo de erro, sem revelar caminhos.
+- Foi ainda corrigida uma fuga de descritor quando o `fsync` falha depois de abrir um componente existente. O teste específico falhou no commit `6147d41` (**1 falha, 1403 aprovados, 1 ignorado**) e passou após a correcção.
+- Commits: testes `5e2d61b`, `8f73f94`, `6147d41`; implementação `e9ce0e6`, `4beb3f0`.
+
+### Validação final no commit `4beb3f002b809de8ef50f9990a377db2f7f7c36d`
+
+- API CI [44832248200](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44832248200): **1404 passed, 1 skipped, 1 warning**; migrações e smokes PostgreSQL 16 passaram, incluindo publicação fenced, linhagem derivada, legal hold/restrições herdadas e serialização concorrente.
+- Quality Gates [44832248161](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44832248161): **1404 passed, 1 skipped, 1 warning**; compilação Python, build TypeScript e build de produção Web aprovados.
+- Docker Compose [44832248174](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44832248174): passou; API, PostgreSQL e vision worker arrancaram, demo seed preparado, volume de outputs da API separado do volume de imagens e não montado no worker; worker verificado como não-root, filesystem root read-only, capabilities removidas e no-new-privileges.
+- O aviso Python restante é a depreciação externa `anyio.abc.BlockingPortal` do Starlette TestClient. O build Web assinalou ainda depreciação Node.js 20 em `actions/upload-artifact@v4`, sem falha do build.
+- Não foram executados testes localmente; a validação foi feita nos workflows GitHub Actions. Os smokes não demonstram resistência a perda física de energia nem garantias do dispositivo/volume real.
