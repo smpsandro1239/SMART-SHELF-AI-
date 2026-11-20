@@ -1,8 +1,10 @@
 ## Política de autorização da API — centralização
 
-- [ ] Extrair a política RBAC do middleware para módulo dedicado e testável, mantendo a semântica ADMIN/SUPERVISOR/EMPLOYEE.
-- [ ] Classificar as rotas em PUBLIC, ADMIN_ONLY, SUPERVISOR_OR_ADMIN, EMPLOYEE_ALLOWLIST ou AUTHENTICATED_STAFF.
-- [ ] Validar que a centralização preserva os testes de autorização e isolamento multi-loja no CI.
+- [x] Extrair a decisão RBAC do middleware para `apps/api/app/api_security_policy.py`, mantendo autenticação Bearer e papel autoritativo lido da base de dados.
+- [x] Implementar as categorias PUBLIC, ADMIN_ONLY, SUPERVISOR_OR_ADMIN, EMPLOYEE_ALLOWLIST e AUTHENTICATED_STAFF, com negação fail-closed para papéis desconhecidos.
+- [x] Acrescentar testes unitários iniciais para a matriz de papéis e categorias.
+- [ ] Validar a refactor com a suite API completa, testes HTTP de autorização, smokes PostgreSQL 16, Quality Gates e Docker Compose no SHA final.
+- [ ] Evoluir a classificação para metadados explícitos por rota e acrescentar teste de cobertura endpoint × método; a categoria AUTHENTICATED_STAFF ainda funciona como fallback e não prova classificação explícita de cada rota.
 
 ## Segurança P0 — CORS preflight e Bearer
 
