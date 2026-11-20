@@ -134,6 +134,12 @@
 - [x] Confirmar o smoke PostgreSQL de autorização multi-loja das sessões de captura no mesmo workflow.
 - [ ] Continuar auditoria por rota/handler; não inferir cobertura exaustiva a partir dos cenários já aprovados.
 
+### Configuração directa do provider ONNX — 2026-11-20
+
+- Reforçado o construtor para aplicar os mesmos limites que a factory de ambiente: tamanho de entrada inteiro 32–4096, threshold finito entre 0 e 1 e máximo de deteções inteiro 1–2000.
+- Booleanos, valores fraccionários, NaN e infinito são rejeitados antes de carregar sessões ONNX.
+- Testes paramétricos acrescentados para os três parâmetros. Validação CI pendente; não declarar o provider operacional nem promover pesos sem dataset e avaliação reais.
+
 ### Prioridades ainda abertas
 
 1. **P1 — desempenho:** executar `apps/api/scripts/postgres_image_query_plan_audit.py` numa réplica/staging com volume representativo; analisar planos `EXPLAIN (ANALYZE, BUFFERS)` e medir paginação profunda antes de acrescentar índices ou alterar contratos. Procedimento em [PERFORMANCE-QUERY-AUDIT.md](PERFORMANCE-QUERY-AUDIT.md).

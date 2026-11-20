@@ -62,6 +62,30 @@ def test_provider_requires_existing_detector_file(tmp_path):
         ONNXShelfVisionProvider(tmp_path / "missing.onnx")
 
 
+@pytest.mark.parametrize("input_size", [0, 31, 4097, True, 640.5])
+def test_provider_rejects_invalid_input_size_before_loading_model(tmp_path, input_size):
+    with pytest.raises(ONNXConfigurationError, match="VISION_INPUT_SIZE"):
+        ONNXShelfVisionProvider(tmp_path / "missing.onnx", input_size=input_size)
+
+
+@pytest.mark.parametrize("threshold", [-0.01, 1.01, float("nan"), float("inf"), True])
+def test_provider_rejects_invalid_confidence_threshold_before_loading_model(tmp_path, threshold):
+    with pytest.raises(ONNXConfigurationError, match="VISION_CONFIDENCE_THRESHOLD"):
+        ONNXShelfVisionProvider(
+            tmp_path / "missing.onnx",
+            confidence_threshold=threshold,
+        )
+
+
+@pytest.mark.parametrize("max_detections", [0, -1, 2001, True, 1.5])
+def test_provider_rejects_invalid_max_detections_before_loading_model(tmp_path, max_detections):
+    with pytest.raises(ONNXConfigurationError, match="VISION_MAX_DETECTIONS"):
+        ONNXShelfVisionProvider(
+            tmp_path / "missing.onnx",
+            max_detections=max_detections,
+        )
+
+
 
 def test_decode_preserves_class_id_for_semantic_mapping():
     provider = provider_without_runtime()

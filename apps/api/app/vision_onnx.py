@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 
@@ -89,12 +90,31 @@ class ONNXShelfVisionProvider:
         class_labels: dict[int, str] | None = None,
         sku_match_labels: set[str] | None = None,
     ):
+        if isinstance(input_size, bool) or not isinstance(input_size, int) or not 32 <= input_size <= 4096:
+            raise ONNXConfigurationError("VISION_INPUT_SIZE must be an integer between 32 and 4096")
+        if (
+            isinstance(confidence_threshold, bool)
+            or not isinstance(confidence_threshold, (int, float))
+            or not math.isfinite(confidence_threshold)
+            or not 0.0 <= confidence_threshold <= 1.0
+        ):
+            raise ONNXConfigurationError("VISION_CONFIDENCE_THRESHOLD must be a finite number between 0 and 1")
+        if (
+            isinstance(max_detections, bool)
+            or not isinstance(max_detections, int)
+            or not 1 <= max_detections <= 2000
+        ):
+            raise ONNXConfigurationError("VISION_MAX_DETECTIONS must be an integer between 1 and 2000")
+        if not isinstance(model_version, str) or not model_version.strip():
+            raise ONNXConfigurationError("Model version cannot be empty")
+        if not isinstance(embedding_model_version, str) or not embedding_model_version.strip():
+            raise ONNXConfigurationError("Embedding model version cannot be empty")
         self.detector_path = Path(detector_path)
         self.embedding_path = Path(embedding_path) if embedding_path else None
         self.configured_model_version = model_version.strip()
         self.configured_embedding_model_version = embedding_model_version.strip()
         self.input_size = input_size
-        self.confidence_threshold = confidence_threshold
+        self.confidence_threshold = float(confidence_threshold)
         self.max_detections = max_detections
         if not self.detector_path.is_file():
             raise ONNXConfigurationError("VISION_DETECTOR_MODEL_PATH does not point to a file")

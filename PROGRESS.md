@@ -1,3 +1,10 @@
+## 2026-11-20 — Validação directa da configuração do provider ONNX
+
+- A auditoria encontrou que os limites de `VISION_INPUT_SIZE`, `VISION_CONFIDENCE_THRESHOLD` e `VISION_MAX_DETECTIONS` eram validados na factory de ambiente, mas não no construtor público do provider.
+- A configuração directa passa a falhar explicitamente para tamanhos fora de 32–4096, thresholds não finitos/fora de 0–1 e máximos de deteções fora de 1–2000; booleanos e valores fraccionários são rejeitados onde o contrato exige inteiros.
+- Os limites são verificados antes de validar/abrir os ficheiros ONNX, evitando inicialização parcial com configuração inválida. Foram acrescentados testes paramétricos.
+- Validação ainda pendente; não foram executados testes localmente. O provider continua experimental até existir modelo/dataset aprovado e avaliação real.
+
 ## 2026-11-20 — Validação da idempotência estrita da observação após revisão SKU
 
 - Confirmado que a branch `main` permanece no commit `c854e948b5664870942b9302dee4913e0349755b` e que os três workflows associados terminaram com sucesso.
