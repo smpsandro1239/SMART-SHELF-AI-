@@ -4802,3 +4802,20 @@ def test_admin_registers_artifact_parent_lineage_over_http(auth_client):
     assert "bucket/source/missing-parent.jpg" not in by_reference
     assert "bucket/source/cross-image.jpg" not in by_reference
     assert "bucket/source/cross-store.jpg" not in by_reference
+
+
+def test_bearer_api_cors_preflight_does_not_enable_cookie_credentials(auth_client):
+    client, _, _ = auth_client
+    response = client.options(
+        "/api/v1/auth/me",
+        headers={
+            "Origin": "http://localhost:5173",
+            "Access-Control-Request-Method": "GET",
+            "Access-Control-Request-Headers": "authorization",
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.headers["access-control-allow-origin"] == "http://localhost:5173"
+    assert "authorization" in response.headers["access-control-allow-headers"].lower()
+    assert "access-control-allow-credentials" not in response.headers
