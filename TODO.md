@@ -1181,3 +1181,13 @@ Critério global: nenhuma capacidade pode ser marcada como concluída sem códig
 - [ ] Validar API CI e Quality Gates para os testes de falha de fsync e limpeza pós-commit.
 - [ ] Manter limpeza de staging órfão sem publicação em modo report-only até prova independente de quiescência dos workers.
 - [x] Testar isolamento multi-loja nas mutações por `planogram_id`: outro supervisor não pode editar um rascunho, ativar ou retirar um planograma de loja alheia; confirmar que o estado ACTIVE permanece inalterado.
+
+
+## Revalidação da identidade no limite do handler — 2026-11-20
+
+- [x] Identificar a janela entre autenticação JWT no middleware e carregamento do actor numa sessão DB independente: conta removida/inactivada podia resultar em `_request_user() == None`, e alguns handlers tratavam esse estado como ausência de restrição de loja.
+- [x] Tornar o carregamento do actor fail-closed fora do ambiente de testes: actor inexistente/inactivo devolve HTTP 401.
+- [x] Reavaliar a política RBAC com o papel actual da base de dados no limite do handler, impedindo que uma alteração de role entre middleware e handler preserve permissões antigas.
+- [x] Acrescentar testes unitários para actor removido e downgrade SUPERVISOR → EMPLOYEE entre autenticação e execução do handler.
+- [ ] Confirmar os testes e a suite completa no CI dos novos commits; não há execução local nesta sessão.
+- [ ] Rever futuramente a mesma janela para outros dados de autorização mutáveis e transacções longas, sem substituir a revalidação do actor por confiança exclusiva no JWT.
