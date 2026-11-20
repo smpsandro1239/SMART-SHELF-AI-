@@ -1,3 +1,11 @@
+## 2026-11-20 — Endurecimento de prefixos na política RBAC
+
+- Alterado `apps/api/app/api_security_policy.py` para usar correspondência de prefixos com limite de segmento, evitando que caminhos semelhantes como `/api/v1/auth/users-export` sejam confundidos com sub-recursos de `/api/v1/auth/users`.
+- Aplicado o helper às famílias de observation alerts, planograms, shelves, pallets, product embedding exemplars, shelf-image detections, shelf images e tasks.
+- Adicionados testes unitários para rejeitar prefixos semelhantes e preservar rotas aninhadas legítimas.
+- Commits: `e19090e` (política) e `7dce6f6` (testes).
+- Verificação GitHub: o status apresenta checks Vercel (um falhado por `build-rate-limit` e outro pendente); o conector não devolveu workflows GitHub Actions associados a este commit. Os testes não foram executados localmente nesta sessão; validação integral permanece pendente.
+
 ## 2026-11-20 — Política RBAC centralizada e validada
 
 - Criado `apps/api/app/api_security_policy.py` com categorias PUBLIC, ADMIN_ONLY, SUPERVISOR_OR_ADMIN, EMPLOYEE_ALLOWLIST e AUTHENTICATED_STAFF.
