@@ -1,3 +1,11 @@
+## 2026-11-20 — Correspondência de segmento em sub-recursos de planogramas
+
+- A revisão da política RBAC encontrou uma segunda correspondência demasiado permissiva: a verificação por substring `"/planograms" in path` também aceitava o segmento lookalike `planograms-export`.
+- A regra passou a verificar os segmentos completos do caminho (`"planograms" in path.split("/")`), preservando os recursos legítimos e evitando atribuir a categoria SUPERVISOR_OR_ADMIN a caminhos semelhantes.
+- Adicionada regressão unitária para `/api/v1/shelves/42/planograms-export`.
+- Commits: `d61e5a1` (correcção) e `2a95fb0` (teste).
+- Não foram executados testes localmente nesta sessão; o resultado CI do SHA de testes ainda tem de ser consultado. A validação permanece pendente.
+
 ## 2026-11-20 — Auditoria reproduzível da classificação RBAC
 
 - Criado `apps/api/scripts/audit_api_route_policy.py`: percorre as rotas `APIRoute` realmente registadas no FastAPI, expande cada método HTTP, classifica pelo motor central e emite JSON determinístico com contagens e rotas que caem no fallback `AUTHENTICATED_STAFF`.
