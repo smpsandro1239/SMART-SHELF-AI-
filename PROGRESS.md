@@ -1,3 +1,12 @@
+## Estado consolidado — 2026-11-20
+
+- P0 output inventory: RED/GREEN confirmado; inventário final sem linha SQL é report-only e nunca apaga ficheiros.
+- P0 CORS: RED/GREEN confirmado; produção exige origens explícitas HTTPS; API CI, Quality Gates e Docker Compose aprovados no commit `1b1e4ea`, suite **1387 passed, 1 skipped, 1 warning**.
+- OWASP API: primeira ronda estática de 130 rotas documentada; não foi confirmado bypass nos fluxos revistos. Política declarativa por rota e matriz exaustiva continuam abertas.
+- Skills: Superpowers, Impeccable, Frontend Design e OWASP Secure Agent Playbook estão fixadas como submódulos; não são dependências runtime.
+- Frontend: detector Impeccable sem findings após correcção side-tab; falta browser QA e acessibilidade manual.
+- Não executados SCA, secret scan, DAST ou pentest externo.
+
 ## 2026-11-20 — Validação do hardening CORS e primeira ronda OWASP API
 
 - Commit `1b1e4ea`: API CI [44783729163](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44783729163), Quality Gates [44783729496](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44783729496) e Docker Compose [44783729436](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44783729436) passaram.
@@ -12,15 +21,7 @@
 - A primeira execução GREEN revelou dois problemas na validação: nomes DNS eram encaminhados directamente para `ipaddress.ip_address` (causando falso rejeitamento) e testes anteriores de configuração de produção não forneciam a origem HTTPS agora obrigatória.
 - A validação foi corrigida para distinguir hosts DNS de IPs literais; os testes de configuração de produção passaram a declarar uma origem HTTPS explícita, excepto os casos que testam deliberadamente origens inválidas.
 - A precedência de validação preserva a mensagem específica quando `VISION_PROVIDER_MODE=mock` é usado em produção.
-- Nova execução CI do commit seguinte pendente.
-
-## 2026-11-20 — Hardening de CORS em produção (em validação)
-
-- A revisão OWASP identificou que a configuração de produção aceitava wildcard, HTTP, localhost e origens com path, apesar de `allow_credentials=True`.
-- Foram acrescentados testes que falham para seis origens ambíguas/inseguras e aceitam uma lista explícita HTTPS.
-- O RED foi observado no commit `e8c9935`: 6 falhados, 1381 aprovados, 1 ignorado, 1 aviso.
-- Implementação adicionada em `apps/api/app/config.py`: produção valida scheme HTTPS, host explícito, ausência de wildcard/credenciais/path/query/fragment e rejeita localhost/loopback.
-- GREEN e workflows do commit de implementação ainda pendentes.
+- GREEN confirmado no commit `1b1e4ea`: API CI [44783729163](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44783729163), Quality Gates [44783729496](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44783729496) e Docker Compose [44783729436](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44783729436) passaram; suite API **1387 passed, 1 skipped, 1 warning**.
 
 ## 2026-11-20 — Integração OWASP Secure Agent Playbook
 
@@ -35,7 +36,7 @@
 - A recolha só considera ficheiros regulares em directórios de job numéricos e aplica o período de segurança para evitar reportar operações de promoção recentes.
 - O relatório inclui referência, tamanho, SHA-256 declarado no nome, timestamp, estado conhecido do job e razão.
 - A categoria é report-only inclusive com `--apply`; não apaga ficheiros nem segue symlinks.
-- O teste de regressão foi observado a falhar no Quality Gates antes da implementação (commit `cc7dc70b`: 1 failed, 1379 passed, 1 skipped, 1 warning). A validação GREEN do commit de implementação ainda está pendente.
+- O teste de regressão foi observado a falhar no Quality Gates antes da implementação (commit `cc7dc70b`: 1 failed, 1379 passed, 1 skipped, 1 warning). GREEN confirmado no commit `cef5618`: API CI, Quality Gates e Docker Compose passaram; suite API **1380 passed, 1 skipped, 1 warning**.
 
 ## 2026-11-20 — Integração Superpowers e Frontend Design
 
@@ -58,7 +59,7 @@
 - O primeiro relatório do detector identificou um padrão visual side-tab: barra de cor numa lateral de um aviso arredondado, em decision-freshness-notice.
 - A revisão do mesmo bloco encontrou o padrão equivalente em decision-warnings; ambos passaram a usar contorno completo, preservando a cor semântica, o conteúdo e o comportamento role=status.
 - Não foram alterados componentes React, contratos API, regras operacionais nem permissões.
-- A verificação de regressão visual depende da nova execução do detector e de inspeção em browser; não foi possível capturar a interface renderizada nesta ronda.
+- O segundo relatório Impeccable foi vazio (`[]`) no commit `d49434e`; a inspeção renderizada em browser desktop/mobile e a auditoria de acessibilidade continuam pendentes.
 
 ## 2026-11-20 — Integração Impeccable no workflow de frontend
 

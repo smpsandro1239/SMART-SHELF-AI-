@@ -1,3 +1,10 @@
+### Estado consolidado P0 — 2026-11-20
+
+- Inventário de outputs finais sem publicação auditável: implementado e validado; sempre report-only, mesmo com `--apply`.
+- CORS de produção: origens explícitas HTTPS e fail-closed para wildcard/localhost/HTTP; API CI, Quality Gates e Docker Compose aprovados, 1387 passed.
+- OWASP: primeira revisão estática de 130 rotas documentada. Não foi confirmado bypass nos fluxos revistos; a política RBAC distribuída é risco residual e a auditoria completa permanece aberta.
+- Próximo: política declarativa por rota + matriz endpoint × papel × loja; depois avançar para os restantes controlos de retenção/linhagem.
+
 ### Primeira ronda OWASP API Security (2026-11-20)
 
 - Revisão estática de 130 rotas, autenticação JWT, RBAC, store scope, planogramas e testes existentes.

@@ -10,25 +10,20 @@
 
 - [x] Exigir origens CORS explícitas HTTPS em produção; rejeitar wildcard, localhost/loopback, paths, query, fragmentos e origens vazias.
 - [x] Corrigir a validação de host DNS para não tratar nomes DNS como endereços IP; testes incluem origens HTTPS DNS e porta explícita.
-- [ ] Confirmar RED/GREEN e workflows API CI, Quality Gates e Docker Compose no commit de implementação.
-
-## Segurança P0 — CORS de produção
-
-- [ ] Exigir origens CORS explícitas HTTPS em produção; rejeitar wildcard, localhost/loopback, paths, query, fragmentos e origens vazias.
-- [ ] Validar RED/GREEN e API CI, Quality Gates e Docker Compose.
+- [x] Confirmar RED/GREEN e workflows API CI, Quality Gates e Docker Compose no commit `1b1e4ea`: 1387 passed, 1 skipped, 1 warning.
 
 ## OWASP Secure Agent Playbook — integração de segurança (2026-11-20)
 
 - [x] Fixar OWASP Secure Agent Playbook como submódulo Git `vendor/owasp-secure-agent-playbook` no commit `65d4efd2cd0b081d52101e9708792b944e4ddebb`, licença CC-BY-4.0 e atribuição preservada.
 - [x] Expor procedimentos de API security review, code security review, SCA e secrets scan através de uma skill de entrada.
-- [ ] Aplicar auditoria OWASP à autorização multi-loja, com evidência por endpoint e classificação CWE/OWASP.
+- [x] Executar primeira ronda OWASP à autorização multi-loja: 130 rotas enumeradas, middleware JWT, RBAC, store scope e planogramas revistos; relatório `docs/security/api-authorization-review-2026-11-20.md`. Auditoria exaustiva continua aberta.
 - [ ] Executar SCA apenas quando existir scanner disponível; não inventar resultados.
 
 ## Inventário de outputs finais sem publicação auditável — 2026-11-20
 
-- [ ] Inventariar ficheiros finais canónicos em `published/<job>/<token>-<sha256>.artifact` sem linha append-only de publicação; incluir digest, tamanho e estado do job.
-- [ ] Garantir que a categoria é report-only mesmo com `--apply`, sem seguir symlinks nem apagar ficheiros recuperáveis.
-- [ ] Validar teste de regressão RED/GREEN, API CI, Quality Gates, PostgreSQL smoke e Docker Compose.
+- [x] Inventariar ficheiros finais canónicos em `published/<job>/<token>-<sha256>.artifact` sem linha append-only de publicação; inclui digest declarado, tamanho, estado e timestamp.
+- [x] Garantir categoria report-only mesmo com `--apply`, sem seguir symlinks nem apagar ficheiros recuperáveis.
+- [x] Validar RED/GREEN e CI no commit `cef5618`: API CI, Quality Gates, PostgreSQL smoke e Docker Compose passaram; 1380 passed, 1 skipped, 1 warning.
 
 ## Superpowers e Frontend Design — integração de metodologia (2026-11-20)
 
@@ -38,7 +33,7 @@
 - [x] Expor Frontend Design como skill complementar; Impeccable mantém-se a ferramenta principal para auditoria/polish do sistema visual actual.
 - [x] Criar `AGENTS.md` e `docs/engineering/agent-skill-stack.md` com ordem de aplicação, limites e inicialização.
 - [ ] Validar inicialização recursiva dos três submódulos num clone local e descoberta das skills no runtime Codex disponível.
-- [ ] Aplicar TDD + revisão Superpowers na próxima correção P0 e recolher evidência CI.
+- [x] Aplicar TDD em duas correções P0 (outputs órfãos e CORS) com RED observado, implementação e GREEN no CI.
 
 ## Impeccable — integração e baseline de qualidade visual (2026-11-20)
 
@@ -46,7 +41,7 @@
 - [x] Expor a skill aos agentes em `.agents/skills/impeccable/SKILL.md`, com instruções específicas do SMART SHELF AI e ligação para o playbook oficial.
 - [x] Criar `PRODUCT.md` e `DESIGN.md` a partir dos fluxos, papéis, limitações e tokens efectivamente encontrados no repositório.
 - [x] Integrar o detector Impeccable v4.10.0 no Quality Gates, guardando um relatório baseline sem bloquear por findings preexistentes; falhas de execução continuam bloqueantes.
-- [x] Obter o primeiro relatório detector: um finding warning side-tab em decision-freshness-notice; a revisão encontrou o mesmo padrão em decision-warnings. Ambos foram corrigidos com contorno completo, preservando o significado dos estados. A nova execução CI deve confirmar que o finding desapareceu.
+- [x] Obter e corrigir finding side-tab em decision-freshness-notice e decision-warnings; segundo relatório Impeccable vazio (`[]`) no commit `d49434e`.
 - [ ] Executar `context`, `critique` e `audit` com checkout local e browser; verificar dashboard e fluxos de captura/revisão em desktop e mobile.
 - [ ] Rever acessibilidade por teclado, contraste, estados loading/empty/error/disabled e semântica dos formulários; o build TypeScript não substitui esta validação visual.
 - [ ] Só depois fazer polimento incremental, sem alterar contratos API, permissões ou regras de inventário.
