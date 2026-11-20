@@ -1437,3 +1437,36 @@ def test_staging_directory_fsync_failure_after_commit_is_nonfatal_and_logged(
         and str(state["job"].id) in record.getMessage()
         for record in caplog.records
     )
+
+def test_output_directory_fsync_failure_closes_open_child_descriptor(tmp_path, monkeypatch):
+    import os
+
+    from app.dataset_job_output_publications import _open_dirs
+
+    root = tmp_path / "existing-output"
+    root.mkdir()
+    parent_info = tmp_path.stat()
+    original_open = os.open
+    original_fsync = os.fsync
+    opened_child_descriptors = []
+
+    def track_open(path, flags, *args, **kwargs):
+        fd = original_open(path, flags, *args, **kwargs)
+        if path == "existing-output":
+            opened_child_descriptors.append(fd)
+        return fd
+
+    def fail_parent_fsync(fd):
+        info = os.fstat(fd)
+        if (info.st_dev, info.st_ino) == (parent_info.st_dev, parent_info.st_ino):
+            raise OSError("simulated existing parent directory fsync failure")
+        return original_fsync(fd)
+
+    monkeypatch.setattr(os, "open", track_open)
+    monkeypatch.setattr(os, "fsync", fail_parent_fsync)
+    with pytest.raises(OSError, match="simulated existing parent directory fsync failure"):
+        _open_dirs(root, (), create=True)
+
+    assert len(opened_child_descriptors) == 1
+    with pytest.raises(OSError, match="Bad file descriptor"):
+        os.fstat(opened_child_descriptors[0])
