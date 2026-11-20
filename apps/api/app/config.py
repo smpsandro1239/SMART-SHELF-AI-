@@ -1,3 +1,6 @@
+import ipaddress
+from urllib.parse import urlsplit
+
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -55,6 +58,39 @@ class Settings(BaseSettings):
                 raise ValueError("Production requires a unique, non-placeholder BOOTSTRAP_ADMIN_KEY with at least 32 characters")
             if self.jwt_secret_key == self.bootstrap_admin_key:
                 raise ValueError("JWT_SECRET_KEY and BOOTSTRAP_ADMIN_KEY must be different secrets")
+            raw_origins = self.cors_allowed_origins.split(",")
+            origins = [origin.strip() for origin in raw_origins]
+            if not origins or any(not origin for origin in origins):
+                raise ValueError("Production requires explicit CORS_ALLOWED_ORIGINS")
+            for origin in origins:
+                try:
+                    parsed = urlsplit(origin)
+                    hostname = parsed.hostname
+                    # Accessing .port validates malformed/non-numeric ports.
+                    _ = parsed.port
+                    address = ipaddress.ip_address(hostname) if hostname else None
+                except ValueError as exc:
+                    raise ValueError(
+                        "Production CORS_ALLOWED_ORIGINS must contain explicit HTTPS origins"
+                    ) from exc
+                host = hostname.lower() if hostname else ""
+                if (
+                    "*" in origin
+                    or parsed.scheme.lower() != "https"
+                    or not host
+                    or parsed.username is not None
+                    or parsed.password is not None
+                    or parsed.path
+                    or parsed.query
+                    or parsed.fragment
+                    or host == "localhost"
+                    or host.endswith(".localhost")
+                    or (address is not None and address.is_loopback)
+                ):
+                    raise ValueError(
+                        "Production CORS_ALLOWED_ORIGINS must contain explicit HTTPS origins "
+                        "without wildcards, paths, query strings, fragments or localhost"
+                    )
             if vision_mode == "mock":
                 raise ValueError("Production cannot use VISION_PROVIDER_MODE=mock")
         return self

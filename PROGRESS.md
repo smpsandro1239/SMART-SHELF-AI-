@@ -1,3 +1,11 @@
+## 2026-11-20 — Hardening de CORS em produção (em validação)
+
+- A revisão OWASP identificou que a configuração de produção aceitava wildcard, HTTP, localhost e origens com path, apesar de `allow_credentials=True`.
+- Foram acrescentados testes que falham para seis origens ambíguas/inseguras e aceitam uma lista explícita HTTPS.
+- O RED foi observado no commit `e8c9935`: 6 falhados, 1381 aprovados, 1 ignorado, 1 aviso.
+- Implementação adicionada em `apps/api/app/config.py`: produção valida scheme HTTPS, host explícito, ausência de wildcard/credenciais/path/query/fragment e rejeita localhost/loopback.
+- GREEN e workflows do commit de implementação ainda pendentes.
+
 ## 2026-11-20 — Integração OWASP Secure Agent Playbook
 
 - Fixado o repositório OWASP Secure Agent Playbook em `65d4efd2cd0b081d52101e9708792b944e4ddebb` como submódulo; licença CC-BY-4.0 e atribuição documentadas.

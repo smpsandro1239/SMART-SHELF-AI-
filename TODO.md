@@ -1,3 +1,8 @@
+## Segurança P0 — CORS de produção
+
+- [ ] Exigir origens CORS explícitas HTTPS em produção; rejeitar wildcard, localhost/loopback, paths, query, fragmentos e origens vazias.
+- [ ] Validar RED/GREEN e API CI, Quality Gates e Docker Compose.
+
 ## OWASP Secure Agent Playbook — integração de segurança (2026-11-20)
 
 - [x] Fixar OWASP Secure Agent Playbook como submódulo Git `vendor/owasp-secure-agent-playbook` no commit `65d4efd2cd0b081d52101e9708792b944e4ddebb`, licença CC-BY-4.0 e atribuição preservada.
