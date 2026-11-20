@@ -1291,3 +1291,11 @@ O teste de concorrência confirma a serialização edição/ativação no servi�
 - O worker antigo tem de detetar a alteração do timestamp de claim e descartar o resultado sem persistir deteções, observações ou snapshots de inventário.
 - O teste complementa o cenário existente de perda de lease seguida de exceção: passa a cobrir também o caminho de sucesso obsoleto.
 - Validação concluída no commit `4212aeab21bfe9182a485e10cfbd8a209d1d28ac`: API CI [44652277501](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44652277501), Quality Gates [44652277455](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44652277455) e Docker Compose [44652278042](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44652278042) passaram; API CI concluiu **1374 passed, 1 skipped, 1 warning** e os smokes PostgreSQL 16 passaram. Não foram executados testes localmente.
+
+## 2026-11-20 — Recuperação após falha do commit SQL de publicação
+
+- Acrescentado teste de falha determinística no ponto crítico entre a publicação atómica do ficheiro e o commit SQL.
+- O cenário força a primeira chamada a `Session.commit()` a falhar depois de o ficheiro final já existir.
+- O teste exige rollback da linha de auditoria, preservação dos bytes publicados e do staging original, ausência de temporários e recuperação idempotente numa segunda tentativa.
+- O teste foi adicionado ao repositório; aguarda validação pelos workflows GitHub Actions. Não foram executados testes localmente.
+

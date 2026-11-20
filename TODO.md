@@ -1082,3 +1082,11 @@ Critério global: nenhuma capacidade pode ser marcada como concluída sem códig
 - [x] Acrescentar teste integrado em que um segundo processamento assume a lease enquanto o primeiro provider ainda está a inferir.
 - [x] Confirmar que o resultado válido do worker antigo é descartado antes de persistir deteções, observações ou inventário.
 - [x] Validar no commit `4212aeab21bfe9182a485e10cfbd8a209d1d28ac`: [API CI 44652277501](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44652277501), [Quality Gates 44652277455](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44652277455) e [Docker Compose 44652278042](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44652278042) passaram. A suite API terminou com 1374 passed, 1 skipped e 1 warning; o smoke PostgreSQL 16 validou recuperação `SKIP LOCKED`, takeover de lease com resultado válido obsoleto, mudança de retenção durante inferência e falha do provider após takeover. Validação CI, não teste manual.
+
+## Recuperação transacional de outputs — 2026-11-20
+
+- [x] Acrescentar regressão para falha SQL depois da criação do ficheiro final e antes da confirmação da publicação.
+- [x] Verificar que a falha não deixa linha de auditoria parcial, não remove staging e permite retry idempotente.
+- [ ] Confirmar API CI, Quality Gates e Docker Compose no commit que contém o teste.
+- [ ] Avaliar separadamente a recuperação de falhas de filesystem durante `fsync`, criação de hard link e remoção pós-commit; não assumir que o teste de falha SQL cobre essas janelas.
+

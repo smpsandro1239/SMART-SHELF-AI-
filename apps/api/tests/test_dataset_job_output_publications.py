@@ -975,3 +975,59 @@ def test_derived_output_inherits_parent_legal_hold_and_authorization(publication
         db, publication_id=child.id, authorize=authorize,
     ) == child_payload
     assert set(authorized_publications) == {parent.id, child.id}
+
+
+def test_commit_failure_after_filesystem_publish_is_recoverable_on_retry(publication_setup, monkeypatch):
+    state = publication_setup
+    db = state["db"]
+    original_commit = db.commit
+    commit_attempts = {"count": 0}
+
+    def fail_first_commit():
+        commit_attempts["count"] += 1
+        if commit_attempts["count"] == 1:
+            raise RuntimeError("simulated database commit interruption")
+        return original_commit()
+
+    monkeypatch.setattr(db, "commit", fail_first_commit)
+
+    published_ref = (
+        f"published/{state['job'].id}/"
+        f"{state['claim'].fencing_token}-{state['digest']}.artifact"
+    )
+    published_path = state["root"] / published_ref
+
+    with pytest.raises(RuntimeError, match="simulated database commit interruption"):
+        promote_dataset_job_output(
+            db,
+            principal=state["principal"],
+            job_id=state["job"].id,
+            fencing_token=state["claim"].fencing_token,
+        )
+
+    # The filesystem link precedes the SQL commit. A failed commit must leave
+    # no audit row, while preserving both the verified destination and staging
+    # so that a retry can reconstruct the publication safely.
+    assert db.query(models.DatasetExecutionJobOutputPublication).filter_by(
+        job_id=state["job"].id
+    ).count() == 0
+    assert published_path.read_bytes() == state["payload"]
+    assert state["stage_path"].read_bytes() == state["payload"]
+    assert not list((state["root"] / "published").rglob("*.tmp"))
+
+    publication = promote_dataset_job_output(
+        db,
+        principal=state["principal"],
+        job_id=state["job"].id,
+        fencing_token=state["claim"].fencing_token,
+    )
+
+    assert publication.published_output_reference == published_ref
+    assert publication.output_sha256 == state["digest"]
+    assert db.query(models.DatasetExecutionJobOutputPublication).filter_by(
+        job_id=state["job"].id
+    ).count() == 1
+    assert published_path.read_bytes() == state["payload"]
+    assert not state["stage_path"].exists()
+    assert commit_attempts["count"] == 2
+

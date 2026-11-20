@@ -47,3 +47,10 @@ A implementação actual suporta apenas o filesystem local configurado por `DATA
 ## Regressão de symlinks
 
 A suite API inclui também um caso em que um nome de temporário válido aponta por symlink para um ficheiro externo. O reconciliador deve ignorar a entrada e preservar tanto o link como o destino. Esta cobertura complementa a regra de só remover ficheiros regulares e nunca seguir symlinks.
+
+## Recuperação após falha entre filesystem e SQL
+
+A promoção cria o destino final com hard link sem sobrescrever um destino existente e só depois confirma a linha de publicação na base de dados. Se o commit SQL falhar, o destino verificado pode permanecer sem linha de auditoria, enquanto o staging original continua disponível. Uma repetição da promoção volta a validar o destino existente pelo SHA-256 e tamanho, cria a linha de publicação e só então tenta remover o staging.
+
+Esta recuperação é intencionalmente conservadora: um destino existente com digest diferente é tratado como conflito de integridade; o reconciliador não inventaria nem apaga destinos publicados sem uma política explícita. O teste de regressão simula a falha do commit antes de a transação SQL ser confirmada e verifica a recuperação por retry. Não cobre falhas físicas do filesystem, perda de energia, garantias de durabilidade do volume Docker ou comportamento de storage remoto.
+
