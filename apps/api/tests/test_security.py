@@ -141,3 +141,14 @@ def test_api_role_policy_preserves_real_nested_route_prefixes():
     assert api_role_denial("GET", "/api/v1/observation-alerts/42", "SUPERVISOR") is None
     assert classify_api_route("GET", "/api/v1/shelf-images/42/content") == "EMPLOYEE_ALLOWLIST"
     assert api_role_denial("GET", "/api/v1/shelf-images/42/content", "EMPLOYEE") is None
+
+def test_api_role_policy_does_not_match_planogram_lookalike_segments():
+    from app.api_security_policy import api_role_denial, classify_api_route
+
+    lookalike_path = "/api/v1/shelves/42/planograms-export"
+
+    assert classify_api_route("GET", lookalike_path) == "AUTHENTICATED_STAFF"
+    assert api_role_denial("GET", lookalike_path, "EMPLOYEE") == (
+        "Employee access is limited to assigned tasks"
+    )
+
