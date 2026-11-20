@@ -1033,7 +1033,7 @@ Critério global: nenhuma capacidade pode ser marcada como concluída sem códig
 - [x] Restringir a apresentação ao percurso ADMIN/SUPERVISOR e reutilizar o endpoint com autenticação já existente.
 - [x] Apresentar proveniência, versão do planograma/modelo, estado por célula, facings e IDs das deteções.
 - [x] Manter a semântica conservadora UNKNOWN sem calibração de visibilidade e não alterar inventário.
-- [ ] Executar build TypeScript/Vite e Quality Gates para validar a integração.
+- [x] Executar build TypeScript/Vite e Quality Gates para validar a integração; Quality Gates `44832248161` passou no commit `4beb3f0`.
 - [ ] Fazer validação manual de teclado, leitor de ecrã, contraste e browser móvel.
 
 
@@ -1078,7 +1078,7 @@ Critério global: nenhuma capacidade pode ser marcada como concluída sem códig
 - [x] Rejeitar versões de esquema não suportadas antes de calcular o digest.
 - [x] Fixar a versão do esquema no payload canónico, impedindo override pelo chamador.
 - [x] Testar independência da ordem das chaves, binding dos resultados por célula, exclusão do próprio digest e rejeição de NaN.
-- [ ] Confirmar API CI e Quality Gates do novo contrato.
+- [x] Confirmar API CI e Quality Gates do novo contrato no commit `4beb3f0`; a suite, compilação Python e build Web passaram.
 
 
 ### Correção do isolamento do teste de idempotência SKU — 2026-11-19
@@ -1093,7 +1093,7 @@ Critério global: nenhuma capacidade pode ser marcada como concluída sem códig
 
 - A execução CI do commit `6e9a3147e33076316bef9feb72c4cf212e63d87b` confirmou que separar apenas a deteção não era suficiente: a deteção de regressão continuava na mesma prateleira e a observação adicional alterava a avaliação operacional usada pelo teste de criação de tarefas.
 - O cenário SKU A → SKU B foi movido para uma segunda prateleira, com imagem e deteção próprias, mantendo os mesmos produtos atribuídos. O fluxo operacional original passa a usar exclusivamente a prateleira e a evidência originais.
-- A correção aguarda nova execução integral do CI. A falha anterior foi **1 failed, 1342 passed, 1 skipped, 1 warning**; não considerar a suite aprovada.
+- A correcção foi incluída na suite completa validada no API CI/Quality Gates do commit `4beb3f0`; a falha histórica foi resolvida e a suite terminou com 1404 passed, 1 skipped, 1 warning.
 
 
 ### Precisão do âmbito da asserção de decisões — 2026-11-19
@@ -1117,7 +1117,7 @@ Critério global: nenhuma capacidade pode ser marcada como concluída sem códig
 - A auditoria identificou que a validação da evidência de demonstração confirmava imagem ativa, deteção, revisão SKU, produto e SHA-256, mas não ligava a imagem à mesma prateleira da observação.
 - A consulta de imagem usada para construir `evidence` exige agora também `ShelfImage.shelf_id == shelf.id`; uma referência válida de outra prateleira deixa de satisfazer o gate de evidência.
 - Acrescentado teste de regressão que injeta numa observação manual referências válidas a uma imagem/deteção/revisão de outra prateleira e exige `evidence == None`.
-- A alteração está publicada na branch principal, mas aguarda API CI, Quality Gates e Docker Compose; não considerar a proteção validada até os workflows terminarem.
+- A alteração está publicada e foi incluída na validação API CI/Quality Gates/Docker Compose do commit `4beb3f0`; os três workflows passaram.
 
 
 ### Proteção contra falsificação de metadados de evidência — 2026-11-19
@@ -1126,7 +1126,7 @@ Critério global: nenhuma capacidade pode ser marcada como concluída sem códig
 - O endpoint genérico rejeita agora os campos reservados de proveniência (`demo_detection_id`, imagem, revisão e confirmação humana), reservando-os para a rota de deteção revista.
 - A avaliação de evidência exige também estado humano confirmado igual ao estado da observação, timestamp de confirmação e utilizador confirmador ativo ADMIN/SUPERVISOR com âmbito de loja válido.
 - O teste integrado tenta criar metadados de demonstração através do endpoint genérico e espera HTTP 422, além de verificar que uma referência cruzada de prateleira não produz evidência elegível.
-- Validação CI pendente no commit seguinte.
+- Validação posterior confirmada no API CI/Quality Gates do commit `4beb3f0`; a suite completa passou.
 
 
 ## Contrato geométrico do provider ONNX — 2026-11-20
