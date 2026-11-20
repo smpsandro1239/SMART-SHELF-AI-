@@ -308,6 +308,72 @@ def main():
                 authorize=lambda _publication, _job: True,
             ) == child_payload
             db.commit()
+
+        # A denied derivation must leave no publication or lineage row and
+        # must preserve the staged bytes for diagnosis/retry.
+        denied_payload = payload + b" denied-derived-output " + suffix.encode("ascii")
+        denied_digest = hashlib.sha256(denied_payload).hexdigest()
+        with SessionLocal() as db:
+            denied_job = enqueue_dataset_job(
+                db, idempotency_key=f"output-smoke-denied-{suffix}",
+                release_fingerprint="9" * 64,
+                approval_evidence={
+                    "status": "APPROVED", "mode": "training",
+                    "record_sha256": "b" * 64, "gate_report_sha256": "c" * 64,
+                },
+                sources=[{
+                    "shelf_image_id": source_image_id, "store_id": source_store_id,
+                    "source_image_sha256": hashlib.sha256(b"0123456789").hexdigest(),
+                }],
+            )
+            denied_claim = claim_next_dataset_job(db, worker_id=worker_id, lease_seconds=300)
+            assert denied_claim is not None and denied_claim.id == denied_job.id
+            denied_stage = root / "staging" / str(denied_job.id) / str(denied_claim.fencing_token)
+            denied_stage.mkdir(parents=True)
+            denied_stage_path = denied_stage / "model.bin"
+            denied_stage_path.write_bytes(denied_payload)
+            complete_dataset_job(
+                db, job_id=denied_job.id, worker_id=worker_id,
+                fencing_token=denied_claim.fencing_token, output_sha256=denied_digest,
+                staged_output_reference=(
+                    f"staging/{denied_job.id}/{denied_claim.fencing_token}/model.bin"
+                ),
+            )
+            denied_job_id, denied_token = denied_job.id, denied_claim.fencing_token
+
+        from app.dataset_output_lineage import DatasetOutputLineageAuthorizationError
+        with SessionLocal() as db:
+            try:
+                promote_dataset_job_output(
+                    db, principal=principal, job_id=denied_job_id,
+                    fencing_token=denied_token,
+                    derived_from_publication_id=publication_id,
+                    derivation_actor_user_id=actor_user_id,
+                    derivation_reason="PostgreSQL smoke: deny derived output publication",
+                    authorize_derivation=lambda *_args: False,
+                )
+            except DatasetOutputLineageAuthorizationError:
+                db.rollback()
+            else:
+                raise AssertionError("denied derived output publication was accepted")
+            assert db.query(models.DatasetExecutionJobOutputPublication).filter_by(
+                job_id=denied_job_id
+            ).count() == 0
+            assert db.query(models.DatasetExecutionJobOutputLineage).join(
+                models.DatasetExecutionJobOutputPublication,
+                models.DatasetExecutionJobOutputPublication.id
+                == models.DatasetExecutionJobOutputLineage.child_publication_id,
+            ).filter(
+                models.DatasetExecutionJobOutputPublication.job_id == denied_job_id
+            ).count() == 0
+            assert denied_stage_path.read_bytes() == denied_payload
+            denied_published_path = (
+                root / "published" / str(denied_job_id)
+                / f"{denied_token}-{denied_digest}.artifact"
+            )
+            assert not denied_published_path.exists()
+
+        with SessionLocal() as db:
             _assert_rejected(
                 db,
                 "INSERT INTO dataset_execution_job_output_lineage "
