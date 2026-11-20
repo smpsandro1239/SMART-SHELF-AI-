@@ -1206,3 +1206,9 @@ Critério global: nenhuma capacidade pode ser marcada como concluída sem códig
 - [x] Acrescentar regressões para o consumidor de outputs publicados: leitura integral autorizada, autorização estritamente positiva (apenas `True`) e rejeição de bytes publicados adulterados.
 - [ ] Validar os novos testes e a suite API no CI do commit `a2b0175490b2ea56fa49956d92de1e1c1147326a`.
 - [ ] Avaliar a integração futura deste helper com um consumidor de produto/API; não existe evidência nesta auditoria de uma rota HTTP que o invoque, pelo que não presumir que outputs já são descarregáveis por utilizadores finais.
+
+## Bloqueio transaccional da proveniência de outputs — 2026-11-20
+
+- [x] Bloquear as linhas `DatasetExecutionJobSource` com `SELECT ... FOR UPDATE` durante o consumo de outputs publicados, ordenando por imagem, job e ID para aquisição determinística dos locks.
+- [x] Acrescentar teste que verifica a cláusula PostgreSQL `FOR UPDATE` e a ordenação estável da query.
+- [ ] Validar o helper e os testes de consumo no CI antes de fechar esta tarefa.
