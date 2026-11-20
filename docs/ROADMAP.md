@@ -1,3 +1,10 @@
+### Inventário de outputs finais sem publicação auditável (2026-11-20)
+
+- Detecta ficheiros finais canónicos antigos em `published/` sem linha SQL de publicação.
+- Reporta digest, tamanho, estado do job e timestamp; não segue symlinks.
+- É sempre report-only, mesmo com `--apply`, porque a ausência de auditoria não prova que os bytes são descartáveis.
+- RED observado no commit `cc7dc70b`; implementação adicionada, GREEN/CI pendente.
+
 ### Metodologia de engenharia e skills (2026-11-20)
 
 - Superpowers fixado como submódulo Git para TDD, debugging, planeamento e revisão; Frontend Design para direcção visual; Impeccable para auditoria e polish.

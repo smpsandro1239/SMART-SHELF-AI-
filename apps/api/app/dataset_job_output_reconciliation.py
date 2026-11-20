@@ -26,6 +26,7 @@ from app.dataset_job_output_publications import (
 )
 
 _TEMPORARY_NAME = re.compile(r"^\.promotion-[0-9a-f]{32}\.tmp$")
+_PUBLISHED_ARTIFACT_NAME = re.compile(r"^([1-9][0-9]*)-([0-9a-f]{64})\.artifact$")
 
 
 def reconcile_dataset_job_output_files(
@@ -60,6 +61,7 @@ def reconcile_dataset_job_output_files(
         "temporary_candidates": [],
         "staging_candidates": [],
         "orphan_staging": [],
+        "orphan_published": [],
         "removed": [],
         "skipped": [],
     }
@@ -85,6 +87,9 @@ def reconcile_dataset_job_output_files(
     }
     published_staging_references = {
         publication.staged_output_reference for publication, _job in publications
+    }
+    published_references = {
+        publication.published_output_reference for publication, _job in publications
     }
     db.rollback()
 
@@ -225,6 +230,64 @@ def reconcile_dataset_job_output_files(
         if published_root_fd is not None:
             os.close(published_root_fd)
 
+    # Inventory canonical final artifacts that have no immutable SQL publication
+    # row. A recent file may be between filesystem promotion and SQL commit; the
+    # grace period avoids noisy reports for in-flight work. This inventory is
+    # strictly report-only, including with --apply: bytes may be recoverable.
+    orphan_published_root_fd = None
+    try:
+        orphan_published_root_fd = _open_dirs(root, ("published",), create=False)
+        directory_flags = (
+            os.O_RDONLY | getattr(os, "O_CLOEXEC", 0)
+            | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
+        )
+        for job_name in os.listdir(orphan_published_root_fd):
+            if not job_name.isdigit() or str(int(job_name)) != job_name:
+                continue
+            try:
+                directory_info = os.stat(
+                    job_name, dir_fd=orphan_published_root_fd, follow_symlinks=False
+                )
+                if not stat.S_ISDIR(directory_info.st_mode):
+                    continue
+                job_fd = os.open(job_name, directory_flags, dir_fd=orphan_published_root_fd)
+            except OSError:
+                continue
+            try:
+                job_id = int(job_name)
+                job_state = jobs_by_id.get(job_id)
+                for name in os.listdir(job_fd):
+                    match = _PUBLISHED_ARTIFACT_NAME.fullmatch(name)
+                    if match is None:
+                        continue
+                    reference = f"published/{job_name}/{name}"
+                    if reference in published_references:
+                        continue
+                    try:
+                        info = os.stat(name, dir_fd=job_fd, follow_symlinks=False)
+                    except OSError:
+                        continue
+                    if not stat.S_ISREG(info.st_mode) or info.st_mtime > cutoff:
+                        continue
+                    report["orphan_published"].append({
+                        "reference": reference,
+                        "bytes": info.st_size,
+                        "output_sha256": match.group(2),
+                        "modified_at": datetime.fromtimestamp(
+                            info.st_mtime, timezone.utc
+                        ).isoformat(),
+                        "job_status": job_state["status"] if job_state else None,
+                        "reason": "missing_publication_audit_row",
+                        "cleanup": "report_only",
+                    })
+            finally:
+                os.close(job_fd)
+    except (FileNotFoundError, NotADirectoryError):
+        pass
+    finally:
+        if orphan_published_root_fd is not None:
+            os.close(orphan_published_root_fd)
+
     # Inventory stale staging files without a publication record. These
     # bytes may belong to a worker that is still writing, a retryable SUCCEEDED
     # job, a revoked/failed execution, or an unknown job. Fencing in SQL does
@@ -308,6 +371,7 @@ def reconcile_dataset_job_output_files(
             os.close(staging_root_fd)
 
     report["orphan_staging_count"] = len(report["orphan_staging"])
+    report["orphan_published_count"] = len(report["orphan_published"])
     report["candidate_count"] = (
         len(report["temporary_candidates"]) + len(report["staging_candidates"])
     )

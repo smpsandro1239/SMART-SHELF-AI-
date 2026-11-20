@@ -1,3 +1,11 @@
+## 2026-11-20 — Inventário report-only de outputs publicados sem auditoria
+
+- Implementado o inventário de artefactos finais canónicos sem referência numa linha append-only de publicação.
+- A recolha só considera ficheiros regulares em directórios de job numéricos e aplica o período de segurança para evitar reportar operações de promoção recentes.
+- O relatório inclui referência, tamanho, SHA-256 declarado no nome, timestamp, estado conhecido do job e razão.
+- A categoria é report-only inclusive com `--apply`; não apaga ficheiros nem segue symlinks.
+- O teste de regressão foi observado a falhar no Quality Gates antes da implementação (commit `cc7dc70b`: 1 failed, 1379 passed, 1 skipped, 1 warning). A validação GREEN do commit de implementação ainda está pendente.
+
 ## 2026-11-20 — Integração Superpowers e Frontend Design
 
 - Fixado `obra/superpowers` em `22f0b463e7a5e579904dd6211a520321035526f7` e `Ilm-Alan/frontend-design` em `f8966e6cc9b90247aa102d71f7e675ec3462b419` como submódulos Git; Impeccable mantém-se em `b49177d32788f2dc585c42831d845dacf1ebed2c`.

@@ -1,3 +1,9 @@
+## Inventário de outputs finais sem publicação auditável — 2026-11-20
+
+- [ ] Inventariar ficheiros finais canónicos em `published/<job>/<token>-<sha256>.artifact` sem linha append-only de publicação; incluir digest, tamanho e estado do job.
+- [ ] Garantir que a categoria é report-only mesmo com `--apply`, sem seguir symlinks nem apagar ficheiros recuperáveis.
+- [ ] Validar teste de regressão RED/GREEN, API CI, Quality Gates, PostgreSQL smoke e Docker Compose.
+
 ## Superpowers e Frontend Design — integração de metodologia (2026-11-20)
 
 - [x] Fixar Superpowers como submódulo Git `vendor/superpowers` no commit `22f0b463e7a5e579904dd6211a520321035526f7` (MIT).

@@ -13,7 +13,7 @@ cd apps/api
 python -m app.dataset_job_output_reconciliation --grace-hours 168
 ```
 
-O modo predefinido é read-only. O relatório separa temporários de promoção, staging elegível, staging órfão sem publicação, ficheiros ignorados, número de candidatos e número de remoções. O campo `orphan_staging` é exclusivamente informativo e nunca é apagado, mesmo com `--apply`.
+O modo predefinido é read-only. O relatório separa temporários de promoção, staging elegível, staging órfão sem publicação, outputs finais sem registo de publicação, ficheiros ignorados, número de candidatos e número de remoções. Os campos `orphan_staging` e `orphan_published` são exclusivamente informativos e nunca são apagados, mesmo com `--apply`.
 
 ## Aplicar a limpeza
 
@@ -66,3 +66,9 @@ A remoção do staging ocorre apenas depois do commit SQL da publicação. Se o 
 
 Este cenário não é equivalente a staging órfão sem publicação: nesse caso continua a não existir prova suficiente para apagar o ficheiro e a ferramenta mantém apenas inventário report-only.
 
+
+## Inventário de outputs finais sem registo SQL
+
+O reconciliador percorre apenas directórios numéricos e ficheiros regulares com o nome canónico `<fencing-token>-<sha256>.artifact`. Se não encontrar a referência numa linha append-only de publicação, e o ficheiro tiver ultrapassado o período de segurança, adiciona-o a `orphan_published` com job status, digest e tamanho. Não segue symlinks e não calcula que o nome do ficheiro prove integridade: o digest no nome é apenas uma pista para investigação.
+
+Esta categoria é sempre report-only, incluindo com `--apply`. Pode representar uma falha de commit SQL, uma publicação interrompida ou uma situação que exige reconciliação manual. Nunca é apagada automaticamente porque a ausência de uma linha SQL não prova que o ficheiro é descartável. A publicação retry continua a ser o caminho preferido quando o job e o worker mantêm autoridade válida.
