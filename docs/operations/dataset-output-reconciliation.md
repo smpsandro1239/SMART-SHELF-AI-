@@ -72,3 +72,17 @@ Este cenário não é equivalente a staging órfão sem publicação: nesse caso
 O reconciliador percorre apenas directórios numéricos e ficheiros regulares com o nome canónico `<fencing-token>-<sha256>.artifact`. Se não encontrar a referência numa linha append-only de publicação, e o ficheiro tiver ultrapassado o período de segurança, adiciona-o a `orphan_published` com job status, digest e tamanho. Não segue symlinks e não calcula que o nome do ficheiro prove integridade: o digest no nome é apenas uma pista para investigação.
 
 Esta categoria é sempre report-only, incluindo com `--apply`. Pode representar uma falha de commit SQL, uma publicação interrompida ou uma situação que exige reconciliação manual. Nunca é apagada automaticamente porque a ausência de uma linha SQL não prova que o ficheiro é descartável. A publicação retry continua a ser o caminho preferido quando o job e o worker mantêm autoridade válida.
+
+## Durabilidade da árvore de armazenamento e recuperação de `fsync`
+
+A promoção percorre a raiz e os componentes internos do caminho com abertura relativa a descritores de directório e `O_NOFOLLOW`. O caminho configurado não deve conter componentes simbólicos. Ao criar ou reutilizar componentes em modo de escrita, cada entrada é confirmada com `fsync` do directório-pai. Isto permite que uma repetição repare uma tentativa anterior em que a criação do directório teve sucesso mas a sincronização do pai falhou.
+
+Antes de criar o hard link final, o conteúdo é copiado para um temporário no mesmo directório, verificado por tamanho e SHA-256 e sincronizado com `fsync` do ficheiro. Depois do hard link, o directório é sincronizado antes de a transacção SQL registar a publicação. Uma falha de sincronização antes do commit aborta a publicação e preserva o staging original; qualquer temporário residual é removido em modo best-effort.
+
+Quando o destino determinístico já existe (por exemplo, depois de uma falha entre filesystem e SQL), a repetição não confia na sua mera existência. Reabre o ficheiro sem seguir symlinks, verifica tipo, tamanho, SHA-256 e estabilidade de identidade/metadados durante a leitura, sincroniza o próprio ficheiro e o directório que contém a entrada. Só depois pode continuar para o commit SQL.
+
+A remoção de staging continua a ocorrer depois do commit. Se o unlink ou o `fsync` do directório de staging falhar, a publicação e a auditoria permanecem confirmadas. A API regista um aviso com o ID do job e o tipo de erro, sem incluir caminhos internos. Se o unlink tiver ocorrido mas o `fsync` falhar, a remoção pode não sobreviver a uma falha abrupta e o ficheiro poderá reaparecer após reinício; o reconciliador continua a ser a via segura para limpar resíduos quando a publicação, o job, o destino, o digest/tamanho e o período de segurança são confirmados.
+
+Os testes de regressão cobrem falha do `fsync` do temporário, criação/sincronização da árvore de directórios, recuperação de destino existente, libertação de descritores após erro, e falha de sincronização da limpeza pós-commit. A validação CI no commit `4beb3f002b809de8ef50f9990a377db2f7f7c36d` passou com 1404 testes aprovados, 1 ignorado e 1 aviso.
+
+**Limite da garantia:** `fsync` só oferece as garantias que o filesystem, driver, volume Docker e dispositivo subjacente realmente implementam. Os testes CI demonstram o tratamento das chamadas e falhas injectadas num runner Linux; não simulam perda física de energia, corrupção do volume, falha de hardware nem garantias de object storage remoto.
