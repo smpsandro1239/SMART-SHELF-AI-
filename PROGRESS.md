@@ -1,3 +1,11 @@
+## 2026-11-20 — CORS preflight: falha funcional descoberta (em correcção)
+
+- O teste `test_bearer_api_cors_preflight_does_not_enable_cookie_credentials` revelou que o preflight OPTIONS era interceptado pelo middleware Bearer antes do CORSMiddleware e respondia 401.
+- O RED foi observado no commit `831c1026`: 1 failed, 1387 passed, 1 skipped, 1 warning. A falha foi o 401 do preflight, não uma falha do cabeçalho de credenciais.
+- Implementação em curso: permitir que apenas OPTIONS com `Origin` e `Access-Control-Request-Method` passe para CORSMiddleware; este valida origem, método e headers. Requests não-preflight continuam protegidos.
+- Como a API usa JWT Bearer e não autenticação por cookie, CORS passa a `allow_credentials=False`; o header Authorization continua explicitamente permitido.
+- GREEN e CI ainda pendentes.
+
 ## Estado consolidado — 2026-11-20
 
 - P0 output inventory: RED/GREEN confirmado; inventário final sem linha SQL é report-only e nunca apaga ficheiros.

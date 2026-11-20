@@ -1,3 +1,10 @@
+## Segurança P0 — CORS preflight e Bearer
+
+- [ ] Permitir apenas preflight OPTIONS com Origin + Access-Control-Request-Method passar pelo middleware de autenticação, deixando CORSMiddleware validar origin/method/headers.
+- [ ] Desactivar `allow_credentials`: autenticação é Bearer e não há sessão por cookie no frontend/API.
+- [ ] Confirmar que preflight Authorization recebe 200, ACAO válido e sem Access-Control-Allow-Credentials; requests reais continuam a exigir Bearer.
+- [ ] Validar RED/GREEN e API CI, Quality Gates e Docker Compose.
+
 ## OWASP API security review — primeira ronda
 
 - [x] Enumerar as 130 declarações de rotas e rever middleware JWT, identidade/role na base de dados, RBAC, store scope, planogramas e testes de isolamento.

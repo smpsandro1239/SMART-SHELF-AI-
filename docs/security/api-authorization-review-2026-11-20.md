@@ -50,3 +50,11 @@ O RED foi observado no commit `e8c9935`: seis novos casos falharam porque a conf
 ## Conclusão
 
 Não foi confirmado um bypass de autenticação ou isolamento multi-loja nesta triagem. Foi corrigida uma configuração CORS de produção. A auditoria de autorização continua aberta até existir uma matriz completa e testes de política declarativa para todas as rotas.
+
+## Finding adicional — CORS preflight interceptado por autenticação
+
+| ID | Severidade | Finding | Estado |
+|---|---|---|---|
+| API-CORS-002 | Alta funcionalidade | Middleware Bearer respondia 401 a OPTIONS preflight antes de CORSMiddleware; browsers não conseguiam completar chamadas cross-origin | Correcção em validação |
+
+O teste HTTP envia `Origin`, `Access-Control-Request-Method` e `Access-Control-Request-Headers: authorization`. O comportamento correcto é deixar CORSMiddleware validar a origem/método/headers, responder 200 para uma origem permitida e não emitir `Access-Control-Allow-Credentials`, dado que a autenticação da API usa Bearer e não cookies. Requests reais continuam a exigir token.

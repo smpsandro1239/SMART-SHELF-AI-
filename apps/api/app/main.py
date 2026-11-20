@@ -134,7 +134,7 @@ async def request_validation_exception_handler(request: Request, exc: RequestVal
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[origin.strip() for origin in settings.cors_allowed_origins.split(",") if origin.strip()],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["GET", "POST", "PUT", "PATCH", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type"],
 )
@@ -147,6 +147,14 @@ PUBLIC_API_PATHS = {"/api/v1/auth/bootstrap", "/api/v1/auth/login"}
 
 @app.middleware("http")
 async def require_api_authentication(request: Request, call_next):
+    # CORS preflight requests do not carry the application's Bearer token.
+    # Let CORSMiddleware validate the origin, requested method and headers.
+    if (
+        request.method.upper() == "OPTIONS"
+        and request.headers.get("origin")
+        and request.headers.get("access-control-request-method")
+    ):
+        return await call_next(request)
     if settings.app_env == "test":
         return await call_next(request)
     if not request.url.path.startswith("/api/v1/") or request.url.path in PUBLIC_API_PATHS:

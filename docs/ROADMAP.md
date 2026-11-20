@@ -1,3 +1,10 @@
+### CORS preflight e autenticação Bearer (2026-11-20)
+
+- O teste de preflight revelou 401 porque o middleware Bearer interceptava OPTIONS antes do CORSMiddleware.
+- Corrigir com bypass estrito apenas para requests OPTIONS que contenham Origin e Access-Control-Request-Method; o CORSMiddleware continua a validar origem/método/headers.
+- Desactivar CORS credentials porque a autenticação usa Bearer, não cookies.
+- RED observado no commit `831c1026`; GREEN pendente.
+
 ### Estado consolidado P0 — 2026-11-20
 
 - Inventário de outputs finais sem publicação auditável: implementado e validado; sempre report-only, mesmo com `--apply`.
