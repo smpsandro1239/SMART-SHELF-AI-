@@ -1098,3 +1098,10 @@ Critério global: nenhuma capacidade pode ser marcada como concluída sem códig
 - [ ] Implementar melhorias de forma incremental, preservando contratos API e fluxos funcionais, e validar screenshots nas dimensões suportadas.
 - Nota: não instalar nem alterar o frontend nesta fase; retomar apenas quando este tema for explicitamente reaberto.
 
+## Durabilidade do filesystem na promoção de outputs — 2026-11-20
+
+- [x] Acrescentar regressão para falha do `fsync` do directório depois do hard link e antes do commit SQL.
+- [x] Confirmar rollback da publicação SQL, preservação do staging e retry com verificação SHA-256 do destino existente.
+- [ ] Validar API CI, Quality Gates e Docker Compose.
+- [ ] Avaliar falhas de `fsync` do ficheiro temporário e da remoção do staging; distinguir erros recuperáveis de garantias de durabilidade que o filesystem/volume não oferece.
+

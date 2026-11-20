@@ -1031,3 +1031,64 @@ def test_commit_failure_after_filesystem_publish_is_recoverable_on_retry(publica
     assert not state["stage_path"].exists()
     assert commit_attempts["count"] == 2
 
+def test_directory_fsync_failure_after_link_is_recoverable_on_retry(publication_setup, monkeypatch):
+    import app.dataset_job_output_publications as publication_service
+
+    state = publication_setup
+    db = state["db"]
+    original_publish = publication_service._publish_prepared_temp
+
+    def fail_directory_fsync_once(*, root, published, temp_name):
+        original_fsync = publication_service.os.fsync
+
+        def fail_fsync(_fd):
+            raise OSError("simulated directory fsync failure")
+
+        monkeypatch.setattr(publication_service.os, "fsync", fail_fsync)
+        try:
+            original_publish(root=root, published=published, temp_name=temp_name)
+        finally:
+            monkeypatch.setattr(publication_service.os, "fsync", original_fsync)
+
+    monkeypatch.setattr(
+        publication_service, "_publish_prepared_temp", fail_directory_fsync_once,
+    )
+    published_ref = (
+        f"published/{state['job'].id}/"
+        f"{state['claim'].fencing_token}-{state['digest']}.artifact"
+    )
+    published_path = state["root"] / published_ref
+
+    with pytest.raises(
+        publication_service.DatasetJobOutputUnavailable,
+        match="prepared output could not be atomically published",
+    ):
+        promote_dataset_job_output(
+            db,
+            principal=state["principal"],
+            job_id=state["job"].id,
+            fencing_token=state["claim"].fencing_token,
+        )
+
+    # The hard link may exist even though directory durability could not be
+    # confirmed. Keep staging and retry only after re-verifying destination bytes.
+    assert published_path.read_bytes() == state["payload"]
+    assert state["stage_path"].read_bytes() == state["payload"]
+    assert db.query(models.DatasetExecutionJobOutputPublication).filter_by(
+        job_id=state["job"].id
+    ).count() == 0
+
+    publication = promote_dataset_job_output(
+        db,
+        principal=state["principal"],
+        job_id=state["job"].id,
+        fencing_token=state["claim"].fencing_token,
+    )
+
+    assert publication.published_output_reference == published_ref
+    assert publication.output_sha256 == state["digest"]
+    assert db.query(models.DatasetExecutionJobOutputPublication).filter_by(
+        job_id=state["job"].id
+    ).count() == 1
+    assert not state["stage_path"].exists()
+

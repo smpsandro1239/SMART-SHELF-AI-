@@ -54,3 +54,9 @@ A promoção cria o destino final com hard link sem sobrescrever um destino exis
 
 Esta recuperação é intencionalmente conservadora: um destino existente com digest diferente é tratado como conflito de integridade; o reconciliador não inventaria nem apaga destinos publicados sem uma política explícita. O teste de regressão simula a falha do commit antes de a transação SQL ser confirmada e verifica a recuperação por retry. Não cobre falhas físicas do filesystem, perda de energia, garantias de durabilidade do volume Docker ou comportamento de storage remoto.
 
+## Falha de sincronização do directório durante a promoção
+
+A criação do hard link de destino é seguida por `fsync` do directório. Se essa sincronização falhar, a promoção aborta e reverte a transação SQL. O destino pode continuar visível no filesystem, mas a sua durabilidade após falha do sistema não está confirmada. O staging original é preservado.
+
+Uma repetição não confia apenas na existência do destino: volta a abrir o ficheiro sem seguir symlinks e valida tipo, tamanho e SHA-256 antes de o reutilizar. Só depois regista a publicação e remove o staging. Este comportamento foi coberto por um teste com falha injectada de `fsync`; não constitui uma garantia contra perda de energia, corrupção do volume ou limitações do driver/storage subjacente.
+

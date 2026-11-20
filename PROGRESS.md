@@ -1299,3 +1299,10 @@ O teste de concorrência confirma a serialização edição/ativação no servi�
 - O teste exige rollback da linha de auditoria, preservação dos bytes publicados e do staging original, ausência de temporários e recuperação idempotente numa segunda tentativa.
 - O teste foi adicionado ao repositório; aguarda validação pelos workflows GitHub Actions. Não foram executados testes localmente.
 
+## 2026-11-20 — Recuperação após falha de fsync do directório de publicação
+
+- Acrescentado teste de integração que injeta falha no `fsync` do directório depois da criação do hard link de destino.
+- O teste confirma que, perante durabilidade não confirmada, a transação SQL é revertida, o staging permanece e o destino existente só é reutilizado após nova verificação dos bytes.
+- Uma segunda promoção deve concluir a publicação e remover o staging depois do commit.
+- Validação pendente de GitHub Actions. Não foram executados testes localmente.
+
