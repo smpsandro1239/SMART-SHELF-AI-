@@ -61,6 +61,11 @@ jobs:
           services="$(docker compose ps --services --filter status=running)"
           grep -qx 'vision-worker' <<< "$services"
 
+          worker_id="$(docker compose ps -q vision-worker)"
+          storage_mount_rw="$(docker inspect "$worker_id" --format '{{range .Mounts}}{{if eq .Destination "/app/storage"}}{{.RW}}{{end}}{{end}}')"
+          test "$storage_mount_rw" = "false"
+          echo "Verified vision-worker mounts shelf image storage read-only."
+
           while IFS='|' read -r role email password; do
             response="$(curl --fail --silent --show-error \
               -H 'Content-Type: application/json' \

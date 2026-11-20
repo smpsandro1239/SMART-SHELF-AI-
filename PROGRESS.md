@@ -1,3 +1,11 @@
+## 2026-11-20 — Mount de imagens read-only no vision-worker
+
+- A auditoria confirmou que o worker só lê ficheiros de captura: `_resolve_worker_image_path` valida e resolve o caminho e os providers recebem o ficheiro para inferência; não há escrita/unlink/mkdir/cópia pelo worker em `IMAGE_STORAGE_PATH`.
+- O serviço `vision-worker` passa a montar `shelf_images` como `/app/storage:ro`. A API mantém o mount read-write para ingestão e operações de retenção.
+- O smoke Docker Compose verifica o mount efectivo através de `docker inspect` e falha se `RW` não for `false`.
+- Esta é uma barreira filesystem efectiva para o container worker no volume de imagens, não isolamento total: API e worker ainda usam a mesma imagem/identidade de processo e o armazenamento de outputs de datasets é uma área separada.
+- Validação desta alteração aguarda API CI, Quality Gates e Docker Compose. Não foram executados testes localmente.
+
 ## 2026-11-20 — Publicação atómica de outputs derivados
 
 - `promote_dataset_job_output` aceita agora uma relação pai → derivado opcional, mas exige actor, motivo e callback de autorização quando essa relação é pedida.

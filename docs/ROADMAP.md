@@ -1,3 +1,11 @@
+### Isolamento filesystem da captura — primeira barreira read-only (2026-11-20)
+
+- O serviço `vision-worker` monta agora o volume persistente `shelf_images` em modo só de leitura; a API permanece responsável por escrever uploads e gerir retenção.
+- A inspecção do worker confirmou que o fluxo de inferência resolve e lê a imagem, sem escrever no volume de capturas.
+- O smoke Docker Compose passa a inspeccionar o mount do container e exige `RW=false`.
+- Limite: isto não separa UID/GID, não isola `DATASET_OUTPUT_STORAGE_PATH` e não prova quiescência de processos antigos. A limpeza de staging órfão continua report-only.
+- Validação CI pendente no commit desta alteração.
+
 ### Inventário seguro de staging órfão — 2026-11-20
 
 - O reconciliador identifica ficheiros antigos em staging sem publicação correspondente e classifica job desconhecido, job concluído sem publicação, token obsoleto, job terminal e worker potencialmente activo.

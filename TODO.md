@@ -46,6 +46,14 @@
 - [ ] Confirmar os três workflows da alteração concorrente antes de marcar a cobertura como validada.
 - [ ] Não implementar libertação independente de legal hold nem matriz HTTP por perfil/loja sem decisão de política aprovada; documentar as decisões necessárias.
 
+## Isolamento filesystem API/vision-worker — 2026-11-20
+
+- [x] Montar o volume persistente de imagens em modo só de leitura no serviço `vision-worker`; a API mantém a escrita e a ingestão.
+- [x] Acrescentar verificação no smoke Docker Compose que inspecciona o mount real do container e exige `RW=false`.
+- [ ] Separar identidades UID/GID e permissões de directórios; confirmar compatibilidade com volumes existentes e operações de retenção/purga antes de alterar ownership.
+- [ ] Separar staging de outputs de datasets do volume de imagens e definir handoff controlado para workers de transformação.
+- [ ] Provar quiescência física de workers antigos antes de qualquer limpeza de staging órfão; fencing SQL isolado não é suficiente.
+
 ## Reconciliação conservadora de outputs (2026-11-19)
 
 - [x] Criar `app.dataset_job_output_reconciliation` com modo read-only por defeito e `--apply` explícito.

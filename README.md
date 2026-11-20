@@ -557,6 +557,7 @@ A API disponibiliza uma primeira etapa de ingestão de fotografias de prateleira
 - Nome de armazenamento aleatório; o nome original é guardado apenas como metadado.
 - SHA-256 calculado para integridade e deduplicação futura.
 - Ficheiros guardados por ID da loja num volume Docker persistente `shelf_images`.
+- O serviço `vision-worker` monta esse volume em modo só de leitura (`:ro`); a API é a fronteira de escrita para capturas. O smoke Docker Compose verifica o mount efectivo do container. Este controlo não substitui isolamento UID/GID nem abrange o armazenamento de outputs de datasets.
 - Supervisores e funcionários só podem carregar/consultar imagens da sua loja; a API verifica a associação da prateleira à loja.
 - O estado inicial é `PENDING`; a análise só avança quando um provider real é configurado no worker.
 
