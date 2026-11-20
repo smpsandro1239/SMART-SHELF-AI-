@@ -49,7 +49,7 @@ def _is_admin_only(method: str, path: str) -> bool:
 def _is_supervisor_or_admin(method: str, path: str) -> bool:
     return (
         _is_path_or_subpath(path, "/api/v1/observation-alerts")
-        or (_is_path_or_subpath(path, "/api/v1/shelves") and "/planograms" in path)
+        or (_is_path_or_subpath(path, "/api/v1/shelves") and "planograms" in path.split("/"))
         or _is_path_or_subpath(path, "/api/v1/planograms")
         or (method == "POST" and path.endswith("/observation-alerts/evaluate"))
         or (method == "POST" and path in SUPERVISOR_OR_ADMIN_POST_PATHS)
