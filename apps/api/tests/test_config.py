@@ -149,3 +149,34 @@ def test_production_rejects_mock_vision_provider_mode():
             bootstrap_admin_key="b" * 32,
             vision_provider_mode="mock",
         )
+
+
+@pytest.mark.parametrize("origins", [
+    "*",
+    "https://*.example.com",
+    "http://app.example.com",
+    "http://localhost:5173",
+    "https://127.0.0.1",
+    "https://app.example.com/",
+])
+def test_production_rejects_ambiguous_or_insecure_cors_origins(origins):
+    with pytest.raises(ValidationError, match="CORS_ALLOWED_ORIGINS"):
+        Settings(
+            _env_file=None,
+            app_env="production",
+            jwt_secret_key="j" * 32,
+            bootstrap_admin_key="b" * 32,
+            cors_allowed_origins=origins,
+        )
+
+
+def test_production_accepts_explicit_https_cors_origins():
+    settings = Settings(
+        _env_file=None,
+        app_env="production",
+        jwt_secret_key="j" * 32,
+        bootstrap_admin_key="b" * 32,
+        cors_allowed_origins="https://app.example.com,https://admin.example.com:8443",
+    )
+
+    assert settings.cors_allowed_origins == "https://app.example.com,https://admin.example.com:8443"
