@@ -35,22 +35,27 @@ SUPERVISOR_OR_ADMIN_POST_PATHS = frozenset({
 })
 
 
+def _is_path_or_subpath(path: str, prefix: str) -> bool:
+    """Match a route prefix only at a path-segment boundary."""
+    return path == prefix or path.startswith(prefix.rstrip("/") + "/")
+
+
 def _is_admin_only(method: str, path: str) -> bool:
-    return path.startswith("/api/v1/auth/users") or (
+    return _is_path_or_subpath(path, "/api/v1/auth/users") or (
         method == "POST" and path in ADMIN_ONLY_POST_PATHS
     )
 
 
 def _is_supervisor_or_admin(method: str, path: str) -> bool:
     return (
-        path.startswith("/api/v1/observation-alerts")
-        or (path.startswith("/api/v1/shelves/") and "/planograms" in path)
-        or path.startswith("/api/v1/planograms/")
+        _is_path_or_subpath(path, "/api/v1/observation-alerts")
+        or (_is_path_or_subpath(path, "/api/v1/shelves") and "/planograms" in path)
+        or _is_path_or_subpath(path, "/api/v1/planograms")
         or (method == "POST" and path.endswith("/observation-alerts/evaluate"))
         or (method == "POST" and path in SUPERVISOR_OR_ADMIN_POST_PATHS)
         or (
             method == "POST"
-            and path.startswith("/api/v1/warehouse/pallets/")
+            and _is_path_or_subpath(path, "/api/v1/warehouse/pallets")
             and path.endswith("/events")
         )
         or (
@@ -58,7 +63,7 @@ def _is_supervisor_or_admin(method: str, path: str) -> bool:
             and path.startswith("/api/v1/warehouse/pallet-rotation/policies/")
         )
         or path == "/api/v1/product-embedding-exemplars"
-        or path.startswith("/api/v1/product-embedding-exemplars/")
+        or _is_path_or_subpath(path, "/api/v1/product-embedding-exemplars")
         or (method == "GET" and path == "/api/v1/training-candidates/reviewed")
         or (
             method == "GET"
@@ -68,10 +73,10 @@ def _is_supervisor_or_admin(method: str, path: str) -> bool:
                 "/api/v1/sku-evaluation/reviewed",
             }
         )
-        or (method == "POST" and path.startswith("/api/v1/shelf-image-detections/"))
+        or (method == "POST" and _is_path_or_subpath(path, "/api/v1/shelf-image-detections"))
         or (
             method == "POST"
-            and path.startswith("/api/v1/shelf-images/")
+            and _is_path_or_subpath(path, "/api/v1/shelf-images")
             and path.endswith(("/ocr-runs", "/ocr-matches", "/evidence-fusion"))
         )
     )
@@ -93,7 +98,7 @@ def _is_employee_allowed(method: str, path: str) -> bool:
         return path.endswith("/reviews")
     return (
         method == "PATCH"
-        and path.startswith("/api/v1/tasks/")
+        and _is_path_or_subpath(path, "/api/v1/tasks")
         and path.endswith("/status")
     )
 
