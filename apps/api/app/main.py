@@ -34,6 +34,7 @@ from jwt import InvalidTokenError
 from app.config import settings
 from app.database import get_db, SessionLocal
 from app import models
+from app.api_security_policy import PUBLIC_API_PATHS, api_role_denial
 from app.artifact_access_policy import evaluate_artifact_access
 from app.operational_decision_engine import DecisionPolicy, evaluate_shelf_decision
 from app.observation_consensus import evaluate_observation_consensus
