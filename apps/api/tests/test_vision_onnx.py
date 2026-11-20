@@ -176,6 +176,37 @@ def test_embedding_contract_rejects_wrong_input_dtype():
         ONNXShelfVisionProvider._validate_embedding_contract(session, 640)
 
 
+def test_analyze_rejects_corrupt_image_instead_of_returning_empty_analysis(tmp_path):
+    from PIL import Image
+
+    image_path = tmp_path / "corrupt.png"
+    image_path.write_bytes(b"not-an-image")
+    provider = provider_without_runtime()
+    provider._image = Image
+
+    with pytest.raises(Image.UnidentifiedImageError):
+        provider.analyze(image_path)
+
+
+def test_analyze_propagates_detector_timeout(tmp_path):
+    from PIL import Image
+
+    image_path = tmp_path / "shelf.png"
+    Image.new("RGB", (640, 640), "white").save(image_path)
+    provider = provider_without_runtime()
+    provider._image = Image
+    provider._detector_input = "images"
+    provider._detector_output = "detections"
+
+    def timeout(*args, **kwargs):
+        raise TimeoutError("inference timed out")
+
+    provider._detector = SimpleNamespace(run=timeout)
+
+    with pytest.raises(TimeoutError, match="inference timed out"):
+        provider.analyze(image_path)
+
+
 def test_analyze_uses_configured_label_for_class_id(tmp_path):
     from PIL import Image
 

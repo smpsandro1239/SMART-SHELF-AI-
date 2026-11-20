@@ -141,6 +141,12 @@
 - A regressão do batch estático foi acrescentada nesta ronda e aguarda CI do novo commit. Não foram executados testes localmente.
 - O fingerprint SHA-256 não equivale a assinatura/autorização de modelo; continuam pendentes manifesto assinado, dataset autorizado e avaliação reproduzível.
 
+### Falhas de entrada e timeout do provider ONNX — 2026-11-20
+
+- Acrescentados testes para imagem corrompida e timeout do runtime: o provider propaga ambas as falhas e não devolve uma análise vazia enganadora.
+- A integração do worker deve continuar a ser validada para garantir estado FAILED, sem deteções persistidas, em falhas de inferência.
+- CI pendente para os novos testes; não foram executados localmente.
+
 ### Prioridades ainda abertas
 
 1. **P1 — desempenho:** executar `apps/api/scripts/postgres_image_query_plan_audit.py` numa réplica/staging com volume representativo; analisar planos `EXPLAIN (ANALYZE, BUFFERS)` e medir paginação profunda antes de acrescentar índices ou alterar contratos. Procedimento em [PERFORMANCE-QUERY-AUDIT.md](PERFORMANCE-QUERY-AUDIT.md).

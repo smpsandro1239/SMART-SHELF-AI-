@@ -1,3 +1,10 @@
+## 2026-11-20 — Falhas de imagem e timeout no provider ONNX
+
+- Acrescentados testes que garantem que uma imagem corrompida falha durante a leitura e não é convertida numa análise vazia.
+- Acrescentado teste que confirma que um timeout do runtime é propagado pelo provider, permitindo ao worker marcar a execução como FAILED em vez de persistir uma ausência de deteções.
+- A alteração de batch do output ONNX está publicada no commit `8431e0ca`; CI ainda em execução à data desta entrada. Estes novos testes também aguardam CI.
+- Não foram executados testes localmente.
+
 ## 2026-11-20 — Validação ONNX e contrato de batch do output
 
 - A CI do commit `1bd2e36178420446689f3be76a0ac837c8273ed5` terminou com sucesso: API CI **1358 passed, 1 skipped, 1 warning**, Quality Gates **1358 passed, 1 skipped, 1 warning**, e Docker Compose smoke aprovado. O API CI também passou as migrations PostgreSQL 16 e os smokes de concorrência/autorização.
