@@ -115,3 +115,8 @@ A API não cria ainda transformações reais. O callback tem de confirmar que o 
 ### Atomicidade da publicação derivada — validação CI
 
 A promoção opcional de um output derivado bloqueia a cadeia-pai antes dos locks do job/fontes e grava a publicação e a aresta na mesma transacção. A validação CI do commit `41c2bb6e4b02e6744ea428403213452800ad8214` passou no API CI [44731054620](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44731054620), Quality Gates [44731054475](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44731054475) e Docker Compose [44731054522](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44731054522). O API CI aplicou as migrations PostgreSQL 16 e concluiu 1374 testes aprovados, 1 ignorado e 1 aviso. O smoke PostgreSQL executou a linhagem, a herança de restrição/legal hold e os guards append-only.
+
+
+### Regressão negativa da publicação derivada — 2026-11-20
+
+Quando o callback de autorização recusa a relação pai → derivado, a promoção faz rollback da linha de publicação e da aresta, não liga o ficheiro final e preserva o staging. A regressão passou no API CI [44731813064](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44731813064) e Quality Gates [44731812997](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44731812997), com 1375 passed, 1 skipped e 1 warning; Docker Compose [44731812973](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44731812973) também passou. O aviso continua a ser a depreciação externa `anyio.abc.BlockingPortal` do Starlette TestClient.

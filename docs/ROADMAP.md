@@ -1,3 +1,9 @@
+### Regressão negativa da publicação derivada — 2026-11-20
+
+- Callback de autorização recusado: rollback da publicação e da relação, ausência do ficheiro final e staging preservado.
+- Validado no commit `9d65bff677128bf2d0e7a81f04ca7d0aceb52b36`: API CI [44731813064](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44731813064), Quality Gates [44731812997](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44731812997) e Docker Compose [44731812973](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44731812973) passaram; PostgreSQL 16 e **1375 passed, 1 skipped, 1 warning**.
+- O aviso é a depreciação externa `anyio.abc.BlockingPortal` do Starlette TestClient.
+
 ### Publicação atómica de outputs derivados — 2026-11-20
 
 - `promote_dataset_job_output` aceita uma relação pai → derivado opcional, com actor, motivo e callback obrigatório.
