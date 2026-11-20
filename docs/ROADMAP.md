@@ -1,3 +1,11 @@
+### Publicação atómica de outputs derivados — 2026-11-20
+
+- `promote_dataset_job_output` aceita uma relação pai → derivado opcional, com actor, motivo e callback obrigatório.
+- Bloqueia a cadeia ancestral antes dos locks do job/fontes e confirma publicação + aresta append-only na mesma transacção SQL.
+- Retry exacto mantém idempotência; metadados divergentes são rejeitados.
+- Validado no commit `41c2bb6e4b02e6744ea428403213452800ad8214`: API CI [44731054620](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44731054620), Quality Gates [44731054475](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44731054475) e Docker Compose [44731054522](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44731054522) passaram; 1374 passed, 1 skipped e 1 warning.
+- Limite: ainda não existe worker de transformação real nem integração externa.
+
 ### Linhagem de outputs derivados — smoke PostgreSQL acrescentado (2026-11-20)
 
 - O smoke de publicação cria agora dois outputs independentes, regista a aresta pai → derivado com autorização explícita e verifica leitura do descendente.
@@ -60,7 +68,7 @@
 - Matriz de autorização específica de outputs permanece deny-by-default; não há endpoints de gestão nem scopes de governação para workers.
 - Proposta de aprovação independente documentada, sem activar fluxo até decisões do responsável do produto/jurídico.
 - Contrato de propagação para caches, exports, object storage, réplicas e backups documentado. Nenhum adapter ou inventário externo foi presumido.
-- Validação do novo commit pendente: PostgreSQL 16, API CI, Quality Gates e Docker Compose. Próximo passo: smoke PostgreSQL de linhagem/ciclo/hold herdado e ligação do registo ao futuro worker de transformação.
+- Validação da migration 0066, smoke PostgreSQL de linhagem/ciclo/hold herdado e suite API concluída no commit `4153625226c6b08b9e09d491986a1415e3fbc847`: API CI [44730129439](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44730129439), Quality Gates [44730129686](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44730129686) e Docker Compose [44730129490](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44730129490) passaram; 1374 passed, 1 skipped e 1 warning.
 
 ### Consumo concorrente e restrição de outputs — 2026-11-19
 

@@ -4,7 +4,8 @@
 - A cadeia ancestral é bloqueada antes dos locks do job e das fontes, preservando a ordem publicação → job → imagens usada pelo consumidor.
 - A publicação filha e a aresta append-only são inseridas e confirmadas na mesma transacção; o ficheiro só é ligado ao destino depois de a autorização e a validação da relação passarem.
 - Retries com a mesma aresta/actor/motivo são idempotentes; metadados imutáveis divergentes são recusados.
-- O teste SQLite e o smoke PostgreSQL foram alterados para usar a nova fronteira atómica. CI do novo commit ainda pendente; não foram executados testes localmente.
+- O teste SQLite e o smoke PostgreSQL usam a nova fronteira atómica. API CI [44731054620](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44731054620), Quality Gates [44731054475](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44731054475) e Docker Compose [44731054522](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44731054522) passaram; PostgreSQL 16 e **1374 passed, 1 skipped, 1 warning**. Não foram executados testes localmente.
+- Teste negativo adicional: callback recusado faz rollback da publicação e da aresta, não cria destino publicado e preserva o staging para diagnóstico. Este teste aguarda CI do commit seguinte.
 - Limite: não existe ainda worker de transformação real; o callback continua a ser responsabilidade do integrador. Sem endpoints/consumidores externos e sem purga física.
 
 ## 2026-11-20 — Smoke PostgreSQL de linhagem de outputs derivados

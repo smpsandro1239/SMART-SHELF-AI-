@@ -627,8 +627,8 @@ def main():
     settings.dataset_output_storage_path = original_root
     print(
         "PostgreSQL output publication/governance smoke passed: fenced publication, "
-        "multi-source retention, concurrent event sequencing, restriction/legal-hold projection "
-        "and immutable governance audit guards."
+        "atomic derived-output lineage, inherited restriction/legal hold, cycle and append-only "
+        "guards, multi-source retention and concurrent governance sequencing."
     )
 
 

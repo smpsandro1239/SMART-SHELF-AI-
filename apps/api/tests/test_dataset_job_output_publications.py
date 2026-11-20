@@ -734,6 +734,71 @@ def test_published_output_consumer_rejects_symlink(publication_setup):
     assert target.read_bytes() == state["payload"]
 
 
+def test_derived_output_authorization_failure_rolls_back_publication_and_preserves_staging(publication_setup):
+    from app.dataset_output_lineage import DatasetOutputLineageAuthorizationError
+
+    state = publication_setup
+    db = state["db"]
+    parent = promote_dataset_job_output(
+        db, principal=state["principal"], job_id=state["job"].id,
+        fencing_token=state["claim"].fencing_token,
+    )
+    actor = models.User(
+        email="output-lineage-denied@example.test", store_id=None,
+        full_name="Output Lineage Denied",
+        password_hash="test-only-hash", role="ADMIN", is_active=True,
+    )
+    db.add(actor)
+    db.commit()
+
+    source = db.query(models.DatasetExecutionJobSource).filter_by(job_id=state["job"].id).one()
+    payload = b"derived output must remain private after denied lineage"
+    digest = hashlib.sha256(payload).hexdigest()
+    job = enqueue_dataset_job(
+        db, idempotency_key="output-lineage-denied",
+        release_fingerprint="e" * 64,
+        approval_evidence={
+            "status": "APPROVED", "mode": "training",
+            "record_sha256": "b" * 64, "gate_report_sha256": "c" * 64,
+        },
+        sources=[{
+            "shelf_image_id": source.shelf_image_id,
+            "store_id": source.store_id,
+            "source_image_sha256": source.source_image_sha256,
+        }],
+    )
+    claim = claim_next_dataset_job(db, worker_id=state["worker_id"], lease_seconds=300)
+    assert claim is not None and claim.id == job.id
+    stage_dir = state["root"] / "staging" / str(job.id) / str(claim.fencing_token)
+    stage_dir.mkdir(parents=True)
+    stage_path = stage_dir / "denied.bin"
+    stage_path.write_bytes(payload)
+    complete_dataset_job(
+        db, job_id=job.id, worker_id=state["worker_id"],
+        fencing_token=claim.fencing_token, output_sha256=digest,
+        staged_output_reference=f"staging/{job.id}/{claim.fencing_token}/denied.bin",
+    )
+
+    with pytest.raises(DatasetOutputLineageAuthorizationError):
+        promote_dataset_job_output(
+            db, principal=state["principal"], job_id=job.id,
+            fencing_token=claim.fencing_token,
+            derived_from_publication_id=parent.id,
+            derivation_actor_user_id=actor.id,
+            derivation_reason="Authorization must be denied",
+            authorize_derivation=lambda *_args: False,
+        )
+
+    assert db.query(models.DatasetExecutionJobOutputPublication).filter_by(
+        job_id=job.id
+    ).count() == 0
+    assert db.query(models.DatasetExecutionJobOutputLineage).filter_by(
+        parent_publication_id=parent.id
+    ).count() == 0
+    assert stage_path.read_bytes() == payload
+    assert not (state["root"] / "published" / str(job.id)).exists()
+
+
 def _create_second_published_output(
     state, *, suffix="derived", derived_from_publication_id=None,
     derivation_actor_user_id=None, derivation_reason=None, authorize_derivation=None,
