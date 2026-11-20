@@ -1,3 +1,12 @@
+## 2026-11-20 — Validação do hardening CORS e primeira ronda OWASP API
+
+- Commit `1b1e4ea`: API CI [44783729163](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44783729163), Quality Gates [44783729496](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44783729496) e Docker Compose [44783729436](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44783729436) passaram.
+- Suite API: **1387 passed, 1 skipped, 1 warning**.
+- CORS em produção agora falha fechado para wildcard, HTTP, localhost/loopback, userinfo, path, query e fragmentos; desenvolvimento local mantém localhost.
+- Revisão estática OWASP inicial cobriu 130 rotas, middleware JWT, RBAC, store scope e planogram services; relatório em `docs/security/api-authorization-review-2026-11-20.md`.
+- Não foi confirmado bypass nos fluxos revistos. Risco residual: RBAC distribuído entre middleware, handlers e serviços; próxima prioridade é política declarativa por rota e teste de cobertura.
+- Não foram executados SCA/secret scan/DAST/pentest nesta ronda.
+
 ## 2026-11-20 — Hardening de CORS em produção (correcção da primeira validação)
 
 - A primeira execução GREEN revelou dois problemas na validação: nomes DNS eram encaminhados directamente para `ipaddress.ip_address` (causando falso rejeitamento) e testes anteriores de configuração de produção não forneciam a origem HTTPS agora obrigatória.

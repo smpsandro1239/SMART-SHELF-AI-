@@ -1,3 +1,10 @@
+### Primeira ronda OWASP API Security (2026-11-20)
+
+- Revisão estática de 130 rotas, autenticação JWT, RBAC, store scope, planogramas e testes existentes.
+- Finding CORS de produção corrigido e validado em CI.
+- Risco residual: políticas RBAC distribuídas em path/method allowlists e handlers; centralizar metadata e testar cobertura de todas as rotas.
+- Auditoria não equivale a pentest; SCA/secret scan/DAST ainda não executados.
+
 ### Hardening CORS em produção (2026-11-20)
 
 - Validação fail-closed de origens explícitas HTTPS; rejeita wildcard, userinfo, path, query, fragmentos, localhost e loopback.

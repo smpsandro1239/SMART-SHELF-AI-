@@ -1,3 +1,11 @@
+## OWASP API security review — primeira ronda
+
+- [x] Enumerar as 130 declarações de rotas e rever middleware JWT, identidade/role na base de dados, RBAC, store scope, planogramas e testes de isolamento.
+- [x] Corrigir finding API-CORS-001: origem wildcard/HTTP/localhost não permitida em produção.
+- [ ] Criar política declarativa por rota e teste de cobertura para evitar novas rotas sem papel/tenant scope explícito.
+- [ ] Completar matriz endpoint × ADMIN/SUPERVISOR/EMPLOYEE × loja e testar os casos menos frequentes.
+- [ ] Executar SCA, secret scan e DAST com ferramentas reais; não há evidência dessas execuções nesta ronda.
+
 ## Segurança P0 — CORS de produção
 
 - [x] Exigir origens CORS explícitas HTTPS em produção; rejeitar wildcard, localhost/loopback, paths, query, fragmentos e origens vazias.
