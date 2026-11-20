@@ -13,7 +13,7 @@ cd apps/api
 python -m app.dataset_job_output_reconciliation --grace-hours 168
 ```
 
-O modo predefinido é read-only. O relatório separa temporários de promoção, staging elegível, ficheiros ignorados, número de candidatos e número de remoções.
+O modo predefinido é read-only. O relatório separa temporários de promoção, staging elegível, staging órfão sem publicação, ficheiros ignorados, número de candidatos e número de remoções. O campo `orphan_staging` é exclusivamente informativo e nunca é apagado, mesmo com `--apply`.
 
 ## Aplicar a limpeza
 
@@ -32,12 +32,14 @@ O período de segurança predefinido é sete dias. O CLI aceita entre uma hora e
 - O próprio staging também tem de corresponder ao mesmo SHA-256 e tamanho antes de ser removido.
 - Um job `SUCCEEDED` sem linha de publicação mantém o staging: esse ficheiro pode ainda ser necessário para uma repetição da promoção.
 - Ficheiros recentes, caminhos não canónicos, symlinks, jobs desconhecidos e conteúdos divergentes são preservados.
+- Staging antigo sem publicação é inventariado por job/token e classificado como job desconhecido, job concluído ainda promovível, token obsoleto, job terminal ou worker potencialmente activo.
+- A classificação de staging órfão é sempre report-only, incluindo com `--apply`: lease/fencing na base de dados não prova que um processo antigo deixou de escrever no filesystem.
 - A ferramenta não remove directórios vazios, fontes de treino, artefactos publicados, nem dados em object storage.
 - A remoção de staging é posterior à publicação e à verificação dos dois conteúdos; a auditoria append-only nunca é alterada.
 
 ## Limitações
 
-A limpeza é best-effort e tem de ser executada periodicamente por um operador ou por uma futura tarefa operacional controlada. O modo `--apply` deve ser usado apenas depois de inspeccionar a simulação e confirmar a configuração de armazenamento. O reconciliador actual não limpa staging de jobs falhados/revogados sem referência de publicação, nem prova que um processo worker antigo deixou de escrever; essas categorias exigem um contrato de isolamento/permissões filesystem entre API e worker.
+A limpeza é best-effort e tem de ser executada periodicamente por um operador ou por uma futura tarefa operacional controlada. O modo `--apply` deve ser usado apenas depois de inspeccionar a simulação e confirmar a configuração de armazenamento. O reconciliador inventaria staging antigo de jobs falhados/revogados, cancelados, desconhecidos e concluídos sem publicação, mas não o remove. Continua sem provar que um processo worker antigo deixou de escrever; a limpeza dessas categorias exige um contrato de isolamento/permissões filesystem entre API e worker e uma prova operacional de quiescência.
 
 A implementação actual suporta apenas o filesystem local configurado por `DATASET_OUTPUT_STORAGE_PATH`. Não equivale a um adapter de object storage nem a uma política de retenção/legal hold para artefactos derivados.
 

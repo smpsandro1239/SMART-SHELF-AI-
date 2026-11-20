@@ -59,6 +59,7 @@ def reconcile_dataset_job_output_files(
         "grace_seconds": grace_seconds,
         "temporary_candidates": [],
         "staging_candidates": [],
+        "orphan_staging": [],
         "removed": [],
         "skipped": [],
     }
@@ -74,6 +75,17 @@ def reconcile_dataset_job_output_files(
         models.DatasetExecutionJob,
         models.DatasetExecutionJob.id == models.DatasetExecutionJobOutputPublication.job_id,
     ).all()
+    jobs_by_id = {
+        job_id: {"status": status, "fencing_token": fencing_token}
+        for job_id, status, fencing_token in db.query(
+            models.DatasetExecutionJob.id,
+            models.DatasetExecutionJob.status,
+            models.DatasetExecutionJob.fencing_token,
+        ).all()
+    }
+    published_staging_references = {
+        publication.staged_output_reference for publication, _job in publications
+    }
     db.rollback()
 
     for publication, job in publications:
@@ -213,6 +225,89 @@ def reconcile_dataset_job_output_files(
         if published_root_fd is not None:
             os.close(published_root_fd)
 
+    # Inventory stale staging files without a publication record. These
+    # bytes may belong to a worker that is still writing, a retryable SUCCEEDED
+    # job, a revoked/failed execution, or an unknown job. Fencing in SQL does
+    # not prove filesystem quiescence, so this pass is deliberately report-only
+    # even when --apply was requested.
+    staging_root_fd = None
+    try:
+        staging_root_fd = _open_dirs(root, ("staging",), create=False)
+        directory_flags = (
+            os.O_RDONLY | getattr(os, "O_CLOEXEC", 0)
+            | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
+        )
+        for job_name in os.listdir(staging_root_fd):
+            if not job_name.isdigit():
+                continue
+            try:
+                job_info = os.stat(job_name, dir_fd=staging_root_fd, follow_symlinks=False)
+                if not stat.S_ISDIR(job_info.st_mode):
+                    continue
+                job_fd = os.open(job_name, directory_flags, dir_fd=staging_root_fd)
+            except OSError:
+                continue
+            try:
+                for token_name in os.listdir(job_fd):
+                    if not token_name.isdigit():
+                        continue
+                    try:
+                        token_info = os.stat(token_name, dir_fd=job_fd, follow_symlinks=False)
+                        if not stat.S_ISDIR(token_info.st_mode):
+                            continue
+                        token_fd = os.open(token_name, directory_flags, dir_fd=job_fd)
+                    except OSError:
+                        continue
+                    try:
+                        job_id = int(job_name)
+                        token = int(token_name)
+                        job_state = jobs_by_id.get(job_id)
+                        for name in os.listdir(token_fd):
+                            reference = f"staging/{job_name}/{token_name}/{name}"
+                            if reference in published_staging_references:
+                                continue
+                            try:
+                                info = os.stat(name, dir_fd=token_fd, follow_symlinks=False)
+                            except OSError:
+                                continue
+                            if not stat.S_ISREG(info.st_mode) or info.st_mtime > cutoff:
+                                continue
+                            if job_state is None:
+                                reason = "unknown_job"
+                                status = None
+                            elif token != job_state["fencing_token"]:
+                                reason = "stale_fencing_token_worker_quiescence_unproven"
+                                status = job_state["status"]
+                            elif job_state["status"] == "SUCCEEDED":
+                                reason = "succeeded_without_publication_may_be_retried"
+                                status = job_state["status"]
+                            elif job_state["status"] in {"FAILED", "REVOKED", "CANCELLED"}:
+                                reason = "terminal_job_worker_quiescence_unproven"
+                                status = job_state["status"]
+                            else:
+                                reason = "worker_may_still_be_active"
+                                status = job_state["status"]
+                            report["orphan_staging"].append({
+                                "reference": reference,
+                                "bytes": info.st_size,
+                                "modified_at": datetime.fromtimestamp(
+                                    info.st_mtime, timezone.utc
+                                ).isoformat(),
+                                "job_status": status,
+                                "reason": reason,
+                                "cleanup": "blocked_until_filesystem_quiescence_is_proven",
+                            })
+                    finally:
+                        os.close(token_fd)
+            finally:
+                os.close(job_fd)
+    except (FileNotFoundError, NotADirectoryError):
+        pass
+    finally:
+        if staging_root_fd is not None:
+            os.close(staging_root_fd)
+
+    report["orphan_staging_count"] = len(report["orphan_staging"])
     report["candidate_count"] = (
         len(report["temporary_candidates"]) + len(report["staging_candidates"])
     )

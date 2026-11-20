@@ -53,6 +53,8 @@
 - [x] Remover staging apenas quando existe publicação append-only correspondente e destino/staging confirmam o mesmo digest e tamanho.
 - [x] Preservar jobs `SUCCEEDED` sem publicação, symlinks, ficheiros recentes, jobs desconhecidos e conteúdos divergentes.
 - [x] Acrescentar testes para dry-run, aplicação, preservação de staging sem publicação e mismatch de digest.
+- [x] Inventariar staging antigo sem publicação por job/token e classificar jobs desconhecidos, concluídos, falhados/revogados/cancelados e tokens obsoletos; manter esta classe report-only mesmo com `--apply`, pois fencing SQL não prova quiescência do processo.
+- [x] Acrescentar regressão que confirma que staging de job terminal e de job desconhecido é reportado mas nunca removido.
 - [x] Documentar o procedimento e os limites operacionais em `docs/operations/dataset-output-reconciliation.md`.
 - [x] Quality Gates [44484598129](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44484598129) e Docker Compose [44484598370](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44484598370) passaram.
 - [x] API CI [44484598295](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44484598295) passou, incluindo smokes PostgreSQL e suite API.

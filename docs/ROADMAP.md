@@ -1,3 +1,10 @@
+### Inventário seguro de staging órfão — 2026-11-20
+
+- O reconciliador identifica ficheiros antigos em staging sem publicação correspondente e classifica job desconhecido, job concluído sem publicação, token obsoleto, job terminal e worker potencialmente activo.
+- A nova classe é sempre report-only, mesmo com `--apply`: lease/fencing na base de dados não prova que um processo antigo deixou de escrever no filesystem.
+- Teste de regressão cobre job terminal e job desconhecido, confirmando que os bytes são preservados.
+- Limitação: isolamento por permissões/identidade de sistema operativo e prova de quiescência continuam por implementar; não existe limpeza automática nem scheduler.
+
 ### Regressão negativa da publicação derivada — 2026-11-20
 
 - Callback de autorização recusado: rollback da publicação e da relação, ausência do ficheiro final e staging preservado.

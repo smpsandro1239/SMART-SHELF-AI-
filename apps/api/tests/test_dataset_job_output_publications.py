@@ -285,6 +285,48 @@ def test_output_reconciler_dry_run_then_removes_only_verified_old_files(publicat
     assert (state["root"] / publication.published_output_reference).read_bytes() == state["payload"]
 
 
+def test_output_reconciler_reports_orphan_staging_but_never_deletes_it(
+    publication_setup,
+):
+    import os
+    from datetime import timedelta
+
+    from app.dataset_job_output_reconciliation import reconcile_dataset_job_output_files
+
+    state = publication_setup
+    old_timestamp = (models.utc_now() - timedelta(days=8)).timestamp()
+    os.utime(state["stage_path"], (old_timestamp, old_timestamp))
+
+    # The completed job has no publication yet and may still be promoted.
+    # A failed job and an unknown job are also reported, never auto-cleaned:
+    # a database fencing token alone does not prove that an old process stopped
+    # writing to the shared filesystem.
+    state["db"].query(models.DatasetExecutionJob).filter_by(
+        id=state["job"].id
+    ).update({"status": "FAILED"})
+    state["db"].commit()
+
+    unknown_path = state["root"] / "staging" / "999999" / "7" / "orphan.bin"
+    unknown_path.parent.mkdir(parents=True)
+    unknown_path.write_bytes(b"unknown job staging")
+    os.utime(unknown_path, (old_timestamp, old_timestamp))
+
+    report = reconcile_dataset_job_output_files(
+        state["db"], apply=True, grace_seconds=7 * 86400
+    )
+
+    assert report["removed_count"] == 0
+    assert report["orphan_staging_count"] == 2
+    reasons = {item["reason"] for item in report["orphan_staging"]}
+    assert reasons == {"terminal_job_worker_quiescence_unproven", "unknown_job"}
+    assert state["stage_path"].read_bytes() == state["payload"]
+    assert unknown_path.read_bytes() == b"unknown job staging"
+    assert all(
+        item["cleanup"] == "blocked_until_filesystem_quiescence_is_proven"
+        for item in report["orphan_staging"]
+    )
+
+
 def test_output_reconciler_preserves_staging_without_publication_or_with_wrong_digest(
     publication_setup
 ):
