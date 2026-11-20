@@ -1,9 +1,16 @@
+### Validação da idempotência estrita da observação após revisão SKU — 2026-11-20
+
+- API CI [44648427709](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44648427709) passou: migrations PostgreSQL 16, todos os smokes operacionais e suite API concluídos.
+- Quality Gates [44648427667](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44648427667) passou: **1343 passed, 1 skipped, 1 warning**, compilação Python e build TypeScript/produção Web.
+- Docker Compose [44648427581](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44648427581) passou: build, readiness, seed, worker e perfis demo.
+- A validação é automatizada; não houve teste manual com câmaras ou datasets reais. O aviso é a depreciação externa `anyio.abc.BlockingPortal` do Starlette TestClient.
+
 ### Idempotência estrita da confirmação de observações — 2026-11-19
 
 - Corrigida a deduplicação por deteção para não devolver uma observação de SKU A quando uma revisão humana posterior já selecionou SKU B.
 - O replay só é idempotente quando o produto e o estado coincidem; pedidos com identidade diferente recebem HTTP 409, preservando a observação original.
 - Foi acrescentado teste HTTP de regressão para revisão SKU posterior e tentativa de reutilização da deteção com outro produto.
-- A validação do novo commit está pendente dos workflows API CI/PostgreSQL, Quality Gates e Docker Compose.
+- A validação do commit `c854e948b5664870942b9302dee4913e0349755b` está concluída: API CI [44648427709](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44648427709), Quality Gates [44648427667](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44648427667) e Docker Compose [44648427581](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44648427581) passaram. A suite API reportou 1343 passed, 1 skipped e 1 warning; os smokes PostgreSQL 16, compilação Python e build Web passaram.
 
 ### Confirmação humana explícita de observações demo — validação concluída (2026-11-19)
 

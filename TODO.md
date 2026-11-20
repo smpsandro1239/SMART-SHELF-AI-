@@ -3,7 +3,7 @@
 - [x] Identificar que a chave de idempotência por deteção devolvia uma observação anterior mesmo quando uma revisão SKU posterior alterava o produto pedido.
 - [x] Tornar o replay estrito: a observação existente só é devolvida quando produto e estado coincidem; alterações de identidade devolvem HTTP 409 sem modificar o registo original.
 - [x] Acrescentar regressão HTTP que cria a observação para SKU A, regista revisão posterior para SKU B e confirma que o segundo pedido é rejeitado e a observação A permanece intacta.
-- [ ] Validar API CI/PostgreSQL, Quality Gates e Docker Compose no commit desta correção.
+- [x] Validar API CI/PostgreSQL, Quality Gates e Docker Compose no commit desta correção: API CI [44648427709](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44648427709), Quality Gates [44648427667](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44648427667) e Docker Compose [44648427581](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44648427581) concluíram com sucesso no commit `c854e948b5664870942b9302dee4913e0349755b`. API CI executou as migrations e os smokes PostgreSQL 16, todos aprovados, e a suite API; Quality Gates confirmou **1343 passed, 1 skipped, 1 warning**, compilação Python e build TypeScript/produção Web; Docker Compose confirmou build, arranque, readiness, seed, worker e perfis demo. O aviso é a depreciação externa `anyio.abc.BlockingPortal` no Starlette TestClient. Validação CI, não teste manual com câmaras/datasets reais.
 
 ## Confirmação humana explícita do estado das observações demo — 2026-11-19
 

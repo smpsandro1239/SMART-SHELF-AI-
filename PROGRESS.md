@@ -1,9 +1,18 @@
+## 2026-11-20 — Validação da idempotência estrita da observação após revisão SKU
+
+- Confirmado que a branch `main` permanece no commit `c854e948b5664870942b9302dee4913e0349755b` e que os três workflows associados terminaram com sucesso.
+- API CI [44648427709](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44648427709): migrations PostgreSQL 16, todos os smokes de concorrência/linhagem/autorização e suite API concluídos com sucesso.
+- Quality Gates [44648427667](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44648427667): **1343 passed, 1 skipped, 1 warning**, compilação Python e build TypeScript/produção Web aprovados.
+- Docker Compose [44648427581](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44648427581): build, arranque API/PostgreSQL/vision worker, readiness, seed, verificação dos perfis e cleanup aprovados.
+- O único aviso reportado é a depreciação externa `anyio.abc.BlockingPortal` no Starlette TestClient. Os erros SQL esperados pelos smokes de constraints/append-only fazem parte dos cenários negativos e não representam falhas do workflow.
+- Não foram executados testes localmente. Esta validação é CI; não demonstra desempenho em dados de produção nem precisão de visão em imagens reais.
+
 ## 2026-11-19 — Idempotência estrita da observação após revisão SKU posterior
 
 - A revisão da implementação revelou que o endpoint podia devolver uma observação anterior para SKU A depois de uma revisão posterior ter selecionado SKU B, porque a deduplicação só identificava a deteção.
 - O endpoint passa a devolver o registo existente apenas quando o produto e o estado coincidem com o pedido repetido. Uma tentativa com identidade diferente recebe HTTP 409; a observação original e a sua proveniência permanecem inalteradas.
 - Foi acrescentado um teste HTTP de regressão para a sequência SKU A → nova revisão SKU B → repetição para SKU B, verificando conflito e preservação da observação A.
-- A validação CI/PostgreSQL desta correção fica pendente da execução dos workflows do novo commit. Não foram executados testes localmente.
+- A validação CI/PostgreSQL ficou concluída no commit `c854e948b5664870942b9302dee4913e0349755b`: API CI [44648427709](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44648427709), Quality Gates [44648427667](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44648427667) e Docker Compose [44648427581](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44648427581) passaram. A suite API teve 1343 passed, 1 skipped e 1 warning; os smokes PostgreSQL 16, compilação Python e build Web passaram. Não foram executados testes localmente.
 
 ## 2026-11-19 — Validação da confirmação humana explícita
 
