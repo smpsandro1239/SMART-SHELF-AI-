@@ -1191,3 +1191,12 @@ Critério global: nenhuma capacidade pode ser marcada como concluída sem códig
 - [x] Acrescentar testes unitários para actor removido e downgrade SUPERVISOR → EMPLOYEE entre autenticação e execução do handler.
 - [ ] Confirmar os testes e a suite completa no CI dos novos commits; não há execução local nesta sessão.
 - [ ] Rever futuramente a mesma janela para outros dados de autorização mutáveis e transacções longas, sem substituir a revalidação do actor por confiança exclusiva no JWT.
+
+
+## Embeddings de visão computacional sem proveniência de loja — 2026-11-20
+
+- [x] Confirmar que o worker resolve a loja a partir da imagem alvo e passa sempre `store_id` ao construir o registo de embeddings.
+- [x] Confirmar que o carregador por loja faz join obrigatório à imagem/prateleira/zona; exemplares sem imagem de origem não entram em registos específicos de loja.
+- [x] Estender o teste de isolamento para incluir um exemplar APPROVED sem `shelf_image_id`; as lojas A e B não o podem carregar nos respectivos registos.
+- [ ] Confirmar execução do teste no CI após o commit de regressão.
+- [ ] Definir, numa alteração funcional separada, se os exemplares sem imagem de origem devem ser proibidos na criação ou mantidos apenas para fluxos administrativos globais. Não alterar este comportamento sem uma decisão de produto e análise dos consumidores.
