@@ -1,3 +1,11 @@
+## 2026-11-20 — Cobertura positiva da autorização de planogramas
+
+- Adicionado teste positivo para a rota real `POST /api/v1/shelves/{shelf_id}/planograms`.
+- O teste verifica que ADMIN e SUPERVISOR são autorizados e EMPLOYEE recebe a recusa `Supervisor role required`; complementa a regressão negativa para `planograms-export`.
+- Commit: `c5098584e11a2eb4377a299d150f38225be045a0`.
+- A leitura de `main.py` confirmou que o handler também executa `_require_planogram_actor` e valida a loja da prateleira com `_planogram_shelf_scope` / `_enforce_store_scope`. A política central não substitui estes controlos de recurso.
+- Os workflows consultados para o commit anterior continuavam sem conclusão; este novo commit de teste deve ser acompanhado separadamente.
+
 ## 2026-11-20 — Estado CI da correcção de segmentos planogramas
 
 - Consultados directamente os workflows associados ao commit de teste `2a95fb0e3a076f03454bb7a46eb4678c0bd9ac7e`.
