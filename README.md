@@ -19,6 +19,10 @@ O guião completo, as limitações, os comandos de teste e a lista de capturas e
 
 # SMART SHELF AI
 
+## Metodologia de engenharia — Superpowers, Impeccable e Frontend Design
+
+O projecto fixa três conjuntos de skills versionados como submódulos Git: [Superpowers](https://github.com/obra/superpowers) para processo de engenharia/TDD/debugging/revisão; [Impeccable](https://github.com/pbakaus/impeccable) para auditoria e qualidade UX/UI; e [Frontend Design](https://github.com/Ilm-Alan/frontend-design) para direcção visual de novas superfícies. Inicializar com `git submodule update --init --recursive`. Entradas dos agentes em `.agents/skills/`; regras e limites em [AGENTS.md](AGENTS.md) e [docs/engineering/agent-skill-stack.md](docs/engineering/agent-skill-stack.md). Não são dependências runtime. Worktrees/subagentes só são usados quando o runtime os suporta; Frontend Design não substitui automaticamente o design system existente.
+
 ## Qualidade de frontend — Impeccable
 
 O repositório integra a skill [Impeccable](https://github.com/pbakaus/impeccable), fixada como submódulo Git em `vendor/impeccable` e exposta aos agentes através de `.agents/skills/impeccable/SKILL.md`. Após clonar, inicializar com `git submodule update --init --recursive`. A integração fornece playbooks de UX/UI, auditoria técnica, documentação de design system e o detector automatizado no workflow **Smart Shelf quality gates**. A aplicação continua sem dependência runtime de Impeccable. O detector começa em modo baseline não bloqueante; falhas de execução do detector continuam a falhar o job. Consultar `PRODUCT.md` e `DESIGN.md` antes de alterar o frontend.

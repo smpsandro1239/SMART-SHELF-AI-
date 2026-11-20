@@ -1,3 +1,11 @@
+### Metodologia de engenharia e skills (2026-11-20)
+
+- Superpowers fixado como submódulo Git para TDD, debugging, planeamento e revisão; Frontend Design para direcção visual; Impeccable para auditoria e polish.
+- Entradas de skills em `.agents/skills/`; instruções de prioridade em `AGENTS.md`.
+- Sem dependências runtime.
+- Worktrees/subagentes apenas quando o runtime os suporta; não simular capacidades.
+- Próximo passo: validar clone/submódulos e usar TDD com revisão numa correção P0.
+
 ### Impeccable — governança de qualidade de frontend (2026-11-20)
 
 - Skill upstream integrada e fixada em `vendor/impeccable`; ponto de entrada dos agentes em `.agents/skills/impeccable/SKILL.md`.

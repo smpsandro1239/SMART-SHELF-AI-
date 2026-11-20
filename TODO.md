@@ -1,3 +1,13 @@
+## Superpowers e Frontend Design — integração de metodologia (2026-11-20)
+
+- [x] Fixar Superpowers como submódulo Git `vendor/superpowers` no commit `22f0b463e7a5e579904dd6211a520321035526f7` (MIT).
+- [x] Expor skills de arranque, TDD, debugging e verificação em `.agents/skills/`, mantendo o conteúdo upstream completo e versionado.
+- [x] Fixar Frontend Design como submódulo Git `vendor/frontend-design` no commit `f8966e6cc9b90247aa102d71f7e675ec3462b419` (MIT).
+- [x] Expor Frontend Design como skill complementar; Impeccable mantém-se a ferramenta principal para auditoria/polish do sistema visual actual.
+- [x] Criar `AGENTS.md` e `docs/engineering/agent-skill-stack.md` com ordem de aplicação, limites e inicialização.
+- [ ] Validar inicialização recursiva dos três submódulos num clone local e descoberta das skills no runtime Codex disponível.
+- [ ] Aplicar TDD + revisão Superpowers na próxima correção P0 e recolher evidência CI.
+
 ## Impeccable — integração e baseline de qualidade visual (2026-11-20)
 
 - [x] Fixar a upstream skill Impeccable como submódulo Git `vendor/impeccable`, apontado ao commit `b49177d32788f2dc585c42831d845dacf1ebed2c`; manter a licença Apache-2.0 e o código upstream intactos.

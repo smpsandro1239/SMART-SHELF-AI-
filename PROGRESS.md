@@ -1,3 +1,11 @@
+## 2026-11-20 — Integração Superpowers e Frontend Design
+
+- Fixado `obra/superpowers` em `22f0b463e7a5e579904dd6211a520321035526f7` e `Ilm-Alan/frontend-design` em `f8966e6cc9b90247aa102d71f7e675ec3462b419` como submódulos Git; Impeccable mantém-se em `b49177d32788f2dc585c42831d845dacf1ebed2c`.
+- Criadas entradas de skills para Superpowers (arranque, TDD, debugging, verificação) e Frontend Design.
+- Criado `AGENTS.md` para compatibilizar metodologia, autonomia, regras do produto e capacidades reais do runtime.
+- Nenhuma dependência runtime foi adicionada; a integração no repositório não instala plugins globais no Codex/ChatGPT.
+- Falta validar checkout local e aplicar o ciclo TDD numa alteração funcional subsequente.
+
 ## 2026-11-20 — Fecho de validação CI e reconciliação do roadmap
 
 - API CI do commit a6a1c30e concluiu com sucesso: PostgreSQL 16, smokes operacionais e **1379 passed, 1 skipped, 1 warning**. Entre os smokes aprovados estão autorização de sessões de captura e isolamento de avaliações SKU revistas.
