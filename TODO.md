@@ -1043,3 +1043,13 @@ Critério global: nenhuma capacidade pode ser marcada como concluída sem códig
 - A avaliação de evidência exige também estado humano confirmado igual ao estado da observação, timestamp de confirmação e utilizador confirmador ativo ADMIN/SUPERVISOR com âmbito de loja válido.
 - O teste integrado tenta criar metadados de demonstração através do endpoint genérico e espera HTTP 422, além de verificar que uma referência cruzada de prateleira não produz evidência elegível.
 - Validação CI pendente no commit seguinte.
+
+
+## Contrato geométrico do provider ONNX — 2026-11-20
+
+- [x] Confirmar que as coordenadas do detector são normalizadas relativamente ao tensor quadrado letterboxed e convertidas para coordenadas normalizadas da imagem original.
+- [x] Acrescentar regressão de clipping às dimensões da imagem original para caixas que intersectam padding do letterbox.
+- [x] Acrescentar testes paramétricos para coordenadas negativas/superiores a 1 e valores NaN/Inf.
+- [x] Fixar o ordenamento por confiança e o limite máximo de deteções através de teste.
+- [ ] Acrescentar teste integrado do worker que prove que imagem corrompida/timeout termina em FAILED, sem deteções persistidas nem alteração de observações/inventário.
+- [ ] Validar o contrato com um modelo ONNX exportado e dataset anotado autorizado; testes sintéticos não demonstram precisão nem compatibilidade com modelos externos.

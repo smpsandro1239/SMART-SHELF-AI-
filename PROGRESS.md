@@ -1216,3 +1216,11 @@ O teste de concorrência confirma a serialização edição/ativação no servi�
 - A avaliação de evidência exige também estado humano confirmado igual ao estado da observação, timestamp de confirmação e utilizador confirmador ativo ADMIN/SUPERVISOR com âmbito de loja válido.
 - O teste integrado tenta criar metadados de demonstração através do endpoint genérico e espera HTTP 422, além de verificar que uma referência cruzada de prateleira não produz evidência elegível.
 - Validação CI pendente no commit seguinte.
+
+
+## 2026-11-20 — Matriz geométrica de deteções ONNX
+
+- Confirmado no decoder que as caixas recebidas são normalizadas relativamente ao input quadrado após letterbox; o provider remove padding, inverte a escala, limita as caixas à imagem original e volta a normalizar para [0,1].
+- Acrescentados testes para clipping de caixas no padding, rejeição de coordenadas fora do intervalo normalizado, rejeição de NaN/Inf e ordenamento/limite de deteções.
+- A alteração é exclusivamente de testes e documentação; não altera o decoder nem o comportamento do worker.
+- Validação pendente de GitHub Actions. Não foram executados testes localmente nesta sessão.

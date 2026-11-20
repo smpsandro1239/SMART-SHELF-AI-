@@ -445,3 +445,59 @@ def test_product_detection_can_generate_sku_embedding(tmp_path):
     assert result.detections[0].embedding == [1.0, 0.0]
     assert result.detections[0].embedding_model_version == "embed-v1"
     assert len(embedding_calls) == 1
+
+
+def test_decode_clips_letterboxed_boxes_to_original_image_bounds():
+    provider = provider_without_runtime()
+    # A 320x640 image is letterboxed with 160px horizontal padding.
+    transform = (320, 640, 1.0, 160, 0)
+    raw = np.array([[0.125, 0.25, 0.875, 0.75, 0.95, 0]], dtype=np.float32)
+
+    boxes = provider._decode(raw, (320, 640), transform)
+
+    assert len(boxes) == 1
+    _, _, x1, y1, x2, y2 = boxes[0]
+    assert (x1, y1, x2, y2) == pytest.approx((0.0, 0.25, 1.0, 0.75))
+
+
+@pytest.mark.parametrize(
+    "coordinates",
+    [
+        (-0.01, 0.1, 0.5, 0.5),
+        (0.1, -0.01, 0.5, 0.5),
+        (0.1, 0.1, 1.01, 0.5),
+        (0.1, 0.1, 0.5, 1.01),
+    ],
+)
+def test_decode_rejects_coordinates_outside_normalized_model_space(coordinates):
+    provider = provider_without_runtime()
+    raw = np.array([[*coordinates, 0.95, 0]], dtype=np.float32)
+
+    with pytest.raises(ValueError, match=r"normalized to \[0, 1\]"):
+        provider._decode(raw, (640, 640), (640, 640, 1.0, 0, 0))
+
+
+@pytest.mark.parametrize("coordinate", [np.nan, np.inf, -np.inf])
+def test_decode_rejects_non_finite_box_coordinates(coordinate):
+    provider = provider_without_runtime()
+    raw = np.array([[0.1, 0.1, coordinate, 0.5, 0.95, 0]], dtype=np.float32)
+
+    with pytest.raises(ValueError, match="non-finite"):
+        provider._decode(raw, (640, 640), (640, 640, 1.0, 0, 0))
+
+
+def test_decode_sorts_by_confidence_and_applies_detection_limit():
+    provider = provider_without_runtime()
+    provider.max_detections = 2
+    raw = np.array(
+        [
+            [0.1, 0.1, 0.2, 0.2, 0.60, 0],
+            [0.2, 0.2, 0.3, 0.3, 0.95, 0],
+            [0.3, 0.3, 0.4, 0.4, 0.80, 0],
+        ],
+        dtype=np.float32,
+    )
+
+    boxes = provider._decode(raw, (640, 640), (640, 640, 1.0, 0, 0))
+
+    assert [box[0] for box in boxes] == pytest.approx([0.95, 0.80])

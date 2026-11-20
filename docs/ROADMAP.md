@@ -773,3 +773,11 @@ A alteração foi validada no API CI [44588809660](https://github.com/smpsandro1
 - A avaliação de evidência exige também estado humano confirmado igual ao estado da observação, timestamp de confirmação e utilizador confirmador ativo ADMIN/SUPERVISOR com âmbito de loja válido.
 - O teste integrado tenta criar metadados de demonstração através do endpoint genérico e espera HTTP 422, além de verificar que uma referência cruzada de prateleira não produz evidência elegível.
 - Validação CI pendente no commit seguinte.
+
+
+### 2026-11-20 — Matriz geométrica do provider ONNX
+
+- Foram adicionados testes de regressão para a transformação inversa do letterbox e clipping às dimensões da imagem original.
+- O decoder rejeita coordenadas normalizadas fora de [0,1] e valores não finitos; caixas degeneradas são descartadas e resultados são ordenados por confiança antes de aplicar o limite máximo de deteções.
+- Os testes sintéticos cobrem o contrato geométrico, mas não substituem validação com modelo ONNX real e dataset autorizado.
+- Próximo passo: testar a fronteira integrada do worker em falhas de inferência, incluindo estado FAILED, fencing/lease e ausência de efeitos em inventário/observações.

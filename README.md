@@ -1749,3 +1749,12 @@ As respostas de comparação incluem ainda a versão do esquema e um SHA-256 det
 ### 2026-11-19 — Comparação serializada com retenção
 
 A comparação de planogramas bloqueia a captura e a imagem de calibração (por ordem crescente de ID), depois a prateleira e a versão ativa do planograma. A versão ativa é revalidada após os locks; uma alteração concorrente devolve HTTP 409 para nova consulta. Uma restrição de retenção concorrente aguarda a leitura protegida e os pedidos posteriores deixam de expor a captura. A comparação continua read-only e não é persistida.
+
+
+### 2026-11-20 — Cobertura geométrica do provider ONNX
+
+- [x] Fixar por testes a transformação de caixas normalizadas do espaço letterboxed para a imagem original, incluindo clipping aos limites da imagem.
+- [x] Rejeitar por teste coordenadas fora de [0,1] e valores NaN/Inf.
+- [x] Fixar por teste o ordenamento decrescente por confiança e o limite máximo de deteções.
+- [ ] Acrescentar regressão integrada do worker para falhas de imagem/inferência sem persistência de deteções ou efeitos em observações/inventário.
+- [ ] Validar com modelo ONNX e dataset real autorizado; a cobertura sintética não comprova qualidade de deteção.
