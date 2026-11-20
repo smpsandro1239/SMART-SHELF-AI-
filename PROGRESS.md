@@ -1,3 +1,11 @@
+## 2026-11-20 — Smoke PostgreSQL de linhagem de outputs derivados
+
+- O smoke existente de publicação passa a criar e publicar um segundo output independente e a registar a relação pai → derivado através de `register_dataset_output_derivation`, com callback de autorização explícito e actor humano activo.
+- Confirma o consumo dos bytes do descendente quando toda a cadeia está elegível.
+- Exercita no PostgreSQL os guards SQL de ciclo e append-only (UPDATE/DELETE), para além do contrato SQLite já existente.
+- Aplica restrição e legal hold ao pai e confirma que o consumo do descendente falha; depois liberta apenas a restrição e confirma que o legal hold continua a bloquear o descendente.
+- A alteração aguarda API CI/PostgreSQL 16, Quality Gates e Docker Compose. Não foram executados testes localmente. O smoke não cria endpoint nem liga um worker de transformação real.
+
 ## 2026-11-20 — Falhas de imagem, timeout e fencing do worker
 
 - Os testes do provider ONNX confirmam que imagens corrompidas e timeouts são propagados como falhas, em vez de serem convertidos numa análise vazia enganadora.

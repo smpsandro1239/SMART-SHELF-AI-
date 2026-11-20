@@ -96,3 +96,10 @@ A migration 0066_dataset_output_lineage introduz arestas append-only parent_publ
 O serviço app.dataset_output_lineage.register_dataset_output_derivation exige autorização callback positiva. O integrador tem de provar que a transformação realmente consumiu o pai; a mera existência de duas publicações não é evidência suficiente. O serviço de consumo resolve e bloqueia a cadeia ancestral em ordem crescente de ID, confirma que a cadeia não mudou durante a aquisição dos locks, autoriza cada publicação, verifica o estado de governação de cada nó e revalida as fontes imutáveis de todos os jobs. Qualquer hold, restrição, job ausente, fonte inelegível ou callback negativo bloqueia o consumo do descendente.
 
 Limites: a ligação de derivação ainda não é chamada por um worker de transformação real, broker, endpoint ou adapter externo. A autorização de registo depende de callback fornecido pelo futuro integrador. A migration/trigger PostgreSQL e o smoke concorrente dedicado ainda aguardam CI. A cobertura SQLite e a integração do consumidor fazem parte da suite API. Caches, exports, backups e object storage continuam sujeitos ao contrato em ../operations/dataset-output-copy-propagation.md; não há purge físico.
+
+
+## Validação PostgreSQL da linhagem derivada — 2026-11-20
+
+O smoke `postgres_dataset_job_output_publication_smoke.py` foi alargado para criar duas publicações independentes e registar uma aresta de derivação através do serviço, com actor activo e callback de autorização explícito. Confirma consumo do descendente enquanto a cadeia está elegível, rejeição de ciclo por trigger PostgreSQL e imutabilidade da relação perante UPDATE/DELETE. Depois aplica restrição e legal hold à publicação ancestral e confirma que o consumo do descendente é bloqueado. A libertação da restrição, isoladamente, não remove o bloqueio enquanto o legal hold ancestral permanecer activo.
+
+Esta prova é específica da fronteira de consumo local e PostgreSQL 16. Não liga transformações reais ao registo de linhagem, não inventaria cópias externas e não autoriza purga física. A validação CI do novo smoke permanece pendente até ao workflow desta alteração terminar.

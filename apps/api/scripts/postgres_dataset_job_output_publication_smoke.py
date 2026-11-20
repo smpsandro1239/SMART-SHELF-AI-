@@ -251,6 +251,87 @@ def main():
             release_db.commit()
             assert released.sequence_number == 2
 
+        # Publish an independent child output, then bind it to the parent with
+        # an explicitly authorized, append-only derivation edge.
+        child_payload = payload + b" derived-output " + suffix.encode("ascii")
+        child_digest = hashlib.sha256(child_payload).hexdigest()
+        with SessionLocal() as db:
+            child_job = enqueue_dataset_job(
+                db, idempotency_key=f"output-smoke-derived-{suffix}",
+                release_fingerprint="a" * 64,
+                approval_evidence={
+                    "status": "APPROVED", "mode": "training",
+                    "record_sha256": "b" * 64, "gate_report_sha256": "c" * 64,
+                },
+                sources=[{
+                    "shelf_image_id": source_image_id, "store_id": source_store_id,
+                    "source_image_sha256": hashlib.sha256(b"0123456789").hexdigest(),
+                }],
+            )
+            child_claim = claim_next_dataset_job(db, worker_id=worker_id, lease_seconds=300)
+            assert child_claim is not None and child_claim.id == child_job.id
+            child_stage = root / "staging" / str(child_job.id) / str(child_claim.fencing_token)
+            child_stage.mkdir(parents=True)
+            (child_stage / "model.bin").write_bytes(child_payload)
+            complete_dataset_job(
+                db, job_id=child_job.id, worker_id=worker_id,
+                fencing_token=child_claim.fencing_token, output_sha256=child_digest,
+                staged_output_reference=(
+                    f"staging/{child_job.id}/{child_claim.fencing_token}/model.bin"
+                ),
+            )
+            child_job_id, child_token = child_job.id, child_claim.fencing_token
+
+        with SessionLocal() as db:
+            child_publication = promote_dataset_job_output(
+                db, principal=principal, job_id=child_job_id, fencing_token=child_token,
+            )
+            child_publication_id = child_publication.id
+            from app.dataset_output_lineage import register_dataset_output_derivation
+            edge = register_dataset_output_derivation(
+                db,
+                parent_publication_id=publication_id,
+                child_publication_id=child_publication_id,
+                actor_user_id=actor_user_id,
+                reason="PostgreSQL smoke: derived model output",
+                authorize=lambda user, parent, child: (
+                    user.id == actor_user_id
+                    and parent.id == publication_id
+                    and child.id == child_publication_id
+                ),
+            )
+            db.commit()
+            assert edge.parent_publication_id == publication_id
+            assert edge.child_publication_id == child_publication_id
+            from app.dataset_job_output_consumption import consume_dataset_job_output_bytes
+            assert consume_dataset_job_output_bytes(
+                db, publication_id=child_publication_id,
+                authorize=lambda _publication, _job: True,
+            ) == child_payload
+            db.commit()
+            _assert_rejected(
+                db,
+                "INSERT INTO dataset_execution_job_output_lineage "
+                "(parent_publication_id,child_publication_id,actor_user_id,reason,created_at) "
+                "VALUES (:parent,:child,:actor,'cycle attempt',now())",
+                {"parent": child_publication_id, "child": publication_id, "actor": actor_user_id},
+                "cyclic output lineage edge",
+            )
+            _assert_rejected(
+                db,
+                "UPDATE dataset_execution_job_output_lineage SET reason='tampered' "
+                "WHERE parent_publication_id=:parent AND child_publication_id=:child",
+                {"parent": publication_id, "child": child_publication_id},
+                "output lineage UPDATE",
+            )
+            _assert_rejected(
+                db,
+                "DELETE FROM dataset_execution_job_output_lineage "
+                "WHERE parent_publication_id=:parent AND child_publication_id=:child",
+                {"parent": publication_id, "child": child_publication_id},
+                "output lineage DELETE",
+            )
+
         first_authorized, release_first, second_started = Event(), Event(), Event()
 
         def first_restriction_writer():
@@ -356,6 +437,41 @@ def main():
             )
             projection = get_output_governance_state(event_db, publication_id=publication_id)
             assert projection.restricted is True and projection.legal_hold is True
+            from app.dataset_job_output_consumption import (
+                DatasetJobOutputAccessDenied, consume_dataset_job_output_bytes,
+            )
+            try:
+                consume_dataset_job_output_bytes(
+                    event_db, publication_id=child_publication_id,
+                    authorize=lambda _publication, _job: True,
+                )
+            except DatasetJobOutputAccessDenied:
+                event_db.rollback()
+            else:
+                raise AssertionError("derived output was readable while its parent was restricted/on legal hold")
+
+        # Releasing the restriction must not release the independent legal hold.
+        with SessionLocal() as governance_db:
+            released = append_output_governance_event(
+                governance_db, publication_id=publication_id,
+                event_type="RESTRICTION_RELEASED", actor_user_id=actor_user_id,
+                reason="Verify legal hold remains inherited after restriction release",
+                authorize=lambda _user, _publication, _action: True,
+            )
+            governance_db.commit()
+            assert released.sequence_number == 5
+        with SessionLocal() as derived_db:
+            projection = get_output_governance_state(derived_db, publication_id=publication_id)
+            assert projection.restricted is False and projection.legal_hold is True
+            try:
+                consume_dataset_job_output_bytes(
+                    derived_db, publication_id=child_publication_id,
+                    authorize=lambda _publication, _job: True,
+                )
+            except DatasetJobOutputAccessDenied:
+                derived_db.rollback()
+            else:
+                raise AssertionError("derived output was readable after parent restriction release despite inherited legal hold")
 
         # A source may become restricted after completion but before promotion.
         held_payload = payload + b" source-retention-race"

@@ -33,7 +33,7 @@
 - [x] Integrar a linhagem no consumo: locks de publicações por ID, estabilidade da cadeia, autorização e governação em todos os ancestrais e revalidação das fontes de todos os jobs.
 - [x] Documentar contrato de propagação para caches, exports, réplicas, object storage e backups; não declarar integração externa.
 - [ ] Executar/confirmar API CI PostgreSQL 16, Quality Gates e Docker Compose para a migration 0066 e novos testes.
-- [ ] Acrescentar smoke PostgreSQL dedicado para ciclo concorrente/linhagem e legal hold herdado.
+- [x] Alargar `postgres_dataset_job_output_publication_smoke.py`: publicar um output derivado real, registar a aresta com callback explícito, provar consumo autorizado, rejeitar ciclo/UPDATE/DELETE no PostgreSQL e confirmar que restrição e legal hold do pai bloqueiam o descendente; libertar a restrição sem libertar o legal hold.
 - [ ] Implementar workflow append-only de pedidos/aprovações após aprovação da política de funções, âmbito, evidência e excepções.
 - [ ] Ligar cada transformação real ao registo de derivação; a função existe, mas não há worker de transformação integrado.
 - [ ] Criar inventário de cópias externas e adapters com atestação; até lá, bloquear serve/restore de cópias não inventariadas e manter purga física desactivada.

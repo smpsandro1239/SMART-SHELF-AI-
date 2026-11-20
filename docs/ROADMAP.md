@@ -1,3 +1,11 @@
+### Linhagem de outputs derivados — smoke PostgreSQL acrescentado (2026-11-20)
+
+- O smoke de publicação cria agora dois outputs independentes, regista a aresta pai → derivado com autorização explícita e verifica leitura do descendente.
+- Acrescentadas verificações PostgreSQL de rejeição de ciclos e de UPDATE/DELETE à linhagem append-only.
+- Restrição e legal hold no pai bloqueiam o descendente; libertar a restrição não liberta o legal hold herdado.
+- A validação do novo smoke e da migration 0066 aguarda API CI/PostgreSQL 16, Quality Gates e Docker Compose. Não foram executados testes localmente.
+- Limitações preservadas: sem integração de transformação real, endpoint, broker, inventário de cópias externas ou autorização de governação por perfil. Purga física continua desactivada.
+
 ### Validação da idempotência estrita da observação após revisão SKU — 2026-11-20
 
 - API CI [44648427709](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44648427709) passou: migrations PostgreSQL 16, todos os smokes operacionais e suite API concluídos.
