@@ -4,7 +4,7 @@
 - [x] Expor a skill aos agentes em `.agents/skills/impeccable/SKILL.md`, com instruções específicas do SMART SHELF AI e ligação para o playbook oficial.
 - [x] Criar `PRODUCT.md` e `DESIGN.md` a partir dos fluxos, papéis, limitações e tokens efectivamente encontrados no repositório.
 - [x] Integrar o detector Impeccable v4.10.0 no Quality Gates, guardando um relatório baseline sem bloquear por findings preexistentes; falhas de execução continuam bloqueantes.
-- [ ] Obter primeiro relatório detector e classificar findings P0–P3; converter problemas reais em tarefas pequenas e corrigir os prioritários.
+- [x] Obter o primeiro relatório detector: um finding warning side-tab em decision-freshness-notice; a revisão encontrou o mesmo padrão em decision-warnings. Ambos foram corrigidos com contorno completo, preservando o significado dos estados. A nova execução CI deve confirmar que o finding desapareceu.
 - [ ] Executar `context`, `critique` e `audit` com checkout local e browser; verificar dashboard e fluxos de captura/revisão em desktop e mobile.
 - [ ] Rever acessibilidade por teclado, contraste, estados loading/empty/error/disabled e semântica dos formulários; o build TypeScript não substitui esta validação visual.
 - [ ] Só depois fazer polimento incremental, sem alterar contratos API, permissões ou regras de inventário.

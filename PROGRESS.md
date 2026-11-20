@@ -1,3 +1,10 @@
+## 2026-11-20 — Primeira correção guiada pelo detector Impeccable
+
+- O primeiro relatório do detector identificou um padrão visual side-tab: barra de cor numa lateral de um aviso arredondado, em decision-freshness-notice.
+- A revisão do mesmo bloco encontrou o padrão equivalente em decision-warnings; ambos passaram a usar contorno completo, preservando a cor semântica, o conteúdo e o comportamento role=status.
+- Não foram alterados componentes React, contratos API, regras operacionais nem permissões.
+- A verificação de regressão visual depende da nova execução do detector e de inspeção em browser; não foi possível capturar a interface renderizada nesta ronda.
+
 ## 2026-11-20 — Integração Impeccable no workflow de frontend
 
 - Adicionado o submódulo upstream `pbakaus/impeccable`, fixado no commit `b49177d32788f2dc585c42831d845dacf1ebed2c`, sem incorporar a ferramenta como dependência runtime da aplicação.
