@@ -152,3 +152,13 @@ def test_api_role_policy_does_not_match_planogram_lookalike_segments():
         "Employee access is limited to assigned tasks"
     )
 
+def test_api_role_policy_matches_real_planogram_routes_by_segment():
+    from app.api_security_policy import api_role_denial, classify_api_route
+
+    route = "/api/v1/shelves/42/planograms"
+
+    assert classify_api_route("POST", route) == "SUPERVISOR_OR_ADMIN"
+    assert api_role_denial("POST", route, "SUPERVISOR") is None
+    assert api_role_denial("POST", route, "ADMIN") is None
+    assert api_role_denial("POST", route, "EMPLOYEE") == "Supervisor role required"
+
