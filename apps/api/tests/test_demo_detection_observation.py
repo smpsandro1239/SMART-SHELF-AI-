@@ -284,7 +284,7 @@ def test_demo_detection_requires_human_review_and_is_idempotent(monkeypatch):
                     "notes": (
                         f"demo_detection_id={regression_detection_id}; "
                         f"shelf_image_id={regression_image_id}; sha256={'b' * 64}; "
-                        f"human_review_id={latest_regression_review.id}; "
+                        f"human_review_id={latest_regression_review_id}; "
                         "human_confirmed_status=EMPTY; human_status_confirmed_by_user_id="
                         f"{reviewer_id}; human_status_confirmed_at=2026-11-19T20:00:00+00:00"
                     ),
