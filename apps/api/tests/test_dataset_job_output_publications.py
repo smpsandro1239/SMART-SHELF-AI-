@@ -1078,12 +1078,35 @@ def test_directory_fsync_failure_after_link_is_recoverable_on_retry(publication_
         job_id=state["job"].id
     ).count() == 0
 
+    import os
+    import stat
+
+    destination_info = published_path.parent.stat()
+    file_info = published_path.stat()
+    original_fsync = publication_service.os.fsync
+    synced_destination_directory = []
+    synced_destination_file = []
+
+    def track_retry_fsync(fd):
+        info = os.fstat(fd)
+        if stat.S_ISDIR(info.st_mode) and (
+            info.st_dev, info.st_ino
+        ) == (destination_info.st_dev, destination_info.st_ino):
+            synced_destination_directory.append(True)
+        if stat.S_ISREG(info.st_mode) and (
+            info.st_dev, info.st_ino
+        ) == (file_info.st_dev, file_info.st_ino):
+            synced_destination_file.append(True)
+        return original_fsync(fd)
+
+    monkeypatch.setattr(publication_service.os, "fsync", track_retry_fsync)
     publication = promote_dataset_job_output(
         db,
         principal=state["principal"],
         job_id=state["job"].id,
         fencing_token=state["claim"].fencing_token,
     )
+    monkeypatch.setattr(publication_service.os, "fsync", original_fsync)
 
     assert publication.published_output_reference == published_ref
     assert publication.output_sha256 == state["digest"]
@@ -1091,6 +1114,9 @@ def test_directory_fsync_failure_after_link_is_recoverable_on_retry(publication_
         job_id=state["job"].id
     ).count() == 1
     assert not state["stage_path"].exists()
+    assert synced_destination_directory, "retry must fsync the recovered destination directory"
+    assert synced_destination_file, "retry must fsync the recovered destination file"
+
 
 def test_staging_cleanup_failure_after_commit_is_recovered_by_reconciliation(publication_setup, monkeypatch):
     import os
@@ -1257,3 +1283,115 @@ def test_output_consumer_locks_source_lineage_rows_in_stable_order():
     finally:
         db.close()
         engine.dispose()
+
+def test_temporary_file_fsync_failure_preserves_staging_and_allows_retry(publication_setup, monkeypatch):
+    import os
+    import stat
+
+    import app.dataset_job_output_publications as publication_service
+
+    state = publication_setup
+    original_fsync = publication_service.os.fsync
+
+    def fail_regular_file_fsync(fd):
+        if stat.S_ISREG(os.fstat(fd).st_mode):
+            raise OSError("simulated temporary file fsync failure")
+        return original_fsync(fd)
+
+    monkeypatch.setattr(publication_service.os, "fsync", fail_regular_file_fsync)
+    with pytest.raises(
+        DatasetJobOutputUnavailable,
+        match="staged output could not be safely prepared",
+    ):
+        promote_dataset_job_output(
+            state["db"],
+            principal=state["principal"],
+            job_id=state["job"].id,
+            fencing_token=state["claim"].fencing_token,
+        )
+
+    assert state["stage_path"].read_bytes() == state["payload"]
+    assert state["db"].query(models.DatasetExecutionJobOutputPublication).filter_by(
+        job_id=state["job"].id
+    ).count() == 0
+    assert not list((state["root"] / "published").rglob("*.artifact"))
+    assert not list((state["root"] / "published").rglob("*.tmp"))
+
+    monkeypatch.setattr(publication_service.os, "fsync", original_fsync)
+    publication = promote_dataset_job_output(
+        state["db"],
+        principal=state["principal"],
+        job_id=state["job"].id,
+        fencing_token=state["claim"].fencing_token,
+    )
+    assert publication.output_sha256 == state["digest"]
+    assert not state["stage_path"].exists()
+
+
+def test_output_directory_creation_fsyncs_each_parent(tmp_path, monkeypatch):
+    import os
+    import stat
+
+    from app.dataset_job_output_publications import _open_dirs
+
+    root = tmp_path / "new-root" / "nested" / "outputs"
+    expected_parents = [
+        tmp_path,
+        tmp_path / "new-root",
+        tmp_path / "new-root" / "nested",
+        root,
+        root / "published",
+    ]
+    original_fsync = os.fsync
+    synced_directories = set()
+
+    def track_directory_fsync(fd):
+        info = os.fstat(fd)
+        if stat.S_ISDIR(info.st_mode):
+            synced_directories.add((info.st_dev, info.st_ino))
+        return original_fsync(fd)
+
+    monkeypatch.setattr(os, "fsync", track_directory_fsync)
+    directory_fd = _open_dirs(root, ("published", "42"), create=True)
+    os.close(directory_fd)
+
+    for directory in expected_parents:
+        info = directory.stat()
+        assert (info.st_dev, info.st_ino) in synced_directories, (
+            f"parent directory entry was not fsynced: {directory.name}"
+        )
+
+
+def test_output_directory_creation_retries_parent_fsync_after_failure(tmp_path, monkeypatch):
+    import os
+
+    from app.dataset_job_output_publications import _open_dirs
+
+    root = tmp_path / "dataset-outputs"
+    parent_info = tmp_path.stat()
+    original_fsync = os.fsync
+
+    def fail_parent_fsync(fd):
+        info = os.fstat(fd)
+        if (info.st_dev, info.st_ino) == (parent_info.st_dev, parent_info.st_ino):
+            raise OSError("simulated parent directory fsync failure")
+        return original_fsync(fd)
+
+    monkeypatch.setattr(os, "fsync", fail_parent_fsync)
+    with pytest.raises(OSError, match="simulated parent directory fsync failure"):
+        _open_dirs(root, (), create=True)
+    assert root.is_dir()
+
+    monkeypatch.setattr(os, "fsync", original_fsync)
+    retried_parent_fsync = []
+
+    def track_parent_fsync(fd):
+        info = os.fstat(fd)
+        if (info.st_dev, info.st_ino) == (parent_info.st_dev, parent_info.st_ino):
+            retried_parent_fsync.append(True)
+        return original_fsync(fd)
+
+    monkeypatch.setattr(os, "fsync", track_parent_fsync)
+    directory_fd = _open_dirs(root, (), create=True)
+    os.close(directory_fd)
+    assert retried_parent_fsync, "retry must re-fsync an existing directory entry after prior failure"
