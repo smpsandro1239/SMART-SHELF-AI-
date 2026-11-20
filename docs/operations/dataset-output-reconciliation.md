@@ -60,3 +60,9 @@ A criação do hard link de destino é seguida por `fsync` do directório. Se es
 
 Uma repetição não confia apenas na existência do destino: volta a abrir o ficheiro sem seguir symlinks e valida tipo, tamanho e SHA-256 antes de o reutilizar. Só depois regista a publicação e remove o staging. Este comportamento foi coberto por um teste com falha injectada de `fsync`; não constitui uma garantia contra perda de energia, corrupção do volume ou limitações do driver/storage subjacente.
 
+## Falha na limpeza de staging depois do commit
+
+A remoção do staging ocorre apenas depois do commit SQL da publicação. Se o processo não tiver permissões para remover o ficheiro, a publicação permanece concluída e o staging fica como resíduo recuperável. O reconciliador pode removê-lo mais tarde quando a linha append-only da publicação, o job concluído, o destino canónico e o digest/tamanho de ambos os ficheiros coincidirem e o período de segurança tiver expirado.
+
+Este cenário não é equivalente a staging órfão sem publicação: nesse caso continua a não existir prova suficiente para apagar o ficheiro e a ferramenta mantém apenas inventário report-only.
+

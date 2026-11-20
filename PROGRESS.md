@@ -1306,3 +1306,10 @@ O teste de concorrência confirma a serialização edição/ativação no servi�
 - Uma segunda promoção deve concluir a publicação e remover o staging depois do commit.
 - Validação pendente de GitHub Actions. Não foram executados testes localmente.
 
+## 2026-11-20 — Recuperação de staging após falha de limpeza pós-commit
+
+- Acrescentado teste que injeta falha de permissões ao remover o staging depois de a publicação e a linha de auditoria já estarem confirmadas.
+- O teste confirma que a publicação continua válida e que o staging residual é removido posteriormente pelo reconciliador, apenas depois de envelhecer e de os bytes de staging/publicação corresponderem ao SHA-256 e tamanho auditados.
+- A reconciliação mantém o contrato conservador e não remove staging sem publicação imutável correspondente.
+- Validação pendente de GitHub Actions. Não foram executados testes localmente.
+

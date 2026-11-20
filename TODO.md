@@ -1105,3 +1105,10 @@ Critério global: nenhuma capacidade pode ser marcada como concluída sem códig
 - [ ] Validar API CI, Quality Gates e Docker Compose.
 - [ ] Avaliar falhas de `fsync` do ficheiro temporário e da remoção do staging; distinguir erros recuperáveis de garantias de durabilidade que o filesystem/volume não oferece.
 
+## Limpeza pós-commit e reconciliação — 2026-11-20
+
+- [x] Testar falha de permissões na remoção de staging depois do commit da publicação.
+- [x] Confirmar que o output e a linha de auditoria permanecem válidos e que o staging residual pode ser removido pelo reconciliador após o período de segurança, com digest/tamanho coincidentes.
+- [ ] Validar API CI e Quality Gates para os testes de falha de fsync e limpeza pós-commit.
+- [ ] Manter limpeza de staging órfão sem publicação em modo report-only até prova independente de quiescência dos workers.
+

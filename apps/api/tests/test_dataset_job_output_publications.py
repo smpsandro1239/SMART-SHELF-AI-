@@ -1092,3 +1092,51 @@ def test_directory_fsync_failure_after_link_is_recoverable_on_retry(publication_
     ).count() == 1
     assert not state["stage_path"].exists()
 
+def test_staging_cleanup_failure_after_commit_is_recovered_by_reconciliation(publication_setup, monkeypatch):
+    import os
+    from datetime import timedelta
+
+    import app.dataset_job_output_publications as publication_service
+    from app.dataset_job_output_reconciliation import reconcile_dataset_job_output_files
+
+    state = publication_setup
+    original_unlink = publication_service.os.unlink
+
+    def fail_staging_unlink(name, *args, **kwargs):
+        if name == state["stage_path"].name:
+            raise PermissionError("simulated staging cleanup permission failure")
+        return original_unlink(name, *args, **kwargs)
+
+    monkeypatch.setattr(publication_service.os, "unlink", fail_staging_unlink)
+    publication = promote_dataset_job_output(
+        state["db"],
+        principal=state["principal"],
+        job_id=state["job"].id,
+        fencing_token=state["claim"].fencing_token,
+    )
+
+    # Publication is already committed. A cleanup permission failure must not
+    # roll it back or make the caller believe the durable output was lost.
+    assert state["db"].query(models.DatasetExecutionJobOutputPublication).filter_by(
+        job_id=state["job"].id
+    ).count() == 1
+    assert (state["root"] / publication.published_output_reference).read_bytes() == state["payload"]
+    assert state["stage_path"].read_bytes() == state["payload"]
+
+    monkeypatch.setattr(publication_service.os, "unlink", original_unlink)
+    stale_time = models.utc_now() - timedelta(days=8)
+    os.utime(state["stage_path"], (stale_time.timestamp(), stale_time.timestamp()))
+
+    report = reconcile_dataset_job_output_files(
+        state["db"],
+        apply=True,
+        grace_seconds=3600,
+        now=models.utc_now(),
+    )
+
+    assert state["stage_path"].as_posix().replace(str(state["root"]) + "/", "") in report["removed"]
+    assert not state["stage_path"].exists()
+    assert state["db"].query(models.DatasetExecutionJobOutputPublication).filter_by(
+        job_id=state["job"].id
+    ).count() == 1
+
