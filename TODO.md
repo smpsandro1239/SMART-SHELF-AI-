@@ -1,9 +1,9 @@
 ## Segurança P0 — CORS preflight e Bearer
 
-- [ ] Permitir apenas preflight OPTIONS com Origin + Access-Control-Request-Method passar pelo middleware de autenticação, deixando CORSMiddleware validar origin/method/headers.
-- [ ] Desactivar `allow_credentials`: autenticação é Bearer e não há sessão por cookie no frontend/API.
-- [ ] Confirmar que preflight Authorization recebe 200, ACAO válido e sem Access-Control-Allow-Credentials; requests reais continuam a exigir Bearer.
-- [ ] Validar RED/GREEN e API CI, Quality Gates e Docker Compose.
+- [x] Permitir apenas preflight OPTIONS com Origin + Access-Control-Request-Method passar pelo middleware de autenticação, deixando CORSMiddleware validar origin/method/headers.
+- [x] Desactivar `allow_credentials`: autenticação é Bearer e não há sessão por cookie no frontend/API.
+- [x] Confirmar preflight Authorization recebe 200, ACAO válido e sem Access-Control-Allow-Credentials; requests reais continuam a exigir Bearer.
+- [x] Validar RED/GREEN e API CI [44785894943](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44785894943), Quality Gates [44785894965](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44785894965) e Docker Compose [44785894960](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44785894960): 1388 passed, 1 skipped, 1 warning.
 
 ## OWASP API security review — primeira ronda
 
@@ -39,7 +39,7 @@
 - [x] Fixar Frontend Design como submódulo Git `vendor/frontend-design` no commit `f8966e6cc9b90247aa102d71f7e675ec3462b419` (MIT).
 - [x] Expor Frontend Design como skill complementar; Impeccable mantém-se a ferramenta principal para auditoria/polish do sistema visual actual.
 - [x] Criar `AGENTS.md` e `docs/engineering/agent-skill-stack.md` com ordem de aplicação, limites e inicialização.
-- [ ] Validar inicialização recursiva dos três submódulos num clone local e descoberta das skills no runtime Codex disponível.
+- [ ] Validar inicialização recursiva dos quatro submódulos num clone local e descoberta das skills no runtime Codex disponível.
 - [x] Aplicar TDD em duas correções P0 (outputs órfãos e CORS) com RED observado, implementação e GREEN no CI.
 
 ## Impeccable — integração e baseline de qualidade visual (2026-11-20)

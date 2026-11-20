@@ -55,6 +55,8 @@ Não foi confirmado um bypass de autenticação ou isolamento multi-loja nesta t
 
 | ID | Severidade | Finding | Estado |
 |---|---|---|---|
-| API-CORS-002 | Alta funcionalidade | Middleware Bearer respondia 401 a OPTIONS preflight antes de CORSMiddleware; browsers não conseguiam completar chamadas cross-origin | Correcção em validação |
+| API-CORS-002 | Alta funcionalidade | Middleware Bearer respondia 401 a OPTIONS preflight antes de CORSMiddleware; browsers não conseguiam completar chamadas cross-origin | Corrigido em `a63d646` |
 
 O teste HTTP envia `Origin`, `Access-Control-Request-Method` e `Access-Control-Request-Headers: authorization`. O comportamento correcto é deixar CORSMiddleware validar a origem/método/headers, responder 200 para uma origem permitida e não emitir `Access-Control-Allow-Credentials`, dado que a autenticação da API usa Bearer e não cookies. Requests reais continuam a exigir token.
+
+A correcção foi validada pelo teste `test_bearer_api_cors_preflight_does_not_enable_cookie_credentials`: HTTP 200 para a origem permitida, `Authorization` presente nos headers permitidos e ausência de `Access-Control-Allow-Credentials`. O middleware só deixa passar preflight OPTIONS com `Origin` e `Access-Control-Request-Method`; pedidos API reais continuam a exigir Bearer. API CI [44785894943](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44785894943), Quality Gates [44785894965](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44785894965) e Docker Compose [44785894960](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44785894960) passaram; **1388 passed, 1 skipped, 1 warning**.

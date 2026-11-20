@@ -1,3 +1,10 @@
+### CORS preflight e Bearer — validado (2026-11-20)
+
+- Preflight OPTIONS com Origin/Access-Control-Request-Method passa para CORSMiddleware validar origem, método e headers; API continua a exigir Bearer em pedidos reais.
+- `allow_credentials=False`, pois não há autenticação por cookie.
+- RED observado no commit `831c1026`; GREEN no commit `a63d646`.
+- API CI, Quality Gates e Docker Compose passaram; **1388 passed, 1 skipped, 1 warning**.
+
 ### CORS preflight e autenticação Bearer (2026-11-20)
 
 - O teste de preflight revelou 401 porque o middleware Bearer interceptava OPTIONS antes do CORSMiddleware.
