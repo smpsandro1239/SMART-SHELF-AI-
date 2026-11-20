@@ -142,9 +142,6 @@ app.add_middleware(
 
 
 
-PUBLIC_API_PATHS = {"/api/v1/auth/bootstrap", "/api/v1/auth/login"}
-
-
 @app.middleware("http")
 async def require_api_authentication(request: Request, call_next):
     # CORS preflight requests do not carry the application's Bearer token.
@@ -178,58 +175,9 @@ async def require_api_authentication(request: Request, call_next):
                                 headers={"WWW-Authenticate": "Bearer"})
         request.state.user_id = user.id
         request.state.user_role = user.role
-        method = request.method.upper()
-        path = request.url.path
-        admin_only = (
-            path.startswith("/api/v1/auth/users")
-            or (method == "POST" and path in {
-                "/api/v1/stores", "/api/v1/zones", "/api/v1/shelves",
-                "/api/v1/products", "/api/v1/shelf-products",
-                "/api/v1/warehouse/product-profiles", "/api/v1/warehouse/product-packaging",
-            })
-        )
-        supervisor_or_admin = (
-            path.startswith("/api/v1/observation-alerts")
-            or (path.startswith("/api/v1/shelves/") and "/planograms" in path)
-            or path.startswith("/api/v1/planograms/")
-            or (method == "POST" and path.endswith("/observation-alerts/evaluate"))
-            or (method == "POST" and path == "/api/v1/tasks/from-operational-decision")
-            or (method == "POST" and (path in {"/api/v1/sales/daily", "/api/v1/sales/import-csv", "/api/v1/warehouse/locations", "/api/v1/warehouse/placements", "/api/v1/warehouse/pallets", "/api/v1/warehouse/pallet-rotation/policies", "/api/v1/warehouse/pallet-rotation/simulate", "/api/v1/sales/hourly", "/api/v1/sales/traffic/hourly", "/api/v1/sales/hourly/batch", "/api/v1/sales/traffic/hourly/batch", "/api/v1/sales/hourly/import-csv", "/api/v1/sales/traffic/hourly/import-csv", "/api/v1/inventory/snapshots"} or (path.startswith("/api/v1/warehouse/pallets/") and path.endswith("/events"))))
-            or (method == "PATCH" and path.startswith("/api/v1/warehouse/pallet-rotation/policies/"))
-            or path == "/api/v1/product-embedding-exemplars"
-            or path.startswith("/api/v1/product-embedding-exemplars/")
-            or (method == "GET" and path == "/api/v1/training-candidates/reviewed")
-            or (method == "GET" and path in {"/api/v1/shelf-image-review-queue", "/api/v1/shelf-image-review-queue/summary", "/api/v1/sku-evaluation/reviewed"})
-            or (method == "POST" and path.startswith("/api/v1/shelf-image-detections/"))
-            or (
-                method == "POST"
-                and path.startswith("/api/v1/shelf-images/")
-                and (path.endswith("/ocr-runs") or path.endswith("/ocr-matches") or path.endswith("/evidence-fusion"))
-            )
-        )
-        if supervisor_or_admin and user.role not in {"ADMIN", "SUPERVISOR"}:
-            return JSONResponse(status_code=403, content={"detail": "Supervisor role required"})
-        if admin_only and user.role != "ADMIN":
-            return JSONResponse(status_code=403, content={"detail": "Administrator role required"})
-        if user.role == "EMPLOYEE":
-            allowed_employee_read = (
-                method == "GET"
-                and path in {"/api/v1/tasks", "/api/v1/auth/me", "/api/v1/dashboard/summary", "/api/v1/shelf-images"}
-            )
-            allowed_employee_image_upload = method == "POST" and path == "/api/v1/shelf-images"
-            allowed_employee_image_content = method == "GET" and path.startswith("/api/v1/shelf-images/") and path.endswith("/content")
-            allowed_employee_image_detections = method == "GET" and path.startswith("/api/v1/shelf-images/") and path.endswith("/detections")
-            allowed_employee_ocr_evidence = method == "GET" and path.startswith("/api/v1/shelf-images/") and (path.endswith("/ocr-evidence") or path.endswith("/ocr-runs") or path.endswith("/ocr-matches") or path.endswith("/evidence-fusion"))
-            allowed_employee_detection_review_history = method == "GET" and path.startswith("/api/v1/shelf-image-detections/") and path.endswith("/reviews")
-            allowed_employee_task_update = (
-                method == "PATCH"
-                and path.startswith("/api/v1/tasks/")
-                and path.endswith("/status")
-            )
-            if not (allowed_employee_read or allowed_employee_task_update or allowed_employee_image_upload or allowed_employee_image_content or allowed_employee_image_detections or allowed_employee_ocr_evidence or allowed_employee_detection_review_history):
-                return JSONResponse(status_code=403, content={"detail": "Employee access is limited to assigned tasks"})
-        if user.role == "SUPERVISOR" and path.startswith("/api/v1/auth/users"):
-            return JSONResponse(status_code=403, content={"detail": "Administrator role required"})
+        denial = api_role_denial(request.method, request.url.path, user.role)
+        if denial is not None:
+            return JSONResponse(status_code=403, content={"detail": denial})
     finally:
         db.close()
     return await call_next(request)

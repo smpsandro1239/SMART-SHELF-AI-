@@ -99,3 +99,20 @@ def test_access_token_requires_subject_issue_time_and_expiration(claims):
     token = jwt.encode(claims, settings.jwt_secret_key, algorithm="HS256")
     with pytest.raises(jwt.MissingRequiredClaimError):
         decode_access_token(token)
+
+
+def test_api_role_policy_is_centralized_and_fail_closed():
+    from app.api_security_policy import api_role_denial, classify_api_route
+
+    assert classify_api_route("POST", "/api/v1/stores") == "ADMIN_ONLY"
+    assert api_role_denial("POST", "/api/v1/stores", "ADMIN") is None
+    assert api_role_denial("POST", "/api/v1/stores", "SUPERVISOR") == "Administrator role required"
+    assert classify_api_route("GET", "/api/v1/observation-alerts") == "SUPERVISOR_OR_ADMIN"
+    assert api_role_denial("GET", "/api/v1/observation-alerts", "EMPLOYEE") == "Supervisor role required"
+    assert api_role_denial("GET", "/api/v1/observation-alerts", "SUPERVISOR") is None
+    assert classify_api_route("GET", "/api/v1/tasks") == "EMPLOYEE_ALLOWLIST"
+    assert api_role_denial("GET", "/api/v1/tasks", "EMPLOYEE") is None
+    assert api_role_denial("POST", "/api/v1/tasks", "EMPLOYEE") == "Employee access is limited to assigned tasks"
+    assert classify_api_route("GET", "/api/v1/products") == "AUTHENTICATED_STAFF"
+    assert api_role_denial("GET", "/api/v1/products", "EMPLOYEE") == "Employee access is limited to assigned tasks"
+    assert api_role_denial("GET", "/api/v1/products", "UNKNOWN") == "User role is not authorized"

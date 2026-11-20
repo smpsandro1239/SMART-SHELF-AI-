@@ -1,3 +1,9 @@
+## Política de autorização da API — centralização
+
+- [ ] Extrair a política RBAC do middleware para módulo dedicado e testável, mantendo a semântica ADMIN/SUPERVISOR/EMPLOYEE.
+- [ ] Classificar as rotas em PUBLIC, ADMIN_ONLY, SUPERVISOR_OR_ADMIN, EMPLOYEE_ALLOWLIST ou AUTHENTICATED_STAFF.
+- [ ] Validar que a centralização preserva os testes de autorização e isolamento multi-loja no CI.
+
 ## Segurança P0 — CORS preflight e Bearer
 
 - [x] Permitir apenas preflight OPTIONS com Origin + Access-Control-Request-Method passar pelo middleware de autenticação, deixando CORSMiddleware validar origin/method/headers.

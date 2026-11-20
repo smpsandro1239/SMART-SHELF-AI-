@@ -1,3 +1,11 @@
+## 2026-11-20 — Política RBAC centralizada (em validação)
+
+- Extraída a decisão de autorização por método/path/role para `apps/api/app/api_security_policy.py`.
+- A classificação explícita distingue PUBLIC, ADMIN_ONLY, SUPERVISOR_OR_ADMIN, EMPLOYEE_ALLOWLIST e AUTHENTICATED_STAFF.
+- O middleware mantém a autenticação Bearer e a consulta do papel autoritativo na base de dados; apenas delega a decisão de role para o módulo central.
+- Adicionados testes unitários para a matriz ADMIN/SUPERVISOR/EMPLOYEE e fail-closed para papel desconhecido.
+- A preservação integral da suite e dos smokes PostgreSQL aguarda CI.
+
 ## 2026-11-20 — CORS preflight corrigido e validado
 
 - O RED do commit `831c1026` mostrou que o middleware Bearer respondia 401 ao OPTIONS preflight antes de CORSMiddleware.
