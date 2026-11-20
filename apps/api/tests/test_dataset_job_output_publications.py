@@ -1395,3 +1395,45 @@ def test_output_directory_creation_retries_parent_fsync_after_failure(tmp_path, 
     directory_fd = _open_dirs(root, (), create=True)
     os.close(directory_fd)
     assert retried_parent_fsync, "retry must re-fsync an existing directory entry after prior failure"
+
+def test_staging_directory_fsync_failure_after_commit_is_nonfatal_and_logged(
+    publication_setup, monkeypatch, caplog,
+):
+    import logging
+    import os
+    import stat
+
+    import app.dataset_job_output_publications as publication_service
+
+    state = publication_setup
+    staging_directory = state["stage_path"].parent.stat()
+    original_fsync = publication_service.os.fsync
+
+    def fail_staging_directory_fsync(fd):
+        info = os.fstat(fd)
+        if stat.S_ISDIR(info.st_mode) and (
+            info.st_dev, info.st_ino
+        ) == (staging_directory.st_dev, staging_directory.st_ino):
+            raise OSError("simulated staging directory fsync failure")
+        return original_fsync(fd)
+
+    monkeypatch.setattr(publication_service.os, "fsync", fail_staging_directory_fsync)
+    with caplog.at_level(logging.WARNING, logger=publication_service.__name__):
+        publication = promote_dataset_job_output(
+            state["db"],
+            principal=state["principal"],
+            job_id=state["job"].id,
+            fencing_token=state["claim"].fencing_token,
+        )
+
+    published_path = state["root"] / publication.published_output_reference
+    assert published_path.read_bytes() == state["payload"]
+    assert not state["stage_path"].exists()
+    assert state["db"].query(models.DatasetExecutionJobOutputPublication).filter_by(
+        job_id=state["job"].id
+    ).count() == 1
+    assert any(
+        "staging cleanup" in record.getMessage().lower()
+        and str(state["job"].id) in record.getMessage()
+        for record in caplog.records
+    )
