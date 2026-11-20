@@ -10,6 +10,12 @@ metadata:
 
 This project entry point delegates to the upstream Impeccable skill, pinned as a Git submodule at `vendor/impeccable`. The upstream instructions, playbooks, reference files, agent definitions, and executable engine remain intact there.
 
+## First checkout
+
+After cloning the project, initialize the pinned upstream repository before loading its full instructions:
+
+`git submodule update --init --recursive`
+
 ## Mandatory loading
 
 Before frontend design work, read:

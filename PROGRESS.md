@@ -1,3 +1,11 @@
+## 2026-11-20 — Fecho de validação CI e reconciliação do roadmap
+
+- API CI do commit a6a1c30e concluiu com sucesso: PostgreSQL 16, smokes operacionais e **1379 passed, 1 skipped, 1 warning**. Entre os smokes aprovados estão autorização de sessões de captura e isolamento de avaliações SKU revistas.
+- Quality Gates do commit d49434e concluiu com sucesso: API tests/compilação Python, build TypeScript/produção e detector Impeccable.
+- O segundo relatório Impeccable é um array vazio (`[]`): o finding side-tab inicial foi removido.
+- Atualizado o README para fechar os dois smokes PostgreSQL que já tinham evidência de CI; a auditoria de autorização global permanece aberta.
+- Para usar a skill upstream num clone local, é necessário inicializar o submódulo com `git submodule update --init --recursive`.
+
 ## 2026-11-20 — Primeira correção guiada pelo detector Impeccable
 
 - O primeiro relatório do detector identificou um padrão visual side-tab: barra de cor numa lateral de um aviso arredondado, em decision-freshness-notice.
