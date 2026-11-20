@@ -1176,3 +1176,59 @@ def test_output_reconciler_reports_orphan_published_output_without_deleting_even
     assert orphan["cleanup"] == "report_only"
     assert orphan_path.read_bytes() == state["payload"]
     assert reference not in report["removed"]
+
+def test_published_output_consumer_returns_only_fully_verified_bytes(publication_setup):
+    from app.dataset_job_output_consumption import consume_dataset_job_output_bytes
+
+    state = publication_setup
+    publication = promote_dataset_job_output(
+        state["db"], principal=state["principal"], job_id=state["job"].id,
+        fencing_token=state["claim"].fencing_token,
+    )
+
+    consumed = consume_dataset_job_output_bytes(
+        state["db"], publication_id=publication.id,
+        authorize=lambda candidate, job: candidate.id == publication.id and job.id == state["job"].id,
+    )
+
+    assert consumed == state["payload"]
+
+
+def test_published_output_consumer_fails_closed_without_explicit_authorization(publication_setup):
+    from app.dataset_job_output_consumption import (
+        DatasetJobOutputAccessDenied,
+        consume_dataset_job_output_bytes,
+    )
+
+    state = publication_setup
+    publication = promote_dataset_job_output(
+        state["db"], principal=state["principal"], job_id=state["job"].id,
+        fencing_token=state["claim"].fencing_token,
+    )
+
+    with pytest.raises(DatasetJobOutputAccessDenied):
+        consume_dataset_job_output_bytes(
+            state["db"], publication_id=publication.id,
+            authorize=lambda _publication, _job: 1,
+        )
+
+
+def test_published_output_consumer_rejects_tampered_published_bytes(publication_setup):
+    from app.dataset_job_output_consumption import (
+        DatasetJobOutputReadIntegrityError,
+        consume_dataset_job_output_bytes,
+    )
+
+    state = publication_setup
+    publication = promote_dataset_job_output(
+        state["db"], principal=state["principal"], job_id=state["job"].id,
+        fencing_token=state["claim"].fencing_token,
+    )
+    published_path = state["root"] / publication.published_output_reference
+    published_path.write_bytes(b"tampered published output")
+
+    with pytest.raises(DatasetJobOutputReadIntegrityError):
+        consume_dataset_job_output_bytes(
+            state["db"], publication_id=publication.id,
+            authorize=lambda _publication, _job: True,
+        )
