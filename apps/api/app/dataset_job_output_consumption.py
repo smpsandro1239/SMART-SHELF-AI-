@@ -84,6 +84,22 @@ def _read_verified_file(
             os.close(directory_fd)
 
 
+def _lock_output_sources(db: Session, job_ids: list[int]):
+    """Lock immutable source-lineage rows until the output read transaction ends."""
+    return (
+        db.query(models.DatasetExecutionJobSource)
+        .filter(models.DatasetExecutionJobSource.job_id.in_(job_ids))
+        .order_by(
+            models.DatasetExecutionJobSource.shelf_image_id.asc(),
+            models.DatasetExecutionJobSource.job_id.asc(),
+            models.DatasetExecutionJobSource.id.asc(),
+        )
+        .with_for_update()
+        .populate_existing()
+        .all()
+    )
+
+
 def consume_dataset_job_output_bytes(
     db: Session,
     *,
@@ -135,12 +151,7 @@ def consume_dataset_job_output_bytes(
                 "published output lineage is blocked: " + ", ".join(reasons)
             )
 
-    sources = (
-        db.query(models.DatasetExecutionJobSource)
-        .filter(models.DatasetExecutionJobSource.job_id.in_(job_ids))
-        .order_by(models.DatasetExecutionJobSource.shelf_image_id.asc())
-        .all()
-    )
+    sources = _lock_output_sources(db, job_ids)
     source_counts = {job_id: 0 for job_id in job_ids}
     for source in sources:
         source_counts[source.job_id] += 1
