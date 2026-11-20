@@ -83,23 +83,30 @@ def _open_dirs(root: Path, parts: tuple[str, ...], *, create: bool) -> int:
     current = os.open(root_path.anchor, flags | nofollow)
     try:
         for part in components:
+            nxt = None
             try:
-                nxt = os.open(part, flags | nofollow, dir_fd=current)
-            except FileNotFoundError:
-                if not create:
-                    raise
                 try:
-                    os.mkdir(part, mode=0o700, dir_fd=current)
-                except FileExistsError:
-                    pass
-                os.fsync(current)
-                nxt = os.open(part, flags | nofollow, dir_fd=current)
-            else:
-                if create:
+                    nxt = os.open(part, flags | nofollow, dir_fd=current)
+                except FileNotFoundError:
+                    if not create:
+                        raise
+                    try:
+                        os.mkdir(part, mode=0o700, dir_fd=current)
+                    except FileExistsError:
+                        pass
                     os.fsync(current)
-            previous = current
-            current = nxt
-            os.close(previous)
+                    nxt = os.open(part, flags | nofollow, dir_fd=current)
+                else:
+                    if create:
+                        os.fsync(current)
+                previous = current
+                current = nxt
+                nxt = None
+                os.close(previous)
+            except Exception:
+                if nxt is not None:
+                    os.close(nxt)
+                raise
         return current
     except Exception:
         os.close(current)
