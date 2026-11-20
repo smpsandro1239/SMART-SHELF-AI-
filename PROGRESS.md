@@ -1,3 +1,13 @@
+## 2026-11-20 — Hardening do container vision-worker
+
+- O worker passa a executar como UID/GID numérico não privilegiado `65532:65532`.
+- O root filesystem do container é read-only; apenas `/tmp` é disponibilizado como tmpfs temporário, com HOME/cache/TMPDIR apontados para essa área.
+- Todas as Linux capabilities são removidas (`cap_drop: ALL`) e é activado `no-new-privileges`.
+- O mount de imagens e o mount de modelos continuam read-only.
+- O smoke Docker Compose inspecciona a configuração efectiva e testa permissões de escrita do processo dentro do container.
+- O isolamento é específico ao worker de inferência; a API e os workers de datasets continuam a necessitar de hardening separado.
+- Validação CI pendente neste commit; não foram executados testes locais.
+
 ## 2026-11-20 — Mount de imagens read-only no vision-worker
 
 - A auditoria confirmou que o worker só lê ficheiros de captura: `_resolve_worker_image_path` valida e resolve o caminho e os providers recebem o ficheiro para inferência; não há escrita/unlink/mkdir/cópia pelo worker em `IMAGE_STORAGE_PATH`.

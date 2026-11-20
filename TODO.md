@@ -47,6 +47,8 @@
 - [ ] Não implementar libertação independente de legal hold nem matriz HTTP por perfil/loja sem decisão de política aprovada; documentar as decisões necessárias.
 
 ## Isolamento filesystem API/vision-worker — 2026-11-20
+- [x] Executar `vision-worker` com UID/GID dedicado não privilegiado `65532:65532`, root filesystem read-only, `cap_drop: ALL`, `no-new-privileges` e `/tmp` temporário isolado; manter os mounts de imagens e modelos read-only.
+- [x] Alargar o smoke Docker Compose para verificar UID efectivo, permissões de escrita, root filesystem, capabilities e `no-new-privileges`.
 
 - [x] Montar o volume persistente de imagens em modo só de leitura no serviço `vision-worker`; a API mantém a escrita e a ingestão.
 - [x] Acrescentar verificação no smoke Docker Compose que inspecciona o mount real do container e exige `RW=false`.

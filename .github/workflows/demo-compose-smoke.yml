@@ -66,6 +66,17 @@ jobs:
           test "$storage_mount_rw" = "false"
           echo "Verified vision-worker mounts shelf image storage read-only."
 
+          rootfs_read_only="$(docker inspect "$worker_id" --format '{{.HostConfig.ReadonlyRootfs}}')"
+          worker_user="$(docker inspect "$worker_id" --format '{{.Config.User}}')"
+          dropped_caps="$(docker inspect "$worker_id" --format '{{join .HostConfig.CapDrop ","}}')"
+          security_options="$(docker inspect "$worker_id" --format '{{join .HostConfig.SecurityOpt ","}}')"
+          test "$rootfs_read_only" = "true"
+          test "$worker_user" = "65532:65532"
+          grep -q 'ALL' <<< "$dropped_caps"
+          grep -q 'no-new-privileges:true' <<< "$security_options"
+          docker compose exec -T vision-worker python -c "import os; assert os.geteuid() == 65532; assert os.access('/tmp', os.W_OK); assert not os.access('/app', os.W_OK); assert not os.access('/app/storage/shelf-images', os.W_OK); assert not os.access('/models', os.W_OK)"
+          echo "Verified non-root worker, read-only root filesystem, dropped capabilities, no-new-privileges and writable temporary directory only."
+
           while IFS='|' read -r role email password; do
             response="$(curl --fail --silent --show-error \
               -H 'Content-Type: application/json' \

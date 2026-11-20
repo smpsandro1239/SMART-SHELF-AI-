@@ -58,9 +58,20 @@ services:
     build:
       context: ./apps/api
     restart: unless-stopped
+    user: "65532:65532"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=64m,mode=1777,uid=65532,gid=65532
     command: ["python", "-m", "app.vision_worker", "--poll-interval", "5"]
     environment:
       APP_ENV: ${APP_ENV:-development}
+      HOME: /tmp
+      XDG_CACHE_HOME: /tmp/.cache
+      TMPDIR: /tmp
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:-INSECURE-DEVELOPMENT-KEY-CHANGE-ME}
       BOOTSTRAP_ADMIN_KEY: ${BOOTSTRAP_ADMIN_KEY:-}
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-smart_shelf}:${POSTGRES_PASSWORD:-local_only_change_me}@db:5432/${POSTGRES_DB:-smart_shelf}

@@ -1,3 +1,12 @@
+### Hardening do container vision-worker — 2026-11-20
+
+- O worker executa como UID/GID `65532:65532`, sem privilégios Linux adicionais.
+- Root filesystem read-only, `cap_drop: ALL`, `no-new-privileges:true` e tmpfs limitado a `/tmp`; HOME/cache/TMPDIR usam essa área temporária.
+- Imagens e pesos de modelos permanecem em mounts read-only.
+- O smoke Compose valida configuração Docker efectiva e permissões de escrita do processo.
+- Esta alteração não hardena a API, não separa o armazenamento de outputs de datasets e não prova quiescência de workers antigos.
+- Validação CI pendente no commit desta ronda.
+
 ### Isolamento filesystem da captura — primeira barreira read-only (2026-11-20)
 
 - O serviço `vision-worker` monta agora o volume persistente `shelf_images` em modo só de leitura; a API permanece responsável por escrever uploads e gerir retenção.
