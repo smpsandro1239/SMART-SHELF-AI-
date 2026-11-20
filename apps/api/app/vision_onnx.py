@@ -228,6 +228,8 @@ class ONNXShelfVisionProvider:
             raise ONNXConfigurationError("Detector output must have rank 2 or 3")
         if output_shape[-1] != 6:
             raise ONNXConfigurationError("Detector output must expose exactly 6 values per detection")
+        if len(output_shape) == 3 and isinstance(output_shape[0], int) and output_shape[0] != 1:
+            raise ONNXConfigurationError("Detector output batch size must be 1 or dynamic")
 
     @staticmethod
     def _validate_embedding_contract(session, input_size: int) -> None:

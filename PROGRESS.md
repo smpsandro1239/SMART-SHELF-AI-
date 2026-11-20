@@ -1,3 +1,10 @@
+## 2026-11-20 — Validação ONNX e contrato de batch do output
+
+- A CI do commit `1bd2e36178420446689f3be76a0ac837c8273ed5` terminou com sucesso: API CI **1358 passed, 1 skipped, 1 warning**, Quality Gates **1358 passed, 1 skipped, 1 warning**, e Docker Compose smoke aprovado. O API CI também passou as migrations PostgreSQL 16 e os smokes de concorrência/autorização.
+- A revisão do contrato do output identificou que a validação aceitava metadados de saída com batch estático superior a 1, embora o decoder apenas suporte `[N, 6]` e `[1, N, 6]`. O provider rejeita agora esse metadado antes da inferência; batches dinâmicos continuam aceites.
+- Foi acrescentado teste de regressão para `[2, N, 6]`. A nova alteração aguarda CI; não foram executados testes localmente nesta sessão.
+- A proveniência por SHA-256 já identifica os pesos e a configuração efectiva, mas não substitui um manifesto assinado/autoridade de aprovação do modelo. O provider continua experimental sem pesos e dataset comercial aprovados.
+
 ## 2026-11-20 — Validação directa da configuração do provider ONNX
 
 - A auditoria encontrou que os limites de `VISION_INPUT_SIZE`, `VISION_CONFIDENCE_THRESHOLD` e `VISION_MAX_DETECTIONS` eram validados na factory de ambiente, mas não no construtor público do provider.

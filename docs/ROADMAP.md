@@ -134,11 +134,12 @@
 - [x] Confirmar o smoke PostgreSQL de autorização multi-loja das sessões de captura no mesmo workflow.
 - [ ] Continuar auditoria por rota/handler; não inferir cobertura exaustiva a partir dos cenários já aprovados.
 
-### Configuração directa do provider ONNX — 2026-11-20
+### Validação directa e contrato de output ONNX — 2026-11-20
 
-- Reforçado o construtor para aplicar os mesmos limites que a factory de ambiente: tamanho de entrada inteiro 32–4096, threshold finito entre 0 e 1 e máximo de deteções inteiro 1–2000.
-- Booleanos, valores fraccionários, NaN e infinito são rejeitados antes de carregar sessões ONNX.
-- Testes paramétricos acrescentados para os três parâmetros. Validação CI pendente; não declarar o provider operacional nem promover pesos sem dataset e avaliação reais.
+- O commit `1bd2e361` passou API CI e Quality Gates com **1358 testes aprovados, 1 ignorado e 1 aviso**, além de migrations/smokes PostgreSQL 16 e Docker Compose smoke.
+- O construtor rejeita limites numéricos inválidos; o contrato do output foi adicionalmente endurecido para rejeitar batch estático diferente de 1, coerente com o decoder.
+- A regressão do batch estático foi acrescentada nesta ronda e aguarda CI do novo commit. Não foram executados testes localmente.
+- O fingerprint SHA-256 não equivale a assinatura/autorização de modelo; continuam pendentes manifesto assinado, dataset autorizado e avaliação reproduzível.
 
 ### Prioridades ainda abertas
 

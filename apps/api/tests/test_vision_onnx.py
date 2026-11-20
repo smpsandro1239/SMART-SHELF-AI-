@@ -150,10 +150,18 @@ def test_detector_contract_accepts_documented_float32_nchw_post_nms_output():
         (fake_session(input_shape=(1, 3, 320, 640)), "VISION_INPUT_SIZE"),
         (fake_session(output_shape=(1, 84, 8400)), "6 values"),
         (fake_session(output_shape=(1, 100, 7)), "6 values"),
+        (fake_session(output_shape=(2, 100, 6)), "batch size"),
     ],
 )
 def test_detector_contract_rejects_incompatible_model_metadata(session, message):
     with pytest.raises(ONNXConfigurationError, match=message):
+        ONNXShelfVisionProvider._validate_detector_contract(session, 640)
+
+
+def test_detector_contract_rejects_static_output_batch_larger_than_one():
+    session = fake_session(output_shape=(2, 100, 6))
+
+    with pytest.raises(ONNXConfigurationError, match="batch size"):
         ONNXShelfVisionProvider._validate_detector_contract(session, 640)
 
 
