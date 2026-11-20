@@ -28,6 +28,61 @@ def test_access_token_rejects_tampering():
         decode_access_token(token + "tampered")
 
 
+def test_request_user_fails_closed_when_actor_disappears_after_middleware_auth(monkeypatch):
+    from types import SimpleNamespace
+
+    from fastapi import HTTPException
+
+    from app.config import settings
+    from app.main import _request_user
+
+    monkeypatch.setattr(settings, "app_env", "production")
+    request = SimpleNamespace(
+        state=SimpleNamespace(user_id=17),
+        method="GET",
+        url=SimpleNamespace(path="/api/v1/shelf-images/42/content"),
+    )
+
+    class DeletedActorSession:
+        def get(self, model, user_id):
+            assert user_id == 17
+            return None
+
+    with pytest.raises(HTTPException) as error:
+        _request_user(DeletedActorSession(), request)
+
+    assert error.value.status_code == 401
+    assert error.value.detail == "Authenticated user is no longer active"
+
+
+def test_request_user_rechecks_role_after_middleware_authentication(monkeypatch):
+    from types import SimpleNamespace
+
+    from fastapi import HTTPException
+
+    from app.config import settings
+    from app.main import _request_user
+
+    monkeypatch.setattr(settings, "app_env", "production")
+    employee = SimpleNamespace(id=17, is_active=True, role="EMPLOYEE")
+    request = SimpleNamespace(
+        state=SimpleNamespace(user_id=17, user_role="SUPERVISOR"),
+        method="POST",
+        url=SimpleNamespace(path="/api/v1/shelf-image-detections/99/reviews"),
+    )
+
+    class DemotedActorSession:
+        def get(self, model, user_id):
+            assert user_id == 17
+            return employee
+
+    with pytest.raises(HTTPException) as error:
+        _request_user(DemotedActorSession(), request)
+
+    assert error.value.status_code == 403
+    assert error.value.detail == "Supervisor role required"
+
+
 def test_store_scope_allows_admin_to_access_any_store():
     from types import SimpleNamespace
     from app.main import _enforce_store_scope
