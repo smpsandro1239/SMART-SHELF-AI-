@@ -107,3 +107,11 @@
 - Acrescentados três testes em `test_dataset_job_output_publications.py`: consumo autorizado dos bytes correctos, rejeição de callback que devolve valor truthy diferente de `True`, e rejeição de ficheiro publicado adulterado.
 - Commit de testes: `a2b0175490b2ea56fa49956d92de1e1c1147326a`.
 - Os testes foram adicionados ao repositório, mas ainda não executados localmente nem validados por CI nesta fase.
+
+## 2026-11-20 — Locks da proveniência durante consumo de outputs
+
+- A leitura de outputs derivados já bloqueava publicações ancestrais, jobs, imagens, prateleiras e zonas, mas consultava as linhas imutáveis `DatasetExecutionJobSource` sem lock explícito.
+- O consumidor passou a obter essas linhas com `FOR UPDATE`, `populate_existing` e ordenação estável por `shelf_image_id`, `job_id` e `id`, mantendo os locks na transacção que abrange a validação e a leitura integral dos bytes.
+- Teste de regressão acrescentado para confirmar SQL PostgreSQL com `FOR UPDATE`, filtro dos jobs esperados e ordenação determinística.
+- Commits: implementação `b08cf3c`; teste `8d4ef12`.
+- Os testes ainda não foram executados localmente; a validação depende do CI.
