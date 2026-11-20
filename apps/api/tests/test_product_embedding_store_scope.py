@@ -127,9 +127,9 @@ def test_approved_embedding_registry_is_isolated_by_source_store_and_excludes_un
                     reviewed_by_user_id=reviewer.id,
                     reviewed_at=models.utc_now(),
                 ),
-                /* An approved exemplar without a source image has no
-                   trustworthy store lineage and must never enter a
-                   store-specific worker registry. */
+                # An approved exemplar without a source image has no
+                # trustworthy store lineage and must never enter a
+                # store-specific worker registry.
                 models.ProductEmbeddingExemplar(
                     product_id=product_b["id"],
                     shelf_image_id=None,
