@@ -115,3 +115,11 @@
 - Teste de regressão acrescentado para confirmar SQL PostgreSQL com `FOR UPDATE`, filtro dos jobs esperados e ordenação determinística.
 - Commits: implementação `b08cf3c`; teste `8d4ef12`.
 - Os testes ainda não foram executados localmente; a validação depende do CI.
+
+## 2026-11-20 — Correcção da verificação SQL dos locks de proveniência
+
+- A primeira execução de Quality Gates no commit documental `5f43652` terminou com **1 falha, 1398 aprovados e 1 ignorado**. A falha estava no teste `test_output_consumer_locks_source_lineage_rows_in_stable_order`: o teste executava a query contra SQLite sem criar o esquema e tentava compilar um resultado materializado.
+- Corrigida a separação no módulo `dataset_job_output_consumption.py`: `_output_sources_query` constrói a query com `FOR UPDATE` e ordenação determinística; `_lock_output_sources` executa-a no fluxo real de consumo.
+- O teste agora compila `_output_sources_query` com o dialect PostgreSQL sem executar a query em SQLite.
+- Commits: `d82ec0a` (código/testabilidade) e `a2fbc1a` (teste).
+- A falha anterior é reproduzível nos logs do Quality Gates run `44829643260`; a correcção aguarda nova validação integral. Não foram executados testes localmente.
