@@ -912,3 +912,7 @@ A alteração foi validada no API CI [44588809660](https://github.com/smpsandro1
 - O resultado obsoleto deve ser descartado sem publicar deteções nem alterar observações/inventário.
 - A cobertura verifica a fronteira de claim do worker em SQLite; a serialização concorrente real continua dependente dos smokes PostgreSQL dedicados.
 - Validado no commit `4212aeab21bfe9182a485e10cfbd8a209d1d28ac`: API CI [44652277501](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44652277501), Quality Gates [44652277455](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44652277455) e Docker Compose [44652278042](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44652278042) passaram. O smoke PostgreSQL cobre o takeover com resultado válido obsoleto e falha de provider após takeover; a suite API terminou com 1374 passed, 1 skipped e 1 warning.
+
+## 2026-11-20 — Teste dos locks da proveniência de outputs
+
+A primeira validação da alteração de locks falhou apenas no novo teste SQL: este executava uma query em SQLite sem criar o esquema e, por isso, não conseguia compilar a instrução PostgreSQL. A implementação foi separada em construtor de query e executor, permitindo inspeccionar o SQL PostgreSQL sem executar `FOR UPDATE` em SQLite. Commits de correcção: `d82ec0a` e `a2fbc1a`. A nova execução API CI/Quality Gates/Docker Compose permanece pendente.
