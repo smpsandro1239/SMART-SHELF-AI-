@@ -1236,13 +1236,13 @@ def test_published_output_consumer_rejects_tampered_published_bytes(publication_
 def test_output_consumer_locks_source_lineage_rows_in_stable_order():
     from sqlalchemy.dialects import postgresql
 
-    from app.dataset_job_output_consumption import _lock_output_sources
+    from app.dataset_job_output_consumption import _output_sources_query
 
     engine = create_engine("sqlite://")
     db = sessionmaker(bind=engine)()
     try:
-        # Compile against PostgreSQL because SQLite does not implement row locks.
-        query = _lock_output_sources(db, [9, 2])
+        # Compile the query against PostgreSQL without executing it on SQLite.
+        query = _output_sources_query(db, [9, 2])
         sql = str(query.statement.compile(
             dialect=postgresql.dialect(),
             compile_kwargs={"literal_binds": True},
