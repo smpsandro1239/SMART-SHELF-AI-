@@ -29,7 +29,7 @@ def override_get_db():
         db.close()
 
 
-def test_approved_embedding_registry_is_isolated_by_source_store():
+def test_approved_embedding_registry_is_isolated_by_source_store_and_excludes_unscoped_exemplars():
     previous_override = app.dependency_overrides.get(get_db)
     Base.metadata.drop_all(bind=TEST_ENGINE)
     Base.metadata.create_all(bind=TEST_ENGINE)
@@ -123,6 +123,21 @@ def test_approved_embedding_registry_is_isolated_by_source_store():
                     model_version="store-scoped-v1",
                     image_sha256="b" * 64,
                     licence="store-owned-reference-image",
+                    review_status="APPROVED",
+                    reviewed_by_user_id=reviewer.id,
+                    reviewed_at=models.utc_now(),
+                ),
+                /* An approved exemplar without a source image has no
+                   trustworthy store lineage and must never enter a
+                   store-specific worker registry. */
+                models.ProductEmbeddingExemplar(
+                    product_id=product_b["id"],
+                    shelf_image_id=None,
+                    embedding=[0.7, 0.7],
+                    embedding_dimension=2,
+                    model_version="store-scoped-v1",
+                    image_sha256="c" * 64,
+                    licence="admin-approved-unscoped-reference",
                     review_status="APPROVED",
                     reviewed_by_user_id=reviewer.id,
                     reviewed_at=models.utc_now(),
