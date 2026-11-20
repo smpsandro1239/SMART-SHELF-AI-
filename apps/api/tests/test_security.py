@@ -116,3 +116,28 @@ def test_api_role_policy_is_centralized_and_fail_closed():
     assert classify_api_route("GET", "/api/v1/products") == "AUTHENTICATED_STAFF"
     assert api_role_denial("GET", "/api/v1/products", "EMPLOYEE") == "Employee access is limited to assigned tasks"
     assert api_role_denial("GET", "/api/v1/products", "UNKNOWN") == "User role is not authorized"
+
+
+def test_api_role_policy_requires_path_segment_boundaries():
+    from app.api_security_policy import api_role_denial, classify_api_route
+
+    lookalike_admin_path = "/api/v1/auth/users-export"
+    lookalike_supervisor_path = "/api/v1/observation-alerts-legacy"
+
+    assert classify_api_route("GET", lookalike_admin_path) == "AUTHENTICATED_STAFF"
+    assert api_role_denial("GET", lookalike_admin_path, "EMPLOYEE") == (
+        "Employee access is limited to assigned tasks"
+    )
+    assert classify_api_route("GET", lookalike_supervisor_path) == "AUTHENTICATED_STAFF"
+    assert api_role_denial("GET", lookalike_supervisor_path, "EMPLOYEE") == (
+        "Employee access is limited to assigned tasks"
+    )
+
+
+def test_api_role_policy_preserves_real_nested_route_prefixes():
+    from app.api_security_policy import api_role_denial, classify_api_route
+
+    assert classify_api_route("GET", "/api/v1/observation-alerts/42") == "SUPERVISOR_OR_ADMIN"
+    assert api_role_denial("GET", "/api/v1/observation-alerts/42", "SUPERVISOR") is None
+    assert classify_api_route("GET", "/api/v1/shelf-images/42/content") == "EMPLOYEE_ALLOWLIST"
+    assert api_role_denial("GET", "/api/v1/shelf-images/42/content", "EMPLOYEE") is None
