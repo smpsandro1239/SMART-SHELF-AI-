@@ -84,8 +84,8 @@ def _read_verified_file(
             os.close(directory_fd)
 
 
-def _lock_output_sources(db: Session, job_ids: list[int]):
-    """Lock immutable source-lineage rows until the output read transaction ends."""
+def _output_sources_query(db: Session, job_ids: list[int]):
+    """Build the deterministically ordered row-locking query for source lineage."""
     return (
         db.query(models.DatasetExecutionJobSource)
         .filter(models.DatasetExecutionJobSource.job_id.in_(job_ids))
@@ -96,8 +96,12 @@ def _lock_output_sources(db: Session, job_ids: list[int]):
         )
         .with_for_update()
         .populate_existing()
-        .all()
     )
+
+
+def _lock_output_sources(db: Session, job_ids: list[int]):
+    """Lock immutable source-lineage rows until the output read transaction ends."""
+    return _output_sources_query(db, job_ids).all()
 
 
 def consume_dataset_job_output_bytes(
