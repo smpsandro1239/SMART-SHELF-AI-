@@ -1212,3 +1212,5 @@ Critério global: nenhuma capacidade pode ser marcada como concluída sem códig
 - [x] Bloquear as linhas `DatasetExecutionJobSource` com `SELECT ... FOR UPDATE` durante o consumo de outputs publicados, ordenando por imagem, job e ID para aquisição determinística dos locks.
 - [x] Acrescentar teste que verifica a cláusula PostgreSQL `FOR UPDATE` e a ordenação estável da query.
 - [ ] Validar o helper e os testes de consumo no CI antes de fechar esta tarefa.
+- [x] Corrigir o teste SQL: separar a construção da query da sua execução para compilar PostgreSQL sem tentar executar `FOR UPDATE` em SQLite nem depender de tabelas não criadas.
+- [ ] Reexecutar API CI, Quality Gates e Docker Compose no SHA corrigido.
