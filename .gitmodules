@@ -9,3 +9,7 @@
 [submodule "vendor/frontend-design"]
 	path = vendor/frontend-design
 	url = https://github.com/Ilm-Alan/frontend-design.git
+
+[submodule "vendor/owasp-secure-agent-playbook"]
+	path = vendor/owasp-secure-agent-playbook
+	url = https://github.com/OWASP/secure-agent-playbook.git

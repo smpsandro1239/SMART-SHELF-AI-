@@ -1,3 +1,10 @@
+## OWASP Secure Agent Playbook — integração de segurança (2026-11-20)
+
+- [x] Fixar OWASP Secure Agent Playbook como submódulo Git `vendor/owasp-secure-agent-playbook` no commit `65d4efd2cd0b081d52101e9708792b944e4ddebb`, licença CC-BY-4.0 e atribuição preservada.
+- [x] Expor procedimentos de API security review, code security review, SCA e secrets scan através de uma skill de entrada.
+- [ ] Aplicar auditoria OWASP à autorização multi-loja, com evidência por endpoint e classificação CWE/OWASP.
+- [ ] Executar SCA apenas quando existir scanner disponível; não inventar resultados.
+
 ## Inventário de outputs finais sem publicação auditável — 2026-11-20
 
 - [ ] Inventariar ficheiros finais canónicos em `published/<job>/<token>-<sha256>.artifact` sem linha append-only de publicação; incluir digest, tamanho e estado do job.

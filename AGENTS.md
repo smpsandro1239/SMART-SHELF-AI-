@@ -15,6 +15,7 @@ O pedido explícito do utilizador para avançar autonomamente e o protocolo do r
 - Revisão: `vendor/superpowers/skills/requesting-code-review/SKILL.md`.
 - Impeccable: `.agents/skills/impeccable/SKILL.md`.
 - Frontend Design: `.agents/skills/frontend-design/SKILL.md`.
+- OWASP Security: `.agents/skills/owasp-security/SKILL.md`.
 
 Brainstorming só quando há decisão em aberto; requisitos aprovados no README/roadmap não precisam de nova aprovação. Usa subagentes/worktrees apenas se existirem ferramentas reais no runtime. Se a execução ocorrer via GitHub API, usa commits pequenos, CAS e CI; não afirmes que criaste worktrees.
 

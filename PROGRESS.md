@@ -1,3 +1,10 @@
+## 2026-11-20 — Integração OWASP Secure Agent Playbook
+
+- Fixado o repositório OWASP Secure Agent Playbook em `65d4efd2cd0b081d52101e9708792b944e4ddebb` como submódulo; licença CC-BY-4.0 e atribuição documentadas.
+- Criada skill de entrada para API security review, code review, SCA e secrets scan.
+- Os procedimentos são guias de revisão, não scanners automáticos; só reportar execução de scanners quando ferramentas estiverem instaladas e executadas.
+- Próxima aplicação: auditoria P0 de autorização multi-loja e retenção com findings rastreáveis por CWE/OWASP.
+
 ## 2026-11-20 — Inventário report-only de outputs publicados sem auditoria
 
 - Implementado o inventário de artefactos finais canónicos sem referência numa linha append-only de publicação.

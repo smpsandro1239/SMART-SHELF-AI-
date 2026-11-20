@@ -5,6 +5,7 @@
 | Superpowers | https://github.com/obra/superpowers | `22f0b463e7a5e579904dd6211a520321035526f7` | MIT | Processo de engenharia, TDD, debugging, planeamento e revisão |
 | Impeccable | https://github.com/pbakaus/impeccable | `b49177d32788f2dc585c42831d845dacf1ebed2c` | Apache-2.0 | Auditoria e qualidade UX/UI |
 | Frontend Design | https://github.com/Ilm-Alan/frontend-design | `f8966e6cc9b90247aa102d71f7e675ec3462b419` | MIT | Direcção visual e composição de novas interfaces |
+| OWASP Secure Agent Playbook | https://github.com/OWASP/secure-agent-playbook | `65d4efd2cd0b081d52101e9708792b944e4ddebb` | CC-BY-4.0 | Revisão de segurança API/código, dependências e segredos |
 
 Todos são submódulos Git em `vendor/`; não são dependências runtime. As licenças e fontes upstream permanecem intactas.
 
