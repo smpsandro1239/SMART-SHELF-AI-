@@ -54,6 +54,7 @@
 - [x] Acrescentar verificação no smoke Docker Compose que inspecciona o mount real do container e exige `RW=false`.
 - [ ] Separar identidades UID/GID e permissões de directórios; confirmar compatibilidade com volumes existentes e operações de retenção/purga antes de alterar ownership.
 - [x] Separar staging/publicações de outputs de datasets num volume Docker persistente `dataset_outputs`, montado apenas na API; o `vision-worker` não recebe esse volume. O smoke verifica os mounts reais e a escrita pela API.
+- [x] Reforçar o smoke para comparar os nomes dos volumes Docker: o volume de imagens partilhado API/vision-worker tem de ser diferente do volume de outputs de datasets.
 - [ ] Definir handoff controlado e mounts mínimos quando existir um worker de transformação de datasets; esse worker ainda não está integrado no Compose.
 - [ ] Provar quiescência física de workers antigos antes de qualquer limpeza de staging órfão; fencing SQL isolado não é suficiente.
 

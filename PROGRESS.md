@@ -1,3 +1,9 @@
+## 2026-11-20 — Smoke reforçado para identidade dos volumes
+
+- O smoke Docker Compose verifica também os nomes dos volumes Docker, não apenas os pontos de montagem e permissões.
+- Exige que API e vision-worker partilhem o mesmo volume de imagens, que a API use um volume de datasets distinto e que o worker não o monte.
+- Esta verificação reduz o risco de uma configuração futura apontar ambos os caminhos para o mesmo volume por engano.
+
 ## 2026-11-20 — Volume dedicado para outputs de datasets
 
 - O Compose passa a montar o volume persistente `dataset_outputs` em `/app/storage/dataset-outputs`, explicitamente configurado em `DATASET_OUTPUT_STORAGE_PATH`.
