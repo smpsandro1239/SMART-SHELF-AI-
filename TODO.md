@@ -1135,7 +1135,7 @@ Critério global: nenhuma capacidade pode ser marcada como concluída sem códig
 - [x] Acrescentar regressão de clipping às dimensões da imagem original para caixas que intersectam padding do letterbox.
 - [x] Acrescentar testes paramétricos para coordenadas negativas/superiores a 1 e valores NaN/Inf.
 - [x] Fixar o ordenamento por confiança e o limite máximo de deteções através de teste.
-- [ ] Acrescentar teste integrado do worker que prove que imagem corrompida/timeout termina em FAILED, sem deteções persistidas nem alteração de observações/inventário.
+- [x] Acrescentar teste integrado do worker que prova que timeout/falha do provider termina em FAILED, sem deteções persistidas nem alteração de observações/inventário.
 - [ ] Validar o contrato com um modelo ONNX exportado e dataset anotado autorizado; testes sintéticos não demonstram precisão nem compatibilidade com modelos externos.
 
 
@@ -1169,16 +1169,20 @@ Critério global: nenhuma capacidade pode ser marcada como concluída sem códig
 
 ## Durabilidade do filesystem na promoção de outputs — 2026-11-20
 
-- [x] Acrescentar regressão para falha do `fsync` do directório depois do hard link e antes do commit SQL.
-- [x] Confirmar rollback da publicação SQL, preservação do staging e retry com verificação SHA-256 do destino existente.
-- [ ] Validar API CI, Quality Gates e Docker Compose.
-- [ ] Avaliar falhas de `fsync` do ficheiro temporário e da remoção do staging; distinguir erros recuperáveis de garantias de durabilidade que o filesystem/volume não oferece.
+- [x] Cobrir falha de `fsync` do ficheiro temporário: abortar antes do commit, remover o temporário, preservar staging e permitir retry.
+- [x] Sincronizar os directórios-pai de cada componente da árvore de armazenamento, incluindo componentes já existentes em retries após falha anterior.
+- [x] Ao recuperar um destino já existente, voltar a verificar SHA-256/tamanho/metadados, sincronizar o ficheiro e o directório antes de registar a publicação.
+- [x] Cobrir falha de `fsync` depois do hard link, rollback SQL e retry idempotente com verificação do destino.
+- [x] Garantir libertação de descritores quando a sincronização de um directório falha depois da abertura do componente.
+- [x] Cobrir falha de `fsync` na remoção pós-commit: a publicação permanece válida e a falha gera aviso sem expor caminhos.
+- [x] Validar no commit `4beb3f002b809de8ef50f9990a377db2f7f7c36d`: API CI, Quality Gates e Docker Compose passaram; suite com 1404 aprovados, 1 ignorado e 1 aviso.
+- [x] Documentar que a garantia depende do filesystem/volume honrar `fsync`; CI não prova resistência a perda física, falha de energia ou storage remoto.
 
 ## Limpeza pós-commit e reconciliação — 2026-11-20
 
 - [x] Testar falha de permissões na remoção de staging depois do commit da publicação.
 - [x] Confirmar que o output e a linha de auditoria permanecem válidos e que o staging residual pode ser removido pelo reconciliador após o período de segurança, com digest/tamanho coincidentes.
-- [ ] Validar API CI e Quality Gates para os testes de falha de fsync e limpeza pós-commit.
+- [x] Validar API CI e Quality Gates para os testes de falha de fsync e limpeza pós-commit no commit `4beb3f0` (1404 passed, 1 skipped, 1 warning).
 - [ ] Manter limpeza de staging órfão sem publicação em modo report-only até prova independente de quiescência dos workers.
 - [x] Testar isolamento multi-loja nas mutações por `planogram_id`: outro supervisor não pode editar um rascunho, ativar ou retirar um planograma de loja alheia; confirmar que o estado ACTIVE permanece inalterado.
 
@@ -1189,7 +1193,7 @@ Critério global: nenhuma capacidade pode ser marcada como concluída sem códig
 - [x] Tornar o carregamento do actor fail-closed fora do ambiente de testes: actor inexistente/inactivo devolve HTTP 401.
 - [x] Reavaliar a política RBAC com o papel actual da base de dados no limite do handler, impedindo que uma alteração de role entre middleware e handler preserve permissões antigas.
 - [x] Acrescentar testes unitários para actor removido e downgrade SUPERVISOR → EMPLOYEE entre autenticação e execução do handler.
-- [ ] Confirmar os testes e a suite completa no CI dos novos commits; não há execução local nesta sessão.
+- [x] Confirmar os testes e a suite completa no API CI/Quality Gates do commit `4beb3f0` (1404 passed, 1 skipped, 1 warning); não houve execução local.
 - [ ] Rever futuramente a mesma janela para outros dados de autorização mutáveis e transacções longas, sem substituir a revalidação do actor por confiança exclusiva no JWT.
 
 
@@ -1198,7 +1202,7 @@ Critério global: nenhuma capacidade pode ser marcada como concluída sem códig
 - [x] Confirmar que o worker resolve a loja a partir da imagem alvo e passa sempre `store_id` ao construir o registo de embeddings.
 - [x] Confirmar que o carregador por loja faz join obrigatório à imagem/prateleira/zona; exemplares sem imagem de origem não entram em registos específicos de loja.
 - [x] Estender o teste de isolamento para incluir um exemplar APPROVED sem `shelf_image_id`; as lojas A e B não o podem carregar nos respectivos registos.
-- [ ] Confirmar execução do teste no CI após o commit de regressão.
+- [x] Confirmar execução do teste no API CI/Quality Gates do commit `4beb3f0`.
 - [ ] Definir, numa alteração funcional separada, se os exemplares sem imagem de origem devem ser proibidos na criação ou mantidos apenas para fluxos administrativos globais. Não alterar este comportamento sem uma decisão de produto e análise dos consumidores.
 
 ## Consumo seguro de outputs publicados — 2026-11-20
@@ -1211,6 +1215,6 @@ Critério global: nenhuma capacidade pode ser marcada como concluída sem códig
 
 - [x] Bloquear as linhas `DatasetExecutionJobSource` com `SELECT ... FOR UPDATE` durante o consumo de outputs publicados, ordenando por imagem, job e ID para aquisição determinística dos locks.
 - [x] Acrescentar teste que verifica a cláusula PostgreSQL `FOR UPDATE` e a ordenação estável da query.
-- [ ] Validar o helper e os testes de consumo no CI antes de fechar esta tarefa.
+- [x] Validar o helper e os testes de consumo no API CI/Quality Gates do commit `4beb3f0` (1404 passed, 1 skipped, 1 warning).
 - [x] Corrigir o teste SQL: separar a construção da query da sua execução para compilar PostgreSQL sem tentar executar `FOR UPDATE` em SQLite nem depender de tabelas não criadas.
-- [ ] Reexecutar API CI, Quality Gates e Docker Compose no SHA corrigido.
+- [x] Reexecutar API CI, Quality Gates e Docker Compose no SHA corrigido `4beb3f0`; os três workflows passaram.
