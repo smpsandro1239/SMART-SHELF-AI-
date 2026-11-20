@@ -1,3 +1,10 @@
+## 2026-11-20 — Hardening de CORS em produção (correcção da primeira validação)
+
+- A primeira execução GREEN revelou dois problemas na validação: nomes DNS eram encaminhados directamente para `ipaddress.ip_address` (causando falso rejeitamento) e testes anteriores de configuração de produção não forneciam a origem HTTPS agora obrigatória.
+- A validação foi corrigida para distinguir hosts DNS de IPs literais; os testes de configuração de produção passaram a declarar uma origem HTTPS explícita, excepto os casos que testam deliberadamente origens inválidas.
+- A precedência de validação preserva a mensagem específica quando `VISION_PROVIDER_MODE=mock` é usado em produção.
+- Nova execução CI do commit seguinte pendente.
+
 ## 2026-11-20 — Hardening de CORS em produção (em validação)
 
 - A revisão OWASP identificou que a configuração de produção aceitava wildcard, HTTP, localhost e origens com path, apesar de `allow_credentials=True`.

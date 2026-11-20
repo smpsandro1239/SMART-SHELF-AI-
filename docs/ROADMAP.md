@@ -1,5 +1,11 @@
 ### Hardening CORS em produção (2026-11-20)
 
+- Validação fail-closed de origens explícitas HTTPS; rejeita wildcard, userinfo, path, query, fragmentos, localhost e loopback.
+- A primeira execução detectou falso rejeitamento de DNS e fixtures de produção incompletos; ambos foram corrigidos.
+- Revalidação GREEN pendente.
+
+### Hardening CORS em produção (2026-11-20)
+
 - A configuração anterior aceitava origens wildcard, HTTP, localhost e paths em produção com credenciais CORS activadas.
 - Implementada validação fail-closed de origens explícitas HTTPS; rejeita wildcard, userinfo, path, query, fragmentos e loopback.
 - RED observado no commit `e8c9935`; GREEN/CI pendente.

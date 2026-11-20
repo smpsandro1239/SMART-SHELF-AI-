@@ -12,7 +12,7 @@ def _clear_secret_environment(monkeypatch):
 def test_production_requires_unique_jwt_and_bootstrap_secrets(monkeypatch):
     _clear_secret_environment(monkeypatch)
     with pytest.raises(ValidationError, match="JWT_SECRET_KEY"):
-        Settings(_env_file=None, app_env="production", bootstrap_admin_key="b" * 32)
+        Settings(_env_file=None, app_env="production", cors_allowed_origins="https://app.example.com", bootstrap_admin_key="b" * 32)
 
 
 def test_production_rejects_short_jwt_secret(monkeypatch):
@@ -32,6 +32,7 @@ def test_production_rejects_short_bootstrap_secret(monkeypatch):
         Settings(
             _env_file=None,
             app_env="production",
+            cors_allowed_origins="https://app.example.com",
             jwt_secret_key="j" * 32,
             bootstrap_admin_key="b" * 31,
         )
@@ -48,6 +49,7 @@ def test_production_rejects_placeholder_jwt_secrets(monkeypatch, secret):
         Settings(
             _env_file=None,
             app_env="production",
+            cors_allowed_origins="https://app.example.com",
             jwt_secret_key=secret,
             bootstrap_admin_key="b" * 32,
         )
@@ -63,6 +65,7 @@ def test_production_rejects_placeholder_bootstrap_secrets(monkeypatch, secret):
         Settings(
             _env_file=None,
             app_env="production",
+            cors_allowed_origins="https://app.example.com",
             jwt_secret_key="j" * 32,
             bootstrap_admin_key=secret,
         )
@@ -75,6 +78,7 @@ def test_production_rejects_whitespace_in_jwt_secret(monkeypatch, secret):
         Settings(
             _env_file=None,
             app_env="production",
+            cors_allowed_origins="https://app.example.com",
             jwt_secret_key=secret,
             bootstrap_admin_key="b" * 32,
         )
@@ -87,6 +91,7 @@ def test_production_rejects_whitespace_in_bootstrap_secret(monkeypatch, secret):
         Settings(
             _env_file=None,
             app_env="production",
+            cors_allowed_origins="https://app.example.com",
             jwt_secret_key="j" * 32,
             bootstrap_admin_key=secret,
         )
@@ -99,6 +104,7 @@ def test_production_rejects_reused_secrets(monkeypatch):
         Settings(
             _env_file=None,
             app_env="production",
+            cors_allowed_origins="https://app.example.com",
             jwt_secret_key=shared_secret,
             bootstrap_admin_key=shared_secret,
         )
@@ -109,6 +115,7 @@ def test_production_accepts_separate_strong_secrets(monkeypatch):
     settings = Settings(
         _env_file=None,
         app_env="production",
+            cors_allowed_origins="https://app.example.com",
         jwt_secret_key="j" * 32,
         bootstrap_admin_key="b" * 32,
     )
@@ -145,6 +152,7 @@ def test_production_rejects_mock_vision_provider_mode():
         Settings(
             _env_file=None,
             app_env="production",
+            cors_allowed_origins="https://app.example.com",
             jwt_secret_key="j" * 32,
             bootstrap_admin_key="b" * 32,
             vision_provider_mode="mock",

@@ -1,5 +1,11 @@
 ## Segurança P0 — CORS de produção
 
+- [x] Exigir origens CORS explícitas HTTPS em produção; rejeitar wildcard, localhost/loopback, paths, query, fragmentos e origens vazias.
+- [x] Corrigir a validação de host DNS para não tratar nomes DNS como endereços IP; testes incluem origens HTTPS DNS e porta explícita.
+- [ ] Confirmar RED/GREEN e workflows API CI, Quality Gates e Docker Compose no commit de implementação.
+
+## Segurança P0 — CORS de produção
+
 - [ ] Exigir origens CORS explícitas HTTPS em produção; rejeitar wildcard, localhost/loopback, paths, query, fragmentos e origens vazias.
 - [ ] Validar RED/GREEN e API CI, Quality Gates e Docker Compose.
 
