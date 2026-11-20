@@ -64,3 +64,9 @@ A correcção foi validada pelo teste `test_bearer_api_cors_preflight_does_not_e
 ## Evolução da política de autorização
 
 A decisão de RBAC foi extraída para `apps/api/app/api_security_policy.py`, com classificação `PUBLIC`, `ADMIN_ONLY`, `SUPERVISOR_OR_ADMIN`, `EMPLOYEE_ALLOWLIST` e `AUTHENTICATED_STAFF`. O middleware continua a carregar o utilizador activo da base de dados e exige Bearer em todos os endpoints versionados não públicos. A alteração centraliza a lógica, mas não substitui a matriz endpoint × papel × tenant nem prova, por si só, o isolamento de cada handler. A validação CI desta refactor está pendente.
+
+## Política RBAC centralizada
+
+A lógica de role foi extraída para `apps/api/app/api_security_policy.py`, com categorias `PUBLIC`, `ADMIN_ONLY`, `SUPERVISOR_OR_ADMIN`, `EMPLOYEE_ALLOWLIST` e `AUTHENTICATED_STAFF`. A primeira execução falhou devido a uma importação em falta (`f86ef76`); a falha foi corrigida em `afd2a38`. API CI [44787322362](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44787322362), Quality Gates [44787322405](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44787322405) e Docker Compose [44787322365](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44787322365) passaram; **1389 passed, 1 skipped, 1 warning**.
+
+A refactor centraliza a decisão, mas não fecha a matriz completa endpoint × papel × loja: ainda é necessário verificar cada handler e caminho indirecto. As regras continuam baseadas em grupos de paths/métodos, não em metadata declarativa individual em cada rota.

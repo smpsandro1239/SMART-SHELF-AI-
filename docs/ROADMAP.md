@@ -1,3 +1,9 @@
+### RBAC centralizado (2026-11-20)
+
+- Política extraída para `apps/api/app/api_security_policy.py` com categorias por grupo e fail-closed para papel desconhecido.
+- API CI, Quality Gates e Docker Compose passaram no commit `afd2a38`; **1389 passed, 1 skipped, 1 warning**.
+- A matriz completa endpoint × ADMIN/SUPERVISOR/EMPLOYEE × loja permanece em aberto; a centralização não substitui testes de isolamento handler-a-handler.
+
 ### CORS preflight e Bearer — validado (2026-11-20)
 
 - Preflight OPTIONS com Origin/Access-Control-Request-Method passa para CORSMiddleware validar origem, método e headers; API continua a exigir Bearer em pedidos reais.

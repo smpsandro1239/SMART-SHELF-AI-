@@ -17,8 +17,8 @@
 
 - [x] Enumerar as 130 declarações de rotas e rever middleware JWT, identidade/role na base de dados, RBAC, store scope, planogramas e testes de isolamento.
 - [x] Corrigir finding API-CORS-001: origem wildcard/HTTP/localhost não permitida em produção.
-- [ ] Criar política declarativa por rota e teste de cobertura para evitar novas rotas sem papel/tenant scope explícito.
-- [ ] Completar matriz endpoint × ADMIN/SUPERVISOR/EMPLOYEE × loja e testar os casos menos frequentes.
+- [x] Centralizar a decisão RBAC em `apps/api/app/api_security_policy.py`, classificar os grupos de rota e testar a matriz base ADMIN/SUPERVISOR/EMPLOYEE. A cobertura exaustiva por endpoint × papel × tenant continua aberta.
+- [ ] Completar matriz endpoint × ADMIN/SUPERVISOR/EMPLOYEE × loja, incluindo todos os handlers e caminhos indirectos; a classificação centralizada não substitui a prova de isolamento de cada endpoint.
 - [ ] Executar SCA, secret scan e DAST com ferramentas reais; não há evidência dessas execuções nesta ronda.
 
 ## Segurança P0 — CORS de produção
