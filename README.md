@@ -19,6 +19,11 @@ O guião completo, as limitações, os comandos de teste e a lista de capturas e
 
 # SMART SHELF AI
 
+## Qualidade de frontend — Impeccable
+
+O repositório integra a skill [Impeccable](https://github.com/pbakaus/impeccable), fixada como submódulo Git em `vendor/impeccable` e exposta aos agentes através de `.agents/skills/impeccable/SKILL.md`. A integração fornece playbooks de UX/UI, auditoria técnica, documentação de design system e o detector automatizado no workflow **Smart Shelf quality gates**. A aplicação continua sem dependência runtime de Impeccable. O detector começa em modo baseline não bloqueante; falhas de execução do detector continuam a falhar o job. Consultar `PRODUCT.md` e `DESIGN.md` antes de alterar o frontend.
+
+
 **Plataforma inteligente para operações de retalho: monitorização de prateleiras, inventário, deteção de ruturas e reposição assistida.**
 
 ![Estado](https://img.shields.io/badge/estado-em%20desenvolvimento-blue)

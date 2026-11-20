@@ -1,3 +1,14 @@
+## Impeccable — integração e baseline de qualidade visual (2026-11-20)
+
+- [x] Fixar a upstream skill Impeccable como submódulo Git `vendor/impeccable`, apontado ao commit `b49177d32788f2dc585c42831d845dacf1ebed2c`; manter a licença Apache-2.0 e o código upstream intactos.
+- [x] Expor a skill aos agentes em `.agents/skills/impeccable/SKILL.md`, com instruções específicas do SMART SHELF AI e ligação para o playbook oficial.
+- [x] Criar `PRODUCT.md` e `DESIGN.md` a partir dos fluxos, papéis, limitações e tokens efectivamente encontrados no repositório.
+- [x] Integrar o detector Impeccable v4.10.0 no Quality Gates, guardando um relatório baseline sem bloquear por findings preexistentes; falhas de execução continuam bloqueantes.
+- [ ] Obter primeiro relatório detector e classificar findings P0–P3; converter problemas reais em tarefas pequenas e corrigir os prioritários.
+- [ ] Executar `context`, `critique` e `audit` com checkout local e browser; verificar dashboard e fluxos de captura/revisão em desktop e mobile.
+- [ ] Rever acessibilidade por teclado, contraste, estados loading/empty/error/disabled e semântica dos formulários; o build TypeScript não substitui esta validação visual.
+- [ ] Só depois fazer polimento incremental, sem alterar contratos API, permissões ou regras de inventário.
+
 ## Idempotência da observação perante revisão SKU posterior — 2026-11-19
 
 - [x] Identificar que a chave de idempotência por deteção devolvia uma observação anterior mesmo quando uma revisão SKU posterior alterava o produto pedido.

@@ -66,3 +66,24 @@ jobs:
 
       - name: Build web application
         run: npm run build
+
+      - name: Run Impeccable design detector (baseline)
+        shell: bash
+        run: |
+          set +e
+          npx --yes impeccable@4.10.0 detect --json src/ > "$RUNNER_TEMP/impeccable-design-audit.json"
+          detector_status=$?
+          set -e
+          if [ "$detector_status" -ne 0 ] && [ "$detector_status" -ne 2 ]; then
+            echo "Impeccable detector could not complete (exit $detector_status)." >> "$GITHUB_STEP_SUMMARY"
+            exit "$detector_status"
+          fi
+          echo "Impeccable detector completed. Existing findings are recorded as a non-blocking baseline; exit 2 means findings were detected." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload Impeccable baseline
+        uses: actions/upload-artifact@v4
+        with:
+          name: impeccable-design-audit
+          path: ${{ runner.temp }}/impeccable-design-audit.json
+          if-no-files-found: error
+          retention-days: 14

@@ -1,3 +1,11 @@
+### Impeccable — governança de qualidade de frontend (2026-11-20)
+
+- Skill upstream integrada e fixada em `vendor/impeccable`; ponto de entrada dos agentes em `.agents/skills/impeccable/SKILL.md`.
+- Contexto durável de produto e design em `PRODUCT.md` e `DESIGN.md`.
+- Detector v4.10.0 integrado no Quality Gates com relatório baseline não bloqueante para findings preexistentes; erro de execução continua a falhar o job.
+- Estado: integração documental e CI configurada; auditoria visual efectiva e correções de findings ainda pendentes. Não afirmar conformidade WCAG nem aprovação visual sem inspeção renderizada e testes.
+- Próximo passo: recolher o primeiro artefacto de auditoria, priorizar findings, corrigir P0/P1 e fazer verificação visual desktop/mobile.
+
 ### Hardening do container vision-worker — 2026-11-20
 
 - O worker executa como UID/GID `65532:65532`, sem privilégios Linux adicionais.

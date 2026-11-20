@@ -1,3 +1,12 @@
+## 2026-11-20 — Integração Impeccable no workflow de frontend
+
+- Adicionado o submódulo upstream `pbakaus/impeccable`, fixado no commit `b49177d32788f2dc585c42831d845dacf1ebed2c`, sem incorporar a ferramenta como dependência runtime da aplicação.
+- Criada a entrada de skill `.agents/skills/impeccable/SKILL.md` e contexto de produto/design (`PRODUCT.md`, `DESIGN.md`) para orientar agentes no modo Operate.
+- O workflow Smart Shelf quality gates executa `impeccable@4.10.0 detect --json src/` e guarda o relatório como artefacto. Findings existentes são baseline não bloqueante; erro de execução do detector é bloqueante.
+- A integração ainda não constitui auditoria visual aprovada: falta executar o detector no runner, analisar findings, e validar o dashboard renderizado em browser desktop/mobile.
+- A identidade actual foi documentada a partir do CSS existente: DM Sans/Manrope, navy, fundo claro, acento mint/verde, navegação lateral e componentes operacionais.
+- Não houve redesign nem alteração do comportamento funcional do frontend nesta ronda.
+
 ## 2026-11-20 — Smoke reforçado para identidade dos volumes
 
 - O smoke Docker Compose verifica também os nomes dos volumes Docker, não apenas os pontos de montagem e permissões.
