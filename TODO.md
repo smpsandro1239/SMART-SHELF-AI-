@@ -5,6 +5,8 @@
 - [x] Acrescentar testes unitários iniciais para a matriz de papéis e categorias.
 - [ ] Validar a refactor com a suite API completa, testes HTTP de autorização, smokes PostgreSQL 16, Quality Gates e Docker Compose no SHA final.
 - [ ] Evoluir a classificação para metadados explícitos por rota e acrescentar teste de cobertura endpoint × método; a categoria AUTHENTICATED_STAFF ainda funciona como fallback e não prova classificação explícita de cada rota.
+- [x] Criar `apps/api/scripts/audit_api_route_policy.py`, auditor read-only que enumera cada método/rota FastAPI, apresenta categorias efectivas e lista os casos `AUTHENTICATED_STAFF`; `--strict` permite tornar a ausência de fallback num gate depois de rever as permissões.
+- [ ] Executar o auditor no ambiente API e rever manualmente cada fallback antes de converter a auditoria num gate bloqueante.
 - [x] Corrigir correspondência de prefixos para respeitar limites de segmentos (`/users` não deve corresponder a `/users-export`); acrescentar regressões para caminhos semelhantes e rotas aninhadas reais.
 - [ ] Confirmar os testes de fronteira no CI e a suite integral antes de considerar a alteração validada.
 
