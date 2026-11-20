@@ -781,3 +781,11 @@ A alteração foi validada no API CI [44588809660](https://github.com/smpsandro1
 - O decoder rejeita coordenadas normalizadas fora de [0,1] e valores não finitos; caixas degeneradas são descartadas e resultados são ordenados por confiança antes de aplicar o limite máximo de deteções.
 - Os testes sintéticos cobrem o contrato geométrico, mas não substituem validação com modelo ONNX real e dataset autorizado.
 - Próximo passo: testar a fronteira integrada do worker em falhas de inferência, incluindo estado FAILED, fencing/lease e ausência de efeitos em inventário/observações.
+
+
+### 2026-11-20 — Falhas de inferência no worker
+
+- Acrescentado teste integrado para timeout e falha de runtime durante inferência.
+- O teste verifica FAILED e ausência de efeitos derivados em deteções, observações e inventário.
+- O cenário usa SQLite isolado; a cobertura de lease/fencing PostgreSQL permanece nos smokes dedicados.
+- Validação CI pendente no commit desta alteração.

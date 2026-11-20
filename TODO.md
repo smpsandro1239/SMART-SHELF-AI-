@@ -1053,3 +1053,10 @@ Critério global: nenhuma capacidade pode ser marcada como concluída sem códig
 - [x] Fixar o ordenamento por confiança e o limite máximo de deteções através de teste.
 - [ ] Acrescentar teste integrado do worker que prove que imagem corrompida/timeout termina em FAILED, sem deteções persistidas nem alteração de observações/inventário.
 - [ ] Validar o contrato com um modelo ONNX exportado e dataset anotado autorizado; testes sintéticos não demonstram precisão nem compatibilidade com modelos externos.
+
+
+## Falhas de inferência no worker de visão — 2026-11-20
+
+- [x] Acrescentar teste integrado do worker para timeout e falha genérica do provider.
+- [x] Confirmar que a falha termina a imagem em FAILED e regista apenas o tipo de erro, sem persistir deteções, observações ou snapshots de inventário.
+- [ ] Validar os testes no API CI, Quality Gates e Docker Compose do commit que contém esta cobertura.

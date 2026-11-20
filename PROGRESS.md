@@ -1224,3 +1224,11 @@ O teste de concorrência confirma a serialização edição/ativação no servi�
 - Acrescentados testes para clipping de caixas no padding, rejeição de coordenadas fora do intervalo normalizado, rejeição de NaN/Inf e ordenamento/limite de deteções.
 - A alteração é exclusivamente de testes e documentação; não altera o decoder nem o comportamento do worker.
 - Validação pendente de GitHub Actions. Não foram executados testes localmente nesta sessão.
+
+
+## 2026-11-20 — Falhas de inferência na fronteira do worker
+
+- Acrescentado teste integrado parametrizado para TimeoutError e RuntimeError do provider durante o processamento de uma imagem ativa.
+- O teste verifica o estado FAILED, o erro sanitizado, timestamp de conclusão e ausência de deteções, observações e snapshots de inventário.
+- O teste usa SQLite isolado; a validação PostgreSQL concorrente/lease continua a ser coberta pelos smokes existentes do API CI, não por este caso.
+- Aguardar GitHub Actions para o commit final. Não foram executados testes localmente.

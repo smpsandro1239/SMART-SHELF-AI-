@@ -773,3 +773,59 @@ def test_worker_never_matches_non_product_semantic_classes(db, monkeypatch):
         "similarity": None,
         "margin": None,
     }
+
+
+
+@pytest.mark.parametrize("failure", [TimeoutError, RuntimeError])
+def test_worker_marks_inference_failure_failed_without_persisting_derived_state(
+    db, tmp_path, monkeypatch, failure
+):
+    import app.vision_worker as worker
+
+    store = models.Store(
+        code=f"INFERENCE-FAIL-{failure.__name__}",
+        name="Inference Failure",
+    )
+    db.add(store)
+    db.flush()
+    zone = models.Zone(store_id=store.id, name="Zona")
+    db.add(zone)
+    db.flush()
+    shelf = models.Shelf(zone_id=zone.id, code="INFERENCE-FAIL-01")
+    db.add(shelf)
+    db.flush()
+
+    storage_root = tmp_path / "storage"
+    image_path = storage_root / str(store.id) / "failure.jpg"
+    image_path.parent.mkdir(parents=True)
+    image_path.write_bytes(b"test image bytes")
+    monkeypatch.setattr(worker.settings, "image_storage_path", str(storage_root))
+
+    image = models.ShelfImage(
+        shelf_id=shelf.id,
+        original_filename="failure.jpg",
+        storage_path=str(image_path),
+        mime_type="image/jpeg",
+        file_size_bytes=image_path.stat().st_size,
+        sha256="e" * 64,
+        analysis_status="PENDING",
+        retention_status="ACTIVE",
+    )
+    db.add(image)
+    db.commit()
+    image_id = image.id
+
+    class FailingProvider:
+        def analyze(self, path):
+            assert path == image_path.resolve()
+            raise failure("simulated inference failure")
+
+    assert worker.process_next_image(db, FailingProvider()) == image_id
+
+    stored_image = db.get(models.ShelfImage, image_id)
+    assert stored_image.analysis_status == "FAILED"
+    assert stored_image.analysis_error == f"{failure.__name__}: processing failed"
+    assert stored_image.analysis_completed_at is not None
+    assert db.query(models.ShelfImageDetection).filter_by(shelf_image_id=image_id).count() == 0
+    assert db.query(models.Observation).count() == 0
+    assert db.query(models.InventorySnapshot).count() == 0

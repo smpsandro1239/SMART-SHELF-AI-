@@ -1758,3 +1758,10 @@ A comparação de planogramas bloqueia a captura e a imagem de calibração (por
 - [x] Fixar por teste o ordenamento decrescente por confiança e o limite máximo de deteções.
 - [ ] Acrescentar regressão integrada do worker para falhas de imagem/inferência sem persistência de deteções ou efeitos em observações/inventário.
 - [ ] Validar com modelo ONNX e dataset real autorizado; a cobertura sintética não comprova qualidade de deteção.
+
+
+### 2026-11-20 — Falhas de inferência no worker
+
+- [x] Cobrir timeout e falha do provider no processamento de uma imagem ativa.
+- [x] Confirmar estado FAILED e ausência de deteções, observações ou snapshots de inventário.
+- [ ] Confirmar API CI, Quality Gates e Docker Compose no commit desta alteração.
