@@ -9,6 +9,7 @@
 - [ ] Executar o auditor no ambiente API e rever manualmente cada fallback antes de converter a auditoria num gate bloqueante.
 - [x] Corrigir correspondência de prefixos para respeitar limites de segmentos (`/users` não deve corresponder a `/users-export`); acrescentar regressões para caminhos semelhantes e rotas aninhadas reais.
 - [x] Corrigir a deteção de sub-recursos `shelves/*/planograms` para exigir o segmento `planograms` completo; acrescentar regressão para `/planograms-export` não herdar permissões de supervisor.
+- [x] Acrescentar teste positivo para a rota real `POST /api/v1/shelves/{shelf_id}/planograms`, confirmando acesso de ADMIN/SUPERVISOR e recusa de EMPLOYEE.
 - [ ] Confirmar os testes de fronteira no CI e a suite integral antes de considerar a alteração validada. API CI #1673 está em execução; Demo Compose #328 está pendente; Quality Gates #1881 foi cancelado antes da instalação das dependências.
 
 ## Segurança P0 — CORS preflight e Bearer
