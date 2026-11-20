@@ -1,3 +1,11 @@
+## 2026-11-20 — Volume dedicado para outputs de datasets
+
+- O Compose passa a montar o volume persistente `dataset_outputs` em `/app/storage/dataset-outputs`, explicitamente configurado em `DATASET_OUTPUT_STORAGE_PATH`.
+- O volume de imagens `shelf_images` mantém o caminho `/app/storage`; o mount aninhado separa staging e publicações de datasets sem alterar o contrato interno de caminhos.
+- O `vision-worker` não recebe o volume de datasets; continua com o volume de imagens read-only.
+- O smoke Compose inspecciona os mounts efectivos, confirma API read-write em ambos, worker read-only nas imagens, ausência do mount de datasets no worker e escrita temporária no directório de outputs pela API.
+- Esta alteração não cria um worker de transformação nem resolve o handoff remoto; a execução assíncrona de datasets continua não operacional.
+
 ## 2026-11-20 — Hardening do container vision-worker
 
 - O worker passa a executar como UID/GID numérico não privilegiado `65532:65532`.

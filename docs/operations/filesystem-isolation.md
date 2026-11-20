@@ -2,12 +2,13 @@
 
 ## Fronteira aplicada
 
-O volume Docker persistente `shelf_images` é montado:
+O armazenamento persistente está dividido em dois volumes Docker:
 
-- na API em modo read-write, porque o endpoint de captura grava uploads e os fluxos administrativos de retenção operam sobre os ficheiros;
-- no `vision-worker` em modo read-only (`shelf_images:/app/storage:ro`), porque o worker apenas resolve e lê a captura para executar inferência/OCR e persiste resultados na base de dados.
+- `shelf_images` é montado na API em read-write em `/app/storage`; contém as capturas em `/app/storage/shelf-images`.
+- `dataset_outputs` é montado apenas na API em read-write em `/app/storage/dataset-outputs`, e é explicitamente seleccionado por `DATASET_OUTPUT_STORAGE_PATH`.
+- O `vision-worker` recebe apenas `shelf_images`, em read-only, e não recebe qualquer mount de `dataset_outputs`.
 
-O smoke `.github/workflows/demo-compose-smoke.yml` inspecciona o container em execução com `docker inspect` e exige que o mount de `/app/storage` tenha `RW=false`. Assim, uma regressão na configuração Compose falha no CI.
+O mount aninhado de `dataset_outputs` separa fisicamente staging e publicações de outputs do volume de imagens, sem alterar os caminhos relativos usados pelo serviço de publicação/consumo. O smoke `.github/workflows/demo-compose-smoke.yml` inspecciona os mounts efectivos: exige API read-write nos dois volumes, worker read-only em `shelf_images`, ausência de mount de datasets no worker e escrita temporária bem-sucedida pela API no directório de outputs.
 
 ## Hardening adicional do processo worker
 
@@ -17,12 +18,13 @@ O smoke Docker Compose verifica a configuração efectiva através de `docker in
 
 ## O que este controlo garante
 
-O processo dentro do container `vision-worker` não pode criar, alterar ou apagar ficheiros no volume `shelf_images` através desse mount. Um worker antigo que continue a executar com esta configuração também fica sem capacidade de escrita nesse volume.
+O processo dentro do container `vision-worker` não pode criar, alterar ou apagar ficheiros no volume `shelf_images` através desse mount e não tem acesso ao volume `dataset_outputs`. Um worker antigo que continue a executar com esta configuração também fica sem capacidade de escrita no volume de imagens.
 
 ## O que não garante
 
 - A identidade do worker é distinta da identidade predefinida da API, mas não existe ainda uma política completa de UID/GID e ownership para todos os serviços/volumes.
-- Não protege volumes ou mounts que venham a ser acrescentados sem as mesmas restrições; o volume de outputs de datasets não está montado neste worker demo nem isolado por este controlo.
+- O volume de outputs de datasets está separado e não é montado no worker de visão; ainda não existe worker remoto de transformação integrado no Compose.
+- A API continua a ser a fronteira de escrita para ambos os volumes no stack demo; a separação não define ainda um handoff para um futuro worker de datasets.
 - Não prova que um processo antigo terminou, nem que um container antigo com configuração anterior foi efectivamente parado.
 - Não define a política de retenção nem autoriza purga física.
 - Não constitui isolamento de segurança completo entre serviços; é uma redução específica da capacidade de escrita do worker sobre imagens de captura.
@@ -30,8 +32,8 @@ O processo dentro do container `vision-worker` não pode criar, alterar ou apaga
 ## Próximas etapas
 
 1. Definir política uniforme de UID/GID para API, workers de datasets e tarefas operacionais, com migração de permissões testada em volumes existentes.
-2. Separar o staging de outputs de datasets do volume de imagens e criar um handoff controlado entre produtor e promotor.
+2. Definir um handoff controlado e mounts mínimos quando existir um worker de transformação de datasets; o worker remoto ainda não está integrado.
 3. Introduzir prova operacional de quiescência/fencing físico antes de expandir a limpeza de staging órfão.
-4. Testar uploads, inferência, retry, retenção e restauro em Docker Compose com a política de permissões final.
+4. Testar uploads, inferência, promoção, consumo, retry, retenção e restauro em Docker Compose com a política de permissões final.
 
 Não alterar ownership de volumes persistentes existentes nem activar limpeza de staging órfão sem testes de migração e recuperação.
