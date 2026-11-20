@@ -560,3 +560,60 @@ def test_comparison_fingerprint_is_canonical_and_binds_schema_and_cell_results()
         comparison_fingerprint({**snapshot, "comparison_schema_version": 2})
     with pytest.raises(ValueError):
         comparison_fingerprint({**snapshot, "non_finite": float("nan")})
+
+def test_planogram_id_mutations_enforce_store_scope(planogram_api):
+    client, ids = planogram_api
+    supervisor_a = _headers(ids["supervisor_a"], "SUPERVISOR")
+    supervisor_b = _headers(ids["supervisor_b"], "SUPERVISOR")
+
+    created = client.post(
+        f"/api/v1/shelves/{ids['shelf_b']}/planograms",
+        json=_payload(ids["product_b"]),
+        headers=supervisor_b,
+    )
+    assert created.status_code == 201, created.text
+    planogram_id = created.json()["id"]
+
+    replacement = {
+        "cells": [{
+            "cell_code": "B2", "row_index": 0, "column_index": 0,
+            "x_min": 0.0, "y_min": 0.0, "x_max": 0.5, "y_max": 1.0,
+            "expected_product_id": ids["product_b"],
+        }],
+    }
+    update_foreign_draft = client.put(
+        f"/api/v1/planograms/{planogram_id}/cells",
+        json=replacement,
+        headers=supervisor_a,
+    )
+    activate_foreign_draft = client.post(
+        f"/api/v1/planograms/{planogram_id}/activate",
+        json={"reason": "Cross-store authorization test"},
+        headers=supervisor_a,
+    )
+    assert update_foreign_draft.status_code == 403
+    assert activate_foreign_draft.status_code == 403
+
+    activated_by_owner = client.post(
+        f"/api/v1/planograms/{planogram_id}/activate",
+        json={"reason": "Owner store activation"},
+        headers=supervisor_b,
+    )
+    assert activated_by_owner.status_code == 200, activated_by_owner.text
+
+    retire_foreign_active = client.post(
+        f"/api/v1/planograms/{planogram_id}/retire",
+        json={"reason": "Cross-store retirement attempt"},
+        headers=supervisor_a,
+    )
+    assert retire_foreign_active.status_code == 403
+
+    history = client.get(
+        f"/api/v1/shelves/{ids['shelf_b']}/planograms",
+        headers=supervisor_b,
+    )
+    assert history.status_code == 200
+    assert [(item["id"], item["status"]) for item in history.json()] == [
+        (planogram_id, "ACTIVE")
+    ]
+
