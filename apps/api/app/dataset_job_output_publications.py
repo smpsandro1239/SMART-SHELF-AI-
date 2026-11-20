@@ -7,6 +7,7 @@ no-clobber filesystem link, and records the append-only publication.
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Callable
 import os
 import re
 import secrets
@@ -298,13 +299,65 @@ def _load_and_validate(
 
 
 def promote_dataset_job_output(
-    db: Session, *, principal: DatasetWorkerPrincipal, job_id: int, fencing_token: int
+    db: Session, *, principal: DatasetWorkerPrincipal, job_id: int, fencing_token: int,
+    derived_from_publication_id: int | None = None,
+    derivation_actor_user_id: int | None = None,
+    derivation_reason: str | None = None,
+    authorize_derivation: Callable | None = None,
 ) -> models.DatasetExecutionJobOutputPublication:
-    """Prepare bytes lock-free, then publish and audit under a short fenced transaction."""
+    """Prepare bytes lock-free and atomically commit publication plus optional lineage."""
     if isinstance(job_id, bool) or not isinstance(job_id, int) or job_id <= 0:
         raise DatasetJobError("job_id must be a positive integer")
     if isinstance(fencing_token, bool) or not isinstance(fencing_token, int) or fencing_token <= 0:
         raise DatasetJobError("fencing_token must be a positive integer")
+
+    derivation_requested = derived_from_publication_id is not None
+    derivation_fields = (derivation_actor_user_id, derivation_reason, authorize_derivation)
+    if not derivation_requested and any(value is not None for value in derivation_fields):
+        raise DatasetJobError("all derivation fields require derived_from_publication_id")
+    if derivation_requested and (
+        isinstance(derived_from_publication_id, bool)
+        or not isinstance(derived_from_publication_id, int)
+        or derived_from_publication_id <= 0
+        or isinstance(derivation_actor_user_id, bool)
+        or not isinstance(derivation_actor_user_id, int)
+        or derivation_actor_user_id <= 0
+        or not isinstance(derivation_reason, str)
+        or not derivation_reason.strip()
+        or len(derivation_reason.strip()) > 4000
+        or not callable(authorize_derivation)
+    ):
+        raise DatasetJobError("derived publication requires a positive parent, active actor, reason and authorization callback")
+
+    def lock_parent_lineage() -> None:
+        if derivation_requested:
+            from app.dataset_output_lineage import lock_dataset_output_lineage
+            lock_dataset_output_lineage(db, publication_id=derived_from_publication_id)
+
+    def record_derivation(publication: models.DatasetExecutionJobOutputPublication) -> None:
+        if not derivation_requested:
+            return
+        existing_edge = db.query(models.DatasetExecutionJobOutputLineage).filter_by(
+            parent_publication_id=derived_from_publication_id,
+            child_publication_id=publication.id,
+        ).one_or_none()
+        if existing_edge is not None:
+            if (
+                existing_edge.actor_user_id != derivation_actor_user_id
+                or existing_edge.reason != derivation_reason.strip()
+            ):
+                from app.dataset_output_lineage import DatasetOutputLineageConflict
+                raise DatasetOutputLineageConflict("existing output derivation has different immutable metadata")
+            return
+        from app.dataset_output_lineage import register_dataset_output_derivation
+        register_dataset_output_derivation(
+            db,
+            parent_publication_id=derived_from_publication_id,
+            child_publication_id=publication.id,
+            actor_user_id=derivation_actor_user_id,
+            reason=derivation_reason,
+            authorize=authorize_derivation,
+        )
 
     temp_name = None
     staged = None
@@ -326,6 +379,8 @@ def promote_dataset_job_output(
                 or existing.staged_output_reference != job.staged_output_reference
             ):
                 raise DatasetJobOutputConflict("job already has a different published output")
+            lock_parent_lineage()
+            record_derivation(existing)
             db.commit()
             return existing
 
@@ -339,6 +394,10 @@ def promote_dataset_job_output(
         temp_name, byte_count = _prepare_verified_bytes(
             root=root, staged=staged, published=published, expected_digest=expected_digest,
         )
+
+        # A derived output must lock its complete parent chain before taking
+        # job/source locks, matching the consumer's publication -> job -> source order.
+        lock_parent_lineage()
 
         # Reacquire locks only after all streaming I/O and hashing have finished.
         job = _load_and_validate(
@@ -356,11 +415,10 @@ def promote_dataset_job_output(
                 or existing.staged_output_reference != staged_reference
             ):
                 raise DatasetJobOutputConflict("job already has a different published output")
+            record_derivation(existing)
             db.commit()
             return existing
 
-        _publish_prepared_temp(root=root, published=published, temp_name=temp_name)
-        temp_name = None
         publication = models.DatasetExecutionJobOutputPublication(
             job_id=job_id, worker_id=principal.worker_id,
             credential_id=principal.credential_id, fencing_token=fencing_token,
@@ -369,6 +427,10 @@ def promote_dataset_job_output(
             created_at=models.utc_now(),
         )
         db.add(publication)
+        db.flush()
+        record_derivation(publication)
+        _publish_prepared_temp(root=root, published=published, temp_name=temp_name)
+        temp_name = None
         db.commit()
         db.refresh(publication)
 

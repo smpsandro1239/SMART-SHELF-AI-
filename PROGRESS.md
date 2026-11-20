@@ -1,3 +1,12 @@
+## 2026-11-20 — Publicação atómica de outputs derivados
+
+- `promote_dataset_job_output` aceita agora uma relação pai → derivado opcional, mas exige actor, motivo e callback de autorização quando essa relação é pedida.
+- A cadeia ancestral é bloqueada antes dos locks do job e das fontes, preservando a ordem publicação → job → imagens usada pelo consumidor.
+- A publicação filha e a aresta append-only são inseridas e confirmadas na mesma transacção; o ficheiro só é ligado ao destino depois de a autorização e a validação da relação passarem.
+- Retries com a mesma aresta/actor/motivo são idempotentes; metadados imutáveis divergentes são recusados.
+- O teste SQLite e o smoke PostgreSQL foram alterados para usar a nova fronteira atómica. CI do novo commit ainda pendente; não foram executados testes localmente.
+- Limite: não existe ainda worker de transformação real; o callback continua a ser responsabilidade do integrador. Sem endpoints/consumidores externos e sem purga física.
+
 ## 2026-11-20 — Smoke PostgreSQL de linhagem de outputs derivados
 
 - O smoke existente de publicação passa a criar e publicar um segundo output independente e a registar a relação pai → derivado através de `register_dataset_output_derivation`, com callback de autorização explícito e actor humano activo.

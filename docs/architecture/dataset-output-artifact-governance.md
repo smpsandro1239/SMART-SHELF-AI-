@@ -103,3 +103,10 @@ Limites: a ligação de derivação ainda não é chamada por um worker de trans
 O smoke `postgres_dataset_job_output_publication_smoke.py` foi alargado para criar duas publicações independentes e registar uma aresta de derivação através do serviço, com actor activo e callback de autorização explícito. Confirma consumo do descendente enquanto a cadeia está elegível, rejeição de ciclo por trigger PostgreSQL e imutabilidade da relação perante UPDATE/DELETE. Depois aplica restrição e legal hold à publicação ancestral e confirma que o consumo do descendente é bloqueado. A libertação da restrição, isoladamente, não remove o bloqueio enquanto o legal hold ancestral permanecer activo.
 
 Esta prova é específica da fronteira de consumo local e PostgreSQL 16. Não liga transformações reais ao registo de linhagem, não inventaria cópias externas e não autoriza purga física. A validação CI do novo smoke permanece pendente até ao workflow desta alteração terminar.
+
+
+## Publicação e linhagem na mesma transacção — 2026-11-20
+
+A função `promote_dataset_job_output` aceita agora os campos opcionais `derived_from_publication_id`, `derivation_actor_user_id`, `derivation_reason` e `authorize_derivation`. Quando fornecidos em conjunto, bloqueia primeiro a cadeia ancestral, seguindo a ordem publicação → job → fontes usada pelo consumidor; insere a publicação filha e a aresta pai → filho na mesma transacção SQL. O destino filesystem só é ligado depois de a autorização e a validação da linhagem terem sido executadas, e a publicação só fica visível após o commit conjunto. Um retry com os mesmos metadados imutáveis devolve a mesma publicação; um retry com actor/motivo divergentes falha.
+
+A API não cria ainda transformações reais. O callback tem de confirmar que o processo realmente utilizou a publicação-pai e que o actor tem autoridade para registar a relação. A opção sem campos de derivação preserva a publicação normal de outputs raiz. Não há endpoint HTTP, worker remoto, cópias externas nem purga física.

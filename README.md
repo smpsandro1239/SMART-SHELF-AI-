@@ -1772,3 +1772,10 @@ A comparação de planogramas bloqueia a captura e a imagem de calibração (por
 - [x] Cobrir a alteração da lease durante inferência, com devolução de deteções válidas pelo worker antigo.
 - [x] Confirmar que o resultado obsoleto é descartado sem persistir deteções nem produzir observações ou snapshots de inventário.
 - [x] Validar no commit `4212aeab21bfe9182a485e10cfbd8a209d1d28ac`: [API CI 44652277501](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44652277501), [Quality Gates 44652277455](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44652277455) e [Docker Compose 44652278042](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44652278042) passaram. API CI executou PostgreSQL 16, incluindo o smoke de recuperação/fencing do worker, e a suite terminou com **1374 testes aprovados, 1 ignorado e 1 aviso**. Quality Gates confirmou compilação Python e build TypeScript/produção Web. O aviso restante é a depreciação externa `anyio.abc.BlockingPortal` no Starlette TestClient. Validação CI; não foram executados testes localmente nem avaliação com modelo/dataset real.
+
+
+### Publicação atómica de outputs derivados — 2026-11-20
+
+`promote_dataset_job_output` permite registar uma publicação derivada através de `derived_from_publication_id`, actor, motivo e callback de autorização. Quando estes campos são fornecidos, a cadeia ancestral é bloqueada antes dos locks do job/fontes e a publicação filha + aresta append-only são confirmadas na mesma transacção SQL. A operação mantém o comportamento anterior para outputs raiz. Repetições com a mesma aresta e metadados são idempotentes; divergências são rejeitadas.
+
+Esta alteração fecha a janela entre publicação e registo da linhagem para os chamadores que usem esta opção. Não cria, por si só, um worker de transformação: o callback continua a ter de provar a utilização efectiva do output-pai. Testes e smoke PostgreSQL integrados; validação CI do commit desta alteração pendente. Não existe integração externa nem purga física.

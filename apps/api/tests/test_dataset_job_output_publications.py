@@ -734,7 +734,10 @@ def test_published_output_consumer_rejects_symlink(publication_setup):
     assert target.read_bytes() == state["payload"]
 
 
-def _create_second_published_output(state, *, suffix="derived"):
+def _create_second_published_output(
+    state, *, suffix="derived", derived_from_publication_id=None,
+    derivation_actor_user_id=None, derivation_reason=None, authorize_derivation=None,
+):
     db = state["db"]
     source = db.query(models.DatasetExecutionJobSource).filter_by(job_id=state["job"].id).one()
     payload = f"derived output fixture {suffix}".encode()
@@ -765,6 +768,10 @@ def _create_second_published_output(state, *, suffix="derived"):
     publication = promote_dataset_job_output(
         db, principal=state["principal"], job_id=job.id,
         fencing_token=claim.fencing_token,
+        derived_from_publication_id=derived_from_publication_id,
+        derivation_actor_user_id=derivation_actor_user_id,
+        derivation_reason=derivation_reason,
+        authorize_derivation=authorize_derivation,
     )
     return publication, payload
 
@@ -784,7 +791,6 @@ def test_derived_output_inherits_parent_legal_hold_and_authorization(publication
         db, principal=state["principal"], job_id=state["job"].id,
         fencing_token=state["claim"].fencing_token,
     )
-    child, child_payload = _create_second_published_output(state)
     actor = models.User(
         email="output-lineage-admin@example.test", store_id=None,
         full_name="Output Lineage Admin",
@@ -793,14 +799,31 @@ def test_derived_output_inherits_parent_legal_hold_and_authorization(publication
     db.add(actor)
     db.commit()
 
-    register_dataset_output_derivation(
-        db, parent_publication_id=parent.id, child_publication_id=child.id,
-        actor_user_id=actor.id, reason="Child output was produced from parent output",
-        authorize=lambda user, parent_row, child_row: (
-            user.role == "ADMIN" and parent_row.id == parent.id and child_row.id == child.id
-        ),
+    derivation_reason = "Child output was produced from parent output"
+    authorize_derivation = lambda user, parent_row, child_row: (
+        user.role == "ADMIN" and parent_row.id == parent.id
+        and child_row.job_id != parent.job_id
     )
-    db.commit()
+    child, child_payload = _create_second_published_output(
+        state,
+        derived_from_publication_id=parent.id,
+        derivation_actor_user_id=actor.id,
+        derivation_reason=derivation_reason,
+        authorize_derivation=authorize_derivation,
+    )
+    edge = db.query(models.DatasetExecutionJobOutputLineage).filter_by(
+        parent_publication_id=parent.id, child_publication_id=child.id,
+    ).one()
+    assert edge.actor_user_id == actor.id and edge.reason == derivation_reason
+    retried = promote_dataset_job_output(
+        db, principal=state["principal"], job_id=child.job_id,
+        fencing_token=child.fencing_token,
+        derived_from_publication_id=parent.id,
+        derivation_actor_user_id=actor.id,
+        derivation_reason=derivation_reason,
+        authorize_derivation=authorize_derivation,
+    )
+    assert retried.id == child.id
 
     with pytest.raises(DatasetOutputLineageConflict, match="cycle"):
         register_dataset_output_derivation(

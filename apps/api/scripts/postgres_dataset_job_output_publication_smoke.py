@@ -285,21 +285,20 @@ def main():
         with SessionLocal() as db:
             child_publication = promote_dataset_job_output(
                 db, principal=principal, job_id=child_job_id, fencing_token=child_token,
-            )
-            child_publication_id = child_publication.id
-            from app.dataset_output_lineage import register_dataset_output_derivation
-            edge = register_dataset_output_derivation(
-                db,
-                parent_publication_id=publication_id,
-                child_publication_id=child_publication_id,
-                actor_user_id=actor_user_id,
-                reason="PostgreSQL smoke: derived model output",
-                authorize=lambda user, parent, child: (
+                derived_from_publication_id=publication_id,
+                derivation_actor_user_id=actor_user_id,
+                derivation_reason="PostgreSQL smoke: derived model output",
+                authorize_derivation=lambda user, parent, child: (
                     user.id == actor_user_id
                     and parent.id == publication_id
-                    and child.id == child_publication_id
+                    and child.job_id == child_job_id
                 ),
             )
+            child_publication_id = child_publication.id
+            edge = db.query(models.DatasetExecutionJobOutputLineage).filter_by(
+                parent_publication_id=publication_id,
+                child_publication_id=child_publication_id,
+            ).one()
             db.commit()
             assert edge.parent_publication_id == publication_id
             assert edge.child_publication_id == child_publication_id
