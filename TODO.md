@@ -1200,3 +1200,9 @@ Critério global: nenhuma capacidade pode ser marcada como concluída sem códig
 - [x] Estender o teste de isolamento para incluir um exemplar APPROVED sem `shelf_image_id`; as lojas A e B não o podem carregar nos respectivos registos.
 - [ ] Confirmar execução do teste no CI após o commit de regressão.
 - [ ] Definir, numa alteração funcional separada, se os exemplares sem imagem de origem devem ser proibidos na criação ou mantidos apenas para fluxos administrativos globais. Não alterar este comportamento sem uma decisão de produto e análise dos consumidores.
+
+## Consumo seguro de outputs publicados — 2026-11-20
+
+- [x] Acrescentar regressões para o consumidor de outputs publicados: leitura integral autorizada, autorização estritamente positiva (apenas `True`) e rejeição de bytes publicados adulterados.
+- [ ] Validar os novos testes e a suite API no CI do commit `a2b0175490b2ea56fa49956d92de1e1c1147326a`.
+- [ ] Avaliar a integração futura deste helper com um consumidor de produto/API; não existe evidência nesta auditoria de uma rota HTTP que o invoque, pelo que não presumir que outputs já são descarregáveis por utilizadores finais.
