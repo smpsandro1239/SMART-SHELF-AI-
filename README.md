@@ -1756,7 +1756,7 @@ A comparação de planogramas bloqueia a captura e a imagem de calibração (por
 - [x] Fixar por testes a transformação de caixas normalizadas do espaço letterboxed para a imagem original, incluindo clipping aos limites da imagem.
 - [x] Rejeitar por teste coordenadas fora de [0,1] e valores NaN/Inf.
 - [x] Fixar por teste o ordenamento decrescente por confiança e o limite máximo de deteções.
-- [ ] Acrescentar regressão integrada do worker para falhas de imagem/inferência sem persistência de deteções ou efeitos em observações/inventário.
+- [x] Acrescentar regressão integrada do worker para falhas de imagem/inferência sem persistência de deteções ou efeitos em observações/inventário.
 - [ ] Validar com modelo ONNX e dataset real autorizado; a cobertura sintética não comprova qualidade de deteção.
 
 
@@ -1764,4 +1764,11 @@ A comparação de planogramas bloqueia a captura e a imagem de calibração (por
 
 - [x] Cobrir timeout e falha do provider no processamento de uma imagem ativa.
 - [x] Confirmar estado FAILED e ausência de deteções, observações ou snapshots de inventário.
-- [ ] Confirmar API CI, Quality Gates e Docker Compose no commit desta alteração.
+- [x] Confirmar API CI, Quality Gates e Docker Compose no commit `d070dc4459700e5ec411eb577220afaa4d96e93e`: os três workflows passaram.
+
+
+### 2026-11-20 — Fencing do resultado após takeover de lease
+
+- [x] Cobrir a alteração da lease durante inferência, com devolução de deteções válidas pelo worker antigo.
+- [x] Confirmar que o resultado obsoleto é descartado sem persistir deteções nem produzir observações ou snapshots de inventário.
+- [ ] Confirmar API CI, Quality Gates e Docker Compose no commit desta regressão.

@@ -1060,3 +1060,10 @@ Critério global: nenhuma capacidade pode ser marcada como concluída sem códig
 - [x] Acrescentar teste integrado do worker para timeout e falha genérica do provider.
 - [x] Confirmar que a falha termina a imagem em FAILED e regista apenas o tipo de erro, sem persistir deteções, observações ou snapshots de inventário.
 - [ ] Validar os testes no API CI, Quality Gates e Docker Compose do commit que contém esta cobertura.
+
+
+## Fencing de resultados após takeover de lease — 2026-11-20
+
+- [x] Acrescentar teste integrado em que um segundo processamento assume a lease enquanto o primeiro provider ainda está a inferir.
+- [x] Confirmar que o resultado válido do worker antigo é descartado antes de persistir deteções, observações ou inventário.
+- [ ] Validar a regressão no API CI, Quality Gates e Docker Compose do commit desta alteração.

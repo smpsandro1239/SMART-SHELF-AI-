@@ -829,3 +829,70 @@ def test_worker_marks_inference_failure_failed_without_persisting_derived_state(
     assert db.query(models.ShelfImageDetection).filter_by(shelf_image_id=image_id).count() == 0
     assert db.query(models.Observation).count() == 0
     assert db.query(models.InventorySnapshot).count() == 0
+
+
+def test_worker_discards_successful_inference_after_lease_takeover(db, tmp_path, monkeypatch):
+    import app.vision_worker as worker
+    from app.vision import DetectionResult, VisionAnalysis
+
+    store = models.Store(code="LEASE-SUCCESS", name="Lease Success")
+    db.add(store)
+    db.flush()
+    zone = models.Zone(store_id=store.id, name="Zona")
+    db.add(zone)
+    db.flush()
+    shelf = models.Shelf(zone_id=zone.id, code="LEASE-SUCCESS-01")
+    db.add(shelf)
+    db.flush()
+
+    storage_root = tmp_path / "storage"
+    monkeypatch.setattr(worker.settings, "image_storage_path", str(storage_root))
+    image_path = storage_root / str(store.id) / "lease-success.jpg"
+    image_path.parent.mkdir(parents=True)
+    image_path.write_bytes(b"test-image")
+    image = models.ShelfImage(
+        shelf_id=shelf.id,
+        original_filename="lease-success.jpg",
+        storage_path=str(image_path),
+        mime_type="image/jpeg",
+        file_size_bytes=image_path.stat().st_size,
+        sha256="a" * 64,
+        analysis_status="PENDING",
+        retention_status="ACTIVE",
+    )
+    db.add(image)
+    db.commit()
+    image_id = image.id
+    replacement_lease = models.utc_now() + timedelta(seconds=30)
+
+    class LeaseTakingOverProvider:
+        def analyze(self, path):
+            stored = db.get(models.ShelfImage, image_id)
+            stored.analysis_status = "PROCESSING"
+            stored.analysis_started_at = replacement_lease
+            stored.analysis_error = None
+            db.commit()
+            return VisionAnalysis(
+                model_version="detector-stale-v1",
+                detections=[
+                    DetectionResult(
+                        label="product",
+                        confidence=0.95,
+                        x_min=0.1,
+                        y_min=0.1,
+                        x_max=0.8,
+                        y_max=0.8,
+                    )
+                ],
+            )
+
+    assert worker.process_next_image(db, LeaseTakingOverProvider()) == image_id
+
+    stored_image = db.get(models.ShelfImage, image_id)
+    assert stored_image.analysis_status == "PROCESSING"
+    assert worker._same_claim_timestamp(stored_image.analysis_started_at, replacement_lease)
+    assert stored_image.analysis_error is None
+    assert stored_image.analysis_completed_at is None
+    assert db.query(models.ShelfImageDetection).filter_by(shelf_image_id=image_id).count() == 0
+    assert db.query(models.Observation).count() == 0
+    assert db.query(models.InventorySnapshot).count() == 0

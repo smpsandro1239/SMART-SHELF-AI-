@@ -1232,3 +1232,11 @@ O teste de concorrência confirma a serialização edição/ativação no servi�
 - O teste verifica o estado FAILED, o erro sanitizado, timestamp de conclusão e ausência de deteções, observações e snapshots de inventário.
 - O teste usa SQLite isolado; a validação PostgreSQL concorrente/lease continua a ser coberta pelos smokes existentes do API CI, não por este caso.
 - Aguardar GitHub Actions para o commit final. Não foram executados testes localmente.
+
+
+## 2026-11-20 — Descarte de inferência após takeover de lease
+
+- Acrescentado teste integrado em que o provider simula a aquisição de uma nova lease e devolve uma inferência aparentemente válida.
+- O worker antigo tem de detetar a alteração do timestamp de claim e descartar o resultado sem persistir deteções, observações ou snapshots de inventário.
+- O teste complementa o cenário existente de perda de lease seguida de exceção: passa a cobrir também o caminho de sucesso obsoleto.
+- Validação GitHub Actions pendente. Não foram executados testes localmente.

@@ -789,3 +789,11 @@ A alteração foi validada no API CI [44588809660](https://github.com/smpsandro1
 - O teste verifica FAILED e ausência de efeitos derivados em deteções, observações e inventário.
 - O cenário usa SQLite isolado; a cobertura de lease/fencing PostgreSQL permanece nos smokes dedicados.
 - Validação CI pendente no commit desta alteração.
+
+
+### 2026-11-20 — Fencing do resultado após takeover de lease
+
+- Adicionado teste integrado para a corrida em que a lease muda durante a inferência e o provider antigo devolve resultados válidos.
+- O resultado obsoleto deve ser descartado sem publicar deteções nem alterar observações/inventário.
+- A cobertura verifica a fronteira de claim do worker em SQLite; a serialização concorrente real continua dependente dos smokes PostgreSQL dedicados.
+- Aguardar API CI, Quality Gates e Docker Compose.
