@@ -975,3 +975,168 @@ def test_derived_output_inherits_parent_legal_hold_and_authorization(publication
         db, publication_id=child.id, authorize=authorize,
     ) == child_payload
     assert set(authorized_publications) == {parent.id, child.id}
+
+
+def test_commit_failure_after_filesystem_publish_is_recoverable_on_retry(publication_setup, monkeypatch):
+    state = publication_setup
+    db = state["db"]
+    original_commit = db.commit
+    commit_attempts = {"count": 0}
+
+    def fail_first_commit():
+        commit_attempts["count"] += 1
+        if commit_attempts["count"] == 1:
+            raise RuntimeError("simulated database commit interruption")
+        return original_commit()
+
+    monkeypatch.setattr(db, "commit", fail_first_commit)
+
+    published_ref = (
+        f"published/{state['job'].id}/"
+        f"{state['claim'].fencing_token}-{state['digest']}.artifact"
+    )
+    published_path = state["root"] / published_ref
+
+    with pytest.raises(RuntimeError, match="simulated database commit interruption"):
+        promote_dataset_job_output(
+            db,
+            principal=state["principal"],
+            job_id=state["job"].id,
+            fencing_token=state["claim"].fencing_token,
+        )
+
+    # The filesystem link precedes the SQL commit. A failed commit must leave
+    # no audit row, while preserving both the verified destination and staging
+    # so that a retry can reconstruct the publication safely.
+    assert db.query(models.DatasetExecutionJobOutputPublication).filter_by(
+        job_id=state["job"].id
+    ).count() == 0
+    assert published_path.read_bytes() == state["payload"]
+    assert state["stage_path"].read_bytes() == state["payload"]
+    assert not list((state["root"] / "published").rglob("*.tmp"))
+
+    publication = promote_dataset_job_output(
+        db,
+        principal=state["principal"],
+        job_id=state["job"].id,
+        fencing_token=state["claim"].fencing_token,
+    )
+
+    assert publication.published_output_reference == published_ref
+    assert publication.output_sha256 == state["digest"]
+    assert db.query(models.DatasetExecutionJobOutputPublication).filter_by(
+        job_id=state["job"].id
+    ).count() == 1
+    assert published_path.read_bytes() == state["payload"]
+    assert not state["stage_path"].exists()
+    assert commit_attempts["count"] == 2
+
+def test_directory_fsync_failure_after_link_is_recoverable_on_retry(publication_setup, monkeypatch):
+    import app.dataset_job_output_publications as publication_service
+
+    state = publication_setup
+    db = state["db"]
+    original_publish = publication_service._publish_prepared_temp
+
+    def fail_directory_fsync_once(*, root, published, temp_name):
+        original_fsync = publication_service.os.fsync
+
+        def fail_fsync(_fd):
+            raise OSError("simulated directory fsync failure")
+
+        monkeypatch.setattr(publication_service.os, "fsync", fail_fsync)
+        try:
+            original_publish(root=root, published=published, temp_name=temp_name)
+        finally:
+            monkeypatch.setattr(publication_service.os, "fsync", original_fsync)
+
+    monkeypatch.setattr(
+        publication_service, "_publish_prepared_temp", fail_directory_fsync_once,
+    )
+    published_ref = (
+        f"published/{state['job'].id}/"
+        f"{state['claim'].fencing_token}-{state['digest']}.artifact"
+    )
+    published_path = state["root"] / published_ref
+
+    with pytest.raises(
+        publication_service.DatasetJobOutputUnavailable,
+        match="prepared output could not be atomically published",
+    ):
+        promote_dataset_job_output(
+            db,
+            principal=state["principal"],
+            job_id=state["job"].id,
+            fencing_token=state["claim"].fencing_token,
+        )
+
+    # The hard link may exist even though directory durability could not be
+    # confirmed. Keep staging and retry only after re-verifying destination bytes.
+    assert published_path.read_bytes() == state["payload"]
+    assert state["stage_path"].read_bytes() == state["payload"]
+    assert db.query(models.DatasetExecutionJobOutputPublication).filter_by(
+        job_id=state["job"].id
+    ).count() == 0
+
+    publication = promote_dataset_job_output(
+        db,
+        principal=state["principal"],
+        job_id=state["job"].id,
+        fencing_token=state["claim"].fencing_token,
+    )
+
+    assert publication.published_output_reference == published_ref
+    assert publication.output_sha256 == state["digest"]
+    assert db.query(models.DatasetExecutionJobOutputPublication).filter_by(
+        job_id=state["job"].id
+    ).count() == 1
+    assert not state["stage_path"].exists()
+
+def test_staging_cleanup_failure_after_commit_is_recovered_by_reconciliation(publication_setup, monkeypatch):
+    import os
+    from datetime import timedelta
+
+    import app.dataset_job_output_publications as publication_service
+    from app.dataset_job_output_reconciliation import reconcile_dataset_job_output_files
+
+    state = publication_setup
+    original_unlink = publication_service.os.unlink
+
+    def fail_staging_unlink(name, *args, **kwargs):
+        if name == state["stage_path"].name:
+            raise PermissionError("simulated staging cleanup permission failure")
+        return original_unlink(name, *args, **kwargs)
+
+    monkeypatch.setattr(publication_service.os, "unlink", fail_staging_unlink)
+    publication = promote_dataset_job_output(
+        state["db"],
+        principal=state["principal"],
+        job_id=state["job"].id,
+        fencing_token=state["claim"].fencing_token,
+    )
+
+    # Publication is already committed. A cleanup permission failure must not
+    # roll it back or make the caller believe the durable output was lost.
+    assert state["db"].query(models.DatasetExecutionJobOutputPublication).filter_by(
+        job_id=state["job"].id
+    ).count() == 1
+    assert (state["root"] / publication.published_output_reference).read_bytes() == state["payload"]
+    assert state["stage_path"].read_bytes() == state["payload"]
+
+    monkeypatch.setattr(publication_service.os, "unlink", original_unlink)
+    stale_time = models.utc_now() - timedelta(days=8)
+    os.utime(state["stage_path"], (stale_time.timestamp(), stale_time.timestamp()))
+
+    report = reconcile_dataset_job_output_files(
+        state["db"],
+        apply=True,
+        grace_seconds=3600,
+        now=models.utc_now(),
+    )
+
+    assert state["stage_path"].as_posix().replace(str(state["root"]) + "/", "") in report["removed"]
+    assert not state["stage_path"].exists()
+    assert state["db"].query(models.DatasetExecutionJobOutputPublication).filter_by(
+        job_id=state["job"].id
+    ).count() == 1
+

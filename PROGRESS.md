@@ -1,3 +1,59 @@
+## 2026-11-20 — Fecho de validação CI e reconciliação do roadmap
+
+- API CI do commit a6a1c30e concluiu com sucesso: PostgreSQL 16, smokes operacionais e **1379 passed, 1 skipped, 1 warning**. Entre os smokes aprovados estão autorização de sessões de captura e isolamento de avaliações SKU revistas.
+- Quality Gates do commit d49434e concluiu com sucesso: API tests/compilação Python, build TypeScript/produção e detector Impeccable.
+- O segundo relatório Impeccable é um array vazio (`[]`): o finding side-tab inicial foi removido.
+- Atualizado o README para fechar os dois smokes PostgreSQL que já tinham evidência de CI; a auditoria de autorização global permanece aberta.
+- Para usar a skill upstream num clone local, é necessário inicializar o submódulo com `git submodule update --init --recursive`.
+
+## 2026-11-20 — Primeira correção guiada pelo detector Impeccable
+
+- O primeiro relatório do detector identificou um padrão visual side-tab: barra de cor numa lateral de um aviso arredondado, em decision-freshness-notice.
+- A revisão do mesmo bloco encontrou o padrão equivalente em decision-warnings; ambos passaram a usar contorno completo, preservando a cor semântica, o conteúdo e o comportamento role=status.
+- Não foram alterados componentes React, contratos API, regras operacionais nem permissões.
+- A verificação de regressão visual depende da nova execução do detector e de inspeção em browser; não foi possível capturar a interface renderizada nesta ronda.
+
+## 2026-11-20 — Integração Impeccable no workflow de frontend
+
+- Adicionado o submódulo upstream `pbakaus/impeccable`, fixado no commit `b49177d32788f2dc585c42831d845dacf1ebed2c`, sem incorporar a ferramenta como dependência runtime da aplicação.
+- Criada a entrada de skill `.agents/skills/impeccable/SKILL.md` e contexto de produto/design (`PRODUCT.md`, `DESIGN.md`) para orientar agentes no modo Operate.
+- O workflow Smart Shelf quality gates executa `impeccable@4.10.0 detect --json src/` e guarda o relatório como artefacto. Findings existentes são baseline não bloqueante; erro de execução do detector é bloqueante.
+- A integração ainda não constitui auditoria visual aprovada: falta executar o detector no runner, analisar findings, e validar o dashboard renderizado em browser desktop/mobile.
+- A identidade actual foi documentada a partir do CSS existente: DM Sans/Manrope, navy, fundo claro, acento mint/verde, navegação lateral e componentes operacionais.
+- Não houve redesign nem alteração do comportamento funcional do frontend nesta ronda.
+
+## 2026-11-20 — Smoke reforçado para identidade dos volumes
+
+- O smoke Docker Compose verifica também os nomes dos volumes Docker, não apenas os pontos de montagem e permissões.
+- Exige que API e vision-worker partilhem o mesmo volume de imagens, que a API use um volume de datasets distinto e que o worker não o monte.
+- Esta verificação reduz o risco de uma configuração futura apontar ambos os caminhos para o mesmo volume por engano.
+
+## 2026-11-20 — Volume dedicado para outputs de datasets
+
+- O Compose passa a montar o volume persistente `dataset_outputs` em `/app/storage/dataset-outputs`, explicitamente configurado em `DATASET_OUTPUT_STORAGE_PATH`.
+- O volume de imagens `shelf_images` mantém o caminho `/app/storage`; o mount aninhado separa staging e publicações de datasets sem alterar o contrato interno de caminhos.
+- O `vision-worker` não recebe o volume de datasets; continua com o volume de imagens read-only.
+- O smoke Compose inspecciona os mounts efectivos, confirma API read-write em ambos, worker read-only nas imagens, ausência do mount de datasets no worker e escrita temporária no directório de outputs pela API.
+- Esta alteração não cria um worker de transformação nem resolve o handoff remoto; a execução assíncrona de datasets continua não operacional.
+
+## 2026-11-20 — Hardening do container vision-worker
+
+- O worker passa a executar como UID/GID numérico não privilegiado `65532:65532`.
+- O root filesystem do container é read-only; apenas `/tmp` é disponibilizado como tmpfs temporário, com HOME/cache/TMPDIR apontados para essa área.
+- Todas as Linux capabilities são removidas (`cap_drop: ALL`) e é activado `no-new-privileges`.
+- O mount de imagens e o mount de modelos continuam read-only.
+- O smoke Docker Compose inspecciona a configuração efectiva e testa permissões de escrita do processo dentro do container.
+- O isolamento é específico ao worker de inferência; a API e os workers de datasets continuam a necessitar de hardening separado.
+- Validação CI pendente neste commit; não foram executados testes locais.
+
+## 2026-11-20 — Mount de imagens read-only no vision-worker
+
+- A auditoria confirmou que o worker só lê ficheiros de captura: `_resolve_worker_image_path` valida e resolve o caminho e os providers recebem o ficheiro para inferência; não há escrita/unlink/mkdir/cópia pelo worker em `IMAGE_STORAGE_PATH`.
+- O serviço `vision-worker` passa a montar `shelf_images` como `/app/storage:ro`. A API mantém o mount read-write para ingestão e operações de retenção.
+- O smoke Docker Compose verifica o mount efectivo através de `docker inspect` e falha se `RW` não for `false`.
+- Esta é uma barreira filesystem efectiva para o container worker no volume de imagens, não isolamento total: API e worker ainda usam a mesma imagem/identidade de processo e o armazenamento de outputs de datasets é uma área separada.
+- Validação desta alteração aguarda API CI, Quality Gates e Docker Compose. Não foram executados testes localmente.
+
 ## 2026-11-20 — Publicação atómica de outputs derivados
 
 - `promote_dataset_job_output` aceita agora uma relação pai → derivado opcional, mas exige actor, motivo e callback de autorização quando essa relação é pedida.
@@ -1259,3 +1315,25 @@ O teste de concorrência confirma a serialização edição/ativação no servi�
 - O worker antigo tem de detetar a alteração do timestamp de claim e descartar o resultado sem persistir deteções, observações ou snapshots de inventário.
 - O teste complementa o cenário existente de perda de lease seguida de exceção: passa a cobrir também o caminho de sucesso obsoleto.
 - Validação concluída no commit `4212aeab21bfe9182a485e10cfbd8a209d1d28ac`: API CI [44652277501](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44652277501), Quality Gates [44652277455](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44652277455) e Docker Compose [44652278042](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44652278042) passaram; API CI concluiu **1374 passed, 1 skipped, 1 warning** e os smokes PostgreSQL 16 passaram. Não foram executados testes localmente.
+
+## 2026-11-20 — Recuperação após falha do commit SQL de publicação
+
+- Acrescentado teste de falha determinística no ponto crítico entre a publicação atómica do ficheiro e o commit SQL.
+- O cenário força a primeira chamada a `Session.commit()` a falhar depois de o ficheiro final já existir.
+- O teste exige rollback da linha de auditoria, preservação dos bytes publicados e do staging original, ausência de temporários e recuperação idempotente numa segunda tentativa.
+- O teste foi adicionado ao repositório; aguarda validação pelos workflows GitHub Actions. Não foram executados testes localmente.
+
+## 2026-11-20 — Recuperação após falha de fsync do directório de publicação
+
+- Acrescentado teste de integração que injeta falha no `fsync` do directório depois da criação do hard link de destino.
+- O teste confirma que, perante durabilidade não confirmada, a transação SQL é revertida, o staging permanece e o destino existente só é reutilizado após nova verificação dos bytes.
+- Uma segunda promoção deve concluir a publicação e remover o staging depois do commit.
+- Validação pendente de GitHub Actions. Não foram executados testes localmente.
+
+## 2026-11-20 — Recuperação de staging após falha de limpeza pós-commit
+
+- Acrescentado teste que injeta falha de permissões ao remover o staging depois de a publicação e a linha de auditoria já estarem confirmadas.
+- O teste confirma que a publicação continua válida e que o staging residual é removido posteriormente pelo reconciliador, apenas depois de envelhecer e de os bytes de staging/publicação corresponderem ao SHA-256 e tamanho auditados.
+- A reconciliação mantém o contrato conservador e não remove staging sem publicação imutável correspondente.
+- Validação pendente de GitHub Actions. Não foram executados testes localmente.
+

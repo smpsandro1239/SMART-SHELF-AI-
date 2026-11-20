@@ -25,6 +25,7 @@ services:
       BOOTSTRAP_ADMIN_KEY: ${BOOTSTRAP_ADMIN_KEY:-}
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-smart_shelf}:${POSTGRES_PASSWORD:-local_only_change_me}@db:5432/${POSTGRES_DB:-smart_shelf}
       IMAGE_STORAGE_PATH: /app/storage/shelf-images
+      DATASET_OUTPUT_STORAGE_PATH: /app/storage/dataset-outputs
       MAX_IMAGE_UPLOAD_BYTES: ${MAX_IMAGE_UPLOAD_BYTES:-10485760}
       VISION_PROVIDER_MODE: ${VISION_PROVIDER_MODE:-mock}
       VISION_PROVIDER_FACTORY: ${VISION_PROVIDER_FACTORY:-app.demo.vision:create_provider}
@@ -48,6 +49,7 @@ services:
       start_period: 10s
     volumes:
       - shelf_images:/app/storage
+      - dataset_outputs:/app/storage/dataset-outputs
       - ./apps/api/demo/assets:/app/demo/assets
       - ${VISION_MODELS_DIR:-./models}:/models:ro
     depends_on:
@@ -58,9 +60,20 @@ services:
     build:
       context: ./apps/api
     restart: unless-stopped
+    user: "65532:65532"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=64m,mode=1777,uid=65532,gid=65532
     command: ["python", "-m", "app.vision_worker", "--poll-interval", "5"]
     environment:
       APP_ENV: ${APP_ENV:-development}
+      HOME: /tmp
+      XDG_CACHE_HOME: /tmp/.cache
+      TMPDIR: /tmp
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:-INSECURE-DEVELOPMENT-KEY-CHANGE-ME}
       BOOTSTRAP_ADMIN_KEY: ${BOOTSTRAP_ADMIN_KEY:-}
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-smart_shelf}:${POSTGRES_PASSWORD:-local_only_change_me}@db:5432/${POSTGRES_DB:-smart_shelf}
@@ -81,7 +94,7 @@ services:
       PRODUCT_MATCHING_MIN_SIMILARITY: ${PRODUCT_MATCHING_MIN_SIMILARITY:-0.90}
       PRODUCT_MATCHING_MIN_MARGIN: ${PRODUCT_MATCHING_MIN_MARGIN:-0.05}
     volumes:
-      - shelf_images:/app/storage
+      - shelf_images:/app/storage:ro
       - ${VISION_MODELS_DIR:-./models}:/models:ro
     depends_on:
       db:
@@ -92,4 +105,5 @@ services:
 
 volumes:
   shelf_images:
+  dataset_outputs:
   postgres_data:

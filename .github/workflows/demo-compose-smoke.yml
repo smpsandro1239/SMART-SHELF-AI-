@@ -61,6 +61,37 @@ jobs:
           services="$(docker compose ps --services --filter status=running)"
           grep -qx 'vision-worker' <<< "$services"
 
+          api_id="$(docker compose ps -q api)"
+          worker_id="$(docker compose ps -q vision-worker)"
+          api_image_mount_rw="$(docker inspect "$api_id" --format '{{range .Mounts}}{{if eq .Destination "/app/storage"}}{{.RW}}{{end}}{{end}}')"
+          api_dataset_mount_rw="$(docker inspect "$api_id" --format '{{range .Mounts}}{{if eq .Destination "/app/storage/dataset-outputs"}}{{.RW}}{{end}}{{end}}')"
+          api_image_volume="$(docker inspect "$api_id" --format '{{range .Mounts}}{{if eq .Destination "/app/storage"}}{{.Name}}{{end}}{{end}}')"
+          api_dataset_volume="$(docker inspect "$api_id" --format '{{range .Mounts}}{{if eq .Destination "/app/storage/dataset-outputs"}}{{.Name}}{{end}}{{end}}')"
+          worker_image_mount_rw="$(docker inspect "$worker_id" --format '{{range .Mounts}}{{if eq .Destination "/app/storage"}}{{.RW}}{{end}}{{end}}')"
+          worker_image_volume="$(docker inspect "$worker_id" --format '{{range .Mounts}}{{if eq .Destination "/app/storage"}}{{.Name}}{{end}}{{end}}')"
+          worker_dataset_mount="$(docker inspect "$worker_id" --format '{{range .Mounts}}{{if eq .Destination "/app/storage/dataset-outputs"}}present{{end}}{{end}}')"
+          test "$api_image_mount_rw" = "true"
+          test "$api_dataset_mount_rw" = "true"
+          test -n "$api_image_volume"
+          test -n "$api_dataset_volume"
+          test "$api_image_volume" != "$api_dataset_volume"
+          test "$worker_image_mount_rw" = "false"
+          test "$worker_image_volume" = "$api_image_volume"
+          test -z "$worker_dataset_mount"
+          docker compose exec -T api python -c "import os, tempfile; p='/app/storage/dataset-outputs'; assert os.environ['DATASET_OUTPUT_STORAGE_PATH'] == p; assert os.path.isdir(p); f=tempfile.TemporaryFile(dir=p); f.write(b'smoke'); f.close()"
+          echo "Verified API read-write dataset volume is separate from shelf_images and is not mounted in vision-worker."
+
+          rootfs_read_only="$(docker inspect "$worker_id" --format '{{.HostConfig.ReadonlyRootfs}}')"
+          worker_user="$(docker inspect "$worker_id" --format '{{.Config.User}}')"
+          dropped_caps="$(docker inspect "$worker_id" --format '{{join .HostConfig.CapDrop ","}}')"
+          security_options="$(docker inspect "$worker_id" --format '{{join .HostConfig.SecurityOpt ","}}')"
+          test "$rootfs_read_only" = "true"
+          test "$worker_user" = "65532:65532"
+          grep -q 'ALL' <<< "$dropped_caps"
+          grep -q 'no-new-privileges:true' <<< "$security_options"
+          docker compose exec -T vision-worker python -c "import os; assert os.geteuid() == 65532; assert os.access('/tmp', os.W_OK); assert not os.access('/app', os.W_OK); assert not os.access('/app/storage/shelf-images', os.W_OK); assert not os.access('/models', os.W_OK)"
+          echo "Verified non-root worker, read-only root filesystem, dropped capabilities, no-new-privileges and writable temporary directory only."
+
           while IFS='|' read -r role email password; do
             response="$(curl --fail --silent --show-error \
               -H 'Content-Type: application/json' \

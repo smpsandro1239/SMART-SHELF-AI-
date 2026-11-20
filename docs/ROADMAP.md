@@ -1,3 +1,28 @@
+### Impeccable — governança de qualidade de frontend (2026-11-20)
+
+- Skill upstream integrada e fixada em `vendor/impeccable`; ponto de entrada dos agentes em `.agents/skills/impeccable/SKILL.md`.
+- Contexto durável de produto e design em `PRODUCT.md` e `DESIGN.md`.
+- Detector v4.10.0 integrado no Quality Gates com relatório baseline não bloqueante para findings preexistentes; erro de execução continua a falhar o job.
+- Estado: integração documental e CI configurada; auditoria visual efectiva e correções de findings ainda pendentes. Não afirmar conformidade WCAG nem aprovação visual sem inspeção renderizada e testes.
+- Próximo passo: recolher o primeiro artefacto de auditoria, priorizar findings, corrigir P0/P1 e fazer verificação visual desktop/mobile.
+
+### Hardening do container vision-worker — 2026-11-20
+
+- O worker executa como UID/GID `65532:65532`, sem privilégios Linux adicionais.
+- Root filesystem read-only, `cap_drop: ALL`, `no-new-privileges:true` e tmpfs limitado a `/tmp`; HOME/cache/TMPDIR usam essa área temporária.
+- Imagens e pesos de modelos permanecem em mounts read-only.
+- O smoke Compose valida configuração Docker efectiva e permissões de escrita do processo.
+- Esta alteração não hardena a API, não separa o armazenamento de outputs de datasets e não prova quiescência de workers antigos.
+- Validação CI pendente no commit desta ronda.
+
+### Isolamento filesystem da captura — primeira barreira read-only (2026-11-20)
+
+- O serviço `vision-worker` monta agora o volume persistente `shelf_images` em modo só de leitura; a API permanece responsável por escrever uploads e gerir retenção.
+- A inspecção do worker confirmou que o fluxo de inferência resolve e lê a imagem, sem escrever no volume de capturas.
+- O smoke Docker Compose passa a inspeccionar o mount do container e exige `RW=false`.
+- Limite: isto não separa UID/GID, não isola `DATASET_OUTPUT_STORAGE_PATH` e não prova quiescência de processos antigos. A limpeza de staging órfão continua report-only.
+- Validação CI pendente no commit desta alteração.
+
 ### Inventário seguro de staging órfão — 2026-11-20
 
 - O reconciliador identifica ficheiros antigos em staging sem publicação correspondente e classifica job desconhecido, job concluído sem publicação, token obsoleto, job terminal e worker potencialmente activo.

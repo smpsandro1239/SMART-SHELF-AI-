@@ -1,3 +1,14 @@
+## Impeccable — integração e baseline de qualidade visual (2026-11-20)
+
+- [x] Fixar a upstream skill Impeccable como submódulo Git `vendor/impeccable`, apontado ao commit `b49177d32788f2dc585c42831d845dacf1ebed2c`; manter a licença Apache-2.0 e o código upstream intactos.
+- [x] Expor a skill aos agentes em `.agents/skills/impeccable/SKILL.md`, com instruções específicas do SMART SHELF AI e ligação para o playbook oficial.
+- [x] Criar `PRODUCT.md` e `DESIGN.md` a partir dos fluxos, papéis, limitações e tokens efectivamente encontrados no repositório.
+- [x] Integrar o detector Impeccable v4.10.0 no Quality Gates, guardando um relatório baseline sem bloquear por findings preexistentes; falhas de execução continuam bloqueantes.
+- [x] Obter o primeiro relatório detector: um finding warning side-tab em decision-freshness-notice; a revisão encontrou o mesmo padrão em decision-warnings. Ambos foram corrigidos com contorno completo, preservando o significado dos estados. A nova execução CI deve confirmar que o finding desapareceu.
+- [ ] Executar `context`, `critique` e `audit` com checkout local e browser; verificar dashboard e fluxos de captura/revisão em desktop e mobile.
+- [ ] Rever acessibilidade por teclado, contraste, estados loading/empty/error/disabled e semântica dos formulários; o build TypeScript não substitui esta validação visual.
+- [ ] Só depois fazer polimento incremental, sem alterar contratos API, permissões ou regras de inventário.
+
 ## Idempotência da observação perante revisão SKU posterior — 2026-11-19
 
 - [x] Identificar que a chave de idempotência por deteção devolvia uma observação anterior mesmo quando uma revisão SKU posterior alterava o produto pedido.
@@ -45,6 +56,18 @@
 - [x] Acrescentar ao smoke PostgreSQL duas sessões concorrentes para provar que RESTRICTION_APPLIED espera pelo consumidor que mantém o lock da publicação, e que a restrição só fica efectiva depois do commit da leitura.
 - [ ] Confirmar os três workflows da alteração concorrente antes de marcar a cobertura como validada.
 - [ ] Não implementar libertação independente de legal hold nem matriz HTTP por perfil/loja sem decisão de política aprovada; documentar as decisões necessárias.
+
+## Isolamento filesystem API/vision-worker — 2026-11-20
+- [x] Executar `vision-worker` com UID/GID dedicado não privilegiado `65532:65532`, root filesystem read-only, `cap_drop: ALL`, `no-new-privileges` e `/tmp` temporário isolado; manter os mounts de imagens e modelos read-only.
+- [x] Alargar o smoke Docker Compose para verificar UID efectivo, permissões de escrita, root filesystem, capabilities e `no-new-privileges`.
+
+- [x] Montar o volume persistente de imagens em modo só de leitura no serviço `vision-worker`; a API mantém a escrita e a ingestão.
+- [x] Acrescentar verificação no smoke Docker Compose que inspecciona o mount real do container e exige `RW=false`.
+- [ ] Separar identidades UID/GID e permissões de directórios; confirmar compatibilidade com volumes existentes e operações de retenção/purga antes de alterar ownership.
+- [x] Separar staging/publicações de outputs de datasets num volume Docker persistente `dataset_outputs`, montado apenas na API; o `vision-worker` não recebe esse volume. O smoke verifica os mounts reais e a escrita pela API.
+- [x] Reforçar o smoke para comparar os nomes dos volumes Docker: o volume de imagens partilhado API/vision-worker tem de ser diferente do volume de outputs de datasets.
+- [ ] Definir handoff controlado e mounts mínimos quando existir um worker de transformação de datasets; esse worker ainda não está integrado no Compose.
+- [ ] Provar quiescência física de workers antigos antes de qualquer limpeza de staging órfão; fencing SQL isolado não é suficiente.
 
 ## Reconciliação conservadora de outputs (2026-11-19)
 
@@ -1070,3 +1093,33 @@ Critério global: nenhuma capacidade pode ser marcada como concluída sem códig
 - [x] Acrescentar teste integrado em que um segundo processamento assume a lease enquanto o primeiro provider ainda está a inferir.
 - [x] Confirmar que o resultado válido do worker antigo é descartado antes de persistir deteções, observações ou inventário.
 - [x] Validar no commit `4212aeab21bfe9182a485e10cfbd8a209d1d28ac`: [API CI 44652277501](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44652277501), [Quality Gates 44652277455](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44652277455) e [Docker Compose 44652278042](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44652278042) passaram. A suite API terminou com 1374 passed, 1 skipped e 1 warning; o smoke PostgreSQL 16 validou recuperação `SKIP LOCKED`, takeover de lease com resultado válido obsoleto, mudança de retenção durante inferência e falha do provider após takeover. Validação CI, não teste manual.
+
+## Recuperação transacional de outputs — 2026-11-20
+
+- [x] Acrescentar regressão para falha SQL depois da criação do ficheiro final e antes da confirmação da publicação.
+- [x] Verificar que a falha não deixa linha de auditoria parcial, não remove staging e permite retry idempotente.
+- [ ] Confirmar API CI, Quality Gates e Docker Compose no commit que contém o teste.
+- [ ] Avaliar separadamente a recuperação de falhas de filesystem durante `fsync`, criação de hard link e remoção pós-commit; não assumir que o teste de falha SQL cobre essas janelas.
+
+## Evolução visual do frontend — melhoria futura (adiada a pedido)
+
+- [ ] Avaliar e integrar a skill [Impeccable](https://github.com/pbakaus/impeccable) no workflow de desenvolvimento do frontend.
+- [ ] Antes de qualquer redesign, definir com o responsável o público-alvo, os principais contextos de utilização e a personalidade visual da marca; verificar se já existe `.impeccable.md` com esse contexto.
+- [ ] Fazer auditoria visual das páginas existentes e propor um sistema coerente de design tokens, tipografia, cores, espaçamento, componentes, estados, acessibilidade e responsividade.
+- [ ] Implementar melhorias de forma incremental, preservando contratos API e fluxos funcionais, e validar screenshots nas dimensões suportadas.
+- Nota: não instalar nem alterar o frontend nesta fase; retomar apenas quando este tema for explicitamente reaberto.
+
+## Durabilidade do filesystem na promoção de outputs — 2026-11-20
+
+- [x] Acrescentar regressão para falha do `fsync` do directório depois do hard link e antes do commit SQL.
+- [x] Confirmar rollback da publicação SQL, preservação do staging e retry com verificação SHA-256 do destino existente.
+- [ ] Validar API CI, Quality Gates e Docker Compose.
+- [ ] Avaliar falhas de `fsync` do ficheiro temporário e da remoção do staging; distinguir erros recuperáveis de garantias de durabilidade que o filesystem/volume não oferece.
+
+## Limpeza pós-commit e reconciliação — 2026-11-20
+
+- [x] Testar falha de permissões na remoção de staging depois do commit da publicação.
+- [x] Confirmar que o output e a linha de auditoria permanecem válidos e que o staging residual pode ser removido pelo reconciliador após o período de segurança, com digest/tamanho coincidentes.
+- [ ] Validar API CI e Quality Gates para os testes de falha de fsync e limpeza pós-commit.
+- [ ] Manter limpeza de staging órfão sem publicação em modo report-only até prova independente de quiescência dos workers.
+
