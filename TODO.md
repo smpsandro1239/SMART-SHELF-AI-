@@ -8,6 +8,7 @@
 - [x] Criar `apps/api/scripts/audit_api_route_policy.py`, auditor read-only que enumera cada método/rota FastAPI, apresenta categorias efectivas e lista os casos `AUTHENTICATED_STAFF`; `--strict` permite tornar a ausência de fallback num gate depois de rever as permissões.
 - [ ] Executar o auditor no ambiente API e rever manualmente cada fallback antes de converter a auditoria num gate bloqueante.
 - [x] Corrigir correspondência de prefixos para respeitar limites de segmentos (`/users` não deve corresponder a `/users-export`); acrescentar regressões para caminhos semelhantes e rotas aninhadas reais.
+- [x] Corrigir a deteção de sub-recursos `shelves/*/planograms` para exigir o segmento `planograms` completo; acrescentar regressão para `/planograms-export` não herdar permissões de supervisor.
 - [ ] Confirmar os testes de fronteira no CI e a suite integral antes de considerar a alteração validada.
 
 ## Segurança P0 — CORS preflight e Bearer
