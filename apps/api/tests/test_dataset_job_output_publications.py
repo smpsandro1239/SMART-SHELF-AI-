@@ -1140,3 +1140,39 @@ def test_staging_cleanup_failure_after_commit_is_recovered_by_reconciliation(pub
         job_id=state["job"].id
     ).count() == 1
 
+
+
+def test_output_reconciler_reports_orphan_published_output_without_deleting_even_apply(publication_setup):
+    import os
+    from datetime import timedelta
+
+    from app.dataset_job_output_reconciliation import reconcile_dataset_job_output_files
+
+    state = publication_setup
+    published_dir = state["root"] / "published" / str(state["job"].id)
+    published_dir.mkdir(parents=True)
+    reference = (
+        f"published/{state['job'].id}/"
+        f"{state['claim'].fencing_token}-{state['digest']}.artifact"
+    )
+    orphan_path = state["root"] / reference
+    orphan_path.write_bytes(state["payload"])
+    stale_time = models.utc_now() - timedelta(days=8)
+    os.utime(orphan_path, (stale_time.timestamp(), stale_time.timestamp()))
+
+    report = reconcile_dataset_job_output_files(
+        state["db"],
+        apply=True,
+        grace_seconds=3600,
+        now=models.utc_now(),
+    )
+
+    orphan = next(
+        item for item in report["orphan_published"]
+        if item["reference"] == reference
+    )
+    assert orphan["bytes"] == len(state["payload"])
+    assert orphan["reason"] == "missing_publication_audit_row"
+    assert orphan["cleanup"] == "report_only"
+    assert orphan_path.read_bytes() == state["payload"]
+    assert reference not in report["removed"]
