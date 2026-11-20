@@ -1156,8 +1156,8 @@ Critério global: nenhuma capacidade pode ser marcada como concluída sem códig
 
 - [x] Acrescentar regressão para falha SQL depois da criação do ficheiro final e antes da confirmação da publicação.
 - [x] Verificar que a falha não deixa linha de auditoria parcial, não remove staging e permite retry idempotente.
-- [ ] Confirmar API CI, Quality Gates e Docker Compose no commit que contém o teste.
-- [ ] Avaliar separadamente a recuperação de falhas de filesystem durante `fsync`, criação de hard link e remoção pós-commit; não assumir que o teste de falha SQL cobre essas janelas.
+- [x] Confirmar API CI, Quality Gates e Docker Compose no commit `4beb3f0`; os três passaram.
+- [x] Avaliar separadamente falhas de `fsync` do ficheiro/directório, hard link e remoção pós-commit; regressões específicas e limites documentados em `docs/operations/dataset-output-reconciliation.md`.
 
 ## Evolução visual do frontend — melhoria futura (adiada a pedido)
 
@@ -1208,7 +1208,7 @@ Critério global: nenhuma capacidade pode ser marcada como concluída sem códig
 ## Consumo seguro de outputs publicados — 2026-11-20
 
 - [x] Acrescentar regressões para o consumidor de outputs publicados: leitura integral autorizada, autorização estritamente positiva (apenas `True`) e rejeição de bytes publicados adulterados.
-- [ ] Validar os novos testes e a suite API no CI do commit `a2b0175490b2ea56fa49956d92de1e1c1147326a`.
+- [x] Validar os novos testes e a suite API no API CI/Quality Gates do commit `4beb3f0` (1404 passed, 1 skipped, 1 warning).
 - [ ] Avaliar a integração futura deste helper com um consumidor de produto/API; não existe evidência nesta auditoria de uma rota HTTP que o invoque, pelo que não presumir que outputs já são descarregáveis por utilizadores finais.
 
 ## Bloqueio transaccional da proveniência de outputs — 2026-11-20
