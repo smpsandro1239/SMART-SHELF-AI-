@@ -538,8 +538,8 @@ def test_sales_csv_imports_are_store_scoped_and_rejected_foreign_imports_are_ato
         monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: actor)
 
         daily_csv = (
-            "product_id,sales_date,quantity,external_reference\\n"
-            f"{product_id},2026-11-20,3,DAILY-OWN-001\\n"
+            "product_id,sales_date,quantity,external_reference\n"
+            f"{product_id},2026-11-20,3,DAILY-OWN-001\n"
         ).encode()
         own_daily = client.post(
             "/api/v1/sales/import-csv",
@@ -550,8 +550,8 @@ def test_sales_csv_imports_are_store_scoped_and_rejected_foreign_imports_are_ato
         assert own_daily.json()["rows_imported"] == 1
 
         hourly_sales_csv = (
-            "product_id,business_date,hour_of_day,quantity,external_reference\\n"
-            f"{product_id},2026-11-20,9,2,HOURLY-OWN-001\\n"
+            "product_id,business_date,hour_of_day,quantity,external_reference\n"
+            f"{product_id},2026-11-20,9,2,HOURLY-OWN-001\n"
         ).encode()
         own_hourly = client.post(
             "/api/v1/sales/hourly/import-csv",
@@ -561,8 +561,8 @@ def test_sales_csv_imports_are_store_scoped_and_rejected_foreign_imports_are_ato
         assert own_hourly.status_code == 200, own_hourly.text
 
         traffic_csv = (
-            "business_date,hour_of_day,customer_count,external_reference\\n"
-            "2026-11-20,9,12,TRAFFIC-OWN-001\\n"
+            "business_date,hour_of_day,customer_count,external_reference\n"
+            "2026-11-20,9,12,TRAFFIC-OWN-001\n"
         ).encode()
         own_traffic = client.post(
             "/api/v1/sales/traffic/hourly/import-csv",
