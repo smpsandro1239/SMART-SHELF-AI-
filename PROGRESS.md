@@ -1,3 +1,12 @@
+## 2026-11-21 — Encaminhamento de digests ONNX no Docker Compose (validação pendente)
+
+- A revisão da configuração detectou que o provider ONNX real exige `VISION_DETECTOR_MODEL_SHA256` e, quando existe embedder, `VISION_EMBEDDING_MODEL_SHA256`, mas os serviços API e worker não recebiam essas variáveis através do Compose.
+- O `docker-compose.yml` foi alterado para encaminhar ambos os valores aos dois processos. Os valores por omissão permanecem vazios, pelo que a configuração continua a falhar fechada se o operador activar o provider real sem fornecer digests aprovados.
+- Foi acrescentado `apps/api/tests/test_vision_compose_configuration.py` para fixar a passagem das duas variáveis nos serviços API e vision-worker.
+- Commits: Compose `2d810e8a`; teste inicial `d00278b2`; correcção do teste `b417490a` e `263de3e8`; documentação em curso.
+- Estado: implementação publicada; testes e workflows ainda não executados/confirmados nesta ronda. Não declarar a alteração validada até CI verde.
+- Limite: isto não implementa manifesto assinado nem fornece pesos ONNX; apenas torna configuráveis no container os digests que já eram obrigatórios no provider real.
+
 ## 2026-11-21 — Integridade dos exemplares de embeddings (validado)
 
 - A validação de ProductExemplar aceitava alguns valores com tipos inadequados: booleanos/floats como IDs e metadados não textuais podiam atravessar a fronteira de domínio.
