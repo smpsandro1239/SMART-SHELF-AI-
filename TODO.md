@@ -1,3 +1,10 @@
+## Gitleaks — cobertura do histórico completo (2026-11-21, validado)
+
+- [x] Confirmar a limitação da ação oficial no evento push: o scan integrado analisava apenas 1 commit. Acrescentar execução explícita de Gitleaks com --log-opts=--all após checkout de histórico completo.
+- [x] Inspecionar as 7 ocorrências históricas generic-api-key: exemplos de bootstrap em documentação, valores HMAC usados exclusivamente em testes e um hash de commit. Não foram identificadas credenciais activas.
+- [x] Substituir no HEAD as credenciais de exemplo e chaves de teste com aparência de segredo; adicionar .gitleaksignore com as 7 fingerprints exactas. Não foram criadas exclusões por pasta, regra ou padrão genérico.
+- [x] Gitleaks: 2741 commits analisados, zero leaks não autorizados. Security Scans [44895863007](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44895863007) passou; pip-audit sem vulnerabilidades conhecidas, npm audit 0 vulnerabilidades e ZAP safe-mode sem findings.
+
 ## Integridade do provider ONNX — pinning de pesos e pré-processamento (2026-11-21)
 
 - [x] Exigir VISION_DETECTOR_MODEL_SHA256 no factory do provider real e validar formato SHA-256.

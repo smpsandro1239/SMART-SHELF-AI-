@@ -1800,13 +1800,14 @@ Esta alteração fecha a janela entre publicação e registo da linhagem para os
 
 ## Última validação técnica — 2026-11-21
 
-Commit validado: [663bf49](https://github.com/smpsandro1239/SMART-SHELF-AI-/commit/663bf495f6d15a4bcc92aa6fedc87d18e47e4e71).
+Commit validado: [1097e53](https://github.com/smpsandro1239/SMART-SHELF-AI-/commit/1097e53a4bfae31f66e4a6c434a37caa1a40e233).
 
 - API CI: **1432 testes aprovados, 1 ignorado**, migrations e smokes PostgreSQL 16 aprovados.
 - Quality Gates: **1432 testes aprovados, 1 ignorado**; compilação Python e build Web aprovados.
 - Docker Compose demo smoke: aprovado.
-- SCA: pip-audit sem vulnerabilidades conhecidas; npm audit e Gitleaks aprovados.
-- OWASP ZAP Baseline e API safe-mode: 0 alertas High, Medium e Low. Permanecem apenas alertas informativos, incluindo respostas 401 esperadas no scan sem autenticação.
+- SCA: pip-audit sem vulnerabilidades conhecidas; npm audit encontrou 0 vulnerabilidades.
+- Secret scanning: Gitleaks analisou o commit atual e 2741 commits alcançáveis; 0 ocorrências não autorizadas. As 7 impressões digitais históricas em .gitleaksignore correspondem apenas a exemplos de documentação, segredos de teste e um hash de commit; não existem exclusões genéricas.
+- OWASP ZAP Baseline e API safe-mode: 0 FAIL-NEW, 0 FAIL-INPROG, 0 WARN-NEW, 0 WARN-INPROG e 0 INFO; 120 verificações PASS. O scan observou 164 URLs no baseline e 161 URLs no scan OpenAPI safe-mode.
 - Segurança multi-loja: 22 handlers com autorização de tenant antes de adquirir locks e revalidação após refresh.
 - Computer Vision: testes adicionais para boxes invertidas/degeneradas, padding letterbox, clipping parcial, falhas/timeout do worker e integridade dos modelos ONNX. O worker preserva deteções anteriores e não altera inventário quando a inferência falha.
 - Integridade ONNX: VISION_DETECTOR_MODEL_SHA256 é obrigatório no provider real; VISION_EMBEDDING_MODEL_SHA256 é obrigatório quando existe embedder. O fingerprint do extrator usa uma versão de pré-processamento distinta do detetor.

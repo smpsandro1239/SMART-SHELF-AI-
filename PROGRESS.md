@@ -1,3 +1,13 @@
+## 2026-11-21 — Gitleaks sobre o histórico Git completo (validado)
+
+- A ação oficial Gitleaks estava a usar --log-opts=-1 no evento push; o checkout tinha histórico completo, mas a acção só verificava o commit actual. Foi acrescentado um passo explícito com --log-opts=--all.
+- A primeira execução percorreu 2740 commits e encontrou 7 ocorrências da regra generic-api-key. A análise dos contextos confirmou exemplos de bootstrap na documentação, chaves HMAC de testes e um hash de commit; não foram identificadas credenciais activas.
+- Os exemplos de credenciais e a chave de teste actual foram substituídos por placeholders/valores de teste explícitos. As 7 ocorrências históricas foram adicionadas a .gitleaksignore através das fingerprints exactas, sem exclusões por caminho, regra ou regex. O histórico Git não foi reescrito.
+- Reexecução: 2741 commits analisados, no leaks found. Artefacto SARIF full-history disponível no workflow Security Scans [44895863007](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44895863007).
+- Segurança: pip-audit sem vulnerabilidades conhecidas; npm audit 0 vulnerabilidades; ZAP baseline/API safe-mode 0 FAIL, 0 WARN, 0 INFO e 120 PASS. Docker Compose passou.
+- API CI [44895863058](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44895863058) e Quality Gates [44895863008](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44895863008) passaram, com 1432 passed, 1 skipped; PostgreSQL 16, compilação Python e build Web aprovados.
+- Commit de correcção e cobertura: 1097e53a4bfae31f66e4a6c434a37caa1a40e233. Limite: as impressões digitais antigas permanecem no histórico por não se ter reescrito a história; a supressão é específica a cada ocorrência classificada como falsa positiva.
+
 ## 2026-11-21 — Pinning de integridade dos modelos ONNX (validado em CI)
 
 - A auditoria confirmou que o provider calculava SHA-256 dos pesos e incorporava o digest no fingerprint, mas não comparava o ficheiro com um digest previamente aprovado. O comportamento anterior permitia que um modelo substituído antes do arranque fosse simplesmente identificado como uma nova versão.

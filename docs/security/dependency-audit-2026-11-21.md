@@ -77,3 +77,16 @@ O workflow [Security Scans 44885522256](https://github.com/smpsandro1239/SMART-S
 - ZAP API safe-mode: 0 High, 0 Medium, 0 Low; 4 informativos; 131 operações OpenAPI importadas.
 
 Os alertas informativos incluem identificação de endpoints de autenticação, respostas 401 esperadas no scan não autenticado e directivas de cache. Não foi executado active scan nem teste com sessão autenticada.
+
+
+## Scan Gitleaks do histórico completo — 2026-11-21
+
+A revisão do log do Gitleaks revelou que a acção oficial, no evento push, usa `--log-opts=-1`: apesar do checkout com `fetch-depth: 0`, o scan integrado verificava apenas o commit actual. Foi adicionado um segundo passo com `gitleaks detect --log-opts=--all`, com relatório SARIF arquivado.
+
+A primeira execução percorreu 2740 commits e encontrou sete correspondências `generic-api-key`. A revisão individual identificou exclusivamente: (a) dois exemplos históricos de credenciais de bootstrap na documentação da API; (b) três ocorrências históricas de uma chave HMAC de teste nos testes de assinatura/integrações; e (c) um hash de commit em PROGRESS.md. Não foram encontradas credenciais activas nem segredos de deployment. Os exemplos de bootstrap e o valor de teste actual foram substituídos por placeholders/valores explícitos de teste.
+
+Foi criado `.gitleaksignore` com as sete fingerprints exactas (commit, caminho, regra e linha). Não foram ignorados diretórios, regras ou padrões genéricos. O histórico Git não foi reescrito; as ocorrências antigas permanecem nos commits, mas estão classificadas por fingerprint e não voltam a ser tratadas como credenciais activas.
+
+Revalidação no commit `1097e53a4bfae31f66e4a6c434a37caa1a40e233`: Gitleaks analisou **2741 commits**, terminou com `no leaks found` e publicou o artefacto SARIF [gitleaks-full-history](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44895863007/artifacts/14704011041). A análise do commit actual também terminou sem leaks.
+
+Workflows associados: [Security Scans 44895863007](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44895863007), [API CI 44895863058](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44895863058), [Quality Gates 44895863008](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44895863008) e [Docker Compose 44895863080](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44895863080). API CI e Quality Gates terminaram com **1432 passed, 1 skipped**. pip-audit não encontrou vulnerabilidades conhecidas, npm audit encontrou zero vulnerabilidades e ZAP safe-mode terminou com 0 FAIL, 0 WARN, 0 INFO e 120 PASS.

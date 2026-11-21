@@ -1,3 +1,10 @@
+### Gitleaks — scan do histórico Git completo (2026-11-21, validado)
+
+- O workflow agora executa Gitleaks sobre todos os commits alcançáveis (--log-opts=--all), além do scan do commit actual.
+- A primeira análise encontrou 7 ocorrências generic-api-key em exemplos de documentação, fixtures HMAC de testes e um hash de commit. Foram classificadas como falsas positivas; valores de exemplo actuais foram substituídos e as fingerprints históricas exactas foram registadas em .gitleaksignore.
+- Reexecução: 2741 commits analisados, zero ocorrências não autorizadas. Não houve reescrita do histórico nem exclusões genéricas.
+- Security Scans, API CI, Quality Gates e Docker Compose passaram; 1432 testes aprovados, 1 ignorado.
+
 ### Integridade do provider ONNX — digests aprovados e pré-processamento (2026-11-21, validado)
 
 - O provider real exige digest SHA-256 aprovado para o detetor e, quando configurado, para o extrator de embeddings.
