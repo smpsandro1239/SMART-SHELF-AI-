@@ -114,6 +114,7 @@ def evaluate_approved_test_split(
     annotations_path: Path,
     images_root: Path,
     *,
+    manifest_path: Path,
     operating_threshold: float = 0.25,
 ) -> dict[str, Any]:
     try:
