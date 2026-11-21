@@ -501,3 +501,44 @@ def test_decode_sorts_by_confidence_and_applies_detection_limit():
     boxes = provider._decode(raw, (640, 640), (640, 640, 1.0, 0, 0))
 
     assert [box[0] for box in boxes] == pytest.approx([0.95, 0.80])
+
+@pytest.mark.parametrize(
+    "coordinates",
+    [
+        (0.8, 0.1, 0.2, 0.9),
+        (0.1, 0.9, 0.9, 0.2),
+        (0.5, 0.1, 0.5, 0.9),
+        (0.1, 0.5, 0.9, 0.5),
+    ],
+)
+def test_decode_discards_reversed_and_zero_area_boxes(coordinates):
+    provider = provider_without_runtime()
+    raw = np.array([[*coordinates, 0.95, 0]], dtype=np.float32)
+
+    assert provider._decode(raw, (640, 640), (640, 640, 1.0, 0, 0)) == []
+
+
+@pytest.mark.parametrize(
+    "vertical_coordinates",
+    [
+        (0.01, 0.1),
+        (0.9, 1.0),
+    ],
+)
+def test_decode_discards_boxes_fully_inside_letterbox_padding(vertical_coordinates):
+    provider = provider_without_runtime()
+    y1, y2 = vertical_coordinates
+    raw = np.array([[0.1, y1, 0.9, y2, 0.95, 0]], dtype=np.float32)
+
+    assert provider._decode(raw, (640, 320), (640, 320, 1.0, 0, 160)) == []
+
+
+def test_decode_clips_partial_vertical_padding_overlap_to_original_image():
+    provider = provider_without_runtime()
+    raw = np.array([[0.1, 0.1, 0.9, 0.5, 0.95, 0]], dtype=np.float32)
+
+    boxes = provider._decode(raw, (640, 320), (640, 320, 1.0, 0, 160))
+
+    assert len(boxes) == 1
+    _, _, x1, y1, x2, y2 = boxes[0]
+    assert (x1, y1, x2, y2) == pytest.approx((0.1, 0.0, 0.9, 0.5))

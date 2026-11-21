@@ -896,3 +896,73 @@ def test_worker_discards_successful_inference_after_lease_takeover(db, tmp_path,
     assert db.query(models.ShelfImageDetection).filter_by(shelf_image_id=image_id).count() == 0
     assert db.query(models.Observation).count() == 0
     assert db.query(models.InventorySnapshot).count() == 0
+
+@pytest.mark.parametrize("failure_type", [RuntimeError, TimeoutError])
+def test_worker_inference_failure_marks_image_failed_and_preserves_prior_detections(
+    db, tmp_path, monkeypatch, failure_type
+):
+    import hashlib
+
+    import app.vision_worker as worker
+
+    store = models.Store(code=f"WORKER-FAIL-{failure_type.__name__}", name="Worker Failure")
+    db.add(store)
+    db.flush()
+    zone = models.Zone(store_id=store.id, name="Zona")
+    db.add(zone)
+    db.flush()
+    shelf = models.Shelf(zone_id=zone.id, code="WORKER-FAIL-01")
+    db.add(shelf)
+    db.flush()
+
+    storage_root = tmp_path / "storage"
+    monkeypatch.setattr(worker.settings, "image_storage_path", str(storage_root))
+    image_path = storage_root / str(store.id) / "worker-failure.jpg"
+    image_path.parent.mkdir(parents=True)
+    image_bytes = b"valid-worker-image-bytes"
+    image_path.write_bytes(image_bytes)
+
+    image = models.ShelfImage(
+        shelf_id=shelf.id,
+        original_filename="worker-failure.jpg",
+        storage_path=str(image_path),
+        mime_type="image/jpeg",
+        file_size_bytes=len(image_bytes),
+        sha256=hashlib.sha256(image_bytes).hexdigest(),
+        analysis_status="PENDING",
+        retention_status="ACTIVE",
+        model_version="previous-model",
+    )
+    db.add(image)
+    db.flush()
+    previous_detection = models.ShelfImageDetection(
+        shelf_image_id=image.id,
+        label="product",
+        confidence=0.91,
+        x_min=0.1,
+        y_min=0.1,
+        x_max=0.7,
+        y_max=0.8,
+        model_version="previous-model",
+    )
+    db.add(previous_detection)
+    db.commit()
+    image_id = image.id
+
+    class BrokenVisionProvider:
+        def analyze(self, path):
+            raise failure_type("simulated inference failure")
+
+    processed = worker.process_next_image(db, BrokenVisionProvider())
+
+    assert processed == image_id
+    db.refresh(image)
+    assert image.analysis_status == "FAILED"
+    assert "simulated inference failure" in image.analysis_error
+    assert (
+        db.query(models.ShelfImageDetection)
+        .filter_by(shelf_image_id=image_id)
+        .count()
+        == 1
+    )
+    assert db.query(models.InventorySnapshot).count() == 0
