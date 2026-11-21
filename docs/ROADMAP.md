@@ -922,3 +922,10 @@ A primeira validação da alteração de locks falhou apenas no novo teste SQL: 
 A promoção de outputs locais passa a sincronizar cada componente da árvore de armazenamento, verificar e sincronizar ficheiros/destinos existentes antes de reutilização, e emitir avisos quando a limpeza de staging pós-commit não consegue confirmar durabilidade. Os erros anteriores ao commit mantêm o staging e não criam publicação SQL parcial. A reconciliação permanece conservadora e report-only para ficheiros sem publicação.
 
 Validação no commit `4beb3f002b809de8ef50f9990a377db2f7f7c36d`: API CI, Quality Gates e Docker Compose aprovados; 1404 testes aprovados, 1 ignorado e 1 aviso. Os limites de durabilidade do filesystem/volume físico estão documentados em `docs/operations/dataset-output-reconciliation.md`.
+## 2026-11-21 — Governação explícita das rotas API
+
+A autorização HTTP foi convertida de grupos/fallback genérico para um registo método × template com 128 entradas. Novas rotas e métodos não declarados são recusados para todos os perfis até receberem uma política. O teste de cobertura percorre as rotas FastAPI registadas; o auditor `--strict` passou a integrar o API CI.
+
+Também foi fechada uma janela de revogação de perfil em dez handlers de administração/catálogo, que agora recarregam o actor na sessão de execução. O teste integrado simula ADMIN → SUPERVISOR entre middleware e handler e confirma ausência de escrita.
+
+Validação no commit `311fecc9e13641e6d5eb55465fda646fb2909601`: API CI, Quality Gates e Docker Compose passaram; **1407 testes aprovados, 1 ignorado e 1 aviso**. A matriz endpoint × perfil × loja continua como trabalho aberto; classificação explícita não prova isoladamente o isolamento de tenant.
