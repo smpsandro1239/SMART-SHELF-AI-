@@ -3,6 +3,7 @@
 - [x] Implementar AP101 por classe, mAP50, mAP50_95 e precision/recall/F1 no ponto operacional.
 - [x] Validar IDs, categorias, scores, caixas, dimensões, limites numéricos e rejeitar crowd annotations não suportadas.
 - [x] Criar runner de inferência que exige release de dataset explicitamente aprovado para inferência, modelo ONNX assinado e integridade SHA-256 das imagens.
+- [x] Incluir hashes das anotações train/val/test na evidência de aprovação e no fingerprint do release; rejeitar alteração de ficheiros durante o gate.
 - [x] Executar apenas no test split, sem treino nem escrita em inventário; incluir fingerprint do dataset e digest/model version no relatório.
 - [x] Adicionar testes sintéticos de métricas, falsos positivos, falsos negativos, thresholds e aprovação de release.
 - [ ] Confirmar suite/API CI, quality gates e security scans no commit final.
