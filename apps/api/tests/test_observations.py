@@ -819,6 +819,13 @@ def test_cross_store_alert_event_history_is_denied(monkeypatch):
         )
         assert created.status_code == 200, created.text
         assert created.json() is not None
+        alert_id = created.json()["id"]
+        history_url = f"/api/v1/observation-alerts/{alert_id}/events"
+
+        # A supervisor must retain access to the history of their own store.
+        own_store_history = client.get(history_url)
+        assert own_store_history.status_code == 200, own_store_history.text
+        assert [event["event_type"] for event in own_store_history.json()] == ["CREATED"]
 
         foreign_actor = SimpleNamespace(
             id=actor.id, role="SUPERVISOR", store_id=store_id + 999
@@ -826,8 +833,26 @@ def test_cross_store_alert_event_history_is_denied(monkeypatch):
         monkeypatch.setattr(
             main_module, "_request_user", lambda db, request: foreign_actor
         )
-        response = client.get(
-            f"/api/v1/observation-alerts/{created.json()['id']}/events"
-        )
+        foreign_store_history = client.get(history_url)
+        assert foreign_store_history.status_code == 403
 
-        assert response.status_code == 403
+        # EMPLOYEE is not allowed to inspect alert history, even in another store.
+        employee_actor = SimpleNamespace(
+            id=actor.id, role="EMPLOYEE", store_id=store_id
+        )
+        monkeypatch.setattr(
+            main_module, "_request_user", lambda db, request: employee_actor
+        )
+        employee_history = client.get(history_url)
+        assert employee_history.status_code == 403
+
+        # ADMIN has global visibility and may inspect the same history.
+        admin_actor = SimpleNamespace(
+            id=actor.id, role="ADMIN", store_id=None
+        )
+        monkeypatch.setattr(
+            main_module, "_request_user", lambda db, request: admin_actor
+        )
+        admin_history = client.get(history_url)
+        assert admin_history.status_code == 200, admin_history.text
+        assert [event["event_type"] for event in admin_history.json()] == ["CREATED"]
