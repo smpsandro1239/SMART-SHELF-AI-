@@ -695,11 +695,28 @@ def test_task_event_and_transition_endpoints_reject_cross_store_access(monkeypat
             foreign_events = client.get(f"/api/v1/tasks/{foreign_task.json()['id']}/events")
             assert foreign_events.status_code == 403
 
+            foreign_task_id = foreign_task.json()["id"]
+            before_foreign_state = db.query(models.ReplenishmentTask).filter_by(
+                id=foreign_task_id
+            ).one().status
+            before_foreign_event_count = db.query(models.ReplenishmentTaskEvent).filter_by(
+                task_id=foreign_task_id
+            ).count()
+
             foreign_transition = client.patch(
                 f"/api/v1/tasks/{foreign_task.json()['id']}/status",
                 json={"status": "CANCELLED", "exception_reason": "Tentativa cross-store"},
             )
             assert foreign_transition.status_code == 403
+
+            db.expire_all()
+            after_foreign_state = db.query(models.ReplenishmentTask).filter_by(
+                id=foreign_task_id
+            ).one().status
+            assert after_foreign_state == before_foreign_state
+            assert db.query(models.ReplenishmentTaskEvent).filter_by(
+                task_id=foreign_task_id
+            ).count() == before_foreign_event_count
 
             scoped_list = client.get("/api/v1/tasks", params={"store_id": foreign_store_id})
             assert scoped_list.status_code == 403
@@ -837,6 +854,13 @@ def test_pallet_lifecycle_audit_endpoints_enforce_store_scope(monkeypatch):
     db.commit()
     db.close()
 
+    with TestingSession() as state_db:
+        foreign_pallet_before = state_db.get(models.StorePallet, foreign_pallet_id)
+        foreign_status_before = foreign_pallet_before.status
+        foreign_event_count_before = state_db.query(models.PalletRotationEvent).filter_by(
+            pallet_id=foreign_pallet_id
+        ).count()
+
     supervisor = SimpleNamespace(role="SUPERVISOR", store_id=own_store_id, id=None)
     monkeypatch.setattr(main_module, "_request_user", lambda db, request: supervisor)
 
@@ -873,6 +897,13 @@ def test_pallet_lifecycle_audit_endpoints_enforce_store_scope(monkeypatch):
             },
         )
         assert foreign_update.status_code == 403
+
+        with TestingSession() as state_db:
+            foreign_pallet_after = state_db.get(models.StorePallet, foreign_pallet_id)
+            assert foreign_pallet_after.status == foreign_status_before
+            assert state_db.query(models.PalletRotationEvent).filter_by(
+                pallet_id=foreign_pallet_id
+            ).count() == foreign_event_count_before
 
         own_update = client.post(
             f"/api/v1/warehouse/pallets/{own_pallet_id}/events",
