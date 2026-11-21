@@ -24,14 +24,27 @@ class ProductExemplar:
     licence: str
 
     def __post_init__(self) -> None:
-        if self.product_id <= 0:
-            raise ValueError("product_id must be positive")
-        if not self.model_version.strip():
+        if (
+            isinstance(self.product_id, bool)
+            or not isinstance(self.product_id, int)
+            or self.product_id <= 0
+        ):
+            raise ValueError("product_id must be a positive integer")
+        if not isinstance(self.model_version, str) or not self.model_version.strip():
             raise ValueError("model_version is required")
-        if len(self.image_sha256) != 64 or any(c not in "0123456789abcdef" for c in self.image_sha256.lower()):
+        if (
+            not isinstance(self.image_sha256, str)
+            or len(self.image_sha256) != 64
+            or any(c not in "0123456789abcdef" for c in self.image_sha256.lower())
+        ):
             raise ValueError("image_sha256 must be a 64-character hexadecimal digest")
-        if not self.reviewed_by.strip() or not self.reviewed_at.strip() or not self.licence.strip():
-            raise ValueError("reviewer, review timestamp and licence are required")
+        for field_name, value in (
+            ("reviewed_by", self.reviewed_by),
+            ("reviewed_at", self.reviewed_at),
+            ("licence", self.licence),
+        ):
+            if not isinstance(value, str) or not value.strip():
+                raise ValueError(f"{field_name} is required")
         _validated_vector(self.embedding)
 
 
