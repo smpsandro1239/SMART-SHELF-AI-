@@ -55,7 +55,7 @@ O proprietário ou gestor utiliza o SMART SHELF AI para acompanhar a operação,
 
 ### Exemplo — da prateleira à tarefa
 
-\`\`\`mermaid
+```mermaid
 flowchart TD
     A["Captura de imagem"] --> B["Análise / deteção"]
     B --> C["Revisão humana do produto e estado"]
@@ -66,7 +66,7 @@ flowchart TD
     G --> H["Execução e registo da quantidade"]
     H --> I["Reconciliação auditada"]
     I --> J["Dashboard e histórico"]
-\`\`\`
+```
 
 Este fluxo está parcialmente implementado. No demo local, a análise visual é sintética; aprovação, atribuição, execução e reconciliação têm controlos explícitos. Não equivale a uma integração de loja real.
 
@@ -100,7 +100,7 @@ A arquitetura separa a interface, a API, a persistência, o processamento de ima
 
 ### Visão simplificada da arquitetura
 
-\`\`\`mermaid
+```mermaid
 flowchart TB
     WEB["Aplicação Web<br/>React + TypeScript + Vite"]
     API["API<br/>FastAPI"]
@@ -116,7 +116,7 @@ flowchart TB
     WORKER --> FILES
     WORKER --> DB
     DOMAIN --> DB
-\`\`\`
+```
 
 ### Componentes principais
 
@@ -132,7 +132,7 @@ flowchart TB
 
 ### Fluxo técnico de dados
 
-\`\`\`mermaid
+```mermaid
 sequenceDiagram
     actor User as Supervisor
     participant Web as Frontend
@@ -152,7 +152,7 @@ sequenceDiagram
     Web->>API: Consultar resultado
     API->>DB: Ler evidência e estado
     API-->>Web: Resultado para revisão humana
-\`\`\`
+```
 
 ### Responsabilidades de engenharia
 
@@ -204,7 +204,7 @@ As áreas seguintes são objetivos de evolução funcional e técnica. Devem ser
 
 **Objetivo:** permitir que câmaras, gateways ou dispositivos locais processem imagens perto da origem, sem depender permanentemente da cloud.
 
-\`\`\`mermaid
+```mermaid
 flowchart LR
     CAM["Câmara fixa / móvel / robot"] --> EDGE["Dispositivo Edge<br/>captura e inferência local"]
     EDGE --> LOCAL["Fila local<br/>resultados e evidências"]
@@ -212,7 +212,7 @@ flowchart LR
     SYNC <--> CLOUD["Cloud<br/>API, catálogo, gestão e analytics"]
     CLOUD --> REVIEW["Validação humana e decisões"]
     REVIEW --> SYNC
-\`\`\`
+```
 
 - Suportar câmaras fixas, móveis e câmaras montadas em robôs.
 - Executar inferência local com modelos e runtimes compatíveis com o hardware.
