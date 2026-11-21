@@ -167,7 +167,7 @@ def test_api_role_policy_is_centralized_and_fail_closed():
     assert api_role_denial("GET", "/api/v1/observation-alerts", "SUPERVISOR") is None
     assert classify_api_route("GET", "/api/v1/tasks") == "EMPLOYEE_ALLOWLIST"
     assert api_role_denial("GET", "/api/v1/tasks", "EMPLOYEE") is None
-    assert api_role_denial("POST", "/api/v1/tasks", "EMPLOYEE") == "Employee access is limited to assigned tasks"
+    assert api_role_denial("POST", "/api/v1/tasks", "EMPLOYEE") == "Supervisor role required"
     assert classify_api_route("GET", "/api/v1/products") == "AUTHENTICATED_STAFF"
     assert api_role_denial("GET", "/api/v1/products", "EMPLOYEE") == "Employee access is limited to assigned tasks"
     assert api_role_denial("GET", "/api/v1/products", "UNKNOWN") == "User role is not authorized"
@@ -217,3 +217,36 @@ def test_api_role_policy_matches_real_planogram_routes_by_segment():
     assert api_role_denial("POST", route, "ADMIN") is None
     assert api_role_denial("POST", route, "EMPLOYEE") == "Supervisor role required"
 
+def test_every_registered_versioned_api_route_has_an_explicit_method_policy():
+    from fastapi.routing import APIRoute
+
+    from app.api_security_policy import classify_api_route
+    from app.main import app
+
+    unclassified = [
+        f"{method} {route.path}"
+        for route in app.routes
+        if isinstance(route, APIRoute) and route.path.startswith("/api/v1/")
+        for method in sorted(route.methods or ())
+        if classify_api_route(method, route.path) == "UNCLASSIFIED"
+    ]
+
+    assert not unclassified, "Unclassified API route methods: " + ", ".join(unclassified)
+
+
+def test_route_policy_matches_dynamic_templates_and_does_not_inherit_methods():
+    from app.api_security_policy import api_role_denial, classify_api_route, is_public_api_route
+
+    assert classify_api_route("GET", "/api/v1/shelf-images/42/artifacts") == "ADMIN_ONLY"
+    assert api_role_denial("GET", "/api/v1/shelf-images/42/artifacts", "SUPERVISOR") == (
+        "Administrator role required"
+    )
+    assert classify_api_route("GET", "/api/v1/shelf-images/42/retention/events") == (
+        "SUPERVISOR_OR_ADMIN"
+    )
+    assert api_role_denial("GET", "/api/v1/shelf-images/42/retention/events", "EMPLOYEE") == (
+        "Supervisor role required"
+    )
+    assert is_public_api_route("POST", "/api/v1/auth/login")
+    assert not is_public_api_route("GET", "/api/v1/auth/login")
+    assert classify_api_route("GET", "/api/v1/auth/login") == "UNCLASSIFIED"
