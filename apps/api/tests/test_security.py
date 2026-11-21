@@ -168,8 +168,8 @@ def test_api_role_policy_is_centralized_and_fail_closed():
     assert classify_api_route("GET", "/api/v1/tasks") == "EMPLOYEE_ALLOWLIST"
     assert api_role_denial("GET", "/api/v1/tasks", "EMPLOYEE") is None
     assert api_role_denial("POST", "/api/v1/tasks", "EMPLOYEE") == "Supervisor role required"
-    assert classify_api_route("GET", "/api/v1/products") == "AUTHENTICATED_STAFF"
-    assert api_role_denial("GET", "/api/v1/products", "EMPLOYEE") == "Employee access is limited to assigned tasks"
+    assert classify_api_route("GET", "/api/v1/products") == "SUPERVISOR_OR_ADMIN"
+    assert api_role_denial("GET", "/api/v1/products", "EMPLOYEE") == "Supervisor role required"
     assert api_role_denial("GET", "/api/v1/products", "UNKNOWN") == "User role is not authorized"
 
 
@@ -179,13 +179,16 @@ def test_api_role_policy_requires_path_segment_boundaries():
     lookalike_admin_path = "/api/v1/auth/users-export"
     lookalike_supervisor_path = "/api/v1/observation-alerts-legacy"
 
-    assert classify_api_route("GET", lookalike_admin_path) == "AUTHENTICATED_STAFF"
+    assert classify_api_route("GET", lookalike_admin_path) == "UNCLASSIFIED"
     assert api_role_denial("GET", lookalike_admin_path, "EMPLOYEE") == (
-        "Employee access is limited to assigned tasks"
+        "API route has no explicit authorization policy"
     )
-    assert classify_api_route("GET", lookalike_supervisor_path) == "AUTHENTICATED_STAFF"
+    assert api_role_denial("GET", lookalike_admin_path, "ADMIN") == (
+        "API route has no explicit authorization policy"
+    )
+    assert classify_api_route("GET", lookalike_supervisor_path) == "UNCLASSIFIED"
     assert api_role_denial("GET", lookalike_supervisor_path, "EMPLOYEE") == (
-        "Employee access is limited to assigned tasks"
+        "API route has no explicit authorization policy"
     )
 
 
@@ -202,9 +205,9 @@ def test_api_role_policy_does_not_match_planogram_lookalike_segments():
 
     lookalike_path = "/api/v1/shelves/42/planograms-export"
 
-    assert classify_api_route("GET", lookalike_path) == "AUTHENTICATED_STAFF"
+    assert classify_api_route("GET", lookalike_path) == "UNCLASSIFIED"
     assert api_role_denial("GET", lookalike_path, "EMPLOYEE") == (
-        "Employee access is limited to assigned tasks"
+        "API route has no explicit authorization policy"
     )
 
 def test_api_role_policy_matches_real_planogram_routes_by_segment():
