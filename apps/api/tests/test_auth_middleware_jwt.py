@@ -338,6 +338,38 @@ def test_admin_can_list_users_with_real_database_backed_jwt(auth_client):
     }
 
 
+def test_admin_role_revocation_between_middleware_and_handler_blocks_store_creation(auth_client):
+    client, ids, _ = auth_client
+    previous_override = main_module.app.dependency_overrides[get_db]
+
+    def demote_before_handler():
+        with main_module.SessionLocal() as db:
+            actor = db.get(User, ids["admin"])
+            actor.role = "SUPERVISOR"
+            db.commit()
+
+        db = main_module.SessionLocal()
+        try:
+            yield db
+        finally:
+            db.close()
+
+    main_module.app.dependency_overrides[get_db] = demote_before_handler
+    try:
+        response = client.post(
+            "/api/v1/stores",
+            json={"code": "STALE-ADMIN", "name": "Must Not Be Created"},
+            headers=bearer(ids["admin"], "ADMIN"),
+        )
+    finally:
+        main_module.app.dependency_overrides[get_db] = previous_override
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Administrator role required"
+    with main_module.SessionLocal() as db:
+        assert db.query(Store).filter_by(code="STALE-ADMIN").first() is None
+
+
 def test_inactive_user_token_is_rejected_even_when_signature_is_valid(auth_client):
     client, ids, _ = auth_client
 
