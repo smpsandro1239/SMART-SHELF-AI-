@@ -6,6 +6,7 @@ persist events, advance cursors, mutate inventory, or acknowledge delivery.
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
 import math
 import re
@@ -35,7 +36,7 @@ class EdgeSequenceDisposition(str, Enum):
 
 
 class EdgeEventEnvelope(BaseModel):
-    """Immutable v1 event envelope; one event belongs to exactly one store/device."""
+    """Validated v1 event envelope; one event belongs to exactly one store/device."""
 
     model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
 
@@ -113,6 +114,16 @@ class EdgeEventEnvelope(BaseModel):
             allowed = {"firmware_version", "battery_pct", "network_status", "storage_free_bytes"}
             if not payload or set(payload) - allowed:
                 raise ValueError("DEVICE_HEARTBEAT payload contains missing or unsupported fields")
+            if "firmware_version" in payload and (
+                not isinstance(payload["firmware_version"], str)
+                or not payload["firmware_version"].strip()
+            ):
+                raise ValueError("firmware_version must be a non-empty string")
+            if "network_status" in payload and (
+                not isinstance(payload["network_status"], str)
+                or payload["network_status"] not in {"ONLINE", "DEGRADED", "OFFLINE"}
+            ):
+                raise ValueError("network_status is unsupported")
             if "battery_pct" in payload and (
                 isinstance(payload["battery_pct"], bool)
                 or not isinstance(payload["battery_pct"], (int, float))
@@ -129,6 +140,10 @@ class EdgeEventEnvelope(BaseModel):
                 raise ValueError("SHELF_CAPTURED requires shelf_id")
             if set(payload) != {"capture_id", "image_sha256", "width", "height", "media_type"}:
                 raise ValueError("SHELF_CAPTURED payload has missing or unsupported fields")
+            if not isinstance(payload["capture_id"], str):
+                raise ValueError("capture_id must be a UUID string")
+            if not isinstance(payload["capture_id"], str):
+                raise ValueError("capture_id must be a UUID string")
             try:
                 UUID(payload["capture_id"])
             except (ValueError, TypeError, AttributeError) as exc:
@@ -138,7 +153,7 @@ class EdgeEventEnvelope(BaseModel):
             for dimension in ("width", "height"):
                 if type(payload[dimension]) is not int or not 1 <= payload[dimension] <= 20000:
                     raise ValueError(f"{dimension} must be an integer between 1 and 20000")
-            if payload["media_type"] not in {"image/jpeg", "image/png", "image/webp"}:
+            if not isinstance(payload["media_type"], str) or payload["media_type"] not in {"image/jpeg", "image/png", "image/webp"}:
                 raise ValueError("media_type is not supported")
         elif self.event_type == "SHELF_OBSERVATION":
             if self.shelf_id is None:
@@ -179,7 +194,7 @@ class EdgeEventEnvelope(BaseModel):
                 raise ValueError("task_id must be a positive integer")
             if type(payload["task_version"]) is not int or payload["task_version"] <= 0:
                 raise ValueError("task_version must be a positive integer")
-            if payload["action"] not in {"ACCEPTED", "STARTED", "COMPLETED"}:
+            if not isinstance(payload["action"], str) or payload["action"] not in {"ACCEPTED", "STARTED", "COMPLETED"}:
                 raise ValueError("task action is unsupported")
         return self
 
@@ -201,7 +216,8 @@ def event_fingerprint(event: EdgeEventEnvelope) -> str:
 
 def event_idempotency_key(event: EdgeEventEnvelope) -> str:
     """Stable idempotency key scoped to the authenticated device identity."""
-    return f"edge:{event.device_id}:{event.event_id}"
+    device_scope = hashlib.sha256(event.device_id.encode("ascii")).hexdigest()[:16]
+    return f"edge:{device_scope}:{event.event_id}"
 
 
 def classify_sequence(last_accepted: int, incoming: int) -> EdgeSequenceDisposition:
@@ -221,6 +237,6 @@ def verify_idempotent_replay(existing_fingerprint: str, incoming_fingerprint: st
     """Return True for an exact replay; reject event-ID reuse with changed content."""
     if not _SHA256.fullmatch(existing_fingerprint) or not _SHA256.fullmatch(incoming_fingerprint):
         raise EdgeEventContractError("event fingerprints must be lowercase SHA-256 hex")
-    if existing_fingerprint != incoming_fingerprint:
+    if not hmac.compare_digest(existing_fingerprint, incoming_fingerprint):
         raise EdgeEventContractError("event ID was reused with different content")
     return True
