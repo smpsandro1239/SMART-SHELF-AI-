@@ -1,205 +1,197 @@
-"""Central, auditable role policy for versioned API routes."""
+"""Explicit, method-specific authorization policy for every versioned HTTP route.
 
-PUBLIC_API_PATHS = frozenset({
-    "/api/v1/auth/bootstrap",
-    "/api/v1/auth/login",
-})
+Policies are keyed by FastAPI route templates, not broad path prefixes. A new
+route or HTTP method is denied until it receives an explicit entry here.
+"""
+
+from __future__ import annotations
+
 VALID_API_ROLES = frozenset({"ADMIN", "SUPERVISOR", "EMPLOYEE"})
 
-ADMIN_ONLY_POST_PATHS = frozenset({
-    "/api/v1/stores",
-    "/api/v1/zones",
-    "/api/v1/shelves",
-    "/api/v1/products",
-    "/api/v1/shelf-products",
-    "/api/v1/warehouse/product-profiles",
-    "/api/v1/warehouse/product-packaging",
+API_ROUTE_POLICIES = (
+    ("POST", "/api/v1/auth/bootstrap", "PUBLIC"),
+    ("POST", "/api/v1/auth/login", "PUBLIC"),
+    ("GET", "/api/v1/auth/me", "EMPLOYEE_ALLOWLIST"),
+    ("GET", "/api/v1/auth/users", "ADMIN_ONLY"),
+    ("POST", "/api/v1/auth/users", "ADMIN_ONLY"),
+    ("GET", "/api/v1/capture-sessions", "SUPERVISOR_OR_ADMIN"),
+    ("POST", "/api/v1/capture-sessions", "SUPERVISOR_OR_ADMIN"),
+    ("POST", "/api/v1/capture-sessions/{session_id}/close", "SUPERVISOR_OR_ADMIN"),
+    ("GET", "/api/v1/dashboard/summary", "EMPLOYEE_ALLOWLIST"),
+    ("GET", "/api/v1/forecasting/demand", "SUPERVISOR_OR_ADMIN"),
+    ("GET", "/api/v1/forecasting/hourly-demand", "SUPERVISOR_OR_ADMIN"),
+    ("GET", "/api/v1/forecasting/stockout-risk", "SUPERVISOR_OR_ADMIN"),
+    ("GET", "/api/v1/forecasting/stockout-risk/portfolio", "SUPERVISOR_OR_ADMIN"),
+    ("GET", "/api/v1/forecasting/traffic-peaks", "SUPERVISOR_OR_ADMIN"),
+    ("GET", "/api/v1/inventory/freshness-policies", "SUPERVISOR_OR_ADMIN"),
+    ("POST", "/api/v1/inventory/freshness-policies", "SUPERVISOR_OR_ADMIN"),
+    ("GET", "/api/v1/inventory/latest", "SUPERVISOR_OR_ADMIN"),
+    ("GET", "/api/v1/inventory/snapshots", "SUPERVISOR_OR_ADMIN"),
+    ("POST", "/api/v1/inventory/snapshots", "SUPERVISOR_OR_ADMIN"),
+    ("GET", "/api/v1/observation-alerts", "SUPERVISOR_OR_ADMIN"),
+    ("PATCH", "/api/v1/observation-alerts/{alert_id}", "SUPERVISOR_OR_ADMIN"),
+    ("GET", "/api/v1/observation-alerts/{alert_id}/events", "SUPERVISOR_OR_ADMIN"),
+    ("GET", "/api/v1/observations", "SUPERVISOR_OR_ADMIN"),
+    ("POST", "/api/v1/observations", "SUPERVISOR_OR_ADMIN"),
+    ("GET", "/api/v1/operational-decisions", "SUPERVISOR_OR_ADMIN"),
+    ("POST", "/api/v1/planograms/{planogram_id}/activate", "SUPERVISOR_OR_ADMIN"),
+    ("PUT", "/api/v1/planograms/{planogram_id}/cells", "SUPERVISOR_OR_ADMIN"),
+    ("POST", "/api/v1/planograms/{planogram_id}/retire", "SUPERVISOR_OR_ADMIN"),
+    ("GET", "/api/v1/product-embedding-exemplars", "SUPERVISOR_OR_ADMIN"),
+    ("POST", "/api/v1/product-embedding-exemplars", "SUPERVISOR_OR_ADMIN"),
+    ("PATCH", "/api/v1/product-embedding-exemplars/{exemplar_id}/review", "SUPERVISOR_OR_ADMIN"),
+    ("GET", "/api/v1/products", "SUPERVISOR_OR_ADMIN"),
+    ("POST", "/api/v1/products", "ADMIN_ONLY"),
+    ("GET", "/api/v1/replenishment/plan", "SUPERVISOR_OR_ADMIN"),
+    ("GET", "/api/v1/replenishment/recommendations", "SUPERVISOR_OR_ADMIN"),
+    ("GET", "/api/v1/replenishment/workload", "SUPERVISOR_OR_ADMIN"),
+    ("GET", "/api/v1/sales/daily", "SUPERVISOR_OR_ADMIN"),
+    ("POST", "/api/v1/sales/daily", "SUPERVISOR_OR_ADMIN"),
+    ("GET", "/api/v1/sales/hourly", "SUPERVISOR_OR_ADMIN"),
+    ("POST", "/api/v1/sales/hourly", "SUPERVISOR_OR_ADMIN"),
+    ("POST", "/api/v1/sales/hourly/batch", "SUPERVISOR_OR_ADMIN"),
+    ("POST", "/api/v1/sales/hourly/import-csv", "SUPERVISOR_OR_ADMIN"),
+    ("POST", "/api/v1/sales/import-csv", "SUPERVISOR_OR_ADMIN"),
+    ("GET", "/api/v1/sales/traffic/hourly", "SUPERVISOR_OR_ADMIN"),
+    ("POST", "/api/v1/sales/traffic/hourly", "SUPERVISOR_OR_ADMIN"),
+    ("POST", "/api/v1/sales/traffic/hourly/batch", "SUPERVISOR_OR_ADMIN"),
+    ("POST", "/api/v1/sales/traffic/hourly/import-csv", "SUPERVISOR_OR_ADMIN"),
+    ("POST", "/api/v1/shelf-image-detections/{detection_id}/observation", "SUPERVISOR_OR_ADMIN"),
+    ("GET", "/api/v1/shelf-image-detections/{detection_id}/reviews", "EMPLOYEE_ALLOWLIST"),
+    ("POST", "/api/v1/shelf-image-detections/{detection_id}/reviews", "SUPERVISOR_OR_ADMIN"),
+    ("GET", "/api/v1/shelf-image-review-queue", "SUPERVISOR_OR_ADMIN"),
+    ("GET", "/api/v1/shelf-image-review-queue/summary", "SUPERVISOR_OR_ADMIN"),
+    ("GET", "/api/v1/shelf-images", "EMPLOYEE_ALLOWLIST"),
+    ("POST", "/api/v1/shelf-images", "EMPLOYEE_ALLOWLIST"),
+    ("POST", "/api/v1/shelf-images/{image_id}/artifact-inventory-snapshots", "ADMIN_ONLY"),
+    ("GET", "/api/v1/shelf-images/{image_id}/artifacts", "ADMIN_ONLY"),
+    ("POST", "/api/v1/shelf-images/{image_id}/artifacts", "ADMIN_ONLY"),
+    ("GET", "/api/v1/shelf-images/{image_id}/artifacts/{artifact_id}/access", "ADMIN_ONLY"),
+    ("GET", "/api/v1/shelf-images/{image_id}/artifacts/{artifact_id}/disposition-events", "ADMIN_ONLY"),
+    ("POST", "/api/v1/shelf-images/{image_id}/artifacts/{artifact_id}/disposition-events", "ADMIN_ONLY"),
+    ("GET", "/api/v1/shelf-images/{image_id}/content", "EMPLOYEE_ALLOWLIST"),
+    ("GET", "/api/v1/shelf-images/{image_id}/detections", "EMPLOYEE_ALLOWLIST"),
+    ("GET", "/api/v1/shelf-images/{image_id}/evidence-fusion", "EMPLOYEE_ALLOWLIST"),
+    ("POST", "/api/v1/shelf-images/{image_id}/evidence-fusion", "SUPERVISOR_OR_ADMIN"),
+    ("GET", "/api/v1/shelf-images/{image_id}/ocr-evidence", "EMPLOYEE_ALLOWLIST"),
+    ("GET", "/api/v1/shelf-images/{image_id}/ocr-matches", "EMPLOYEE_ALLOWLIST"),
+    ("POST", "/api/v1/shelf-images/{image_id}/ocr-matches", "SUPERVISOR_OR_ADMIN"),
+    ("GET", "/api/v1/shelf-images/{image_id}/ocr-runs", "EMPLOYEE_ALLOWLIST"),
+    ("POST", "/api/v1/shelf-images/{image_id}/ocr-runs", "SUPERVISOR_OR_ADMIN"),
+    ("GET", "/api/v1/shelf-images/{image_id}/retention/events", "SUPERVISOR_OR_ADMIN"),
+    ("POST", "/api/v1/shelf-images/{image_id}/retention/legal-hold/apply", "ADMIN_ONLY"),
+    ("POST", "/api/v1/shelf-images/{image_id}/retention/legal-hold/release", "ADMIN_ONLY"),
+    ("GET", "/api/v1/shelf-images/{image_id}/retention/purge-eligibility", "ADMIN_ONLY"),
+    ("POST", "/api/v1/shelf-images/{image_id}/retention/purge-schedule", "ADMIN_ONLY"),
+    ("POST", "/api/v1/shelf-images/{image_id}/retention/purge-schedule/cancel", "ADMIN_ONLY"),
+    ("POST", "/api/v1/shelf-images/{image_id}/retention/restore", "ADMIN_ONLY"),
+    ("POST", "/api/v1/shelf-images/{image_id}/retention/restrict", "SUPERVISOR_OR_ADMIN"),
+    ("POST", "/api/v1/shelf-images/{image_id}/retry", "SUPERVISOR_OR_ADMIN"),
+    ("GET", "/api/v1/shelf-products", "SUPERVISOR_OR_ADMIN"),
+    ("POST", "/api/v1/shelf-products", "ADMIN_ONLY"),
+    ("GET", "/api/v1/shelves", "SUPERVISOR_OR_ADMIN"),
+    ("POST", "/api/v1/shelves", "ADMIN_ONLY"),
+    ("POST", "/api/v1/shelves/{shelf_id}/observation-alerts/evaluate", "SUPERVISOR_OR_ADMIN"),
+    ("GET", "/api/v1/shelves/{shelf_id}/observation-consensus", "SUPERVISOR_OR_ADMIN"),
+    ("GET", "/api/v1/shelves/{shelf_id}/planograms", "SUPERVISOR_OR_ADMIN"),
+    ("POST", "/api/v1/shelves/{shelf_id}/planograms", "SUPERVISOR_OR_ADMIN"),
+    ("GET", "/api/v1/shelves/{shelf_id}/planograms/active", "SUPERVISOR_OR_ADMIN"),
+    ("GET", "/api/v1/shelves/{shelf_id}/planograms/comparison/{image_id}", "SUPERVISOR_OR_ADMIN"),
+    ("GET", "/api/v1/sku-evaluation/reviewed", "SUPERVISOR_OR_ADMIN"),
+    ("GET", "/api/v1/store-employees", "SUPERVISOR_OR_ADMIN"),
+    ("GET", "/api/v1/stores", "SUPERVISOR_OR_ADMIN"),
+    ("POST", "/api/v1/stores", "ADMIN_ONLY"),
+    ("GET", "/api/v1/stores/{store_id}/external-integrations", "ADMIN_ONLY"),
+    ("POST", "/api/v1/stores/{store_id}/external-integrations", "ADMIN_ONLY"),
+    ("PATCH", "/api/v1/stores/{store_id}/external-integrations/{integration_id}", "ADMIN_ONLY"),
+    ("GET", "/api/v1/stores/{store_id}/external-integrations/coverage", "ADMIN_ONLY"),
+    ("GET", "/api/v1/tasks", "EMPLOYEE_ALLOWLIST"),
+    ("POST", "/api/v1/tasks", "SUPERVISOR_OR_ADMIN"),
+    ("GET", "/api/v1/tasks/{task_id}/events", "SUPERVISOR_OR_ADMIN"),
+    ("POST", "/api/v1/tasks/{task_id}/reconcile-inventory", "SUPERVISOR_OR_ADMIN"),
+    ("PATCH", "/api/v1/tasks/{task_id}/status", "EMPLOYEE_ALLOWLIST"),
+    ("POST", "/api/v1/tasks/from-operational-decision", "SUPERVISOR_OR_ADMIN"),
+    ("POST", "/api/v1/tasks/from-recommendation", "SUPERVISOR_OR_ADMIN"),
+    ("GET", "/api/v1/training-candidates/reviewed", "SUPERVISOR_OR_ADMIN"),
+    ("GET", "/api/v1/warehouse/locations", "SUPERVISOR_OR_ADMIN"),
+    ("POST", "/api/v1/warehouse/locations", "SUPERVISOR_OR_ADMIN"),
+    ("GET", "/api/v1/warehouse/pallet-rotation/hourly-profile", "SUPERVISOR_OR_ADMIN"),
+    ("GET", "/api/v1/warehouse/pallet-rotation/policies", "SUPERVISOR_OR_ADMIN"),
+    ("POST", "/api/v1/warehouse/pallet-rotation/policies", "SUPERVISOR_OR_ADMIN"),
+    ("PATCH", "/api/v1/warehouse/pallet-rotation/policies/{policy_id}", "SUPERVISOR_OR_ADMIN"),
+    ("GET", "/api/v1/warehouse/pallet-rotation/portfolio", "SUPERVISOR_OR_ADMIN"),
+    ("GET", "/api/v1/warehouse/pallet-rotation/portfolio-from-history", "SUPERVISOR_OR_ADMIN"),
+    ("POST", "/api/v1/warehouse/pallet-rotation/simulate", "SUPERVISOR_OR_ADMIN"),
+    ("GET", "/api/v1/warehouse/pallet-rotation/weekday-hourly-profile", "SUPERVISOR_OR_ADMIN"),
+    ("GET", "/api/v1/warehouse/pallet-rotation/window-plan", "SUPERVISOR_OR_ADMIN"),
+    ("GET", "/api/v1/warehouse/pallets", "SUPERVISOR_OR_ADMIN"),
+    ("POST", "/api/v1/warehouse/pallets", "SUPERVISOR_OR_ADMIN"),
+    ("GET", "/api/v1/warehouse/pallets/{pallet_id}/events", "SUPERVISOR_OR_ADMIN"),
+    ("POST", "/api/v1/warehouse/pallets/{pallet_id}/events", "SUPERVISOR_OR_ADMIN"),
+    ("GET", "/api/v1/warehouse/physical-slotting", "SUPERVISOR_OR_ADMIN"),
+    ("POST", "/api/v1/warehouse/placements", "SUPERVISOR_OR_ADMIN"),
+    ("GET", "/api/v1/warehouse/product-packaging", "SUPERVISOR_OR_ADMIN"),
+    ("POST", "/api/v1/warehouse/product-packaging", "ADMIN_ONLY"),
+    ("POST", "/api/v1/warehouse/product-profiles", "ADMIN_ONLY"),
+    ("GET", "/api/v1/warehouse/replenishment-units", "SUPERVISOR_OR_ADMIN"),
+    ("GET", "/api/v1/warehouse/slotting-recommendations", "SUPERVISOR_OR_ADMIN"),
+    ("GET", "/api/v1/zones", "SUPERVISOR_OR_ADMIN"),
+    ("POST", "/api/v1/zones", "ADMIN_ONLY"),
+)
+
+POLICY_CATEGORIES = frozenset({
+    "PUBLIC",
+    "ADMIN_ONLY",
+    "SUPERVISOR_OR_ADMIN",
+    "EMPLOYEE_ALLOWLIST",
 })
 
-SUPERVISOR_OR_ADMIN_POST_PATHS = frozenset({
-    "/api/v1/tasks/from-operational-decision",
-    "/api/v1/sales/daily",
-    "/api/v1/sales/import-csv",
-    "/api/v1/warehouse/locations",
-    "/api/v1/warehouse/placements",
-    "/api/v1/warehouse/pallets",
-    "/api/v1/warehouse/pallet-rotation/policies",
-    "/api/v1/warehouse/pallet-rotation/simulate",
-    "/api/v1/sales/hourly",
-    "/api/v1/sales/traffic/hourly",
-    "/api/v1/sales/hourly/batch",
-    "/api/v1/sales/traffic/hourly/batch",
-    "/api/v1/sales/hourly/import-csv",
-    "/api/v1/sales/traffic/hourly/import-csv",
-    "/api/v1/inventory/snapshots",
-})
 
-
-
-# Explicit route-template policies for endpoints whose handlers already enforce
-# the same role boundary. Keeping these entries method-specific prevents a new
-# method on an existing path from silently inheriting staff access.
-ADMIN_ONLY_ROUTE_POLICIES = frozenset({
-    ("POST", "/api/v1/shelf-images/{image_id}/artifact-inventory-snapshots"),
-    ("GET", "/api/v1/shelf-images/{image_id}/artifacts"),
-    ("POST", "/api/v1/shelf-images/{image_id}/artifacts"),
-    ("GET", "/api/v1/shelf-images/{image_id}/artifacts/{artifact_id}/access"),
-    ("GET", "/api/v1/shelf-images/{image_id}/artifacts/{artifact_id}/disposition-events"),
-    ("POST", "/api/v1/shelf-images/{image_id}/artifacts/{artifact_id}/disposition-events"),
-    ("POST", "/api/v1/shelf-images/{image_id}/retention/legal-hold/apply"),
-    ("POST", "/api/v1/shelf-images/{image_id}/retention/legal-hold/release"),
-    ("GET", "/api/v1/shelf-images/{image_id}/retention/purge-eligibility"),
-    ("POST", "/api/v1/shelf-images/{image_id}/retention/purge-schedule"),
-    ("POST", "/api/v1/shelf-images/{image_id}/retention/purge-schedule/cancel"),
-    ("POST", "/api/v1/shelf-images/{image_id}/retention/restore"),
-    ("GET", "/api/v1/stores/{store_id}/external-integrations"),
-    ("POST", "/api/v1/stores/{store_id}/external-integrations"),
-    ("PATCH", "/api/v1/stores/{store_id}/external-integrations/{integration_id}"),
-    ("GET", "/api/v1/stores/{store_id}/external-integrations/coverage"),
-})
-
-SUPERVISOR_OR_ADMIN_ROUTE_POLICIES = frozenset({
-    ("GET", "/api/v1/capture-sessions"),
-    ("POST", "/api/v1/capture-sessions"),
-    ("POST", "/api/v1/capture-sessions/{session_id}/close"),
-    ("GET", "/api/v1/forecasting/demand"),
-    ("GET", "/api/v1/forecasting/hourly-demand"),
-    ("GET", "/api/v1/forecasting/stockout-risk"),
-    ("GET", "/api/v1/forecasting/stockout-risk/portfolio"),
-    ("GET", "/api/v1/forecasting/traffic-peaks"),
-    ("GET", "/api/v1/inventory/freshness-policies"),
-    ("POST", "/api/v1/inventory/freshness-policies"),
-    ("GET", "/api/v1/inventory/latest"),
-    ("GET", "/api/v1/inventory/snapshots"),
-    ("GET", "/api/v1/observations"),
-    ("POST", "/api/v1/observations"),
-    ("GET", "/api/v1/operational-decisions"),
-    ("GET", "/api/v1/products"),
-    ("GET", "/api/v1/replenishment/plan"),
-    ("GET", "/api/v1/replenishment/recommendations"),
-    ("GET", "/api/v1/replenishment/workload"),
-    ("GET", "/api/v1/sales/daily"),
-    ("GET", "/api/v1/sales/hourly"),
-    ("GET", "/api/v1/sales/traffic/hourly"),
-    ("GET", "/api/v1/shelf-images/{image_id}/retention/events"),
-    ("POST", "/api/v1/shelf-images/{image_id}/retention/restrict"),
-    ("POST", "/api/v1/shelf-images/{image_id}/retry"),
-    ("GET", "/api/v1/shelf-products"),
-    ("GET", "/api/v1/shelves"),
-    ("GET", "/api/v1/shelves/{shelf_id}/observation-consensus"),
-    ("GET", "/api/v1/store-employees"),
-    ("GET", "/api/v1/stores"),
-    ("POST", "/api/v1/tasks"),
-    ("GET", "/api/v1/tasks/{task_id}/events"),
-    ("POST", "/api/v1/tasks/{task_id}/reconcile-inventory"),
-    ("POST", "/api/v1/tasks/from-recommendation"),
-    ("GET", "/api/v1/warehouse/locations"),
-    ("GET", "/api/v1/warehouse/pallet-rotation/hourly-profile"),
-    ("GET", "/api/v1/warehouse/pallet-rotation/policies"),
-    ("GET", "/api/v1/warehouse/pallet-rotation/portfolio"),
-    ("GET", "/api/v1/warehouse/pallet-rotation/portfolio-from-history"),
-    ("GET", "/api/v1/warehouse/pallet-rotation/weekday-hourly-profile"),
-    ("GET", "/api/v1/warehouse/pallet-rotation/window-plan"),
-    ("GET", "/api/v1/warehouse/pallets"),
-    ("GET", "/api/v1/warehouse/pallets/{pallet_id}/events"),
-    ("GET", "/api/v1/warehouse/physical-slotting"),
-    ("GET", "/api/v1/warehouse/product-packaging"),
-    ("GET", "/api/v1/warehouse/replenishment-units"),
-    ("GET", "/api/v1/warehouse/slotting-recommendations"),
-    ("GET", "/api/v1/zones"),
-})
-
-def _is_path_or_subpath(path: str, prefix: str) -> bool:
-    """Match a route prefix only at a path-segment boundary."""
-    return path == prefix or path.startswith(prefix.rstrip("/") + "/")
-
-
-def _is_admin_only(method: str, path: str) -> bool:
-    return _is_path_or_subpath(path, "/api/v1/auth/users") or (
-        method == "POST" and path in ADMIN_ONLY_POST_PATHS
-    )
-
-
-def _is_supervisor_or_admin(method: str, path: str) -> bool:
-    return (
-        _is_path_or_subpath(path, "/api/v1/observation-alerts")
-        or (_is_path_or_subpath(path, "/api/v1/shelves") and "planograms" in path.split("/"))
-        or _is_path_or_subpath(path, "/api/v1/planograms")
-        or (method == "POST" and path.endswith("/observation-alerts/evaluate"))
-        or (method == "POST" and path in SUPERVISOR_OR_ADMIN_POST_PATHS)
-        or (
-            method == "POST"
-            and _is_path_or_subpath(path, "/api/v1/warehouse/pallets")
-            and path.endswith("/events")
-        )
-        or (
-            method == "PATCH"
-            and path.startswith("/api/v1/warehouse/pallet-rotation/policies/")
-        )
-        or path == "/api/v1/product-embedding-exemplars"
-        or _is_path_or_subpath(path, "/api/v1/product-embedding-exemplars")
-        or (method == "GET" and path == "/api/v1/training-candidates/reviewed")
-        or (
-            method == "GET"
-            and path in {
-                "/api/v1/shelf-image-review-queue",
-                "/api/v1/shelf-image-review-queue/summary",
-                "/api/v1/sku-evaluation/reviewed",
-            }
-        )
-        or (method == "POST" and _is_path_or_subpath(path, "/api/v1/shelf-image-detections"))
-        or (
-            method == "POST"
-            and _is_path_or_subpath(path, "/api/v1/shelf-images")
-            and path.endswith(("/ocr-runs", "/ocr-matches", "/evidence-fusion"))
-        )
-    )
-
-
-def _is_employee_allowed(method: str, path: str) -> bool:
-    if method == "GET" and path in {
-        "/api/v1/tasks",
-        "/api/v1/auth/me",
-        "/api/v1/dashboard/summary",
-        "/api/v1/shelf-images",
-    }:
-        return True
-    if method == "POST" and path == "/api/v1/shelf-images":
-        return True
-    if method == "GET" and path.startswith("/api/v1/shelf-images/"):
-        return path.endswith(("/content", "/detections", "/ocr-evidence", "/ocr-runs", "/ocr-matches", "/evidence-fusion"))
-    if method == "GET" and path.startswith("/api/v1/shelf-image-detections/"):
-        return path.endswith("/reviews")
-    return (
-        method == "PATCH"
-        and _is_path_or_subpath(path, "/api/v1/tasks")
-        and path.endswith("/status")
+def _path_matches_template(path: str, template: str) -> bool:
+    """Match a concrete URL path against a registered FastAPI route template."""
+    path_parts = path.strip("/").split("/")
+    template_parts = template.strip("/").split("/")
+    return len(path_parts) == len(template_parts) and all(
+        expected == actual
+        or (expected.startswith("{") and expected.endswith("}") and bool(actual))
+        for actual, expected in zip(path_parts, template_parts)
     )
 
 
 def classify_api_route(method: str, path: str) -> str:
-    """Return the effective route policy category for audit and tests."""
-    method = method.upper()
-    if path in PUBLIC_API_PATHS:
-        return "PUBLIC"
-    if _is_admin_only(method, path):
-        return "ADMIN_ONLY"
-    if _is_supervisor_or_admin(method, path):
-        return "SUPERVISOR_OR_ADMIN"
-    if _is_employee_allowed(method, path):
-        return "EMPLOYEE_ALLOWLIST"
-    return "AUTHENTICATED_STAFF"
+    """Return the explicit policy for one method/path, or UNCLASSIFIED."""
+    normalized_method = method.upper()
+    matches = {
+        policy
+        for route_method, template, policy in API_ROUTE_POLICIES
+        if route_method == normalized_method and _path_matches_template(path, template)
+    }
+    if len(matches) == 1:
+        return matches.pop()
+    if len(matches) > 1:
+        raise RuntimeError(
+            f"Conflicting authorization policies for {normalized_method} {path}"
+        )
+    return "UNCLASSIFIED"
+
+
+def is_public_api_route(method: str, path: str) -> bool:
+    """Return whether this exact HTTP method/path pair is intentionally public."""
+    return classify_api_route(method, path) == "PUBLIC"
 
 
 def api_role_denial(method: str, path: str, role: str) -> str | None:
-    """Return the 403 detail for a denied role; None means the role is allowed."""
-    method = method.upper()
+    """Return the denial reason; None means the explicit route policy permits the role."""
     if role not in VALID_API_ROLES:
         return "User role is not authorized"
-    if _is_admin_only(method, path) and role != "ADMIN":
+
+    policy = classify_api_route(method, path)
+    if policy == "UNCLASSIFIED":
+        return "API route has no explicit authorization policy"
+    if policy == "PUBLIC" or policy == "EMPLOYEE_ALLOWLIST":
+        return None
+    if policy == "ADMIN_ONLY" and role != "ADMIN":
         return "Administrator role required"
-    if _is_supervisor_or_admin(method, path) and role not in {"ADMIN", "SUPERVISOR"}:
+    if policy == "SUPERVISOR_OR_ADMIN" and role not in {"ADMIN", "SUPERVISOR"}:
         return "Supervisor role required"
-    if role == "EMPLOYEE" and not _is_employee_allowed(method, path):
-        return "Employee access is limited to assigned tasks"
     return None
