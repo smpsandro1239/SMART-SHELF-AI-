@@ -1,3 +1,10 @@
+### Computer Vision — avaliador COCO v1 (implementação publicada; CI/dataset pendentes)
+
+- Avaliador AP101/mAP50/mAP50_95 e operating point precision/recall/F1, por classe e global.
+- Runner executa apenas test split de release aprovado para inferência, valida hash das imagens e provider ONNX assinado.
+- Não treina nem escreve em inventário; não foram produzidas métricas reais.
+- [Protocolo de avaliação](vision-model-evaluation.md).
+
 ### Edge AI — contrato de eventos v1 (implementação de domínio publicada; CI pendente)
 
 - Envelope versionado e payloads específicos para heartbeat, captura, observação visual e confirmação de tarefa.
