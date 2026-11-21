@@ -66,3 +66,14 @@ Workflows:
 API CI e Quality Gates concluíram com **1413 passed, 1 skipped**. As migrations e os smokes PostgreSQL 16 passaram. O aviso de depreciação do Starlette TestClient foi removido com httpx2 2.16.2.
 
 O baseline não é autenticado nem activo. Os alertas informativos dizem respeito a identificação de pedidos de autenticação, respostas 401 e política de cache; não foram identificados findings High/Medium/Low.
+
+## Revalidação no commit a345746 — 2026-11-21
+
+O workflow [Security Scans 44885522256](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44885522256) voltou a passar:
+- pip-audit: sem vulnerabilidades conhecidas.
+- npm audit: sucesso.
+- Gitleaks: sucesso.
+- ZAP Baseline: 0 High, 0 Medium, 0 Low; 3 informativos.
+- ZAP API safe-mode: 0 High, 0 Medium, 0 Low; 4 informativos; 131 operações OpenAPI importadas.
+
+Os alertas informativos incluem identificação de endpoints de autenticação, respostas 401 esperadas no scan não autenticado e directivas de cache. Não foi executado active scan nem teste com sessão autenticada.

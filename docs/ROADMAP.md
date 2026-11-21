@@ -953,3 +953,10 @@ Validação no commit `311fecc9e13641e6d5eb55465fda646fb2909601`: Quality Gates 
 - Headers HTTP de segurança, CSP, HSTS em produção, no-store em APIs e Swagger UI desactivado em produção.
 - API CI e Quality Gates: **1413 passed, 1 skipped**; PostgreSQL 16 e Docker Compose smoke passaram.
 - ZAP Baseline e API safe-mode: 0 alertas High/Medium/Low; apenas alertas informativos. Scan não autenticado; DAST autenticado/activo continua aberto.
+
+### Computer Vision — contrato ONNX e recuperação de falhas (2026-11-21)
+
+- Matriz de testes de boxes ONNX ampliada para coordenadas invertidas, área nula, padding letterbox e clipping parcial.
+- Worker testado para RuntimeError/TimeoutError: FAILED, erro sanitizado, deteções anteriores preservadas e nenhum snapshot de inventário.
+- API CI e Quality Gates: **1422 passed, 1 skipped**; PostgreSQL 16 e Docker Compose smoke aprovados.
+- A precisão do detector real continua por validar: falta modelo aprovado, dataset autorizado e métricas reproduzíveis por SKU/cenário.

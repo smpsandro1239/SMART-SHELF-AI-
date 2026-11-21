@@ -223,3 +223,20 @@ O endpoint PATCH de alertas foi também corrigido para autorizar antes do lock. 
 Foram acrescentados headers HTTP de segurança, CSP, HSTS em produção e Cache-Control no-store para APIs. Swagger UI é desactivado em produção; a documentação interactiva fica disponível apenas fora de produção com CSP específica.
 
 ZAP Baseline e API safe-mode [44884714393](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44884714393) analisaram 134 endpoints no baseline e 131 operações importadas via OpenAPI. Ambos os relatórios apresentaram 0 alertas High, 0 Medium e 0 Low; os alertas restantes são informativos. O scan não é autenticado: 128 operações protegidas responderam 401. Não é uma certificação de segurança nem substitui DAST autenticado/activo.
+
+## 2026-11-21 — Matriz ONNX e falhas do worker
+
+Foi ampliada a cobertura do contrato de saída do detector ONNX:
+- Caixas com coordenadas invertidas ou área nula são descartadas.
+- Caixas totalmente contidas no padding de letterbox são descartadas.
+- Caixas que intersectam parcialmente o padding são recortadas correctamente à geometria da imagem original.
+
+Foi acrescentado teste de integração do worker para RuntimeError e TimeoutError. Em ambos os casos, o worker marca a imagem como FAILED, guarda uma mensagem sanitizada, preserva deteções anteriores e não cria snapshots de inventário.
+
+Validação no commit a345746200eb6ea8b0035bd2cdba7c188de87ef9:
+- API CI [44885522283](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44885522283): sucesso, **1422 passed, 1 skipped**; migrations e smokes PostgreSQL 16 passaram.
+- Quality Gates [44885522309](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44885522309): sucesso, **1422 passed, 1 skipped**.
+- Docker Compose [44885522318](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44885522318): sucesso.
+- Security Scans [44885522256](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44885522256): sucesso; SCA e secret scan passaram; ZAP sem alertas High/Medium/Low.
+
+A cobertura é de contrato e tratamento de falhas. Não representa avaliação de precisão de um modelo real; a integração ONNX continua dependente de modelo e dataset autorizados.

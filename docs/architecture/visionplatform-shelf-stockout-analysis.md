@@ -69,3 +69,9 @@ A comparação com o SMART SHELF AI confirma que a maior parte dos conceitos já
 - [REA de visão computacional no retalho](retail-vision-rea.md).
 - As afirmações de precisão, produtividade e ROI do artigo não foram verificadas de forma independente e não devem ser copiadas para a apresentação do SMART SHELF AI.
 - Não adicionar contagem de pessoas, reconhecimento facial ou heatmaps de clientes ao âmbito deste produto; não são necessários para detetar ruturas.
+
+## Evidência de testes do contrato ONNX e worker — 2026-11-21
+
+A matriz de regressão de descodificação inclui coordenadas invertidas, caixas de área nula, caixas inteiramente no padding de letterbox e clipping de caixas que intersectam parcialmente o padding. O teste do worker cobre RuntimeError e TimeoutError, garantindo estado FAILED, mensagem sanitizada, preservação das deteções anteriores e ausência de snapshots de inventário.
+
+A validação CI no commit a345746 passou com 1422 testes aprovados e 1 ignorado. Estes testes não medem precision/recall/mAP nem substituem a avaliação de um modelo treinado com dataset autorizado.

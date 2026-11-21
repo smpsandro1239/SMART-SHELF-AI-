@@ -779,7 +779,7 @@ Objectivo: evoluir o projecto para uma plataforma de inteligência operacional d
 - [x] Corrigir o mapeamento de class_id para etiquetas/classes versionadas; rejeitar classes desconhecidas ou índices fora do catálogo em vez de atribuir genericamente "product". (Configuração obrigatória `VISION_CLASS_LABELS_JSON`; classes inválidas/desconhecidas rejeitadas.)
 - [ ] Validar metadados do modelo (formato, versão, hash SHA-256, input/output names, shapes, dtype, labels, threshold e versão do pré/pós-processamento) antes de carregar/inferir. (Shapes/dtype, número de inputs/outputs e contrato das seis colunas são agora validados; hash/manifesto assinado e versão do pré/pós-processamento continuam pendentes.)
 - [x] Definir configuração fail-closed para provider mock/demo versus provider real; impedir que resultados sintéticos sejam apresentados como deteções reais ou usados para alterar inventário. (`VISION_PROVIDER_MODE=disabled|mock|real`; modo mock limitado ao provider demo e bloqueado em produção.)
-- [ ] Acrescentar testes de contrato e regressão para modelos inválidos, outputs malformados, classes desconhecidas, confiança fora de intervalo, boxes inválidas, imagens inválidas e falhas/timeout do provider. (Metadados incompatíveis, class_id inválido/desconhecido, confiança inválida, imagem corrompida e propagação de timeout têm testes; falta completar a matriz de boxes e validar o tratamento integrado do worker.)
+- [x] Acrescentar testes de contrato e regressão para modelos inválidos, outputs malformados, classes desconhecidas, confiança fora de intervalo, boxes inválidas, imagens inválidas e falhas/timeout do provider. (A matriz cobre caixas invertidas/degeneradas, padding letterbox e clipping parcial; o worker marca FAILED em RuntimeError/TimeoutError, preserva deteções anteriores e não altera inventário.)
 - [ ] Garantir que cada deteção e observação preserva proveniência: imagem/captura, loja, zona, prateleira, dispositivo, timestamp UTC, provider, model version, preprocessing version e correlation/request ID.
 - [ ] Definir estados explícitos para inferência indisponível, evidência insuficiente, baixa confiança e revisão humana; nunca converter falha de inferência em "prateleira vazia".
 - [ ] Verificar idempotência de reprocessamento, deduplicação de eventos e fencing/lease do worker; testar retry, timeout, crash e recuperação sem duplicar deteções ou tarefas.
@@ -1255,3 +1255,10 @@ Critério global: nenhuma capacidade pode ser marcada como concluída sem códig
 - [x] Acrescentar testes para respostas 401, headers e política de docs.
 - [x] OWASP ZAP Baseline e API safe-mode [44884714393](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44884714393): 0 alertas High/Medium/Low; 7 informativos.
 - [ ] DAST autenticado e teste activo continuam pendentes; o scan actual não possui sessão de utilizador e recebe 401 em endpoints protegidos.
+
+## Computer Vision — contrato ONNX e falhas do worker (2026-11-21)
+
+- [x] Completar matriz de boxes: coordenadas invertidas, largura/altura zero, caixas totalmente dentro do padding letterbox e clipping parcial para a imagem original.
+- [x] Testar falhas RuntimeError e TimeoutError no worker: estado FAILED, erro sanitizado, deteções anteriores preservadas e nenhum snapshot de inventário criado.
+- [x] Validar no commit a345746200eb6ea8b0035bd2cdba7c188de87ef9: API CI [44885522283](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44885522283), Quality Gates [44885522309](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44885522309) e Docker Compose [44885522318](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44885522318) passaram com **1422 passed, 1 skipped**.
+- [ ] Validar com modelo ONNX real versionado, dataset autorizado e métricas reproduzíveis; os testes de contrato não medem precisão nem substituem avaliação por SKU/cenário.

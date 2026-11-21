@@ -1797,3 +1797,19 @@ A comparação de planogramas bloqueia a captura e a imagem de calibração (por
 `promote_dataset_job_output` permite registar uma publicação derivada através de `derived_from_publication_id`, actor, motivo e callback de autorização. Quando estes campos são fornecidos, a cadeia ancestral é bloqueada antes dos locks do job/fontes e a publicação filha + aresta append-only são confirmadas na mesma transacção SQL. A operação mantém o comportamento anterior para outputs raiz. Repetições com a mesma aresta e metadados são idempotentes; divergências são rejeitadas.
 
 Esta alteração fecha a janela entre publicação e registo da linhagem para os chamadores que usem esta opção. Não cria, por si só, um worker de transformação: o callback continua a ter de provar a utilização efectiva do output-pai. Validação CI concluída no commit `41c2bb6e4b02e6744ea428403213452800ad8214`: API CI [44731054620](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44731054620), Quality Gates [44731054475](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44731054475) e Docker Compose [44731054522](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44731054522) passaram; PostgreSQL 16, 1374 testes aprovados, 1 ignorado e 1 aviso. O teste negativo de autorização recusada também passou no API CI [44731813064](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44731813064) e Quality Gates [44731812997](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44731812997): **1375 passed, 1 skipped, 1 warning**; Docker Compose [44731812973](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44731812973) passou. Não existe integração externa nem purga física.
+
+## Última validação técnica — 2026-11-21
+
+Commit validado: [a345746](https://github.com/smpsandro1239/SMART-SHELF-AI-/commit/a345746200eb6ea8b0035bd2cdba7c188de87ef9).
+
+- API CI: **1422 testes aprovados, 1 ignorado**, migrations e smokes PostgreSQL 16 aprovados.
+- Quality Gates: **1422 testes aprovados, 1 ignorado**; compilação Python e build Web aprovados.
+- Docker Compose demo smoke: aprovado.
+- SCA: pip-audit sem vulnerabilidades conhecidas; npm audit e Gitleaks aprovados.
+- OWASP ZAP Baseline e API safe-mode: 0 alertas High, Medium e Low. Permanecem apenas alertas informativos, incluindo respostas 401 esperadas no scan sem autenticação.
+- Segurança multi-loja: 22 handlers com autorização de tenant antes de adquirir locks e revalidação após refresh.
+- Computer Vision: testes adicionais para boxes invertidas/degeneradas, padding letterbox, clipping parcial e falhas/timeout do worker. O worker preserva deteções anteriores e não altera inventário quando a inferência falha.
+
+Relatórios: [TODO](TODO.md), [PROGRESS](PROGRESS.md), [auditoria de dependências e ZAP](docs/security/dependency-audit-2026-11-21.md), [ordem de locks por tenant](docs/security/tenant-lock-order.md) e [headers HTTP](docs/security/http-security-headers.md).
+
+**Limitação importante:** 1422 testes aprovados não significam que o detector tenha precisão comercial validada. Continua a faltar modelo ONNX real aprovado, dataset autorizado anotado, métricas por SKU/cenário, integração CCTV/RTSP/ONVIF e validação com dados POS/ERP/WMS reais. O percurso demo continua a usar dados sintéticos e provider mock.

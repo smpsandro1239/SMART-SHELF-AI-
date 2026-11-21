@@ -96,3 +96,9 @@ No commit 1c0f59136af8364aab868b60f477c169679c4f3f:
 - API CI e Quality Gates: 1413 testes aprovados, 1 ignorado; migrations e smokes PostgreSQL 16 aprovados.
 
 O scan é passivo/safe-mode, não autenticado e não executa active scan. Não equivale a pentest nem valida isolamento por sessão/tenant. O DAST autenticado continua pendente.
+
+## Actualização de cobertura de Computer Vision — 2026-11-21
+
+A suite passou a **1422 passed, 1 skipped** no commit a345746. Foram acrescentados testes para caixas ONNX invertidas/degeneradas, padding letterbox, clipping parcial e falhas/timeout do worker. O worker preserva deteções anteriores e não cria snapshots de inventário quando a inferência falha.
+
+API CI, Quality Gates, Docker Compose e Security Scans passaram. Esta evidência valida contratos e tratamento de falhas, não a precisão de um modelo real.

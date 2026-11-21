@@ -44,3 +44,7 @@ No commit 1c0f591:
 ## Limitações
 
 Esta é uma correcção da ordem de locks e uma cobertura estática dos handlers identificados. Não substitui a auditoria completa BOLA/IDOR por recurso, nem a matriz autenticada endpoint × ADMIN/SUPERVISOR/EMPLOYEE × loja.
+
+## Revalidação — 2026-11-21
+
+No commit a345746, API CI e Quality Gates passaram com 1422 testes aprovados e 1 ignorado. Os 22 handlers abrangidos pela regra de autorização pré-lock continuam cobertos; PostgreSQL 16 smokes e o workflow de segurança também passaram.
