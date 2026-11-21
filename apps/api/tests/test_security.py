@@ -195,8 +195,10 @@ def test_api_role_policy_requires_path_segment_boundaries():
 def test_api_role_policy_preserves_real_nested_route_prefixes():
     from app.api_security_policy import api_role_denial, classify_api_route
 
-    assert classify_api_route("GET", "/api/v1/observation-alerts/42") == "SUPERVISOR_OR_ADMIN"
-    assert api_role_denial("GET", "/api/v1/observation-alerts/42", "SUPERVISOR") is None
+    assert classify_api_route("GET", "/api/v1/observation-alerts/42/events") == "SUPERVISOR_OR_ADMIN"
+    assert api_role_denial("GET", "/api/v1/observation-alerts/42/events", "SUPERVISOR") is None
+    assert classify_api_route("PATCH", "/api/v1/observation-alerts/42") == "SUPERVISOR_OR_ADMIN"
+    assert api_role_denial("PATCH", "/api/v1/observation-alerts/42", "EMPLOYEE") == "Supervisor role required"
     assert classify_api_route("GET", "/api/v1/shelf-images/42/content") == "EMPLOYEE_ALLOWLIST"
     assert api_role_denial("GET", "/api/v1/shelf-images/42/content", "EMPLOYEE") is None
 
