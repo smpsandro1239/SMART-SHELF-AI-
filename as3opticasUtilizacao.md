@@ -305,6 +305,15 @@ A chave privada é usada apenas no processo de release offline. O utilitário `a
 
 A assinatura confirma a origem/autorização dos bytes do modelo, mas não mede a qualidade do reconhecimento. A avaliação independente por SKU, loja, sessão, iluminação e oclusão continua obrigatória. A prevenção de rollback e a rotação/revogação automatizada de chaves continuam por implementar. Ver [docs/vision-model-manifest.md](docs/vision-model-manifest.md).
 
+## 4.7 Contrato de sincronização Edge AI
+
+O contrato v1 define mensagens de dispositivos com `event_id` UUID estável, `device_id`, `store_id`, sequência monotónica, timestamp com fuso horário e payload limitado. Os tipos iniciais são heartbeat, captura de prateleira, observação visual e confirmação de tarefa.
+
+A camada de domínio valida o conteúdo, calcula fingerprint SHA-256 canónico, constrói chave de idempotência por dispositivo e classifica sequências como NEXT, GAP ou STALE. Um retry com o mesmo ID e conteúdo é idempotente; reutilizar o ID com conteúdo diferente é conflito. Lacunas não podem avançar o cursor nem executar efeitos laterais.
+
+O contrato não autentica dispositivos, não recebe imagens, não persiste eventos e não altera inventário. A implementação de ingestão exige registo/credencial individual por dispositivo, resolução de loja no servidor, inbox/outbox duráveis, cursor e auditoria na mesma transacção e confirmação apenas após commit. Ver [docs/edge-device-event-contract.md](docs/edge-device-event-contract.md).
+
+
 ## 5. Percurso de evolução recomendado
 
 1. **Consolidar o fluxo operacional:** captura, evidência, revisão humana, recomendação, tarefa, execução e reconciliação auditáveis.
