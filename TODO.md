@@ -1,16 +1,16 @@
 ## Política de autorização da API — centralização
 
 - [x] Extrair a decisão RBAC do middleware para `apps/api/app/api_security_policy.py`, mantendo autenticação Bearer e papel autoritativo lido da base de dados.
-- [x] Implementar as categorias PUBLIC, ADMIN_ONLY, SUPERVISOR_OR_ADMIN, EMPLOYEE_ALLOWLIST e AUTHENTICATED_STAFF, com negação fail-closed para papéis desconhecidos.
+- [x] Implementar as categorias PUBLIC, ADMIN_ONLY, SUPERVISOR_OR_ADMIN e EMPLOYEE_ALLOWLIST com uma política explícita por método e template; `UNCLASSIFIED` é negado a todos os perfis, incluindo ADMIN.
 - [x] Acrescentar testes unitários iniciais para a matriz de papéis e categorias.
-- [ ] Validar a refactor com a suite API completa, testes HTTP de autorização, smokes PostgreSQL 16, Quality Gates e Docker Compose no SHA final.
-- [ ] Evoluir a classificação para metadados explícitos por rota e acrescentar teste de cobertura endpoint × método; a categoria AUTHENTICATED_STAFF ainda funciona como fallback e não prova classificação explícita de cada rota.
-- [x] Criar `apps/api/scripts/audit_api_route_policy.py`, auditor read-only que enumera cada método/rota FastAPI, apresenta categorias efectivas e lista os casos `AUTHENTICATED_STAFF`; `--strict` permite tornar a ausência de fallback num gate depois de rever as permissões.
-- [ ] Executar o auditor no ambiente API e rever manualmente cada fallback antes de converter a auditoria num gate bloqueante.
+- [x] Validar a refactor no commit `311fecc9e13641e6d5eb55465fda646fb2909601`: API CI [44880841684](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44880841684), Quality Gates [44880841658](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44880841658) e Docker Compose [44880841671](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44880841671) passaram; 1407 passed, 1 skipped, 1 warning.
+- [x] Declarar as 128 combinações método/rota em `API_ROUTE_POLICIES`; o teste `test_every_registered_versioned_api_route_has_an_explicit_method_policy` percorre as rotas FastAPI registadas e falha se existir uma combinação sem política.
+- [x] Criar `apps/api/scripts/audit_api_route_policy.py`, auditor read-only que enumera método/rota, categorias, rotas `UNCLASSIFIED` e fallbacks legados; `--strict` falha perante qualquer rota sem política explícita.
+- [x] Integrar `python scripts/audit_api_route_policy.py --strict` no workflow `.github/workflows/api-ci.yml`; a validação CI da suite e dos smokes PostgreSQL passou no commit `311fecc9`.
 - [x] Corrigir correspondência de prefixos para respeitar limites de segmentos (`/users` não deve corresponder a `/users-export`); acrescentar regressões para caminhos semelhantes e rotas aninhadas reais.
 - [x] Corrigir a deteção de sub-recursos `shelves/*/planograms` para exigir o segmento `planograms` completo; acrescentar regressão para `/planograms-export` não herdar permissões de supervisor.
 - [x] Acrescentar teste positivo para a rota real `POST /api/v1/shelves/{shelf_id}/planograms`, confirmando acesso de ADMIN/SUPERVISOR e recusa de EMPLOYEE.
-- [ ] Confirmar os testes de fronteira no CI e a suite integral antes de considerar a alteração validada. API CI #1673 está em execução; Demo Compose #328 está pendente; Quality Gates #1881 foi cancelado antes da instalação das dependências.
+- [x] Confirmar testes de fronteira, cobertura de todas as rotas e suite integral no commit `311fecc9`; API CI, Quality Gates e Docker Compose passaram (1407 passed, 1 skipped, 1 warning).
 
 ## Segurança P0 — CORS preflight e Bearer
 
@@ -21,9 +21,10 @@
 
 ## OWASP API security review — primeira ronda
 
-- [x] Enumerar as 130 declarações de rotas e rever middleware JWT, identidade/role na base de dados, RBAC, store scope, planogramas e testes de isolamento.
+- [x] Rever middleware JWT, identidade/role na base de dados, RBAC, store scope, planogramas e testes de isolamento; o inventário actualizado contém 128 métodos API (mais duas rotas health fora de `/api/v1/`).
 - [x] Corrigir finding API-CORS-001: origem wildcard/HTTP/localhost não permitida em produção.
-- [x] Centralizar a decisão RBAC em `apps/api/app/api_security_policy.py`, classificar os grupos de rota e testar a matriz base ADMIN/SUPERVISOR/EMPLOYEE. A cobertura exaustiva por endpoint × papel × tenant continua aberta.
+- [x] Centralizar RBAC em `apps/api/app/api_security_policy.py` com 128 políticas explícitas por método/template e teste dinâmico das rotas registadas. A cobertura exaustiva endpoint × papel × tenant continua aberta.
+- [x] Revalidar o actor no handler em dez endpoints de gestão/catálogo que dependiam apenas do middleware; o teste de despromoção ADMIN → SUPERVISOR entre middleware e handler confirma 403 e ausência de escrita.
 - [ ] Completar matriz endpoint × ADMIN/SUPERVISOR/EMPLOYEE × loja, incluindo todos os handlers e caminhos indirectos; a classificação centralizada não substitui a prova de isolamento de cada endpoint.
 - [ ] Executar SCA, secret scan e DAST com ferramentas reais; não há evidência dessas execuções nesta ronda.
 
