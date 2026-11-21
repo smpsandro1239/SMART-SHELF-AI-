@@ -75,9 +75,13 @@ class EdgeEventEnvelope(BaseModel):
         def inspect(item: Any, depth: int = 0) -> None:
             if depth > _MAX_JSON_DEPTH:
                 raise ValueError("payload nesting exceeds the maximum depth")
-            if item is None or isinstance(item, (str, bool, int)):
+            if item is None or isinstance(item, (str, bool)):
                 if isinstance(item, str) and len(item) > 4096:
                     raise ValueError("payload strings cannot exceed 4096 characters")
+                return
+            if isinstance(item, int):
+                if not -(2**63) <= item <= (2**63 - 1):
+                    raise ValueError("payload integers must fit signed 64-bit range")
                 return
             if isinstance(item, float):
                 if not math.isfinite(item):
@@ -127,8 +131,8 @@ class EdgeEventEnvelope(BaseModel):
             if "battery_pct" in payload and (
                 isinstance(payload["battery_pct"], bool)
                 or not isinstance(payload["battery_pct"], (int, float))
-                or not math.isfinite(payload["battery_pct"])
                 or not 0 <= payload["battery_pct"] <= 100
+                or (isinstance(payload["battery_pct"], float) and not math.isfinite(payload["battery_pct"]))
             ):
                 raise ValueError("battery_pct must be a finite number between 0 and 100")
             if "storage_free_bytes" in payload and (
@@ -175,13 +179,13 @@ class EdgeEventEnvelope(BaseModel):
                 if not isinstance(observation["label"], str) or not observation["label"].strip():
                     raise ValueError("observation label must be non-empty")
                 confidence = observation["confidence"]
-                if isinstance(confidence, bool) or not isinstance(confidence, (int, float)) or not math.isfinite(confidence) or not 0 <= confidence <= 1:
+                if isinstance(confidence, bool) or not isinstance(confidence, (int, float)) or not 0 <= confidence <= 1 or (isinstance(confidence, float) and not math.isfinite(confidence)):
                     raise ValueError("observation confidence must be finite and between 0 and 1")
                 bbox = observation["bbox"]
                 if (
                     not isinstance(bbox, list)
                     or len(bbox) != 4
-                    or any(isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v) for v in bbox)
+                    or any(isinstance(v, bool) or not isinstance(v, (int, float)) or (isinstance(v, int) and not -(2**63) <= v <= 2**63 - 1) or (isinstance(v, float) and not math.isfinite(v)) for v in bbox)
                     or not (0 <= bbox[0] < bbox[2] <= 1 and 0 <= bbox[1] < bbox[3] <= 1)
                 ):
                     raise ValueError("bbox must be normalized [x_min, y_min, x_max, y_max]")
@@ -216,7 +220,7 @@ def event_fingerprint(event: EdgeEventEnvelope) -> str:
 
 def event_idempotency_key(event: EdgeEventEnvelope) -> str:
     """Stable idempotency key scoped to the authenticated device identity."""
-    device_scope = hashlib.sha256(event.device_id.encode("ascii")).hexdigest()[:16]
+    device_scope = hashlib.sha256(event.device_id.encode("ascii")).hexdigest()
     return f"edge:{device_scope}:{event.event_id}"
 
 
