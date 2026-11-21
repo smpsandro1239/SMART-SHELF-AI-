@@ -10,7 +10,11 @@ IOU_THRESHOLDS = tuple(round(value, 2) for value in (0.50, 0.55, 0.60, 0.65, 0.7
 
 
 def _number(value: Any, label: str) -> float:
-    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError(f"{label} must be a finite number")
+    if isinstance(value, int) and not -(2**63) <= value <= 2**63 - 1:
+        raise ValueError(f"{label} exceeds the supported numeric range")
+    if isinstance(value, float) and not math.isfinite(value):
         raise ValueError(f"{label} must be a finite number")
     return float(value)
 
@@ -143,9 +147,14 @@ def evaluate_coco_detections(
         if not isinstance(annotation, dict):
             raise ValueError("COCO annotation entries must be objects")
         image_id, category_id = annotation.get("image_id"), annotation.get("category_id")
-        if image_id not in image_sizes or category_id not in category_names:
+        if (
+            type(image_id) is not int
+            or type(category_id) is not int
+            or image_id not in image_sizes
+            or category_id not in category_names
+        ):
             raise ValueError("COCO annotation references an unknown image or category")
-        if annotation.get("iscrowd", 0) != 0:
+        if type(annotation.get("iscrowd", 0)) is not int or annotation.get("iscrowd", 0) != 0:
             raise ValueError("iscrowd annotations are not supported by evaluation v1")
         box = _xywh(annotation.get("bbox"), "ground-truth bbox")
         width, height = image_sizes[image_id]
