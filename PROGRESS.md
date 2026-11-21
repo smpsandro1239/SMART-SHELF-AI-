@@ -1,3 +1,12 @@
+## 2026-11-21 — Avaliação de Computer Vision com COCO (implementação publicada; CI/dataset pendentes)
+
+- Criado `apps/api/app/vision_evaluation.py`: avaliação determinística de caixas COCO com AP101, mAP50, mAP50_95 e métricas TP/FP/FN, precision, recall e F1 por classe e globalmente.
+- O evaluator rejeita IDs ambíguos, classes desconhecidas, caixas fora da imagem, scores não finitos e crowd annotations ainda não suportadas.
+- Criado `apps/api/scripts/evaluate_vision_model.py`: executa o provider ONNX real apenas num test split pertencente a um release aprovado para inferência; exige manifesto Ed25519, keyring, hashes e SHA-256 das imagens.
+- O runner exige confidence floor 0.0 para AP, mede separadamente o operating threshold, e escreve relatório com release fingerprint, versão do modelo, pesos e pré-processamento. Não treina nem altera inventário.
+- Testes sintéticos em `apps/api/tests/test_vision_evaluation.py`; protocolo em `docs/vision-model-evaluation.md`.
+- Limite: não foi executado com dataset autorizado nem pesos reais; nenhuma métrica de precisão foi produzida. CI ainda por confirmar.
+
 ## 2026-11-21 — Contrato Edge AI v1 (implementação de domínio publicada; CI pendente)
 
 - Criado `apps/api/app/edge_event_contract.py` com envelope v1, payloads tipados por evento, limites de tamanho/profundidade, timestamps timezone-aware, IDs e hashes validados.
