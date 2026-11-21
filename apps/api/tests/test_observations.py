@@ -746,18 +746,51 @@ def test_observation_alerts_are_store_scoped(monkeypatch):
 
     with TestClient(app) as client:
         (store_id, shelf_id, product_id), actor = _setup_alert_fixture(client)
+        monkeypatch.setattr(main_module, "_request_user", lambda db, request: actor)
+
+        created = client.post(
+            f"/api/v1/shelves/{shelf_id}/observation-alerts/evaluate",
+            params={"product_id": product_id, "minimum_confirmations": 3},
+        )
+        assert created.status_code == 200, created.text
+        assert created.json() is not None
+
+        own_store_alerts = client.get("/api/v1/observation-alerts")
+        assert own_store_alerts.status_code == 200
+        assert [alert["id"] for alert in own_store_alerts.json()] == [created.json()["id"]]
+
         foreign_actor = SimpleNamespace(
             id=actor.id, role="SUPERVISOR", store_id=store_id + 999
         )
         monkeypatch.setattr(main_module, "_request_user", lambda db, request: foreign_actor)
-        response = client.get("/api/v1/observation-alerts")
-        assert response.status_code == 200
-        assert response.json() == []
+        foreign_store_alerts = client.get("/api/v1/observation-alerts")
+        assert foreign_store_alerts.status_code == 200
+        assert foreign_store_alerts.json() == []
+        filtered_foreign_alerts = client.get(
+            "/api/v1/observation-alerts",
+            params={"shelf_id": shelf_id, "product_id": product_id},
+        )
+        assert filtered_foreign_alerts.status_code == 200
+        assert filtered_foreign_alerts.json() == []
+
         evaluate = client.post(
             f"/api/v1/shelves/{shelf_id}/observation-alerts/evaluate",
             params={"product_id": product_id, "minimum_confirmations": 3},
         )
         assert evaluate.status_code == 403
+
+        employee_actor = SimpleNamespace(
+            id=actor.id, role="EMPLOYEE", store_id=store_id
+        )
+        monkeypatch.setattr(main_module, "_request_user", lambda db, request: employee_actor)
+        employee_alerts = client.get("/api/v1/observation-alerts")
+        assert employee_alerts.status_code == 403
+
+        admin_actor = SimpleNamespace(id=actor.id, role="ADMIN", store_id=None)
+        monkeypatch.setattr(main_module, "_request_user", lambda db, request: admin_actor)
+        admin_alerts = client.get("/api/v1/observation-alerts")
+        assert admin_alerts.status_code == 200
+        assert [alert["id"] for alert in admin_alerts.json()] == [created.json()["id"]]
 
 def test_cross_store_alert_update_checks_scope_before_acquiring_row_lock(monkeypatch):
     from types import SimpleNamespace
