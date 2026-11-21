@@ -192,11 +192,30 @@ sequenceDiagram
 
 ---
 
-## 4. Próximas áreas de evolução
+## 4. Cinco áreas de evolução técnica
 
 As áreas seguintes são objetivos de evolução funcional e técnica. Devem ser desenvolvidas incrementalmente, com critérios de aceitação, dados de validação e distinção entre protótipo e capacidade operacional.
 
-### 4.1 IA e catálogo
+### 4.1 Computer Vision
+
+**Objetivo:** transformar imagens de prateleiras em evidência visual fiável sobre produtos, espaços vazios, etiquetas, facings e conformidade com o planograma.
+
+Capacidades a desenvolver:
+
+- Melhorar a deteção de produtos e respetivas bounding boxes, incluindo prateleiras densas, embalagens semelhantes, reflexos, blur, iluminação irregular e oclusões.
+- Distinguir explicitamente deteção de objeto, identificação de SKU, contagem de facings visíveis e estimativa de unidades físicas. Uma face visível não representa stock total.
+- Detetar espaços vazios apenas quando a região está visível, calibrada e não ocluída; ausência de deteção, falha de captura ou baixa confiança têm de permanecer UNKNOWN.
+- Reconhecer e associar etiquetas/preços por OCR, mantendo a associação etiqueta-produto como hipótese sujeita a validação.
+- Comparar a disposição observada com células e posições esperadas do planograma, identificando produto deslocado, facings em falta/excesso e conflitos.
+- Introduzir estados de qualidade por região: occluded, blurred, glare, out_of_view e low_resolution.
+- Calibrar deduplicação/NMS, sobreposição geométrica e contagem com imagens anotadas; registar versões do modelo e do pré-processamento.
+- Medir precision, recall, F1, mAP, matriz de confusão, falsos vazios, falsos produtos deslocados e latência p50/p95 por SKU, câmara e cenário.
+
+**Estado conhecido:** existem provider ONNX configurável, deteções, OCR, embeddings, comparador geométrico de células, planogramas versionados e comparação read-only por captura. O worker demo usa um provider mock determinístico. A comparação ainda não está integrada de forma persistente no worker; não há modelo real/dataset autorizado com métricas de qualidade validadas.
+
+**Critério de qualidade:** nenhuma deteção isolada pode alterar stock. UNKNOWN, baixa confiança, oclusão ou falha de câmara nunca são convertidos automaticamente em rutura.
+
+### 4.2 IA e catálogo
 
 **Objetivo:** melhorar a correspondência entre o que a câmara observa e os produtos do catálogo, reduzindo ambiguidades e encaminhando casos incertos para validação humana.
 
@@ -211,7 +230,7 @@ As áreas seguintes são objetivos de evolução funcional e técnica. Devem ser
 
 **Critério de qualidade:** o sistema deve poder abster-se de identificar um produto. Uma correspondência incerta deve originar revisão, não uma decisão automática de inventário.
 
-### 4.2 Edge AI
+### 4.3 Edge AI
 
 **Objetivo:** permitir que câmaras, gateways ou dispositivos locais processem imagens perto da origem, sem depender permanentemente da cloud.
 
@@ -236,7 +255,7 @@ flowchart LR
 
 **Critério de qualidade:** a operação local não pode criar estados contraditórios nem perder proveniência. A sincronização deve ser idempotente, auditável e recuperável após interrupções.
 
-### 4.3 Analytics
+### 4.4 Analytics
 
 **Objetivo:** converter histórico operacional fiável em indicadores, previsões e recomendações úteis para a gestão.
 
@@ -251,7 +270,7 @@ flowchart LR
 
 **Critério de qualidade:** só apresentar previsões quando existe quantidade e qualidade de dados suficientes. Os indicadores devem identificar período, fonte, cobertura e limitações.
 
-### 4.4 Integrações
+### 4.5 Integrações
 
 **Objetivo:** ligar o SMART SHELF AI aos sistemas que já suportam a operação do retalhista, evitando duplicação de dados e permitindo decisões com contexto atualizado.
 

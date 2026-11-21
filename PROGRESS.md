@@ -1,3 +1,12 @@
+## 2026-11-21 — Integridade dos exemplares de embeddings (validado)
+
+- A validação de ProductExemplar aceitava alguns valores com tipos inadequados: booleanos/floats como IDs e metadados não textuais podiam atravessar a fronteira de domínio.
+- A implementação passou a exigir ID de produto inteiro positivo; versão do modelo, revisor, timestamp de revisão e licença como strings não vazias; e digest SHA-256 com exactamente 64 caracteres hexadecimais.
+- Foram adicionados testes paramétricos para booleanos, floats, strings, valores nulos, hashes de comprimento incorrecto e caracteres não hexadecimais.
+- Commits: implementação 762d3344dbcb72c39d223bdd2a97a7f8e8333421; testes a1e056c3a49eebd1b7ac36903cc1453b6d570338.
+- Validação no SHA a1e056c3: API CI [44902878547](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44902878547) passou com PostgreSQL 16, smokes de concorrência/isolamento e **1461 passed, 1 skipped**. Quality Gates [44902878553](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44902878553) confirmou compilação Python, build Web e a mesma suite; Docker Compose [44902878594](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44902878594) e Security Scans [44902878703](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44902878703) passaram.
+- Limite: esta alteração melhora a integridade dos registos de referência; não valida qualidade visual dos embeddings, precisão por SKU nem adequação de thresholds para uma loja real.
+
 ## 2026-11-21 — Gitleaks sobre o histórico Git completo (validado)
 
 - A ação oficial Gitleaks estava a usar --log-opts=-1 no evento push; o checkout tinha histórico completo, mas a acção só verificava o commit actual. Foi acrescentado um passo explícito com --log-opts=--all.

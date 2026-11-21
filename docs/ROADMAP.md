@@ -1,3 +1,10 @@
+### IA e catálogo — integridade dos exemplares de embeddings (2026-11-21, validado)
+
+- ProductExemplar exige agora ID inteiro positivo, versão de modelo e proveniência textual não vazia e SHA-256 hexadecimal com 64 caracteres.
+- Testes paramétricos cobrem IDs booleanos/floats/strings, valores nulos/vazios e digests inválidos.
+- API CI [44902878547](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44902878547), Quality Gates [44902878553](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44902878553), Docker Compose [44902878594](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44902878594) e Security Scans [44902878703](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44902878703) passaram; **1461 testes aprovados, 1 ignorado**.
+- Limite: integridade de metadados não demonstra precisão de matching; continua necessária avaliação independente por SKU, loja e cenário.
+
 ### Gitleaks — scan do histórico Git completo (2026-11-21, validado)
 
 - O workflow agora executa Gitleaks sobre todos os commits alcançáveis (--log-opts=--all), além do scan do commit actual.

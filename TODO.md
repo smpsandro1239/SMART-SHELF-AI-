@@ -1,3 +1,11 @@
+## IA e catálogo — validação estrita de exemplares de embeddings (2026-11-21, validado)
+
+- [x] Exigir product_id inteiro positivo (rejeitar booleanos, floats, strings e valores não positivos) em ProductExemplar.
+- [x] Validar model_version, SHA-256 hexadecimal e os campos de proveniência reviewed_by, reviewed_at e licence como strings não vazias.
+- [x] Acrescentar testes paramétricos para identificadores e metadados malformados.
+- [x] Validar no commit a1e056c3: API CI [44902878547](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44902878547), Quality Gates [44902878553](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44902878553), Docker Compose [44902878594](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44902878594) e Security Scans [44902878703](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44902878703) passaram; **1461 testes aprovados, 1 ignorado**.
+- [ ] Continuar avaliação com dataset independente por loja/sessão e validar thresholds de matching; estes testes verificam integridade dos exemplares, não precisão do reconhecimento.
+
 ## Gitleaks — cobertura do histórico completo (2026-11-21, validado)
 
 - [x] Confirmar a limitação da ação oficial no evento push: o scan integrado analisava apenas 1 commit. Acrescentar execução explícita de Gitleaks com --log-opts=--all após checkout de histórico completo.
