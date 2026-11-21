@@ -352,6 +352,9 @@ O evaluator não treina modelos nem altera inventário. A versão 1 rejeita anot
 - [Demonstração vertical de 10 minutos](docs/DEMO.md)
 - [Critérios de aceitação da demonstração](docs/DEMO-ACCEPTANCE.md)
 - [Arquitetura e decisões técnicas](docs/architecture/)
+- [Manifesto e aprovação de modelos ONNX](docs/vision-model-manifest.md)
+- [Contrato de eventos Edge AI](docs/edge-device-event-contract.md)
+- [Protocolo de avaliação de Computer Vision](docs/vision-model-evaluation.md)
 
 ---
 
