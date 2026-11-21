@@ -494,6 +494,13 @@ def test_image_detection_and_ocr_endpoints_enforce_store_scope(monkeypatch):
             assert foreign_runs.status_code == 403
             assert foreign_evidence.status_code == 403
 
+            # A rejected cross-store request must not append OCR or review rows.
+            before_rejected_writes = (
+                db.query(models.ShelfImageOCRRun).count(),
+                db.query(models.ShelfImageOCREvidence).count(),
+                db.query(models.DetectionSkuReview).count(),
+            )
+
             foreign_ocr_create = client.post(
                 f"/api/v1/shelf-images/{foreign_image_id}/ocr-runs",
                 json={
@@ -517,6 +524,14 @@ def test_image_detection_and_ocr_endpoints_enforce_store_scope(monkeypatch):
                 json={"decision": "REJECTED", "notes": "Tentativa cross-store"},
             )
             assert foreign_review.status_code == 403
+
+            db.expire_all()
+            after_rejected_writes = (
+                db.query(models.ShelfImageOCRRun).count(),
+                db.query(models.ShelfImageOCREvidence).count(),
+                db.query(models.DetectionSkuReview).count(),
+            )
+            assert after_rejected_writes == before_rejected_writes
 
 
 
