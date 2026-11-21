@@ -78,7 +78,7 @@ def main() -> int:
     if not isinstance(private_key, Ed25519PrivateKey):
         parser.error("The supplied PEM key is not an Ed25519 private key")
 
-    if args.output.exists() and args.output.is_symlink():
+    if args.output.is_symlink():
         parser.error("--output must not be a symbolic link")
     manifest = build_manifest(private_key, args.key_id, args.detector, args.embedding)
     public_bytes = private_key.public_key().public_bytes(
