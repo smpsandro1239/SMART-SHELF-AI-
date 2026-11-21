@@ -173,3 +173,26 @@ def test_real_provider_factory_loads_only_after_signed_manifest_and_sha_match(tm
 
     assert provider.detector_sha256 == payload["detector_sha256"]
     assert provider.embedding_path is None
+
+
+def test_offline_signing_utility_creates_verifiable_manifest(tmp_path):
+    from scripts.create_vision_model_manifest import build_manifest
+
+    private_key = Ed25519PrivateKey.generate()
+    public_key = private_key.public_key().public_bytes(
+        encoding=serialization.Encoding.Raw,
+        format=serialization.PublicFormat.Raw,
+    )
+    detector = tmp_path / "detector.onnx"
+    detector.write_bytes(b"release-candidate-detector")
+    manifest_path = tmp_path / "manifest.json"
+    envelope = build_manifest(private_key, "release-candidate", detector)
+    manifest_path.write_text(json.dumps(envelope), encoding="utf-8")
+    keyring = json.dumps({
+        "release-candidate": base64.b64encode(public_key).decode("ascii"),
+    })
+
+    verified = verify_model_manifest(manifest_path, keyring, detector)
+
+    assert verified["key_id"] == "release-candidate"
+    assert verified["detector_sha256"] == envelope["payload"]["detector_sha256"]
