@@ -35,6 +35,80 @@ SUPERVISOR_OR_ADMIN_POST_PATHS = frozenset({
 })
 
 
+
+# Explicit route-template policies for endpoints whose handlers already enforce
+# the same role boundary. Keeping these entries method-specific prevents a new
+# method on an existing path from silently inheriting staff access.
+ADMIN_ONLY_ROUTE_POLICIES = frozenset({
+    ("POST", "/api/v1/shelf-images/{image_id}/artifact-inventory-snapshots"),
+    ("GET", "/api/v1/shelf-images/{image_id}/artifacts"),
+    ("POST", "/api/v1/shelf-images/{image_id}/artifacts"),
+    ("GET", "/api/v1/shelf-images/{image_id}/artifacts/{artifact_id}/access"),
+    ("GET", "/api/v1/shelf-images/{image_id}/artifacts/{artifact_id}/disposition-events"),
+    ("POST", "/api/v1/shelf-images/{image_id}/artifacts/{artifact_id}/disposition-events"),
+    ("POST", "/api/v1/shelf-images/{image_id}/retention/legal-hold/apply"),
+    ("POST", "/api/v1/shelf-images/{image_id}/retention/legal-hold/release"),
+    ("GET", "/api/v1/shelf-images/{image_id}/retention/purge-eligibility"),
+    ("POST", "/api/v1/shelf-images/{image_id}/retention/purge-schedule"),
+    ("POST", "/api/v1/shelf-images/{image_id}/retention/purge-schedule/cancel"),
+    ("POST", "/api/v1/shelf-images/{image_id}/retention/restore"),
+    ("GET", "/api/v1/stores/{store_id}/external-integrations"),
+    ("POST", "/api/v1/stores/{store_id}/external-integrations"),
+    ("PATCH", "/api/v1/stores/{store_id}/external-integrations/{integration_id}"),
+    ("GET", "/api/v1/stores/{store_id}/external-integrations/coverage"),
+})
+
+SUPERVISOR_OR_ADMIN_ROUTE_POLICIES = frozenset({
+    ("GET", "/api/v1/capture-sessions"),
+    ("POST", "/api/v1/capture-sessions"),
+    ("POST", "/api/v1/capture-sessions/{session_id}/close"),
+    ("GET", "/api/v1/forecasting/demand"),
+    ("GET", "/api/v1/forecasting/hourly-demand"),
+    ("GET", "/api/v1/forecasting/stockout-risk"),
+    ("GET", "/api/v1/forecasting/stockout-risk/portfolio"),
+    ("GET", "/api/v1/forecasting/traffic-peaks"),
+    ("GET", "/api/v1/inventory/freshness-policies"),
+    ("POST", "/api/v1/inventory/freshness-policies"),
+    ("GET", "/api/v1/inventory/latest"),
+    ("GET", "/api/v1/inventory/snapshots"),
+    ("GET", "/api/v1/observations"),
+    ("POST", "/api/v1/observations"),
+    ("GET", "/api/v1/operational-decisions"),
+    ("GET", "/api/v1/products"),
+    ("GET", "/api/v1/replenishment/plan"),
+    ("GET", "/api/v1/replenishment/recommendations"),
+    ("GET", "/api/v1/replenishment/workload"),
+    ("GET", "/api/v1/sales/daily"),
+    ("GET", "/api/v1/sales/hourly"),
+    ("GET", "/api/v1/sales/traffic/hourly"),
+    ("GET", "/api/v1/shelf-images/{image_id}/retention/events"),
+    ("POST", "/api/v1/shelf-images/{image_id}/retention/restrict"),
+    ("POST", "/api/v1/shelf-images/{image_id}/retry"),
+    ("GET", "/api/v1/shelf-products"),
+    ("GET", "/api/v1/shelves"),
+    ("GET", "/api/v1/shelves/{shelf_id}/observation-consensus"),
+    ("GET", "/api/v1/store-employees"),
+    ("GET", "/api/v1/stores"),
+    ("POST", "/api/v1/tasks"),
+    ("GET", "/api/v1/tasks/{task_id}/events"),
+    ("POST", "/api/v1/tasks/{task_id}/reconcile-inventory"),
+    ("POST", "/api/v1/tasks/from-recommendation"),
+    ("GET", "/api/v1/warehouse/locations"),
+    ("GET", "/api/v1/warehouse/pallet-rotation/hourly-profile"),
+    ("GET", "/api/v1/warehouse/pallet-rotation/policies"),
+    ("GET", "/api/v1/warehouse/pallet-rotation/portfolio"),
+    ("GET", "/api/v1/warehouse/pallet-rotation/portfolio-from-history"),
+    ("GET", "/api/v1/warehouse/pallet-rotation/weekday-hourly-profile"),
+    ("GET", "/api/v1/warehouse/pallet-rotation/window-plan"),
+    ("GET", "/api/v1/warehouse/pallets"),
+    ("GET", "/api/v1/warehouse/pallets/{pallet_id}/events"),
+    ("GET", "/api/v1/warehouse/physical-slotting"),
+    ("GET", "/api/v1/warehouse/product-packaging"),
+    ("GET", "/api/v1/warehouse/replenishment-units"),
+    ("GET", "/api/v1/warehouse/slotting-recommendations"),
+    ("GET", "/api/v1/zones"),
+})
+
 def _is_path_or_subpath(path: str, prefix: str) -> bool:
     """Match a route prefix only at a path-segment boundary."""
     return path == prefix or path.startswith(prefix.rstrip("/") + "/")
