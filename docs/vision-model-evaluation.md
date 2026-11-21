@@ -35,6 +35,7 @@ python -m app.dataset_execution \
   --mode inference \
   -- python scripts/evaluate_vision_model.py \
     --annotations /datasets/instances_test.json \
+    --manifest /datasets/manifest.csv \\
     --images-root /datasets/images \
     --output /reports/vision-evaluation.json \
     --operating-threshold 0.25
