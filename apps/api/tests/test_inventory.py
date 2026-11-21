@@ -524,3 +524,83 @@ def test_inventory_history_and_latest_enforce_store_scope_for_supervisor(monkeyp
         implicit_store_history = client.get("/api/v1/inventory/snapshots")
         assert implicit_store_history.status_code == 200
         assert all(item["store_id"] == own_store_id for item in implicit_store_history.json())
+
+
+def test_sales_csv_imports_are_store_scoped_and_rejected_foreign_imports_are_atomic(monkeypatch):
+    with TestClient(app) as client:
+        own_store_id, product_id = create_store_and_product(client)
+        foreign_store = client.post("/api/v1/stores", json={
+            "code": "INV-CSV-FOREIGN", "name": "Loja externa CSV",
+        })
+        assert foreign_store.status_code == 201
+        foreign_store_id = foreign_store.json()["id"]
+        actor = _supervisor_actor(own_store_id)
+        monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: actor)
+
+        daily_csv = (
+            "product_id,sales_date,quantity,external_reference\\n"
+            f"{product_id},2026-11-20,3,DAILY-OWN-001\\n"
+        ).encode()
+        own_daily = client.post(
+            "/api/v1/sales/import-csv",
+            data={"store_id": str(own_store_id), "source": "IMPORT"},
+            files={"file": ("daily.csv", daily_csv, "text/csv")},
+        )
+        assert own_daily.status_code == 200, own_daily.text
+        assert own_daily.json()["rows_imported"] == 1
+
+        hourly_sales_csv = (
+            "product_id,business_date,hour_of_day,quantity,external_reference\\n"
+            f"{product_id},2026-11-20,9,2,HOURLY-OWN-001\\n"
+        ).encode()
+        own_hourly = client.post(
+            "/api/v1/sales/hourly/import-csv",
+            data={"store_id": str(own_store_id), "source": "IMPORT"},
+            files={"file": ("hourly.csv", hourly_sales_csv, "text/csv")},
+        )
+        assert own_hourly.status_code == 200, own_hourly.text
+
+        traffic_csv = (
+            "business_date,hour_of_day,customer_count,external_reference\\n"
+            "2026-11-20,9,12,TRAFFIC-OWN-001\\n"
+        ).encode()
+        own_traffic = client.post(
+            "/api/v1/sales/traffic/hourly/import-csv",
+            data={"store_id": str(own_store_id), "source": "IMPORT"},
+            files={"file": ("traffic.csv", traffic_csv, "text/csv")},
+        )
+        assert own_traffic.status_code == 200, own_traffic.text
+
+        with TestingSession() as db:
+            before = (
+                db.query(models.DailySalesRecord).count(),
+                db.query(models.HourlySalesRecord).count(),
+                db.query(models.HourlyStoreTrafficRecord).count(),
+            )
+
+        foreign_requests = [
+            client.post(
+                "/api/v1/sales/import-csv",
+                data={"store_id": str(foreign_store_id), "source": "IMPORT"},
+                files={"file": ("daily.csv", daily_csv, "text/csv")},
+            ),
+            client.post(
+                "/api/v1/sales/hourly/import-csv",
+                data={"store_id": str(foreign_store_id), "source": "IMPORT"},
+                files={"file": ("hourly.csv", hourly_sales_csv, "text/csv")},
+            ),
+            client.post(
+                "/api/v1/sales/traffic/hourly/import-csv",
+                data={"store_id": str(foreign_store_id), "source": "IMPORT"},
+                files={"file": ("traffic.csv", traffic_csv, "text/csv")},
+            ),
+        ]
+        assert [response.status_code for response in foreign_requests] == [403, 403, 403]
+
+        with TestingSession() as db:
+            after = (
+                db.query(models.DailySalesRecord).count(),
+                db.query(models.HourlySalesRecord).count(),
+                db.query(models.HourlyStoreTrafficRecord).count(),
+            )
+        assert after == before
