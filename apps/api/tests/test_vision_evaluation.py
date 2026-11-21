@@ -117,6 +117,7 @@ def write_approved_release_inputs(tmp_path, monkeypatch):
     import hashlib
     import json
 
+    tmp_path.mkdir(parents=True, exist_ok=True)
     image_bytes = b"approved-test-image"
     image_digest = hashlib.sha256(image_bytes).hexdigest()
     document = {
