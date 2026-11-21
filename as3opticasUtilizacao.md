@@ -10,9 +10,20 @@ O SMART SHELF AI é uma plataforma de apoio às operações de retalho. Liga evi
 
 ## 1. Para o repositor — utilização diária na loja
 
-![Imagem sintética de uma prateleira usada no percurso de demonstração do SMART SHELF AI](apps/api/demo/assets/synthetic-shelf.png)
+### Esquema ilustrativo de uma prateleira
 
-<small>Imagem sintética de demonstração. Não representa uma deteção real nem dados de uma loja em produção.</small>
+```mermaid
+flowchart TB
+  subgraph Shelf[Prateleira de supermercado]
+    P1[Produto A] --- P2[Produto B] --- P3[Produto C]
+    P4[Produto A] --- GAP[Espaço vazio] --- P6[Produto C]
+    P7[Produto A] --- P8[Produto B] --- P9[Produto C]
+  end
+  GAP --> REVIEW[Observação a validar]
+  REVIEW --> HUMAN[Confirmação humana do estado e do SKU]
+```
+
+<small>Esquema conceptual, não é uma captura nem uma deteção real. O provider do demo é determinístico e não reconhece semanticamente o conteúdo da imagem.</small>
 
 O repositor utiliza o SMART SHELF AI para saber **o que precisa de ser reposto, onde deve atuar e que trabalho tem atribuído**.
 
