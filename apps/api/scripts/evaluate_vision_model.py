@@ -35,6 +35,8 @@ def _sha256_file(path: Path) -> str:
 def _approved_release_context() -> dict[str, str]:
     if os.getenv("SMART_SHELF_DATASET_APPROVAL_STATUS") != "APPROVED":
         raise ValueError("evaluation must run inside an APPROVED dataset release consumer")
+    if os.getenv("SMART_SHELF_DATASET_APPROVAL_MODE") != "inference":
+        raise ValueError("vision evaluation requires a dataset release explicitly approved for inference")
     release_id = os.getenv("SMART_SHELF_DATASET_RELEASE_ID", "").strip()
     fingerprint = os.getenv("SMART_SHELF_DATASET_RELEASE_FINGERPRINT", "").strip()
     if not release_id or not _SHA256.fullmatch(fingerprint):
