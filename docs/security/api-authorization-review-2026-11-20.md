@@ -87,4 +87,6 @@ Foi ainda identificada e corrigida uma janela de revogação de perfil: dez hand
 
 **Validação:** commit `311fecc9e13641e6d5eb55465fda646fb2909601` passou API CI [44880841684](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44880841684), Quality Gates [44880841658](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44880841658) e Docker Compose [44880841671](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44880841671). A suite terminou com **1407 passed, 1 skipped, 1 warning**; as migrações e os smokes PostgreSQL 16 passaram.
 
+**Validação adicional do gate estrito:** API CI [44881182965](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44881182965), commit `8775aaff`, confirmou 128 métodos registados, 0 rotas `UNCLASSIFIED` e 0 fallbacks legados; os smokes PostgreSQL e 1407 testes passaram.
+
 **Risco residual:** a matriz explícita comprova que cada método/rota tem uma categoria RBAC, mas não demonstra por si só a matriz completa endpoint × ADMIN/SUPERVISOR/EMPLOYEE × loja. A revisão handler-by-handler de filtros de tenant, atribuições e caminhos indirectos continua aberta. SCA, secret scanning, DAST e pentest externo não foram executados e não são declarados concluídos.

@@ -4,7 +4,7 @@
 
 Total de declarações únicas encontradas: **128**.
 
-Distribuição das 128 políticas explícitas: **2 PUBLIC**, **25 ADMIN_ONLY**, **88 SUPERVISOR_OR_ADMIN** e **13 EMPLOYEE_ALLOWLIST**. Uma rota ou método não registado é `UNCLASSIFIED` e o middleware recusa-o para todos os perfis, incluindo ADMIN; não existe fallback `AUTHENTICATED_STAFF`.
+Distribuição das 128 políticas explícitas: **2 PUBLIC**, **25 ADMIN_ONLY**, **88 SUPERVISOR_OR_ADMIN** e **13 EMPLOYEE_ALLOWLIST**. Uma rota ou método não registado é `UNCLASSIFIED` e o middleware recusa-o para todos os perfis, incluindo ADMIN; não existe fallback `AUTHENTICATED_STAFF`. O gate live do API CI [44881182965](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44881182965) confirmou 128 métodos, zero `UNCLASSIFIED` e zero fallbacks legados.
 
 | Método | Caminho | Handler | Política |
 |---|---|---|---|

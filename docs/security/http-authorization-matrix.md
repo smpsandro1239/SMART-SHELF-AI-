@@ -29,6 +29,8 @@ O teste `test_admin_role_revocation_between_middleware_and_handler_blocks_store_
 
 Validação no commit `311fecc9e13641e6d5eb55465fda646fb2909601`: API CI [44880841684](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44880841684), Quality Gates [44880841658](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44880841658) e Docker Compose [44880841671](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44880841671) passaram; **1407 testes aprovados, 1 ignorado e 1 aviso**. A validação API CI incluiu migrações e smokes PostgreSQL 16. O aviso Python é a depreciação externa `anyio.abc.BlockingPortal` do Starlette TestClient.
 
+O gate estrito foi depois executado no API CI [44881182965](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44881182965), commit `8775aaff`: **128 métodos, 0 UNCLASSIFIED, 0 fallbacks legados**, com 1407 testes aprovados, 1 ignorado e 1 aviso.
+
 ## Identidade e validação do token
 
 1. As rotas fora de `/api/v1/` não passam pelo middleware de autenticação da API.

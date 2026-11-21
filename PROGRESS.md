@@ -182,4 +182,5 @@
 
 - A classificação explícita não substitui a prova endpoint × ADMIN/SUPERVISOR/EMPLOYEE × loja. A auditoria de tenant scope e caminhos indirectos continua aberta.
 - SCA, secret scanning, DAST e pentest externo não foram executados.
-- O auditor strict foi integrado no API CI; o último commit com validação completa é `311fecc9`. Os commits seguintes são documentação e integração do auditor e aguardam a sua própria execução CI.
+- API CI [44881182965](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44881182965), commit `8775aaffc8db199dd6c43a61dafd03c019f519fc`, executou o gate `audit_api_route_policy.py --strict`: **128 métodos, 0 UNCLASSIFIED, 0 fallbacks legados**; migrações PostgreSQL 16, smokes e suite **1407 passed, 1 skipped, 1 warning**.
+- Quality Gates [44880841658](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44880841658) e Docker Compose [44880841671](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44880841671) passaram no commit de código/testes `311fecc9`. A execução Quality Gates do head documental anterior está em curso; não há execução local.
