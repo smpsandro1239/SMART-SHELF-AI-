@@ -78,7 +78,16 @@ def main() -> int:
     if not isinstance(private_key, Ed25519PrivateKey):
         parser.error("The supplied PEM key is not an Ed25519 private key")
 
+    if args.output.exists() and args.output.is_symlink():
+        parser.error("--output must not be a symbolic link")
     manifest = build_manifest(private_key, args.key_id, args.detector, args.embedding)
+    public_bytes = private_key.public_key().public_bytes(
+        encoding=serialization.Encoding.Raw,
+        format=serialization.PublicFormat.Raw,
+    )
+    import base64
+
+    print(f"Trusted public key for {args.key_id}: {base64.b64encode(public_bytes).decode('ascii')}")
     args.output.write_text(
         json.dumps(manifest, sort_keys=True, indent=2) + "\n",
         encoding="utf-8",
