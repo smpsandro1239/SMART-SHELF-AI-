@@ -143,7 +143,7 @@ def test_payload_is_bounded_and_rejects_non_json_objects():
     with pytest.raises(ValidationError, match="JSON-compatible"):
         make_event(payload={"bad": object()})
     with pytest.raises(ValidationError, match="64 KiB"):
-        make_event(payload={"blob": "x" * 70000})
+        make_event(payload={"items": ["x" * 4000 for _ in range(20)]})
 
 
 def test_event_fingerprint_is_stable_and_sensitive_to_content():
