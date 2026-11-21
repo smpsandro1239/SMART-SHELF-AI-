@@ -38,10 +38,10 @@ class EdgeSequenceDisposition(str, Enum):
 class EdgeEventEnvelope(BaseModel):
     """Validated v1 event envelope; one event belongs to exactly one store/device."""
 
-    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     schema_version: Literal[1]
-    event_id: UUID
+    event_id: str
     event_type: Literal[
         "DEVICE_HEARTBEAT",
         "SHELF_CAPTURED",
@@ -54,6 +54,35 @@ class EdgeEventEnvelope(BaseModel):
     sequence_number: int = Field(gt=0)
     occurred_at: datetime
     payload: dict[str, Any]
+
+    @field_validator("schema_version", mode="before")
+    @classmethod
+    def validate_schema_version(cls, value: Any) -> int:
+        if type(value) is not int or value != 1:
+            raise ValueError("schema_version must be integer 1")
+        return value
+
+    @field_validator("event_id")
+    @classmethod
+    def validate_event_id(cls, value: str) -> str:
+        try:
+            return str(UUID(value))
+        except (ValueError, TypeError, AttributeError) as exc:
+            raise ValueError("event_id must be a UUID string") from exc
+
+    @field_validator("store_id", "sequence_number", mode="before")
+    @classmethod
+    def validate_positive_integer_fields(cls, value: Any) -> int:
+        if type(value) is not int or value <= 0:
+            raise ValueError("store_id and sequence_number must be positive integers")
+        return value
+
+    @field_validator("shelf_id", mode="before")
+    @classmethod
+    def validate_optional_shelf_id(cls, value: Any) -> int | None:
+        if value is not None and (type(value) is not int or value <= 0):
+            raise ValueError("shelf_id must be null or a positive integer")
+        return value
 
     @field_validator("device_id")
     @classmethod
