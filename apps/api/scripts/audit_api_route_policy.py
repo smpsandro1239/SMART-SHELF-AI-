@@ -39,7 +39,7 @@ def main() -> int:
     parser.add_argument(
         "--strict",
         action="store_true",
-        help="exit non-zero when any route still uses AUTHENTICATED_STAFF fallback",
+        help="exit non-zero when any registered route method has no explicit policy",
     )
     args = parser.parse_args()
 
@@ -54,7 +54,7 @@ def main() -> int:
         "routes": records,
     }
     print(json.dumps(report, ensure_ascii=False, indent=2))
-    return 1 if args.strict and fallback else 0
+    return 1 if args.strict and (unclassified or legacy_fallback) else 0
 
 
 if __name__ == "__main__":
