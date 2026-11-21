@@ -690,7 +690,7 @@ def test_employee_cannot_upload_image_with_foreign_capture_session(
         headers=headers,
     )
 
-    assert response.status_code == 422, response.text
+    assert response.status_code == 403, response.text
     assert not list(tmp_path.rglob("*"))
     with main_module.SessionLocal() as db:
         after_count = db.query(models.ShelfImage).filter(

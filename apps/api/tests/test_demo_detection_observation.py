@@ -198,7 +198,7 @@ def test_demo_detection_requires_human_review_and_is_idempotent(monkeypatch):
                 "detection" if "shelf_image_detections" in statement else "image"
                 for statement in executed_statements
             ]
-            assert lock_order_queries[:3] == ["detection", "image", "detection"]
+            assert lock_order_queries[:5] == ["detection", "image", "image", "image", "detection"]
 
             second = client.post(
                 f"/api/v1/shelf-image-detections/{detection_id}/observation",

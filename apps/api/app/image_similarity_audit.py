@@ -19,7 +19,7 @@ def difference_hash(path: Path) -> int:
     """Return a 64-bit dHash after EXIF orientation correction."""
     with Image.open(path) as source:
         image = ImageOps.exif_transpose(source).convert("L").resize((9, 8), Image.Resampling.LANCZOS)
-    pixels = list(image.getdata())
+    pixels = list(image.get_flattened_data())
     value = 0
     for row in range(8):
         offset = row * 9
