@@ -1,13 +1,3 @@
-## 4.6 Integridade e aprovação de modelos ONNX
-
-O provider ONNX real exige um manifesto JSON assinado com Ed25519. O manifesto identifica a chave de release (`key_id`), a versão do schema e os digests SHA-256 do detector e, quando aplicável, do embedder. A assinatura é verificada com uma chave pública pertencente ao keyring configurado no deployment.
-
-A API e o worker recebem `VISION_MODEL_MANIFEST_PATH` e `VISION_MODEL_TRUSTED_KEYS_JSON`. Os digests assinados têm ainda de coincidir com os ficheiros ONNX e com os valores SHA-256 configurados. Qualquer falha de assinatura, confiança, formato ou integridade interrompe o arranque do provider real. O modo mock/desactivado não necessita de manifesto.
-
-A chave privada é usada apenas no processo de release offline. O utilitário `apps/api/scripts/create_vision_model_manifest.py` cria o envelope assinado e apresenta a chave pública em Base64 para configurar o keyring. Nunca colocar a chave privada no Git, no container ou no volume de modelos.
-
-A assinatura confirma a origem/autorização dos bytes do modelo, mas não mede a qualidade do reconhecimento. A avaliação independente por SKU, loja, sessão, iluminação e oclusão continua obrigatória. A prevenção de rollback e a rotação/revogação automatizada de chaves continuam por implementar. Ver [docs/vision-model-manifest.md](docs/vision-model-manifest.md).
-
 # SMART SHELF AI — Ópticas de utilização
 
 > **Objetivo:** explicar o SMART SHELF AI a partir de três perspetivas: repositor, proprietário/gestor de hipermercado e programador.
@@ -304,6 +294,16 @@ Princípios de integração:
 - Disponibilizar modo de simulação sem apresentar simulações como integrações reais.
 
 ---
+
+## 4.6 Integridade e aprovação de modelos ONNX
+
+O provider ONNX real exige um manifesto JSON assinado com Ed25519. O manifesto identifica a chave de release (`key_id`), a versão do schema e os digests SHA-256 do detector e, quando aplicável, do embedder. A assinatura é verificada com uma chave pública pertencente ao keyring configurado no deployment.
+
+A API e o worker recebem `VISION_MODEL_MANIFEST_PATH` e `VISION_MODEL_TRUSTED_KEYS_JSON`. Os digests assinados têm ainda de coincidir com os ficheiros ONNX e com os valores SHA-256 configurados. Qualquer falha de assinatura, confiança, formato ou integridade interrompe o arranque do provider real. O modo mock/desactivado não necessita de manifesto.
+
+A chave privada é usada apenas no processo de release offline. O utilitário `apps/api/scripts/create_vision_model_manifest.py` cria o envelope assinado e apresenta a chave pública em Base64 para configurar o keyring. Nunca colocar a chave privada no Git, no container ou no volume de modelos.
+
+A assinatura confirma a origem/autorização dos bytes do modelo, mas não mede a qualidade do reconhecimento. A avaliação independente por SKU, loja, sessão, iluminação e oclusão continua obrigatória. A prevenção de rollback e a rotação/revogação automatizada de chaves continuam por implementar. Ver [docs/vision-model-manifest.md](docs/vision-model-manifest.md).
 
 ## 5. Percurso de evolução recomendado
 
