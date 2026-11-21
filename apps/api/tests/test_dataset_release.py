@@ -240,10 +240,12 @@ def test_approval_evidence_is_bound_to_release_fingerprint(tmp_path):
     approval_one = {
         "status": "APPROVED", "mode": "training",
         "record_sha256": "a" * 64, "gate_report_sha256": "b" * 64,
+        "split_annotations_sha256": {"train": "1" * 64, "val": "2" * 64, "test": "3" * 64},
     }
     approval_two = {
         "status": "APPROVED", "mode": "training",
         "record_sha256": "c" * 64, "gate_report_sha256": "b" * 64,
+        "split_annotations_sha256": {"train": "1" * 64, "val": "2" * 64, "test": "4" * 64},
     }
     first, first_created = create_release(
         manifest, split, visual, registry,
@@ -269,5 +271,29 @@ def test_release_rejects_malformed_approval_evidence(tmp_path):
             approval_evidence={
                 "status": "APPROVED", "mode": "training",
                 "record_sha256": "not-a-digest", "gate_report_sha256": "b" * 64,
+            },
+        )
+
+
+def test_release_rejects_incomplete_or_malformed_split_annotation_hashes(tmp_path):
+    manifest, split, visual, provenance = setup_release_inputs(tmp_path)
+    with pytest.raises(ValueError, match="must contain train, val and test"):
+        create_release(
+            manifest, split, visual, tmp_path / "registry",
+            provenance_path=provenance,
+            approval_evidence={
+                "status": "APPROVED", "mode": "inference",
+                "record_sha256": "a" * 64, "gate_report_sha256": "b" * 64,
+                "split_annotations_sha256": {"test": "c" * 64},
+            },
+        )
+    with pytest.raises(ValueError, match="lowercase SHA-256"):
+        create_release(
+            manifest, split, visual, tmp_path / "registry",
+            provenance_path=provenance,
+            approval_evidence={
+                "status": "APPROVED", "mode": "inference",
+                "record_sha256": "a" * 64, "gate_report_sha256": "b" * 64,
+                "split_annotations_sha256": {"train": "a" * 64, "val": "b" * 64, "test": "bad"},
             },
         )
