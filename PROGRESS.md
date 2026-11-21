@@ -1,3 +1,14 @@
+## 2026-11-21 — Manifesto ONNX assinado com Ed25519 (implementação publicada; CI pendente)
+
+- O provider ONNX real passou a exigir um manifesto autenticado por Ed25519 e um keyring explícito de chaves públicas confiáveis.
+- A assinatura cobre o payload JSON canónico com schema versionado, key ID e SHA-256 do detector e, opcionalmente, do embedder. Os hashes são comparados com os ficheiros reais e com as variáveis SHA-256 já configuradas.
+- A validação rejeita assinatura inválida, key ID desconhecido, chave pública com tamanho incorrecto, digest divergente, ficheiro alterado, symlink, JSON ambíguo/malformado e campos extra ou em falta.
+- A API e o vision-worker recebem `VISION_MODEL_MANIFEST_PATH` e `VISION_MODEL_TRUSTED_KEYS_JSON` através do Docker Compose. Foi fixada `cryptography==50.0.2` para Ed25519.
+- Foi criado `apps/api/scripts/create_vision_model_manifest.py` para assinar offline com PEM Ed25519; o utilitário imprime apenas a chave pública Base64. A chave privada nunca é distribuída para os containers.
+- Testes adicionados em `apps/api/tests/test_vision_model_manifest.py`. A suite completa e os workflows ainda precisam de confirmação; não marcar como validado até CI verde.
+- Limitações conhecidas: não há prevenção persistente de rollback nem política automática de revogação/rotação. A assinatura autentica a origem dos pesos, não a precisão do modelo.
+- Especificação operacional: `docs/vision-model-manifest.md`.
+
 ## 2026-11-21 — Encaminhamento de digests ONNX no Docker Compose (validação pendente)
 
 - A revisão da configuração detectou que o provider ONNX real exige `VISION_DETECTOR_MODEL_SHA256` e, quando existe embedder, `VISION_EMBEDDING_MODEL_SHA256`, mas os serviços API e worker não recebiam essas variáveis através do Compose.
