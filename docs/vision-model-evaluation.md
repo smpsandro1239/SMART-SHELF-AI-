@@ -40,7 +40,7 @@ python -m app.dataset_execution \
     --operating-threshold 0.25
 ```
 
-O runner exige as variáveis de contexto do release aprovado, a aprovação explícita para inferência, manifesto ONNX Ed25519 válido, keyring confiável e SHA-256 coerentes. O provider deve usar `VISION_CONFIDENCE_THRESHOLD=0.0` para que o cálculo AP receba todas as detecções; `--operating-threshold` é independente e mede o ponto operacional escolhido.
+O runner exige as variáveis de contexto do release aprovado, a aprovação explícita para inferência, o hash da anotação test e do manifest ligados ao fingerprint do release, correspondência exacta entre imagens COCO e split test, manifesto ONNX Ed25519 válido, keyring confiável e SHA-256 coerentes. O provider deve usar `VISION_CONFIDENCE_THRESHOLD=0.0` para que o cálculo AP receba todas as detecções; `--operating-threshold` é independente e mede o ponto operacional escolhido.
 
 ## Métricas e interpretação
 
