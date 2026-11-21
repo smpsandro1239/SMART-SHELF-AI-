@@ -70,3 +70,21 @@ A decisão de RBAC foi extraída para `apps/api/app/api_security_policy.py`, com
 A lógica de role foi extraída para `apps/api/app/api_security_policy.py`, com categorias `PUBLIC`, `ADMIN_ONLY`, `SUPERVISOR_OR_ADMIN`, `EMPLOYEE_ALLOWLIST` e `AUTHENTICATED_STAFF`. A primeira execução falhou devido a uma importação em falta (`f86ef76`); a falha foi corrigida em `afd2a38`. API CI [44787322362](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44787322362), Quality Gates [44787322405](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44787322405) e Docker Compose [44787322365](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44787322365) passaram; **1389 passed, 1 skipped, 1 warning**.
 
 A refactor centraliza a decisão, mas não fecha a matriz completa endpoint × papel × loja: ainda é necessário verificar cada handler e caminho indirecto. As regras continuam baseadas em grupos de paths/métodos, não em metadata declarativa individual em cada rota.
+## Atualização — política explícita por método e revalidação no handler (2026-11-21)
+
+A classificação genérica `AUTHENTICATED_STAFF` foi removida como fallback. `apps/api/app/api_security_policy.py` contém agora uma política por método e template FastAPI para as 128 combinações inventariadas:
+
+- 2 `PUBLIC`;
+- 25 `ADMIN_ONLY`;
+- 88 `SUPERVISOR_OR_ADMIN`;
+- 13 `EMPLOYEE_ALLOWLIST`.
+
+A correspondência dinâmica compara cada segmento do URL com o template registado e exige coincidência exacta do método. Métodos adicionais em caminhos existentes não herdam permissões. `UNCLASSIFIED` é negado para todos os perfis, incluindo ADMIN. O middleware usa a mesma decisão método/caminho para permitir apenas os endpoints públicos explicitamente declarados.
+
+Foi acrescentado `test_every_registered_versioned_api_route_has_an_explicit_method_policy`, que percorre as rotas FastAPI realmente registadas. O auditor `apps/api/scripts/audit_api_route_policy.py --strict` foi corrigido para distinguir rotas não classificadas de fallbacks legados e foi integrado no API CI.
+
+Foi ainda identificada e corrigida uma janela de revogação de perfil: dez handlers de administração/catálogo não voltavam a carregar o actor na sessão de execução. Passam a chamar `_request_user` antes da operação. O teste `test_admin_role_revocation_between_middleware_and_handler_blocks_store_creation` altera ADMIN para SUPERVISOR depois do middleware e confirma HTTP 403 sem persistência.
+
+**Validação:** commit `311fecc9e13641e6d5eb55465fda646fb2909601` passou API CI [44880841684](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44880841684), Quality Gates [44880841658](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44880841658) e Docker Compose [44880841671](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44880841671). A suite terminou com **1407 passed, 1 skipped, 1 warning**; as migrações e os smokes PostgreSQL 16 passaram.
+
+**Risco residual:** a matriz explícita comprova que cada método/rota tem uma categoria RBAC, mas não demonstra por si só a matriz completa endpoint × ADMIN/SUPERVISOR/EMPLOYEE × loja. A revisão handler-by-handler de filtros de tenant, atribuições e caminhos indirectos continua aberta. SCA, secret scanning, DAST e pentest externo não foram executados e não são declarados concluídos.
