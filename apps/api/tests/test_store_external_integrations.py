@@ -278,7 +278,7 @@ def test_accepted_signed_snapshot_updates_integration_last_seen(db_session, monk
 
     store_id, image_id, admin_id = build_store_image(db_session)
     request = SimpleNamespace(state=SimpleNamespace(user_id=admin_id))
-    secret = "integration-test-secret-with-at-least-32-bytes"
+    secret = "test-only-store-integration-hmac-key-not-for-deployment"
     monkeypatch.setattr(
         main_module.settings,
         "artifact_inventory_hmac_keys_json",

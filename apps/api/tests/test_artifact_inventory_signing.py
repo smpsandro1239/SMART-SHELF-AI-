@@ -12,7 +12,7 @@ from app.artifact_inventory_signing import (
 )
 
 
-SECRET = "test-inventory-secret-with-at-least-32-bytes"
+SECRET = "test-only-artifact-inventory-signing-key-not-for-deployment"
 GENERATED_AT = datetime(2026, 11, 16, 0, 0, tzinfo=timezone.utc)
 ENTRIES = [
     {

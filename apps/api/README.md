@@ -192,7 +192,7 @@ Configurar no ambiente da API `JWT_SECRET_KEY` e `BOOTSTRAP_ADMIN_KEY` com valor
     curl -X POST http://localhost:8000/api/v1/auth/bootstrap \
       -H "Content-Type: application/json" \
       -H "X-Bootstrap-Key: $BOOTSTRAP_ADMIN_KEY" \
-      -d '{"email":"admin@example.com","full_name":"Administrador","password":"uma-palavra-passe-com-12-ou-mais-caracteres"}'
+      -d '{"email":"admin@example.invalid","full_name":"Administrador","password":"<replace-with-unique-admin-password>"}'
 
 3. Usar o `access_token` devolvido como `Authorization: Bearer <token>`.
 4. Consultar `GET /api/v1/auth/me`.
