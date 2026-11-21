@@ -213,7 +213,8 @@ def evaluate_coco_detections(
         fn = total_gt - tp
         precision = tp / (tp + fp) if tp + fp else None
         recall = tp / total_gt if total_gt else None
-        f1 = (2 * precision * recall / (precision + recall)) if precision is not None and recall is not None and precision + recall else None
+        f1_denominator = 2 * tp + fp + fn
+        f1 = (2 * tp / f1_denominator) if f1_denominator else None
         ap_values = [value for value in ap_by_iou.values() if value is not None]
         ap50 = ap_by_iou["0.50"]
         ap50_95 = sum(ap_values) / len(ap_values) if ap_values else None
@@ -248,11 +249,8 @@ def evaluate_coco_detections(
 
     overall_precision = total_tp / (total_tp + total_fp) if total_tp + total_fp else None
     overall_recall = total_tp / (total_tp + total_fn) if total_tp + total_fn else None
-    overall_f1 = (
-        2 * overall_precision * overall_recall / (overall_precision + overall_recall)
-        if overall_precision is not None and overall_recall is not None and overall_precision + overall_recall
-        else None
-    )
+    overall_f1_denominator = 2 * total_tp + total_fp + total_fn
+    overall_f1 = (2 * total_tp / overall_f1_denominator) if overall_f1_denominator else None
     return {
         "evaluation": "coco-object-detection-ap101-v1",
         "image_count": len(image_sizes),
