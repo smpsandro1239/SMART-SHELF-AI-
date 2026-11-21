@@ -184,3 +184,13 @@
 - SCA, secret scanning, DAST e pentest externo não foram executados.
 - API CI [44881182965](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44881182965), commit `8775aaffc8db199dd6c43a61dafd03c019f519fc`, executou o gate `audit_api_route_policy.py --strict`: **128 métodos, 0 UNCLASSIFIED, 0 fallbacks legados**; migrações PostgreSQL 16, smokes e suite **1407 passed, 1 skipped, 1 warning**.
 - Quality Gates [44880841658](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44880841658) e Docker Compose [44880841671](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44880841671) passaram no commit de código/testes `311fecc9`. A sincronização documental `5cdcf4b` também passou Quality Gates [44881922766](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44881922766). Não há execução local.
+
+## 2026-11-21 — Matriz exaustiva de decisões RBAC
+
+Foi acrescentado um teste parametrizado por todas as entradas de API_ROUTE_POLICIES. Para cada método/template, o teste verifica a decisão de ADMIN, SUPERVISOR e EMPLOYEE segundo a categoria declarada, além de detectar chaves duplicadas e categorias fora do conjunto permitido. Rotas não registadas continuam a ser negadas a todos os perfis.
+
+O commit b1c60246938befa86233b49f6d8a4841617fbfdc passou Quality Gates [44882467613](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44882467613): compilação Python, build Web e **1408 passed, 1 skipped, 1 warning**. O aviso é a depreciação externa anyio.abc.BlockingPortal emitida pelo Starlette TestClient.
+
+Docker Compose demo smoke [44882467596](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44882467596) passou. API CI [44882467564](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44882467564), com smokes PostgreSQL 16, ainda estava em execução no momento deste registo.
+
+A auditoria handler × perfil × loja permanece aberta: a matriz centralizada não prova isolamento de cada recurso nem caminhos indirectos. SCA, secret scan e DAST não foram executados.

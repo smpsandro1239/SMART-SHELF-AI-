@@ -929,3 +929,12 @@ A autorização HTTP foi convertida de grupos/fallback genérico para um registo
 Também foi fechada uma janela de revogação de perfil em dez handlers de administração/catálogo, que agora recarregam o actor na sessão de execução. O teste integrado simula ADMIN → SUPERVISOR entre middleware e handler e confirma ausência de escrita.
 
 Validação no commit `311fecc9e13641e6d5eb55465fda646fb2909601`: Quality Gates e Docker Compose passaram; **1407 testes aprovados, 1 ignorado e 1 aviso**. O API CI [44881182965](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44881182965), commit `8775aaff`, confirmou o gate estrito com 128 métodos, 0 rotas não classificadas e 0 fallbacks legados, além dos smokes PostgreSQL e da mesma suite API. A matriz endpoint × perfil × loja continua como trabalho aberto; classificação explícita não prova isoladamente o isolamento de tenant.
+
+### 2026-11-21 — Cobertura completa das decisões RBAC por perfil
+
+- Adicionado teste que percorre todas as entradas explícitas de método/template e verifica as decisões para ADMIN, SUPERVISOR e EMPLOYEE.
+- O teste também rejeita políticas duplicadas, categorias não suportadas e confirma que uma rota não registada é negada a todos os perfis.
+- Quality Gates [44882467613](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44882467613) passou: compilação Python, build Web e **1408 testes aprovados, 1 ignorado e 1 aviso**.
+- Docker Compose demo smoke [44882467596](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44882467596) passou.
+- API CI [44882467564](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44882467564) continuava em execução, incluindo os smokes PostgreSQL 16.
+- Limite: esta cobertura verifica a política central por método/rota/perfil; não substitui a auditoria handler × perfil × loja e dos caminhos indirectos.

@@ -1219,3 +1219,11 @@ Critério global: nenhuma capacidade pode ser marcada como concluída sem códig
 - [x] Validar o helper e os testes de consumo no API CI/Quality Gates do commit `4beb3f0` (1404 passed, 1 skipped, 1 warning).
 - [x] Corrigir o teste SQL: separar a construção da query da sua execução para compilar PostgreSQL sem tentar executar `FOR UPDATE` em SQLite nem depender de tabelas não criadas.
 - [x] Reexecutar API CI, Quality Gates e Docker Compose no SHA corrigido `4beb3f0`; os três workflows passaram.
+
+## Segurança — matriz completa de políticas RBAC (2026-11-21)
+
+- [x] Acrescentar o teste test_every_explicit_api_route_policy_matches_the_complete_role_matrix em apps/api/tests/test_security.py: valida todas as entradas método/template contra ADMIN, SUPERVISOR e EMPLOYEE, rejeita políticas duplicadas/categorias desconhecidas e confirma fail-closed para rotas não registadas.
+- [x] Quality Gates [44882467613](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44882467613) passou no commit b1c60246938befa86233b49f6d8a4841617fbfdc: compilação Python, build TypeScript/produção, detector Impeccable e suite API **1408 passed, 1 skipped, 1 warning**.
+- [ ] Aguardar conclusão da API CI [44882467564](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44882467564), incluindo smokes PostgreSQL 16 e suite API; não declarar essa pipeline concluída enquanto estiver em execução.
+- [ ] Prosseguir a matriz handler × perfil × loja e caminhos indirectos. A matriz RBAC prova classificação por método/rota, não o isolamento de cada recurso.
+- [ ] Executar SCA, secret scan e DAST com scanners reais disponíveis; nenhuma execução é declarada nesta ronda.

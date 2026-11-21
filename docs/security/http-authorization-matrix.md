@@ -453,3 +453,13 @@ As decisões pendentes e a proposta de aprovação independente estão em datase
 ## Validação CI mais recente — 19-11-2026
 
 O API CI [44606506802](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44606506802) passou, incluindo os smokes PostgreSQL 16 de autorização de sessões de captura, avaliação SKU revista, listagem de funcionários e fila de revisão/retention. A suite API terminou com **1343 testes aprovados, 1 ignorado e 1 aviso**. O resultado confirma estes cenários específicos; não fecha a auditoria global dos 128 endpoints versionados.
+
+## Matriz completa de decisões por perfil — 2026-11-21
+
+Foi acrescentado o teste test_every_explicit_api_route_policy_matches_the_complete_role_matrix em apps/api/tests/test_security.py. O teste percorre todas as entradas de API_ROUTE_POLICIES e confirma, para cada método/template, a decisão dos três perfis. Verifica ainda ausência de políticas duplicadas, validade das categorias e recusa de rotas não registadas para todos os perfis.
+
+Quality Gates [44882467613](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44882467613) passou no commit b1c60246938befa86233b49f6d8a4841617fbfdc: **1408 passed, 1 skipped, 1 warning**, com compilação Python e build Web aprovados. O aviso continua a ser a depreciação externa de anyio.abc.BlockingPortal no Starlette TestClient.
+
+Docker Compose demo smoke [44882467596](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44882467596) passou. API CI [44882467564](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44882467564), incluindo os smokes PostgreSQL 16, ainda estava em execução quando esta atualização foi preparada.
+
+Esta evidência não fecha a auditoria de isolamento multi-loja por handler nem a matriz endpoint × perfil × tenant.

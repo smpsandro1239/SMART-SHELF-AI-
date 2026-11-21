@@ -90,3 +90,9 @@ Foi ainda identificada e corrigida uma janela de revogação de perfil: dez hand
 **Validação adicional do gate estrito:** API CI [44881182965](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44881182965), commit `8775aaff`, confirmou 128 métodos registados, 0 rotas `UNCLASSIFIED` e 0 fallbacks legados; os smokes PostgreSQL e 1407 testes passaram.
 
 **Risco residual:** a matriz explícita comprova que cada método/rota tem uma categoria RBAC, mas não demonstra por si só a matriz completa endpoint × ADMIN/SUPERVISOR/EMPLOYEE × loja. A revisão handler-by-handler de filtros de tenant, atribuições e caminhos indirectos continua aberta. SCA, secret scanning, DAST e pentest externo não foram executados e não são declarados concluídos.
+
+## Atualização — matriz de decisão RBAC completa (2026-11-21)
+
+O teste test_every_explicit_api_route_policy_matches_the_complete_role_matrix percorre todas as políticas método/template e verifica as decisões para ADMIN, SUPERVISOR e EMPLOYEE, incluindo duplicados, categorias não suportadas e rotas desconhecidas. Quality Gates [44882467613](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44882467613) passou no commit b1c60246938befa86233b49f6d8a4841617fbfdc, com **1408 testes aprovados, 1 ignorado e 1 aviso**, compilação Python e build Web aprovados. Docker Compose demo smoke [44882467596](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44882467596) também passou.
+
+A API CI [44882467564](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44882467564), que inclui os smokes PostgreSQL 16, permanecia em execução. A auditoria handler × perfil × loja, SCA, secret scan e DAST continuam abertos; esta alteração não os declara concluídos.
