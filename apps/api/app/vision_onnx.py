@@ -44,7 +44,29 @@ def _env_float(name: str, default: float, minimum: float = 0.0, maximum: float =
     return value
 
 
-PREPROCESSING_VERSION = "rgb-letterbox-bilinear-114-v1"
+DETECTOR_PREPROCESSING_VERSION = "rgb-letterbox-bilinear-114-v1"
+EMBEDDING_PREPROCESSING_VERSION = "rgb-crop-stretch-bilinear-v1"
+# Backwards-compatible name for the detector preprocessing contract.
+PREPROCESSING_VERSION = DETECTOR_PREPROCESSING_VERSION
+
+
+def _normalize_approved_sha256(value: str, setting_name: str) -> str:
+    if (
+        not isinstance(value, str)
+        or len(value) != 64
+        or any(char not in "0123456789abcdefABCDEF" for char in value)
+    ):
+        raise ONNXConfigurationError(f"{setting_name} must be a 64-character SHA-256 hex digest")
+    return value.lower()
+
+
+def _env_sha256(name: str, *, required: bool) -> str | None:
+    raw = os.getenv(name, "").strip()
+    if not raw:
+        if required:
+            raise ONNXConfigurationError(f"{name} is required for a real ONNX provider")
+        return None
+    return _normalize_approved_sha256(raw, name)
 
 
 def _sha256_file(path: Path) -> str:
@@ -89,6 +111,8 @@ class ONNXShelfVisionProvider:
         providers: list[str] | None = None,
         class_labels: dict[int, str] | None = None,
         sku_match_labels: set[str] | None = None,
+        expected_detector_sha256: str | None = None,
+        expected_embedding_sha256: str | None = None,
     ):
         if isinstance(input_size, bool) or not isinstance(input_size, int) or not 32 <= input_size <= 4096:
             raise ONNXConfigurationError("VISION_INPUT_SIZE must be an integer between 32 and 4096")
@@ -139,8 +163,27 @@ class ONNXShelfVisionProvider:
         self.sku_match_labels_sha256 = _canonical_sha256(sorted(self.sku_match_labels))
         if self.detector_path.is_symlink() or (self.embedding_path and self.embedding_path.is_symlink()):
             raise ONNXConfigurationError("Model paths must not be symbolic links")
+        self.expected_detector_sha256 = (
+            _normalize_approved_sha256(expected_detector_sha256, "VISION_DETECTOR_MODEL_SHA256")
+            if expected_detector_sha256 is not None else None
+        )
+        self.expected_embedding_sha256 = (
+            _normalize_approved_sha256(expected_embedding_sha256, "VISION_EMBEDDING_MODEL_SHA256")
+            if expected_embedding_sha256 is not None else None
+        )
+        if self.expected_embedding_sha256 is not None and self.embedding_path is None:
+            raise ONNXConfigurationError(
+                "VISION_EMBEDDING_MODEL_SHA256 cannot be set without VISION_EMBEDDING_MODEL_PATH"
+            )
         self.detector_sha256 = _sha256_file(self.detector_path)
+        if self.expected_detector_sha256 is not None and self.detector_sha256 != self.expected_detector_sha256:
+            raise ONNXConfigurationError("Detector model SHA-256 does not match approved SHA-256")
         self.embedding_sha256 = _sha256_file(self.embedding_path) if self.embedding_path else None
+        if (
+            self.expected_embedding_sha256 is not None
+            and self.embedding_sha256 != self.expected_embedding_sha256
+        ):
+            raise ONNXConfigurationError("Embedding model SHA-256 does not match approved SHA-256")
         detector_fingerprint = _canonical_sha256({
             "detector_sha256": self.detector_sha256,
             "class_labels_sha256": self.class_labels_sha256,
@@ -148,21 +191,24 @@ class ONNXShelfVisionProvider:
             "input_size": self.input_size,
             "confidence_threshold": self.confidence_threshold,
             "max_detections": self.max_detections,
-            "preprocessing_version": PREPROCESSING_VERSION,
+            "preprocessing_version": DETECTOR_PREPROCESSING_VERSION,
         })
         self.model_version = _fingerprinted_version(self.configured_model_version, detector_fingerprint)
         if self.embedding_sha256:
             embedding_fingerprint = _canonical_sha256({
                 "embedding_sha256": self.embedding_sha256,
                 "input_size": self.input_size,
-                "preprocessing_version": PREPROCESSING_VERSION,
+                "preprocessing_version": EMBEDDING_PREPROCESSING_VERSION,
             })
             self.embedding_model_version = _fingerprinted_version(
                 self.configured_embedding_model_version, embedding_fingerprint
             )
         else:
             self.embedding_model_version = None
-        self.preprocessing_version = PREPROCESSING_VERSION
+        self.preprocessing_version = DETECTOR_PREPROCESSING_VERSION
+        self.embedding_preprocessing_version = (
+            EMBEDDING_PREPROCESSING_VERSION if self.embedding_path else None
+        )
         try:
             import onnxruntime as ort
             import numpy as np
@@ -383,6 +429,10 @@ def create_provider() -> ONNXShelfVisionProvider:
         raise ONNXConfigurationError("VISION_MODEL_VERSION cannot be empty")
     if embedder and not embedding_version:
         raise ONNXConfigurationError("VISION_EMBEDDING_MODEL_VERSION cannot be empty when an embedder is configured")
+    expected_detector_sha256 = _env_sha256("VISION_DETECTOR_MODEL_SHA256", required=True)
+    expected_embedding_sha256 = _env_sha256(
+        "VISION_EMBEDDING_MODEL_SHA256", required=bool(embedder)
+    )
     return ONNXShelfVisionProvider(
         detector,
         embedder,
@@ -393,4 +443,6 @@ def create_provider() -> ONNXShelfVisionProvider:
         max_detections=_env_int("VISION_MAX_DETECTIONS", 300, 1, 2000),
         class_labels=class_labels,
         sku_match_labels=sku_match_labels,
+        expected_detector_sha256=expected_detector_sha256,
+        expected_embedding_sha256=expected_embedding_sha256,
     )
