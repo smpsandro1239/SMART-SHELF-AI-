@@ -16,7 +16,7 @@ COMPOSE_FILE = Path(__file__).resolve().parents[3] / "docker-compose.yml"
 def test_compose_forwards_approved_model_digests_to_every_real_provider_process(service, setting):
     compose = COMPOSE_FILE.read_text(encoding="utf-8")
     service_match = re.search(
-        rf"(?ms)^  {re.escape(service)}:\n(?P<body>.*?)(?=^  [a-zA-Z0-9_-]+:\n|\\Z)",
+        rf"(?ms)^  {re.escape(service)}:\n(?P<body>.*?)(?=^  [a-zA-Z0-9_-]+:\n|\Z)",
         compose,
     )
     assert service_match is not None, f"Missing Docker Compose service: {service}"
