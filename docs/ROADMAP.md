@@ -981,3 +981,10 @@ Validação no commit `311fecc9e13641e6d5eb55465fda646fb2909601`: Quality Gates 
 - Worker testado para RuntimeError/TimeoutError: FAILED, erro sanitizado, deteções anteriores preservadas e nenhum snapshot de inventário.
 - API CI e Quality Gates: **1422 passed, 1 skipped**; PostgreSQL 16 e Docker Compose smoke aprovados.
 - A precisão do detector real continua por validar: falta modelo aprovado, dataset autorizado e métricas reproduzíveis por SKU/cenário.
+
+
+### Isolamento multi-loja — listagem de sessões de captura (2026-11-21)
+
+- Confirmado no handler `list_capture_sessions` o filtro por `CaptureSession.store_id` para utilizadores não ADMIN.
+- Acrescentado teste com duas lojas: a sessão da loja estrangeira não aparece na listagem do supervisor, incluindo quando este manipula o filtro `shelf_id` para apontar à prateleira estrangeira.
+- A validação local não foi executada neste ambiente; a suite CI será usada para confirmar o novo teste. A cobertura desta rota não fecha a matriz global handler × perfil × loja.
