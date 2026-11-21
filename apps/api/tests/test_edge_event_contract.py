@@ -18,7 +18,7 @@ from app.edge_event_contract import (
 def make_event(**overrides):
     values = {
         "schema_version": 1,
-        "event_id": uuid4(),
+        "event_id": str(uuid4()),
         "event_type": "DEVICE_HEARTBEAT",
         "device_id": "edge-gateway-01",
         "store_id": 12,
@@ -37,6 +37,14 @@ def test_heartbeat_event_accepts_timezone_aware_tenant_bound_envelope():
     assert event.store_id == 12
     assert event.device_id == "edge-gateway-01"
     assert event.event_type == "DEVICE_HEARTBEAT"
+
+
+def test_wire_json_round_trip_accepts_uuid_and_iso_timestamp_strings():
+    event = make_event()
+    parsed = EdgeEventEnvelope.model_validate_json(event.model_dump_json())
+
+    assert parsed.event_id == event.event_id
+    assert parsed.occurred_at == event.occurred_at
 
 
 def test_shelf_capture_requires_hash_dimensions_and_supported_media_type():
