@@ -11,7 +11,7 @@
 
 ## Deploy — passagem dos digests ONNX para API e worker (2026-11-21, validação CI pendente)
 
-- [ ] Passar `VISION_DETECTOR_MODEL_SHA256` e `VISION_EMBEDDING_MODEL_SHA256` explicitamente para os serviços `api` e `vision-worker` no Docker Compose; sem esta passagem, o provider real falha fechado mesmo quando os digests existem no ambiente do host.
+- [x] Passar `VISION_DETECTOR_MODEL_SHA256` e `VISION_EMBEDDING_MODEL_SHA256` para os serviços `api` e `vision-worker` no Docker Compose.
 - [x] Testar o contrato de configuração dos dois serviços, dos dois digests e das variáveis de manifesto/keyring; `docker compose config` e smoke de arranque continuam dependentes de CI.
 - [ ] Manter os digests vazios por omissão: não enfraquecer o modo fail-closed nem inventar hashes para pesos não fornecidos.
 - [ ] Manifesto Ed25519 assinado e trust roots continuam pendentes; esta alteração apenas encaminha as âncoras SHA-256 existentes.
