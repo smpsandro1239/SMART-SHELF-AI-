@@ -1,3 +1,13 @@
+## Integridade do provider ONNX — pinning de pesos e pré-processamento (2026-11-21)
+
+- [x] Exigir VISION_DETECTOR_MODEL_SHA256 no factory do provider real e validar formato SHA-256.
+- [x] Exigir VISION_EMBEDDING_MODEL_SHA256 quando VISION_EMBEDDING_MODEL_PATH está configurado.
+- [x] Comparar os digests aprovados com os ficheiros antes de abrir sessões ONNX; manter a revalidação do digest depois do carregamento para detectar substituição concorrente.
+- [x] Separar a identidade de pré-processamento do detetor (letterbox) e do extrator (crop stretch), incluindo-a nos fingerprints efectivos.
+- [x] Adicionar regressões para digest ausente, malformado, divergente, válido e identidade de pré-processamento. API CI e Quality Gates: 1432 passed, 1 skipped; Docker Compose e Security Scans passaram no commit [663bf49](https://github.com/smpsandro1239/SMART-SHELF-AI-/commit/663bf495f6d15a4bcc92aa6fedc87d18e47e4e71).
+- [ ] Implementar manifesto assinado e verificação de assinatura com chave pública de confiança; os digests actuais são âncoras de confiança fornecidas pela configuração de deployment, não assinaturas digitais.
+- [ ] Validar pesos reais autorizados, dataset anotado e métricas por SKU/cenário antes de activar inferência em piloto.
+
 ## Política de autorização da API — centralização
 
 - [x] Extrair a decisão RBAC do middleware para `apps/api/app/api_security_policy.py`, mantendo autenticação Bearer e papel autoritativo lido da base de dados.

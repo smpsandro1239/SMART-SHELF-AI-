@@ -1,3 +1,13 @@
+## 2026-11-21 — Pinning de integridade dos modelos ONNX (validado em CI)
+
+- A auditoria confirmou que o provider calculava SHA-256 dos pesos e incorporava o digest no fingerprint, mas não comparava o ficheiro com um digest previamente aprovado. O comportamento anterior permitia que um modelo substituído antes do arranque fosse simplesmente identificado como uma nova versão.
+- Primeiro foram publicados testes de regressão. O Quality Gates observou RED: 9 falhas, 1423 aprovados e 1 ignorado. As falhas demonstraram a ausência de suporte aos digests no provider e a ausência de exigência dos digests no factory real.
+- ONNXShelfVisionProvider passou a validar o formato dos digests esperados e a comparar os hashes do detetor e do embedder antes de criar sessões ONNX. O factory create_provider() falha fechado quando falta o digest do detetor ou, havendo embedder, o digest do embedder. A verificação pós-carregamento existente foi preservada para detectar substituição durante a abertura da sessão.
+- O fingerprint do detetor usa rgb-letterbox-bilinear-114-v1; o fingerprint do extrator usa rgb-crop-stretch-bilinear-v1. Assim, os identificadores não confundem pipelines de pré-processamento distintos.
+- Commits: implementação 1b03b66cd24c9efed2b16c41a71cbfd2f5c2c2ea; testes e asserção do fingerprint 663bf495f6d15a4bcc92aa6fedc87d18e47e4e71.
+- GREEN: API CI [44894912840](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44894912840) e Quality Gates [44894912818](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44894912818) passaram, com 1432 passed, 1 skipped. Os smokes PostgreSQL 16, compilação Python e build Web passaram. Docker Compose [44894912826](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44894912826) e Security Scans [44894912752](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44894912752) também passaram.
+- Limites: nenhum peso ONNX real foi fornecido ou avaliado. Os hashes aprovados são âncoras de confiança da configuração de deployment; ainda não existe manifesto assinado com verificação de assinatura. Não activar provider real em piloto sem pesos, licenças, dataset e métricas autorizados.
+
 ## 2026-11-21 — Isolamento multi-loja do histórico de alertas (validado)
 
 - A revisão handler-a-handler confirmou que `GET /api/v1/observation-alerts/{alert_id}/events` carrega o alerta pai e chama `_require_alert_supervisor`, que verifica o papel e a loja antes de devolver eventos.

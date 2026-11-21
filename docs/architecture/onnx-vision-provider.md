@@ -42,7 +42,9 @@ VISION_CLASS_LABELS_JSON={"0":"product","1":"empty_facing"}
 VISION_SKU_MATCH_LABELS=product
 VISION_MODELS_DIR=./models
 VISION_DETECTOR_MODEL_PATH=/models/shelf-detector.onnx
+VISION_DETECTOR_MODEL_SHA256=<64-character-approved-sha256>
 VISION_EMBEDDING_MODEL_PATH=/models/product-embedder.onnx
+VISION_EMBEDDING_MODEL_SHA256=<64-character-approved-sha256>
 VISION_MODEL_VERSION=shelf-detector-v1
 VISION_EMBEDDING_MODEL_VERSION=product-embedding-v1
 VISION_INPUT_SIZE=640
@@ -50,7 +52,7 @@ VISION_CONFIDENCE_THRESHOLD=0.25
 VISION_MAX_DETECTIONS=300
 ```
 
-Para executar apenas deteção, deixar `VISION_EMBEDDING_MODEL_PATH` vazio. O mapa JSON tem de corresponder exactamente à ordem/IDs de classe exportados pelo modelo. O provider calcula SHA-256 dos pesos e um fingerprint SHA-256 da configuração efectiva (digest dos pesos, mapa de classes, dimensão, threshold, limite de deteções e versão de pré-processamento). A versão persistida em cada deteção é `versão-configurada@fingerprint`; para o embedder, a versão efectiva inclui o fingerprint dos seus pesos e pré-processamento. Alterações ao modelo, labels ou configuração geram uma identidade diferente. As versões efectivas dos embeddings têm de ser usadas ao aprovar novos exemplares; exemplares aprovados sob uma versão anterior não são reutilizados automaticamente. Sem mapa de classes, o provider ONNX não arranca. O `class_id` devolvido pelo modelo é preservado até à resolução da etiqueta; um ID ausente no mapa interrompe a análise em vez de ser convertido em `product`. Não ativar o modo `real` até os pesos e a sua licença estarem aprovados.
+Para executar apenas deteção, deixar `VISION_EMBEDDING_MODEL_PATH` vazio; nesse caso, `VISION_EMBEDDING_MODEL_SHA256` não é necessário. O factory real exige sempre `VISION_DETECTOR_MODEL_SHA256` e exige `VISION_EMBEDDING_MODEL_SHA256` quando existe um extrator. Cada valor tem de ser um digest SHA-256 hexadecimal de 64 caracteres obtido a partir do artefacto aprovado, não um hash calculado e aceite automaticamente no arranque. O provider compara os digests configurados com os ficheiros antes de abrir sessões ONNX e volta a calcular os hashes depois de abrir cada sessão para detectar substituição durante o carregamento. O digest aprovado deve ser injectado por configuração de deployment protegida e revisto juntamente com a origem/licença do artefacto. O mapa JSON tem de corresponder exactamente à ordem/IDs de classe exportados pelo modelo. O provider verifica os SHA-256 dos pesos contra digests aprovados e calcula um fingerprint SHA-256 da configuração efectiva (digest dos pesos, mapa de classes, dimensão, threshold, limite de deteções e versão de pré-processamento). A versão persistida em cada deteção é `versão-configurada@fingerprint`; para o embedder, a versão efectiva inclui o fingerprint dos seus pesos e pré-processamento. Alterações ao modelo, labels ou configuração geram uma identidade diferente. As versões efectivas dos embeddings têm de ser usadas ao aprovar novos exemplares; exemplares aprovados sob uma versão anterior não são reutilizados automaticamente. Sem mapa de classes, o provider ONNX não arranca. O `class_id` devolvido pelo modelo é preservado até à resolução da etiqueta; um ID ausente no mapa interrompe a análise em vez de ser convertido em `product`. Não ativar o modo `real` até os pesos e a sua licença estarem aprovados.
 
 O Compose monta a pasta de modelos em modo só de leitura. A API continua sem executar inferência: o processamento é feito pelo worker separado.
 
@@ -94,8 +96,9 @@ O provider utiliza ONNX Runtime CPU, NumPy e Pillow. O runtime permite carregar 
 
 - O provider espera output de deteção pós-NMS com seis colunas; não é um conversor universal de modelos YOLO.
 - O mapa de classes converte `class_id` em etiquetas semânticas, mas ainda não identifica SKU; apenas labels explicitamente autorizadas em `VISION_SKU_MATCH_LABELS` geram embeddings/entram no matching. `empty_facing` não pode ser associado a um SKU.
-- O digest SHA-256 dos ficheiros e o fingerprint da configuração ficam incorporados na versão efectiva persistida em `model_version`/`embedding_model_version` (sem migration adicional). O provider recusa symlinks e volta a calcular o digest depois de abrir a sessão ONNX para detectar substituição concorrente durante o carregamento. A persistência de campos separados para cada digest e um manifesto assinado continuam pendentes.
+- Os digests SHA-256 aprovados dos ficheiros e o fingerprint da configuração ficam incorporados na versão efectiva persistida em `model_version`/`embedding_model_version` (sem migration adicional). O provider recusa symlinks, compara o digest configurado antes de abrir a sessão ONNX e volta a calcular o digest depois do carregamento para detectar substituição concorrente. A configuração de deployment é a âncora de confiança; um manifesto assinado e a persistência de campos separados para cada digest continuam pendentes.
 - O extrator é opcional e requer exemplares aprovados na mesma versão de embedding.
+- Os digests aprovados são fornecidos por configuração de deployment: ainda não existe manifesto assinado nem verificação criptográfica da origem do fornecedor.
 - O provider não calcula quantidade física na prateleira, planograma, stock contabilístico ou quantidade a repor.
 - Não foram incluídos pesos ONNX no repositório nem executado benchmark de um modelo real.
 

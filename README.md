@@ -794,7 +794,7 @@ A principal referência arquitetural é a separação entre deteção genérica 
 
 Foi adicionado um provider local CPU-first em `apps/api/app/vision_onnx.py`, compatível com o contrato `VisionProvider`. Suporta um detetor ONNX pós-NMS e, opcionalmente, um extrator ONNX de embeddings para matching de SKU. O Compose monta os pesos a partir de uma pasta local em modo só de leitura; os modelos não são descarregados nem versionados pelo projeto.
 
-**Importante:** as Settings mantêm a visão `disabled` por defeito. O Docker Compose selecciona explicitamente o provider `mock` apenas para a demonstração local; este modo é recusado em produção. Para inferência real é obrigatório configurar `VISION_PROVIDER_MODE=real`, `VISION_PROVIDER_FACTORY=app.vision_onnx:create_provider`, pesos autorizados e `VISION_CLASS_LABELS_JSON` com o mapeamento exacto de `class_id` para etiquetas semânticas. Classes desconhecidas ou outputs fora do contrato fazem a inferência falhar. O mapa de classes não identifica SKU; sem embedder e exemplares aprovados, o matching abstém com `UNKNOWN`.
+**Importante:** as Settings mantêm a visão `disabled` por defeito. O Docker Compose selecciona explicitamente o provider `mock` apenas para a demonstração local; este modo é recusado em produção. Para inferência real é obrigatório configurar `VISION_PROVIDER_MODE=real`, `VISION_PROVIDER_FACTORY=app.vision_onnx:create_provider`, pesos autorizados, `VISION_DETECTOR_MODEL_SHA256` e `VISION_CLASS_LABELS_JSON` com o mapeamento exacto de `class_id` para etiquetas semânticas. Se existir `VISION_EMBEDDING_MODEL_PATH`, também é obrigatório `VISION_EMBEDDING_MODEL_SHA256`. Os digests aprovados são comparados antes de abrir as sessões ONNX e os ficheiros são novamente verificados depois do carregamento. Classes desconhecidas ou outputs fora do contrato fazem a inferência falhar. Os fingerprints distinguem o pré-processamento do detetor (letterbox) e do extrator (crop stretch). Os digests configurados são âncoras de confiança da configuração de deployment, não assinaturas digitais do fornecedor. O mapa de classes não identifica SKU; sem embedder e exemplares aprovados, o matching abstém com `UNKNOWN`.
 
 - [Contrato, configuração e execução do provider ONNX](docs/architecture/onnx-vision-provider.md)
 - [Exemplo de variáveis de ambiente](apps/api/.env.vision.example)
@@ -1800,16 +1800,17 @@ Esta alteração fecha a janela entre publicação e registo da linhagem para os
 
 ## Última validação técnica — 2026-11-21
 
-Commit validado: [a345746](https://github.com/smpsandro1239/SMART-SHELF-AI-/commit/a345746200eb6ea8b0035bd2cdba7c188de87ef9).
+Commit validado: [663bf49](https://github.com/smpsandro1239/SMART-SHELF-AI-/commit/663bf495f6d15a4bcc92aa6fedc87d18e47e4e71).
 
-- API CI: **1422 testes aprovados, 1 ignorado**, migrations e smokes PostgreSQL 16 aprovados.
-- Quality Gates: **1422 testes aprovados, 1 ignorado**; compilação Python e build Web aprovados.
+- API CI: **1432 testes aprovados, 1 ignorado**, migrations e smokes PostgreSQL 16 aprovados.
+- Quality Gates: **1432 testes aprovados, 1 ignorado**; compilação Python e build Web aprovados.
 - Docker Compose demo smoke: aprovado.
 - SCA: pip-audit sem vulnerabilidades conhecidas; npm audit e Gitleaks aprovados.
 - OWASP ZAP Baseline e API safe-mode: 0 alertas High, Medium e Low. Permanecem apenas alertas informativos, incluindo respostas 401 esperadas no scan sem autenticação.
 - Segurança multi-loja: 22 handlers com autorização de tenant antes de adquirir locks e revalidação após refresh.
-- Computer Vision: testes adicionais para boxes invertidas/degeneradas, padding letterbox, clipping parcial e falhas/timeout do worker. O worker preserva deteções anteriores e não altera inventário quando a inferência falha.
+- Computer Vision: testes adicionais para boxes invertidas/degeneradas, padding letterbox, clipping parcial, falhas/timeout do worker e integridade dos modelos ONNX. O worker preserva deteções anteriores e não altera inventário quando a inferência falha.
+- Integridade ONNX: VISION_DETECTOR_MODEL_SHA256 é obrigatório no provider real; VISION_EMBEDDING_MODEL_SHA256 é obrigatório quando existe embedder. O fingerprint do extrator usa uma versão de pré-processamento distinta do detetor.
 
 Relatórios: [TODO](TODO.md), [PROGRESS](PROGRESS.md), [auditoria de dependências e ZAP](docs/security/dependency-audit-2026-11-21.md), [ordem de locks por tenant](docs/security/tenant-lock-order.md) e [headers HTTP](docs/security/http-security-headers.md).
 
-**Limitação importante:** 1422 testes aprovados não significam que o detector tenha precisão comercial validada. Continua a faltar modelo ONNX real aprovado, dataset autorizado anotado, métricas por SKU/cenário, integração CCTV/RTSP/ONVIF e validação com dados POS/ERP/WMS reais. O percurso demo continua a usar dados sintéticos e provider mock.
+**Limitação importante:** 1432 testes aprovados não significam que o detector tenha precisão comercial validada. Continua a faltar modelo ONNX real aprovado e assinado por manifesto verificável, dataset autorizado anotado, métricas por SKU/cenário, integração CCTV/RTSP/ONVIF e validação com dados POS/ERP/WMS reais. O percurso demo continua a usar dados sintéticos e provider mock.

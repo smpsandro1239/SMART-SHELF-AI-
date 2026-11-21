@@ -1,3 +1,11 @@
+### Integridade do provider ONNX — digests aprovados e pré-processamento (2026-11-21, validado)
+
+- O provider real exige digest SHA-256 aprovado para o detetor e, quando configurado, para o extrator de embeddings.
+- Os hashes são comparados antes da criação das sessões ONNX e revalidados após o carregamento; digest divergente ou ausente impede o arranque.
+- Os fingerprints separam o pré-processamento letterbox do detetor e o resize stretch dos crops do extrator.
+- API CI e Quality Gates: 1432 passed, 1 skipped; PostgreSQL 16, compilação Python e build Web aprovados. Docker Compose e Security Scans passaram.
+- Limite: configuração de deployment é a âncora de confiança actual; manifesto assinado, pesos reais, dataset e avaliação por SKU continuam pendentes.
+
 ### Isolamento multi-loja do histórico de alertas — 2026-11-21 (validado)
 
 - Revisão estática: o endpoint valida o alerta pai com `_require_alert_supervisor` antes de consultar os eventos.
