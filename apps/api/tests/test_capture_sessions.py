@@ -227,3 +227,64 @@ def test_reviewed_training_candidates_group_by_capture_session():
     assert candidate["capture_session_id"] == session_id
     assert candidate["capture_group_key"] == f"session:{session_id}"
     assert "same capture session" in candidate["split_policy"]
+
+def test_capture_session_listing_is_store_scoped_even_with_foreign_shelf_filter(monkeypatch):
+    from types import SimpleNamespace
+
+    shelf_id, _ = seed_shelves()
+    db = Session()
+    own_store_id = (
+        db.query(models.Zone.store_id)
+        .join(models.Shelf, models.Shelf.zone_id == models.Zone.id)
+        .filter(models.Shelf.id == shelf_id)
+        .scalar()
+    )
+    foreign_store = models.Store(code="CAP-FOREIGN", name="Foreign capture store")
+    db.add(foreign_store)
+    db.flush()
+    foreign_zone = models.Zone(store_id=foreign_store.id, name="Foreign aisle")
+    db.add(foreign_zone)
+    db.flush()
+    foreign_shelf = models.Shelf(zone_id=foreign_zone.id, code="FOREIGN-01")
+    db.add(foreign_shelf)
+    db.flush()
+
+    own_session = models.CaptureSession(
+        store_id=own_store_id,
+        shelf_id=shelf_id,
+        source_type="mobile",
+        capture_mode="single",
+        started_at=models.utc_now(),
+    )
+    foreign_session = models.CaptureSession(
+        store_id=foreign_store.id,
+        shelf_id=foreign_shelf.id,
+        source_type="fixed_camera",
+        capture_mode="single",
+        started_at=models.utc_now(),
+    )
+    db.add_all([own_session, foreign_session])
+    db.commit()
+    own_session_id = own_session.id
+    foreign_shelf_id = foreign_shelf.id
+
+    supervisor = SimpleNamespace(id=17, role="SUPERVISOR", store_id=own_store_id)
+    monkeypatch.setattr(
+        main_module,
+        "_request_user",
+        lambda session, request: supervisor,
+    )
+    request = SimpleNamespace()
+    try:
+        own_store_sessions = main_module.list_capture_sessions(request, db=db)
+        foreign_shelf_sessions = main_module.list_capture_sessions(
+            request,
+            shelf_id=foreign_shelf_id,
+            db=db,
+        )
+
+        assert [item.id for item in own_store_sessions] == [own_session_id]
+        assert foreign_shelf_sessions == []
+        assert all(item.store_id == own_store_id for item in own_store_sessions)
+    finally:
+        db.close()
