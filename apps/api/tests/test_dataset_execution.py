@@ -57,6 +57,9 @@ def test_internal_consumer_runs_only_after_approval_and_before_source_locks_rele
         assert evidence["mode"] == "training"
         assert len(evidence["record_sha256"]) == 64
         assert len(evidence["gate_report_sha256"]) == 64
+        assert set(evidence["split_annotations_sha256"]) == {"train", "val", "test"}
+        for split, path in splits.items():
+            assert evidence["split_annotations_sha256"][split] == dataset_execution.sha256_file(path)
         return release, True
 
     monkeypatch.setattr("app.dataset_approval.run_release_gate", fake_gate)
@@ -159,3 +162,32 @@ def test_consumer_rejects_malformed_provenance_before_execution(tmp_path, monkey
             release_record_path=tmp_path / "release.json",
             split_paths={"train": tmp_path / "train.json", "val": tmp_path / "val.json", "test": tmp_path / "test.json"},
         )
+
+
+def test_consumer_rejects_annotation_change_during_approval_gate(tmp_path, monkeypatch):
+    provenance, record, splits = write_inputs(tmp_path, source_type="external")
+    calls = []
+
+    def fake_gate(*args, **kwargs):
+        splits["test"].write_text('{"changed":true}', encoding="utf-8")
+        return [], {"status": "APPROVED"}
+
+    monkeypatch.setattr("app.dataset_approval.run_release_gate", fake_gate)
+    monkeypatch.setattr(
+        dataset_execution,
+        "create_release",
+        lambda *args, **kwargs: calls.append("release"),
+    )
+    monkeypatch.setattr(
+        dataset_execution.subprocess,
+        "run",
+        lambda *args, **kwargs: calls.append("consumer"),
+    )
+
+    with pytest.raises(ValueError, match="changed while the approval gate"):
+        dataset_execution.run_release_consumer(
+            tmp_path / "manifest.csv", tmp_path / "split.json", tmp_path / "visual.json",
+            provenance, tmp_path / "registry", ["trainer"],
+            release_record_path=record, split_paths=splits,
+        )
+    assert calls == []
