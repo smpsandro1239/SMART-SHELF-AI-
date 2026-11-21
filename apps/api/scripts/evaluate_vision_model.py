@@ -60,9 +60,9 @@ def evaluate_approved_test_split(
     from app.vision_onnx import create_provider
 
     provider = create_provider()
-    if provider.confidence_threshold > 0.001:
+    if provider.confidence_threshold > 0.0:
         raise ValueError(
-            "set VISION_CONFIDENCE_THRESHOLD=0.001 for AP evaluation; "
+            "set VISION_CONFIDENCE_THRESHOLD=0.0 for AP evaluation; "
             "the operating threshold is configured separately"
         )
 
