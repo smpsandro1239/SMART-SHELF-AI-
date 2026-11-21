@@ -48,3 +48,21 @@ As actualizações de versões estão aplicadas no código, mas não são consid
 - o ZAP baseline seja concluído e os alertas sejam triados.
 
 Não foram adicionadas exclusões de advisories nem ignorados findings para forçar o sucesso.
+
+## Revalidação após remediação — commit 1c0f591 (2026-11-21)
+
+- pip-audit: sem vulnerabilidades conhecidas nas dependências API e OCR.
+- npm audit: passou sem vulnerabilidades acima do limiar configurado.
+- Gitleaks: passou, sem segredos detectados.
+- ZAP Baseline: 0 High, 0 Medium, 0 Low; 3 informativos.
+- ZAP API safe-mode com OpenAPI: 0 High, 0 Medium, 0 Low; 4 informativos; 131 operações importadas. 128 respostas 401 são esperadas no scan não autenticado e não provam autorização correcta para sessões autenticadas.
+
+Workflows:
+- [Security Scans 44884714393](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44884714393)
+- [API CI 44884714292](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44884714292)
+- [Quality Gates 44884714318](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44884714318)
+- [Docker Compose 44884714261](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44884714261)
+
+API CI e Quality Gates concluíram com **1413 passed, 1 skipped**. As migrations e os smokes PostgreSQL 16 passaram. O aviso de depreciação do Starlette TestClient foi removido com httpx2 2.16.2.
+
+O baseline não é autenticado nem activo. Os alertas informativos dizem respeito a identificação de pedidos de autenticação, respostas 401 e política de cache; não foram identificados findings High/Medium/Low.

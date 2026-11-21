@@ -202,3 +202,24 @@ Foi criado .github/workflows/security-scans.yml com quatro jobs independentes: p
 A primeira execução confirmou Gitleaks PASS e npm audit PASS. O pip-audit falhou com 158 ocorrências em cinco pacotes Python (pytest 8.3.5, PyJWT 2.10.1, python-multipart 0.0.20, Pillow 11.2.1 e Starlette 0.46.2). Foram actualizadas as dependências directas para versões corrigidas; FastAPI 0.165.0 passa a seleccionar Starlette compatível, sem pin directo de Starlette. A segunda execução SCA e a regressão completa continuam pendentes.
 
 O ZAP está inicialmente em modo baseline passivo e report-only (fail_action: false), sem autenticação nem mutações. Isto estabelece recolha de evidência, não uma certificação DAST nem uma aprovação de segurança.
+
+## 2026-11-21 — Remediação SCA, isolamento de locks e headers HTTP
+
+### Dependências e qualidade
+A primeira execução SCA detectou 158 ocorrências em cinco pacotes Python. Foram actualizados FastAPI 0.165.0, Pillow 13.0.0, PyJWT 2.15.1, python-multipart 0.0.34 e pytest 9.2.0; FastAPI selecciona a versão compatível de Starlette sem pin directo. Foi adicionado httpx2 2.16.2 para substituir o caminho deprecated do Starlette TestClient. O uso de Pillow foi migrado de Image.getdata para get_flattened_data.
+
+No commit 1c0f59136af8364aab868b60f477c169679c4f3f:
+- API CI [44884714292](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44884714292): sucesso; 1413 passed, 1 skipped; migrations e smokes PostgreSQL 16 passaram.
+- Quality Gates [44884714318](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44884714318): sucesso; 1413 passed, 1 skipped; build Python/Web passou sem o aviso anterior do TestClient.
+- Docker Compose [44884714261](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44884714261): sucesso.
+- Security Scans [44884714393](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44884714393): pip-audit sem vulnerabilidades conhecidas, npm audit passou e Gitleaks passou.
+
+### Isolamento multi-loja e concorrência
+A auditoria encontrou endpoints que adquiriam locks antes de verificar o store scope. Foram criados _lock_authorized_shelf_image e _lock_store_scoped_record. O padrão é: leitura não bloqueante para obter store_id, validação de actor/tenant, lock com populate_existing, nova validação do tenant e só depois a operação. O padrão foi aplicado a 22 handlers de imagens, OCR, deteções, exemplares, sessões, paletes, tarefas e alertas. O teste estático impede regressões na ordem de autorização e locks.
+
+O endpoint PATCH de alertas foi também corrigido para autorizar antes do lock. Os smokes PostgreSQL continuam a validar concorrência e retenção.
+
+### Headers HTTP e DAST
+Foram acrescentados headers HTTP de segurança, CSP, HSTS em produção e Cache-Control no-store para APIs. Swagger UI é desactivado em produção; a documentação interactiva fica disponível apenas fora de produção com CSP específica.
+
+ZAP Baseline e API safe-mode [44884714393](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44884714393) analisaram 134 endpoints no baseline e 131 operações importadas via OpenAPI. Ambos os relatórios apresentaram 0 alertas High, 0 Medium e 0 Low; os alertas restantes são informativos. O scan não é autenticado: 128 operações protegidas responderam 401. Não é uma certificação de segurança nem substitui DAST autenticado/activo.

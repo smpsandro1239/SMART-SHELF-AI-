@@ -463,3 +463,25 @@ Quality Gates [44882467613](https://github.com/smpsandro1239/SMART-SHELF-AI-/act
 Docker Compose demo smoke [44882467596](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44882467596) passou. API CI [44882467564](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44882467564) concluiu com sucesso, incluindo migrations PostgreSQL 16, smokes de concorrência/isolamento/retention e **1408 passed, 1 skipped, 1 warning**.
 
 Esta evidência não fecha a auditoria de isolamento multi-loja por handler nem a matriz endpoint × perfil × tenant.
+
+## Ordem de autorização e locks por tenant — 2026-11-21
+
+### Regra
+Para qualquer recurso com store scope, não adquirir row lock antes de validar o tenant:
+1. Ler a relação de store sem lock.
+2. Validar identidade, papel e store scope.
+3. Adquirir lock e refrescar a entidade.
+4. Revalidar o store scope sobre o estado bloqueado.
+5. Executar a mutação e gravar auditoria na mesma transacção.
+
+### Helpers
+- _lock_authorized_shelf_image: resolve store_id através da relação imagem → prateleira → zona, valida antes do lock, bloqueia e volta a validar.
+- _lock_store_scoped_record: aplica o mesmo contrato a modelos com store_id directo.
+
+### Handlers cobertos
+get_shelf_image_content, retry_shelf_image_analysis, list_shelf_image_detections, create_observation_from_demo_detection, match_shelf_image_ocr_to_catalogue, list_shelf_image_ocr_matches, fuse_shelf_image_evidence, list_shelf_image_fused_evidence, create_shelf_image_ocr_run, list_shelf_image_ocr_evidence, list_shelf_image_ocr_runs, create_detection_sku_review, list_detection_sku_reviews, restrict_shelf_image, create_product_embedding_exemplar, review_product_embedding_exemplar, close_capture_session, record_pallet_lifecycle_update, reconcile_completed_replenishment, update_replenishment_task_status, upload_shelf_image e update_observation_alert.
+
+### Verificação
+O teste test_store_scoped_lock_handlers_authorize_before_their_first_lock verifica a utilização dos helpers e a ordem das chamadas. O teste test_store_scoped_record_lock_rejects_foreign_store_before_lock confirma que um actor de outra loja recebe 403 sem tentativa de lock. O teste de alerta cross-store e o smoke PostgreSQL de detecção confirmam o comportamento sob concorrência.
+
+A suite API passou com 1413 testes aprovados e 1 ignorado. A auditoria completa BOLA/IDOR por recurso e a matriz autenticada endpoint × papel × tenant continuam abertas.

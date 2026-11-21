@@ -945,3 +945,11 @@ Validação no commit `311fecc9e13641e6d5eb55465fda646fb2909601`: Quality Gates 
 - As Actions externas são fixadas a SHA completo e as permissões são limitadas por job.
 - ZAP corre inicialmente em modo baseline passivo/report-only; não executa operações activas nem prova a segurança de rotas autenticadas.
 - Primeira execução: Gitleaks e npm audit passaram; pip-audit identificou 158 ocorrências em 5 pacotes Python. As versões directas vulneráveis foram actualizadas e a FastAPI foi elevada para 0.165.0 para resolver a dependência Starlette sem pin isolado. A validação da segunda execução e a triagem ZAP continuam pendentes.
+
+### Segurança — remediação SCA, lock ordering e headers HTTP (2026-11-21)
+
+- SCA inicial detectou 158 ocorrências em cinco pacotes Python; dependências actualizadas. Revalidação pip-audit e npm audit sem vulnerabilidades conhecidas; Gitleaks passou.
+- 22 handlers multi-loja passaram a verificar o tenant antes do lock e novamente após refresh; teste estático de regressão e testes de helper adicionados.
+- Headers HTTP de segurança, CSP, HSTS em produção, no-store em APIs e Swagger UI desactivado em produção.
+- API CI e Quality Gates: **1413 passed, 1 skipped**; PostgreSQL 16 e Docker Compose smoke passaram.
+- ZAP Baseline e API safe-mode: 0 alertas High/Medium/Low; apenas alertas informativos. Scan não autenticado; DAST autenticado/activo continua aberto.

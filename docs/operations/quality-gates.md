@@ -85,3 +85,14 @@ O workflow .github/workflows/security-scans.yml executa separadamente:
 - OWASP ZAP Baseline sobre a API local iniciada por Docker Compose num runner efémero.
 
 As Actions externas estão fixadas a SHA completo. O job ZAP é inicialmente passivo e report-only para recolher um baseline sem fazer pedidos de escrita nem abrir issues automaticamente. A primeira execução passou Gitleaks e npm audit, mas o pip-audit identificou 158 ocorrências em cinco pacotes Python; as versões vulneráveis foram actualizadas em requirements.txt e a nova execução é necessária para confirmar a resolução. A ausência de findings só pode ser declarada depois de consultar os resultados do SHA exacto; o baseline não é um pentest, não cobre autenticação com sessão real e não substitui DAST autenticado, SCA de imagens de containers ou revisão manual.
+
+## Resultados de segurança — 2026-11-21
+
+No commit 1c0f59136af8364aab868b60f477c169679c4f3f:
+- pip-audit (requirements API e OCR) e npm audit: sem vulnerabilidades conhecidas.
+- Gitleaks: sem segredos detectados.
+- ZAP Baseline e API safe-mode sobre OpenAPI: 0 alertas High/Medium/Low; 7 informativos.
+- O scan API importou 131 operações; a maioria dos endpoints protegidos respondeu 401 por não existir sessão de autenticação no scan.
+- API CI e Quality Gates: 1413 testes aprovados, 1 ignorado; migrations e smokes PostgreSQL 16 aprovados.
+
+O scan é passivo/safe-mode, não autenticado e não executa active scan. Não equivale a pentest nem valida isolamento por sessão/tenant. O DAST autenticado continua pendente.

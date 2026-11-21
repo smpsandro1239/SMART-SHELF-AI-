@@ -25,8 +25,8 @@
 - [x] Corrigir finding API-CORS-001: origem wildcard/HTTP/localhost não permitida em produção.
 - [x] Centralizar RBAC em `apps/api/app/api_security_policy.py` com 128 políticas explícitas por método/template e teste dinâmico das rotas registadas. A cobertura exaustiva endpoint × papel × tenant continua aberta.
 - [x] Revalidar o actor no handler em dez endpoints de gestão/catálogo que dependiam apenas do middleware; o teste de despromoção ADMIN → SUPERVISOR entre middleware e handler confirma 403 e ausência de escrita.
-- [ ] Completar matriz endpoint × ADMIN/SUPERVISOR/EMPLOYEE × loja, incluindo todos os handlers e caminhos indirectos; a classificação centralizada não substitui a prova de isolamento de cada endpoint.
-- [ ] Executar SCA, secret scan e DAST com ferramentas reais; não há evidência dessas execuções nesta ronda.
+- [ ] Completar matriz endpoint × ADMIN/SUPERVISOR/EMPLOYEE × loja, incluindo todos os handlers e caminhos indirectos. Em 2026-11-21, 22 handlers com locks foram cobertos por helpers de autorização pré-lock e teste estático; a auditoria BOLA/IDOR por recurso continua aberta.
+- [x] Executar SCA, secret scan e baseline DAST passivo: pip-audit, npm audit, Gitleaks e ZAP com evidência no workflow 44884714393; DAST autenticado/activo continua fora deste baseline.
 
 ## Segurança P0 — CORS de produção
 
@@ -39,7 +39,7 @@
 - [x] Fixar OWASP Secure Agent Playbook como submódulo Git `vendor/owasp-secure-agent-playbook` no commit `65d4efd2cd0b081d52101e9708792b944e4ddebb`, licença CC-BY-4.0 e atribuição preservada.
 - [x] Expor procedimentos de API security review, code security review, SCA e secrets scan através de uma skill de entrada.
 - [x] Executar primeira ronda OWASP à autorização multi-loja: 130 rotas enumeradas, middleware JWT, RBAC, store scope e planogramas revistos; relatório `docs/security/api-authorization-review-2026-11-20.md`. Auditoria exaustiva continua aberta.
-- [ ] Executar SCA apenas quando existir scanner disponível; não inventar resultados.
+- [x] Executar SCA real com pip-audit e npm audit; resultados e remediação registados em docs/security/dependency-audit-2026-11-21.md.
 
 ## Inventário de outputs finais sem publicação auditável — 2026-11-20
 
@@ -1225,14 +1225,33 @@ Critério global: nenhuma capacidade pode ser marcada como concluída sem códig
 - [x] Acrescentar o teste test_every_explicit_api_route_policy_matches_the_complete_role_matrix em apps/api/tests/test_security.py: valida todas as entradas método/template contra ADMIN, SUPERVISOR e EMPLOYEE, rejeita políticas duplicadas/categorias desconhecidas e confirma fail-closed para rotas não registadas.
 - [x] Quality Gates [44882467613](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44882467613) passou no commit b1c60246938befa86233b49f6d8a4841617fbfdc: compilação Python, build TypeScript/produção, detector Impeccable e suite API **1408 passed, 1 skipped, 1 warning**.
 - [x] API CI [44882467564](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44882467564) passou no mesmo commit: auditoria estrita de rotas, migrations PostgreSQL 16, smokes de concorrência/isolamento/retention e **1408 passed, 1 skipped, 1 warning**.
-- [ ] Prosseguir a matriz handler × perfil × loja e caminhos indirectos. A matriz RBAC prova classificação por método/rota, não o isolamento de cada recurso.
-- [ ] Executar SCA, secret scan e DAST com scanners reais disponíveis; nenhuma execução é declarada nesta ronda.
+- [ ] Prosseguir a matriz handler × perfil × loja e caminhos indirectos. A cobertura de ordem de locks foi acrescentada para 22 handlers, mas não prova isolamento de cada recurso nem todos os caminhos indirectos.
+- [x] Executar SCA, Gitleaks e ZAP baseline/API safe-mode no workflow 44884714393; o scan não é autenticado e não substitui DAST autenticado/activo.
 
 ## Segurança — scanners automatizados SCA, segredos e DAST (2026-11-21)
 
 - [x] Criar workflow isolado .github/workflows/security-scans.yml, com permissões mínimas, checkout sem persistência de credenciais e execução em runners efémeros.
 - [x] Configurar pip-audit sobre dependências API e OCR opcionais, npm audit --audit-level=high sobre o lockfile Web e Gitleaks sobre o histórico Git.
-- [x] Configurar OWASP ZAP Baseline contra a API local efémera do Docker Compose. É um scan passivo inicial, sem autenticação e sem operações destrutivas; os alertas ficam em relatório para triagem, não são silenciosamente ignorados.
-- [x] Analisar a primeira execução real: Gitleaks passou, npm audit passou e pip-audit detectou 158 ocorrências em 5 pacotes Python (pytest, PyJWT, python-multipart, Pillow e Starlette).
-- [ ] Reexecutar SCA após actualizar as dependências vulneráveis e confirmar compatibilidade com a suite API e os smokes PostgreSQL.
-- [ ] Corrigir/triagem de todos os findings confirmados, adicionar regressões e definir limiares de bloqueio depois da análise dos relatórios ZAP e da segunda execução SCA.
+- [x] Configurar ZAP Baseline e API safe-mode sobre OpenAPI contra a API efémera do Docker Compose; 134 endpoints no baseline e 131 operações importadas no scan API.
+- [x] Analisar a primeira execução real: Gitleaks e npm audit passaram; pip-audit detectou 158 ocorrências em cinco pacotes Python (pytest, PyJWT, python-multipart, Pillow e Starlette). As versões vulneráveis foram actualizadas, sem exclusões de advisories.
+- [x] Reexecutar SCA: pip-audit e npm audit sem vulnerabilidades conhecidas no commit 1c0f591; API CI e Quality Gates passaram com 1413 testes aprovados e 1 ignorado.
+- [x] Triar o baseline ZAP: 0 alertas High, 0 Medium e 0 Low; 7 alertas informativos, sem findings exploráveis identificados.
+- [ ] Implementar DAST autenticado e active scan apenas num ambiente isolado com identidades de teste e salvaguardas contra operações destrutivas.
+
+## Segurança — ordem de locks por tenant (2026-11-21)
+
+- [x] Introduzir _lock_authorized_shelf_image: obter store scope sem lock, autorizar, adquirir lock com refresh e revalidar o store scope.
+- [x] Introduzir _lock_store_scoped_record com a mesma sequência para sessões de captura, paletes e tarefas.
+- [x] Migrar 22 handlers que acedem a recursos multi-loja, incluindo conteúdo/retention de imagens, deteções, OCR, fusions, exemplares, tarefas, paletes, sessões e alertas.
+- [x] Acrescentar teste estático de ordem de autorização/locks, teste do helper genérico e regressões de alertas cross-store e de ordenação PostgreSQL.
+- [x] API CI [44884714292](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44884714292), Quality Gates [44884714318](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44884714318) e Docker Compose [44884714261](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44884714261) passaram no commit 1c0f591: 1413 passed, 1 skipped.
+- [ ] Completar a revisão BOLA/IDOR endpoint × perfil × tenant e testar caminhos indirectos em contexto autenticado.
+
+## Segurança — headers HTTP e política de documentação (2026-11-21)
+
+- [x] Aplicar X-Content-Type-Options, X-Frame-Options, Referrer-Policy, Permissions-Policy, Cross-Origin-Resource-Policy e CSP.
+- [x] Aplicar Cache-Control: no-store às respostas API e HSTS em produção.
+- [x] Desactivar Swagger UI em produção; manter documentação interactiva apenas fora de produção, com CSP específica.
+- [x] Acrescentar testes para respostas 401, headers e política de docs.
+- [x] OWASP ZAP Baseline e API safe-mode [44884714393](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44884714393): 0 alertas High/Medium/Low; 7 informativos.
+- [ ] DAST autenticado e teste activo continuam pendentes; o scan actual não possui sessão de utilizador e recebe 401 em endpoints protegidos.

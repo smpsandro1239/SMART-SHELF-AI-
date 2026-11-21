@@ -96,3 +96,13 @@ Foi ainda identificada e corrigida uma janela de revogação de perfil: dez hand
 O teste test_every_explicit_api_route_policy_matches_the_complete_role_matrix percorre todas as políticas método/template e verifica as decisões para ADMIN, SUPERVISOR e EMPLOYEE, incluindo duplicados, categorias não suportadas e rotas desconhecidas. Quality Gates [44882467613](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44882467613) passou no commit b1c60246938befa86233b49f6d8a4841617fbfdc, com **1408 testes aprovados, 1 ignorado e 1 aviso**, compilação Python e build Web aprovados. Docker Compose demo smoke [44882467596](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44882467596) também passou.
 
 A API CI [44882467564](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44882467564) concluiu com sucesso, incluindo migrations PostgreSQL 16, smokes de concorrência/isolamento/retention e **1408 testes aprovados, 1 ignorado e 1 aviso**. A auditoria handler × perfil × loja, SCA, secret scan e DAST continuam abertos; esta alteração não os declara concluídos.
+
+## Actualização — autorização antes de row locks (2026-11-21)
+
+A revisão de concorrência identificou que alguns handlers multi-loja bloqueavam recursos antes de verificar o store scope. Foram introduzidos _lock_authorized_shelf_image e _lock_store_scoped_record, com leitura inicial sem lock, validação de tenant, lock com refresh e revalidação do tenant.
+
+A cobertura de ordem de locks foi aplicada a 22 handlers de imagens, OCR, deteções, exemplares, sessões, paletes, tarefas e alertas. O teste estático test_store_scoped_lock_handlers_authorize_before_their_first_lock e os testes de helper impedem regressões na sequência.
+
+Validação no commit 1c0f591: API CI e Quality Gates passaram com **1413 passed, 1 skipped**, migrations e smokes PostgreSQL 16 passaram. ZAP Baseline/API safe-mode apresentou 0 alertas High/Medium/Low.
+
+Limite: esta evidência não fecha a matriz completa BOLA/IDOR por recurso nem o teste autenticado de todos os perfis e lojas.
