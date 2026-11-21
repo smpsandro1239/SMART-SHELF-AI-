@@ -150,7 +150,7 @@ def main() -> int:
     parser.add_argument("--operating-threshold", type=float, default=0.25)
     args = parser.parse_args()
 
-    if args.output.exists() and args.output.is_symlink():
+    if args.output.is_symlink():
         parser.error("--output must not be a symbolic link")
     try:
         report = evaluate_approved_test_split(
