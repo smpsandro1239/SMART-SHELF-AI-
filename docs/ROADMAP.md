@@ -1,7 +1,8 @@
 ### Computer Vision — avaliador COCO v1 (implementação publicada; CI/dataset pendentes)
 
 - Avaliador AP101/mAP50/mAP50_95 e operating point precision/recall/F1, por classe e global.
-- Runner executa apenas test split de release aprovado para inferência, valida hash das imagens e provider ONNX assinado.
+- Runner executa apenas test split de release aprovado para inferência, valida hashes das anotações, manifest e imagens contra o release fingerprint e usa provider ONNX assinado.
+- O pipeline de release liga os hashes dos três splits à aprovação e detecta alterações durante o gate.
 - Não treina nem escreve em inventário; não foram produzidas métricas reais.
 - [Protocolo de avaliação](vision-model-evaluation.md).
 
