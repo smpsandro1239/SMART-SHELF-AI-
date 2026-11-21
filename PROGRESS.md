@@ -268,3 +268,11 @@ Validação no commit a345746200eb6ea8b0035bd2cdba7c188de87ef9:
 - Security Scans [44885522256](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44885522256): sucesso; SCA e secret scan passaram; ZAP sem alertas High/Medium/Low.
 
 A cobertura é de contrato e tratamento de falhas. Não representa avaliação de precisão de um modelo real; a integração ONNX continua dependente de modelo e dataset autorizados.
+
+
+## 2026-11-21 — Isolamento multi-loja na listagem de sessões de captura
+
+- A auditoria handler-a-handler confirmou que `GET /api/v1/capture-sessions` restringe as sessões à `store_id` do actor não administrador.
+- Acrescentado teste de regressão com duas lojas, duas prateleiras e sessões independentes. O supervisor da loja A só recebe a sua sessão e não consegue obter a sessão da loja B através de `shelf_id` estrangeiro.
+- O teste chama o handler com actor de teste controlado e base SQLite isolada; a validação da execução CI e dos smokes PostgreSQL continua necessária para fechar esta unidade.
+- A matriz global endpoint × perfil × loja continua aberta; este teste cobre apenas a listagem de sessões de captura.
