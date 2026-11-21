@@ -255,3 +255,47 @@ def test_route_policy_matches_dynamic_templates_and_does_not_inherit_methods():
     assert is_public_api_route("POST", "/api/v1/auth/login")
     assert not is_public_api_route("GET", "/api/v1/auth/login")
     assert classify_api_route("GET", "/api/v1/auth/login") == "UNCLASSIFIED"
+
+def test_every_explicit_api_route_policy_matches_the_complete_role_matrix():
+    from app.api_security_policy import API_ROUTE_POLICIES, POLICY_CATEGORIES, api_role_denial
+
+    expected_denials = {
+        "PUBLIC": {},
+        "ADMIN_ONLY": {
+            "SUPERVISOR": "Administrator role required",
+            "EMPLOYEE": "Administrator role required",
+        },
+        "SUPERVISOR_OR_ADMIN": {
+            "EMPLOYEE": "Supervisor role required",
+        },
+        "EMPLOYEE_ALLOWLIST": {},
+    }
+    roles = ("ADMIN", "SUPERVISOR", "EMPLOYEE")
+    seen = set()
+
+    assert API_ROUTE_POLICIES
+    for method, template, policy in API_ROUTE_POLICIES:
+        key = (method, template)
+        assert key not in seen, f"Duplicate API route policy: {method} {template}"
+        seen.add(key)
+        assert policy in POLICY_CATEGORIES, (
+            f"Unsupported policy category for {method} {template}: {policy}"
+        )
+
+        for role in roles:
+            expected = expected_denials[policy].get(role)
+            actual = api_role_denial(method, template, role)
+            assert actual == expected, (
+                f"Unexpected {role} decision for {method} {template}: "
+                f"expected {expected!r}, got {actual!r}"
+            )
+
+    assert api_role_denial("GET", "/api/v1/not-registered", "ADMIN") == (
+        "API route has no explicit authorization policy"
+    )
+    assert api_role_denial("GET", "/api/v1/not-registered", "SUPERVISOR") == (
+        "API route has no explicit authorization policy"
+    )
+    assert api_role_denial("GET", "/api/v1/not-registered", "EMPLOYEE") == (
+        "API route has no explicit authorization policy"
+    )
