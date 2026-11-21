@@ -958,7 +958,7 @@ def test_worker_inference_failure_marks_image_failed_and_preserves_prior_detecti
     assert processed == image_id
     db.refresh(image)
     assert image.analysis_status == "FAILED"
-    assert "simulated inference failure" in image.analysis_error
+    assert image.analysis_error == f"{failure_type.__name__}: processing failed"
     assert (
         db.query(models.ShelfImageDetection)
         .filter_by(shelf_image_id=image_id)
