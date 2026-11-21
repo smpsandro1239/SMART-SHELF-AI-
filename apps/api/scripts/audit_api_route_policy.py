@@ -45,12 +45,17 @@ def main() -> int:
 
     records = collect_route_policy()
     counts = Counter(record["policy"] for record in records)
-    fallback = [record for record in records if record["policy"] == "AUTHENTICATED_STAFF"]
+    unclassified = [record for record in records if record["policy"] == "UNCLASSIFIED"]
+    legacy_fallback = [
+        record for record in records if record["policy"] == "AUTHENTICATED_STAFF"
+    ]
     report = {
         "route_method_count": len(records),
         "policy_counts": dict(sorted(counts.items())),
-        "fallback_count": len(fallback),
-        "fallback_routes": fallback,
+        "unclassified_count": len(unclassified),
+        "unclassified_routes": unclassified,
+        "legacy_fallback_count": len(legacy_fallback),
+        "legacy_fallback_routes": legacy_fallback,
         "routes": records,
     }
     print(json.dumps(report, ensure_ascii=False, indent=2))
