@@ -6,6 +6,7 @@ import pytest
 from app.vision_onnx import (
     ONNXConfigurationError,
     ONNXShelfVisionProvider,
+    EMBEDDING_PREPROCESSING_VERSION,
     PREPROCESSING_VERSION,
     _canonical_sha256,
     _fingerprinted_version,
@@ -363,6 +364,12 @@ def test_embedding_version_is_bound_to_embedding_weights(tmp_path, monkeypatch):
     assert first.model_version == second.model_version
     assert first.embedding_model_version != second.embedding_model_version
     assert first.embedding_model_version.startswith("embed-v1@")
+    assert first.embedding_model_version.endswith(_canonical_sha256({
+        "embedding_sha256": first.embedding_sha256,
+        "input_size": 640,
+        "preprocessing_version": EMBEDDING_PREPROCESSING_VERSION,
+    }))
+    assert EMBEDDING_PREPROCESSING_VERSION != PREPROCESSING_VERSION
 
 
 
