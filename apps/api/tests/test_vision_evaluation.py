@@ -62,6 +62,7 @@ def test_missing_prediction_has_zero_ap_and_one_false_negative():
     assert report["operating_point"]["false_negatives"] == 1
     assert report["operating_point"]["precision"] is None
     assert report["operating_point"]["recall"] == 0.0
+    assert report["operating_point"]["f1"] == 0.0
 
 
 def test_confidence_threshold_changes_operating_point_not_average_precision():
