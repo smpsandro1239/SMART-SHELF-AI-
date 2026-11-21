@@ -147,3 +147,39 @@
 - Docker Compose [44832248174](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44832248174): passou; API, PostgreSQL e vision worker arrancaram, demo seed preparado, volume de outputs da API separado do volume de imagens e não montado no worker; worker verificado como não-root, filesystem root read-only, capabilities removidas e no-new-privileges.
 - O aviso Python restante é a depreciação externa `anyio.abc.BlockingPortal` do Starlette TestClient. O build Web assinalou ainda depreciação Node.js 20 em `actions/upload-artifact@v4`, sem falha do build.
 - Não foram executados testes localmente; a validação foi feita nos workflows GitHub Actions. Os smokes não demonstram resistência a perda física de energia nem garantias do dispositivo/volume real.
+## 2026-11-21 — Matriz RBAC explícita e revalidação no handler
+
+### Política por método/rota
+
+- Substituída a classificação genérica `AUTHENTICATED_STAFF` por `API_ROUTE_POLICIES`, com uma entrada explícita por método e template FastAPI. O inventário actual tem 128 combinações: 2 PUBLIC, 25 ADMIN_ONLY, 88 SUPERVISOR_OR_ADMIN e 13 EMPLOYEE_ALLOWLIST.
+- O matcher compara segmentos e exige coincidência do método. Uma rota/método desconhecido é `UNCLASSIFIED` e o middleware recusa-o a todos os perfis, incluindo ADMIN. A verificação de rotas públicas também é método-específica.
+- Acrescentado `test_every_registered_versioned_api_route_has_an_explicit_method_policy`, que verifica os `APIRoute` efectivamente registados, e teste de templates dinâmicos/métodos não herdados.
+- O auditor `apps/api/scripts/audit_api_route_policy.py` foi corrigido para reportar `UNCLASSIFIED` e fallbacks legados separadamente. O workflow API CI executa agora `python scripts/audit_api_route_policy.py --strict` antes das migrações e smokes.
+
+### Revalidação da identidade
+
+- A análise handler-by-handler encontrou dez handlers de administração/catálogo que dependiam apenas do middleware e não recarregavam o actor na sessão de execução: gestão de utilizadores, lojas, zonas, prateleiras, produtos e embalagens/perfis de armazém.
+- Estes handlers recebem agora `Request` e chamam `_request_user` antes de ler ou escrever. A revalidação consulta o perfil actual da base de dados e aplica a política explícita método/rota.
+- `test_admin_role_revocation_between_middleware_and_handler_blocks_store_creation` simula a despromoção de ADMIN para SUPERVISOR depois do middleware e antes da execução do handler; confirma HTTP 403 e que a loja não é criada.
+
+### Commits principais
+
+- Política explícita: `7523914c`.
+- Middleware público método-específico: `d91e1426`.
+- Cobertura de rotas registadas e regressões RBAC: `809945e1`, `813a2d42`, `3a966726`.
+- Auditor strict: `347a00bd`; correcção do relatório: `a9f71290`; integração no API CI: `8775aaff`.
+- Revalidação dos handlers: `26accef6`; teste de revogação entre middleware/handler: `311fecc9`.
+
+### Validação
+
+- API CI [44880841684](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44880841684): passou; migrações PostgreSQL 16 e todos os smokes dedicados passaram; suite **1407 passed, 1 skipped, 1 warning**.
+- Quality Gates [44880841658](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44880841658): passou; compilação Python, suite API (**1407 passed, 1 skipped, 1 warning**) e build de produção Web aprovados.
+- Docker Compose [44880841671](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44880841671): passou.
+- O aviso Python restante é a depreciação externa `anyio.abc.BlockingPortal` do Starlette TestClient. O detector Impeccable continua a registar a baseline de design como não bloqueante.
+- Não foram executados testes localmente; a validação foi feita nos workflows GitHub Actions.
+
+### Limites ainda abertos
+
+- A classificação explícita não substitui a prova endpoint × ADMIN/SUPERVISOR/EMPLOYEE × loja. A auditoria de tenant scope e caminhos indirectos continua aberta.
+- SCA, secret scanning, DAST e pentest externo não foram executados.
+- O auditor strict foi integrado no API CI; o último commit com validação completa é `311fecc9`. Os commits seguintes são documentação e integração do auditor e aguardam a sua própria execução CI.
