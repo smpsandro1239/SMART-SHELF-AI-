@@ -1,3 +1,10 @@
+### Edge AI — contrato de eventos v1 (implementação de domínio publicada; CI pendente)
+
+- Envelope versionado e payloads específicos para heartbeat, captura, observação visual e confirmação de tarefa.
+- Fingerprint canónico, chave de idempotência por dispositivo e classificação de sequência NEXT/GAP/STALE.
+- Contrato não autentica dispositivos nem persiste/acknowledges eventos; inbox/outbox duráveis, credenciais e ingestão multi-loja são fase seguinte.
+- [Especificação do protocolo Edge](edge-device-event-contract.md).
+
 ### Computer Vision — manifesto ONNX Ed25519 (implementação publicada; CI pendente)
 
 - Provider real exige manifesto assinado e chave pública confiável; assinatura cobre schema, key ID e digests dos modelos.
