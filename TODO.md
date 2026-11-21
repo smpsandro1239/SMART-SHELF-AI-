@@ -1,3 +1,13 @@
+## Edge AI — contrato de eventos v1 (implementado como contrato puro; CI pendente)
+
+- [x] Definir envelope versionado com identidade do dispositivo, tenant, sequência monotónica, timestamp com fuso, event ID e payload JSON limitado.
+- [x] Validar HEARTBEAT, SHELF_CAPTURED, SHELF_OBSERVATION e TASK_ACKNOWLEDGED com esquemas específicos e limites de dados.
+- [x] Definir fingerprint canónico, chave de idempotência por dispositivo e classificação NEXT/GAP/STALE.
+- [x] Garantir que observações visuais não transportam quantidades de stock nem executam mutações.
+- [x] Documentar outbox offline, inbox transaccional, retries, isolamento por loja e requisitos de autenticação.
+- [ ] Validar suite e integração CI.
+- [ ] Implementar registo de dispositivos, credenciais, endpoint de ingestão, inbox/outbox persistentes, cursor transaccional e acknowledgements; não activar ingestão antes destas peças.
+
 ## Computer Vision — manifesto ONNX Ed25519 (implementado; CI pendente)
 
 - [x] Verificar assinatura Ed25519 do manifesto com keyring explícito de chaves públicas confiáveis.
