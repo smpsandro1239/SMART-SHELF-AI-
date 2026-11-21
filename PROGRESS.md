@@ -1,10 +1,10 @@
-## 2026-11-21 — Isolamento multi-loja do histórico de alertas (em validação)
+## 2026-11-21 — Isolamento multi-loja do histórico de alertas (validado)
 
 - A revisão handler-a-handler confirmou que `GET /api/v1/observation-alerts/{alert_id}/events` carrega o alerta pai e chama `_require_alert_supervisor`, que verifica o papel e a loja antes de devolver eventos.
 - Acrescentado teste HTTP de regressão: um supervisor da loja A tenta ler a cronologia de um alerta da loja B e deve receber HTTP 403.
 - Removida uma segunda definição duplicada de `test_cross_store_alert_update_checks_scope_before_acquiring_row_lock`; a definição repetida não criava um cenário adicional, mas ocultava a duplicação na suite.
 - A implementação do endpoint não foi alterada: a cobertura passa a provar explicitamente o controlo já existente.
-- Estado: teste publicado; aguarda execução API CI e Quality Gates no commit desta ronda. Não declarar GREEN antes dos workflows terminarem.
+- Validação GREEN no commit `1a53a9f1`: API CI [44893270814](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44893270814) e Quality Gates [44893270837](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44893270837) passaram, com **1423 passed, 1 skipped**. Docker Compose [44893271027](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44893271027) e Security Scans [44893270848](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44893270848) também passaram.
 
 ## 2026-11-20 — Isolamento multi-loja nas mutações de planogramas
 

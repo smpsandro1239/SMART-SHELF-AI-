@@ -106,3 +106,18 @@ A cobertura de ordem de locks foi aplicada a 22 handlers de imagens, OCR, deteç
 Validação no commit 1c0f591: API CI e Quality Gates passaram com **1413 passed, 1 skipped**, migrations e smokes PostgreSQL 16 passaram. ZAP Baseline/API safe-mode apresentou 0 alertas High/Medium/Low.
 
 Limite: esta evidência não fecha a matriz completa BOLA/IDOR por recurso nem o teste autenticado de todos os perfis e lojas.
+
+
+## Cobertura adicional — histórico de eventos de alertas multi-loja (2026-11-21)
+
+A revisão do handler `GET /api/v1/observation-alerts/{alert_id}/events` confirmou que a rota carrega o alerta pai e chama `_require_alert_supervisor`, que verifica o papel e o store scope antes de consultar os eventos. Foi acrescentado o teste HTTP `test_cross_store_alert_event_history_is_denied`: um supervisor de outra loja recebe HTTP 403 ao tentar consultar a cronologia do alerta.
+
+Foi removida uma definição de teste duplicada em `test_observations.py`; a segunda definição tinha o mesmo nome e conteúdo, pelo que não cobria um cenário adicional.
+
+**Validação no commit `1a53a9f1ab0db69a920a4970c2d37c4bdfc257ce`:**
+- API CI [44893270814](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44893270814): sucesso; migrações e smokes PostgreSQL 16 passaram; suite **1423 passed, 1 skipped**.
+- Quality Gates [44893270837](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44893270837): sucesso; compilação Python, suite **1423 passed, 1 skipped**, TypeScript e build web aprovados.
+- Docker Compose [44893271027](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44893271027): sucesso.
+- Security Scans [44893270848](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44893270848): sucesso; pip-audit sem vulnerabilidades conhecidas, npm audit sem vulnerabilidades acima do limiar, Gitleaks sem leaks e ZAP passivo/safe-mode concluído.
+
+Esta evidência cobre a rota de eventos de alertas, não fecha a matriz completa endpoint × papel × loja nem substitui DAST autenticado/pentest.

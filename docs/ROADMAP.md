@@ -1,8 +1,8 @@
-### Isolamento multi-loja do histórico de alertas — 2026-11-21 (em validação)
+### Isolamento multi-loja do histórico de alertas — 2026-11-21 (validado)
 
 - Revisão estática: o endpoint valida o alerta pai com `_require_alert_supervisor` antes de consultar os eventos.
 - Adicionada regressão HTTP cross-store e removida uma definição de teste duplicada.
-- Aguardar API CI e Quality Gates do commit; a matriz completa BOLA/IDOR continua aberta.
+- API CI [44893270814](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44893270814) e Quality Gates [44893270837](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44893270837): **1423 passed, 1 skipped**. Docker Compose [44893271027](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44893271027) e Security Scans [44893270848](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44893270848) passaram. A matriz completa BOLA/IDOR continua aberta.
 
 ### RBAC centralizado (2026-11-20)
 
