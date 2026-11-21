@@ -936,5 +936,5 @@ Validação no commit `311fecc9e13641e6d5eb55465fda646fb2909601`: Quality Gates 
 - O teste também rejeita políticas duplicadas, categorias não suportadas e confirma que uma rota não registada é negada a todos os perfis.
 - Quality Gates [44882467613](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44882467613) passou: compilação Python, build Web e **1408 testes aprovados, 1 ignorado e 1 aviso**.
 - Docker Compose demo smoke [44882467596](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44882467596) passou.
-- API CI [44882467564](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44882467564) continuava em execução, incluindo os smokes PostgreSQL 16.
+- API CI [44882467564](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44882467564) concluiu com sucesso: migrations PostgreSQL 16, smokes de concorrência/isolamento/retention e **1408 passed, 1 skipped, 1 warning**.
 - Limite: esta cobertura verifica a política central por método/rota/perfil; não substitui a auditoria handler × perfil × loja e dos caminhos indirectos.

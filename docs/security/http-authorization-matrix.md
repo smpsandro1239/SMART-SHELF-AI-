@@ -460,6 +460,6 @@ Foi acrescentado o teste test_every_explicit_api_route_policy_matches_the_comple
 
 Quality Gates [44882467613](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44882467613) passou no commit b1c60246938befa86233b49f6d8a4841617fbfdc: **1408 passed, 1 skipped, 1 warning**, com compilação Python e build Web aprovados. O aviso continua a ser a depreciação externa de anyio.abc.BlockingPortal no Starlette TestClient.
 
-Docker Compose demo smoke [44882467596](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44882467596) passou. API CI [44882467564](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44882467564), incluindo os smokes PostgreSQL 16, ainda estava em execução quando esta atualização foi preparada.
+Docker Compose demo smoke [44882467596](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44882467596) passou. API CI [44882467564](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44882467564) concluiu com sucesso, incluindo migrations PostgreSQL 16, smokes de concorrência/isolamento/retention e **1408 passed, 1 skipped, 1 warning**.
 
 Esta evidência não fecha a auditoria de isolamento multi-loja por handler nem a matriz endpoint × perfil × tenant.
