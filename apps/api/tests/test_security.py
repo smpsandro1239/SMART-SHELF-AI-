@@ -299,3 +299,79 @@ def test_every_explicit_api_route_policy_matches_the_complete_role_matrix():
     assert api_role_denial("GET", "/api/v1/not-registered", "EMPLOYEE") == (
         "API route has no explicit authorization policy"
     )
+
+def test_store_scoped_lock_handlers_authorize_before_their_first_lock():
+    import inspect
+
+    import app.main as main_module
+
+    handlers = {
+        "get_shelf_image_content": "_lock_authorized_shelf_image",
+        "retry_shelf_image_analysis": "_lock_authorized_shelf_image",
+        "list_shelf_image_detections": "_lock_authorized_shelf_image",
+        "create_observation_from_demo_detection": "_lock_authorized_shelf_image",
+        "match_shelf_image_ocr_to_catalogue": "_lock_authorized_shelf_image",
+        "list_shelf_image_ocr_matches": "_lock_authorized_shelf_image",
+        "fuse_shelf_image_evidence": "_lock_authorized_shelf_image",
+        "list_shelf_image_fused_evidence": "_lock_authorized_shelf_image",
+        "create_shelf_image_ocr_run": "_lock_authorized_shelf_image",
+        "list_shelf_image_ocr_evidence": "_lock_authorized_shelf_image",
+        "list_shelf_image_ocr_runs": "_lock_authorized_shelf_image",
+        "create_detection_sku_review": "_lock_authorized_shelf_image",
+        "list_detection_sku_reviews": "_lock_authorized_shelf_image",
+        "restrict_shelf_image": "_lock_authorized_shelf_image",
+        "create_product_embedding_exemplar": "_lock_authorized_shelf_image",
+        "review_product_embedding_exemplar": "_lock_authorized_shelf_image",
+        "close_capture_session": "_lock_store_scoped_record",
+        "record_pallet_lifecycle_update": "_lock_store_scoped_record",
+        "reconcile_completed_replenishment": "_lock_store_scoped_record",
+        "update_replenishment_task_status": "_lock_store_scoped_record",
+        "upload_shelf_image": "_lock_store_scoped_record",
+        "update_observation_alert": "_require_alert_supervisor",
+    }
+    for handler_name, authorization_helper in handlers.items():
+        source = inspect.getsource(getattr(main_module, handler_name))
+        helper_position = source.find(authorization_helper)
+        lock_position = source.find(".with_for_update(")
+        assert helper_position >= 0, f"{handler_name} must use {authorization_helper}"
+        assert lock_position < 0 or helper_position < lock_position, (
+            f"{handler_name} must authorize store scope before acquiring row locks"
+        )
+
+
+def test_store_scoped_record_lock_rejects_foreign_store_before_lock():
+    from types import SimpleNamespace
+
+    from fastapi import HTTPException
+
+    from app.main import _lock_store_scoped_record
+
+    foreign_record = SimpleNamespace(id=41, store_id=22)
+    lock_attempts = []
+
+    class Query:
+        def filter(self, *args, **kwargs):
+            return self
+
+        def first(self):
+            return foreign_record
+
+        def with_for_update(self):
+            lock_attempts.append(True)
+            return self
+
+        def populate_existing(self):
+            return self
+
+    class FakeSession:
+        def query(self, model):
+            return Query()
+
+    supervisor = SimpleNamespace(id=7, role="SUPERVISOR", store_id=11)
+    with pytest.raises(HTTPException) as error:
+        _lock_store_scoped_record(
+            FakeSession(), SimpleNamespace(id=object()), 41, supervisor, "Record not found"
+        )
+
+    assert error.value.status_code == 403
+    assert lock_attempts == []

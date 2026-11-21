@@ -262,6 +262,61 @@ def _enforce_store_scope(actor: models.User | None, store_id: int) -> None:
         raise HTTPException(status_code=403, detail="Access to this store is not allowed")
 
 
+def _lock_authorized_shelf_image(
+    db: Session,
+    image_id: int,
+    actor: models.User | None,
+    *,
+    missing_status_code: int = 404,
+    missing_detail: str = "Shelf image not found",
+) -> tuple[models.ShelfImage, int]:
+    """Check tenant scope before locking a source image, then recheck after the lock."""
+    initial_store_id = _shelf_image_store_id(db, image_id)
+    if initial_store_id is None:
+        raise HTTPException(status_code=missing_status_code, detail=missing_detail)
+    _enforce_store_scope(actor, initial_store_id)
+
+    image = (
+        db.query(models.ShelfImage)
+        .filter(models.ShelfImage.id == image_id)
+        .with_for_update()
+        .populate_existing()
+        .first()
+    )
+    if image is None:
+        raise HTTPException(status_code=missing_status_code, detail=missing_detail)
+    store_id = _shelf_image_store_id(db, image_id)
+    if store_id is None:
+        raise HTTPException(status_code=missing_status_code, detail=missing_detail)
+    _enforce_store_scope(actor, store_id)
+    return image, store_id
+
+
+def _lock_store_scoped_record(
+    db: Session,
+    model,
+    record_id: int,
+    actor: models.User | None,
+    missing_detail: str,
+):
+    """Authorize a record's store before locking it, then recheck after refresh."""
+    initial = db.query(model).filter(model.id == record_id).first()
+    if initial is None:
+        raise HTTPException(status_code=404, detail=missing_detail)
+    _enforce_store_scope(actor, initial.store_id)
+    locked = (
+        db.query(model)
+        .filter(model.id == record_id)
+        .with_for_update()
+        .populate_existing()
+        .first()
+    )
+    if locked is None:
+        raise HTTPException(status_code=404, detail=missing_detail)
+    _enforce_store_scope(actor, locked.store_id)
+    return locked
+
+
 def _lock_store_for_task_creation(db: Session, store_id: int) -> None:
     """Serialize task creation per store on databases supporting row-level locks."""
     store = (
@@ -1181,16 +1236,9 @@ def list_capture_sessions(request: Request, shelf_id: int | None = None, include
 @app.post("/api/v1/capture-sessions/{session_id}/close", response_model=CaptureSessionRead, tags=["computer-vision"])
 def close_capture_session(session_id: int, request: Request, db: Session = Depends(get_db)):
     actor = _request_user(db, request)
-    item = (
-        db.query(models.CaptureSession)
-        .filter(models.CaptureSession.id == session_id)
-        .with_for_update()
-        .populate_existing()
-        .first()
+    item = _lock_store_scoped_record(
+        db, models.CaptureSession, session_id, actor, "Capture session not found"
     )
-    if item is None:
-        raise HTTPException(status_code=404, detail="Capture session not found")
-    _enforce_store_scope(actor, item.store_id)
     if actor is not None and actor.role == "EMPLOYEE":
         raise HTTPException(status_code=403, detail="Supervisor role required to close capture sessions")
     if item.ended_at is None:
@@ -1223,15 +1271,9 @@ async def upload_shelf_image(
 
     capture_session = None
     if capture_session_id is not None:
-        capture_session = (
-            db.query(models.CaptureSession)
-            .filter(models.CaptureSession.id == capture_session_id)
-            .with_for_update()
-            .populate_existing()
-            .first()
+        capture_session = _lock_store_scoped_record(
+            db, models.CaptureSession, capture_session_id, actor, "Capture session not found"
         )
-        if capture_session is None:
-            raise HTTPException(status_code=404, detail="Capture session not found")
         if capture_session.shelf_id != shelf.id or capture_session.store_id != shelf.zone.store_id:
             raise HTTPException(status_code=422, detail="Capture session does not belong to this shelf")
         if capture_session.ended_at is not None:
@@ -1312,16 +1354,7 @@ def restrict_shelf_image(image_id: int, payload: ShelfImageRetentionRequest, req
     actor = _request_user(db, request)
     if actor is not None and actor.role not in {"ADMIN", "SUPERVISOR"}:
         raise HTTPException(status_code=403, detail="Supervisor role required")
-    item = (
-        db.query(models.ShelfImage)
-        .filter(models.ShelfImage.id == image_id)
-        .with_for_update()
-        .populate_existing()
-        .first()
-    )
-    if item is None:
-        raise HTTPException(status_code=404, detail="Shelf image not found")
-    _enforce_store_scope(actor, _shelf_image_store_id(db, image_id))
+    item, _ = _lock_authorized_shelf_image(db, image_id, actor)
     if item.retention_status == "PURGED":
         raise HTTPException(status_code=409, detail="Purged image cannot be restricted")
     if item.retention_status == "ACTIVE":
@@ -2914,24 +2947,9 @@ def list_shelf_images(
 
 @app.get("/api/v1/shelf-images/{image_id}/content", tags=["computer-vision"])
 def get_shelf_image_content(image_id: int, request: Request, db: Session = Depends(get_db)):
-    # Lock the source row before checking retention so a concurrent restriction
-    # cannot pass the policy check while this request is preparing the response.
-    item = (
-        db.query(models.ShelfImage)
-        .join(models.Shelf, models.ShelfImage.shelf_id == models.Shelf.id)
-        .join(models.Zone, models.Shelf.zone_id == models.Zone.id)
-        .filter(models.ShelfImage.id == image_id)
-        .with_for_update(of=models.ShelfImage)
-        .populate_existing()
-        .first()
-    )
-    if item is None:
-        raise HTTPException(status_code=404, detail="Shelf image not found")
     actor = _request_user(db, request)
-    store_id = _shelf_image_store_id(db, image_id)
-    if store_id is None:
-        raise HTTPException(status_code=404, detail="Shelf image not found")
-    _enforce_store_scope(actor, store_id)
+    # Authorize the tenant before taking the source-image lock.
+    item, store_id = _lock_authorized_shelf_image(db, image_id, actor)
     _require_active_shelf_image(item)
     path = _resolve_shelf_image_storage_path(item.storage_path, store_id)
 
@@ -2965,19 +2983,10 @@ def retry_shelf_image_analysis(
     db: Session = Depends(get_db),
 ):
     """Requeue a failed image analysis for an authorized store supervisor."""
-    item = (
-        db.query(models.ShelfImage)
-        .filter(models.ShelfImage.id == image_id)
-        .with_for_update()
-        .populate_existing()
-        .first()
-    )
-    if item is None:
-        raise HTTPException(status_code=404, detail="Shelf image not found")
     actor = _request_user(db, request)
     if actor is not None and actor.role not in {"ADMIN", "SUPERVISOR"}:
         raise HTTPException(status_code=403, detail="Supervisor role required")
-    _enforce_store_scope(actor, _shelf_image_store_id(db, image_id))
+    item, _ = _lock_authorized_shelf_image(db, image_id, actor)
     _require_active_shelf_image(item)
     if item.analysis_status != "FAILED":
         raise HTTPException(status_code=409, detail="Only failed image analyses can be retried")
@@ -3004,19 +3013,8 @@ def list_shelf_image_detections(
     db: Session = Depends(get_db),
 ):
     """Return persisted model detections for an image, scoped to the user's store."""
-    image_record = (
-        db.query(models.ShelfImage)
-        .join(models.Shelf, models.ShelfImage.shelf_id == models.Shelf.id)
-        .join(models.Zone, models.Shelf.zone_id == models.Zone.id)
-        .filter(models.ShelfImage.id == image_id)
-        .with_for_update(of=models.ShelfImage)
-        .populate_existing()
-        .first()
-    )
-    if image_record is None:
-        raise HTTPException(status_code=404, detail="Shelf image not found")
     actor = _request_user(db, request)
-    _enforce_store_scope(actor, _shelf_image_store_id(db, image_id))
+    image_record, _ = _lock_authorized_shelf_image(db, image_id, actor)
     _require_active_shelf_image(image_record)
     return (
         db.query(models.ShelfImageDetection)
@@ -3051,15 +3049,7 @@ def create_observation_from_demo_detection(
     if initial_detection is None:
         raise HTTPException(status_code=404, detail="Detection not found")
     source_image_id = initial_detection.shelf_image_id
-    image = (
-        db.query(models.ShelfImage)
-        .filter(models.ShelfImage.id == source_image_id)
-        .with_for_update()
-        .populate_existing()
-        .first()
-    )
-    if image is None:
-        raise HTTPException(status_code=404, detail="Shelf image not found")
+    image, _ = _lock_authorized_shelf_image(db, source_image_id, actor)
     detection = (
         db.query(models.ShelfImageDetection)
         .filter(
@@ -3072,8 +3062,6 @@ def create_observation_from_demo_detection(
     )
     if detection is None:
         raise HTTPException(status_code=404, detail="Detection not found")
-    store_id = _shelf_image_store_id(db, image.id)
-    _enforce_store_scope(actor, store_id)
     _require_active_shelf_image(image)
     if image.analysis_status != "COMPLETED" or not (detection.model_version or "").startswith("mock-"):
         raise HTTPException(status_code=409, detail="Only completed mock-provider detections can create demo observations")
@@ -3213,17 +3201,8 @@ def _refresh_ocr_match_view(db: Session, rows: list[models.ShelfImageOCRMatch]):
 @app.post("/api/v1/shelf-images/{image_id}/ocr-matches", response_model=list[ShelfImageOCRMatchRead], tags=["computer-vision"])
 def match_shelf_image_ocr_to_catalogue(image_id: int, request: Request, db: Session = Depends(get_db)):
     """Rank active catalogue candidates for OCR text grouped by product detection."""
-    image_record = (
-        db.query(models.ShelfImage)
-        .filter(models.ShelfImage.id == image_id)
-        .with_for_update()
-        .populate_existing()
-        .first()
-    )
-    if image_record is None:
-        raise HTTPException(status_code=404, detail="Shelf image not found")
     actor = _request_user(db, request)
-    _enforce_store_scope(actor, _shelf_image_store_id(db, image_id))
+    image_record, _ = _lock_authorized_shelf_image(db, image_id, actor)
     _require_active_shelf_image(image_record)
 
     run = (
@@ -3314,16 +3293,8 @@ def list_shelf_image_ocr_matches(
     db: Session = Depends(get_db),
 ):
     """List persisted OCR catalogue suggestions for an image."""
-    image_record = (
-        db.query(models.ShelfImage)
-        .filter(models.ShelfImage.id == image_id)
-        .with_for_update()
-        .populate_existing()
-        .first()
-    )
-    if image_record is None:
-        raise HTTPException(status_code=404, detail="Shelf image not found")
-    _enforce_store_scope(_request_user(db, request), _shelf_image_store_id(db, image_id))
+    actor = _request_user(db, request)
+    image_record, _ = _lock_authorized_shelf_image(db, image_id, actor)
     _require_active_shelf_image(image_record)
     rows = (
         db.query(models.ShelfImageOCRMatch)
@@ -3406,17 +3377,8 @@ def fuse_shelf_image_evidence(image_id: int, request: Request, db: Session = Dep
     from app.product_matching import ProductCandidate, ProductMatch
     from app.product_text import OCRText, TextCandidate, TextMatch
 
-    image_record = (
-        db.query(models.ShelfImage)
-        .filter(models.ShelfImage.id == image_id)
-        .with_for_update()
-        .populate_existing()
-        .first()
-    )
-    if image_record is None:
-        raise HTTPException(status_code=404, detail="Shelf image not found")
     actor = _request_user(db, request)
-    _enforce_store_scope(actor, _shelf_image_store_id(db, image_id))
+    image_record, _ = _lock_authorized_shelf_image(db, image_id, actor)
     _require_active_shelf_image(image_record)
 
     run = (
@@ -3925,16 +3887,8 @@ def list_shelf_image_fused_evidence(
     allowed_statuses = {"CONSENSUS", "VISUAL_ONLY", "TEXT_ONLY", "CONFLICT", "AMBIGUOUS", "UNKNOWN"}
     if status is not None and status not in allowed_statuses:
         raise HTTPException(status_code=422, detail="Unsupported evidence-fusion status")
-    image_record = (
-        db.query(models.ShelfImage)
-        .filter(models.ShelfImage.id == image_id)
-        .with_for_update()
-        .populate_existing()
-        .first()
-    )
-    if image_record is None:
-        raise HTTPException(status_code=404, detail="Shelf image not found")
-    _enforce_store_scope(_request_user(db, request), _shelf_image_store_id(db, image_id))
+    actor = _request_user(db, request)
+    image_record, _ = _lock_authorized_shelf_image(db, image_id, actor)
     _require_active_shelf_image(image_record)
     query = (
         db.query(models.ShelfImageFusedEvidence)
@@ -4018,17 +3972,8 @@ def list_shelf_image_fused_evidence(
 @app.post("/api/v1/shelf-images/{image_id}/ocr-runs", response_model=ShelfImageOCRRunRead, status_code=201, tags=["computer-vision"])
 def create_shelf_image_ocr_run(image_id: int, payload: ShelfImageOCRRunCreate, request: Request, db: Session = Depends(get_db)):
     """Persist one immutable OCR pass and its per-region detection associations."""
-    image_record = (
-        db.query(models.ShelfImage)
-        .filter(models.ShelfImage.id == image_id)
-        .with_for_update()
-        .populate_existing()
-        .first()
-    )
-    if image_record is None:
-        raise HTTPException(status_code=404, detail="Shelf image not found")
     actor = _request_user(db, request)
-    _enforce_store_scope(actor, _shelf_image_store_id(db, image_id))
+    image_record, _ = _lock_authorized_shelf_image(db, image_id, actor)
     _require_active_shelf_image(image_record)
 
     detection_ids = {item.detection_id for item in payload.regions if item.detection_id is not None}
@@ -4079,16 +4024,8 @@ def list_shelf_image_ocr_evidence(
     db: Session = Depends(get_db),
 ):
     """List OCR evidence for an image, newest inference run first."""
-    image_record = (
-        db.query(models.ShelfImage)
-        .filter(models.ShelfImage.id == image_id)
-        .with_for_update()
-        .populate_existing()
-        .first()
-    )
-    if image_record is None:
-        raise HTTPException(status_code=404, detail="Shelf image not found")
-    _enforce_store_scope(_request_user(db, request), _shelf_image_store_id(db, image_id))
+    actor = _request_user(db, request)
+    image_record, _ = _lock_authorized_shelf_image(db, image_id, actor)
     _require_active_shelf_image(image_record)
     return (
         db.query(models.ShelfImageOCREvidence)
@@ -4106,16 +4043,8 @@ def list_shelf_image_ocr_runs(
     db: Session = Depends(get_db),
 ):
     """List OCR inference provenance for a shelf image."""
-    image_record = (
-        db.query(models.ShelfImage)
-        .filter(models.ShelfImage.id == image_id)
-        .with_for_update()
-        .populate_existing()
-        .first()
-    )
-    if image_record is None:
-        raise HTTPException(status_code=404, detail="Shelf image not found")
-    _enforce_store_scope(_request_user(db, request), _shelf_image_store_id(db, image_id))
+    actor = _request_user(db, request)
+    image_record, _ = _lock_authorized_shelf_image(db, image_id, actor)
     _require_active_shelf_image(image_record)
     return (
         db.query(models.ShelfImageOCRRun)
@@ -4153,17 +4082,7 @@ def create_detection_sku_review(
     source_image_id = initial_detection.shelf_image_id
 
     actor = _request_user(db, request)
-    _enforce_store_scope(actor, _shelf_image_store_id(db, source_image_id))
-
-    image_record = (
-        db.query(models.ShelfImage)
-        .filter(models.ShelfImage.id == source_image_id)
-        .with_for_update()
-        .populate_existing()
-        .first()
-    )
-    if image_record is None:
-        raise HTTPException(status_code=404, detail="Shelf image not found")
+    image_record, _ = _lock_authorized_shelf_image(db, source_image_id, actor)
     if image_record.retention_status != "ACTIVE":
         _require_active_shelf_image(image_record)
 
@@ -4234,20 +4153,12 @@ def list_detection_sku_reviews(
     offset: int = 0,
     db: Session = Depends(get_db),
 ):
+    actor = _request_user(db, request)
     initial_detection = db.get(models.ShelfImageDetection, detection_id)
     if initial_detection is None:
         raise HTTPException(status_code=404, detail="Detection not found")
     source_image_id = initial_detection.shelf_image_id
-    image_record = (
-        db.query(models.ShelfImage)
-        .filter(models.ShelfImage.id == source_image_id)
-        .with_for_update()
-        .populate_existing()
-        .first()
-    )
-    if image_record is None:
-        raise HTTPException(status_code=404, detail="Shelf image not found")
-    _enforce_store_scope(_request_user(db, request), _shelf_image_store_id(db, source_image_id))
+    image_record, _ = _lock_authorized_shelf_image(db, source_image_id, actor)
     _require_active_shelf_image(image_record)
     detection = (
         db.query(models.ShelfImageDetection)
@@ -4309,16 +4220,10 @@ def create_product_embedding_exemplar(
     # This serializes creation against retention and product deactivation.
     actor = _request_user(db, request)
     if payload.shelf_image_id is not None:
-        source_image = (
-            db.query(models.ShelfImage)
-            .filter(models.ShelfImage.id == payload.shelf_image_id)
-            .with_for_update()
-            .populate_existing()
-            .first()
+        source_image, _ = _lock_authorized_shelf_image(
+            db, payload.shelf_image_id, actor,
+            missing_detail="Source shelf image not found",
         )
-        if source_image is None:
-            raise HTTPException(status_code=404, detail="Source shelf image not found")
-        _enforce_store_scope(actor, _shelf_image_store_id(db, source_image.id))
         _require_active_shelf_image(source_image)
         if source_image.sha256.lower() != payload.image_sha256.lower():
             raise HTTPException(status_code=422, detail="image_sha256 does not match source shelf image")
@@ -4422,16 +4327,11 @@ def review_product_embedding_exemplar(
     actor = _request_user(db, request)
     source_image = None
     if initial.shelf_image_id is not None:
-        source_image = (
-            db.query(models.ShelfImage)
-            .filter(models.ShelfImage.id == initial.shelf_image_id)
-            .with_for_update()
-            .populate_existing()
-            .first()
+        source_image, _ = _lock_authorized_shelf_image(
+            db, initial.shelf_image_id, actor,
+            missing_status_code=410,
+            missing_detail="Source shelf image is no longer available",
         )
-        if source_image is None:
-            raise HTTPException(status_code=410, detail="Source shelf image is no longer available")
-        _enforce_store_scope(actor, _shelf_image_store_id(db, initial.shelf_image_id))
         _require_active_shelf_image(source_image)
     product = (
         db.query(models.Product)
@@ -6037,10 +5937,9 @@ def record_pallet_lifecycle_update(
 ):
     """Record a supervised, optimistic-concurrency-protected pallet state update."""
     actor = _request_user(db, request)
-    pallet = db.query(models.StorePallet).filter_by(id=pallet_id).with_for_update().first()
-    if pallet is None:
-        raise HTTPException(status_code=404, detail="Pallet not found")
-    _enforce_store_scope(actor, pallet.store_id)
+    pallet = _lock_store_scoped_record(
+        db, models.StorePallet, pallet_id, actor, "Pallet not found"
+    )
 
     if pallet.status != payload.expected_status or float(pallet.base_quantity) != payload.expected_base_quantity:
         raise HTTPException(status_code=409, detail="Pallet state changed; refresh and retry with the current status and quantity")
@@ -6847,15 +6746,9 @@ def reconcile_completed_replenishment(
     if actor.role not in {"ADMIN", "SUPERVISOR"}:
         raise HTTPException(status_code=403, detail="Supervisor approval is required")
 
-    task = (
-        db.query(models.ReplenishmentTask)
-        .filter(models.ReplenishmentTask.id == task_id)
-        .with_for_update()
-        .first()
+    task = _lock_store_scoped_record(
+        db, models.ReplenishmentTask, task_id, actor, "Task not found"
     )
-    if task is None:
-        raise HTTPException(status_code=404, detail="Task not found")
-    _enforce_store_scope(actor, task.store_id)
     product = db.query(models.Product).filter(models.Product.id == task.product_id).with_for_update().first()
     if product is None:
         raise HTTPException(status_code=404, detail="Product not found")
@@ -8012,12 +7905,10 @@ def update_replenishment_task_status(
     request: Request,
     db: Session = Depends(get_db),
 ):
-    task = db.query(models.ReplenishmentTask).filter(models.ReplenishmentTask.id == task_id).with_for_update().first()
-    if task is None:
-        raise HTTPException(status_code=404, detail="Task not found")
     actor = _request_user(db, request)
-    if actor is not None and actor.role != "ADMIN" and task.store_id != actor.store_id:
-        raise HTTPException(status_code=403, detail="Access to this task is not allowed")
+    task = _lock_store_scoped_record(
+        db, models.ReplenishmentTask, task_id, actor, "Task not found"
+    )
     if actor is not None and actor.role == "EMPLOYEE":
         if task.assigned_user_id != actor.id:
             raise HTTPException(status_code=403, detail="Employees can only update tasks assigned to them")
