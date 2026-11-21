@@ -542,3 +542,133 @@ def test_decode_clips_partial_vertical_padding_overlap_to_original_image():
     assert len(boxes) == 1
     _, _, x1, y1, x2, y2 = boxes[0]
     assert (x1, y1, x2, y2) == pytest.approx((0.1, 0.0, 0.9, 0.5))
+
+
+
+def test_provider_rejects_detector_digest_that_is_not_the_approved_digest(tmp_path, monkeypatch):
+    import sys
+
+    detector = tmp_path / "detector.onnx"
+    detector.write_bytes(b"unapproved-detector")
+    loaded = []
+    monkeypatch.setitem(
+        sys.modules,
+        "onnxruntime",
+        SimpleNamespace(InferenceSession=lambda *args, **kwargs: loaded.append(args) or fake_session()),
+    )
+
+    with pytest.raises(ONNXConfigurationError, match="approved SHA-256"):
+        ONNXShelfVisionProvider(
+            detector,
+            class_labels={0: "product"},
+            expected_detector_sha256="0" * 64,
+        )
+
+    assert loaded == []
+
+
+@pytest.mark.parametrize("digest", ["", "not-a-digest", "a" * 63, "g" * 64])
+def test_provider_rejects_malformed_approved_detector_digest(tmp_path, digest):
+    detector = tmp_path / "detector.onnx"
+    detector.write_bytes(b"detector")
+
+    with pytest.raises(ONNXConfigurationError, match="64-character SHA-256"):
+        ONNXShelfVisionProvider(
+            detector,
+            class_labels={0: "product"},
+            expected_detector_sha256=digest,
+        )
+
+
+def test_provider_accepts_matching_approved_detector_digest(tmp_path, monkeypatch):
+    import sys
+
+    detector = tmp_path / "detector.onnx"
+    detector.write_bytes(b"approved-detector")
+    expected = _sha256_file(detector)
+    monkeypatch.setitem(
+        sys.modules,
+        "onnxruntime",
+        SimpleNamespace(InferenceSession=lambda *args, **kwargs: fake_session()),
+    )
+
+    provider = ONNXShelfVisionProvider(
+        detector,
+        class_labels={0: "product"},
+        expected_detector_sha256=expected,
+    )
+
+    assert provider.detector_sha256 == expected
+
+
+def test_provider_rejects_unapproved_embedding_digest_before_loading_sessions(tmp_path, monkeypatch):
+    import sys
+
+    detector = tmp_path / "detector.onnx"
+    embedder = tmp_path / "embedder.onnx"
+    detector.write_bytes(b"approved-detector")
+    embedder.write_bytes(b"unapproved-embedder")
+    loaded = []
+    monkeypatch.setitem(
+        sys.modules,
+        "onnxruntime",
+        SimpleNamespace(InferenceSession=lambda *args, **kwargs: loaded.append(args) or fake_session()),
+    )
+
+    with pytest.raises(ONNXConfigurationError, match="approved SHA-256"):
+        ONNXShelfVisionProvider(
+            detector,
+            embedder,
+            class_labels={0: "product"},
+            expected_detector_sha256=_sha256_file(detector),
+            expected_embedding_sha256="0" * 64,
+        )
+
+    assert loaded == []
+
+
+def test_real_provider_factory_requires_approved_detector_digest(tmp_path, monkeypatch):
+    import sys
+
+    detector = tmp_path / "detector.onnx"
+    detector.write_bytes(b"detector")
+    monkeypatch.setenv("VISION_DETECTOR_MODEL_PATH", str(detector))
+    monkeypatch.setenv("VISION_CLASS_LABELS_JSON", '{"0":"product"}')
+    monkeypatch.delenv("VISION_DETECTOR_MODEL_SHA256", raising=False)
+    monkeypatch.delenv("VISION_EMBEDDING_MODEL_PATH", raising=False)
+    monkeypatch.setitem(
+        sys.modules,
+        "onnxruntime",
+        SimpleNamespace(InferenceSession=lambda *args, **kwargs: fake_session()),
+    )
+
+    from app.vision_onnx import create_provider
+
+    with pytest.raises(ONNXConfigurationError, match="VISION_DETECTOR_MODEL_SHA256 is required"):
+        create_provider()
+
+
+def test_real_provider_factory_requires_approved_embedding_digest_when_embedder_is_configured(
+    tmp_path, monkeypatch
+):
+    import sys
+
+    detector = tmp_path / "detector.onnx"
+    embedder = tmp_path / "embedder.onnx"
+    detector.write_bytes(b"detector")
+    embedder.write_bytes(b"embedder")
+    monkeypatch.setenv("VISION_DETECTOR_MODEL_PATH", str(detector))
+    monkeypatch.setenv("VISION_DETECTOR_MODEL_SHA256", _sha256_file(detector))
+    monkeypatch.setenv("VISION_EMBEDDING_MODEL_PATH", str(embedder))
+    monkeypatch.delenv("VISION_EMBEDDING_MODEL_SHA256", raising=False)
+    monkeypatch.setenv("VISION_CLASS_LABELS_JSON", '{"0":"product"}')
+    monkeypatch.setitem(
+        sys.modules,
+        "onnxruntime",
+        SimpleNamespace(InferenceSession=lambda *args, **kwargs: fake_session()),
+    )
+
+    from app.vision_onnx import create_provider
+
+    with pytest.raises(ONNXConfigurationError, match="VISION_EMBEDDING_MODEL_SHA256 is required"):
+        create_provider()
