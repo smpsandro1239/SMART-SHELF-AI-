@@ -938,3 +938,10 @@ Validação no commit `311fecc9e13641e6d5eb55465fda646fb2909601`: Quality Gates 
 - Docker Compose demo smoke [44882467596](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44882467596) passou.
 - API CI [44882467564](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44882467564) concluiu com sucesso: migrations PostgreSQL 16, smokes de concorrência/isolamento/retention e **1408 passed, 1 skipped, 1 warning**.
 - Limite: esta cobertura verifica a política central por método/rota/perfil; não substitui a auditoria handler × perfil × loja e dos caminhos indirectos.
+
+### 2026-11-21 — SCA, secret scanning e DAST configurados
+
+- Criado .github/workflows/security-scans.yml com pip-audit para dependências API/OCR, npm audit --audit-level=high, Gitleaks e OWASP ZAP Baseline contra Docker Compose efémero.
+- As Actions externas são fixadas a SHA completo e as permissões são limitadas por job.
+- ZAP corre inicialmente em modo baseline passivo/report-only; não executa operações activas nem prova a segurança de rotas autenticadas.
+- Estado: configuração publicada; aguardar resultados reais e triagem dos relatórios antes de marcar SCA, secret scan ou DAST como concluídos.

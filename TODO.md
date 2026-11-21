@@ -1227,3 +1227,11 @@ Critério global: nenhuma capacidade pode ser marcada como concluída sem códig
 - [x] API CI [44882467564](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44882467564) passou no mesmo commit: auditoria estrita de rotas, migrations PostgreSQL 16, smokes de concorrência/isolamento/retention e **1408 passed, 1 skipped, 1 warning**.
 - [ ] Prosseguir a matriz handler × perfil × loja e caminhos indirectos. A matriz RBAC prova classificação por método/rota, não o isolamento de cada recurso.
 - [ ] Executar SCA, secret scan e DAST com scanners reais disponíveis; nenhuma execução é declarada nesta ronda.
+
+## Segurança — scanners automatizados SCA, segredos e DAST (2026-11-21)
+
+- [x] Criar workflow isolado .github/workflows/security-scans.yml, com permissões mínimas, checkout sem persistência de credenciais e execução em runners efémeros.
+- [x] Configurar pip-audit sobre dependências API e OCR opcionais, npm audit --audit-level=high sobre o lockfile Web e Gitleaks sobre o histórico Git.
+- [x] Configurar OWASP ZAP Baseline contra a API local efémera do Docker Compose. É um scan passivo inicial, sem autenticação e sem operações destrutivas; os alertas ficam em relatório para triagem, não são silenciosamente ignorados.
+- [ ] Aguardar e analisar os resultados reais de SCA, Gitleaks e ZAP no workflow do commit que introduz os scanners. Não declarar vulnerabilidades ausentes antes da execução.
+- [ ] Corrigir findings confirmados, adicionar regressões e definir limiares de bloqueio depois da triagem do baseline.

@@ -74,3 +74,14 @@ O planeador de paletes ignora candidatos que não sejam objetos de mapeamento e 
 - The operator-input portfolio endpoint no longer truncates fractional limits with `int(limit)`; the requested limit must already be an integer.
 - A physically ready replacement pallet is allocated to at most one display-pallet candidate per planning run. Multiple display pallets cannot all inherit readiness from the same warehouse pallet; allocation follows the stable pallet-ID order returned by the database query and is covered by regression tests.
 - Invalid input is rejected with HTTP 422 before portfolio database work proceeds. Both portfolio endpoints remain read-only.
+
+## Scanners de segurança
+
+O workflow .github/workflows/security-scans.yml executa separadamente:
+
+- pip-audit sobre dependências de API e OCR opcional;
+- npm audit --audit-level=high sobre o package-lock.json;
+- Gitleaks sobre o histórico Git, incluindo commits anteriores;
+- OWASP ZAP Baseline sobre a API local iniciada por Docker Compose num runner efémero.
+
+As Actions externas estão fixadas a SHA completo. O job ZAP é inicialmente passivo e report-only para recolher um baseline sem fazer pedidos de escrita nem abrir issues automaticamente. A ausência de findings só pode ser declarada depois de consultar os resultados do SHA exacto; o baseline não é um pentest, não cobre autenticação com sessão real e não substitui DAST autenticado, SCA de imagens de containers ou revisão manual.
