@@ -109,3 +109,18 @@ def test_evaluator_rejects_boolean_annotation_identifiers():
 def test_evaluator_rejects_invalid_operating_threshold():
     with pytest.raises(ValueError, match="operating_threshold"):
         evaluate_coco_detections(make_coco(), [], operating_threshold=float("nan"))
+
+
+def test_evaluation_runner_requires_explicit_inference_approved_release(monkeypatch):
+    from scripts.evaluate_vision_model import _approved_release_context
+
+    monkeypatch.setenv("SMART_SHELF_DATASET_APPROVAL_STATUS", "APPROVED")
+    monkeypatch.setenv("SMART_SHELF_DATASET_RELEASE_ID", "release-123")
+    monkeypatch.setenv("SMART_SHELF_DATASET_RELEASE_FINGERPRINT", "a" * 64)
+    monkeypatch.setenv("SMART_SHELF_DATASET_APPROVAL_MODE", "training")
+
+    with pytest.raises(ValueError, match="approved for inference"):
+        _approved_release_context()
+
+    monkeypatch.setenv("SMART_SHELF_DATASET_APPROVAL_MODE", "inference")
+    assert _approved_release_context()["release_id"] == "release-123"
