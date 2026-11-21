@@ -15,7 +15,7 @@ import subprocess
 from pathlib import Path
 from typing import Any, Sequence
 
-from app.dataset_release import create_release
+from app.dataset_release import create_release, sha256_file
 
 
 def _read_provenance(provenance_path: Path) -> dict[str, Any]:
@@ -77,11 +77,19 @@ def run_release_consumer(
 
         from app.dataset_approval import run_release_gate
 
+        split_hashes_before = {
+            split: sha256_file(path) for split, path in sorted(split_paths.items())
+        }
         gate_errors, gate_report = run_release_gate(
             release_record, manifest_path, split_paths,
             provenance_path=provenance_path, db_session=db_session, mode=mode,
             review_paths=review_paths, require_visual_review=require_visual_review,
         )
+        split_hashes_after = {
+            split: sha256_file(path) for split, path in sorted(split_paths.items())
+        }
+        if split_hashes_before != split_hashes_after:
+            raise ValueError("dataset annotation files changed while the approval gate was running")
         if gate_errors or gate_report.get("status") != "APPROVED":
             reasons = gate_errors or gate_report.get("errors") or ["approval gate did not approve the dataset"]
             raise ValueError("dataset approval gate rejected: " + "; ".join(reasons))
@@ -91,6 +99,7 @@ def run_release_consumer(
             "mode": mode,
             "record_sha256": hashlib.sha256(release_record_bytes).hexdigest(),
             "gate_report_sha256": _approval_digest(gate_report),
+            "split_annotations_sha256": split_hashes_after,
         }
         release, _created = create_release(
             manifest_path, split_audit_path, visual_audit_path, registry_dir,
