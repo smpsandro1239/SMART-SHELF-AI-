@@ -34,7 +34,7 @@ from jwt import InvalidTokenError
 from app.config import settings
 from app.database import get_db, SessionLocal
 from app import models
-from app.api_security_policy import PUBLIC_API_PATHS, api_role_denial
+from app.api_security_policy import api_role_denial, is_public_api_route
 from app.artifact_access_policy import evaluate_artifact_access
 from app.operational_decision_engine import DecisionPolicy, evaluate_shelf_decision
 from app.observation_consensus import evaluate_observation_consensus
@@ -155,7 +155,7 @@ async def require_api_authentication(request: Request, call_next):
         return await call_next(request)
     if settings.app_env == "test":
         return await call_next(request)
-    if not request.url.path.startswith("/api/v1/") or request.url.path in PUBLIC_API_PATHS:
+    if not request.url.path.startswith("/api/v1/") or is_public_api_route(request.method, request.url.path):
         return await call_next(request)
     authorization = request.headers.get("Authorization", "")
     scheme, _, token = authorization.partition(" ")
