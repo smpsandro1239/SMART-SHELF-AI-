@@ -107,6 +107,16 @@ def create_release(
             if (not isinstance(digest, str) or len(digest) != 64
                     or any(character not in "0123456789abcdef" for character in digest)):
                 raise ValueError(f"approval_evidence.{field} must be a lowercase SHA-256 digest")
+        split_hashes = approval_evidence.get("split_annotations_sha256")
+        if split_hashes is not None:
+            if not isinstance(split_hashes, dict) or set(split_hashes) != REQUIRED_SPLITS:
+                raise ValueError("approval_evidence.split_annotations_sha256 must contain train, val and test")
+            for split_name, digest in split_hashes.items():
+                if (not isinstance(digest, str) or len(digest) != 64
+                        or any(character not in "0123456789abcdef" for character in digest)):
+                    raise ValueError(
+                        f"approval_evidence.split_annotations_sha256.{split_name} must be a lowercase SHA-256 digest"
+                    )
 
     rows = load_manifest(manifest_path)
     try:
