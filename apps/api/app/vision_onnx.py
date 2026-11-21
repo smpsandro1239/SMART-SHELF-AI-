@@ -16,6 +16,7 @@ import os
 from pathlib import Path
 
 from app.vision import DetectionResult, VisionAnalysis
+from app.vision_model_manifest import ModelManifestError, verify_model_manifest
 
 
 class ONNXConfigurationError(RuntimeError):
@@ -433,6 +434,23 @@ def create_provider() -> ONNXShelfVisionProvider:
     expected_embedding_sha256 = _env_sha256(
         "VISION_EMBEDDING_MODEL_SHA256", required=bool(embedder)
     )
+    manifest_path = os.getenv("VISION_MODEL_MANIFEST_PATH", "").strip()
+    trusted_keys_json = os.getenv("VISION_MODEL_TRUSTED_KEYS_JSON", "").strip()
+    if not manifest_path:
+        raise ONNXConfigurationError("VISION_MODEL_MANIFEST_PATH is required for a real ONNX provider")
+    try:
+        signed_model = verify_model_manifest(
+            manifest_path,
+            trusted_keys_json,
+            detector,
+            embedder,
+        )
+    except ModelManifestError as exc:
+        raise ONNXConfigurationError(str(exc)) from exc
+    if signed_model["detector_sha256"] != expected_detector_sha256:
+        raise ONNXConfigurationError("VISION_DETECTOR_MODEL_SHA256 does not match the signed manifest")
+    if signed_model["embedding_sha256"] != expected_embedding_sha256:
+        raise ONNXConfigurationError("VISION_EMBEDDING_MODEL_SHA256 does not match the signed manifest")
     return ONNXShelfVisionProvider(
         detector,
         embedder,
