@@ -2,7 +2,7 @@
 
 A release is created only when the split-leakage and visual-similarity
 reports explicitly contain status='passed' and an empty errors list.
-The release fingerprint binds the normalized image manifest and provenance sidecar hash.
+The release fingerprint binds the normalized image manifest, provenance sidecar hash and, when approval evidence is supplied, the approved annotation split hashes.
 """
 import argparse
 import csv
