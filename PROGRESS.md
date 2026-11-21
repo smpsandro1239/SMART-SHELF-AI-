@@ -1,3 +1,12 @@
+## 2026-11-21 — Contrato Edge AI v1 (implementação de domínio publicada; CI pendente)
+
+- Criado `apps/api/app/edge_event_contract.py` com envelope v1, payloads tipados por evento, limites de tamanho/profundidade, timestamps timezone-aware, IDs e hashes validados.
+- Tipos: DEVICE_HEARTBEAT, SHELF_CAPTURED, SHELF_OBSERVATION e TASK_ACKNOWLEDGED.
+- Acrescentados fingerprint SHA-256 canónico, chave idempotente por dispositivo/evento, comparação de replay exacto e classificação de sequência NEXT/GAP/STALE.
+- Criados testes em `apps/api/tests/test_edge_event_contract.py` para payloads válidos/inválidos, tenant IDs, bounding boxes, tamanho, idempotência e lacunas de sequência.
+- Documentação do protocolo: `docs/edge-device-event-contract.md`.
+- Limite explícito: não existe ainda autenticação/registo de dispositivos, endpoint, inbox/outbox persistente, cursor durável nem ACK de entrega. O módulo não faz persistência nem mutações de inventário. CI pendente.
+
 ## 2026-11-21 — Manifesto ONNX assinado com Ed25519 (implementação publicada; CI pendente)
 
 - O provider ONNX real passou a exigir um manifesto autenticado por Ed25519 e um keyring explícito de chaves públicas confiáveis.
