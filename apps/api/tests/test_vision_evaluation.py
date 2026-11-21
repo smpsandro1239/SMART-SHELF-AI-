@@ -112,16 +112,82 @@ def test_evaluator_rejects_invalid_operating_threshold():
         evaluate_coco_detections(make_coco(), [], operating_threshold=float("nan"))
 
 
-def test_evaluation_runner_requires_explicit_inference_approved_release(monkeypatch):
-    from scripts.evaluate_vision_model import _approved_release_context
+def write_approved_release_inputs(tmp_path, monkeypatch):
+    import csv
+    import hashlib
+    import json
 
+    image_bytes = b"approved-test-image"
+    image_digest = hashlib.sha256(image_bytes).hexdigest()
+    document = {
+        "images": [{
+            "id": 1,
+            "file_name": "test/shelf.jpg",
+            "width": 100,
+            "height": 100,
+            "sha256": image_digest,
+        }],
+        "annotations": [],
+        "categories": [{"id": 1, "name": "product"}],
+    }
+    annotations = tmp_path / "instances_test.json"
+    annotations.write_text(json.dumps(document), encoding="utf-8")
+
+    manifest = tmp_path / "manifest.csv"
+    with manifest.open("w", encoding="utf-8", newline="") as stream:
+        writer = csv.DictWriter(stream, fieldnames=["split", "file_name", "size_bytes", "sha256"])
+        writer.writeheader()
+        writer.writerows([
+            {"split": "train", "file_name": "train/shelf.jpg", "size_bytes": 10, "sha256": "1" * 64},
+            {"split": "val", "file_name": "val/shelf.jpg", "size_bytes": 10, "sha256": "2" * 64},
+            {"split": "test", "file_name": "test/shelf.jpg", "size_bytes": len(image_bytes), "sha256": image_digest},
+        ])
+
+    release_path = tmp_path / "approved-release.json"
+    release = {
+        "release_id": "release-123",
+        "fingerprint": "a" * 64,
+        "manifest_sha256": hashlib.sha256(manifest.read_bytes()).hexdigest(),
+        "approval": {
+            "status": "APPROVED",
+            "mode": "inference",
+            "split_annotations_sha256": {
+                "train": "3" * 64,
+                "val": "4" * 64,
+                "test": hashlib.sha256(annotations.read_bytes()).hexdigest(),
+            },
+        },
+    }
+    release_path.write_text(json.dumps(release), encoding="utf-8")
     monkeypatch.setenv("SMART_SHELF_DATASET_APPROVAL_STATUS", "APPROVED")
+    monkeypatch.setenv("SMART_SHELF_DATASET_APPROVAL_MODE", "inference")
     monkeypatch.setenv("SMART_SHELF_DATASET_RELEASE_ID", "release-123")
     monkeypatch.setenv("SMART_SHELF_DATASET_RELEASE_FINGERPRINT", "a" * 64)
+    monkeypatch.setenv("SMART_SHELF_DATASET_RELEASE_PATH", str(release_path))
+    return annotations, manifest, document
+
+
+def test_evaluation_runner_requires_inference_approval_and_binds_all_release_inputs(tmp_path, monkeypatch):
+    from scripts.evaluate_vision_model import _approved_release_context
+
+    annotations, manifest, document = write_approved_release_inputs(tmp_path, monkeypatch)
+
+    assert _approved_release_context(annotations, manifest, document)["release_id"] == "release-123"
+
     monkeypatch.setenv("SMART_SHELF_DATASET_APPROVAL_MODE", "training")
-
     with pytest.raises(ValueError, match="approved for inference"):
-        _approved_release_context()
+        _approved_release_context(annotations, manifest, document)
 
-    monkeypatch.setenv("SMART_SHELF_DATASET_APPROVAL_MODE", "inference")
-    assert _approved_release_context()["release_id"] == "release-123"
+
+def test_evaluation_runner_rejects_annotation_or_manifest_drift(tmp_path, monkeypatch):
+    from scripts.evaluate_vision_model import _approved_release_context
+
+    annotations, manifest, document = write_approved_release_inputs(tmp_path, monkeypatch)
+    annotations.write_text('{"images":[],"annotations":[],"categories":[]}', encoding="utf-8")
+    with pytest.raises(ValueError, match="annotations do not match"):
+        _approved_release_context(annotations, manifest, document)
+
+    annotations, manifest, document = write_approved_release_inputs(tmp_path / "second", monkeypatch)
+    manifest.write_text(manifest.read_text(encoding="utf-8") + "\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="manifest does not match"):
+        _approved_release_context(annotations, manifest, document)
