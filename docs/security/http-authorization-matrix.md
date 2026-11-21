@@ -4,6 +4,31 @@
 
 Este documento regista a política de autorização aplicada pelo middleware HTTP em `apps/api/app/main.py` e a cobertura de integração com tokens JWT assinados. Não substitui a revisão de autorização de cada handler: o middleware decide se o perfil pode invocar uma família de rotas; os handlers continuam responsáveis por validar o âmbito da loja, atribuições e propriedade do recurso.
 
+## Registo declarativo por método e template — 2026-11-21
+
+A autorização está agora declarada em `apps/api/app/api_security_policy.py` através de uma entrada por método HTTP e template FastAPI. O inventário actual contém **128 combinações método/rota**:
+
+| Política | Número de rotas | Permissão |
+|---|---:|---|
+| `PUBLIC` | 2 | Apenas os métodos públicos de bootstrap e login |
+| `ADMIN_ONLY` | 25 | ADMIN |
+| `SUPERVISOR_OR_ADMIN` | 88 | SUPERVISOR ou ADMIN |
+| `EMPLOYEE_ALLOWLIST` | 13 | Os três perfis, sujeitos às verificações do handler |
+
+A correspondência de rotas dinâmicas é feita segmento a segmento contra o template registado, e o método tem de coincidir. Por isso, um novo método numa rota existente não herda automaticamente a política de outro método. Os pedidos públicos também são identificados pelo par método/caminho, não apenas pelo caminho.
+
+**Fail-closed:** qualquer combinação não declarada é `UNCLASSIFIED` e recebe HTTP 403 para todos os perfis, incluindo ADMIN. Não existe fallback `AUTHENTICATED_STAFF`. A lista de rotas está em [http-route-inventory.md](http-route-inventory.md).
+
+A cobertura dinâmica é garantida por `test_every_registered_versioned_api_route_has_an_explicit_method_policy`, que percorre os `APIRoute` efectivamente registados, e pelo auditor `apps/api/scripts/audit_api_route_policy.py --strict`, integrado no API CI. A matriz central não substitui a autorização por recurso nem o isolamento multi-loja implementado nos handlers.
+
+## Revalidação do actor no limite do handler — 2026-11-21
+
+O middleware continua a validar o Bearer e o perfil persistido. Os handlers de criação/gestão de lojas, zonas, prateleiras, produtos, utilizadores e embalagens/perfis de armazém passam também a chamar `_request_user` na sessão DB usada pela operação. Isto fecha a janela em que um perfil ADMIN/SUPERVISOR podia ser alterado depois da verificação no middleware, mas antes de um handler que não voltava a carregar o actor.
+
+O teste `test_admin_role_revocation_between_middleware_and_handler_blocks_store_creation` altera ADMIN para SUPERVISOR depois da autenticação no middleware e antes de o handler abrir a sua sessão. A criação é recusada com HTTP 403 e não deixa a loja persistida.
+
+Validação no commit `311fecc9e13641e6d5eb55465fda646fb2909601`: API CI [44880841684](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44880841684), Quality Gates [44880841658](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44880841658) e Docker Compose [44880841671](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44880841671) passaram; **1407 testes aprovados, 1 ignorado e 1 aviso**. A validação API CI incluiu migrações e smokes PostgreSQL 16. O aviso Python é a depreciação externa `anyio.abc.BlockingPortal` do Starlette TestClient.
+
 ## Identidade e validação do token
 
 1. As rotas fora de `/api/v1/` não passam pelo middleware de autenticação da API.
@@ -19,7 +44,7 @@ Este documento regista a política de autorização aplicada pelo middleware HTT
 | Operação/família | ADMIN | SUPERVISOR | EMPLOYEE |
 |---|---:|---:|---:|
 | Endpoints públicos de bootstrap e login | Público | Público | Público |
-| Rotas protegidas sem regra especial | Permitido pelo middleware | Permitido pelo middleware | Negado por omissão |
+| Rota/método novo ou sem política explícita (`UNCLASSIFIED`) | Negado | Negado | Negado |
 | Gestão de utilizadores em `/api/v1/auth/users...` | Permitido | Negado | Negado |
 | Criação de lojas, zonas, prateleiras, produtos e associações SKU–prateleira | Permitido | Negado | Negado |
 | Criação de perfis/embalagens de produto no armazém | Permitido | Negado | Negado |
