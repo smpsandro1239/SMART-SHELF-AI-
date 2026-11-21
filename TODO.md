@@ -1233,5 +1233,6 @@ Critério global: nenhuma capacidade pode ser marcada como concluída sem códig
 - [x] Criar workflow isolado .github/workflows/security-scans.yml, com permissões mínimas, checkout sem persistência de credenciais e execução em runners efémeros.
 - [x] Configurar pip-audit sobre dependências API e OCR opcionais, npm audit --audit-level=high sobre o lockfile Web e Gitleaks sobre o histórico Git.
 - [x] Configurar OWASP ZAP Baseline contra a API local efémera do Docker Compose. É um scan passivo inicial, sem autenticação e sem operações destrutivas; os alertas ficam em relatório para triagem, não são silenciosamente ignorados.
-- [ ] Aguardar e analisar os resultados reais de SCA, Gitleaks e ZAP no workflow do commit que introduz os scanners. Não declarar vulnerabilidades ausentes antes da execução.
-- [ ] Corrigir findings confirmados, adicionar regressões e definir limiares de bloqueio depois da triagem do baseline.
+- [x] Analisar a primeira execução real: Gitleaks passou, npm audit passou e pip-audit detectou 158 ocorrências em 5 pacotes Python (pytest, PyJWT, python-multipart, Pillow e Starlette).
+- [ ] Reexecutar SCA após actualizar as dependências vulneráveis e confirmar compatibilidade com a suite API e os smokes PostgreSQL.
+- [ ] Corrigir/triagem de todos os findings confirmados, adicionar regressões e definir limiares de bloqueio depois da análise dos relatórios ZAP e da segunda execução SCA.

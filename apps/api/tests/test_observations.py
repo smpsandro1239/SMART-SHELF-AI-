@@ -1,4 +1,6 @@
 import os
+
+import pytest
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
@@ -791,6 +793,49 @@ def test_cross_store_alert_update_checks_scope_before_acquiring_row_lock(monkeyp
         "_request_user",
         lambda db, request: foreign_supervisor,
     )
+
+    with pytest.raises(HTTPException) as error:
+        main_module.update_observation_alert(
+            41,
+            SimpleNamespace(status="ACKNOWLEDGED", reason=None),
+            SimpleNamespace(),
+            FakeSession(),
+        )
+
+    assert error.value.status_code == 403
+    assert lock_attempts == []
+    assert alert.status == "OPEN"
+
+def test_cross_store_alert_update_checks_scope_before_acquiring_row_lock(monkeypatch):
+    from types import SimpleNamespace
+
+    from fastapi import HTTPException
+
+    import app.main as main_module
+
+    alert = SimpleNamespace(id=41, store_id=22, status="OPEN")
+    lock_attempts = []
+
+    class Query:
+        def filter(self, *args, **kwargs):
+            return self
+
+        def with_for_update(self):
+            lock_attempts.append(True)
+            return self
+
+        def populate_existing(self):
+            return self
+
+        def first(self):
+            return alert
+
+    class FakeSession:
+        def query(self, model):
+            return Query()
+
+    foreign_supervisor = SimpleNamespace(id=7, role="SUPERVISOR", store_id=11)
+    monkeypatch.setattr(main_module, "_request_user", lambda db, request: foreign_supervisor)
 
     with pytest.raises(HTTPException) as error:
         main_module.update_observation_alert(

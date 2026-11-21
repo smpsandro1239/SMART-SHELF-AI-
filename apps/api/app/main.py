@@ -973,10 +973,26 @@ def update_observation_alert(
     request: Request,
     db: Session = Depends(get_db),
 ):
-    alert = db.query(models.ObservationAlert).filter(models.ObservationAlert.id == alert_id).with_for_update().first()
+    alert = (
+        db.query(models.ObservationAlert)
+        .filter(models.ObservationAlert.id == alert_id)
+        .first()
+    )
     if alert is None:
         raise HTTPException(status_code=404, detail="Observation alert not found")
+
     actor = _require_alert_supervisor(db, request, alert.store_id)
+    alert = (
+        db.query(models.ObservationAlert)
+        .filter(models.ObservationAlert.id == alert_id)
+        .with_for_update()
+        .populate_existing()
+        .first()
+    )
+    if alert is None:
+        raise HTTPException(status_code=404, detail="Observation alert not found")
+    _enforce_store_scope(actor, alert.store_id)
+
     previous_status = alert.status
     if payload.status == "ACKNOWLEDGED":
         if previous_status != "OPEN":

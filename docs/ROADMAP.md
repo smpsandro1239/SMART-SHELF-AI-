@@ -944,4 +944,4 @@ Validação no commit `311fecc9e13641e6d5eb55465fda646fb2909601`: Quality Gates 
 - Criado .github/workflows/security-scans.yml com pip-audit para dependências API/OCR, npm audit --audit-level=high, Gitleaks e OWASP ZAP Baseline contra Docker Compose efémero.
 - As Actions externas são fixadas a SHA completo e as permissões são limitadas por job.
 - ZAP corre inicialmente em modo baseline passivo/report-only; não executa operações activas nem prova a segurança de rotas autenticadas.
-- Estado: configuração publicada; aguardar resultados reais e triagem dos relatórios antes de marcar SCA, secret scan ou DAST como concluídos.
+- Primeira execução: Gitleaks e npm audit passaram; pip-audit identificou 158 ocorrências em 5 pacotes Python. As versões directas vulneráveis foram actualizadas e a FastAPI foi elevada para 0.165.0 para resolver a dependência Starlette sem pin isolado. A validação da segunda execução e a triagem ZAP continuam pendentes.
