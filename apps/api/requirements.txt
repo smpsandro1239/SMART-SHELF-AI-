@@ -13,3 +13,4 @@ python-multipart==0.0.34
 numpy==2.2.6
 Pillow==13.0.0
 onnxruntime==1.22.0
+cryptography==50.0.2
