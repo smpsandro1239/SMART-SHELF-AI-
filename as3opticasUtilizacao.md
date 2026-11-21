@@ -318,7 +318,7 @@ O contrato não autentica dispositivos, não recebe imagens, não persiste event
 
 O evaluator COCO v1 calcula AP por classe com interpolação em 101 pontos, mAP50, mAP50_95 e precision/recall/F1 no ponto operacional, incluindo TP/FP/FN. O runner de avaliação valida o hash das imagens, a versão/digest do modelo e o fingerprint do release.
 
-A execução está limitada ao *test split* de um dataset com aprovação explícita para inferência e é feita através do consumidor de releases aprovado, mantendo os bloqueios de retenção durante a inferência. O provider real tem de passar a verificação Ed25519 e receber `VISION_CONFIDENCE_THRESHOLD=0.0` para não truncar as pontuações usadas no cálculo AP; o limiar operacional é configurado separadamente.
+A execução está limitada ao *test split* de um dataset com aprovação explícita para inferência e é feita através do consumidor de releases aprovado, mantendo os bloqueios de retenção durante a inferência. O pipeline calcula os hashes dos três ficheiros de anotação antes e depois do gate, rejeita alterações durante a aprovação e inclui esses digests no fingerprint do release; o runner confirma também o hash do manifest e a correspondência exacta do split test. O provider real tem de passar a verificação Ed25519 e receber `VISION_CONFIDENCE_THRESHOLD=0.0` para não truncar as pontuações usadas no cálculo AP; o limiar operacional é configurado separadamente.
 
 O evaluator não treina modelos nem altera inventário. A versão 1 rejeita anotações COCO crowd (`iscrowd`) e não calcula stock físico ou impacto comercial. Não existem ainda resultados reais: faltam dataset autorizado, pesos aprovados e execução CI verificada. Ver [docs/vision-model-evaluation.md](docs/vision-model-evaluation.md).
 
