@@ -1,3 +1,13 @@
+## Computer Vision — avaliador COCO v1 (implementado; CI pendente)
+
+- [x] Implementar AP101 por classe, mAP50, mAP50_95 e precision/recall/F1 no ponto operacional.
+- [x] Validar IDs, categorias, scores, caixas, dimensões, limites numéricos e rejeitar crowd annotations não suportadas.
+- [x] Criar runner de inferência que exige release de dataset explicitamente aprovado para inferência, modelo ONNX assinado e integridade SHA-256 das imagens.
+- [x] Executar apenas no test split, sem treino nem escrita em inventário; incluir fingerprint do dataset e digest/model version no relatório.
+- [x] Adicionar testes sintéticos de métricas, falsos positivos, falsos negativos, thresholds e aprovação de release.
+- [ ] Confirmar suite/API CI, quality gates e security scans no commit final.
+- [ ] Executar com dataset autorizado e pesos reais; não publicar métricas até obter relatório verificável e revisão independente.
+
 ## Edge AI — contrato de eventos v1 (implementado como contrato puro; CI pendente)
 
 - [x] Definir envelope versionado com identidade do dispositivo, tenant, sequência monotónica, timestamp com fuso, event ID e payload JSON limitado.
