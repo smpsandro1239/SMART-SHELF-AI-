@@ -314,6 +314,15 @@ A camada de domínio valida o conteúdo, calcula fingerprint SHA-256 canónico, 
 O contrato não autentica dispositivos, não recebe imagens, não persiste eventos e não altera inventário. A implementação de ingestão exige registo/credencial individual por dispositivo, resolução de loja no servidor, inbox/outbox duráveis, cursor e auditoria na mesma transacção e confirmação apenas após commit. Ver [docs/edge-device-event-contract.md](docs/edge-device-event-contract.md).
 
 
+## 4.8 Avaliação com datasets anotados
+
+O evaluator COCO v1 calcula AP por classe com interpolação em 101 pontos, mAP50, mAP50_95 e precision/recall/F1 no ponto operacional, incluindo TP/FP/FN. O runner de avaliação valida o hash das imagens, a versão/digest do modelo e o fingerprint do release.
+
+A execução está limitada ao *test split* de um dataset com aprovação explícita para inferência e é feita através do consumidor de releases aprovado, mantendo os bloqueios de retenção durante a inferência. O provider real tem de passar a verificação Ed25519 e receber `VISION_CONFIDENCE_THRESHOLD=0.0` para não truncar as pontuações usadas no cálculo AP; o limiar operacional é configurado separadamente.
+
+O evaluator não treina modelos nem altera inventário. A versão 1 rejeita anotações COCO crowd (`iscrowd`) e não calcula stock físico ou impacto comercial. Não existem ainda resultados reais: faltam dataset autorizado, pesos aprovados e execução CI verificada. Ver [docs/vision-model-evaluation.md](docs/vision-model-evaluation.md).
+
+
 ## 5. Percurso de evolução recomendado
 
 1. **Consolidar o fluxo operacional:** captura, evidência, revisão humana, recomendação, tarefa, execução e reconciliação auditáveis.
