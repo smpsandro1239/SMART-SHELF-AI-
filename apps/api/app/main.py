@@ -107,7 +107,18 @@ from app.schemas import (
     ShelfPlanogramComparisonRead,
 )
 
-app = FastAPI(title=settings.app_name, version="0.2.0", description="Operational API for SMART SHELF AI.")
+def _docs_url_for_environment(environment: str) -> str | None:
+    """Expose interactive API docs only outside production."""
+    return None if environment.strip().lower() == "production" else "/docs"
+
+
+app = FastAPI(
+    title=settings.app_name,
+    version="0.2.0",
+    description="Operational API for SMART SHELF AI.",
+    docs_url=_docs_url_for_environment(settings.app_env),
+    redoc_url=None,
+)
 
 
 def _json_safe_validation_value(value):
@@ -182,6 +193,36 @@ async def require_api_authentication(request: Request, call_next):
     finally:
         db.close()
     return await call_next(request)
+
+
+@app.middleware("http")
+async def apply_security_headers(request: Request, call_next):
+    """Apply browser security headers to success and error responses alike."""
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    response.headers.setdefault("Permissions-Policy", "camera=(self), microphone=(), geolocation=()")
+    response.headers.setdefault("Cross-Origin-Resource-Policy", "same-origin")
+    response.headers.setdefault(
+        "Content-Security-Policy",
+        "default-src 'none'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'",
+    )
+    if request.url.path.startswith("/docs"):
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self' https://cdn.jsdelivr.net; "
+            "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+            "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+            "img-src 'self' data:; font-src 'self' https://cdn.jsdelivr.net; "
+            "connect-src 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'self'"
+        )
+    if request.url.path.startswith("/api/v1/"):
+        response.headers.setdefault("Cache-Control", "no-store")
+    if settings.app_env.strip().lower() == "production":
+        response.headers.setdefault(
+            "Strict-Transport-Security", "max-age=31536000; includeSubDomains"
+        )
+    return response
 
 
 def _request_user(db: Session, request: Request | None):

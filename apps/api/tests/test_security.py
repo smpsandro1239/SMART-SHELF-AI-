@@ -375,3 +375,39 @@ def test_store_scoped_record_lock_rejects_foreign_store_before_lock():
 
     assert error.value.status_code == 403
     assert lock_attempts == []
+
+def test_security_headers_cover_health_and_authentication_errors(monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from app.config import settings
+    from app.main import app
+
+    monkeypatch.setattr(settings, "app_env", "production")
+    with TestClient(app) as client:
+        response = client.get("/api/v1/auth/me")
+
+    assert response.status_code == 401
+    assert response.headers["x-content-type-options"] == "nosniff"
+    assert response.headers["x-frame-options"] == "DENY"
+    assert response.headers["cross-origin-resource-policy"] == "same-origin"
+    assert response.headers["referrer-policy"] == "strict-origin-when-cross-origin"
+    assert response.headers["cache-control"] == "no-store"
+    assert "frame-ancestors 'none'" in response.headers["content-security-policy"]
+    assert "max-age=31536000" in response.headers["strict-transport-security"]
+
+
+def test_development_swagger_docs_receive_csp_and_are_disabled_for_production():
+    from fastapi.testclient import TestClient
+
+    from app.main import app, _docs_url_for_environment
+
+    assert _docs_url_for_environment("production") is None
+    assert _docs_url_for_environment("development") == "/docs"
+
+    with TestClient(app) as client:
+        response = client.get("/docs")
+
+    assert response.status_code == 200
+    assert "https://cdn.jsdelivr.net" in response.headers["content-security-policy"]
+    assert "frame-ancestors 'none'" in response.headers["content-security-policy"]
+    assert response.headers["x-frame-options"] == "DENY"
