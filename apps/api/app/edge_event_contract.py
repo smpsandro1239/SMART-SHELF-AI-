@@ -146,8 +146,6 @@ class EdgeEventEnvelope(BaseModel):
                 raise ValueError("SHELF_CAPTURED payload has missing or unsupported fields")
             if not isinstance(payload["capture_id"], str):
                 raise ValueError("capture_id must be a UUID string")
-            if not isinstance(payload["capture_id"], str):
-                raise ValueError("capture_id must be a UUID string")
             try:
                 UUID(payload["capture_id"])
             except (ValueError, TypeError, AttributeError) as exc:
@@ -164,6 +162,8 @@ class EdgeEventEnvelope(BaseModel):
                 raise ValueError("SHELF_OBSERVATION requires shelf_id")
             if set(payload) != {"capture_id", "model_version", "observations"}:
                 raise ValueError("SHELF_OBSERVATION payload has missing or unsupported fields")
+            if not isinstance(payload["capture_id"], str):
+                raise ValueError("capture_id must be a UUID string")
             try:
                 UUID(payload["capture_id"])
             except (ValueError, TypeError, AttributeError) as exc:
