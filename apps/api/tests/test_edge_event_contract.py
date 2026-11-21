@@ -92,7 +92,7 @@ def test_task_acknowledgement_requires_positive_task_and_version():
 @pytest.mark.parametrize(
     "overrides, message",
     [
-        ({"store_id": 0}, "greater than 0"),
+        ({"store_id": 0}, "positive integers"),
         ({"device_id": "bad device"}, "safe ASCII"),
         ({"occurred_at": datetime(2026, 11, 21, 12, 0)}, "explicit timezone"),
         ({"event_type": "UNKNOWN"}, "event_type"),
