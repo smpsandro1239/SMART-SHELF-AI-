@@ -1,3 +1,14 @@
+## Computer Vision — manifesto ONNX Ed25519 (implementado; CI pendente)
+
+- [x] Verificar assinatura Ed25519 do manifesto com keyring explícito de chaves públicas confiáveis.
+- [x] Vincular os hashes SHA-256 assinados aos bytes exactos do detector e do embedder; rejeitar modelos alterados, symlinks, JSON ambíguo, campos desconhecidos, assinaturas inválidas e key IDs não confiáveis.
+- [x] Exigir manifesto e keyring no factory do provider real; preservar a segunda confirmação SHA-256 por variável de ambiente.
+- [x] Passar configuração de manifesto/keyring para API e vision-worker no Docker Compose.
+- [x] Adicionar utilitário de assinatura offline; a chave privada fica fora do repositório e do runtime.
+- [x] Adicionar testes de assinatura, key trust, integridade dos ficheiros, configuração e utilitário.
+- [ ] Confirmar API CI, Quality Gates, Docker Compose smoke e Security Scans no commit final; Vercel build-rate-limit não substitui CI.
+- [ ] Definir política de rotação/revogação e prevenção de rollback com versão mínima persistente antes de produção.
+
 ## Deploy — passagem dos digests ONNX para API e worker (2026-11-21, validação CI pendente)
 
 - [ ] Passar `VISION_DETECTOR_MODEL_SHA256` e `VISION_EMBEDDING_MODEL_SHA256` explicitamente para os serviços `api` e `vision-worker` no Docker Compose; sem esta passagem, o provider real falha fechado mesmo quando os digests existem no ambiente do host.
