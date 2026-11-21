@@ -1,3 +1,11 @@
+### Computer Vision — manifesto ONNX Ed25519 (implementação publicada; CI pendente)
+
+- Provider real exige manifesto assinado e chave pública confiável; assinatura cobre schema, key ID e digests dos modelos.
+- API e worker recebem manifesto/keyring por Docker Compose; o utilitário de release assina offline e não expõe a chave privada ao runtime.
+- Testes cobrem assinatura inválida, key desconhecida, modelo adulterado, hash do embedder, JSON inválido/duplicado e configuração do factory.
+- Documentação: [docs/vision-model-manifest.md](vision-model-manifest.md).
+- Pendente: CI verde, rotação/revogação de chaves e prevenção de rollback com estado persistente. A assinatura não prova precisão do modelo.
+
 ### Deploy — digests ONNX nos serviços Docker Compose (2026-11-21, CI pendente)
 
 - `api` e `vision-worker` recebem agora `VISION_DETECTOR_MODEL_SHA256` e `VISION_EMBEDDING_MODEL_SHA256` do ambiente do deployment.
