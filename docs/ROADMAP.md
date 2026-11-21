@@ -1,3 +1,11 @@
+### Deploy — digests ONNX nos serviços Docker Compose (2026-11-21, CI pendente)
+
+- `api` e `vision-worker` recebem agora `VISION_DETECTOR_MODEL_SHA256` e `VISION_EMBEDDING_MODEL_SHA256` do ambiente do deployment.
+- Os valores não são inventados nem preenchidos por defeito: ficam vazios quando não configurados e o provider ONNX real continua a rejeitar a configuração incompleta.
+- Foi acrescentado teste de contrato para os dois serviços e as duas variáveis.
+- Implementação: commits `2d810e8a`, `263de3e8`; teste e registo de progresso: commits subsequentes na branch `main`.
+- A validação CI ainda está pendente. Não confundir encaminhamento de digests com manifesto assinado, aprovação criptográfica de modelos ou validação de qualidade do detector.
+
 ### IA e catálogo — integridade dos exemplares de embeddings (2026-11-21, validado)
 
 - ProductExemplar exige agora ID inteiro positivo, versão de modelo e proveniência textual não vazia e SHA-256 hexadecimal com 64 caracteres.
