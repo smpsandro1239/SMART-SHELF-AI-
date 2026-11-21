@@ -129,3 +129,66 @@ def test_registry_normalizes_model_version_whitespace():
     registry = ProductEmbeddingRegistry([], model_version="  embed-v1  ")
 
     assert registry.model_version == "embed-v1"
+
+@pytest.mark.parametrize("product_id", [True, False, 0, -1, 1.5, "1"])
+def test_exemplar_requires_positive_integer_product_id(product_id):
+    with pytest.raises(ValueError, match="positive integer"):
+        ProductExemplar(
+            product_id=product_id,
+            embedding=(1.0, 0.0),
+            model_version="embed-v1",
+            image_sha256="a" * 64,
+            reviewed_by="reviewer@example.test",
+            reviewed_at="2026-01-15T10:00:00Z",
+            licence="store-owned-reference-image",
+        )
+
+
+@pytest.mark.parametrize("value", [None, 1, "", "   "])
+def test_exemplar_requires_nonempty_string_model_version(value):
+    with pytest.raises(ValueError, match="model_version"):
+        ProductExemplar(
+            product_id=1,
+            embedding=(1.0, 0.0),
+            model_version=value,
+            image_sha256="a" * 64,
+            reviewed_by="reviewer@example.test",
+            reviewed_at="2026-01-15T10:00:00Z",
+            licence="store-owned-reference-image",
+        )
+
+
+@pytest.mark.parametrize("digest", [None, 1, "g" * 64, "a" * 63, "a" * 65])
+def test_exemplar_requires_hex_sha256_string(digest):
+    with pytest.raises(ValueError, match="image_sha256"):
+        ProductExemplar(
+            product_id=1,
+            embedding=(1.0, 0.0),
+            model_version="embed-v1",
+            image_sha256=digest,
+            reviewed_by="reviewer@example.test",
+            reviewed_at="2026-01-15T10:00:00Z",
+            licence="store-owned-reference-image",
+        )
+
+
+@pytest.mark.parametrize(
+    "field_name",
+    ["reviewed_by", "reviewed_at", "licence"],
+)
+@pytest.mark.parametrize("value", [None, 1, "", "   "])
+def test_exemplar_requires_nonempty_string_review_provenance(field_name, value):
+    values = {
+        "reviewed_by": "reviewer@example.test",
+        "reviewed_at": "2026-01-15T10:00:00Z",
+        "licence": "store-owned-reference-image",
+    }
+    values[field_name] = value
+    with pytest.raises(ValueError, match=field_name):
+        ProductExemplar(
+            product_id=1,
+            embedding=(1.0, 0.0),
+            model_version="embed-v1",
+            image_sha256="a" * 64,
+            **values,
+        )
