@@ -389,7 +389,8 @@ def readiness(db: Session = Depends(get_db)):
 
 
 @app.post("/api/v1/stores", response_model=StoreRead, status_code=201, tags=["stores"])
-def create_store(payload: StoreCreate, db: Session = Depends(get_db)):
+def create_store(payload: StoreCreate, request: Request, db: Session = Depends(get_db)):
+    _request_user(db, request)
     if db.query(models.Store).filter_by(code=payload.code).first():
         raise HTTPException(status_code=409, detail="Store code already exists")
     item = models.Store(**payload.model_dump())
@@ -424,7 +425,8 @@ def list_zones(request: Request, store_id: int | None = None, db: Session = Depe
 
 
 @app.post("/api/v1/zones", response_model=ZoneRead, status_code=201, tags=["zones"])
-def create_zone(payload: ZoneCreate, db: Session = Depends(get_db)):
+def create_zone(payload: ZoneCreate, request: Request, db: Session = Depends(get_db)):
+    _request_user(db, request)
     if not db.get(models.Store, payload.store_id):
         raise HTTPException(status_code=404, detail="Store not found")
     item = models.Zone(**payload.model_dump())
@@ -435,7 +437,8 @@ def create_zone(payload: ZoneCreate, db: Session = Depends(get_db)):
 
 
 @app.post("/api/v1/shelves", response_model=ShelfRead, status_code=201, tags=["shelves"])
-def create_shelf(payload: ShelfCreate, db: Session = Depends(get_db)):
+def create_shelf(payload: ShelfCreate, request: Request, db: Session = Depends(get_db)):
+    _request_user(db, request)
     if not db.get(models.Zone, payload.zone_id):
         raise HTTPException(status_code=404, detail="Zone not found")
     item = models.Shelf(**payload.model_dump())
@@ -4252,7 +4255,8 @@ def list_detection_sku_reviews(
 
 
 @app.post("/api/v1/products", response_model=ProductRead, status_code=201, tags=["products"])
-def create_product(payload: ProductCreate, db: Session = Depends(get_db)):
+def create_product(payload: ProductCreate, request: Request, db: Session = Depends(get_db)):
+    _request_user(db, request)
     if db.query(models.Product).filter_by(sku=payload.sku).first():
         raise HTTPException(status_code=409, detail="Product SKU already exists")
     item = models.Product(**payload.model_dump())
@@ -4263,7 +4267,8 @@ def create_product(payload: ProductCreate, db: Session = Depends(get_db)):
 
 
 @app.get("/api/v1/products", response_model=list[ProductRead], tags=["products"])
-def list_products(active_only: bool = True, limit: int = 100, db: Session = Depends(get_db)):
+def list_products(request: Request, active_only: bool = True, limit: int = 100, db: Session = Depends(get_db)):
+    _request_user(db, request)
     limit = max(1, min(limit, 500))
     query = db.query(models.Product)
     if active_only:
@@ -5263,6 +5268,7 @@ def create_warehouse_product_profile(
     request: Request,
     db: Session = Depends(get_db),
 ):
+    _request_user(db, request)
     product = db.get(models.Product, payload.product_id)
     if product is None:
         raise HTTPException(status_code=404, detail="Product not found")
@@ -5307,8 +5313,10 @@ def create_warehouse_placement(
 @app.post("/api/v1/warehouse/product-packaging", status_code=201, tags=["warehouse"])
 def create_product_packaging_level(
     payload: ProductPackagingLevelCreate,
+    request: Request,
     db: Session = Depends(get_db),
 ):
+    _request_user(db, request)
     product = db.get(models.Product, payload.product_id)
     if product is None:
         raise HTTPException(status_code=404, detail="Product not found")
@@ -5340,8 +5348,10 @@ def create_product_packaging_level(
 @app.get("/api/v1/warehouse/product-packaging", tags=["warehouse"])
 def list_product_packaging_levels(
     product_id: int,
+    request: Request,
     db: Session = Depends(get_db),
 ):
+    _request_user(db, request)
     if db.get(models.Product, product_id) is None:
         raise HTTPException(status_code=404, detail="Product not found")
     return (
@@ -8157,7 +8167,8 @@ def current_user(request: Request, db: Session = Depends(get_db)):
 
 
 @app.post("/api/v1/auth/users", response_model=UserRead, status_code=201, tags=["authentication"])
-def create_user(payload: UserCreate, db: Session = Depends(get_db)):
+def create_user(payload: UserCreate, request: Request, db: Session = Depends(get_db)):
+    _request_user(db, request)
     email = payload.email.strip().lower()
     if "@" not in email:
         raise HTTPException(status_code=422, detail="A valid email address is required")
@@ -8182,7 +8193,8 @@ def create_user(payload: UserCreate, db: Session = Depends(get_db)):
 
 
 @app.get("/api/v1/auth/users", response_model=list[UserRead], tags=["authentication"])
-def list_users(limit: int = 100, db: Session = Depends(get_db)):
+def list_users(request: Request, limit: int = 100, db: Session = Depends(get_db)):
+    _request_user(db, request)
     return db.query(models.User).order_by(models.User.id).limit(max(1, min(limit, 500))).all()
 
 
