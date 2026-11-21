@@ -1,3 +1,11 @@
+## 2026-11-21 — Isolamento multi-loja do histórico de alertas (em validação)
+
+- A revisão handler-a-handler confirmou que `GET /api/v1/observation-alerts/{alert_id}/events` carrega o alerta pai e chama `_require_alert_supervisor`, que verifica o papel e a loja antes de devolver eventos.
+- Acrescentado teste HTTP de regressão: um supervisor da loja A tenta ler a cronologia de um alerta da loja B e deve receber HTTP 403.
+- Removida uma segunda definição duplicada de `test_cross_store_alert_update_checks_scope_before_acquiring_row_lock`; a definição repetida não criava um cenário adicional, mas ocultava a duplicação na suite.
+- A implementação do endpoint não foi alterada: a cobertura passa a provar explicitamente o controlo já existente.
+- Estado: teste publicado; aguarda execução API CI e Quality Gates no commit desta ronda. Não declarar GREEN antes dos workflows terminarem.
+
 ## 2026-11-20 — Isolamento multi-loja nas mutações de planogramas
 
 - A auditoria confirmou que o serviço `shelf_planograms.py` obtém a loja através da prateleira bloqueada e valida o papel/loja antes de editar, ativar ou retirar planogramas.

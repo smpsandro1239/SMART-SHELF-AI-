@@ -806,45 +806,28 @@ def test_cross_store_alert_update_checks_scope_before_acquiring_row_lock(monkeyp
     assert lock_attempts == []
     assert alert.status == "OPEN"
 
-def test_cross_store_alert_update_checks_scope_before_acquiring_row_lock(monkeypatch):
-    from types import SimpleNamespace
-
-    from fastapi import HTTPException
-
+def test_cross_store_alert_event_history_is_denied(monkeypatch):
     import app.main as main_module
 
-    alert = SimpleNamespace(id=41, store_id=22, status="OPEN")
-    lock_attempts = []
+    with TestClient(app) as client:
+        (store_id, shelf_id, product_id), actor = _setup_alert_fixture(client)
+        monkeypatch.setattr(main_module, "_request_user", lambda db, request: actor)
 
-    class Query:
-        def filter(self, *args, **kwargs):
-            return self
+        created = client.post(
+            f"/api/v1/shelves/{shelf_id}/observation-alerts/evaluate",
+            params={"product_id": product_id, "minimum_confirmations": 3},
+        )
+        assert created.status_code == 200, created.text
+        assert created.json() is not None
 
-        def with_for_update(self):
-            lock_attempts.append(True)
-            return self
-
-        def populate_existing(self):
-            return self
-
-        def first(self):
-            return alert
-
-    class FakeSession:
-        def query(self, model):
-            return Query()
-
-    foreign_supervisor = SimpleNamespace(id=7, role="SUPERVISOR", store_id=11)
-    monkeypatch.setattr(main_module, "_request_user", lambda db, request: foreign_supervisor)
-
-    with pytest.raises(HTTPException) as error:
-        main_module.update_observation_alert(
-            41,
-            SimpleNamespace(status="ACKNOWLEDGED", reason=None),
-            SimpleNamespace(),
-            FakeSession(),
+        foreign_actor = SimpleNamespace(
+            id=actor.id, role="SUPERVISOR", store_id=store_id + 999
+        )
+        monkeypatch.setattr(
+            main_module, "_request_user", lambda db, request: foreign_actor
+        )
+        response = client.get(
+            f"/api/v1/observation-alerts/{created.json()['id']}/events"
         )
 
-    assert error.value.status_code == 403
-    assert lock_attempts == []
-    assert alert.status == "OPEN"
+        assert response.status_code == 403

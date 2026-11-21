@@ -1,3 +1,9 @@
+### Isolamento multi-loja do histórico de alertas — 2026-11-21 (em validação)
+
+- Revisão estática: o endpoint valida o alerta pai com `_require_alert_supervisor` antes de consultar os eventos.
+- Adicionada regressão HTTP cross-store e removida uma definição de teste duplicada.
+- Aguardar API CI e Quality Gates do commit; a matriz completa BOLA/IDOR continua aberta.
+
 ### RBAC centralizado (2026-11-20)
 
 - Política extraída para `apps/api/app/api_security_policy.py` com categorias por grupo e fail-closed para papel desconhecido.

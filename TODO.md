@@ -26,6 +26,7 @@
 - [x] Centralizar RBAC em `apps/api/app/api_security_policy.py` com 128 políticas explícitas por método/template e teste dinâmico das rotas registadas. A cobertura exaustiva endpoint × papel × tenant continua aberta.
 - [x] Revalidar o actor no handler em dez endpoints de gestão/catálogo que dependiam apenas do middleware; o teste de despromoção ADMIN → SUPERVISOR entre middleware e handler confirma 403 e ausência de escrita.
 - [ ] Completar matriz endpoint × ADMIN/SUPERVISOR/EMPLOYEE × loja, incluindo todos os handlers e caminhos indirectos. Em 2026-11-21, 22 handlers com locks foram cobertos por helpers de autorização pré-lock e teste estático; a auditoria BOLA/IDOR por recurso continua aberta.
+  - [ ] Cobrir por HTTP a leitura do histórico de eventos de alertas entre lojas; o teste `test_cross_store_alert_event_history_is_denied` foi acrescentado neste commit e aguarda CI.
 - [x] Executar SCA, secret scan e baseline DAST passivo: pip-audit, npm audit, Gitleaks e ZAP com evidência no workflow 44884714393; DAST autenticado/activo continua fora deste baseline.
 
 ## Segurança P0 — CORS de produção
