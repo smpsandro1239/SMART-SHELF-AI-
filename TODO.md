@@ -42,6 +42,7 @@
 - [x] Substituir `SELECT FOR UPDATE` por advisory transaction lock por deployment nas verificações/registos; runtime mantém serialização sem privilégios de escrita.
 - [x] Alargar `postgres_runtime_role_smoke.py` para verificar SELECT, ausência de DML/sequence privileges e recusa efectiva de INSERT/UPDATE/DELETE/TRUNCATE; validar também o guard com o principal runtime.
 - [x] Acrescentar testes estáticos para separação de credenciais, migração 0070, bootstrap, perfil privilegiado e ausência de auto-registo no provider.
+- [ ] Para cada nova tabela de confiança/manifesto, actualizar a lista de revogações do bootstrap e a migration correspondente; manter runtime SELECT-only e smoke de regressão.
 - [x] Validar a camada read-only ONNX no SHA `5e16a9cb`: API CI, Quality Gates, Security Scans e Docker Compose passaram; suite API 1552 passed, 1 skipped.
 - [ ] Reexecutar todos os workflows após introdução do serviço `provision-runtime-role` e política `NOINHERIT`; não considerar esta última alteração validada até obter novo SHA verde.
 - [x] Integrar o serviço one-shot `provision-runtime-role` antes de Alembic: cria/reconcilia o principal em cada arranque Compose, também em volumes existentes, com `NOINHERIT`; API/worker não iniciam se o provisionamento falhar.
