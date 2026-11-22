@@ -1,4 +1,4 @@
-"""Verify a PostgreSQL application role cannot mutate schema or bypass trust guards."""
+"""Verify PostgreSQL runtime identity, grants and model-trust isolation."""
 from __future__ import annotations
 
 import os
@@ -10,6 +10,11 @@ from sqlalchemy.orm import sessionmaker
 from app.vision_model_release import assert_model_release_current
 
 
+_PROTECTED_TABLES = ("vision_model_release_states", "vision_model_release_events")
+_OPERATIONAL_TABLE_PRIVILEGES = frozenset({"SELECT", "INSERT", "UPDATE", "DELETE"})
+_OPERATIONAL_SEQUENCE_PRIVILEGES = frozenset({"USAGE", "SELECT", "UPDATE"})
+
+
 def _assert_denied(connection, statement: str, label: str) -> None:
     try:
         connection.execute(text(statement))
@@ -18,6 +23,45 @@ def _assert_denied(connection, statement: str, label: str) -> None:
         connection.rollback()
         return
     raise AssertionError(f"Runtime role unexpectedly succeeded at {label}")
+
+
+def _assert_default_privileges(connection) -> None:
+    rows = connection.execute(text("""
+        SELECT defaults.defaclobjtype, privilege.privilege_type, privilege.is_grantable
+        FROM pg_default_acl AS defaults
+        CROSS JOIN LATERAL aclexplode(defaults.defaclacl) AS privilege
+        WHERE defaults.defaclnamespace = 'public'::regnamespace
+          AND privilege.grantee = (
+              SELECT oid FROM pg_roles WHERE rolname = current_user
+          )
+    """)).all()
+
+    actual: dict[str, set[str]] = {"r": set(), "S": set()}
+    for object_type, privilege, grantable in rows:
+        if object_type not in actual:
+            continue
+        if grantable:
+            raise AssertionError(
+                f"Runtime default privilege {privilege} for object type {object_type} is grantable"
+            )
+        actual[object_type].add(privilege)
+
+    expected = {
+        "r": _OPERATIONAL_TABLE_PRIVILEGES,
+        "S": _OPERATIONAL_SEQUENCE_PRIVILEGES,
+    }
+    for object_type, required in expected.items():
+        if not required.issubset(actual[object_type]):
+            missing = sorted(required - actual[object_type])
+            raise AssertionError(
+                f"Runtime role is missing future-object privileges {missing} for type {object_type}"
+            )
+        unexpected = actual[object_type] - required
+        if unexpected:
+            raise AssertionError(
+                f"Runtime role has unexpected future-object privileges "
+                f"{sorted(unexpected)} for type {object_type}"
+            )
 
 
 def main() -> None:
@@ -47,13 +91,13 @@ def main() -> None:
 
         with engine.connect() as connection:
             role = connection.execute(text("""
-                SELECT current_user, rol.rolsuper, rol.rolcreatedb, rol.rolcreaterole,
-                       rol.rolreplication, rol.rolbypassrls, rol.rolinherit
+                SELECT current_user, rol.rolcanlogin, rol.rolsuper, rol.rolcreatedb,
+                       rol.rolcreaterole, rol.rolreplication, rol.rolbypassrls, rol.rolinherit
                 FROM pg_roles AS rol
                 WHERE rol.rolname = current_user
             """)).one()
-            if any(role[index] for index in range(1, 7)):
-                raise AssertionError(f"Runtime role has an elevated role attribute: {role}")
+            if not role[1] or any(role[index] for index in range(2, 7)) or role[7]:
+                raise AssertionError(f"Runtime role has unexpected login/elevated/inheritance attributes: {role}")
 
             memberships = connection.execute(text("""
                 SELECT COUNT(*)
@@ -64,24 +108,33 @@ def main() -> None:
                 raise AssertionError("Runtime role unexpectedly inherits another PostgreSQL role")
 
             owned_objects = connection.execute(text("""
-                SELECT
-                    (SELECT COUNT(*) FROM pg_class
-                     WHERE relowner = (SELECT oid FROM pg_roles WHERE rolname = current_user))
-                    + (SELECT COUNT(*) FROM pg_namespace
-                       WHERE nspowner = (SELECT oid FROM pg_roles WHERE rolname = current_user))
-                    + (SELECT COUNT(*) FROM pg_database
-                       WHERE datdba = (SELECT oid FROM pg_roles WHERE rolname = current_user))
+                SELECT COUNT(*)
+                FROM pg_shdepend
+                WHERE refclassid = 'pg_authid'::regclass
+                  AND refobjid = (SELECT oid FROM pg_roles WHERE rolname = current_user)
+                  AND deptype = 'o'
             """)).scalar_one()
             if owned_objects:
-                raise AssertionError(f"Runtime role owns {owned_objects} database objects")
+                raise AssertionError(f"Runtime role owns {owned_objects} PostgreSQL objects")
+
+            if not connection.execute(text(
+                "SELECT has_database_privilege(current_user, current_database(), 'CONNECT')"
+            )).scalar_one():
+                raise AssertionError("Runtime role cannot CONNECT to the application database")
+
+            if not connection.execute(text(
+                "SELECT has_schema_privilege(current_user, 'public', 'USAGE')"
+            )).scalar_one():
+                raise AssertionError("Runtime role cannot use the public schema")
 
             if connection.execute(text(
                 "SELECT has_schema_privilege(current_user, 'public', 'CREATE')"
             )).scalar_one():
                 raise AssertionError("Runtime role can CREATE objects in public schema")
 
-            protected_tables = ("vision_model_release_states", "vision_model_release_events")
-            for table in protected_tables:
+            _assert_default_privileges(connection)
+
+            for table in _PROTECTED_TABLES:
                 if not connection.execute(text(
                     "SELECT has_table_privilege(current_user, :table_name, 'SELECT')"
                 ), {"table_name": table}).scalar_one():
@@ -145,7 +198,11 @@ def main() -> None:
     finally:
         engine.dispose()
 
-    print("PostgreSQL runtime-role smoke passed: least privilege, operational DML, read-only model trust state and no memberships/ownership.")
+    print(
+        "PostgreSQL runtime-role smoke passed: LOGIN/NOSUPERUSER/NOINHERIT, "
+        "no memberships or ownership, operational future-object ACLs, "
+        "database/schema access and read-only model trust state."
+    )
 
 
 if __name__ == "__main__":
