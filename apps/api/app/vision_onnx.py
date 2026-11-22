@@ -383,8 +383,9 @@ class ONNXShelfVisionProvider:
         return (vector / norm).astype(self._np.float32).tolist()
 
     def assert_release_current(self, session=None) -> None:
-        if self._release_guard is not None:
-            self._release_guard(session)
+        release_guard = getattr(self, "_release_guard", None)
+        if release_guard is not None:
+            release_guard(session)
 
     def analyze(self, image_path: Path) -> VisionAnalysis:
         self.assert_release_current()
