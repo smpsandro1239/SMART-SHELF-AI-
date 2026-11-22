@@ -323,3 +323,16 @@ A cobertura é de contrato e tratamento de falhas. Não representa avaliação d
 - Acrescentado teste de regressão com duas lojas, duas prateleiras e sessões independentes. O supervisor da loja A só recebe a sua sessão e não consegue obter a sessão da loja B através de `shelf_id` estrangeiro.
 - O teste chama o handler com actor de teste controlado e base SQLite isolada; a validação da execução CI e dos smokes PostgreSQL continua necessária para fechar esta unidade.
 - A matriz global endpoint × perfil × loja continua aberta; este teste cobre apenas a listagem de sessões de captura.
+
+
+## 2026-11-22 — Confiança persistente e anti-rollback de modelos ONNX
+
+Foi implementado o schema v2 do manifesto Ed25519: o payload assinado inclui `model_id` e `release_version` monotónica, além de `key_id` e hashes do detector/embedder. Manifestos v1 deixam de ser aceites no provider real. O utilitário offline exige agora `--model-id` e `--release-version`.
+
+A migration `0069_vision_model_release_trust_state` cria o high-water mark persistente por `VISION_MODEL_DEPLOYMENT_ID` e um trilho append-only de decisões. O serviço `app.vision_model_release` serializa upgrades, aceita retries exactos, rejeita rollback, colisão de versão e alteração da identidade do modelo. Triggers PostgreSQL/SQLite protegem a monotonicidade, impedem apagar o estado e tornam os eventos imutáveis; downgrade recusa remover high-water marks existentes.
+
+O provider real regista o release depois de construir/validar as sessões ONNX, verifica a versão antes/depois da inferência e o worker bloqueia a linha do release na transacção de publicação. Um worker obsoleto não persiste resultados, reencaminha a captura para PENDING e termina para reiniciar com a configuração actual.
+
+A rotação normal está documentada em `docs/vision-model-manifest.md`: adicionar chave nova, assinar release superior, confirmar todas as instâncias no novo release e só depois remover/revogar a chave antiga. A revogação explícita usa `VISION_MODEL_REVOKED_KEY_IDS_JSON`; o `VISION_MODEL_DEPLOYMENT_ID` tem de permanecer estável.
+
+Testes acrescentados: `test_vision_model_release.py`, `test_vision_model_release_migration.py` e smoke PostgreSQL `postgres_vision_model_release_smoke.py`, integrado em API CI. **A validação CI desta implementação ainda está pendente**; não foram executados testes localmente. Não existem pesos/dataset autorizados, pelo que nenhuma inferência real foi activada.
