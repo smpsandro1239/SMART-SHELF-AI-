@@ -346,7 +346,7 @@ Validação confirmada:
 Limitação de segurança resolvida em camadas: owner de migrations separado do runtime, tabelas de confiança ONNX read-only para API/worker e registo explícito de releases pelo owner. O owner continua privilegiado e deve permanecer restrito ao serviço de migrations e ao perfil one-shot. Não existem pesos/dataset autorizados, pelo que nenhuma inferência real foi activada.
 
 
-## 2026-11-22 — Separação PostgreSQL owner/runtime (CI validada no HEAD bbf5ad80)
+## 2026-11-22 — Separação PostgreSQL owner/runtime e trust state ONNX (CI validada no HEAD aeff4a3b)
 
 - O Compose executa Alembic no serviço one-shot `migrate` com o principal owner; API e vision-worker usam `APP_DB_USER`/`APP_DB_PASSWORD` separados. A API já não executa migrations no arranque.
 - O bootstrap `infra/postgres/10-create-runtime-role.sh` cria um papel NOSUPERUSER/NOCREATEDB/NOCREATEROLE/NOREPLICATION/NOBYPASSRLS/NOINHERIT, remove memberships/ownership anteriores, concede DML operacional e revoga CREATE no schema.
@@ -360,7 +360,7 @@ Limitação de segurança resolvida em camadas: owner de migrations separado do 
 - **Validação da camada read-only ONNX:** concluída no SHA `5e16a9cb`: API CI, Quality Gates, Security Scans e Docker Compose passaram; suite API **1552 passed, 1 skipped**. O API CI confirmou o smoke PostgreSQL de permissões e o guard advisory com o principal runtime.
 
 
-## 2026-11-22 — Provisionamento recorrente do principal runtime (CI pendente)
+## 2026-11-22 — Provisionamento recorrente do principal runtime (CI validada no HEAD aeff4a3b)
 
 - Foi removido o acoplamento do bootstrap ao directório `initdb.d`, que só corre em volumes novos.
 - Adicionado o serviço one-shot `provision-runtime-role` (imagem PostgreSQL 16) entre `db` e `migrate`. Liga por TCP, autentica com o owner, reconcilia papel/senha/memberships/ownership/grants e termina antes de Alembic.
@@ -368,4 +368,4 @@ Limitação de segurança resolvida em camadas: owner de migrations separado do 
 - O papel runtime passa a `NOINHERIT`; o smoke verifica `rolinherit=false` além de atributos, memberships, ownership, DML operacional e trust tables read-only.
 - O API CI recebe explicitamente `POSTGRES_PASSWORD` para exercitar o mesmo script de provisionamento por TCP.
 - README, guia do manifesto, DEMO, segredos de produção, ADR-009, TODO e instruções da API actualizados para remover comandos Alembic no container runtime.
-- **Pendente:** executar API CI, Quality Gates, Security Scans e Docker Compose no SHA com o novo serviço `provision-runtime-role`; validar também actualização de um volume persistente já existente com papel legado. Não declarar esta última camada concluída antes dos workflows.
+- API CI [45076219787](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45076219787), Quality Gates [45076219801](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45076219801), Security Scans [45076219740](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45076219740) e Docker Compose [45076219751](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45076219751) passaram no HEAD `aeff4a3b`; suite API **1552 passed, 1 skipped**. O Compose smoke simulou um volume legado ao atribuir ownership de uma tabela ao runtime e uma membership indevida, e confirmou a reconciliação automática.
