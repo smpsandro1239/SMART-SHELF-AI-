@@ -1,4 +1,4 @@
-## Computer Vision — avaliador COCO v1 (implementado; CI pendente)
+## Computer Vision — avaliador COCO v1 (implementado; CI validada em 2026-11-22)
 
 - [x] Implementar AP101 por classe, mAP50, mAP50_95 e precision/recall/F1 no ponto operacional.
 - [x] Validar IDs, categorias, scores, caixas, dimensões, limites numéricos e rejeitar crowd annotations não suportadas.
@@ -9,14 +9,14 @@
 - [x] Confirmar API CI, Quality Gates, Security Scans e Docker Compose no commit de código `91ea51e023b1952ed0bc3e5f86e9dcd21311be2a`: 1545 passed, 1 skipped; smokes PostgreSQL 16 e anti-rollback passaram. Runs: API CI [45065013302](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45065013302), Quality Gates [45065079666](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45065079666), Security [45065079730](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45065079730), Compose [45065013291](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45065013291).
 - [ ] Executar com dataset autorizado e pesos reais; não publicar métricas até obter relatório verificável e revisão independente.
 
-## Edge AI — contrato de eventos v1 (implementado como contrato puro; CI pendente)
+## Edge AI — contrato de eventos v1 (implementado como contrato puro; CI validada em 2026-11-22)
 
 - [x] Definir envelope versionado com identidade do dispositivo, tenant, sequência monotónica, timestamp com fuso, event ID e payload JSON limitado.
 - [x] Validar HEARTBEAT, SHELF_CAPTURED, SHELF_OBSERVATION e TASK_ACKNOWLEDGED com esquemas específicos e limites de dados.
 - [x] Definir fingerprint canónico, chave de idempotência por dispositivo e classificação NEXT/GAP/STALE.
 - [x] Garantir que observações visuais não transportam quantidades de stock nem executam mutações.
 - [x] Documentar outbox offline, inbox transaccional, retries, isolamento por loja e requisitos de autenticação.
-- [ ] Validar suite e integração CI.
+- [x] Validar suite e integração CI no commit `91ea51e0`; 1545 testes aprovados, 1 ignorado. A ingestão persistente continua deliberadamente pendente.
 - [ ] Implementar registo de dispositivos, credenciais, endpoint de ingestão, inbox/outbox persistentes, cursor transaccional e acknowledgements; não activar ingestão antes destas peças.
 
 ## Computer Vision — manifesto ONNX Ed25519 v2 e anti-rollback (implementação publicada; CI validada em 2026-11-22)
@@ -33,15 +33,15 @@
 - [x] Acrescentar eventos append-only e guards PostgreSQL/SQLite; impedir downgrade da migration quando já existem releases aceites.
 - [x] Implementar key revocation explícita através de `VISION_MODEL_REVOKED_KEY_IDS_JSON`, mantendo o keyring de chaves públicas como allow-list.
 - [x] Verificar o release antes/depois da inferência e manter lock da versão durante a publicação das deteções; workers obsoletos reencaminham a captura para PENDING e terminam.
-- [x] Validar no commit `9a0c40f0082d056e9d3c9538b5ca85089331a31c`: API CI [45064470736](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45064470736), Quality Gates [45064470874](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45064470874), Security Scans [45064470765](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45064470765) e Docker Compose [45064470789](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45064470789) passaram; API CI executou PostgreSQL 16, smoke anti-rollback concorrente e 1540 testes aprovados, 1 ignorado.
+- [x] Validar no commit de código `91ea51e023b1952ed0bc3e5f86e9dcd21311be2a`: API CI [45065013302](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45065013302), Quality Gates [45065079666](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45065079666), Security Scans [45065079730](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45065079730) e Docker Compose [45065013291](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45065013291) passaram; API CI executou PostgreSQL 16, smoke anti-rollback concorrente e 1545 testes aprovados, 1 ignorado.
 - [x] Exigir `VISION_MODEL_DEPLOYMENT_ID` explícito e não-default em `APP_ENV=production`; Compose deixa de injectar um fallback silencioso.
 - [ ] Separar o principal de migrations do principal runtime e retirar permissões DDL/ALTER/TRUNCATE/gestão de triggers ao runtime antes de produção; o owner/superuser ainda pode desactivar os triggers.
 - [ ] Validar rotação/revogação em deployment real com chaves e pesos autorizados; não existe ainda material de release real.
 
-## Deploy — passagem dos digests e política de confiança ONNX para API e worker (2026-11-21, validação CI pendente)
+## Deploy — passagem dos digests e política de confiança ONNX para API e worker (2026-11-22, CI validada)
 
 - [x] Passar `VISION_DETECTOR_MODEL_SHA256` e `VISION_EMBEDDING_MODEL_SHA256` para os serviços `api` e `vision-worker` no Docker Compose.
-- [x] Testar o contrato de configuração dos dois serviços, dos dois digests e das variáveis de manifesto/keyring; `docker compose config` e smoke de arranque continuam dependentes de CI.
+- [x] Testar o contrato de configuração dos dois serviços, dos dois digests e das variáveis de manifesto/keyring; `docker compose config` e smoke de arranque passaram no Docker Compose CI [45065013291](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45065013291).
 - [x] Manter os digests vazios por omissão: Compose não inventa hashes nem enfraquece o modo fail-closed.
 - [x] Manifesto Ed25519 v2, trust roots, rotação/revogação configurável e anti-rollback persistente implementados; ver `docs/vision-model-manifest.md`, `apps/api/app/vision_model_manifest.py`, `apps/api/app/vision_model_release.py` e migration `0069_vision_model_release_trust_state`.
 - [x] Confirmar migration PostgreSQL 16, smoke anti-rollback concorrente, suite API, Quality Gates, Security Scans e Docker Compose no commit `9a0c40f0082d056e9d3c9538b5ca85089331a31c`; 1540 testes aprovados, 1 ignorado.
