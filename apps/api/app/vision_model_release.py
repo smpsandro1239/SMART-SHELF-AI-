@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from typing import Any, Callable
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import Session
 
 from app.models import VisionModelReleaseEvent, VisionModelReleaseState
 
@@ -114,24 +114,9 @@ def register_model_release(
                 raise ModelReleaseError(
                     f"Persistent model anti-rollback is unsupported for database dialect '{dialect}'"
                 )
-            db.execute(statement)
+            insert_result = db.execute(statement)
             db.flush()
-            state = db.execute(
-                select(VisionModelReleaseState)
-                .where(VisionModelReleaseState.deployment_id == deployment_id)
-                .with_for_update()
-            ).scalar_one_or_none()
-            if state is None:
-                raise ModelReleaseError("Persistent model release state could not be initialized")
-            if state.highest_release_version == model_release["release_version"]:
-                if state.manifest_sha256 != model_release["manifest_sha256"]:
-                    db.add(_event(
-                        deployment_id, model_release,
-                        decision="REJECTED_VERSION_COLLISION",
-                        reason="A different signed manifest already uses this release version",
-                    ))
-                    db.commit()
-                    raise ModelReleaseError("A different manifest already uses the same release version")
+            if insert_result.rowcount == 1:
                 db.add(_event(
                     deployment_id, model_release,
                     decision="ACCEPTED",
@@ -139,6 +124,13 @@ def register_model_release(
                 ))
                 db.commit()
                 return
+            state = db.execute(
+                select(VisionModelReleaseState)
+                .where(VisionModelReleaseState.deployment_id == deployment_id)
+                .with_for_update()
+            ).scalar_one_or_none()
+            if state is None:
+                raise ModelReleaseError("Persistent model release state could not be initialized")
 
         if state.model_id != model_release["model_id"]:
             db.add(_event(
