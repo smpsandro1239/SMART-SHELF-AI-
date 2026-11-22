@@ -5,6 +5,9 @@ import os
 
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import DBAPIError
+from sqlalchemy.orm import sessionmaker
+
+from app.vision_model_release import assert_model_release_current
 
 
 def _assert_denied(connection, statement: str, label: str) -> None:
@@ -24,6 +27,24 @@ def main() -> None:
 
     engine = create_engine(database_url, pool_pre_ping=True)
     try:
+        probe_deployment = os.getenv("TRUST_PROBE_DEPLOYMENT_ID", "").strip()
+        if probe_deployment:
+            session_factory = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+            with session_factory() as db:
+                assert_model_release_current(
+                    db,
+                    deployment_id=probe_deployment,
+                    model_release={
+                        "model_id": "shelf-detector",
+                        "release_version": 3,
+                        "key_id": "release-smoke",
+                        "manifest_sha256": f"{3:064x}",
+                        "detector_sha256": "a" * 64,
+                        "embedding_sha256": None,
+                    },
+                )
+                db.rollback()
+
         with engine.connect() as connection:
             role = connection.execute(text("""
                 SELECT current_user, rol.rolsuper, rol.rolcreatedb, rol.rolcreaterole,
