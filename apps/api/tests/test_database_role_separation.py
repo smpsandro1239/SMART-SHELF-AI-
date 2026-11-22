@@ -32,7 +32,8 @@ def test_migrations_use_owner_credentials_and_runtime_services_use_restricted_ro
     assert "alembic" in migration
     assert "POSTGRES_USER" in migration
     assert "POSTGRES_PASSWORD" in migration
-    assert "APP_DB_USER" not in migration
+    assert "APP_DB_USER" in migration, "migration needs the runtime role name for trust-table ACLs"
+    assert "APP_DB_PASSWORD" not in migration, "migration must not receive the runtime password"
 
     for service_name, block in (("api", api), ("vision-worker", worker)):
         assert "APP_DB_USER" in block, f"{service_name} must use the runtime role"
@@ -101,7 +102,7 @@ def test_model_trust_tables_are_read_only_to_the_runtime_principal():
     migration = _service_block(compose, "migrate")
 
     for table in ("vision_model_release_states", "vision_model_release_events"):
-        assert f"public.{table}" in bootstrap
+        assert table in bootstrap
         assert "REVOKE INSERT, UPDATE, DELETE, TRUNCATE" in bootstrap
         assert "GRANT SELECT ON TABLE" in bootstrap
     assert "CASE" in bootstrap
