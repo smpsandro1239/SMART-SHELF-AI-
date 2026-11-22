@@ -271,6 +271,7 @@ jobs:
           PGPORT: 5432
           APP_DB_USER: smart_shelf_runtime_ci
           APP_DB_PASSWORD: runtime-ci-password
+          MIGRATION_DB_USER: postgres
           TRUST_PROBE_DEPLOYMENT_ID: ci-model-release-runtime-role
         run: |
           sudo apt-get update
