@@ -1830,7 +1830,7 @@ Commit validado: [1097e53](https://github.com/smpsandro1239/SMART-SHELF-AI-/comm
 
 Relatórios: [TODO](TODO.md), [PROGRESS](PROGRESS.md), [auditoria de dependências e ZAP](docs/security/dependency-audit-2026-11-21.md), [ordem de locks por tenant](docs/security/tenant-lock-order.md) e [headers HTTP](docs/security/http-security-headers.md).
 
-**Limitação importante:** 1549 testes aprovados, 1 ignorado no HEAD `bbf5ad80` não significam que o detector tenha precisão comercial validada. Continua a faltar modelo ONNX real aprovado, dataset autorizado anotado e métricas por SKU/cenário. O principal runtime já está separado do owner de migrations e as tabelas de confiança ONNX são agora de leitura apenas para a API/worker; a operação explícita de registo usa o owner. Ainda faltam integração CCTV/RTSP/ONVIF e validação com dados POS/ERP/WMS reais. O percurso demo continua a usar dados sintéticos e provider mock.
+**Limitação importante:** a camada read-only de confiança ONNX foi validada no HEAD `5e16a9cb`: API CI e Quality Gates com **1552 testes aprovados, 1 ignorado**, Security Scans e Docker Compose smoke passaram. A alteração seguinte adiciona provisionamento recorrente do principal runtime e `NOINHERIT`; aguarda nova validação CI. Continua a faltar modelo ONNX real aprovado, dataset autorizado anotado e métricas por SKU/cenário, além de integração CCTV/RTSP/ONVIF e dados POS/ERP/WMS reais. O percurso demo continua a usar dados sintéticos e provider mock.
 
 
 ## Validação técnica — 2026-11-22
