@@ -50,6 +50,8 @@ def test_postgres_bootstrap_creates_non_owner_role_with_dml_only_grants():
     assert "APP_DB_PASSWORD" in db
 
     assert '[[ "$APP_DB_USER" == "$POSTGRES_USER" ]]' in bootstrap
+    assert "APP_DB_PASSWORD must contain at least 32 URL-safe characters" in bootstrap
+    assert "APP_DB_USER must be a 1-63 character PostgreSQL identifier" in bootstrap
     assert "NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS" in bootstrap
     assert "REVOKE CREATE ON SCHEMA public" in bootstrap
     assert "GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES" in bootstrap
