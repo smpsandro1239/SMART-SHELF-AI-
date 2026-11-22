@@ -63,6 +63,7 @@ jobs:
           SQL
           docker compose run --rm provision-runtime-role
           docker compose exec -T api python -c "import os, runpy; os.environ['RUNTIME_DATABASE_URL'] = os.environ['DATABASE_URL']; runpy.run_path('scripts/postgres_runtime_role_smoke.py', run_name='__main__')"
+          docker compose exec -T db psql --username smart_shelf --dbname smart_shelf --set=ON_ERROR_STOP=1 --command="DROP ROLE legacy_runtime_smoke"
           curl --fail --silent http://127.0.0.1:8000/health/ready >/dev/null
           docker compose exec -T api python -m app.demo.seed
           test -s apps/api/demo/assets/synthetic-shelf.png
