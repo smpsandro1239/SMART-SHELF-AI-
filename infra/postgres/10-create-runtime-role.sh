@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# Provision a least-privilege application role on first database initialization.
+set -Eeuo pipefail
+
+: "${POSTGRES_USER:?POSTGRES_USER must identify the migration/database owner}"
+: "${POSTGRES_DB:?POSTGRES_DB must be set}"
+: "${APP_DB_USER:?APP_DB_USER must identify the runtime role}"
+: "${APP_DB_PASSWORD:?APP_DB_PASSWORD must be a non-empty runtime password}"
+
+if [[ "$APP_DB_USER" == "$POSTGRES_USER" ]]; then
+  echo "APP_DB_USER must differ from POSTGRES_USER; runtime must not use the migration owner." >&2
+  exit 1
+fi
+
+psql --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" \
+  --set=ON_ERROR_STOP=1 \
+  --set=runtime_user="$APP_DB_USER" \
+  --set=runtime_password="$APP_DB_PASSWORD" \
+  --set=migration_user="$POSTGRES_USER" \
+  --set=database_name="$POSTGRES_DB" <<'SQL'
+SELECT format(
+    'CREATE ROLE %I LOGIN PASSWORD %L NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS',
+    :'runtime_user',
+    :'runtime_password'
+)
+WHERE NOT EXISTS (
+    SELECT 1 FROM pg_roles WHERE rolname = :'runtime_user'
+)
+\gexec
+
+SELECT format(
+    'ALTER ROLE %I WITH LOGIN PASSWORD %L NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS',
+    :'runtime_user',
+    :'runtime_password'
+)
+\gexec
+
+GRANT CONNECT ON DATABASE :"database_name" TO :"runtime_user";
+GRANT USAGE ON SCHEMA public TO :"runtime_user";
+REVOKE CREATE ON SCHEMA public FROM :"runtime_user";
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO :"runtime_user";
+GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO :"runtime_user";
+
+ALTER DEFAULT PRIVILEGES FOR ROLE :"migration_user" IN SCHEMA public
+    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO :"runtime_user";
+ALTER DEFAULT PRIVILEGES FOR ROLE :"migration_user" IN SCHEMA public
+    GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO :"runtime_user";
+SQL
