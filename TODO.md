@@ -19,7 +19,7 @@
 - [ ] Validar suite e integração CI.
 - [ ] Implementar registo de dispositivos, credenciais, endpoint de ingestão, inbox/outbox persistentes, cursor transaccional e acknowledgements; não activar ingestão antes destas peças.
 
-## Computer Vision — manifesto ONNX Ed25519 (implementado; CI pendente)
+## Computer Vision — manifesto ONNX Ed25519 (implementado; quality/security CI validada em 2026-11-21)
 
 - [x] Verificar assinatura Ed25519 do manifesto com keyring explícito de chaves públicas confiáveis.
 - [x] Vincular os hashes SHA-256 assinados aos bytes exactos do detector e do embedder; rejeitar modelos alterados, symlinks, JSON ambíguo, campos desconhecidos, assinaturas inválidas e key IDs não confiáveis.
@@ -27,7 +27,7 @@
 - [x] Passar configuração de manifesto/keyring para API e vision-worker no Docker Compose.
 - [x] Adicionar utilitário de assinatura offline; a chave privada fica fora do repositório e do runtime.
 - [x] Adicionar testes de assinatura, key trust, integridade dos ficheiros, configuração e utilitário.
-- [ ] Confirmar API CI, Quality Gates, Docker Compose smoke e Security Scans no commit final; Vercel build-rate-limit não substitui CI.
+- [x] Quality Gates no HEAD `e9145ac7cb89409e80259f52967f7fccda3de478` passou: API compile + suite pytest e build Web; Security Scans no mesmo SHA passou. Runs: [Quality Gates 44918245867](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44918245867) e [Security Scans 44918245858](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44918245858). API CI e Docker Compose smoke têm sucesso em SHA anterior, não foram confirmados neste HEAD.
 - [ ] Definir política de rotação/revogação e prevenção de rollback com versão mínima persistente antes de produção.
 
 ## Deploy — passagem dos digests ONNX para API e worker (2026-11-21, validação CI pendente)
@@ -35,7 +35,7 @@
 - [x] Passar `VISION_DETECTOR_MODEL_SHA256` e `VISION_EMBEDDING_MODEL_SHA256` para os serviços `api` e `vision-worker` no Docker Compose.
 - [x] Testar o contrato de configuração dos dois serviços, dos dois digests e das variáveis de manifesto/keyring; `docker compose config` e smoke de arranque continuam dependentes de CI.
 - [ ] Manter os digests vazios por omissão: não enfraquecer o modo fail-closed nem inventar hashes para pesos não fornecidos.
-- [ ] Manifesto Ed25519 assinado e trust roots continuam pendentes; esta alteração apenas encaminha as âncoras SHA-256 existentes.
+- [x] Manifesto Ed25519 e trust roots estão implementados em `apps/api/app/vision_model_manifest.py`; verificação e configuração no provider real cobertas por `apps/api/tests/test_vision_model_manifest.py`. A validação do HEAD está registada acima. Permanecem pendentes rotação/revogação operacional e anti-rollback persistente.
 
 ## IA e catálogo — validação estrita de exemplares de embeddings (2026-11-21, validado)
 
@@ -59,7 +59,7 @@
 - [x] Comparar os digests aprovados com os ficheiros antes de abrir sessões ONNX; manter a revalidação do digest depois do carregamento para detectar substituição concorrente.
 - [x] Separar a identidade de pré-processamento do detetor (letterbox) e do extrator (crop stretch), incluindo-a nos fingerprints efectivos.
 - [x] Adicionar regressões para digest ausente, malformado, divergente, válido e identidade de pré-processamento. API CI e Quality Gates: 1432 passed, 1 skipped; Docker Compose e Security Scans passaram no commit [663bf49](https://github.com/smpsandro1239/SMART-SHELF-AI-/commit/663bf495f6d15a4bcc92aa6fedc87d18e47e4e71).
-- [ ] Implementar manifesto assinado e verificação de assinatura com chave pública de confiança; os digests actuais são âncoras de confiança fornecidas pela configuração de deployment, não assinaturas digitais.
+- [x] Implementar manifesto Ed25519 assinado e verificação com keyring explícito; os digests de deployment mantêm-se como segunda confirmação. Ver `docs/vision-model-manifest.md` e `apps/api/app/vision_model_manifest.py`.
 - [ ] Validar pesos reais autorizados, dataset anotado e métricas por SKU/cenário antes de activar inferência em piloto.
 
 ## Política de autorização da API — centralização
