@@ -159,7 +159,9 @@ def test_runtime_role_smoke_checks_login_ownership_and_future_object_acl_contrac
     assert "has_schema_privilege" in smoke
     assert "pg_default_acl" in smoke
     assert "aclexplode" in smoke
-    assert "_assert_default_privileges(connection)" in smoke
+    assert "MIGRATION_DB_USER" in smoke
+    assert "defaults.defaclrole" in smoke
+    assert "_assert_default_privileges(connection, migration_role)" in smoke
     assert "_OPERATIONAL_TABLE_PRIVILEGES" in smoke
     assert "_OPERATIONAL_SEQUENCE_PRIVILEGES" in smoke
 
