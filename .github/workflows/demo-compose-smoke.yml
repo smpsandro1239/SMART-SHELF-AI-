@@ -52,7 +52,7 @@ jobs:
             exit 1
           fi
 
-          docker compose exec -T api python scripts/postgres_runtime_role_smoke.py
+          docker compose exec -T api python -c "import os, runpy; os.environ['RUNTIME_DATABASE_URL'] = os.environ['DATABASE_URL']; runpy.run_path('scripts/postgres_runtime_role_smoke.py', run_name='__main__')"
           docker compose exec -T api python -m app.demo.seed
           test -s apps/api/demo/assets/synthetic-shelf.png
 
