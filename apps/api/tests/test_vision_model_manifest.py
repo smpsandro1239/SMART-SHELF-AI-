@@ -8,7 +8,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from app.vision_model_manifest import ModelManifestError, _canonical_json, verify_model_manifest
 
 
-def signed_manifest(tmp_path, *, detector_bytes=b"detector-v1", embedding_bytes=None, key_id="release-2026"):
+def signed_manifest(tmp_path, *, detector_bytes=b"detector-v1", embedding_bytes=None, key_id="release-2026", model_id="shelf-detector", release_version=1):
     private_key = Ed25519PrivateKey.generate()
     public_key = private_key.public_key().public_bytes(
         encoding=serialization.Encoding.Raw,
@@ -21,8 +21,10 @@ def signed_manifest(tmp_path, *, detector_bytes=b"detector-v1", embedding_bytes=
         embedding = tmp_path / "embedding.onnx"
         embedding.write_bytes(embedding_bytes)
     payload = {
-        "schema_version": 1,
+        "schema_version": 2,
         "key_id": key_id,
+        "model_id": model_id,
+        "release_version": release_version,
         "detector_sha256": __import__("hashlib").sha256(detector_bytes).hexdigest(),
         "embedding_sha256": (
             __import__("hashlib").sha256(embedding_bytes).hexdigest()
@@ -48,6 +50,9 @@ def test_signed_manifest_accepts_trusted_ed25519_signature_and_exact_model_hashe
 
     assert result == {
         "key_id": "release-2026",
+        "model_id": "shelf-detector",
+        "release_version": 1,
+        "manifest_sha256": __import__("hashlib").sha256(_canonical_json(payload)).hexdigest(),
         "detector_sha256": payload["detector_sha256"],
         "embedding_sha256": payload["embedding_sha256"],
     }
@@ -195,4 +200,37 @@ def test_offline_signing_utility_creates_verifiable_manifest(tmp_path):
     verified = verify_model_manifest(manifest_path, keyring, detector)
 
     assert verified["key_id"] == "release-candidate"
+    assert verified["model_id"] == "shelf-detector"
+    assert verified["release_version"] == 1
     assert verified["detector_sha256"] == envelope["payload"]["detector_sha256"]
+
+
+
+def test_signed_manifest_rejects_explicitly_revoked_key(tmp_path):
+    manifest, keyring, detector, embedding, _ = signed_manifest(tmp_path)
+
+    with pytest.raises(ModelManifestError, match="revoked"):
+        verify_model_manifest(
+            manifest,
+            keyring,
+            detector,
+            embedding,
+            revoked_key_ids_json='["release-2026"]',
+        )
+
+
+@pytest.mark.parametrize("release_version", [0, -1, True, 2**31])
+def test_manifest_builder_rejects_invalid_release_versions(tmp_path, release_version):
+    from scripts.create_vision_model_manifest import build_manifest
+
+    private_key = Ed25519PrivateKey.generate()
+    detector = tmp_path / "detector.onnx"
+    detector.write_bytes(b"detector")
+    with pytest.raises(ValueError, match="release_version"):
+        build_manifest(
+            private_key,
+            "release-a",
+            detector,
+            model_id="shelf-detector",
+            release_version=release_version,
+        )
