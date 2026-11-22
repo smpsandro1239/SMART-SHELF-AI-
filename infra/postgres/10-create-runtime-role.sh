@@ -90,10 +90,14 @@ WHERE to_regclass(format('public.%I', table_name)) IS NOT NULL
 
 SELECT format(
     'REVOKE ALL ON SEQUENCE %s FROM %I',
-    pg_get_serial_sequence('public.vision_model_release_events', 'id'),
+    CASE
+        WHEN to_regclass('public.vision_model_release_events') IS NOT NULL
+        THEN pg_get_serial_sequence('public.vision_model_release_events', 'id')
+        ELSE NULL
+    END,
     :'runtime_user'
 )
-WHERE pg_get_serial_sequence('public.vision_model_release_events', 'id') IS NOT NULL
+WHERE to_regclass('public.vision_model_release_events') IS NOT NULL
 \gexec
 
 ALTER DEFAULT PRIVILEGES FOR ROLE :"migration_user" IN SCHEMA public
