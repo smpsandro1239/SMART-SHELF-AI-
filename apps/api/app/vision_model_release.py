@@ -5,7 +5,7 @@ import re
 from datetime import datetime, timezone
 from typing import Any, Callable
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models import VisionModelReleaseEvent, VisionModelReleaseState
@@ -19,6 +19,14 @@ _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 
 class ModelReleaseError(RuntimeError):
     """Raised when a signed model release violates persistent trust policy."""
+
+
+def _lock_release_slot(db: Session, deployment_id: str) -> None:
+    """Serialize trust-state reads and writes without granting runtime UPDATE rights."""
+    if db.get_bind().dialect.name == "postgresql":
+        db.execute(
+            select(func.pg_advisory_xact_lock(func.hashtextextended(deployment_id, 0)))
+        )
 
 
 def _validate_release(deployment_id: str, release: dict[str, Any]) -> None:
@@ -79,10 +87,10 @@ def register_model_release(
     _validate_release(deployment_id, model_release)
     db = session_factory()
     try:
+        _lock_release_slot(db, deployment_id)
         state = db.execute(
             select(VisionModelReleaseState)
             .where(VisionModelReleaseState.deployment_id == deployment_id)
-            .with_for_update()
         ).scalar_one_or_none()
 
         if state is None:
@@ -127,7 +135,6 @@ def register_model_release(
             state = db.execute(
                 select(VisionModelReleaseState)
                 .where(VisionModelReleaseState.deployment_id == deployment_id)
-                .with_for_update()
             ).scalar_one_or_none()
             if state is None:
                 raise ModelReleaseError("Persistent model release state could not be initialized")
@@ -193,12 +200,16 @@ def assert_model_release_current(
     deployment_id: str,
     model_release: dict[str, Any],
 ) -> None:
-    """Lock and verify the exact current release inside the caller's transaction."""
+    """Verify the exact current release under a transaction-scoped deployment lock.
+
+    PostgreSQL uses an advisory lock so the application runtime needs SELECT,
+    not UPDATE, on trust-state tables. Registration takes the same lock as owner.
+    """
     _validate_release(deployment_id, model_release)
+    _lock_release_slot(db, deployment_id)
     state = db.execute(
         select(VisionModelReleaseState)
         .where(VisionModelReleaseState.deployment_id == deployment_id)
-        .with_for_update()
     ).scalar_one_or_none()
     if state is None:
         raise ModelReleaseError("Signed model release is not registered in persistent trust state")
