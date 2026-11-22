@@ -146,3 +146,19 @@ def test_trust_state_privilege_migration_and_owner_registration_cli_are_fail_clo
     assert "_verify_migration_owner()" in registration
     assert "register_model_release(" in registration
     assert "Model releases must be registered by the PostgreSQL owner" in registration
+
+
+def test_runtime_role_smoke_checks_login_ownership_and_future_object_acl_contract():
+    smoke = ROLE_SMOKE.read_text(encoding="utf-8")
+
+    assert "rol.rolcanlogin" in smoke
+    assert "rol.rolinherit" in smoke
+    assert "pg_shdepend" in smoke
+    assert "deptype = 'o'" in smoke
+    assert "has_database_privilege" in smoke
+    assert "has_schema_privilege" in smoke
+    assert "pg_default_acl" in smoke
+    assert "aclexplode" in smoke
+    assert "_assert_default_privileges(connection)" in smoke
+    assert "_OPERATIONAL_TABLE_PRIVILEGES" in smoke
+    assert "_OPERATIONAL_SEQUENCE_PRIVILEGES" in smoke
