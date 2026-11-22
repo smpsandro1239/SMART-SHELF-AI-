@@ -35,6 +35,17 @@ SELECT format(
 )
 \gexec
 
+-- Strip inherited elevated roles and ownership/grants from any previously used role.
+SELECT format('REVOKE %I FROM %I', granted_role.rolname, member_role.rolname)
+FROM pg_auth_members AS membership
+JOIN pg_roles AS granted_role ON granted_role.oid = membership.roleid
+JOIN pg_roles AS member_role ON member_role.oid = membership.member
+WHERE member_role.rolname = :'runtime_user'
+\gexec
+
+REASSIGN OWNED BY :"runtime_user" TO :"migration_user";
+DROP OWNED BY :"runtime_user";
+
 GRANT CONNECT ON DATABASE :"database_name" TO :"runtime_user";
 GRANT USAGE ON SCHEMA public TO :"runtime_user";
 REVOKE CREATE ON SCHEMA public FROM :"runtime_user";
