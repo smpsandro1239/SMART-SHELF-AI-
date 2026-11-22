@@ -13,7 +13,10 @@ import hashlib
 import json
 import math
 import os
+from collections.abc import Callable
 from pathlib import Path
+
+from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
 from app.vision import DetectionResult, VisionAnalysis
@@ -120,7 +123,7 @@ class ONNXShelfVisionProvider:
         sku_match_labels: set[str] | None = None,
         expected_detector_sha256: str | None = None,
         expected_embedding_sha256: str | None = None,
-        release_guard=None,
+        release_guard: Callable[[Session | None], None] | None = None,
     ):
         if isinstance(input_size, bool) or not isinstance(input_size, int) or not 32 <= input_size <= 4096:
             raise ONNXConfigurationError("VISION_INPUT_SIZE must be an integer between 32 and 4096")
@@ -467,30 +470,9 @@ def create_provider() -> ONNXShelfVisionProvider:
         raise ONNXConfigurationError("VISION_DETECTOR_MODEL_SHA256 does not match the signed manifest")
     if signed_model["embedding_sha256"] != expected_embedding_sha256:
         raise ONNXConfigurationError("VISION_EMBEDDING_MODEL_SHA256 does not match the signed manifest")
-    provider = ONNXShelfVisionProvider(
-        detector,
-        embedder,
-        model_version=version,
-        embedding_model_version=embedding_version,
-        input_size=_env_int("VISION_INPUT_SIZE", 640, 32, 4096),
-        confidence_threshold=_env_float("VISION_CONFIDENCE_THRESHOLD", 0.25),
-        max_detections=_env_int("VISION_MAX_DETECTIONS", 300, 1, 2000),
-        class_labels=class_labels,
-        sku_match_labels=sku_match_labels,
-        expected_detector_sha256=expected_detector_sha256,
-        expected_embedding_sha256=expected_embedding_sha256,
-    )
     deployment_id = os.getenv("VISION_MODEL_DEPLOYMENT_ID", "default").strip()
-    try:
-        register_model_release(
-            SessionLocal,
-            deployment_id=deployment_id,
-            model_release=signed_model,
-        )
-    except ModelReleaseError as exc:
-        raise ONNXConfigurationError(str(exc)) from exc
 
-    def release_guard(session=None):
+    def release_guard(session: Session | None = None) -> None:
         if session is not None:
             assert_model_release_current(
                 session,
@@ -505,6 +487,28 @@ def create_provider() -> ONNXShelfVisionProvider:
                 model_release=signed_model,
             )
 
-    provider._release_guard = release_guard
+    provider = ONNXShelfVisionProvider(
+        detector,
+        embedder,
+        model_version=version,
+        embedding_model_version=embedding_version,
+        input_size=_env_int("VISION_INPUT_SIZE", 640, 32, 4096),
+        confidence_threshold=_env_float("VISION_CONFIDENCE_THRESHOLD", 0.25),
+        max_detections=_env_int("VISION_MAX_DETECTIONS", 300, 1, 2000),
+        class_labels=class_labels,
+        sku_match_labels=sku_match_labels,
+        expected_detector_sha256=expected_detector_sha256,
+        expected_embedding_sha256=expected_embedding_sha256,
+        release_guard=release_guard,
+    )
+    try:
+        register_model_release(
+            SessionLocal,
+            deployment_id=deployment_id,
+            model_release=signed_model,
+        )
+    except ModelReleaseError as exc:
+        raise ONNXConfigurationError(str(exc)) from exc
+
     provider.assert_release_current()
     return provider
