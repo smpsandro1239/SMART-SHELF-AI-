@@ -12,6 +12,18 @@ if [[ "$APP_DB_USER" == "$POSTGRES_USER" ]]; then
   exit 1
 fi
 
+if [[ ! "$APP_DB_USER" =~ ^[A-Za-z_][A-Za-z0-9_]{0,62}$ ]]; then
+  echo "APP_DB_USER must be a 1-63 character PostgreSQL identifier using ASCII letters, digits and underscores." >&2
+  exit 1
+fi
+
+if [[ "${APP_ENV:-development}" == "production" ]]; then
+  if [[ ${#APP_DB_PASSWORD} -lt 32 || ! "$APP_DB_PASSWORD" =~ ^[A-Za-z0-9_-]+$ ]]; then
+    echo "Production APP_DB_PASSWORD must contain at least 32 URL-safe characters." >&2
+    exit 1
+  fi
+fi
+
 psql --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" \
   --set=ON_ERROR_STOP=1 \
   --set=runtime_user="$APP_DB_USER" \
