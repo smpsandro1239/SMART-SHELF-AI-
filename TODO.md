@@ -28,14 +28,21 @@
 - [x] Adicionar utilitário de assinatura offline; a chave privada fica fora do repositório e do runtime.
 - [x] Adicionar testes de assinatura, key trust, integridade dos ficheiros, configuração e utilitário.
 - [x] Quality Gates no HEAD `e9145ac7cb89409e80259f52967f7fccda3de478` passou: API compile + suite pytest e build Web; Security Scans no mesmo SHA passou. Runs: [Quality Gates 44918245867](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44918245867) e [Security Scans 44918245858](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44918245858). API CI e Docker Compose smoke têm sucesso em SHA anterior, não foram confirmados neste HEAD.
-- [ ] Definir política de rotação/revogação e prevenção de rollback com versão mínima persistente antes de produção.
+- [x] Implementar manifesto schema v2 com `model_id` e `release_version` assinados; schema v1 é rejeitado pelo provider real.
+- [x] Implementar high-water mark persistente por `VISION_MODEL_DEPLOYMENT_ID`, upgrade transaccional, retry idempotente, rejeição de rollback/colisão e identidade de modelo imutável.
+- [x] Acrescentar eventos append-only e guards PostgreSQL/SQLite; impedir downgrade da migration quando já existem releases aceites.
+- [x] Implementar key revocation explícita através de `VISION_MODEL_REVOKED_KEY_IDS_JSON`, mantendo o keyring de chaves públicas como allow-list.
+- [x] Verificar o release antes/depois da inferência e manter lock da versão durante a publicação das deteções; workers obsoletos reencaminham a captura para PENDING e terminam.
+- [ ] Confirmar API CI/PostgreSQL 16, Quality Gates, Security Scans e Docker Compose no SHA final.
+- [ ] Validar rotação/revogação em deployment real com chaves e pesos autorizados; não existe ainda material de release real.
 
-## Deploy — passagem dos digests ONNX para API e worker (2026-11-21, validação CI pendente)
+## Deploy — passagem dos digests e política de confiança ONNX para API e worker (2026-11-21, validação CI pendente)
 
 - [x] Passar `VISION_DETECTOR_MODEL_SHA256` e `VISION_EMBEDDING_MODEL_SHA256` para os serviços `api` e `vision-worker` no Docker Compose.
 - [x] Testar o contrato de configuração dos dois serviços, dos dois digests e das variáveis de manifesto/keyring; `docker compose config` e smoke de arranque continuam dependentes de CI.
 - [ ] Manter os digests vazios por omissão: não enfraquecer o modo fail-closed nem inventar hashes para pesos não fornecidos.
-- [x] Manifesto Ed25519 e trust roots estão implementados em `apps/api/app/vision_model_manifest.py`; verificação e configuração no provider real cobertas por `apps/api/tests/test_vision_model_manifest.py`. A validação do HEAD está registada acima. Permanecem pendentes rotação/revogação operacional e anti-rollback persistente.
+- [x] Manifesto Ed25519 v2, trust roots, rotação/revogação configurável e anti-rollback persistente implementados; ver `docs/vision-model-manifest.md`, `apps/api/app/vision_model_manifest.py`, `apps/api/app/vision_model_release.py` e migration `0069_vision_model_release_trust_state`.
+- [ ] Confirmar a execução CI da migration, smokes PostgreSQL, suite API e Security Scans no SHA final.
 
 ## IA e catálogo — validação estrita de exemplares de embeddings (2026-11-21, validado)
 
