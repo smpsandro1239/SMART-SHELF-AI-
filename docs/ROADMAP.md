@@ -29,7 +29,7 @@
 - Os valores não são inventados nem preenchidos por defeito: ficam vazios quando não configurados e o provider ONNX real continua a rejeitar a configuração incompleta.
 - Foi acrescentado teste de contrato para os dois serviços e as duas variáveis.
 - Implementação: commits `2d810e8a`, `263de3e8`; teste e registo de progresso: commits subsequentes na branch `main`.
-- A validação CI ainda está pendente. Não confundir encaminhamento de digests com manifesto assinado, aprovação criptográfica de modelos ou validação de qualidade do detector.
+- O encaminhamento de digests é uma segunda confirmação ao manifesto Ed25519 v2; não substitui a aprovação de pesos, a avaliação do detector nem a CI final.
 
 ### IA e catálogo — integridade dos exemplares de embeddings (2026-11-21, validado)
 
@@ -51,7 +51,7 @@
 - Os hashes são comparados antes da criação das sessões ONNX e revalidados após o carregamento; digest divergente ou ausente impede o arranque.
 - Os fingerprints separam o pré-processamento letterbox do detetor e o resize stretch dos crops do extrator.
 - API CI e Quality Gates: 1432 passed, 1 skipped; PostgreSQL 16, compilação Python e build Web aprovados. Docker Compose e Security Scans passaram.
-- Limite: manifesto assinado e trust roots estão implementados; continuam pendentes pesos reais autorizados, dataset anotado e avaliação por SKU/cenário. A configuração de deployment fornece as chaves públicas confiáveis; não existe ainda estado persistente anti-rollback.
+- Limite: manifesto Ed25519 v2 e high-water mark persistente estão implementados; CI do SHA actual ainda pendente. Continuam pendentes pesos reais autorizados, dataset anotado e avaliação independente por SKU/cenário.
 
 ### Isolamento multi-loja do histórico de alertas — 2026-11-21 (validado)
 
