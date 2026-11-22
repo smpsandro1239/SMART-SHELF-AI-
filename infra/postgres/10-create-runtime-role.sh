@@ -36,6 +36,8 @@ psql --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" \
   --set=runtime_password="$APP_DB_PASSWORD" \
   --set=migration_user="$POSTGRES_USER" \
   --set=database_name="$POSTGRES_DB" <<'SQL'
+BEGIN;
+
 SELECT format(
     'CREATE ROLE %I LOGIN PASSWORD %L NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS NOINHERIT',
     :'runtime_user',
@@ -106,4 +108,6 @@ ALTER DEFAULT PRIVILEGES FOR ROLE :"migration_user" IN SCHEMA public
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO :"runtime_user";
 ALTER DEFAULT PRIVILEGES FOR ROLE :"migration_user" IN SCHEMA public
     GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO :"runtime_user";
+
+COMMIT;
 SQL
