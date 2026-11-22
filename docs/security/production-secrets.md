@@ -32,7 +32,7 @@ Set `APP_ENV=production`, `JWT_SECRET_KEY`, `BOOTSTRAP_ADMIN_KEY`, and `DATABASE
 
 The Compose API and worker now receive `APP_ENV`, `JWT_SECRET_KEY`, and `BOOTSTRAP_ADMIN_KEY` from the host environment. For production, provide all three through the deployment platform's secret/environment injection and set `APP_ENV=production`. Do not rely on the development defaults in `.env.example` or the Compose file. Keep the file containing actual values outside version control with restrictive permissions, or use a dedicated secret manager.
 
-The API and worker must receive the same JWT and bootstrap values because both import the validated application settings. PostgreSQL credentials are separate secrets and must be configured in `DATABASE_URL` / the Compose database variables.
+The API and worker must receive the same JWT and bootstrap values because both import the validated application settings. PostgreSQL uses two separate identities: `APP_DB_USER`/`APP_DB_PASSWORD` are the least-privilege runtime credentials for API/worker; `POSTGRES_USER`/`POSTGRES_PASSWORD` are reserved for the migration owner and the explicitly invoked ONNX release-registration profile. Never inject the owner credentials into API or worker containers. The runtime role has DML on operational tables but only SELECT on `vision_model_release_states` and `vision_model_release_events`.
 
 ## First administrator bootstrap
 
@@ -63,7 +63,7 @@ Generate a new value, update the secret store, and redeploy. Since bootstrap is 
 
 ### Database credentials
 
-Rotate the PostgreSQL role password at the database provider, update every consumer's `DATABASE_URL` (and Compose database environment where applicable), then roll out the API and worker. Coordinate the change to avoid a period where processes use credentials that no longer work.
+Rotate `APP_DB_PASSWORD` for the runtime role independently from `POSTGRES_PASSWORD` for the migration owner. Update the database role and the corresponding secret-store values in a coordinated rollout. API and worker use only `APP_DB_USER`/`APP_DB_PASSWORD`; the `migrate` service and one-shot `register-model-release` profile use the owner credentials. Re-run `infra/postgres/10-create-runtime-role.sh` on existing volumes after changing runtime credentials so the grants, including read-only ONNX trust tables, are reconciled.
 
 ## Operational controls
 
