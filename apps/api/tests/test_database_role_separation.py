@@ -104,6 +104,9 @@ def test_model_trust_tables_are_read_only_to_the_runtime_principal():
         assert f"public.{table}" in bootstrap
         assert "REVOKE INSERT, UPDATE, DELETE, TRUNCATE" in bootstrap
         assert "GRANT SELECT ON TABLE" in bootstrap
+    assert "CASE" in bootstrap
+    assert "to_regclass('public.vision_model_release_events') IS NOT NULL" in bootstrap
+    assert "ALTER DEFAULT PRIVILEGES FOR ROLE" in bootstrap
 
     assert "APP_DB_USER" in migration, "Alembic needs the runtime role name to revoke trust-table DML"
     assert "register_model_release" not in vision_onnx, (
