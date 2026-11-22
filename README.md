@@ -32,7 +32,7 @@ Este perfil one-shot valida a assinatura Ed25519, os SHA-256 dos ficheiros e o i
 
 Define `APP_DB_USER` e `APP_DB_PASSWORD` no ambiente. Em produção, usa uma palavra-passe aleatória forte, única e URL-safe (pelo menos 32 caracteres Base64URL); os valores de fallback do Compose são exclusivamente para desenvolvimento local. A mesma regra URL-safe aplica-se a `POSTGRES_PASSWORD`, pois as URLs PostgreSQL são montadas no Compose. `POSTGRES_USER`/`POSTGRES_PASSWORD` ficam reservados ao serviço `migrate`, ao perfil explícito `register-model-release` e à administração da base de dados.
 
-Em volumes existentes, a inicialização automática do PostgreSQL não volta a executar scripts. Depois de definir `APP_DB_USER` e `APP_DB_PASSWORD`, provisiona/actualiza o papel com `docker compose exec db bash /docker-entrypoint-initdb.d/10-create-runtime-role.sh`; o script revoga também os privilégios de escrita nas tabelas de confiança ONNX. A migration 0070 aplica a mesma revogação quando o papel já existe durante Alembic. Confirma que o ambiente aponta para a instância correcta. Não executes Alembic através do container `api`, que não tem privilégios DDL.
+O serviço one-shot `provision-runtime-role` executa o bootstrap actualizado em cada arranque do Compose, antes de Alembic. Cria/actualiza o papel, remove memberships/ownership anteriores, aplica DML operacional e revoga escrita nas tabelas de confiança ONNX. Isto também reconcilia volumes PostgreSQL existentes; não depende de scripts `initdb.d`. Para o executar manualmente após alterar credenciais: `docker compose run --rm provision-runtime-role`. A migration 0070 aplica a revogação das tabelas de confiança quando o papel existe. Confirma que o ambiente aponta para a instância correcta. Não executes Alembic através do container `api`, que não tem privilégios DDL.
 
 
 ## Metodologia de engenharia — Superpowers, Impeccable e Frontend Design
@@ -857,7 +857,7 @@ A associação geométrica das regiões OCR às deteções individuais está em 
 A migração `0014_shelf_image_ocr_evidence` introduz histórico de execuções OCR e regiões reconhecidas associadas (ou não) a deteções de produto. A API permite registar e consultar evidência com controlo de acesso por loja. A integração com o worker ainda não está ativa.
 
 - [Documentação de persistência OCR](docs/architecture/ocr-evidence-persistence.md)
-- Aplicar em ambiente de desenvolvimento: `cd apps/api && alembic upgrade head`
+- Aplicar em ambiente de desenvolvimento: `docker compose run --rm migrate` (a partir da raiz do repositório).
 
 
 ### Matching OCR com o catálogo
