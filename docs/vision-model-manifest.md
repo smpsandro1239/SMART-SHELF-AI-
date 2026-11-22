@@ -54,9 +54,9 @@ O serviço `app.vision_model_release` usa uma transacção e bloqueio da linha p
 - versão inferior: rejeitada e registada como rollback;
 - mudança de `model_id` no mesmo deployment slot: rejeitada.
 
-Triggers PostgreSQL e SQLite impedem diminuir/apagar o high-water mark, alterar a identidade do modelo ou modificar/eliminar eventos de auditoria. O downgrade da migration recusa-se a remover o estado quando já existe pelo menos um release aceite. Esta protecção é intencionalmente não reversível por downgrade normal.
+Triggers PostgreSQL e SQLite impedem diminuir/apagar o high-water mark, alterar a identidade do modelo ou modificar/eliminar eventos de auditoria; PostgreSQL também bloqueia `TRUNCATE` das duas tabelas. O downgrade da migration recusa-se a remover o estado quando já existe pelo menos um release aceite. Esta protecção é intencionalmente não reversível por downgrade normal.
 
-`VISION_MODEL_DEPLOYMENT_ID` identifica o slot lógico e tem de permanecer estável entre reinícios e réplicas que partilham a mesma política de release. API e worker recebem o mesmo valor através do Docker Compose. Não o alteres para contornar uma versão mínima; slots independentes exigem uma decisão de arquitectura e isolamento próprios.
+`VISION_MODEL_DEPLOYMENT_ID` identifica o slot lógico e tem de permanecer estável entre reinícios e réplicas que partilham a mesma política de release. API e worker recebem o mesmo valor através do Docker Compose. Em `APP_ENV=production`, o valor tem de ser explícito e diferente de `default`; apenas desenvolvimento/testes usam o fallback `default`. Não o alteres para contornar uma versão mínima; slots independentes exigem uma decisão de arquitectura e isolamento próprios.
 
 O provider constrói e valida as sessões ONNX antes de avançar o high-water mark. A cada inferência verifica o release actual antes e depois do cálculo. O worker volta a verificar a versão dentro da transacção que publica deteções e mantém o lock da linha de confiança até ao commit. Se uma versão mais recente for aceite durante uma inferência, o resultado antigo não é persistido, a captura volta a `PENDING` e o worker obsoleto termina para reiniciar com a configuração actual.
 
@@ -123,7 +123,7 @@ Em caso de comprometimento, revogar imediatamente a chave comprometida e distrib
 
 O provider real falha antes da inferência se faltar manifesto, trust root, digest, estado persistente, se a assinatura for inválida, se a chave estiver revogada/desconhecida, se o schema for inválido, se os pesos divergirem ou se a versão tentar retroceder. A indisponibilidade do PostgreSQL também bloqueia a inferência.
 
-A assinatura autentica a aprovação dos bytes identificados pelo manifesto; o high-water mark impede rollback dentro do deployment slot. Nenhum destes mecanismos demonstra precisão, segurança semântica ou adequação comercial do modelo. Continuam necessários pesos autorizados, dataset anotado independente, métricas reproduzíveis por SKU/cenário, revisão de licenças e aprovação operacional.
+A assinatura autentica a aprovação dos bytes identificados pelo manifesto; o high-water mark impede rollback dentro do deployment slot. Os triggers protegem contra DML acidental/malicioso sem privilégios de DDL, mas um owner/superuser PostgreSQL pode alterar schema ou desactivar triggers. Antes de produção, separar o principal de migrations do principal runtime e retirar a este último permissões de DDL, ALTER, TRUNCATE e gestão de triggers. O Compose de demonstração ainda não implementa essa separação. Nenhum destes mecanismos demonstra precisão, segurança semântica ou adequação comercial do modelo. Continuam necessários pesos autorizados, dataset anotado independente, métricas reproduzíveis por SKU/cenário, revisão de licenças e aprovação operacional.
 
 O modo mock/desactivado não carrega nem exige manifesto nem registo anti-rollback. O Docker Compose local continua a usar o provider mock por omissão; não activar o modo real sem pesos autorizados e avaliação independente.
 
