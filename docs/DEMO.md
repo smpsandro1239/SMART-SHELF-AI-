@@ -65,7 +65,7 @@ npm ci
 npm run build
 ```
 
-O serviço `migrate` aplica `alembic upgrade head` com o principal de migrations antes de a API arrancar. A API e o worker usam o principal runtime sem privilégios DDL. Não executes Alembic no container `api`. Para um volume PostgreSQL já existente, consulta a secção de provisionamento do principal runtime em `README.md` e executa o script de forma explícita após configurar as credenciais.
+O serviço `migrate` aplica `alembic upgrade head` com o principal de migrations antes de a API arrancar. A API e o worker usam o principal runtime sem privilégios DDL. Não executes Alembic no container `api`. O serviço `provision-runtime-role` corre antes das migrations em todos os arranques Compose e reconcilia também volumes existentes. Para o executar manualmente depois de alterar credenciais, usa `docker compose run --rm provision-runtime-role`.
 
 ## Capturas de ecrã recomendadas
 
