@@ -344,3 +344,14 @@ Validação confirmada:
 - Security Scans [45065079730](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45065079730): sucesso; SCA, Gitleaks do histórico e ZAP baseline.
 
 Limitação de segurança: os triggers protegem contra operações DML/TRUNCATE sem privilégios de DDL, mas o owner/superuser PostgreSQL pode alterar schema ou desactivar triggers. Antes de produção, separar o principal de migrations do principal runtime e retirar permissões DDL/ALTER/TRUNCATE ao runtime. Não existem pesos/dataset autorizados, pelo que nenhuma inferência real foi activada.
+
+
+## 2026-11-22 — Separação do principal PostgreSQL de migrations/runtime (implementação publicada; CI pendente)
+
+- A auditoria do anti-rollback ONNX confirmou que os triggers de monotonicidade e append-only não protegem contra um principal owner/superuser capaz de alterar schema, remover triggers ou truncar tabelas.
+- O Docker Compose passa a executar Alembic num serviço one-shot `migrate`, com o principal owner; a API e o vision-worker usam `APP_DB_USER`/`APP_DB_PASSWORD` separados.
+- Adicionado `infra/postgres/10-create-runtime-role.sh`: cria/actualiza o principal runtime como NOSUPERUSER/NOCREATEDB/NOCREATEROLE/NOREPLICATION/NOBYPASSRLS, concede DML e sequências, revoga CREATE no schema e define privilégios por omissão para objetos futuros.
+- A API já não executa migrations com as credenciais runtime. O worker continua dependente da API saudável e ambos usam a mesma identidade runtime.
+- Adicionados testes estáticos em `apps/api/tests/test_database_role_separation.py` para verificar os contratos do Compose e bootstrap.
+- README, guia DEMO e documentação do manifesto ONNX actualizados. Para volumes existentes, o script tem de ser executado explicitamente após configurar as credenciais runtime; initdb não volta a executar scripts automaticamente.
+- Limites: os testes ainda não foram executados nesta sessão; falta smoke PostgreSQL com autenticação real do principal runtime e CI. Os valores de fallback do Compose são apenas para desenvolvimento; produção exige segredo forte/único e provisionamento controlado.
