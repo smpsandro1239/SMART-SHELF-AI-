@@ -43,6 +43,10 @@ VISION_SKU_MATCH_LABELS=product
 VISION_MODELS_DIR=./models
 VISION_DETECTOR_MODEL_PATH=/models/shelf-detector.onnx
 VISION_DETECTOR_MODEL_SHA256=<64-character-approved-sha256>
+VISION_MODEL_MANIFEST_PATH=/models/manifest.json
+VISION_MODEL_TRUSTED_KEYS_JSON={"release-2026":"<base64-public-key>"}
+VISION_MODEL_REVOKED_KEY_IDS_JSON=[]
+VISION_MODEL_DEPLOYMENT_ID=store-a-shelf-detector
 VISION_EMBEDDING_MODEL_PATH=/models/product-embedder.onnx
 VISION_EMBEDDING_MODEL_SHA256=<64-character-approved-sha256>
 VISION_MODEL_VERSION=shelf-detector-v1
@@ -56,7 +60,17 @@ Para executar apenas deteção, deixar `VISION_EMBEDDING_MODEL_PATH` vazio; ness
 
 O Compose monta a pasta de modelos em modo só de leitura. A API continua sem executar inferência: o processamento é feito pelo worker separado.
 
-## 3. Execução do worker
+## 3. Manifesto assinado e prevenção de rollback
+
+O provider real exige agora manifesto Ed25519 schema v2. O payload assinado liga `key_id`, `model_id`, `release_version` e SHA-256 dos pesos. O utilitário offline `apps/api/scripts/create_vision_model_manifest.py` exige `--model-id` e `--release-version`; releases antigos schema v1 têm de ser novamente assinados.
+
+A migration `0069_vision_model_release_trust_state` mantém o high-water mark de cada `VISION_MODEL_DEPLOYMENT_ID` em PostgreSQL, com eventos append-only. Versões inferiores, colisões na mesma versão e alterações de `model_id` são recusadas. A lista `VISION_MODEL_REVOKED_KEY_IDS_JSON` bloqueia explicitamente chaves comprometidas mesmo que ainda estejam no keyring. API e worker recebem a mesma identidade de deployment através do Compose.
+
+O provider confirma a versão antes/depois da inferência. O worker volta a validá-la e mantém o lock da linha de confiança durante a transacção que publica deteções. Um worker obsoleto não publica resultados, devolve a captura a PENDING e termina para reiniciar com a release actual. A indisponibilidade do registo PostgreSQL bloqueia o modo real.
+
+O processo de rotação de chaves, a revogação de emergência e o formato exacto do manifesto estão em [docs/vision-model-manifest.md](../vision-model-manifest.md). Não alterar `VISION_MODEL_DEPLOYMENT_ID` para contornar o high-water mark.
+
+## 4. Execução do worker
 
 Com API e base de dados disponíveis e as variáveis carregadas no ambiente do worker:
 
@@ -73,7 +87,7 @@ python -m app.vision_worker --poll-interval 5
 
 O worker exige uma escolha explícita de `VISION_PROVIDER_MODE`: `disabled` recusa processamento, `mock` só aceita `app.demo.vision:create_provider` e é recusado em `APP_ENV=production`, e `real` recusa o provider determinístico de demonstração. Para inferência real, configurar `VISION_PROVIDER_FACTORY=app.vision_onnx:create_provider`, pesos autorizados e o mapa `VISION_CLASS_LABELS_JSON`. O modo `disabled` é o default das Settings; o Compose usa explicitamente `mock` para o percurso local. A API não deve iniciar inferência síncrona durante o upload.
 
-## 4. Dependências e execução
+## 5. Dependências e execução
 
 O provider utiliza ONNX Runtime CPU, NumPy e Pillow. O runtime permite carregar uma sessão ONNX e executar tensores através de `InferenceSession`; a seleção explícita de `CPUExecutionProvider` mantém a configuração reproduzível em máquinas sem GPU.
 
@@ -81,7 +95,7 @@ O provider utiliza ONNX Runtime CPU, NumPy e Pillow. O runtime permite carregar 
 - [ONNX Runtime — instalação e primeiros passos](https://onnxruntime.ai/docs/get-started/with-python.html)
 - [Execution Providers](https://onnxruntime.ai/docs/execution-providers/)
 
-## 5. Critérios antes de piloto
+## 6. Critérios antes de piloto
 
 1. Confirmar a licença e proveniência do detetor, extrator e dados de treino.
 2. Validar o contrato dos tensores com os modelos exportados reais.
@@ -92,18 +106,18 @@ O provider utiliza ONNX Runtime CPU, NumPy e Pillow. O runtime permite carregar 
 7. Manter o teste final separado e intocado.
 8. Só depois ativar o worker num piloto controlado, com revisão humana.
 
-## 6. Limitações conhecidas
+## 7. Limitações conhecidas
 
 - O provider espera output de deteção pós-NMS com seis colunas; não é um conversor universal de modelos YOLO.
 - O mapa de classes converte `class_id` em etiquetas semânticas, mas ainda não identifica SKU; apenas labels explicitamente autorizadas em `VISION_SKU_MATCH_LABELS` geram embeddings/entram no matching. `empty_facing` não pode ser associado a um SKU.
-- Os digests SHA-256 aprovados dos ficheiros e o fingerprint da configuração ficam incorporados na versão efectiva persistida em `model_version`/`embedding_model_version` (sem migration adicional). O provider recusa symlinks, compara o digest configurado antes de abrir a sessão ONNX e volta a calcular o digest depois do carregamento para detectar substituição concorrente. A configuração de deployment é a âncora de confiança; um manifesto assinado e a persistência de campos separados para cada digest continuam pendentes.
+- O provider recusa symlinks, valida os hashes assinados antes de abrir as sessões ONNX e volta a calcular os digests depois do carregamento para detectar substituição concorrente. A migration 0069 guarda separadamente o high-water mark, identidade do modelo, key ID e hashes aprovados.
 - O extrator é opcional e requer exemplares aprovados na mesma versão de embedding.
-- Os digests aprovados são fornecidos por configuração de deployment: ainda não existe manifesto assinado nem verificação criptográfica da origem do fornecedor.
+- A assinatura autentica o release aprovado, não prova a qualidade nem a licença dos pesos. O deployment tem de proteger a chave pública confiável e a chave privada permanece offline.
 - O provider não calcula quantidade física na prateleira, planograma, stock contabilístico ou quantidade a repor.
 - Não foram incluídos pesos ONNX no repositório nem executado benchmark de um modelo real.
 
 
-## 7. Geometria explícita de células — estado experimental
+## 8. Geometria explícita de células — estado experimental
 
 `app.shelf_layout` inclui agora `ShelfCell` e `compare_detections_to_cells`, que comparam caixas normalizadas com células fornecidas por calibração/planograma. O comparador devolve `OCCUPIED`, `OCCUPIED_UNIDENTIFIED`, `MISPLACED`, `EMPTY` ou `UNKNOWN`, preservando os índices das deteções e os SKU observados.
 
