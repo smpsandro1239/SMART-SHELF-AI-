@@ -48,11 +48,11 @@ def main() -> None:
         with engine.connect() as connection:
             role = connection.execute(text("""
                 SELECT current_user, rol.rolsuper, rol.rolcreatedb, rol.rolcreaterole,
-                       rol.rolreplication, rol.rolbypassrls
+                       rol.rolreplication, rol.rolbypassrls, rol.rolinherit
                 FROM pg_roles AS rol
                 WHERE rol.rolname = current_user
             """)).one()
-            if any(role[index] for index in range(1, 6)):
+            if any(role[index] for index in range(1, 7)):
                 raise AssertionError(f"Runtime role has an elevated role attribute: {role}")
 
             memberships = connection.execute(text("""
