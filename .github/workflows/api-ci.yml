@@ -11,6 +11,8 @@ on:
   pull_request:
     paths:
       - 'apps/api/**'
+      - 'infra/postgres/**'
+      - 'docker-compose.yml'
       - '.github/workflows/api-ci.yml'
   workflow_dispatch:
 
@@ -268,6 +270,7 @@ jobs:
           PGPORT: 5432
           APP_DB_USER: smart_shelf_runtime_ci
           APP_DB_PASSWORD: runtime-ci-password
+          TRUST_PROBE_DEPLOYMENT_ID: ci-model-release-runtime-role
         run: |
           sudo apt-get update
           sudo apt-get install --yes postgresql-client
