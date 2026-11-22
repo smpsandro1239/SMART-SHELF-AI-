@@ -1,6 +1,6 @@
 # ADR-009 — Isolar o estado de confiança de releases ONNX do principal runtime
 
-**Estado:** aceite e implementado; camada read-only validada em `5e16a9cb`; serviço de provisionamento recorrente aguarda CI  
+**Estado:** aceite e implementado; camada read-only e provisionamento recorrente validados em CI no HEAD `aeff4a3b`; ensaio com volume persistente real continua pendente  
 **Data:** 22-11-2026
 
 ## Contexto
@@ -46,4 +46,4 @@ A separação owner/runtime introduzida no Docker Compose resolve privilégios D
 - Smoke: `apps/api/scripts/postgres_runtime_role_smoke.py`.
 - CI: API CI e Docker Compose smoke executam os testes com PostgreSQL 16 e o principal runtime.
 
-A camada read-only foi validada no SHA `5e16a9cb` (API CI, Quality Gates, Security Scans e Compose; 1552 passed, 1 skipped). A alteração do serviço recorrente `provision-runtime-role` e `NOINHERIT` aguarda nova CI e validação de volume legado. A decisão não autoriza a activação do provider real sem pesos licenciados, dataset autorizado, avaliação independente e aprovação operacional.
+A camada read-only e o serviço recorrente `provision-runtime-role` com `NOINHERIT` foram validados no HEAD `aeff4a3b`: API CI [45076219787](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45076219787), Quality Gates [45076219801](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45076219801), Security Scans [45076219740](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45076219740) e Compose [45076219751](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45076219751) passaram; suite API 1552 passed, 1 skipped. O Compose smoke simulou um estado legado com ownership indevido da tabela de confiança e membership herdada, confirmando a reconciliação. A persistência de um volume real entre reinícios ainda não foi ensaiada. A decisão não autoriza a activação do provider real sem pesos licenciados, dataset autorizado, avaliação independente e aprovação operacional.
