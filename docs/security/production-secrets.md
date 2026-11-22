@@ -63,7 +63,7 @@ Generate a new value, update the secret store, and redeploy. Since bootstrap is 
 
 ### Database credentials
 
-Rotate `APP_DB_PASSWORD` for the runtime role independently from `POSTGRES_PASSWORD` for the migration owner. Update the database role and the corresponding secret-store values in a coordinated rollout. API and worker use only `APP_DB_USER`/`APP_DB_PASSWORD`; the `migrate` service and one-shot `register-model-release` profile use the owner credentials. Re-run `infra/postgres/10-create-runtime-role.sh` on existing volumes after changing runtime credentials so the grants, including read-only ONNX trust tables, are reconciled.
+Rotate `APP_DB_PASSWORD` for the runtime role independently from `POSTGRES_PASSWORD` for the migration owner. Update the database role and the corresponding secret-store values in a coordinated rollout. API and worker use only `APP_DB_USER`/`APP_DB_PASSWORD`; the `migrate` service and one-shot `register-model-release` profile use the owner credentials. The Compose `provision-runtime-role` one-shot service runs before migrations on each deployment and reconciles existing volumes as well as fresh databases. After changing credentials, run `docker compose run --rm provision-runtime-role` explicitly when an immediate reconciliation is required; coordinate API/worker restarts with password rotation.
 
 ## Operational controls
 
