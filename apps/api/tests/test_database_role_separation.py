@@ -8,6 +8,7 @@ import subprocess
 ROOT = Path(__file__).resolve().parents[3]
 COMPOSE = ROOT / "docker-compose.yml"
 ROLE_BOOTSTRAP = ROOT / "infra" / "postgres" / "10-create-runtime-role.sh"
+VISION_ONNX = ROOT / "apps" / "api" / "app" / "vision_onnx.py"
 
 
 def _service_block(compose: str, service: str) -> str:
@@ -84,3 +85,22 @@ def test_runtime_role_bootstrap_has_valid_bash_syntax():
         text=True,
     )
     assert result.returncode == 0, result.stderr
+
+
+
+def test_model_trust_tables_are_read_only_to_the_runtime_principal():
+    bootstrap = ROLE_BOOTSTRAP.read_text(encoding="utf-8")
+    compose = COMPOSE.read_text(encoding="utf-8")
+    vision_onnx = VISION_ONNX.read_text(encoding="utf-8")
+    migration = _service_block(compose, "migrate")
+
+    for table in ("vision_model_release_states", "vision_model_release_events"):
+        assert f"public.{table}" in bootstrap
+        assert "REVOKE INSERT, UPDATE, DELETE, TRUNCATE" in bootstrap
+        assert "GRANT SELECT ON TABLE" in bootstrap
+
+    assert "APP_DB_USER" in migration, "Alembic needs the runtime role name to revoke trust-table DML"
+    assert "register_model_release" not in vision_onnx, (
+        "The unprivileged API/worker must not register model releases during provider startup"
+    )
+    assert "assert_model_release_current" in vision_onnx
