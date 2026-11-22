@@ -1,3 +1,14 @@
+### Segurança P0 — smoke do principal PostgreSQL runtime (2026-11-22; código publicado, validação pendente)
+
+- O smoke agora valida LOGIN/NOINHERIT e todos os atributos de privilégio do papel, ausência de memberships e ownership via `pg_shdepend`.
+- Verifica CONNECT, USAGE sem CREATE, DML nas tabelas operacionais e ACLs por defeito para futuras tabelas/sequências, sem grant option.
+- Mantém validação negativa de escrita nas tabelas de confiança ONNX e da sequência associada.
+- Teste estático actualizado em `apps/api/tests/test_database_role_separation.py`.
+- Commits `2d7bce2f`, `afda3ee6`, `ee609372`, `72d4034d`.
+- **Não marcar como validado:** API CI, PostgreSQL 16 smoke, Quality Gates e ensaio de volume persistente aguardam execução/confirmação.
+
+---
+
 ### Computer Vision — avaliador COCO v1 (implementação publicada; CI validada; dataset real pendente)
 
 - Avaliador AP101/mAP50/mAP50_95 e operating point precision/recall/F1, por classe e global.
