@@ -433,7 +433,7 @@ Pré-requisitos: Docker e Docker Compose.
    - Saúde: http://localhost:8000/health
    - Prontidão da base de dados: http://localhost:8000/health/ready
 
-As migrações Alembic são aplicadas no arranque do serviço API.
+As migrações Alembic são aplicadas pelo serviço one-shot `migrate`, executado como principal owner depois de `provision-runtime-role` reconciliar o principal runtime. A API e o `vision-worker` não executam migrations e ligam-se com as credenciais de runtime de menor privilégio.
 
 ## 9. Tarefas de reposição
 
