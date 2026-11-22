@@ -355,6 +355,7 @@ Limitação de segurança resolvida em camadas: owner de migrations separado do 
 - Implementada migration `0070_vision_model_trust_runtime_readonly` e actualização do bootstrap: runtime passa a ter apenas SELECT em `vision_model_release_states`/`vision_model_release_events`, sem DML/TRUNCATE nem acesso à sequência de eventos.
 - O provider deixou de registar releases no arranque. Criado `apps/api/scripts/register_vision_model_release.py` e perfil one-shot `register-model-release`, que verifica manifesto Ed25519, digests e exige o owner das tabelas.
 - `app.vision_model_release` usa advisory transaction lock por deployment para serializar verificações read-only e registos privilegiados; evita SELECT FOR UPDATE e mantém o runtime sem UPDATE.
+- A migration 0070 falha fechada em produção se `APP_DB_USER` faltar, não existir, coincidir com o owner ou for owner das tabelas de confiança.
 - O smoke PostgreSQL foi alargado para provar SELECT autorizado, DML/sequence privileges ausentes, recusa efectiva de INSERT/UPDATE/DELETE/TRUNCATE e validação do release pelo runtime. Foram acrescentados testes estáticos e teste de migração dialect-safe.
 - Documentação actualizada: README, guia do manifesto, provider ONNX, segredos de produção, ADR-009 e TODO.
 - **Validação da camada read-only ONNX:** concluída no SHA `5e16a9cb`: API CI, Quality Gates, Security Scans e Docker Compose passaram; suite API **1552 passed, 1 skipped**. O API CI confirmou o smoke PostgreSQL de permissões e o guard advisory com o principal runtime.
