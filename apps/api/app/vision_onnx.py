@@ -21,10 +21,7 @@ from sqlalchemy.orm import Session
 from app.database import SessionLocal
 from app.vision import DetectionResult, VisionAnalysis
 from app.vision_model_manifest import ModelManifestError, verify_model_manifest
-from app.vision_model_release import (
-    ModelReleaseError,
-    assert_model_release_current,
-)
+from app.vision_model_release import assert_model_release_current
 
 
 class ONNXConfigurationError(RuntimeError):
