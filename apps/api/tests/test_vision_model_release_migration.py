@@ -63,7 +63,8 @@ def test_vision_model_release_state_is_monotonic_and_events_are_append_only(tmp_
         with pytest.raises(IntegrityError, match="append-only"):
             db.exec_driver_sql("DELETE FROM vision_model_release_events WHERE id=1")
         with pytest.raises(RuntimeError, match="Refusing to downgrade"):
-            migration.downgrade()
+            with Operations.context(MigrationContext.configure(db)):
+                migration.downgrade()
         assert db.exec_driver_sql(
             "SELECT highest_release_version FROM vision_model_release_states WHERE deployment_id='edge-a'"
         ).scalar_one() == 2
