@@ -1,4 +1,4 @@
-"""Verify signed ONNX model manifests against an explicit Ed25519 trust store."""
+"""Verify signed, versioned ONNX model manifests against an explicit Ed25519 trust store."""
 from __future__ import annotations
 
 import base64
@@ -18,7 +18,9 @@ _MAX_MANIFEST_BYTES = 64 * 1024
 _MAX_TRUSTED_KEYS_BYTES = 16 * 1024
 _MAX_TRUSTED_KEYS = 32
 _KEY_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
+_MODEL_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$")
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
+_MAX_RELEASE_VERSION = 2**31 - 1
 
 
 def _unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -56,16 +58,34 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _parse_revoked_key_ids(raw: str | None) -> set[str]:
+    if raw is None or not raw.strip():
+        return set()
+    try:
+        revoked = json.loads(raw, object_pairs_hook=_unique_object)
+    except (UnicodeError, json.JSONDecodeError) as exc:
+        raise ModelManifestError("VISION_MODEL_REVOKED_KEY_IDS_JSON must be a JSON array") from exc
+    if not isinstance(revoked, list) or len(revoked) > _MAX_TRUSTED_KEYS:
+        raise ModelManifestError("Revoked key IDs must be a JSON array with at most 32 entries")
+    if len(set(revoked)) != len(revoked):
+        raise ModelManifestError("Revoked key IDs must not contain duplicates")
+    if any(not isinstance(key_id, str) or not _KEY_ID.fullmatch(key_id) for key_id in revoked):
+        raise ModelManifestError("Revoked key IDs contain an invalid identifier")
+    return set(revoked)
+
+
 def verify_model_manifest(
     manifest_path: str | Path,
     trusted_keys_json: str,
     detector_path: str | Path,
     embedding_path: str | Path | None = None,
-) -> dict[str, str | None]:
-    """Verify the Ed25519 signature and bind manifest digests to exact model files.
+    *,
+    revoked_key_ids_json: str | None = None,
+) -> dict[str, str | int | None]:
+    """Verify Ed25519 signature and bind release identity to exact model bytes.
 
-    The detached signature is over canonical UTF-8 JSON of the complete payload.
-    Trusted public keys are supplied as JSON: {"key-id": "<base64 raw Ed25519 key>"}.
+    The signature covers canonical UTF-8 JSON of the complete schema-v2 payload.
+    Trusted public keys are supplied as {"key-id": "<base64 raw Ed25519 key>"}.
     """
     try:
         from cryptography.exceptions import InvalidSignature
@@ -93,6 +113,9 @@ def verify_model_manifest(
         raise ModelManifestError("VISION_MODEL_TRUSTED_KEYS_JSON must be valid JSON") from exc
     if not isinstance(keyring, dict) or not 1 <= len(keyring) <= _MAX_TRUSTED_KEYS:
         raise ModelManifestError("Trusted keyring must contain between 1 and 32 public keys")
+    if any(not isinstance(key_id, str) or not _KEY_ID.fullmatch(key_id) for key_id in keyring):
+        raise ModelManifestError("Trusted keyring contains an invalid key_id")
+    revoked_key_ids = _parse_revoked_key_ids(revoked_key_ids_json)
 
     try:
         envelope = json.loads(raw_manifest.decode("utf-8"), object_pairs_hook=_unique_object)
@@ -102,16 +125,32 @@ def verify_model_manifest(
         raise ModelManifestError("Manifest envelope must contain exactly payload and signature")
 
     payload = envelope["payload"]
-    required_fields = {"schema_version", "key_id", "detector_sha256", "embedding_sha256"}
+    required_fields = {
+        "schema_version", "key_id", "model_id", "release_version",
+        "detector_sha256", "embedding_sha256",
+    }
     if not isinstance(payload, dict) or set(payload) != required_fields:
         raise ModelManifestError("Manifest payload has missing or unsupported fields")
-    if type(payload["schema_version"]) is not int or payload["schema_version"] != 1:
-        raise ModelManifestError("Unsupported model manifest schema_version")
+    if type(payload["schema_version"]) is not int or payload["schema_version"] != 2:
+        raise ModelManifestError("Unsupported model manifest schema_version; schema version 2 is required")
+
     key_id = payload["key_id"]
     if not isinstance(key_id, str) or not _KEY_ID.fullmatch(key_id):
         raise ModelManifestError("Manifest key_id is invalid")
+    if key_id in revoked_key_ids:
+        raise ModelManifestError("Manifest signing key_id is explicitly revoked")
     if key_id not in keyring:
         raise ModelManifestError("Manifest was signed by an untrusted key_id")
+
+    model_id = payload["model_id"]
+    if not isinstance(model_id, str) or not _MODEL_ID.fullmatch(model_id):
+        raise ModelManifestError("Manifest model_id is invalid")
+    release_version = payload["release_version"]
+    if (
+        type(release_version) is not int
+        or not 1 <= release_version <= _MAX_RELEASE_VERSION
+    ):
+        raise ModelManifestError("Manifest release_version must be a positive 32-bit integer")
 
     detector_digest = payload["detector_sha256"]
     embedding_digest = payload["embedding_sha256"]
@@ -146,6 +185,9 @@ def verify_model_manifest(
 
     return {
         "key_id": key_id,
+        "model_id": model_id,
+        "release_version": release_version,
+        "manifest_sha256": hashlib.sha256(_canonical_json(payload)).hexdigest(),
         "detector_sha256": detector_digest,
         "embedding_sha256": embedding_digest,
     }
