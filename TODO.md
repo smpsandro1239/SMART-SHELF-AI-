@@ -4,7 +4,12 @@
 - [x] Verificar ausência de memberships e ownership através de `pg_shdepend`, CONNECT à base de dados, USAGE sem CREATE no schema público e privilégios DML nas tabelas operacionais.
 - [x] Verificar ACLs por defeito para tabelas/sequências futuras, sem GRANT OPTION, e confirmar SELECT-only nas tabelas de confiança ONNX.
 - [x] Acrescentar regressões estáticas em `test_database_role_separation.py` para garantir que o smoke mantém estas verificações.
-- [ ] Executar API CI, smoke PostgreSQL 16 e Quality Gates no SHA desta alteração; o código foi publicado, mas ainda não existe resultado de execução confirmado nesta ronda.
+- [x] Restringir a leitura de `pg_default_acl` ao `defaclrole` do principal de migrations (`MIGRATION_DB_USER`), evitando agregar ACLs de owners diferentes.
+- [x] Passar `MIGRATION_DB_USER=postgres` explicitamente no job PostgreSQL 16 da API CI.
+- [x] Validação anterior à correcção: API CI [45083455380](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45083455380) e Docker Compose [45083455389](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45083455389) passaram no SHA `72d4034d`; Quality Gates [45083489901](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45083489901) e Security Scans [45083489889](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45083489889) passaram no SHA `9bad015c`. Estes resultados antecedem a correcção do filtro por owner.
+- [ ] Reexecutar API CI/PostgreSQL 16 smoke e Quality Gates após a correcção por owner; não existe ainda resultado para o novo SHA.
+- [ ] Ensaiar com volume PostgreSQL persistente preexistente, incluindo role legado, memberships, ownership e grants; não executar contra produção.
+- [ ] Executar operações API reais com o principal runtime após bootstrap e confirmar leitura/escrita nos módulos operacionais sem permissões adicionais.
 - [ ] Ensaiar com volume PostgreSQL persistente preexistente, incluindo role legado, memberships, ownership e grants; não executar contra produção.
 - [ ] Executar operações API reais com o principal runtime após bootstrap e confirmar leitura/escrita nos módulos operacionais sem permissões adicionais.
 
