@@ -53,6 +53,17 @@ def _env_float(name: str, default: float, minimum: float = 0.0, maximum: float =
         raise ONNXConfigurationError(f"{name} must be between {minimum} and {maximum}")
     return value
 
+def _configured_model_deployment_id() -> str:
+    deployment_id = os.getenv("VISION_MODEL_DEPLOYMENT_ID", "").strip()
+    app_environment = os.getenv("APP_ENV", "development").strip().lower()
+    if app_environment in {"production", "prod"}:
+        if not deployment_id or deployment_id == "default":
+            raise ONNXConfigurationError(
+                "VISION_MODEL_DEPLOYMENT_ID must be explicitly configured to a stable, non-default value in production"
+            )
+        return deployment_id
+    return deployment_id or "default"
+
 
 DETECTOR_PREPROCESSING_VERSION = "rgb-letterbox-bilinear-114-v1"
 EMBEDDING_PREPROCESSING_VERSION = "rgb-crop-stretch-bilinear-v1"
@@ -471,7 +482,7 @@ def create_provider() -> ONNXShelfVisionProvider:
         raise ONNXConfigurationError("VISION_DETECTOR_MODEL_SHA256 does not match the signed manifest")
     if signed_model["embedding_sha256"] != expected_embedding_sha256:
         raise ONNXConfigurationError("VISION_EMBEDDING_MODEL_SHA256 does not match the signed manifest")
-    deployment_id = os.getenv("VISION_MODEL_DEPLOYMENT_ID", "default").strip()
+    deployment_id = _configured_model_deployment_id()
 
     def release_guard(session: Session | None = None) -> None:
         if session is not None:
