@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.database import SessionLocal
 from app import models
+from app.vision_model_release import ModelReleaseError
 from app.vision import VisionAnalysis, VisionProviderNotConfigured
 from app.product_embedding_service import (
     build_approved_product_registry,
@@ -467,6 +468,32 @@ def process_next_image(db: Session, provider, ocr_provider=None) -> int | None:
         image.model_version = result.model_version
         image.analysis_completed_at = models.utc_now()
         db.commit()
+    except ModelReleaseError:
+        db.rollback()
+        image = (
+            db.query(models.ShelfImage)
+            .filter(models.ShelfImage.id == image_id)
+            .with_for_update()
+            .populate_existing()
+            .first()
+        )
+        if (
+            image is not None
+            and image.analysis_status == "PROCESSING"
+            and _same_claim_timestamp(image.analysis_started_at, claimed_started_at)
+        ):
+            image.analysis_status = "PENDING"
+            image.analysis_error = "Model release superseded; worker restart required"
+            image.analysis_started_at = None
+            image.analysis_completed_at = None
+            db.commit()
+        else:
+            db.rollback()
+        logger.error(
+            "Stopping stale vision worker after model release supersession; pending image %s was not published",
+            image_id,
+        )
+        raise
     except Exception as exc:
         db.rollback()
         image = (
@@ -543,6 +570,8 @@ def main() -> int:
         db = SessionLocal()
         try:
             image_id = process_next_image(db, provider, ocr_provider=ocr_provider)
+        except ModelReleaseError:
+            return 3
         finally:
             db.close()
         if image_id is None and args.once:
