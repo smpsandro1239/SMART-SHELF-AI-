@@ -16,14 +16,14 @@
 - Documentação do protocolo: `docs/edge-device-event-contract.md`.
 - Limite explícito: não existe ainda autenticação/registo de dispositivos, endpoint, inbox/outbox persistente, cursor durável nem ACK de entrega. O módulo não faz persistência nem mutações de inventário. CI pendente.
 
-## 2026-11-21 — Manifesto ONNX assinado com Ed25519 (implementação publicada; CI pendente)
+## 2026-11-21 — Manifesto ONNX assinado com Ed25519 (implementação publicada; Quality Gates e Security Scans validados)
 
 - O provider ONNX real passou a exigir um manifesto autenticado por Ed25519 e um keyring explícito de chaves públicas confiáveis.
 - A assinatura cobre o payload JSON canónico com schema versionado, key ID e SHA-256 do detector e, opcionalmente, do embedder. Os hashes são comparados com os ficheiros reais e com as variáveis SHA-256 já configuradas.
 - A validação rejeita assinatura inválida, key ID desconhecido, chave pública com tamanho incorrecto, digest divergente, ficheiro alterado, symlink, JSON ambíguo/malformado e campos extra ou em falta.
 - A API e o vision-worker recebem `VISION_MODEL_MANIFEST_PATH` e `VISION_MODEL_TRUSTED_KEYS_JSON` através do Docker Compose. Foi fixada `cryptography==50.0.2` para Ed25519.
 - Foi criado `apps/api/scripts/create_vision_model_manifest.py` para assinar offline com PEM Ed25519; o utilitário imprime apenas a chave pública Base64. A chave privada nunca é distribuída para os containers.
-- Testes adicionados em `apps/api/tests/test_vision_model_manifest.py`. A suite completa e os workflows ainda precisam de confirmação; não marcar como validado até CI verde.
+- Testes adicionados em `apps/api/tests/test_vision_model_manifest.py`. No HEAD `e9145ac7cb89409e80259f52967f7fccda3de478`, Quality Gates passou (compilação Python, suite pytest API e build Web) no run [44918245867](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44918245867); Security Scans passou no run [44918245858](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44918245858). API CI e Docker Compose smoke tiveram sucesso em SHA anterior e não são aqui apresentados como validação deste HEAD.
 - Limitações conhecidas: não há prevenção persistente de rollback nem política automática de revogação/rotação. A assinatura autentica a origem dos pesos, não a precisão do modelo.
 - Especificação operacional: `docs/vision-model-manifest.md`.
 
