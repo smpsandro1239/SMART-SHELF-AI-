@@ -53,7 +53,7 @@
 - Os hashes são comparados antes da criação das sessões ONNX e revalidados após o carregamento; digest divergente ou ausente impede o arranque.
 - Os fingerprints separam o pré-processamento letterbox do detetor e o resize stretch dos crops do extrator.
 - API CI e Quality Gates: 1432 passed, 1 skipped; PostgreSQL 16, compilação Python e build Web aprovados. Docker Compose e Security Scans passaram.
-- Limite: não existem pesos reais autorizados, dataset anotado ou avaliação independente por SKU/cenário. A separação owner/runtime foi implementada; a validação das permissões read-only nas tabelas de confiança ONNX e dos fluxos completos com o principal runtime continua pendente.
+- Limite: não existem pesos reais autorizados, dataset anotado ou avaliação independente por SKU/cenário. A separação owner/runtime e as permissões read-only ONNX foram validadas no SHA `5e16a9cb` (API CI, Quality Gates, Security Scans e Compose; 1552 passed, 1 skipped). A reconciliação automática de volumes persistentes pelo novo serviço `provision-runtime-role` aguarda CI.
 
 ### Isolamento multi-loja do histórico de alertas — 2026-11-21 (validado)
 
@@ -1041,13 +1041,22 @@ Validação no commit `311fecc9e13641e6d5eb55465fda646fb2909601`: Quality Gates 
 - Smoke `postgres_runtime_role_smoke.py` verifica leitura, ausência de privilégios de escrita e recusa efectiva de mutações; integrado no API CI e Docker Compose.
 - ADR: [ADR-009 — Isolar o estado de confiança de releases ONNX](architecture/adr-009-onnx-trust-state-privileges.md).
 - A separação base foi validada no HEAD anterior `bbf5ad80` (API CI, Quality Gates, Security Scans e Docker Compose; 1549 passed, 1 skipped). A nova restrição de DML no trust state aguarda os workflows do SHA final.
-- Volumes existentes exigem execução explícita do bootstrap actualizado; falta ainda validar a aplicação completa com o runtime e configurar segredos fortes no deployment alvo.
+- O serviço `provision-runtime-role` passa a reconciliar volumes existentes antes de migrations; a nova configuração aguarda CI. Continua a faltar validação operacional com volume persistente legado e execução de todos os fluxos com o runtime.
 
 ### Segurança PostgreSQL — trust state ONNX read-only para runtime (22-11-2026; CI final pendente)
 
-- Migration `0070_vision_model_trust_runtime_readonly` revoga privilégios de escrita nas tabelas de confiança ao principal runtime; o bootstrap aplica a mesma regra em volumes existentes.
+- Migration `0070_vision_model_trust_runtime_readonly` revoga privilégios de escrita nas tabelas de confiança ao principal runtime; o bootstrap executado pelo serviço `provision-runtime-role` aplica a mesma regra em volumes novos e existentes.
 - `register_vision_model_release.py` regista apenas releases Ed25519 válidas, com digests verificados, através do owner das tabelas; Compose disponibiliza a operação num perfil one-shot.
 - API/worker apenas lêem o trust state. Advisory transaction lock serializa inferência/publicação com registo de releases sem UPDATE.
 - Testes estáticos, migration SQLite dialect-safe e smoke PostgreSQL com tentativa real de DML directo adicionados.
 - A camada anterior foi validada no HEAD `bbf5ad80`; a validação desta restrição adicional depende dos workflows API CI, Quality Gates, Security Scans e Docker Compose no SHA final.
 - Não existem ainda pesos ONNX ou dataset autorizado; o provider real permanece desligado.
+
+
+### Provisionamento recorrente do principal runtime (22-11-2026; CI pendente)
+
+- Novo serviço one-shot `provision-runtime-role` executa o script idempotente via TCP depois de a base de dados ficar saudável e antes de Alembic.
+- O serviço reconcilia utilizador, senha, memberships, ownership, privilégios DML operacionais e revoga escrita no trust state; não depende de `initdb.d` nem de volumes vazios.
+- Runtime passa a `NOINHERIT`; smoke PostgreSQL verifica `rolinherit=false`.
+- API/worker dependem do sucesso de provisioning e migrations; falha de provisionamento impede o arranque.
+- **Pendente:** CI API/Quality/Security/Compose no SHA actual e ensaio de actualização de volume persistente legado. Não declarar esta camada validada antes desses resultados.
