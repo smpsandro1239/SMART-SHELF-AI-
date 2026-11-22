@@ -4,7 +4,7 @@ from threading import Barrier
 from uuid import uuid4
 
 from sqlalchemy import select, text
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import DBAPIError
 
 from app.database import SessionLocal
 from app.models import VisionModelReleaseEvent, VisionModelReleaseState
@@ -80,7 +80,7 @@ def main() -> None:
                 {"deployment_id": deployment_id},
             )
             db.commit()
-        except IntegrityError:
+        except DBAPIError:
             db.rollback()
         else:
             raise AssertionError("PostgreSQL allowed the model high-water mark to move backwards")
