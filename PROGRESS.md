@@ -1,3 +1,16 @@
+## 2026-11-22 — Expansão do smoke de segurança PostgreSQL runtime (implementação publicada; CI pendente)
+
+- O smoke `apps/api/scripts/postgres_runtime_role_smoke.py` verifica agora o atributo LOGIN e todos os atributos privilegiados, incluindo NOINHERIT.
+- A verificação de ownership foi generalizada para `pg_shdepend`, em vez de se limitar a relações, schemas e bases de dados.
+- São verificados CONNECT, USAGE no schema público e ausência de CREATE.
+- O smoke inspeciona os default ACLs de tabelas e sequências futuras, exige apenas os privilégios operacionais previstos e rejeita GRANT OPTION.
+- Todas as tabelas operacionais existentes têm de conceder SELECT/INSERT/UPDATE/DELETE; as duas tabelas de confiança ONNX permanecem SELECT-only e sem acesso à sequência de auditoria.
+- Foi acrescentado teste estático para impedir regressões na cobertura do smoke.
+- Commits: `2d7bce2f`, `afda3ee6`, `ee609372`, `72d4034d`.
+- **Validação pendente:** não foi possível executar localmente Python/PostgreSQL nesta sessão; os workflows do SHA final ainda não foram confirmados. Continua pendente o ensaio com volume persistente real e operações API sob o principal runtime.
+
+---
+
 ## 2026-11-21 — Avaliação de Computer Vision com COCO (implementação publicada; CI/dataset pendentes)
 
 - Criado `apps/api/app/vision_evaluation.py`: avaliação determinística de caixas COCO com AP101, mAP50, mAP50_95 e métricas TP/FP/FN, precision, recall e F1 por classe e globalmente.
