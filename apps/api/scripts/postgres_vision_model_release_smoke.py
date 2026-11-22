@@ -100,7 +100,7 @@ def main() -> None:
         )
         _expect_guard(
             db,
-            "TRUNCATE vision_model_release_states",
+            "TRUNCATE vision_model_release_states, vision_model_release_events",
             {},
             "vision model release trust tables cannot be truncated",
         )
