@@ -17,6 +17,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 
 _KEY_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
+_MODEL_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$")
 
 
 def _sha256(path: Path) -> str:
@@ -36,16 +37,25 @@ def build_manifest(
     key_id: str,
     detector_path: Path,
     embedding_path: Path | None = None,
+    *,
+    model_id: str = "shelf-detector",
+    release_version: int = 1,
 ) -> dict:
-    if not _KEY_ID.fullmatch(key_id):
+    if not isinstance(key_id, str) or not _KEY_ID.fullmatch(key_id):
         raise ValueError("key_id must contain 1-64 safe ASCII characters")
+    if not isinstance(model_id, str) or not _MODEL_ID.fullmatch(model_id):
+        raise ValueError("model_id must contain 1-80 safe ASCII characters")
+    if type(release_version) is not int or not 1 <= release_version <= 2**31 - 1:
+        raise ValueError("release_version must be a positive 32-bit integer")
     if detector_path.is_symlink() or not detector_path.is_file():
         raise ValueError("detector must be a regular non-symlink file")
     if embedding_path is not None and (embedding_path.is_symlink() or not embedding_path.is_file()):
         raise ValueError("embedding model must be a regular non-symlink file")
     payload = {
-        "schema_version": 1,
+        "schema_version": 2,
         "key_id": key_id,
+        "model_id": model_id,
+        "release_version": release_version,
         "detector_sha256": _sha256(detector_path),
         "embedding_sha256": _sha256(embedding_path) if embedding_path is not None else None,
     }
@@ -61,6 +71,8 @@ def build_manifest(
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--key-id", required=True)
+    parser.add_argument("--model-id", required=True)
+    parser.add_argument("--release-version", required=True, type=int)
     parser.add_argument("--private-key-pem", required=True, type=Path)
     parser.add_argument("--detector", required=True, type=Path)
     parser.add_argument("--embedding", type=Path)
@@ -80,7 +92,10 @@ def main() -> int:
 
     if args.output.is_symlink():
         parser.error("--output must not be a symbolic link")
-    manifest = build_manifest(private_key, args.key_id, args.detector, args.embedding)
+    manifest = build_manifest(
+        private_key, args.key_id, args.detector, args.embedding,
+        model_id=args.model_id, release_version=args.release_version,
+    )
     public_bytes = private_key.public_key().public_bytes(
         encoding=serialization.Encoding.Raw,
         format=serialization.PublicFormat.Raw,
