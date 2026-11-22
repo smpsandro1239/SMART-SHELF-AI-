@@ -13,7 +13,7 @@ A separação owner/runtime introduzida no Docker Compose resolve privilégios D
 
 1. O principal de migrations é o owner das tabelas e executa Alembic no serviço one-shot `migrate`.
 2. API e vision-worker usam `APP_DB_USER` e têm apenas SELECT nas tabelas `vision_model_release_states` e `vision_model_release_events`. Não recebem INSERT, UPDATE, DELETE, TRUNCATE nem privilégios da sequência de eventos.
-3. A migration 0070 revoga privilégios quando o papel runtime já existe. O bootstrap PostgreSQL aplica a mesma excepção, incluindo em volumes existentes quando executado novamente.
+3. O serviço one-shot `provision-runtime-role` executa o bootstrap idempotente em cada arranque Compose, antes de migrations, criando/reconciliando o papel em volumes novos e existentes. A migration 0070 revoga privilégios quando o papel já existe.
 4. O provider ONNX não regista releases durante o arranque. O registo é uma operação explícita de deployment através de `register_vision_model_release.py`, exposta no Compose pelo perfil one-shot `register-model-release`.
 5. O CLI verifica novamente assinatura Ed25519, hashes dos artefactos, digests configurados e identidade de deployment; exige que o utilizador da ligação seja o owner da tabela de confiança.
 6. Verificações e registos usam o mesmo advisory transaction lock, calculado a partir do identificador estável de deployment. O runtime consegue serializar a leitura com o registo sem obter privilégios UPDATE ou usar SELECT FOR UPDATE.
@@ -32,7 +32,7 @@ A separação owner/runtime introduzida no Docker Compose resolve privilégios D
 - O provider real falha fechado se a release ainda não estiver registada. O operador tem de executar `docker compose --profile model-release run --rm register-model-release` antes de activar a inferência real.
 - A rotação/actualização de modelos passa a ser uma operação de deployment auditável e separada do arranque/restart da API e worker.
 - O runtime continua a poder adquirir advisory locks e ler o estado de confiança; não consegue avançar, apagar ou fabricar directamente o estado.
-- Em volumes existentes, é necessário aplicar a migration 0070 e executar novamente o bootstrap actualizado para reconciliar grants.
+- Em volumes existentes, o serviço `provision-runtime-role` reconcilia grants automaticamente antes das migrations; a rotação de credenciais continua a exigir rollout coordenado dos processos.
 - A suite API executada com owner não prova por si só que todos os fluxos operacionais funcionam com o runtime. O smoke de privilégios e o Docker Compose smoke são gates separados.
 - O owner continua a ser uma identidade privilegiada; deve ficar limitada ao serviço de migrations e à operação explícita de registo, com segredos protegidos fora do repositório.
 
