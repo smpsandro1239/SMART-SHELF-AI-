@@ -13,7 +13,7 @@
 - Contrato não autentica dispositivos nem persiste/acknowledges eventos; inbox/outbox duráveis, credenciais e ingestão multi-loja são fase seguinte.
 - [Especificação do protocolo Edge](edge-device-event-contract.md).
 
-### Computer Vision — manifesto ONNX Ed25519 v2 e confiança persistente (implementação publicada; CI pendente)
+### Computer Vision — manifesto ONNX Ed25519 v2 e confiança persistente (implementação publicada; CI validada em 2026-11-22)
 
 - Payload Ed25519 schema v2 assina `model_id`, `release_version`, `key_id` e SHA-256 do detector/embedder; schema v1 é rejeitado no provider real.
 - Migration `0069_vision_model_release_trust_state`: high-water mark por deployment, eventos append-only, monotonicidade e protecção contra remoção/alteração do estado.
@@ -21,7 +21,7 @@
 - Provider verifica a versão antes/depois da inferência; worker bloqueia o release actual durante a publicação e termina se ficar obsoleto.
 - Rotação/revogação configurável por keyring e `VISION_MODEL_REVOKED_KEY_IDS_JSON`; procedimento em [docs/vision-model-manifest.md](vision-model-manifest.md).
 - Testes: `test_vision_model_manifest.py`, `test_vision_model_release.py`, `test_vision_model_release_migration.py` e smoke PostgreSQL `postgres_vision_model_release_smoke.py`, integrado no API CI.
-- Limite: CI do novo SHA ainda pendente; não existem pesos reais autorizados nem dataset/métricas independentes. A assinatura e anti-rollback não demonstram precisão comercial.
+- Validação no commit de código `91ea51e023b1952ed0bc3e5f86e9dcd21311be2a`: API CI [45065013302](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45065013302), Quality Gates [45065079666](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45065079666), Security Scans [45065079730](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45065079730) e Docker Compose [45065013291](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45065013291) passaram; 1545 testes aprovados, 1 ignorado. Smoke PostgreSQL confirmou concorrência, rollback, imutabilidade e bloqueio de TRUNCATE.
 
 ### Deploy — digests ONNX nos serviços Docker Compose (2026-11-21, CI pendente)
 
@@ -51,7 +51,7 @@
 - Os hashes são comparados antes da criação das sessões ONNX e revalidados após o carregamento; digest divergente ou ausente impede o arranque.
 - Os fingerprints separam o pré-processamento letterbox do detetor e o resize stretch dos crops do extrator.
 - API CI e Quality Gates: 1432 passed, 1 skipped; PostgreSQL 16, compilação Python e build Web aprovados. Docker Compose e Security Scans passaram.
-- Limite: manifesto Ed25519 v2 e high-water mark persistente estão implementados; CI do SHA actual ainda pendente. Continuam pendentes pesos reais autorizados, dataset anotado e avaliação independente por SKU/cenário.
+- Limite: não existem pesos reais autorizados, dataset anotado ou avaliação independente por SKU/cenário. Antes de produção, separar o principal owner de migrations do principal runtime e retirar permissões DDL/ALTER/TRUNCATE ao runtime; triggers não protegem contra owner/superuser.
 
 ### Isolamento multi-loja do histórico de alertas — 2026-11-21 (validado)
 
