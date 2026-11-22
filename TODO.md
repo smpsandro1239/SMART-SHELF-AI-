@@ -38,7 +38,8 @@
 - [x] Separar no Docker Compose o serviço one-shot `migrate` (principal owner) dos processos API/worker (principal runtime dedicado). A API deixou de executar Alembic no arranque; o runtime recebe DML e acesso a sequências, sem CREATE no schema.
 - [x] Provisionar `APP_DB_USER`/`APP_DB_PASSWORD` com script idempotente no bootstrap de PostgreSQL, revogar CREATE no schema e configurar default privileges para tabelas/sequências futuras.
 - [x] Acrescentar testes estáticos que verificam separação das URLs, dependência da API no sucesso das migrations e ausência de credenciais owner na API/worker.
-- [ ] Executar Docker Compose com volume novo e existente; confirmar em PostgreSQL que o runtime não é superuser/owner e não consegue CREATE/ALTER/TRUNCATE, mas consegue executar DML necessário. A validação CI desta alteração está pendente.
+- [x] Criar `apps/api/scripts/postgres_runtime_role_smoke.py` para verificar atributos, memberships, ownership, DML e recusa real de CREATE/ALTER/TRUNCATE; integrar o smoke no API CI e no Docker Compose smoke.
+- [ ] Confirmar os workflows no SHA desta alteração e executar instalação limpa/volume existente. O bootstrap de volumes existentes tem de ser invocado explicitamente; o smoke de Compose cobre volume novo.
 - [ ] Provisionar/rotacionar o principal runtime em volumes/deployments existentes; scripts initdb só correm automaticamente em volumes novos. Definir `APP_DB_PASSWORD` forte e único fora do repositório antes de produção.
 - [ ] Rever e validar a matriz completa de permissões DML da aplicação e testar todos os fluxos com o principal runtime; a ausência de privilégios DDL não prova por si só que a aplicação inteira funciona.
 - [ ] Validar rotação/revogação em deployment real com chaves e pesos autorizados; não existe ainda material de release real.
