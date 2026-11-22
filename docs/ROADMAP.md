@@ -53,7 +53,7 @@
 - Os hashes são comparados antes da criação das sessões ONNX e revalidados após o carregamento; digest divergente ou ausente impede o arranque.
 - Os fingerprints separam o pré-processamento letterbox do detetor e o resize stretch dos crops do extrator.
 - API CI e Quality Gates: 1432 passed, 1 skipped; PostgreSQL 16, compilação Python e build Web aprovados. Docker Compose e Security Scans passaram.
-- Limite: não existem pesos reais autorizados, dataset anotado ou avaliação independente por SKU/cenário. A separação owner/runtime e as permissões read-only ONNX foram validadas no SHA `5e16a9cb` (API CI, Quality Gates, Security Scans e Compose; 1552 passed, 1 skipped). A reconciliação automática de volumes persistentes pelo novo serviço `provision-runtime-role` aguarda CI.
+- Limite: não existem pesos reais autorizados, dataset anotado ou avaliação independente por SKU/cenário. A separação owner/runtime, trust state read-only e provisionamento recorrente foram validados no SHA `fcd19a3a` (API CI, Quality Gates, Security Scans e Compose; 1552 passed, 1 skipped). O Compose smoke simulou ownership e membership legados e confirmou reconciliação; falta ensaio com volume persistente real preservado entre reinícios.
 
 ### Isolamento multi-loja do histórico de alertas — 2026-11-21 (validado)
 
@@ -1041,7 +1041,7 @@ Validação no commit `311fecc9e13641e6d5eb55465fda646fb2909601`: Quality Gates 
 - Smoke `postgres_runtime_role_smoke.py` verifica leitura, ausência de privilégios de escrita e recusa efectiva de mutações; integrado no API CI e Docker Compose.
 - ADR: [ADR-009 — Isolar o estado de confiança de releases ONNX](architecture/adr-009-onnx-trust-state-privileges.md).
 - API CI [45076219787](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45076219787), Quality Gates [45076219801](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45076219801), Security Scans [45076219740](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45076219740) e Docker Compose [45076219751](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45076219751) passaram no HEAD `aeff4a3b`; suite API 1552 passed, 1 skipped.
-- O serviço `provision-runtime-role` passa a reconciliar volumes existentes antes de migrations; a nova configuração aguarda CI. Continua a faltar validação operacional com volume persistente legado e execução de todos os fluxos com o runtime.
+- O serviço `provision-runtime-role` reconcilia volumes existentes antes de migrations; API CI, Quality Gates, Security Scans e Compose passaram no SHA `fcd19a3a` (1552 passed, 1 skipped). O Compose smoke simulou uma tabela pertencente ao runtime e uma membership herdada, confirmando a reparação. Continua pendente um ensaio com volume persistente real entre reinícios e uma validação mais ampla dos fluxos operacionais com o runtime.
 
 ### Segurança PostgreSQL — trust state ONNX read-only para runtime (22-11-2026; CI validada)
 
