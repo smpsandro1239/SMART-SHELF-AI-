@@ -679,3 +679,35 @@ def test_real_provider_factory_requires_approved_embedding_digest_when_embedder_
 
     with pytest.raises(ONNXConfigurationError, match="VISION_EMBEDDING_MODEL_SHA256 is required"):
         create_provider()
+
+
+@pytest.mark.parametrize("deployment_id", [None, "", "default"])
+def test_production_model_provider_requires_explicit_non_default_deployment_id(monkeypatch, deployment_id):
+    from app.vision_onnx import ONNXConfigurationError, _configured_model_deployment_id
+
+    monkeypatch.setenv("APP_ENV", "production")
+    if deployment_id is None:
+        monkeypatch.delenv("VISION_MODEL_DEPLOYMENT_ID", raising=False)
+    else:
+        monkeypatch.setenv("VISION_MODEL_DEPLOYMENT_ID", deployment_id)
+
+    with pytest.raises(ONNXConfigurationError, match="VISION_MODEL_DEPLOYMENT_ID"):
+        _configured_model_deployment_id()
+
+
+def test_non_production_model_provider_uses_local_default_deployment_id(monkeypatch):
+    from app.vision_onnx import _configured_model_deployment_id
+
+    monkeypatch.setenv("APP_ENV", "test")
+    monkeypatch.delenv("VISION_MODEL_DEPLOYMENT_ID", raising=False)
+
+    assert _configured_model_deployment_id() == "default"
+
+
+def test_production_model_provider_accepts_explicit_stable_deployment_id(monkeypatch):
+    from app.vision_onnx import _configured_model_deployment_id
+
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("VISION_MODEL_DEPLOYMENT_ID", "store-a-shelf-detector")
+
+    assert _configured_model_deployment_id() == "store-a-shelf-detector"
