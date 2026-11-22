@@ -35,7 +35,12 @@
 - [x] Verificar o release antes/depois da inferência e manter lock da versão durante a publicação das deteções; workers obsoletos reencaminham a captura para PENDING e terminam.
 - [x] API CI [45065013302](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45065013302) e Docker Compose [45065013291](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45065013291) passaram no commit de código `91ea51e0`; Quality Gates [45065079666](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45065079666) e Security Scans [45065079730](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45065079730) passaram no descendente documental `1566b8ea`; 1545 testes aprovados, 1 ignorado.
 - [x] Exigir `VISION_MODEL_DEPLOYMENT_ID` explícito e não-default em `APP_ENV=production`; Compose deixa de injectar um fallback silencioso.
-- [ ] Separar o principal de migrations do principal runtime e retirar permissões DDL/ALTER/TRUNCATE/gestão de triggers ao runtime antes de produção; o owner/superuser ainda pode desactivar os triggers.
+- [x] Separar no Docker Compose o serviço one-shot `migrate` (principal owner) dos processos API/worker (principal runtime dedicado). A API deixou de executar Alembic no arranque; o runtime recebe DML e acesso a sequências, sem CREATE no schema.
+- [x] Provisionar `APP_DB_USER`/`APP_DB_PASSWORD` com script idempotente no bootstrap de PostgreSQL, revogar CREATE no schema e configurar default privileges para tabelas/sequências futuras.
+- [x] Acrescentar testes estáticos que verificam separação das URLs, dependência da API no sucesso das migrations e ausência de credenciais owner na API/worker.
+- [ ] Executar Docker Compose com volume novo e existente; confirmar em PostgreSQL que o runtime não é superuser/owner e não consegue CREATE/ALTER/TRUNCATE, mas consegue executar DML necessário. A validação CI desta alteração está pendente.
+- [ ] Provisionar/rotacionar o principal runtime em volumes/deployments existentes; scripts initdb só correm automaticamente em volumes novos. Definir `APP_DB_PASSWORD` forte e único fora do repositório antes de produção.
+- [ ] Rever e validar a matriz completa de permissões DML da aplicação e testar todos os fluxos com o principal runtime; a ausência de privilégios DDL não prova por si só que a aplicação inteira funciona.
 - [ ] Validar rotação/revogação em deployment real com chaves e pesos autorizados; não existe ainda material de release real.
 
 ## Deploy — passagem dos digests e política de confiança ONNX para API e worker (2026-11-22, CI validada)
