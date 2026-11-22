@@ -43,6 +43,8 @@ def _verify_migration_owner() -> None:
 
 def main() -> None:
     deployment_id = _required("VISION_MODEL_DEPLOYMENT_ID")
+    if os.getenv("APP_ENV", "development").strip().lower() == "production" and deployment_id == "default":
+        raise RuntimeError("Production model release registration requires a stable non-default deployment ID")
     manifest_path = _required("VISION_MODEL_MANIFEST_PATH")
     trusted_keys = _required("VISION_MODEL_TRUSTED_KEYS_JSON")
     detector_path = _required("VISION_DETECTOR_MODEL_PATH")
