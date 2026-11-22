@@ -26,7 +26,7 @@ Do not commit generated values, paste them into issue trackers, or place them in
 
 ### Vercel
 
-Set `APP_ENV=production`, `JWT_SECRET_KEY`, `BOOTSTRAP_ADMIN_KEY`, and `DATABASE_URL` in the Vercel project's server-side Environment Variables. Configure Production and Preview independently; do not expose secrets to the browser. Redeploy after changing a value.
+Set `APP_ENV=production`, `JWT_SECRET_KEY`, `BOOTSTRAP_ADMIN_KEY`, and a least-privilege runtime `DATABASE_URL` in the Vercel project's server-side Environment Variables. The URL must authenticate as the application runtime role, never as the database/migration owner. Configure Production and Preview independently; do not expose secrets to the browser. Redeploy after changing a value.
 
 ### Docker Compose
 
