@@ -41,6 +41,7 @@ services:
       APP_ENV: ${APP_ENV:-development}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:-INSECURE-DEVELOPMENT-KEY-CHANGE-ME}
       BOOTSTRAP_ADMIN_KEY: ${BOOTSTRAP_ADMIN_KEY:-}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:5173}
       DATABASE_URL: postgresql+psycopg://${APP_DB_USER:-smart_shelf_runtime}:${APP_DB_PASSWORD:-local_runtime_change_me}@db:5432/${POSTGRES_DB:-smart_shelf}
       IMAGE_STORAGE_PATH: /app/storage/shelf-images
       DATASET_OUTPUT_STORAGE_PATH: /app/storage/dataset-outputs
@@ -102,6 +103,7 @@ services:
       TMPDIR: /tmp
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:-INSECURE-DEVELOPMENT-KEY-CHANGE-ME}
       BOOTSTRAP_ADMIN_KEY: ${BOOTSTRAP_ADMIN_KEY:-}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:5173}
       DATABASE_URL: postgresql+psycopg://${APP_DB_USER:-smart_shelf_runtime}:${APP_DB_PASSWORD:-local_runtime_change_me}@db:5432/${POSTGRES_DB:-smart_shelf}
       IMAGE_STORAGE_PATH: /app/storage/shelf-images
       VISION_PROCESSING_TIMEOUT_SECONDS: ${VISION_PROCESSING_TIMEOUT_SECONDS:-86400}
