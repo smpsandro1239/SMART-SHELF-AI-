@@ -9,6 +9,7 @@ ROOT = Path(__file__).resolve().parents[3]
 COMPOSE = ROOT / "docker-compose.yml"
 ROLE_BOOTSTRAP = ROOT / "infra" / "postgres" / "10-create-runtime-role.sh"
 VISION_ONNX = ROOT / "apps" / "api" / "app" / "vision_onnx.py"
+ROLE_SMOKE = ROOT / "apps" / "api" / "scripts" / "postgres_runtime_role_smoke.py"
 MODEL_TRUST_MIGRATION = ROOT / "apps" / "api" / "migrations" / "versions" / "0070_vision_model_trust_runtime_readonly.py"
 MODEL_RELEASE_CLI = ROOT / "apps" / "api" / "scripts" / "register_vision_model_release.py"
 
@@ -58,6 +59,7 @@ def test_postgres_bootstrap_creates_non_owner_role_with_dml_only_grants():
     db = _service_block(compose, "db")
     provision = _service_block(compose, "provision-runtime-role")
     assert "10-create-runtime-role.sh:/docker-entrypoint-initdb.d/" not in db
+    assert "image: postgres:16-alpine" in provision
     assert "10-create-runtime-role.sh:/scripts/10-create-runtime-role.sh:ro" in provision
     assert "APP_DB_USER" in provision
     assert "APP_DB_PASSWORD" in provision
@@ -71,6 +73,7 @@ def test_postgres_bootstrap_creates_non_owner_role_with_dml_only_grants():
     assert "APP_DB_USER must be a 1-63 character PostgreSQL identifier" in bootstrap
     assert "NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS" in bootstrap
     assert "NOINHERIT" in bootstrap
+    assert 'export PGPASSWORD="$POSTGRES_PASSWORD"' in bootstrap
     assert "REVOKE CREATE ON SCHEMA public" in bootstrap
     assert "GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES" in bootstrap
     assert "GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES" in bootstrap
@@ -122,6 +125,7 @@ def test_model_trust_tables_are_read_only_to_the_runtime_principal():
         "The unprivileged API/worker must not register model releases during provider startup"
     )
     assert "assert_model_release_current" in vision_onnx
+    assert "rolinherit" in ROLE_SMOKE.read_text(encoding="utf-8")
 
 
 
