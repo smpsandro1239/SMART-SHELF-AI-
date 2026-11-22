@@ -68,6 +68,34 @@ REVOKE CREATE ON SCHEMA public FROM :"runtime_user";
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO :"runtime_user";
 GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO :"runtime_user";
 
+-- Model-release trust state is readable by the application but writable only by
+-- the migration/deployment principal. This also repairs grants on existing volumes.
+SELECT format(
+    'REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON TABLE public.%I FROM %I',
+    table_name,
+    :'runtime_user'
+)
+FROM unnest(ARRAY['vision_model_release_states', 'vision_model_release_events']) AS protected(table_name)
+WHERE to_regclass(format('public.%I', table_name)) IS NOT NULL
+\\gexec
+
+SELECT format(
+    'GRANT SELECT ON TABLE public.%I TO %I',
+    table_name,
+    :'runtime_user'
+)
+FROM unnest(ARRAY['vision_model_release_states', 'vision_model_release_events']) AS protected(table_name)
+WHERE to_regclass(format('public.%I', table_name)) IS NOT NULL
+\\gexec
+
+SELECT format(
+    'REVOKE ALL ON SEQUENCE %s FROM %I',
+    pg_get_serial_sequence('public.vision_model_release_events', 'id'),
+    :'runtime_user'
+)
+WHERE pg_get_serial_sequence('public.vision_model_release_events', 'id') IS NOT NULL
+\\gexec
+
 ALTER DEFAULT PRIVILEGES FOR ROLE :"migration_user" IN SCHEMA public
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO :"runtime_user";
 ALTER DEFAULT PRIVILEGES FOR ROLE :"migration_user" IN SCHEMA public
