@@ -13,7 +13,6 @@ Na raiz do repositório:
 ```bash
 docker compose up --build -d
 
-docker compose exec api alembic upgrade head
 docker compose exec api python -m app.demo.seed
 ```
 
@@ -66,7 +65,7 @@ npm ci
 npm run build
 ```
 
-O serviço API executa `alembic upgrade head` no arranque. O comando explícito `docker compose exec api alembic upgrade head` é seguro para confirmar/aplicar o estado das migrações antes do seed.
+O serviço `migrate` aplica `alembic upgrade head` com o principal de migrations antes de a API arrancar. A API e o worker usam o principal runtime sem privilégios DDL. Não executes Alembic no container `api`. Para um volume PostgreSQL já existente, consulta a secção de provisionamento do principal runtime em `README.md` e executa o script de forma explícita após configurar as credenciais.
 
 ## Capturas de ecrã recomendadas
 
