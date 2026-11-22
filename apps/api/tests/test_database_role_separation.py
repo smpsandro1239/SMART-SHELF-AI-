@@ -9,6 +9,8 @@ ROOT = Path(__file__).resolve().parents[3]
 COMPOSE = ROOT / "docker-compose.yml"
 ROLE_BOOTSTRAP = ROOT / "infra" / "postgres" / "10-create-runtime-role.sh"
 VISION_ONNX = ROOT / "apps" / "api" / "app" / "vision_onnx.py"
+MODEL_TRUST_MIGRATION = ROOT / "apps" / "api" / "migrations" / "versions" / "0070_vision_model_trust_runtime_readonly.py"
+MODEL_RELEASE_CLI = ROOT / "apps" / "api" / "scripts" / "register_vision_model_release.py"
 
 
 def _service_block(compose: str, service: str) -> str:
@@ -23,6 +25,7 @@ def _service_block(compose: str, service: str) -> str:
 def test_migrations_use_owner_credentials_and_runtime_services_use_restricted_role():
     compose = COMPOSE.read_text(encoding="utf-8")
     migration = _service_block(compose, "migrate")
+    release_registration = _service_block(compose, "register-model-release")
     api = _service_block(compose, "api")
     worker = _service_block(compose, "vision-worker")
 
@@ -39,6 +42,9 @@ def test_migrations_use_owner_credentials_and_runtime_services_use_restricted_ro
 
     assert "migrate:" in api
     assert "service_completed_successfully" in api
+    assert "profiles: [\"model-release\"]" in release_registration
+    assert "POSTGRES_USER" in release_registration
+    assert "POSTGRES_PASSWORD" in release_registration
 
 
 def test_postgres_bootstrap_creates_non_owner_role_with_dml_only_grants():
@@ -104,3 +110,18 @@ def test_model_trust_tables_are_read_only_to_the_runtime_principal():
         "The unprivileged API/worker must not register model releases during provider startup"
     )
     assert "assert_model_release_current" in vision_onnx
+
+
+
+def test_trust_state_privilege_migration_and_owner_registration_cli_are_fail_closed():
+    migration = MODEL_TRUST_MIGRATION.read_text(encoding="utf-8")
+    registration = MODEL_RELEASE_CLI.read_text(encoding="utf-8")
+
+    assert 'os.getenv("APP_DB_USER"' in migration
+    assert "REVOKE INSERT, UPDATE, DELETE, TRUNCATE" in migration
+    assert "GRANT SELECT ON TABLE" in migration
+    assert "Deliberately do not restore runtime write privileges" in migration
+    assert "verify_model_manifest(" in registration
+    assert "_verify_migration_owner()" in registration
+    assert "register_model_release(" in registration
+    assert "Model releases must be registered by the PostgreSQL owner" in registration
