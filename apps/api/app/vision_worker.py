@@ -350,6 +350,12 @@ def process_next_image(db: Session, provider, ocr_provider=None) -> int | None:
                 and detection.embedding_model_version
             },
         )
+        release_guard = getattr(provider, "assert_release_current", None)
+        if callable(release_guard):
+            # Hold the persisted release row lock through output commit. A newer
+            # release cannot become current between this check and persistence.
+            release_guard(db)
+
         image = (
             db.query(models.ShelfImage)
             .filter(models.ShelfImage.id == image_id)
