@@ -137,3 +137,16 @@ O modo mock/desactivado não carrega nem exige manifesto nem registo anti-rollba
 - Quality Gates e Security Scans para o SHA final.
 
 A execução destes testes não equivale a avaliação da precisão do detector. Não existem métricas reais publicáveis enquanto não existir dataset autorizado e avaliação independente.
+
+
+## Separação entre principal de migrations e principal runtime
+
+Em Docker Compose, o serviço one-shot `migrate` aplica as migrations com o principal owner da base de dados. API e vision-worker usam `APP_DB_USER`/`APP_DB_PASSWORD`, um principal separado com apenas `CONNECT`, `USAGE` no schema, DML nas tabelas e acesso às sequências. Não recebe `CREATE`, `TRUNCATE`, `ALTER`, gestão de triggers nem propriedade dos objetos. As permissões default são configuradas para que novas tabelas e sequências criadas pelo principal de migrations também fiquem acessíveis ao runtime.
+
+O bootstrap `infra/postgres/10-create-runtime-role.sh` é executado automaticamente apenas quando o volume PostgreSQL é inicializado pela primeira vez. Para volumes já existentes, após configurar as credenciais runtime, executa explicitamente:
+
+```bash
+docker compose exec db bash /docker-entrypoint-initdb.d/10-create-runtime-role.sh
+```
+
+Este script actualiza a palavra-passe e os grants de forma idempotente. Em produção, usa segredo forte e único para `APP_DB_PASSWORD`; nunca reutilizes a palavra-passe do owner. A migração continua a correr como owner e a API não executa Alembic no arranque. A configuração de Compose e os testes estáticos não substituem o smoke PostgreSQL com as credenciais runtime nem a validação no deployment alvo.
