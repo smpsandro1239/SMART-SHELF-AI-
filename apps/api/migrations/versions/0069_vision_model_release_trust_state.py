@@ -92,6 +92,24 @@ def upgrade() -> None:
             BEFORE UPDATE OR DELETE ON vision_model_release_events
             FOR EACH ROW EXECUTE FUNCTION guard_vision_model_release_event_0069()
         """)
+        op.execute("""
+            CREATE OR REPLACE FUNCTION guard_vision_model_release_truncate_0069()
+            RETURNS trigger AS $
+            BEGIN
+                RAISE EXCEPTION 'vision model release trust tables cannot be truncated';
+            END;
+            $ LANGUAGE plpgsql
+        """)
+        op.execute("""
+            CREATE TRIGGER trg_vision_model_release_state_no_truncate_0069
+            BEFORE TRUNCATE ON vision_model_release_states
+            FOR EACH STATEMENT EXECUTE FUNCTION guard_vision_model_release_truncate_0069()
+        """)
+        op.execute("""
+            CREATE TRIGGER trg_vision_model_release_event_no_truncate_0069
+            BEFORE TRUNCATE ON vision_model_release_events
+            FOR EACH STATEMENT EXECUTE FUNCTION guard_vision_model_release_truncate_0069()
+        """)
     elif bind.dialect.name == "sqlite":
         op.execute("""
             CREATE TRIGGER trg_vision_model_release_state_update_0069
@@ -136,6 +154,9 @@ def downgrade() -> None:
     if bind.dialect.name == "postgresql":
         op.execute("DROP TRIGGER IF EXISTS trg_vision_model_release_event_append_only_0069 ON vision_model_release_events")
         op.execute("DROP FUNCTION IF EXISTS guard_vision_model_release_event_0069()")
+        op.execute("DROP TRIGGER IF EXISTS trg_vision_model_release_event_no_truncate_0069 ON vision_model_release_events")
+        op.execute("DROP TRIGGER IF EXISTS trg_vision_model_release_state_no_truncate_0069 ON vision_model_release_states")
+        op.execute("DROP FUNCTION IF EXISTS guard_vision_model_release_truncate_0069()")
         op.execute("DROP TRIGGER IF EXISTS trg_vision_model_release_state_guard_0069 ON vision_model_release_states")
         op.execute("DROP FUNCTION IF EXISTS guard_vision_model_release_state_0069()")
     elif bind.dialect.name == "sqlite":
