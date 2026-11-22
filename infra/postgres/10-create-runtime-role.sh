@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Provision a least-privilege application role on first database initialization.
+# Idempotently reconcile a least-privilege application role before migrations.
 set -Eeuo pipefail
 
 : "${POSTGRES_USER:?POSTGRES_USER must identify the migration/database owner}"
@@ -35,7 +35,7 @@ psql --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" \
   --set=migration_user="$POSTGRES_USER" \
   --set=database_name="$POSTGRES_DB" <<'SQL'
 SELECT format(
-    'CREATE ROLE %I LOGIN PASSWORD %L NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS',
+    'CREATE ROLE %I LOGIN PASSWORD %L NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS NOINHERIT',
     :'runtime_user',
     :'runtime_password'
 )
