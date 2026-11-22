@@ -1030,3 +1030,12 @@ Validação no commit `311fecc9e13641e6d5eb55465fda646fb2909601`: Quality Gates 
 - Confirmado no handler `list_capture_sessions` o filtro por `CaptureSession.store_id` para utilizadores não ADMIN.
 - Acrescentado teste com duas lojas: a sessão da loja estrangeira não aparece na listagem do supervisor, incluindo quando este manipula o filtro `shelf_id` para apontar à prateleira estrangeira.
 - A validação local não foi executada neste ambiente; a suite CI será usada para confirmar o novo teste. A cobertura desta rota não fecha a matriz global handler × perfil × loja.
+
+
+### Segurança PostgreSQL — separação de principal owner e runtime (implementação publicada; validação CI pendente)
+
+- Serviço one-shot `migrate` executa Alembic com o principal owner.
+- API e vision-worker usam principal runtime separado, sem privilégios DDL/CREATE/TRUNCATE, com DML e sequências.
+- Script de bootstrap idempotente: `infra/postgres/10-create-runtime-role.sh`; configura privilégios default para tabelas/sequências futuras.
+- Testes estáticos: `apps/api/tests/test_database_role_separation.py`.
+- **Ainda não validado:** instalação limpa Docker Compose, volume preexistente, smoke de permissões PostgreSQL com o principal runtime, suite API e workflows no SHA desta alteração. Em volumes existentes, o operador tem de executar o script explicitamente. Não declarar produção pronta antes de validar as permissões reais e definir segredo APP_DB_PASSWORD.
