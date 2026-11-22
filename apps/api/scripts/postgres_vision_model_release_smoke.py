@@ -109,7 +109,7 @@ def main() -> None:
                 {"event_id": event.id},
             )
             db.commit()
-        except IntegrityError:
+        except DBAPIError:
             db.rollback()
         else:
             raise AssertionError("PostgreSQL allowed mutation of model release audit events")
