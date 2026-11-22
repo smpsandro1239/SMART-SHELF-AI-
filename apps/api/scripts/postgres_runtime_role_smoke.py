@@ -25,16 +25,25 @@ def _assert_denied(connection, statement: str, label: str) -> None:
     raise AssertionError(f"Runtime role unexpectedly succeeded at {label}")
 
 
-def _assert_default_privileges(connection) -> None:
+def _assert_default_privileges(connection, migration_role: str) -> None:
+    migration_role_exists = connection.execute(text(
+        "SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = :role_name)"
+    ), {"role_name": migration_role}).scalar_one()
+    if not migration_role_exists:
+        raise AssertionError(f"Migration role {migration_role!r} does not exist")
+
     rows = connection.execute(text("""
         SELECT defaults.defaclobjtype, privilege.privilege_type, privilege.is_grantable
         FROM pg_default_acl AS defaults
         CROSS JOIN LATERAL aclexplode(defaults.defaclacl) AS privilege
         WHERE defaults.defaclnamespace = 'public'::regnamespace
+          AND defaults.defaclrole = (
+              SELECT oid FROM pg_roles WHERE rolname = :migration_role
+          )
           AND privilege.grantee = (
               SELECT oid FROM pg_roles WHERE rolname = current_user
           )
-    """)).all()
+    """), {"migration_role": migration_role}).all()
 
     actual: dict[str, set[str]] = {"r": set(), "S": set()}
     for object_type, privilege, grantable in rows:
@@ -66,6 +75,9 @@ def _assert_default_privileges(connection) -> None:
 
 def main() -> None:
     database_url = os.environ.get("RUNTIME_DATABASE_URL", "").strip()
+    migration_role = os.environ.get("MIGRATION_DB_USER", "").strip()
+    if not migration_role:
+        raise RuntimeError("MIGRATION_DB_USER is required to verify migration-owner default ACLs")
     if not database_url:
         raise RuntimeError("RUNTIME_DATABASE_URL is required for the runtime-role smoke test")
 
@@ -132,7 +144,7 @@ def main() -> None:
             )).scalar_one():
                 raise AssertionError("Runtime role can CREATE objects in public schema")
 
-            _assert_default_privileges(connection)
+            _assert_default_privileges(connection, migration_role)
 
             missing_operational_grant = connection.execute(text("""
                 SELECT relation.relname, required.privilege
