@@ -42,21 +42,24 @@ def upgrade() -> None:
         )
         op.execute(f"GRANT SELECT ON TABLE public.{table_name} TO {quoted_role}")
 
-    sequence_revoke = bind.execute(
+    sequence = bind.execute(
         sa.text(
             """
-            SELECT format(
-                'REVOKE ALL ON SEQUENCE %s FROM %I',
-                pg_get_serial_sequence('public.vision_model_release_events', 'id'),
-                :role_name
+            SELECT namespace.nspname, relation.relname
+            FROM pg_class AS relation
+            JOIN pg_namespace AS namespace ON namespace.oid = relation.relnamespace
+            WHERE relation.oid = to_regclass(
+                pg_get_serial_sequence('public.vision_model_release_events', 'id')
             )
-            WHERE pg_get_serial_sequence('public.vision_model_release_events', 'id') IS NOT NULL
             """
-        ),
-        {"role_name": runtime_role},
-    ).scalar_one_or_none()
-    if sequence_revoke:
-        op.execute(sequence_revoke)
+        )
+    ).one_or_none()
+    if sequence is not None:
+        quoted_schema = bind.dialect.identifier_preparer.quote(sequence.nspname)
+        quoted_sequence = bind.dialect.identifier_preparer.quote(sequence.relname)
+        op.execute(
+            f"REVOKE ALL ON SEQUENCE {quoted_schema}.{quoted_sequence} FROM {quoted_role}"
+        )
 
 
 def downgrade() -> None:
