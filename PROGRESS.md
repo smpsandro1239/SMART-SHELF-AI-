@@ -343,13 +343,13 @@ Validação confirmada:
 - Docker Compose [45065013291](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45065013291): sucesso; readiness, seed e worker.
 - Security Scans [45065079730](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45065079730): sucesso; SCA, Gitleaks do histórico e ZAP baseline.
 
-Limitação de segurança: os triggers protegem contra operações DML/TRUNCATE sem privilégios de DDL, mas o owner/superuser PostgreSQL pode alterar schema ou desactivar triggers. Antes de produção, separar o principal de migrations do principal runtime e retirar permissões DDL/ALTER/TRUNCATE ao runtime. Não existem pesos/dataset autorizados, pelo que nenhuma inferência real foi activada.
+Limitação de segurança resolvida em camadas: owner de migrations separado do runtime, tabelas de confiança ONNX read-only para API/worker e registo explícito de releases pelo owner. O owner continua privilegiado e deve permanecer restrito ao serviço de migrations e ao perfil one-shot. Não existem pesos/dataset autorizados, pelo que nenhuma inferência real foi activada.
 
 
 ## 2026-11-22 — Separação PostgreSQL owner/runtime (CI validada no HEAD bbf5ad80)
 
 - O Compose executa Alembic no serviço one-shot `migrate` com o principal owner; API e vision-worker usam `APP_DB_USER`/`APP_DB_PASSWORD` separados. A API já não executa migrations no arranque.
-- O bootstrap `infra/postgres/10-create-runtime-role.sh` cria um papel NOSUPERUSER/NOCREATEDB/NOCREATEROLE/NOREPLICATION/NOBYPASSRLS, remove memberships/ownership anteriores, concede DML operacional e revoga CREATE no schema.
+- O bootstrap `infra/postgres/10-create-runtime-role.sh` cria um papel NOSUPERUSER/NOCREATEDB/NOCREATEROLE/NOREPLICATION/NOBYPASSRLS/NOINHERIT, remove memberships/ownership anteriores, concede DML operacional e revoga CREATE no schema.
 - A validação CI anterior confirmou a instalação limpa e o smoke de permissões geral no HEAD `bbf5ad80`: API CI, Quality Gates, Security Scans e Docker Compose passaram; suite API **1549 passed, 1 skipped**. O smoke runtime-role passou, mas a auditoria adicional detectou que o runtime ainda tinha DML sobre as tabelas de confiança ONNX.
 - Nova análise P0: triggers monotónicos não impediam o runtime de inserir eventos falsos ou elevar arbitrariamente o high-water mark para uma versão futura, bloqueando releases legítimas.
 - Implementada migration `0070_vision_model_trust_runtime_readonly` e actualização do bootstrap: runtime passa a ter apenas SELECT em `vision_model_release_states`/`vision_model_release_events`, sem DML/TRUNCATE nem acesso à sequência de eventos.
@@ -357,5 +357,15 @@ Limitação de segurança: os triggers protegem contra operações DML/TRUNCATE 
 - `app.vision_model_release` usa advisory transaction lock por deployment para serializar verificações read-only e registos privilegiados; evita SELECT FOR UPDATE e mantém o runtime sem UPDATE.
 - O smoke PostgreSQL foi alargado para provar SELECT autorizado, DML/sequence privileges ausentes, recusa efectiva de INSERT/UPDATE/DELETE/TRUNCATE e validação do release pelo runtime. Foram acrescentados testes estáticos e teste de migração dialect-safe.
 - Documentação actualizada: README, guia do manifesto, provider ONNX, segredos de produção, ADR-009 e TODO.
-- **Validação desta segunda camada:** ainda pendente de API CI, Quality Gates, Security Scans e Docker Compose no SHA final. Não afirmar GREEN até os workflows terminarem. A validação de volumes existentes e a execução completa da aplicação com o runtime continuam gates operacionais separados.
+- **Validação da camada read-only ONNX:** concluída no SHA `5e16a9cb`: API CI, Quality Gates, Security Scans e Docker Compose passaram; suite API **1552 passed, 1 skipped**. O API CI confirmou o smoke PostgreSQL de permissões e o guard advisory com o principal runtime.
 
+
+## 2026-11-22 — Provisionamento recorrente do principal runtime (CI pendente)
+
+- Foi removido o acoplamento do bootstrap ao directório `initdb.d`, que só corre em volumes novos.
+- Adicionado o serviço one-shot `provision-runtime-role` (imagem PostgreSQL 16) entre `db` e `migrate`. Liga por TCP, autentica com o owner, reconcilia papel/senha/memberships/ownership/grants e termina antes de Alembic.
+- A API e o worker só arrancam depois do provisionamento e das migrations; volumes persistentes antigos também passam pelo processo.
+- O papel runtime passa a `NOINHERIT`; o smoke verifica `rolinherit=false` além de atributos, memberships, ownership, DML operacional e trust tables read-only.
+- O API CI recebe explicitamente `POSTGRES_PASSWORD` para exercitar o mesmo script de provisionamento por TCP.
+- README, guia do manifesto, DEMO, segredos de produção, ADR-009, TODO e instruções da API actualizados para remover comandos Alembic no container runtime.
+- **Pendente:** executar API CI, Quality Gates, Security Scans e Docker Compose no SHA com o novo serviço `provision-runtime-role`; validar também actualização de um volume persistente já existente com papel legado. Não declarar esta última camada concluída antes dos workflows.
