@@ -173,13 +173,19 @@ def test_real_provider_factory_loads_only_after_signed_manifest_and_sha_match(tm
     )
 
     import app.vision_onnx as vision_onnx
-    monkeypatch.setattr(vision_onnx, "register_model_release", lambda *args, **kwargs: None)
-    monkeypatch.setattr(vision_onnx, "assert_model_release_current", lambda *args, **kwargs: None)
+    release_checks = []
+    monkeypatch.setattr(
+        vision_onnx,
+        "assert_model_release_current",
+        lambda *args, **kwargs: release_checks.append((args, kwargs)),
+    )
 
     provider = vision_onnx.create_provider()
 
     assert provider.detector_sha256 == payload["detector_sha256"]
     assert provider.embedding_path is None
+    assert len(release_checks) == 1
+    assert not hasattr(vision_onnx, "register_model_release")
 
 
 def test_offline_signing_utility_creates_verifiable_manifest(tmp_path):
