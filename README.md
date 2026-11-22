@@ -18,13 +18,21 @@ O guião completo, as limitações, os comandos de teste e a lista de capturas e
 
 # SMART SHELF AI
 
-## Separação de credenciais PostgreSQL
+## Separação de credenciais PostgreSQL e confiança ONNX
 
-O Docker Compose usa um serviço `migrate` com o principal owner/migration para executar Alembic. A API e o `vision-worker` recebem apenas o principal `APP_DB_USER` (DML, sem `CREATE` no schema, `TRUNCATE` ou privilégios de owner). O papel runtime é provisionado no primeiro arranque de um volume PostgreSQL vazio por `infra/postgres/10-create-runtime-role.sh`; os privilégios por omissão também cobrem tabelas e sequências criadas por migrations futuras.
+O Docker Compose usa o serviço one-shot `migrate` com o principal owner para executar Alembic. A API e o `vision-worker` usam apenas `APP_DB_USER`/`APP_DB_PASSWORD`: DML nas tabelas operacionais, sem `CREATE` no schema, sem privilégios de owner e **apenas SELECT** nas tabelas `vision_model_release_states` e `vision_model_release_events`. O registo de releases ONNX não é efectuado pelo arranque da API/worker.
 
-Define `APP_DB_USER` e `APP_DB_PASSWORD` no ambiente. Em produção, usa uma palavra-passe aleatória forte, única e URL-safe (pelo menos 32 caracteres Base64URL); os valores de fallback do Compose são exclusivamente para desenvolvimento local. A mesma regra URL-safe aplica-se a `POSTGRES_PASSWORD`, pois as URLs PostgreSQL são montadas no Compose. `POSTGRES_USER`/`POSTGRES_PASSWORD` ficam reservados ao serviço `migrate` e à administração da base de dados, nunca à API ou ao worker.
+O principal owner é reservado a migrations e a uma operação explícita de deployment. Depois de colocar os pesos, manifesto Ed25519, keyring público e digests aprovados em `models/`, regista a release com:
 
-Em volumes existentes, a inicialização automática do PostgreSQL não volta a executar scripts. Depois de definir `APP_DB_USER` e `APP_DB_PASSWORD` no ambiente, provisiona/actualiza o papel de forma idempotente com `docker compose exec db bash /docker-entrypoint-initdb.d/10-create-runtime-role.sh`. Confirma primeiro que a configuração de ambiente aponta para a instância correcta. O serviço `migrate` aplica as migrations antes de a API ficar disponível. Não executes Alembic através do container `api`, que já não tem privilégios DDL.
+```bash
+docker compose --profile model-release run --rm register-model-release
+```
+
+Este perfil one-shot valida a assinatura Ed25519, os SHA-256 dos ficheiros e o identificador estável de deployment; exige que a ligação à base de dados seja efectuada pelo owner das tabelas. Só depois desse registo o provider real consegue arrancar. A chave privada de assinatura nunca deve ser distribuída aos containers. Não disponibilizes as credenciais `POSTGRES_USER`/`POSTGRES_PASSWORD` à API ou ao worker.
+
+Define `APP_DB_USER` e `APP_DB_PASSWORD` no ambiente. Em produção, usa uma palavra-passe aleatória forte, única e URL-safe (pelo menos 32 caracteres Base64URL); os valores de fallback do Compose são exclusivamente para desenvolvimento local. A mesma regra URL-safe aplica-se a `POSTGRES_PASSWORD`, pois as URLs PostgreSQL são montadas no Compose. `POSTGRES_USER`/`POSTGRES_PASSWORD` ficam reservados ao serviço `migrate`, ao perfil explícito `register-model-release` e à administração da base de dados.
+
+Em volumes existentes, a inicialização automática do PostgreSQL não volta a executar scripts. Depois de definir `APP_DB_USER` e `APP_DB_PASSWORD`, provisiona/actualiza o papel com `docker compose exec db bash /docker-entrypoint-initdb.d/10-create-runtime-role.sh`; o script revoga também os privilégios de escrita nas tabelas de confiança ONNX. A migration 0070 aplica a mesma revogação quando o papel já existe durante Alembic. Confirma que o ambiente aponta para a instância correcta. Não executes Alembic através do container `api`, que não tem privilégios DDL.
 
 
 ## Metodologia de engenharia — Superpowers, Impeccable e Frontend Design
@@ -809,7 +817,7 @@ Foi adicionado um provider local CPU-first em `apps/api/app/vision_onnx.py`, com
 - [Implementação do provider](apps/api/app/vision_onnx.py)
 - [Testes do descodificador de deteções](apps/api/tests/test_vision_onnx.py)
 
-Dependências adicionais: ONNX Runtime CPU, NumPy e Pillow. A API continua separada do worker de inferência; não executa inferência durante o upload. O serviço `vision-worker` está disponível no perfil opcional `vision` e só deve ser iniciado depois de configurar pesos e variáveis: `docker compose --profile vision up -d vision-worker`.
+Dependências adicionais: ONNX Runtime CPU, NumPy e Pillow. A API continua separada do worker de inferência; não executa inferência durante o upload. O serviço `vision-worker` é iniciado pelo Docker Compose e usa o provider mock apenas no percurso local. Para inferência real, regista primeiro a release assinada com o perfil `model-release`; só depois configura `VISION_PROVIDER_MODE=real` e os restantes parâmetros de deployment.
 
 
 ## Localização de filas e OCR auxiliar (experimental)
@@ -1822,7 +1830,7 @@ Commit validado: [1097e53](https://github.com/smpsandro1239/SMART-SHELF-AI-/comm
 
 Relatórios: [TODO](TODO.md), [PROGRESS](PROGRESS.md), [auditoria de dependências e ZAP](docs/security/dependency-audit-2026-11-21.md), [ordem de locks por tenant](docs/security/tenant-lock-order.md) e [headers HTTP](docs/security/http-security-headers.md).
 
-**Limitação importante:** 1432 testes aprovados não significam que o detector tenha precisão comercial validada. Continua a faltar modelo ONNX real aprovado, dataset autorizado anotado e métricas por SKU/cenário. O manifesto Ed25519 v2 e a prevenção persistente de rollback passaram CI/API PostgreSQL 16, Quality Gates, Security Scans e Docker Compose em 22-11-2026 (**1545 testes aprovados, 1 ignorado**). Antes de produção, separar o principal de migrations do principal runtime; também faltam integração CCTV/RTSP/ONVIF e validação com dados POS/ERP/WMS reais. O percurso demo continua a usar dados sintéticos e provider mock.
+**Limitação importante:** 1549 testes aprovados, 1 ignorado no HEAD `bbf5ad80` não significam que o detector tenha precisão comercial validada. Continua a faltar modelo ONNX real aprovado, dataset autorizado anotado e métricas por SKU/cenário. O principal runtime já está separado do owner de migrations e as tabelas de confiança ONNX são agora de leitura apenas para a API/worker; a operação explícita de registo usa o owner. Ainda faltam integração CCTV/RTSP/ONVIF e validação com dados POS/ERP/WMS reais. O percurso demo continua a usar dados sintéticos e provider mock.
 
 
 ## Validação técnica — 2026-11-22
@@ -1834,4 +1842,4 @@ Commit de código validado: [91ea51e](https://github.com/smpsandro1239/SMART-SHE
 - Docker Compose [45065013291](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45065013291): no commit de código `91ea51e0`, readiness, seed e worker aprovados.
 - Security Scans [45065079730](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45065079730): no descendente documental `1566b8ea`, auditorias de dependências, Gitleaks do histórico e OWASP ZAP baseline aprovados.
 
-A assinatura e o anti-rollback protegem a cadeia de release, não a precisão do modelo. O modo real continua sem ser activado até existirem pesos e dataset autorizados, métricas independentes e separação entre o principal de migrations e o principal runtime da base de dados.
+A assinatura e o anti-rollback protegem a cadeia de release, não a precisão do modelo. O modo real continua sem ser activado até existirem pesos e dataset autorizados e métricas independentes. A separação de credenciais PostgreSQL já está implementada; a validação de permissões ONNX foi aprofundada nesta ronda.
