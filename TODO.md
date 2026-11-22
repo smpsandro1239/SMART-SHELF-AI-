@@ -1,3 +1,17 @@
+## Segurança P0 — verificação efectiva do principal PostgreSQL runtime (2026-11-22)
+
+- [x] Expandir `apps/api/scripts/postgres_runtime_role_smoke.py` para verificar LOGIN, NOSUPERUSER, NOCREATEDB, NOCREATEROLE, NOREPLICATION, NOBYPASSRLS e NOINHERIT.
+- [x] Verificar ausência de memberships e ownership através de `pg_shdepend`, CONNECT à base de dados, USAGE sem CREATE no schema público e privilégios DML nas tabelas operacionais.
+- [x] Verificar ACLs por defeito para tabelas/sequências futuras, sem GRANT OPTION, e confirmar SELECT-only nas tabelas de confiança ONNX.
+- [x] Acrescentar regressões estáticas em `test_database_role_separation.py` para garantir que o smoke mantém estas verificações.
+- [ ] Executar API CI, smoke PostgreSQL 16 e Quality Gates no SHA desta alteração; o código foi publicado, mas ainda não existe resultado de execução confirmado nesta ronda.
+- [ ] Ensaiar com volume PostgreSQL persistente preexistente, incluindo role legado, memberships, ownership e grants; não executar contra produção.
+- [ ] Executar operações API reais com o principal runtime após bootstrap e confirmar leitura/escrita nos módulos operacionais sem permissões adicionais.
+
+**Limite:** os novos controlos alargam a verificação automatizada, mas não provam ainda o comportamento em volume persistente real nem fecham a auditoria multi-loja global.
+
+---
+
 ## Computer Vision — avaliador COCO v1 (implementado; CI validada em 2026-11-22)
 
 - [x] Implementar AP101 por classe, mAP50, mAP50_95 e precision/recall/F1 no ponto operacional.
