@@ -13,13 +13,13 @@
 - Contrato não autentica dispositivos nem persiste/acknowledges eventos; inbox/outbox duráveis, credenciais e ingestão multi-loja são fase seguinte.
 - [Especificação do protocolo Edge](edge-device-event-contract.md).
 
-### Computer Vision — manifesto ONNX Ed25519 (implementação publicada; CI pendente)
+### Computer Vision — manifesto ONNX Ed25519 (implementação publicada; quality/security CI validada em 2026-11-21)
 
 - Provider real exige manifesto assinado e chave pública confiável; assinatura cobre schema, key ID e digests dos modelos.
 - API e worker recebem manifesto/keyring por Docker Compose; o utilitário de release assina offline e não expõe a chave privada ao runtime.
 - Testes cobrem assinatura inválida, key desconhecida, modelo adulterado, hash do embedder, JSON inválido/duplicado e configuração do factory.
 - Documentação: [docs/vision-model-manifest.md](vision-model-manifest.md).
-- Pendente: CI verde, rotação/revogação de chaves e prevenção de rollback com estado persistente. A assinatura não prova precisão do modelo.
+- Quality Gates (API compile + pytest + Web build) e Security Scans passaram no HEAD `e9145ac7cb89409e80259f52967f7fccda3de478`: [44918245867](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44918245867) e [44918245858](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44918245858). API CI e Docker Compose smoke não foram confirmados neste SHA. Permanecem pendentes rotação/revogação operacional e prevenção persistente de rollback; assinatura não prova precisão do modelo.
 
 ### Deploy — digests ONNX nos serviços Docker Compose (2026-11-21, CI pendente)
 
@@ -49,7 +49,7 @@
 - Os hashes são comparados antes da criação das sessões ONNX e revalidados após o carregamento; digest divergente ou ausente impede o arranque.
 - Os fingerprints separam o pré-processamento letterbox do detetor e o resize stretch dos crops do extrator.
 - API CI e Quality Gates: 1432 passed, 1 skipped; PostgreSQL 16, compilação Python e build Web aprovados. Docker Compose e Security Scans passaram.
-- Limite: configuração de deployment é a âncora de confiança actual; manifesto assinado, pesos reais, dataset e avaliação por SKU continuam pendentes.
+- Limite: manifesto assinado e trust roots estão implementados; continuam pendentes pesos reais autorizados, dataset anotado e avaliação por SKU/cenário. A configuração de deployment fornece as chaves públicas confiáveis; não existe ainda estado persistente anti-rollback.
 
 ### Isolamento multi-loja do histórico de alertas — 2026-11-21 (validado)
 
