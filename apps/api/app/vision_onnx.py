@@ -24,7 +24,6 @@ from app.vision_model_manifest import ModelManifestError, verify_model_manifest
 from app.vision_model_release import (
     ModelReleaseError,
     assert_model_release_current,
-    register_model_release,
 )
 
 
@@ -513,14 +512,7 @@ def create_provider() -> ONNXShelfVisionProvider:
         expected_embedding_sha256=expected_embedding_sha256,
         release_guard=release_guard,
     )
-    try:
-        register_model_release(
-            SessionLocal,
-            deployment_id=deployment_id,
-            model_release=signed_model,
-        )
-    except ModelReleaseError as exc:
-        raise ONNXConfigurationError(str(exc)) from exc
-
+    # Trust state is provisioned explicitly by the deployment principal.
+    # The API/worker runtime may verify the release but cannot register it.
     provider.assert_release_current()
     return provider
