@@ -4,6 +4,8 @@ set -Eeuo pipefail
 
 : "${POSTGRES_USER:?POSTGRES_USER must identify the migration/database owner}"
 : "${POSTGRES_DB:?POSTGRES_DB must be set}"
+: "${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}"
+export PGPASSWORD="$POSTGRES_PASSWORD"
 : "${APP_DB_USER:?APP_DB_USER must identify the runtime role}"
 : "${APP_DB_PASSWORD:?APP_DB_PASSWORD must be a non-empty runtime password}"
 
