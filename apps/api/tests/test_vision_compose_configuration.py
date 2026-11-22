@@ -27,7 +27,7 @@ def test_compose_forwards_model_integrity_and_trust_settings_to_every_provider_p
         "VISION_MODEL_MANIFEST_PATH": "/models/manifest.json",
         "VISION_MODEL_TRUSTED_KEYS_JSON": "",
         "VISION_MODEL_REVOKED_KEY_IDS_JSON": "[]",
-        "VISION_MODEL_DEPLOYMENT_ID": "default",
+        "VISION_MODEL_DEPLOYMENT_ID": "",
     }
     expected_line = f"      {setting}: ${{{setting}:-{defaults[setting]}}}"
     assert expected_line in service_match.group("body").splitlines(), (
