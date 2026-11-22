@@ -77,7 +77,7 @@ SELECT format(
 )
 FROM unnest(ARRAY['vision_model_release_states', 'vision_model_release_events']) AS protected(table_name)
 WHERE to_regclass(format('public.%I', table_name)) IS NOT NULL
-\\gexec
+\gexec
 
 SELECT format(
     'GRANT SELECT ON TABLE public.%I TO %I',
@@ -86,7 +86,7 @@ SELECT format(
 )
 FROM unnest(ARRAY['vision_model_release_states', 'vision_model_release_events']) AS protected(table_name)
 WHERE to_regclass(format('public.%I', table_name)) IS NOT NULL
-\\gexec
+\gexec
 
 SELECT format(
     'REVOKE ALL ON SEQUENCE %s FROM %I',
@@ -94,7 +94,7 @@ SELECT format(
     :'runtime_user'
 )
 WHERE pg_get_serial_sequence('public.vision_model_release_events', 'id') IS NOT NULL
-\\gexec
+\gexec
 
 ALTER DEFAULT PRIVILEGES FOR ROLE :"migration_user" IN SCHEMA public
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO :"runtime_user";
