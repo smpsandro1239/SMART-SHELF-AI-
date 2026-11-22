@@ -138,6 +138,10 @@ def test_trust_state_privilege_migration_and_owner_registration_cli_are_fail_clo
     assert "REVOKE INSERT, UPDATE, DELETE, TRUNCATE" in migration
     assert "GRANT SELECT ON TABLE" in migration
     assert "Deliberately do not restore runtime write privileges" in migration
+    assert 'app_env == "production"' in migration
+    assert "APP_DB_USER is required for production trust-state privilege isolation" in migration
+    assert "APP_DB_USER must differ from the migration owner" in migration
+    assert "APP_DB_USER must not own ONNX model trust-state tables" in migration
     assert "verify_model_manifest(" in registration
     assert "_verify_migration_owner()" in registration
     assert "register_model_release(" in registration
