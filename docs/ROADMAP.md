@@ -1,4 +1,4 @@
-### Computer Vision — avaliador COCO v1 (implementação publicada; CI/dataset pendentes)
+### Computer Vision — avaliador COCO v1 (implementação publicada; CI validada; dataset real pendente)
 
 - Avaliador AP101/mAP50/mAP50_95 e operating point precision/recall/F1, por classe e global.
 - Runner executa apenas test split de release aprovado para inferência, valida hashes das anotações, manifest e imagens contra o release fingerprint e usa provider ONNX assinado.
@@ -6,11 +6,12 @@
 - Não treina nem escreve em inventário; não foram produzidas métricas reais.
 - [Protocolo de avaliação](vision-model-evaluation.md).
 
-### Edge AI — contrato de eventos v1 (implementação de domínio publicada; CI pendente)
+### Edge AI — contrato de eventos v1 (implementação de domínio publicada; CI validada em 2026-11-22)
 
 - Envelope versionado e payloads específicos para heartbeat, captura, observação visual e confirmação de tarefa.
 - Fingerprint canónico, chave de idempotência por dispositivo e classificação de sequência NEXT/GAP/STALE.
 - Contrato não autentica dispositivos nem persiste/acknowledges eventos; inbox/outbox duráveis, credenciais e ingestão multi-loja são fase seguinte.
+- API CI/Quality Gates no código `91ea51e0`: 1545 passed, 1 skipped. A validação do contrato não equivale a ingestão persistente.
 - [Especificação do protocolo Edge](edge-device-event-contract.md).
 
 ### Computer Vision — manifesto ONNX Ed25519 v2 e confiança persistente (implementação publicada; CI validada em 2026-11-22)
@@ -21,15 +22,16 @@
 - Provider verifica a versão antes/depois da inferência; worker bloqueia o release actual durante a publicação e termina se ficar obsoleto.
 - Rotação/revogação configurável por keyring e `VISION_MODEL_REVOKED_KEY_IDS_JSON`; procedimento em [docs/vision-model-manifest.md](vision-model-manifest.md).
 - Testes: `test_vision_model_manifest.py`, `test_vision_model_release.py`, `test_vision_model_release_migration.py` e smoke PostgreSQL `postgres_vision_model_release_smoke.py`, integrado no API CI.
-- Validação no commit de código `91ea51e023b1952ed0bc3e5f86e9dcd21311be2a`: API CI [45065013302](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45065013302), Quality Gates [45065079666](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45065079666), Security Scans [45065079730](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45065079730) e Docker Compose [45065013291](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45065013291) passaram; 1545 testes aprovados, 1 ignorado. Smoke PostgreSQL confirmou concorrência, rollback, imutabilidade e bloqueio de TRUNCATE.
+- API CI [45065013302](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45065013302) e Docker Compose [45065013291](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45065013291) passaram no commit de código `91ea51e0`; Quality Gates [45065079666](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45065079666) e Security Scans [45065079730](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45065079730) passaram no descendente documental `1566b8ea`; 1545 testes aprovados, 1 ignorado. Smoke PostgreSQL confirmou concorrência, rollback, imutabilidade e bloqueio de TRUNCATE.
 
-### Deploy — digests ONNX nos serviços Docker Compose (2026-11-21, CI pendente)
+### Deploy — digests e política de confiança ONNX nos serviços Docker Compose (2026-11-22, CI validada)
 
 - `api` e `vision-worker` recebem agora `VISION_DETECTOR_MODEL_SHA256` e `VISION_EMBEDDING_MODEL_SHA256` do ambiente do deployment.
 - Os valores não são inventados nem preenchidos por defeito: ficam vazios quando não configurados e o provider ONNX real continua a rejeitar a configuração incompleta.
 - Foi acrescentado teste de contrato para os dois serviços e as duas variáveis.
 - Implementação: commits `2d810e8a`, `263de3e8`; teste e registo de progresso: commits subsequentes na branch `main`.
-- O encaminhamento de digests é uma segunda confirmação ao manifesto Ed25519 v2; não substitui a aprovação de pesos, a avaliação do detector nem a CI final.
+- O encaminhamento de digests é uma segunda confirmação ao manifesto Ed25519 v2; não substitui a aprovação de pesos nem a avaliação do detector.
+- Docker Compose smoke [45065013291](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45065013291) passou no commit de código `91ea51e0`; `VISION_MODEL_DEPLOYMENT_ID` fica vazio por omissão e é obrigatório/não-default em produção.
 
 ### IA e catálogo — integridade dos exemplares de embeddings (2026-11-21, validado)
 
