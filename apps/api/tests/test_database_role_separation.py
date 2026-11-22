@@ -162,3 +162,7 @@ def test_runtime_role_smoke_checks_login_ownership_and_future_object_acl_contrac
     assert "_assert_default_privileges(connection)" in smoke
     assert "_OPERATIONAL_TABLE_PRIVILEGES" in smoke
     assert "_OPERATIONAL_SEQUENCE_PRIVILEGES" in smoke
+
+    assert "missing_operational_grant" in smoke
+    assert "relation.relkind IN ('r', 'p')" in smoke
+    assert "has_table_privilege(current_user, relation.oid, required.privilege)" in smoke
