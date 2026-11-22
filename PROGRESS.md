@@ -346,12 +346,16 @@ Validação confirmada:
 Limitação de segurança: os triggers protegem contra operações DML/TRUNCATE sem privilégios de DDL, mas o owner/superuser PostgreSQL pode alterar schema ou desactivar triggers. Antes de produção, separar o principal de migrations do principal runtime e retirar permissões DDL/ALTER/TRUNCATE ao runtime. Não existem pesos/dataset autorizados, pelo que nenhuma inferência real foi activada.
 
 
-## 2026-11-22 — Separação do principal PostgreSQL de migrations/runtime (implementação publicada; CI pendente)
+## 2026-11-22 — Separação PostgreSQL owner/runtime (CI validada no HEAD bbf5ad80)
 
-- A auditoria do anti-rollback ONNX confirmou que os triggers de monotonicidade e append-only não protegem contra um principal owner/superuser capaz de alterar schema, remover triggers ou truncar tabelas.
-- O Docker Compose passa a executar Alembic num serviço one-shot `migrate`, com o principal owner; a API e o vision-worker usam `APP_DB_USER`/`APP_DB_PASSWORD` separados.
-- Adicionado `infra/postgres/10-create-runtime-role.sh`: cria/actualiza o principal runtime como NOSUPERUSER/NOCREATEDB/NOCREATEROLE/NOREPLICATION/NOBYPASSRLS, concede DML e sequências, revoga CREATE no schema e define privilégios por omissão para objetos futuros.
-- A API já não executa migrations com as credenciais runtime. O worker continua dependente da API saudável e ambos usam a mesma identidade runtime.
-- Adicionados testes estáticos em `apps/api/tests/test_database_role_separation.py` e smoke PostgreSQL real em `apps/api/scripts/postgres_runtime_role_smoke.py`; o smoke foi integrado no API CI e no Docker Compose smoke para verificar permissões com autenticação runtime.
-- README, guia DEMO e documentação do manifesto ONNX actualizados. Para volumes existentes, o script tem de ser executado explicitamente após configurar as credenciais runtime; initdb não volta a executar scripts automaticamente.
-- Limites: os testes ainda não foram executados nesta sessão; o smoke PostgreSQL com autenticação real e os workflows foram integrados, mas ainda aguardam execução no SHA final. Os valores de fallback do Compose são apenas para desenvolvimento; produção exige segredo forte/único e provisionamento controlado.
+- O Compose executa Alembic no serviço one-shot `migrate` com o principal owner; API e vision-worker usam `APP_DB_USER`/`APP_DB_PASSWORD` separados. A API já não executa migrations no arranque.
+- O bootstrap `infra/postgres/10-create-runtime-role.sh` cria um papel NOSUPERUSER/NOCREATEDB/NOCREATEROLE/NOREPLICATION/NOBYPASSRLS, remove memberships/ownership anteriores, concede DML operacional e revoga CREATE no schema.
+- A validação CI anterior confirmou a instalação limpa e o smoke de permissões geral no HEAD `bbf5ad80`: API CI, Quality Gates, Security Scans e Docker Compose passaram; suite API **1549 passed, 1 skipped**. O smoke runtime-role passou, mas a auditoria adicional detectou que o runtime ainda tinha DML sobre as tabelas de confiança ONNX.
+- Nova análise P0: triggers monotónicos não impediam o runtime de inserir eventos falsos ou elevar arbitrariamente o high-water mark para uma versão futura, bloqueando releases legítimas.
+- Implementada migration `0070_vision_model_trust_runtime_readonly` e actualização do bootstrap: runtime passa a ter apenas SELECT em `vision_model_release_states`/`vision_model_release_events`, sem DML/TRUNCATE nem acesso à sequência de eventos.
+- O provider deixou de registar releases no arranque. Criado `apps/api/scripts/register_vision_model_release.py` e perfil one-shot `register-model-release`, que verifica manifesto Ed25519, digests e exige o owner das tabelas.
+- `app.vision_model_release` usa advisory transaction lock por deployment para serializar verificações read-only e registos privilegiados; evita SELECT FOR UPDATE e mantém o runtime sem UPDATE.
+- O smoke PostgreSQL foi alargado para provar SELECT autorizado, DML/sequence privileges ausentes, recusa efectiva de INSERT/UPDATE/DELETE/TRUNCATE e validação do release pelo runtime. Foram acrescentados testes estáticos e teste de migração dialect-safe.
+- Documentação actualizada: README, guia do manifesto, provider ONNX, segredos de produção, ADR-009 e TODO.
+- **Validação desta segunda camada:** ainda pendente de API CI, Quality Gates, Security Scans e Docker Compose no SHA final. Não afirmar GREEN até os workflows terminarem. A validação de volumes existentes e a execução completa da aplicação com o runtime continuam gates operacionais separados.
+
