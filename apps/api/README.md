@@ -8,14 +8,14 @@ A partir da raiz do repositório:
     cp .env.example .env
     docker compose up --build
 
-O serviço da API executa as migrações Alembic antes de iniciar o servidor. A API ficará disponível em:
+O serviço one-shot `migrate` aplica as migrações Alembic com o principal owner antes de a API iniciar. A API usa apenas o principal runtime e não executa DDL. A API ficará disponível em:
 - Health: http://localhost:8000/health
 - Readiness (inclui ligação à base de dados): http://localhost:8000/health/ready
 - OpenAPI: http://localhost:8000/docs
 
 Para aplicar manualmente as migrações depois de alterações ao schema:
 
-    docker compose exec api alembic upgrade head
+    docker compose run --rm migrate
 
 A tabela interna `alembic_version` usa `VARCHAR(128)`, porque alguns identificadores históricos de revisão excedem o limite predefinido de 32 caracteres do Alembic. A inicialização alarga também instalações PostgreSQL existentes antes de aplicar novas revisões.
 
@@ -163,13 +163,13 @@ Tipos de evento:
 - `APPROVED`: proposta operacional aprovada por um utilizador; inclui quantidade aprovada e motivo/contexto.
 - `STATUS_CHANGED`: transição de estado; pode incluir quantidade efetivamente reposta e motivo de exceção.
 
-A migração `0019_task_created_audit_event` alarga a constraint da tabela de eventos para aceitar `CREATED`. Aplicar com `alembic upgrade head` antes de executar a versão atualizada da API.
+A migração `0019_task_created_audit_event` alarga a constraint da tabela de eventos para aceitar `CREATED`. Aplicar com `docker compose run --rm migrate` (a partir da raiz do repositório) antes de executar a versão actualizada da API.
 
 A criação valida a loja, a pertença da prateleira à loja e a associação do produto à prateleira. A quantidade pedida é opcional e tem de ser positiva. A criação por esta rota regista o evento de auditoria `CREATED`.
 
 A integridade contra duplicados é também imposta pela base de dados através do índice único parcial `uq_active_task_store_shelf_product`, que só abrange estados ativos (`PENDING`, `ASSIGNED`, `IN_PROGRESS`). Assim, tarefas concluídas ou canceladas não bloqueiam uma reposição futura. A API mantém a verificação prévia e o bloqueio da linha da loja em PostgreSQL; o índice é a última barreira contra corridas concorrentes. Tanto a deteção prévia de uma tarefa ativa como a perda de uma corrida concorrente respondem HTTP 409 com `detail.code=ACTIVE_TASK_EXISTS`, incluindo o identificador e estado da tarefa ativa quando disponíveis.
 
-A migração `0020_active_task_unique_index` verifica primeiro se já existem grupos duplicados ativos. Se existirem, interrompe a migração e identifica até dez grupos para resolução manual; não cancela nem elimina tarefas automaticamente. Aplicar todas as migrações com `alembic upgrade head`.
+A migração `0020_active_task_unique_index` verifica primeiro se já existem grupos duplicados ativos. Se existirem, interrompe a migração e identifica até dez grupos para resolução manual; não cancela nem elimina tarefas automaticamente. Aplicar todas as migrações com `docker compose run --rm migrate` (a partir da raiz do repositório).
 
 
 
@@ -186,7 +186,7 @@ Este endpoint só cria a tarefa quando a recomendação atual é `NEEDS_REPLENIS
 
 Configurar no ambiente da API `JWT_SECRET_KEY` e `BOOTSTRAP_ADMIN_KEY` com valores aleatórios fortes e distintos. Não utilizar os valores de exemplo em produção.
 
-1. Aplicar migrações: `alembic upgrade head`.
+1. Aplicar migrações: `docker compose run --rm migrate` (a partir da raiz do repositório).
 2. Criar o primeiro administrador uma única vez:
 
     curl -X POST http://localhost:8000/api/v1/auth/bootstrap \
@@ -675,8 +675,7 @@ A fase física do Warehouse Slotting introduz três estruturas de dados:
 Antes de utilizar os novos endpoints, aplicar a migração:
 
 ```bash
-cd apps/api
-alembic upgrade head
+docker compose run --rm migrate
 ```
 
 ### Configurar uma localização
@@ -771,8 +770,7 @@ A mesma lógica aplica-se a arroz e açúcar: a palete e a caixa são unidades d
 Aplicar a migração:
 
 ```bash
-cd apps/api
-alembic upgrade head
+docker compose run --rm migrate
 ```
 
 ### Configurar níveis de embalagem
