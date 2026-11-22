@@ -1032,7 +1032,7 @@ Validação no commit `311fecc9e13641e6d5eb55465fda646fb2909601`: Quality Gates 
 - A validação local não foi executada neste ambiente; a suite CI será usada para confirmar o novo teste. A cobertura desta rota não fecha a matriz global handler × perfil × loja.
 
 
-### Segurança PostgreSQL — owner/runtime e estado de confiança ONNX (implementação publicada; CI final pendente)
+### Segurança PostgreSQL — owner/runtime e estado de confiança ONNX (implementação publicada; CI validada em 2026-11-22)
 
 - Serviço one-shot `migrate` aplica Alembic como owner; API/vision-worker usam `APP_DB_USER` sem privilégios DDL.
 - Migration 0070 e bootstrap revogam INSERT/UPDATE/DELETE/TRUNCATE e privilégios da sequência nas tabelas ONNX; runtime conserva apenas SELECT.
@@ -1040,23 +1040,23 @@ Validação no commit `311fecc9e13641e6d5eb55465fda646fb2909601`: Quality Gates 
 - Verificações e registos partilham advisory transaction lock por deployment; o runtime não necessita de UPDATE/SELECT FOR UPDATE.
 - Smoke `postgres_runtime_role_smoke.py` verifica leitura, ausência de privilégios de escrita e recusa efectiva de mutações; integrado no API CI e Docker Compose.
 - ADR: [ADR-009 — Isolar o estado de confiança de releases ONNX](architecture/adr-009-onnx-trust-state-privileges.md).
-- A separação base foi validada no HEAD anterior `bbf5ad80` (API CI, Quality Gates, Security Scans e Docker Compose; 1549 passed, 1 skipped). A nova restrição de DML no trust state aguarda os workflows do SHA final.
+- API CI [45076219787](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45076219787), Quality Gates [45076219801](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45076219801), Security Scans [45076219740](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45076219740) e Docker Compose [45076219751](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45076219751) passaram no HEAD `aeff4a3b`; suite API 1552 passed, 1 skipped.
 - O serviço `provision-runtime-role` passa a reconciliar volumes existentes antes de migrations; a nova configuração aguarda CI. Continua a faltar validação operacional com volume persistente legado e execução de todos os fluxos com o runtime.
 
-### Segurança PostgreSQL — trust state ONNX read-only para runtime (22-11-2026; CI final pendente)
+### Segurança PostgreSQL — trust state ONNX read-only para runtime (22-11-2026; CI validada)
 
 - Migration `0070_vision_model_trust_runtime_readonly` revoga privilégios de escrita nas tabelas de confiança ao principal runtime; o bootstrap executado pelo serviço `provision-runtime-role` aplica a mesma regra em volumes novos e existentes.
 - `register_vision_model_release.py` regista apenas releases Ed25519 válidas, com digests verificados, através do owner das tabelas; Compose disponibiliza a operação num perfil one-shot.
 - API/worker apenas lêem o trust state. Advisory transaction lock serializa inferência/publicação com registo de releases sem UPDATE.
 - Testes estáticos, migration SQLite dialect-safe e smoke PostgreSQL com tentativa real de DML directo adicionados.
-- A camada anterior foi validada no HEAD `bbf5ad80`; a validação desta restrição adicional depende dos workflows API CI, Quality Gates, Security Scans e Docker Compose no SHA final.
+- A camada foi validada no HEAD `aeff4a3b`: API CI, Quality Gates, Security Scans e Docker Compose passaram; suite API 1552 passed, 1 skipped.
 - Não existem ainda pesos ONNX ou dataset autorizado; o provider real permanece desligado.
 
 
-### Provisionamento recorrente do principal runtime (22-11-2026; CI pendente)
+### Provisionamento recorrente do principal runtime (22-11-2026; CI validada)
 
 - Novo serviço one-shot `provision-runtime-role` executa o script idempotente via TCP depois de a base de dados ficar saudável e antes de Alembic.
 - O serviço reconcilia utilizador, senha, memberships, ownership, privilégios DML operacionais e revoga escrita no trust state; não depende de `initdb.d` nem de volumes vazios.
 - Runtime passa a `NOINHERIT`; smoke PostgreSQL verifica `rolinherit=false`.
 - API/worker dependem do sucesso de provisioning e migrations; falha de provisionamento impede o arranque.
-- **Pendente:** CI API/Quality/Security/Compose no SHA actual e ensaio de actualização de volume persistente legado. Não declarar esta camada validada antes desses resultados.
+- CI API/Quality/Security/Compose passou no HEAD `aeff4a3b`. O smoke Compose simulou ownership e membership legados e confirmou a reconciliação; continua pendente um ensaio operacional com volume persistente real preservado entre reinícios, fora do runner efémero.
