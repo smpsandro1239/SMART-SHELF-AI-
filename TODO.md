@@ -44,7 +44,7 @@
 - [x] Testar o contrato de configuração dos dois serviços, dos dois digests e das variáveis de manifesto/keyring; `docker compose config` e smoke de arranque passaram no Docker Compose CI [45065013291](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45065013291).
 - [x] Manter os digests vazios por omissão: Compose não inventa hashes nem enfraquece o modo fail-closed.
 - [x] Manifesto Ed25519 v2, trust roots, rotação/revogação configurável e anti-rollback persistente implementados; ver `docs/vision-model-manifest.md`, `apps/api/app/vision_model_manifest.py`, `apps/api/app/vision_model_release.py` e migration `0069_vision_model_release_trust_state`.
-- [x] Confirmar migration PostgreSQL 16, smoke anti-rollback concorrente, suite API, Quality Gates, Security Scans e Docker Compose no commit `9a0c40f0082d056e9d3c9538b5ca85089331a31c`; 1540 testes aprovados, 1 ignorado.
+- [x] Confirmar migration PostgreSQL 16, smoke anti-rollback concorrente, suite API e Docker Compose no commit de código `91ea51e0`; Quality Gates e Security Scans passaram no descendente documental `1566b8ea`; 1545 testes aprovados, 1 ignorado.
 
 ## IA e catálogo — validação estrita de exemplares de embeddings (2026-11-21, validado)
 
