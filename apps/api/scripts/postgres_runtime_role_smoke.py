@@ -26,7 +26,7 @@ def main() -> None:
     try:
         with engine.connect() as connection:
             role = connection.execute(text("""
-                SELECT current_user, rol.super, rol.rolcreatedb, rol.rolcreaterole,
+                SELECT current_user, rol.rolsuper, rol.rolcreatedb, rol.rolcreaterole,
                        rol.rolreplication, rol.rolbypassrls
                 FROM pg_roles AS rol
                 WHERE rol.rolname = current_user
