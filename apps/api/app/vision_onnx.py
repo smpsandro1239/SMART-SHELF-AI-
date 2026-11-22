@@ -15,8 +15,14 @@ import math
 import os
 from pathlib import Path
 
+from app.database import SessionLocal
 from app.vision import DetectionResult, VisionAnalysis
 from app.vision_model_manifest import ModelManifestError, verify_model_manifest
+from app.vision_model_release import (
+    ModelReleaseError,
+    assert_model_release_current,
+    register_model_release,
+)
 
 
 class ONNXConfigurationError(RuntimeError):
@@ -114,6 +120,7 @@ class ONNXShelfVisionProvider:
         sku_match_labels: set[str] | None = None,
         expected_detector_sha256: str | None = None,
         expected_embedding_sha256: str | None = None,
+        release_guard=None,
     ):
         if isinstance(input_size, bool) or not isinstance(input_size, int) or not 32 <= input_size <= 4096:
             raise ONNXConfigurationError("VISION_INPUT_SIZE must be an integer between 32 and 4096")
@@ -206,6 +213,7 @@ class ONNXShelfVisionProvider:
             )
         else:
             self.embedding_model_version = None
+        self._release_guard = release_guard
         self.preprocessing_version = DETECTOR_PREPROCESSING_VERSION
         self.embedding_preprocessing_version = (
             EMBEDDING_PREPROCESSING_VERSION if self.embedding_path else None
@@ -371,7 +379,12 @@ class ONNXShelfVisionProvider:
             return None
         return (vector / norm).astype(self._np.float32).tolist()
 
+    def assert_release_current(self, session=None) -> None:
+        if self._release_guard is not None:
+            self._release_guard(session)
+
     def analyze(self, image_path: Path) -> VisionAnalysis:
+        self.assert_release_current()
         with self._image.open(image_path) as source:
             image = source.convert("RGB")
         tensor, transform = self._preprocess(image)
@@ -396,6 +409,7 @@ class ONNXShelfVisionProvider:
                 embedding=embedding,
                 embedding_model_version=self.embedding_model_version if embedding is not None else None,
             ))
+        self.assert_release_current()
         return VisionAnalysis(model_version=self.model_version, detections=detections)
 
 
@@ -438,12 +452,14 @@ def create_provider() -> ONNXShelfVisionProvider:
     trusted_keys_json = os.getenv("VISION_MODEL_TRUSTED_KEYS_JSON", "").strip()
     if not manifest_path:
         raise ONNXConfigurationError("VISION_MODEL_MANIFEST_PATH is required for a real ONNX provider")
+    revoked_key_ids_json = os.getenv("VISION_MODEL_REVOKED_KEY_IDS_JSON", "[]").strip()
     try:
         signed_model = verify_model_manifest(
             manifest_path,
             trusted_keys_json,
             detector,
             embedder,
+            revoked_key_ids_json=revoked_key_ids_json,
         )
     except ModelManifestError as exc:
         raise ONNXConfigurationError(str(exc)) from exc
@@ -451,7 +467,7 @@ def create_provider() -> ONNXShelfVisionProvider:
         raise ONNXConfigurationError("VISION_DETECTOR_MODEL_SHA256 does not match the signed manifest")
     if signed_model["embedding_sha256"] != expected_embedding_sha256:
         raise ONNXConfigurationError("VISION_EMBEDDING_MODEL_SHA256 does not match the signed manifest")
-    return ONNXShelfVisionProvider(
+    provider = ONNXShelfVisionProvider(
         detector,
         embedder,
         model_version=version,
@@ -464,3 +480,31 @@ def create_provider() -> ONNXShelfVisionProvider:
         expected_detector_sha256=expected_detector_sha256,
         expected_embedding_sha256=expected_embedding_sha256,
     )
+    deployment_id = os.getenv("VISION_MODEL_DEPLOYMENT_ID", "default").strip()
+    try:
+        register_model_release(
+            SessionLocal,
+            deployment_id=deployment_id,
+            model_release=signed_model,
+        )
+    except ModelReleaseError as exc:
+        raise ONNXConfigurationError(str(exc)) from exc
+
+    def release_guard(session=None):
+        if session is not None:
+            assert_model_release_current(
+                session,
+                deployment_id=deployment_id,
+                model_release=signed_model,
+            )
+            return
+        with SessionLocal() as db:
+            assert_model_release_current(
+                db,
+                deployment_id=deployment_id,
+                model_release=signed_model,
+            )
+
+    provider._release_guard = release_guard
+    provider.assert_release_current()
+    return provider
