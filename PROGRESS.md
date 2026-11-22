@@ -1,3 +1,14 @@
+## 2026-11-22 — Correcção do âmbito dos default ACLs PostgreSQL (código publicado; CI pendente)
+
+- A revisão do smoke identificou que a query de `pg_default_acl` agregava permissões concedidas ao runtime por qualquer owner, em vez de verificar especificamente os objectos futuros criados pelo principal de migrations.
+- A query passa a filtrar `pg_default_acl.defaclrole` pelo papel explícito `MIGRATION_DB_USER`, e continua a verificar o grantee como `current_user`, privilégios exactos e ausência de GRANT OPTION.
+- O job PostgreSQL 16 da API CI fornece `MIGRATION_DB_USER=postgres`; o teste estático verifica o contrato e a ligação da configuração.
+- Commits desta correcção: `bb3766fc`, `491ae99f`, `8e5a6810`.
+- Evidência anterior à correcção: API CI [45083455380](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45083455380) e Docker Compose [45083455389](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45083455389) passaram no SHA `72d4034d`; Quality Gates [45083489901](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45083489901) e Security Scans [45083489889](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45083489889) passaram no SHA `9bad015c`.
+- **Ainda não validado:** os workflows têm de ser reexecutados no novo SHA; continua pendente o ensaio com volume persistente real e operações API com o principal runtime.
+
+---
+
 ## 2026-11-22 — Expansão do smoke de segurança PostgreSQL runtime (implementação publicada; CI pendente)
 
 - O smoke `apps/api/scripts/postgres_runtime_role_smoke.py` verifica agora o atributo LOGIN e todos os atributos privilegiados, incluindo NOINHERIT.
