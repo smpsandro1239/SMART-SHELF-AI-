@@ -91,7 +91,7 @@ def main() -> None:
                 {"deployment_id": deployment_id},
             )
             db.commit()
-        except IntegrityError:
+        except DBAPIError:
             db.rollback()
         else:
             raise AssertionError("PostgreSQL allowed deletion of persistent model trust state")
