@@ -3,20 +3,35 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
+      POSTGRES_DB: ${POSTGRES_DB:-smart_shelf}
+      POSTGRES_USER: ${POSTGRES_USER:-smart_shelf}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local_only_change_me}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-smart_shelf} -d ${POSTGRES_DB:-smart_shelf}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  provision-runtime-role:
+    image: postgres:16-alpine
+    restart: "no"
+    command: ["bash", "/scripts/10-create-runtime-role.sh"]
+    environment:
       APP_ENV: ${APP_ENV:-development}
       POSTGRES_DB: ${POSTGRES_DB:-smart_shelf}
       POSTGRES_USER: ${POSTGRES_USER:-smart_shelf}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local_only_change_me}
       APP_DB_USER: ${APP_DB_USER:-smart_shelf_runtime}
       APP_DB_PASSWORD: ${APP_DB_PASSWORD:-local_runtime_change_me}
+      PGHOST: db
+      PGPORT: 5432
     volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./infra/postgres/10-create-runtime-role.sh:/docker-entrypoint-initdb.d/10-create-runtime-role.sh:ro
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-smart_shelf} -d ${POSTGRES_DB:-smart_shelf}"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
+      - ./infra/postgres/10-create-runtime-role.sh:/scripts/10-create-runtime-role.sh:ro
+    depends_on:
+      db:
+        condition: service_healthy
 
   migrate:
     build:
@@ -33,6 +48,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      provision-runtime-role:
+        condition: service_completed_successfully
 
   register-model-release:
     profiles: ["model-release"]
