@@ -25,6 +25,7 @@ def _service_block(compose: str, service: str) -> str:
 def test_migrations_use_owner_credentials_and_runtime_services_use_restricted_role():
     compose = COMPOSE.read_text(encoding="utf-8")
     migration = _service_block(compose, "migrate")
+    provision = _service_block(compose, "provision-runtime-role")
     release_registration = _service_block(compose, "register-model-release")
     api = _service_block(compose, "api")
     worker = _service_block(compose, "vision-worker")
@@ -34,6 +35,8 @@ def test_migrations_use_owner_credentials_and_runtime_services_use_restricted_ro
     assert "POSTGRES_PASSWORD" in migration
     assert "APP_DB_USER" in migration, "migration needs the runtime role name for trust-table ACLs"
     assert "APP_DB_PASSWORD" not in migration, "migration must not receive the runtime password"
+    assert "provision-runtime-role:" in migration
+    assert "service_completed_successfully" in migration
 
     for service_name, block in (("api", api), ("vision-worker", worker)):
         assert "APP_DB_USER" in block, f"{service_name} must use the runtime role"
@@ -53,9 +56,13 @@ def test_postgres_bootstrap_creates_non_owner_role_with_dml_only_grants():
     bootstrap = ROLE_BOOTSTRAP.read_text(encoding="utf-8")
 
     db = _service_block(compose, "db")
-    assert "10-create-runtime-role.sh:/docker-entrypoint-initdb.d/" in db
-    assert "APP_DB_USER" in db
-    assert "APP_DB_PASSWORD" in db
+    provision = _service_block(compose, "provision-runtime-role")
+    assert "10-create-runtime-role.sh:/docker-entrypoint-initdb.d/" not in db
+    assert "10-create-runtime-role.sh:/scripts/10-create-runtime-role.sh:ro" in provision
+    assert "APP_DB_USER" in provision
+    assert "APP_DB_PASSWORD" in provision
+    assert "PGHOST: db" in provision
+    assert "APP_ENV: ${APP_ENV:-development}" in provision
 
     assert '[[ "$APP_DB_USER" == "$POSTGRES_USER" ]]' in bootstrap
     assert "APP_DB_PASSWORD must contain at least 32 URL-safe characters" in bootstrap
@@ -63,6 +70,7 @@ def test_postgres_bootstrap_creates_non_owner_role_with_dml_only_grants():
     assert "APP_ENV: ${APP_ENV:-development}" in db
     assert "APP_DB_USER must be a 1-63 character PostgreSQL identifier" in bootstrap
     assert "NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS" in bootstrap
+    assert "NOINHERIT" in bootstrap
     assert "REVOKE CREATE ON SCHEMA public" in bootstrap
     assert "GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES" in bootstrap
     assert "GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES" in bootstrap
