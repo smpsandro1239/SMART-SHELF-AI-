@@ -884,7 +884,7 @@ terão de ser medidos num piloto.
 A migração `0015_pallet_rotation_registry` cria a identidade de paletes físicas,
 políticas de rotação por loja/produto e histórico de eventos. Aplicar com:
 
-    docker compose exec api alembic upgrade head
+    docker compose run --rm migrate
 
 Consultar `docs/architecture/pallet-registry-and-traceability.md` para o modelo
 e exemplos completos. Endpoints principais:
