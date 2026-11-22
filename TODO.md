@@ -6,7 +6,7 @@
 - [x] Incluir hashes das anotações train/val/test na evidência de aprovação e no fingerprint do release; rejeitar alteração de ficheiros durante o gate.
 - [x] Executar apenas no test split, sem treino nem escrita em inventário; incluir fingerprint do dataset e digest/model version no relatório.
 - [x] Adicionar testes sintéticos de métricas, falsos positivos, falsos negativos, thresholds e aprovação de release.
-- [ ] Confirmar suite/API CI, quality gates e security scans no commit final.
+- [x] Confirmar API CI, Quality Gates, Security Scans e Docker Compose no commit de código `91ea51e023b1952ed0bc3e5f86e9dcd21311be2a`: 1545 passed, 1 skipped; smokes PostgreSQL 16 e anti-rollback passaram. Runs: API CI [45065013302](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45065013302), Quality Gates [45065079666](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45065079666), Security [45065079730](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45065079730), Compose [45065013291](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45065013291).
 - [ ] Executar com dataset autorizado e pesos reais; não publicar métricas até obter relatório verificável e revisão independente.
 
 ## Edge AI — contrato de eventos v1 (implementado como contrato puro; CI pendente)
@@ -35,14 +35,14 @@
 - [x] Verificar o release antes/depois da inferência e manter lock da versão durante a publicação das deteções; workers obsoletos reencaminham a captura para PENDING e terminam.
 - [x] Validar no commit `9a0c40f0082d056e9d3c9538b5ca85089331a31c`: API CI [45064470736](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45064470736), Quality Gates [45064470874](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45064470874), Security Scans [45064470765](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45064470765) e Docker Compose [45064470789](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45064470789) passaram; API CI executou PostgreSQL 16, smoke anti-rollback concorrente e 1540 testes aprovados, 1 ignorado.
 - [x] Exigir `VISION_MODEL_DEPLOYMENT_ID` explícito e não-default em `APP_ENV=production`; Compose deixa de injectar um fallback silencioso.
-- [ ] Separar o principal de migrations do principal runtime e retirar permissões DDL/ALTER/TRUNCATE/gestão de triggers ao runtime antes de produção.
+- [ ] Separar o principal de migrations do principal runtime e retirar permissões DDL/ALTER/TRUNCATE/gestão de triggers ao runtime antes de produção; o owner/superuser ainda pode desactivar os triggers.
 - [ ] Validar rotação/revogação em deployment real com chaves e pesos autorizados; não existe ainda material de release real.
 
 ## Deploy — passagem dos digests e política de confiança ONNX para API e worker (2026-11-21, validação CI pendente)
 
 - [x] Passar `VISION_DETECTOR_MODEL_SHA256` e `VISION_EMBEDDING_MODEL_SHA256` para os serviços `api` e `vision-worker` no Docker Compose.
 - [x] Testar o contrato de configuração dos dois serviços, dos dois digests e das variáveis de manifesto/keyring; `docker compose config` e smoke de arranque continuam dependentes de CI.
-- [ ] Manter os digests vazios por omissão: não enfraquecer o modo fail-closed nem inventar hashes para pesos não fornecidos.
+- [x] Manter os digests vazios por omissão: Compose não inventa hashes nem enfraquece o modo fail-closed.
 - [x] Manifesto Ed25519 v2, trust roots, rotação/revogação configurável e anti-rollback persistente implementados; ver `docs/vision-model-manifest.md`, `apps/api/app/vision_model_manifest.py`, `apps/api/app/vision_model_release.py` e migration `0069_vision_model_release_trust_state`.
 - [x] Confirmar migration PostgreSQL 16, smoke anti-rollback concorrente, suite API, Quality Gates, Security Scans e Docker Compose no commit `9a0c40f0082d056e9d3c9538b5ca85089331a31c`; 1540 testes aprovados, 1 ignorado.
 
