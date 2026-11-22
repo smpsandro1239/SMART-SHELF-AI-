@@ -100,3 +100,24 @@ def test_vision_model_release_state_allows_only_strictly_higher_version_updates(
             "SELECT highest_release_version FROM vision_model_release_states WHERE deployment_id='edge-b'"
         ).scalar_one() == 3
     engine.dispose()
+
+
+
+def test_runtime_trust_acl_migration_is_postgresql_only(tmp_path, monkeypatch):
+    migration_path = (
+        Path(__file__).parents[1]
+        / "migrations"
+        / "versions"
+        / "0070_vision_model_trust_runtime_readonly.py"
+    )
+    spec = importlib.util.spec_from_file_location("vision_model_trust_runtime_readonly_0070", migration_path)
+    migration = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(migration)
+
+    monkeypatch.setenv("APP_DB_USER", "smart_shelf_runtime")
+    engine = create_engine(f"sqlite:///{tmp_path / 'vision-model-trust-acl.db'}")
+    with engine.begin() as db:
+        with Operations.context(MigrationContext.configure(db)):
+            migration.upgrade()
+            migration.downgrade()
+    engine.dispose()
