@@ -19,7 +19,7 @@
 - [ ] Validar suite e integração CI.
 - [ ] Implementar registo de dispositivos, credenciais, endpoint de ingestão, inbox/outbox persistentes, cursor transaccional e acknowledgements; não activar ingestão antes destas peças.
 
-## Computer Vision — manifesto ONNX Ed25519 (implementado; quality/security CI validada em 2026-11-21)
+## Computer Vision — manifesto ONNX Ed25519 v2 e anti-rollback (implementação publicada; CI validada em 2026-11-22)
 
 - [x] Verificar assinatura Ed25519 do manifesto com keyring explícito de chaves públicas confiáveis.
 - [x] Vincular os hashes SHA-256 assinados aos bytes exactos do detector e do embedder; rejeitar modelos alterados, symlinks, JSON ambíguo, campos desconhecidos, assinaturas inválidas e key IDs não confiáveis.
@@ -33,7 +33,9 @@
 - [x] Acrescentar eventos append-only e guards PostgreSQL/SQLite; impedir downgrade da migration quando já existem releases aceites.
 - [x] Implementar key revocation explícita através de `VISION_MODEL_REVOKED_KEY_IDS_JSON`, mantendo o keyring de chaves públicas como allow-list.
 - [x] Verificar o release antes/depois da inferência e manter lock da versão durante a publicação das deteções; workers obsoletos reencaminham a captura para PENDING e terminam.
-- [ ] Confirmar API CI/PostgreSQL 16, Quality Gates, Security Scans e Docker Compose no SHA final.
+- [x] Validar no commit `9a0c40f0082d056e9d3c9538b5ca85089331a31c`: API CI [45064470736](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45064470736), Quality Gates [45064470874](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45064470874), Security Scans [45064470765](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45064470765) e Docker Compose [45064470789](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45064470789) passaram; API CI executou PostgreSQL 16, smoke anti-rollback concorrente e 1540 testes aprovados, 1 ignorado.
+- [x] Exigir `VISION_MODEL_DEPLOYMENT_ID` explícito e não-default em `APP_ENV=production`; Compose deixa de injectar um fallback silencioso.
+- [ ] Separar o principal de migrations do principal runtime e retirar permissões DDL/ALTER/TRUNCATE/gestão de triggers ao runtime antes de produção.
 - [ ] Validar rotação/revogação em deployment real com chaves e pesos autorizados; não existe ainda material de release real.
 
 ## Deploy — passagem dos digests e política de confiança ONNX para API e worker (2026-11-21, validação CI pendente)
@@ -42,7 +44,7 @@
 - [x] Testar o contrato de configuração dos dois serviços, dos dois digests e das variáveis de manifesto/keyring; `docker compose config` e smoke de arranque continuam dependentes de CI.
 - [ ] Manter os digests vazios por omissão: não enfraquecer o modo fail-closed nem inventar hashes para pesos não fornecidos.
 - [x] Manifesto Ed25519 v2, trust roots, rotação/revogação configurável e anti-rollback persistente implementados; ver `docs/vision-model-manifest.md`, `apps/api/app/vision_model_manifest.py`, `apps/api/app/vision_model_release.py` e migration `0069_vision_model_release_trust_state`.
-- [ ] Confirmar a execução CI da migration, smokes PostgreSQL, suite API e Security Scans no SHA final.
+- [x] Confirmar migration PostgreSQL 16, smoke anti-rollback concorrente, suite API, Quality Gates, Security Scans e Docker Compose no commit `9a0c40f0082d056e9d3c9538b5ca85089331a31c`; 1540 testes aprovados, 1 ignorado.
 
 ## IA e catálogo — validação estrita de exemplares de embeddings (2026-11-21, validado)
 
