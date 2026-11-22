@@ -22,6 +22,10 @@ if [[ "${APP_ENV:-development}" == "production" ]]; then
     echo "Production APP_DB_PASSWORD must contain at least 32 URL-safe characters." >&2
     exit 1
   fi
+  if [[ ${#POSTGRES_PASSWORD} -lt 32 || ! "$POSTGRES_PASSWORD" =~ ^[A-Za-z0-9_-]+$ ]]; then
+    echo "Production POSTGRES_PASSWORD must contain at least 32 URL-safe characters." >&2
+    exit 1
+  fi
 fi
 
 psql --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" \
