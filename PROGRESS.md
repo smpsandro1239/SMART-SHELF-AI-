@@ -335,4 +335,12 @@ O provider real regista o release depois de construir/validar as sessões ONNX, 
 
 A rotação normal está documentada em `docs/vision-model-manifest.md`: adicionar chave nova, assinar release superior, confirmar todas as instâncias no novo release e só depois remover/revogar a chave antiga. A revogação explícita usa `VISION_MODEL_REVOKED_KEY_IDS_JSON`; o `VISION_MODEL_DEPLOYMENT_ID` tem de permanecer estável.
 
-Testes acrescentados: `test_vision_model_release.py`, `test_vision_model_release_migration.py` e smoke PostgreSQL `postgres_vision_model_release_smoke.py`, integrado em API CI. **A validação CI desta implementação ainda está pendente**; não foram executados testes localmente. Não existem pesos/dataset autorizados, pelo que nenhuma inferência real foi activada.
+Testes acrescentados: `test_vision_model_release.py`, `test_vision_model_release_migration.py`, testes de configuração de deployment e smoke PostgreSQL `postgres_vision_model_release_smoke.py`, integrado em API CI. Em `APP_ENV=production`, `VISION_MODEL_DEPLOYMENT_ID` é obrigatório e não pode ser `default`; Compose deixa o valor vazio quando não configurado.
+
+Validação confirmada:
+- API CI [45065013302](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45065013302): sucesso; PostgreSQL 16, migration 0069, smoke de concorrência/rollback/append-only/TRUNCATE e **1545 passed, 1 skipped**.
+- Quality Gates [45065079666](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45065079666): sucesso; **1545 passed, 1 skipped**, compilação Python e build Web.
+- Docker Compose [45065013291](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45065013291): sucesso; readiness, seed e worker.
+- Security Scans [45065079730](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45065079730): sucesso; SCA, Gitleaks do histórico e ZAP baseline.
+
+Limitação de segurança: os triggers protegem contra operações DML/TRUNCATE sem privilégios de DDL, mas o owner/superuser PostgreSQL pode alterar schema ou desactivar triggers. Antes de produção, separar o principal de migrations do principal runtime e retirar permissões DDL/ALTER/TRUNCATE ao runtime. Não existem pesos/dataset autorizados, pelo que nenhuma inferência real foi activada.
