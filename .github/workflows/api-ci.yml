@@ -5,6 +5,8 @@ on:
     branches: [main]
     paths:
       - 'apps/api/**'
+      - 'infra/postgres/**'
+      - 'docker-compose.yml'
       - '.github/workflows/api-ci.yml'
   pull_request:
     paths:
@@ -257,5 +259,19 @@ jobs:
           DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/smart_shelf_ci
           APP_ENV: test
         run: python scripts/postgres_vision_model_release_smoke.py
+      - name: Provision and verify restricted PostgreSQL runtime role
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_DB: smart_shelf_ci
+          PGPASSWORD: postgres
+          PGHOST: localhost
+          PGPORT: 5432
+          APP_DB_USER: smart_shelf_runtime_ci
+          APP_DB_PASSWORD: runtime-ci-password
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes postgresql-client
+          bash ../../infra/postgres/10-create-runtime-role.sh
+          RUNTIME_DATABASE_URL=postgresql+psycopg://smart_shelf_runtime_ci:runtime-ci-password@localhost:5432/smart_shelf_ci python scripts/postgres_runtime_role_smoke.py
       - name: Run tests
         run: pytest -q
