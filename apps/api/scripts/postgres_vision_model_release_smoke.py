@@ -1,7 +1,6 @@
 """PostgreSQL concurrency and database-guard smoke for ONNX model anti-rollback."""
 from concurrent.futures import ThreadPoolExecutor
 from threading import Barrier
-from uuid import uuid4
 
 from sqlalchemy import select, text
 from sqlalchemy.exc import DBAPIError
@@ -41,7 +40,7 @@ def _release(version: int) -> dict:
 
 
 def main() -> None:
-    deployment_id = f"ci-model-release-{uuid4().hex}"
+    deployment_id = "ci-model-release-runtime-role"
     register_model_release(
         SessionLocal,
         deployment_id=deployment_id,
