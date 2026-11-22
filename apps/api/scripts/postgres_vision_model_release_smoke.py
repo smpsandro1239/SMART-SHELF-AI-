@@ -15,6 +15,20 @@ from app.vision_model_release import (
 )
 
 
+def _expect_guard(db, statement: str, parameters: dict, expected_message: str) -> None:
+    try:
+        db.execute(text(statement), parameters)
+        db.commit()
+    except DBAPIError as exc:
+        db.rollback()
+        if expected_message not in str(exc.orig):
+            raise AssertionError(
+                f"Expected database guard '{expected_message}', received: {exc.orig}"
+            ) from exc
+    else:
+        raise AssertionError(f"PostgreSQL did not enforce database guard: {expected_message}")
+
+
 def _release(version: int) -> dict:
     return {
         "model_id": "shelf-detector",
@@ -71,30 +85,25 @@ def main() -> None:
         else:
             raise AssertionError("A superseded model release passed the runtime guard")
 
-        try:
-            db.execute(
-                text(
-                    "UPDATE vision_model_release_states "
-                    "SET highest_release_version = 1 WHERE deployment_id = :deployment_id"
-                ),
-                {"deployment_id": deployment_id},
-            )
-            db.commit()
-        except DBAPIError:
-            db.rollback()
-        else:
-            raise AssertionError("PostgreSQL allowed the model high-water mark to move backwards")
-
-        try:
-            db.execute(
-                text("DELETE FROM vision_model_release_states WHERE deployment_id = :deployment_id"),
-                {"deployment_id": deployment_id},
-            )
-            db.commit()
-        except DBAPIError:
-            db.rollback()
-        else:
-            raise AssertionError("PostgreSQL allowed deletion of persistent model trust state")
+        _expect_guard(
+            db,
+            "UPDATE vision_model_release_states SET highest_release_version = 1 "
+            "WHERE deployment_id = :deployment_id",
+            {"deployment_id": deployment_id},
+            "vision model release state must advance monotonically",
+        )
+        _expect_guard(
+            db,
+            "DELETE FROM vision_model_release_states WHERE deployment_id = :deployment_id",
+            {"deployment_id": deployment_id},
+            "vision model release high-water marks cannot be deleted",
+        )
+        _expect_guard(
+            db,
+            "TRUNCATE vision_model_release_states",
+            {},
+            "vision model release trust tables cannot be truncated",
+        )
 
         event = db.execute(
             select(VisionModelReleaseEvent)
@@ -103,16 +112,24 @@ def main() -> None:
         ).scalars().first()
         if event is None:
             raise AssertionError("Accepted model release did not create an audit event")
-        try:
-            db.execute(
-                text("UPDATE vision_model_release_events SET reason = 'tampered' WHERE id = :event_id"),
-                {"event_id": event.id},
-            )
-            db.commit()
-        except DBAPIError:
-            db.rollback()
-        else:
-            raise AssertionError("PostgreSQL allowed mutation of model release audit events")
+        _expect_guard(
+            db,
+            "UPDATE vision_model_release_events SET reason = 'tampered' WHERE id = :event_id",
+            {"event_id": event.id},
+            "vision model release events are append-only",
+        )
+        _expect_guard(
+            db,
+            "DELETE FROM vision_model_release_events WHERE id = :event_id",
+            {"event_id": event.id},
+            "vision model release events are append-only",
+        )
+        _expect_guard(
+            db,
+            "TRUNCATE vision_model_release_events",
+            {},
+            "vision model release trust tables cannot be truncated",
+        )
 
     try:
         register_model_release(
