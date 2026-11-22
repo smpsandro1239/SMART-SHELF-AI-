@@ -72,7 +72,7 @@ def test_postgres_bootstrap_creates_non_owner_role_with_dml_only_grants():
     assert "APP_ENV: ${APP_ENV:-development}" in db
     assert "APP_DB_USER must be a 1-63 character PostgreSQL identifier" in bootstrap
     assert "NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS" in bootstrap
-    assert "NOINHERIT" in bootstrap
+    assert bootstrap.count("NOINHERIT") == 2, "CREATE ROLE and ALTER ROLE must both disable inheritance"
     assert 'export PGPASSWORD="$POSTGRES_PASSWORD"' in bootstrap
     assert "REVOKE CREATE ON SCHEMA public" in bootstrap
     assert "GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES" in bootstrap
