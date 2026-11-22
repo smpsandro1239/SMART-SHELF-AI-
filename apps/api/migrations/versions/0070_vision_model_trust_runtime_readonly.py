@@ -22,18 +22,39 @@ def upgrade() -> None:
     if bind.dialect.name != "postgresql":
         return
 
+    app_env = os.getenv("APP_ENV", "development").strip().lower()
     runtime_role = os.getenv("APP_DB_USER", "").strip()
     if not runtime_role:
+        if app_env == "production":
+            raise RuntimeError("APP_DB_USER is required for production trust-state privilege isolation")
         return
     if not _RUNTIME_ROLE.fullmatch(runtime_role):
         raise RuntimeError("APP_DB_USER is not a safe PostgreSQL role identifier")
+
+    current_user = bind.execute(sa.text("SELECT current_user")).scalar_one()
+    if runtime_role == current_user:
+        raise RuntimeError("APP_DB_USER must differ from the migration owner")
 
     role_exists = bind.execute(
         sa.text("SELECT 1 FROM pg_roles WHERE rolname = :role_name"),
         {"role_name": runtime_role},
     ).scalar_one_or_none()
     if role_exists is None:
+        if app_env == "production":
+            raise RuntimeError("Configured APP_DB_USER does not exist; refusing production migration")
         return
+
+    trust_owner = bind.execute(
+        sa.text(
+            """
+            SELECT pg_get_userbyid(relowner)
+            FROM pg_class
+            WHERE oid = 'public.vision_model_release_states'::regclass
+            """
+        )
+    ).scalar_one()
+    if trust_owner == runtime_role:
+        raise RuntimeError("APP_DB_USER must not own ONNX model trust-state tables")
 
     quoted_role = bind.dialect.identifier_preparer.quote(runtime_role)
     for table_name in _TRUST_TABLES:
