@@ -53,7 +53,7 @@
 - Os hashes são comparados antes da criação das sessões ONNX e revalidados após o carregamento; digest divergente ou ausente impede o arranque.
 - Os fingerprints separam o pré-processamento letterbox do detetor e o resize stretch dos crops do extrator.
 - API CI e Quality Gates: 1432 passed, 1 skipped; PostgreSQL 16, compilação Python e build Web aprovados. Docker Compose e Security Scans passaram.
-- Limite: não existem pesos reais autorizados, dataset anotado ou avaliação independente por SKU/cenário. Antes de produção, separar o principal owner de migrations do principal runtime e retirar permissões DDL/ALTER/TRUNCATE ao runtime; triggers não protegem contra owner/superuser.
+- Limite: não existem pesos reais autorizados, dataset anotado ou avaliação independente por SKU/cenário. A separação owner/runtime foi implementada; a validação das permissões read-only nas tabelas de confiança ONNX e dos fluxos completos com o principal runtime continua pendente.
 
 ### Isolamento multi-loja do histórico de alertas — 2026-11-21 (validado)
 
@@ -1032,10 +1032,22 @@ Validação no commit `311fecc9e13641e6d5eb55465fda646fb2909601`: Quality Gates 
 - A validação local não foi executada neste ambiente; a suite CI será usada para confirmar o novo teste. A cobertura desta rota não fecha a matriz global handler × perfil × loja.
 
 
-### Segurança PostgreSQL — separação de principal owner e runtime (implementação publicada; validação CI pendente)
+### Segurança PostgreSQL — owner/runtime e estado de confiança ONNX (implementação publicada; CI final pendente)
 
-- Serviço one-shot `migrate` executa Alembic com o principal owner.
-- API e vision-worker usam principal runtime separado, sem privilégios DDL/CREATE/TRUNCATE, com DML e sequências.
-- Script de bootstrap idempotente: `infra/postgres/10-create-runtime-role.sh`; configura privilégios default para tabelas/sequências futuras.
-- Testes estáticos: `apps/api/tests/test_database_role_separation.py`.
-- **Ainda não validado:** instalação limpa Docker Compose, volume preexistente, smoke de permissões PostgreSQL com o principal runtime, suite API e workflows no SHA desta alteração. Em volumes existentes, o operador tem de executar o script explicitamente. Não declarar produção pronta antes de validar as permissões reais e definir segredo APP_DB_PASSWORD.
+- Serviço one-shot `migrate` aplica Alembic como owner; API/vision-worker usam `APP_DB_USER` sem privilégios DDL.
+- Migration 0070 e bootstrap revogam INSERT/UPDATE/DELETE/TRUNCATE e privilégios da sequência nas tabelas ONNX; runtime conserva apenas SELECT.
+- O provider não regista releases no arranque. O perfil one-shot `register-model-release` valida assinatura/digests e exige o owner das tabelas.
+- Verificações e registos partilham advisory transaction lock por deployment; o runtime não necessita de UPDATE/SELECT FOR UPDATE.
+- Smoke `postgres_runtime_role_smoke.py` verifica leitura, ausência de privilégios de escrita e recusa efectiva de mutações; integrado no API CI e Docker Compose.
+- ADR: [ADR-009 — Isolar o estado de confiança de releases ONNX](architecture/adr-009-onnx-trust-state-privileges.md).
+- A separação base foi validada no HEAD anterior `bbf5ad80` (API CI, Quality Gates, Security Scans e Docker Compose; 1549 passed, 1 skipped). A nova restrição de DML no trust state aguarda os workflows do SHA final.
+- Volumes existentes exigem execução explícita do bootstrap actualizado; falta ainda validar a aplicação completa com o runtime e configurar segredos fortes no deployment alvo.
+
+### Segurança PostgreSQL — trust state ONNX read-only para runtime (22-11-2026; CI final pendente)
+
+- Migration `0070_vision_model_trust_runtime_readonly` revoga privilégios de escrita nas tabelas de confiança ao principal runtime; o bootstrap aplica a mesma regra em volumes existentes.
+- `register_vision_model_release.py` regista apenas releases Ed25519 válidas, com digests verificados, através do owner das tabelas; Compose disponibiliza a operação num perfil one-shot.
+- API/worker apenas lêem o trust state. Advisory transaction lock serializa inferência/publicação com registo de releases sem UPDATE.
+- Testes estáticos, migration SQLite dialect-safe e smoke PostgreSQL com tentativa real de DML directo adicionados.
+- A camada anterior foi validada no HEAD `bbf5ad80`; a validação desta restrição adicional depende dos workflows API CI, Quality Gates, Security Scans e Docker Compose no SHA final.
+- Não existem ainda pesos ONNX ou dataset autorizado; o provider real permanece desligado.
