@@ -94,11 +94,11 @@ def upgrade() -> None:
         """)
         op.execute("""
             CREATE OR REPLACE FUNCTION guard_vision_model_release_truncate_0069()
-            RETURNS trigger AS $
+            RETURNS trigger AS $function$
             BEGIN
                 RAISE EXCEPTION 'vision model release trust tables cannot be truncated';
             END;
-            $ LANGUAGE plpgsql
+            $function$ LANGUAGE plpgsql
         """)
         op.execute("""
             CREATE TRIGGER trg_vision_model_release_state_no_truncate_0069
