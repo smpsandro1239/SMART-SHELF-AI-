@@ -42,8 +42,10 @@
 - [x] Substituir `SELECT FOR UPDATE` por advisory transaction lock por deployment nas verificações/registos; runtime mantém serialização sem privilégios de escrita.
 - [x] Alargar `postgres_runtime_role_smoke.py` para verificar SELECT, ausência de DML/sequence privileges e recusa efectiva de INSERT/UPDATE/DELETE/TRUNCATE; validar também o guard com o principal runtime.
 - [x] Acrescentar testes estáticos para separação de credenciais, migração 0070, bootstrap, perfil privilegiado e ausência de auto-registo no provider.
-- [ ] Confirmar API CI, Quality Gates, Security Scans e Docker Compose no SHA final; os testes ainda não foram executados localmente.
-- [ ] Executar o bootstrap actualizado em volumes/deployments existentes e validar os privilégios efectivos no ambiente alvo; scripts initdb só correm automaticamente em volumes novos.
+- [x] Validar a camada read-only ONNX no SHA `5e16a9cb`: API CI, Quality Gates, Security Scans e Docker Compose passaram; suite API 1552 passed, 1 skipped.
+- [ ] Reexecutar todos os workflows após introdução do serviço `provision-runtime-role` e política `NOINHERIT`; não considerar esta última alteração validada até obter novo SHA verde.
+- [x] Integrar o serviço one-shot `provision-runtime-role` antes de Alembic: cria/reconcilia o principal em cada arranque Compose, também em volumes existentes, com `NOINHERIT`; API/worker não iniciam se o provisionamento falhar.
+- [ ] Validar o novo serviço em volume persistente já existente com papel legado/memberships/ownership; confirmar que os privilégios são reconciliados sem interromper tarefas ou dados existentes.
 - [ ] Executar os fluxos operacionais completos com o principal runtime (não apenas como owner no pytest) e validar as permissões necessárias em cada tabela/sequence.
 - [ ] Definir `APP_DB_PASSWORD` forte/único e credenciais owner fora do repositório antes de produção; não activar modelo real sem pesos, dataset e métricas aprovados.
 
