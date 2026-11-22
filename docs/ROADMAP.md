@@ -13,13 +13,15 @@
 - Contrato não autentica dispositivos nem persiste/acknowledges eventos; inbox/outbox duráveis, credenciais e ingestão multi-loja são fase seguinte.
 - [Especificação do protocolo Edge](edge-device-event-contract.md).
 
-### Computer Vision — manifesto ONNX Ed25519 (implementação publicada; quality/security CI validada em 2026-11-21)
+### Computer Vision — manifesto ONNX Ed25519 v2 e confiança persistente (implementação publicada; CI pendente)
 
-- Provider real exige manifesto assinado e chave pública confiável; assinatura cobre schema, key ID e digests dos modelos.
-- API e worker recebem manifesto/keyring por Docker Compose; o utilitário de release assina offline e não expõe a chave privada ao runtime.
-- Testes cobrem assinatura inválida, key desconhecida, modelo adulterado, hash do embedder, JSON inválido/duplicado e configuração do factory.
-- Documentação: [docs/vision-model-manifest.md](vision-model-manifest.md).
-- Quality Gates (API compile + pytest + Web build) e Security Scans passaram no HEAD `e9145ac7cb89409e80259f52967f7fccda3de478`: [44918245867](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44918245867) e [44918245858](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44918245858). API CI e Docker Compose smoke não foram confirmados neste SHA. Permanecem pendentes rotação/revogação operacional e prevenção persistente de rollback; assinatura não prova precisão do modelo.
+- Payload Ed25519 schema v2 assina `model_id`, `release_version`, `key_id` e SHA-256 do detector/embedder; schema v1 é rejeitado no provider real.
+- Migration `0069_vision_model_release_trust_state`: high-water mark por deployment, eventos append-only, monotonicidade e protecção contra remoção/alteração do estado.
+- Registo transaccional serializa releases concorrentes, aceita retries exactos e rejeita rollback, colisão de versão e mudança de identidade.
+- Provider verifica a versão antes/depois da inferência; worker bloqueia o release actual durante a publicação e termina se ficar obsoleto.
+- Rotação/revogação configurável por keyring e `VISION_MODEL_REVOKED_KEY_IDS_JSON`; procedimento em [docs/vision-model-manifest.md](vision-model-manifest.md).
+- Testes: `test_vision_model_manifest.py`, `test_vision_model_release.py`, `test_vision_model_release_migration.py` e smoke PostgreSQL `postgres_vision_model_release_smoke.py`, integrado no API CI.
+- Limite: CI do novo SHA ainda pendente; não existem pesos reais autorizados nem dataset/métricas independentes. A assinatura e anti-rollback não demonstram precisão comercial.
 
 ### Deploy — digests ONNX nos serviços Docker Compose (2026-11-21, CI pendente)
 
