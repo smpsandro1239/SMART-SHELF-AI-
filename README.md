@@ -1821,9 +1821,9 @@ Relatórios: [TODO](TODO.md), [PROGRESS](PROGRESS.md), [auditoria de dependênci
 
 Commit de código validado: [91ea51e](https://github.com/smpsandro1239/SMART-SHELF-AI-/commit/91ea51e023b1952ed0bc3e5f86e9dcd21311be2a).
 
-- API CI [45065013302](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45065013302): PostgreSQL 16, migration 0069, smokes de concorrência/anti-rollback e **1545 passed, 1 skipped**.
-- Quality Gates [45065079666](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45065079666): **1545 passed, 1 skipped**, compilação Python e build Web.
-- Docker Compose [45065013291](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45065013291): readiness, seed e worker aprovados.
-- Security Scans [45065079730](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45065079730): auditorias de dependências, Gitleaks do histórico e OWASP ZAP baseline aprovados.
+- API CI [45065013302](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45065013302): no commit de código `91ea51e0`, PostgreSQL 16, migration 0069, smokes de concorrência/anti-rollback e **1545 passed, 1 skipped**.
+- Quality Gates [45065079666](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45065079666): no descendente documental `1566b8ea` (sem alterações de código), **1545 passed, 1 skipped**, compilação Python e build Web.
+- Docker Compose [45065013291](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45065013291): no commit de código `91ea51e0`, readiness, seed e worker aprovados.
+- Security Scans [45065079730](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45065079730): no descendente documental `1566b8ea`, auditorias de dependências, Gitleaks do histórico e OWASP ZAP baseline aprovados.
 
 A assinatura e o anti-rollback protegem a cadeia de release, não a precisão do modelo. O modo real continua sem ser activado até existirem pesos e dataset autorizados, métricas independentes e separação entre o principal de migrations e o principal runtime da base de dados.
