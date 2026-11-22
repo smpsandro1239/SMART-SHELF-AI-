@@ -172,9 +172,11 @@ def test_real_provider_factory_loads_only_after_signed_manifest_and_sha_match(tm
         )),
     )
 
-    from app.vision_onnx import create_provider
+    import app.vision_onnx as vision_onnx
+    monkeypatch.setattr(vision_onnx, "register_model_release", lambda *args, **kwargs: None)
+    monkeypatch.setattr(vision_onnx, "assert_model_release_current", lambda *args, **kwargs: None)
 
-    provider = create_provider()
+    provider = vision_onnx.create_provider()
 
     assert provider.detector_sha256 == payload["detector_sha256"]
     assert provider.embedding_path is None
