@@ -67,10 +67,10 @@ def _parse_revoked_key_ids(raw: str | None) -> set[str]:
         raise ModelManifestError("VISION_MODEL_REVOKED_KEY_IDS_JSON must be a JSON array") from exc
     if not isinstance(revoked, list) or len(revoked) > _MAX_TRUSTED_KEYS:
         raise ModelManifestError("Revoked key IDs must be a JSON array with at most 32 entries")
-    if len(set(revoked)) != len(revoked):
-        raise ModelManifestError("Revoked key IDs must not contain duplicates")
     if any(not isinstance(key_id, str) or not _KEY_ID.fullmatch(key_id) for key_id in revoked):
         raise ModelManifestError("Revoked key IDs contain an invalid identifier")
+    if len(set(revoked)) != len(revoked):
+        raise ModelManifestError("Revoked key IDs must not contain duplicates")
     return set(revoked)
 
 
