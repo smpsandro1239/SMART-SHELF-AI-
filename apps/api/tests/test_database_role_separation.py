@@ -1,6 +1,8 @@
 """Deployment tests for PostgreSQL migration/runtime role separation."""
 from pathlib import Path
 import re
+import shutil
+import subprocess
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -53,6 +55,9 @@ def test_postgres_bootstrap_creates_non_owner_role_with_dml_only_grants():
     assert "GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES" in bootstrap
     assert "GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES" in bootstrap
     assert "ALTER DEFAULT PRIVILEGES FOR ROLE" in bootstrap
+    assert "REASSIGN OWNED BY" in bootstrap
+    assert "DROP OWNED BY" in bootstrap
+    assert "pg_auth_members" in bootstrap
     assert "GRANT CREATE" not in bootstrap
     assert "GRANT TRUNCATE" not in bootstrap
 
@@ -63,3 +68,15 @@ def test_api_no_longer_runs_alembic_with_runtime_database_credentials():
 
     assert "alembic" not in api
     assert '["uvicorn", "app.main:app"' in api
+
+
+def test_runtime_role_bootstrap_has_valid_bash_syntax():
+    bash = shutil.which("bash")
+    assert bash is not None, "bash is required by the PostgreSQL container bootstrap"
+    result = subprocess.run(
+        [bash, "-n", str(ROLE_BOOTSTRAP)],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
