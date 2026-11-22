@@ -12,6 +12,7 @@ on:
     paths:
       - 'docker-compose.yml'
       - 'apps/api/**'
+      - 'infra/postgres/**'
       - '.github/workflows/demo-compose-smoke.yml'
   workflow_dispatch:
 
