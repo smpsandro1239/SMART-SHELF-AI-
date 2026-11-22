@@ -251,5 +251,11 @@ jobs:
           DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/smart_shelf_ci
           APP_ENV: test
         run: python scripts/postgres_planogram_lifecycle_smoke.py
+
+      - name: Verify PostgreSQL ONNX model anti-rollback and concurrent release registration
+        env:
+          DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/smart_shelf_ci
+          APP_ENV: test
+        run: python scripts/postgres_vision_model_release_smoke.py
       - name: Run tests
         run: pytest -q
