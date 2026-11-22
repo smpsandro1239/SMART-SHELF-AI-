@@ -1302,3 +1302,54 @@ class DatasetExecutionJobOutputGovernanceEvent(Base):
     evidence_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
     details: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+
+class VisionModelReleaseState(Base):
+    """Persistent high-water mark for one logical ONNX deployment slot."""
+
+    __tablename__ = "vision_model_release_states"
+    __table_args__ = (
+        CheckConstraint("length(trim(deployment_id)) BETWEEN 1 AND 80", name="ck_vision_release_state_deployment"),
+        CheckConstraint("length(trim(model_id)) BETWEEN 1 AND 80", name="ck_vision_release_state_model"),
+        CheckConstraint("highest_release_version > 0", name="ck_vision_release_state_version"),
+        CheckConstraint("length(manifest_sha256) = 64", name="ck_vision_release_state_manifest_digest"),
+        CheckConstraint("length(detector_sha256) = 64", name="ck_vision_release_state_detector_digest"),
+        CheckConstraint("embedding_sha256 IS NULL OR length(embedding_sha256) = 64", name="ck_vision_release_state_embedding_digest"),
+    )
+
+    deployment_id: Mapped[str] = mapped_column(String(80), primary_key=True)
+    model_id: Mapped[str] = mapped_column(String(80), nullable=False)
+    highest_release_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    manifest_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    key_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    detector_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    embedding_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+
+class VisionModelReleaseEvent(Base):
+    """Append-only audit trail for accepted and rejected signed model releases."""
+
+    __tablename__ = "vision_model_release_events"
+    __table_args__ = (
+        CheckConstraint(
+            "decision IN ('ACCEPTED', 'REJECTED_ROLLBACK', 'REJECTED_VERSION_COLLISION', 'REJECTED_MODEL_ID_CHANGE')",
+            name="ck_vision_release_event_decision",
+        ),
+        CheckConstraint("release_version > 0", name="ck_vision_release_event_version"),
+        CheckConstraint("length(manifest_sha256) = 64", name="ck_vision_release_event_manifest_digest"),
+        Index("ix_vision_model_release_events_deployment_created", "deployment_id", "created_at", "id"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    deployment_id: Mapped[str] = mapped_column(
+        ForeignKey("vision_model_release_states.deployment_id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    model_id: Mapped[str] = mapped_column(String(80), nullable=False)
+    release_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    manifest_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    key_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    decision: Mapped[str] = mapped_column(String(32), nullable=False)
+    reason: Mapped[str] = mapped_column(String(500), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
