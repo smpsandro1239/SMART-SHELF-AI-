@@ -134,6 +134,26 @@ def main() -> None:
 
             _assert_default_privileges(connection)
 
+            missing_operational_grant = connection.execute(text("""
+                SELECT relation.relname, required.privilege
+                FROM pg_class AS relation
+                CROSS JOIN (VALUES ('SELECT'), ('INSERT'), ('UPDATE'), ('DELETE')) AS required(privilege)
+                WHERE relation.relnamespace = 'public'::regnamespace
+                  AND relation.relkind IN ('r', 'p')
+                  AND relation.relname NOT IN (
+                      'vision_model_release_states',
+                      'vision_model_release_events'
+                  )
+                  AND NOT has_table_privilege(current_user, relation.oid, required.privilege)
+                ORDER BY relation.relname, required.privilege
+                LIMIT 1
+            """)).one_or_none()
+            if missing_operational_grant is not None:
+                raise AssertionError(
+                    f"Runtime role is missing {missing_operational_grant.privilege} "
+                    f"on operational table {missing_operational_grant.relname}"
+                )
+
             for table in _PROTECTED_TABLES:
                 if not connection.execute(text(
                     "SELECT has_table_privilege(current_user, :table_name, 'SELECT')"
