@@ -1,3 +1,13 @@
+### Segurança P0 — precisão do smoke de default ACLs (2026-11-22; correcção publicada, CI pendente)
+
+- O smoke filtra agora `pg_default_acl.defaclrole` pelo principal de migrations configurado em `MIGRATION_DB_USER`; já não agrega ACLs de owners diferentes.
+- O grantee continua a ser o principal runtime autenticado, com verificação de privilégios esperados e rejeição de GRANT OPTION.
+- API CI PostgreSQL 16 fornece `MIGRATION_DB_USER=postgres`; regressão estática acrescentada.
+- Commits: `bb3766fc`, `491ae99f`, `8e5a6810`.
+- A API CI [45083455380](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45083455380), Docker Compose [45083455389](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45083455389), Quality Gates [45083489901](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45083489901) e Security Scans [45083489889](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45083489889) passaram em SHAs anteriores à correcção. A reexecução no novo SHA está pendente.
+
+---
+
 ### Segurança P0 — smoke do principal PostgreSQL runtime (2026-11-22; código publicado, validação pendente)
 
 - O smoke agora valida LOGIN/NOINHERIT e todos os atributos de privilégio do papel, ausência de memberships e ownership via `pg_shdepend`.
