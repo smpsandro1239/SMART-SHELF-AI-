@@ -59,17 +59,52 @@ def main() -> None:
             )).scalar_one():
                 raise AssertionError("Runtime role can CREATE objects in public schema")
 
-            for privilege in ("SELECT", "INSERT", "UPDATE", "DELETE"):
-                allowed = connection.execute(text(
-                    "SELECT has_table_privilege(current_user, 'vision_model_release_states', :privilege)"
-                ), {"privilege": privilege}).scalar_one()
-                if not allowed:
-                    raise AssertionError(f"Runtime role is missing required {privilege} privilege")
+            protected_tables = ("vision_model_release_states", "vision_model_release_events")
+            for table in protected_tables:
+                if not connection.execute(text(
+                    "SELECT has_table_privilege(current_user, :table_name, 'SELECT')"
+                ), {"table_name": table}).scalar_one():
+                    raise AssertionError(f"Runtime role cannot read protected trust table {table}")
 
-            if connection.execute(text(
-                "SELECT has_table_privilege(current_user, 'vision_model_release_states', 'TRUNCATE')"
-            )).scalar_one():
-                raise AssertionError("Runtime role unexpectedly has TRUNCATE privilege")
+                for privilege in ("INSERT", "UPDATE", "DELETE", "TRUNCATE"):
+                    allowed = connection.execute(text(
+                        "SELECT has_table_privilege(current_user, :table_name, :privilege)"
+                    ), {"table_name": table, "privilege": privilege}).scalar_one()
+                    if allowed:
+                        raise AssertionError(
+                            f"Runtime role unexpectedly has {privilege} on protected trust table {table}"
+                        )
+
+            sequence_name = connection.execute(text(
+                "SELECT pg_get_serial_sequence('vision_model_release_events', 'id')"
+            )).scalar_one()
+            if sequence_name and any(
+                connection.execute(text(
+                    "SELECT has_sequence_privilege(current_user, :sequence_name, :privilege)"
+                ), {"sequence_name": sequence_name, "privilege": privilege}).scalar_one()
+                for privilege in ("USAGE", "SELECT", "UPDATE")
+            ):
+                raise AssertionError("Runtime role unexpectedly has privileges on the trust-event sequence")
+
+            denied_statements = (
+                ("INSERT INTO vision_model_release_states "
+                 "(deployment_id, model_id, highest_release_version, manifest_sha256, key_id, "
+                 "detector_sha256, embedding_sha256, updated_at) "
+                 "SELECT 'runtime-probe', 'shelf-detector', 1, repeat('a', 64), 'runtime', "
+                 "repeat('b', 64), NULL, CURRENT_TIMESTAMP WHERE FALSE", "INSERT trust state"),
+                ("UPDATE vision_model_release_states SET highest_release_version = "
+                 "highest_release_version + 1 WHERE FALSE", "UPDATE trust state"),
+                ("DELETE FROM vision_model_release_states WHERE FALSE", "DELETE trust state"),
+                ("INSERT INTO vision_model_release_events "
+                 "(deployment_id, model_id, release_version, manifest_sha256, key_id, decision, reason, created_at) "
+                 "SELECT 'runtime-probe', 'shelf-detector', 1, repeat('a', 64), 'runtime', "
+                 "'ACCEPTED', 'probe', CURRENT_TIMESTAMP WHERE FALSE", "INSERT trust event"),
+                ("UPDATE vision_model_release_events SET reason = 'tampered' WHERE FALSE", "UPDATE trust event"),
+                ("DELETE FROM vision_model_release_events WHERE FALSE", "DELETE trust event"),
+                ("TRUNCATE vision_model_release_states, vision_model_release_events", "TRUNCATE trust tables"),
+            )
+            for statement, label in denied_statements:
+                _assert_denied(connection, statement, label)
 
             _assert_denied(
                 connection,
@@ -89,7 +124,7 @@ def main() -> None:
     finally:
         engine.dispose()
 
-    print("PostgreSQL runtime-role smoke passed: least privilege, no memberships/ownership, DML only.")
+    print("PostgreSQL runtime-role smoke passed: least privilege, operational DML, read-only model trust state and no memberships/ownership.")
 
 
 if __name__ == "__main__":
