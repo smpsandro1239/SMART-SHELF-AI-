@@ -1,3 +1,10 @@
+## Segurança P0 — ocultação de IDs de consenso de prateleira (2026-11-23; código/testes publicados, CI pendente)
+
+- [x] GET /api/v1/shelves/{shelf_id}/observation-consensus devolve HTTP 404 para prateleiras estrangeiras e inexistentes.
+- [x] POST /api/v1/shelves/{shelf_id}/observation-alerts/evaluate herda o mesmo contrato de ocultação ao consultar o consenso.
+- [x] Acrescentar regressões autenticadas que comparam respostas de prateleira estrangeira e ID inexistente.
+- [ ] Executar API CI/PostgreSQL 16, Quality Gates, Security Scans e Docker Compose no novo SHA.
+
 ## Segurança P0 — ocultação de IDs de sessões de captura e alertas (2026-11-23; código/testes publicados, CI pendente)
 
 - [x] Fechar sessão por ID com autorização pré-lock e revalidação pós-lock, ocultando IDs de outras lojas com HTTP 404.
