@@ -1,3 +1,13 @@
+## 2026-11-23 — Resultados CI da prova PostgreSQL multi-loja pré-lock
+
+- O smoke PostgreSQL `Verify PostgreSQL legal hold and purge schedule concurrency` concluiu com sucesso no API CI [45129975394](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45129975394), commit de código `926abcf1`. O teste executou o pedido de supervisor estrangeiro enquanto a imagem estava bloqueada e confirmou rejeição HTTP 403 sem aguardar pelo lock.
+- Docker Compose demo smoke passou em [45129975482](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45129975482), no mesmo SHA de código.
+- Quality Gates passou em [45130013285](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45130013285), SHA documental `7b10c5c1`: compilação Python, suite API e build Web concluídos com sucesso.
+- Security Scans [45130013260](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45130013260): Gitleaks, pip-audit, npm audit e baseline ZAP passaram; o workflow ainda estava em execução na última consulta.
+- **Ainda pendente:** conclusão do API CI e do Security Scans; integração multi-loja de todos os handlers e ensaio de volume persistente.
+
+---
+
 ## 2026-11-23 — Prova PostgreSQL de autorização multi-loja antes de lock (código publicado; CI pendente)
 
 - O smoke de retenção PostgreSQL cria agora uma segunda loja e um supervisor pertencente a essa loja.
