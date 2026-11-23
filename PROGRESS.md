@@ -611,3 +611,12 @@ Limitação de segurança resolvida em camadas: owner de migrations separado do 
 - O teste HTTP autenticado passou a exigir HTTP 404 tanto para a palete real da loja estrangeira como para um ID inexistente, evitando um oráculo de existência. As verificações de estado da palete e contagem de eventos mantêm-se.
 - Commits publicados: `4873087c` (correcção) e `ecc652e5` (regressão).
 - API CI, Quality Gates, Security Scans e Docker Compose do novo HEAD ainda não confirmados. Não foi executada suite local nesta sessão.
+
+
+## 2026-11-23 — BOLA: criação de prateleiras através de zona estrangeira
+
+- A auditoria identificou que POST /api/v1/shelves consultava a zona pelo ID, mas não comparava o store_id da zona com a loja do actor.
+- Um SUPERVISOR autenticado podia, por isso, tentar criar uma prateleira numa zona de outra loja. A rota passa agora a ocultar zonas estrangeiras com HTTP 404, igual ao ID inexistente, antes de persistir.
+- Foi acrescentado teste HTTP autenticado com zona estrangeira, ID inexistente e controlo positivo same-store; verifica também que a tentativa negada não cria a prateleira.
+- Commits: código aa46a2553ac37e479c7b9564ff8c2b69ffa24cb5; teste 716c359afbad17e2280014f938d2c2d71c899c80.
+- CI, execução local e PostgreSQL 16 ainda não foram confirmados.
