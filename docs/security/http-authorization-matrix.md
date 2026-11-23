@@ -485,3 +485,7 @@ get_shelf_image_content, retry_shelf_image_analysis, list_shelf_image_detections
 O teste test_store_scoped_lock_handlers_authorize_before_their_first_lock verifica a utilização dos helpers e a ordem das chamadas. O teste test_store_scoped_record_lock_rejects_foreign_store_before_lock confirma que um actor de outra loja recebe 403 sem tentativa de lock. O teste de alerta cross-store e o smoke PostgreSQL de detecção confirmam o comportamento sob concorrência.
 
 A suite API passou com 1413 testes aprovados e 1 ignorado. A auditoria completa BOLA/IDOR por recurso e a matriz autenticada endpoint × papel × tenant continuam abertas.
+
+## Atualização — IDs directos de deteção e exemplar (2026-11-23; CI pendente)
+
+Os handlers de revisão de SKU por detection_id (POST e GET do histórico) e de revisão por exemplar_id (PATCH) foram revistos. A sequência observada é: leitura inicial sem lock apenas para descobrir a imagem, autorização do store scope através de `_lock_authorized_shelf_image`, lock da imagem, revalidação da entidade e, quando aplicável, lock do produto/exemplar. A revisão de deteção valida ainda que o produto escolhido está atribuído à prateleira da imagem. O novo smoke PostgreSQL bloqueia simultaneamente imagem e produto e exige rejeição cross-store antes de qualquer espera. A evidência CI ainda está pendente; isto não fecha a matriz BOLA/IDOR.

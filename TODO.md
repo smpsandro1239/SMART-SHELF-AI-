@@ -1,3 +1,13 @@
+## Segurança P0 — autorização pré-lock de IDs directos de deteções e exemplares (2026-11-23; smoke PostgreSQL adicionado, CI pendente)
+
+- [x] Auditar os handlers POST/GET de revisão de deteções e PATCH de revisão de exemplares: resolver a imagem de origem, validar o tenant e só depois adquirir locks de imagem/produto; manter revalidação pós-lock.
+- [x] Confirmar que a listagem de deteções é ancorada numa imagem previamente autorizada e activa; as rotas por ID directo de deteção passam pelo helper de autorização da imagem.
+- [x] Acrescentar smoke PostgreSQL 16 com um supervisor da loja A e IDs reais de deteção/exemplar da loja B, mantendo simultaneamente bloqueadas as linhas da imagem e do produto.
+- [x] Exigir HTTP 403, sem espera pelos locks, em revisão da deteção, histórico de revisão e revisão do exemplar; verificar ausência de alterações persistidas.
+- [ ] Validar o novo smoke e a suite completa nos workflows API CI, Quality Gates, Security Scans e Docker Compose.
+- [ ] Alargar a matriz aos IDs directos e relações indirectas restantes; este smoke cobre três operações, não todos os endpoints nem todos os papéis.
+- [ ] Ensaiar volume PostgreSQL persistente preexistente com principal runtime, sem usar dados de produção.
+
 ## Segurança P0 — autorização pré-lock de planogramas (2026-11-23; CI validada)
 
 - [x] Adicionar preflight de tenant para a prateleira e para imagens de calibração antes de adquirir locks.

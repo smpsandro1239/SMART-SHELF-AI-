@@ -1,3 +1,11 @@
+## 2026-11-23 — Pré-lock PostgreSQL para IDs directos de deteção e exemplar
+
+- Auditoria dirigida aos handlers de revisão de deteção, histórico e revisão de exemplares. Os três resolvem a imagem de origem, aplicam autorização de tenant antes do lock da imagem e mantêm validação de estado/identidade após os locks.
+- Adicionado `postgres_detection_exemplar_prelock_smoke.py`: supervisor da loja A tenta usar IDs reais da loja B enquanto as linhas de `ShelfImage` e `Product` estão bloqueadas.
+- O smoke exige HTTP 403 imediato nas três operações e confirma que não é criado `DetectionSkuReview` nem alterado o exemplar PENDING.
+- O passo foi ligado ao API CI com PostgreSQL 16. A validação ainda está pendente; a publicação do script/workflow não equivale a execução.
+- Limite: cobertura focada em três operações e um perfil; não fecha BOLA/IDOR nem a matriz ADMIN/SUPERVISOR/EMPLOYEE.
+
 ## Segurança P0 — autorização pré-lock de planogramas (2026-11-23; CI validada)
 
 - [x] Adicionar preflight de tenant para a prateleira e para imagens de calibração antes de adquirir locks.

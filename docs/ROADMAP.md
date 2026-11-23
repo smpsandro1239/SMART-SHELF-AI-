@@ -1,3 +1,11 @@
+## Segurança P0 — IDs directos de deteção e exemplar: autorização antes de locks (2026-11-23; CI pendente)
+
+- A revisão humana de deteções, o histórico por detection_id e a revisão de exemplares foram auditados quanto à ordem imagem → produto → exemplar e à validação de tenant antes dos locks.
+- Criado smoke PostgreSQL 16 com supervisor de outra loja, IDs reais estrangeiros e locks simultâneos sobre imagem e produto; as três operações têm de responder HTTP 403 sem esperar.
+- O smoke confirma também ausência de persistência de revisão e manutenção do exemplar em PENDING.
+- Novo passo API CI: `Verify PostgreSQL direct-ID detection and exemplar tenant pre-lock authorization`.
+- Ainda não validado por CI. A matriz global de endpoints/papéis/tenants, relações indirectas e volume persistente continuam pendentes.
+
 ## Segurança P0 — autorização pré-lock de planogramas (2026-11-23; CI validada)
 
 - [x] Adicionar preflight de tenant para a prateleira e para imagens de calibração antes de adquirir locks.
