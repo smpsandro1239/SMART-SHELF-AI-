@@ -1179,33 +1179,6 @@ def test_supervisor_jwt_cannot_access_foreign_ocr_or_retry_restricted_image(auth
             f"received HTTP {response.status_code}: {response.text}"
         )
 
-    foreign_location = client.post(
-        "/api/v1/warehouse/placements",
-        json={
-            "location_id": ids["warehouse_location_b"],
-            "product_id": ids["product"],
-            "quantity": 5,
-        },
-        headers=headers,
-    )
-    missing_location = client.post(
-        "/api/v1/warehouse/placements",
-        json={
-            "location_id": 2147483000,
-            "product_id": ids["product"],
-            "quantity": 5,
-        },
-        headers=headers,
-    )
-    assert foreign_location.status_code == 404, foreign_location.text
-    assert missing_location.status_code == 404, missing_location.text
-    assert foreign_location.json() == missing_location.json()
-
-    with main_module.SessionLocal() as db:
-        assert db.query(models.WarehouseProductPlacement).filter_by(
-            location_id=ids["warehouse_location_b"], product_id=ids["product"]
-        ).count() == 0
-
     # Explicit shelf filters must not disclose whether a foreign image exists.
     foreign_listing = client.get(
         f"/api/v1/shelf-images?shelf_id={ids['shelf_b']}",
@@ -1847,6 +1820,33 @@ def test_supervisor_jwt_cannot_read_or_write_foreign_inventory_and_placement_res
             f"SUPERVISOR must not access foreign {resource}; "
             f"received HTTP {response.status_code}: {response.text}"
         )
+
+    foreign_location = client.post(
+        "/api/v1/warehouse/placements",
+        json={
+            "location_id": ids["warehouse_location_b"],
+            "product_id": ids["product"],
+            "quantity": 5,
+        },
+        headers=headers,
+    )
+    missing_location = client.post(
+        "/api/v1/warehouse/placements",
+        json={
+            "location_id": 2147483000,
+            "product_id": ids["product"],
+            "quantity": 5,
+        },
+        headers=headers,
+    )
+    assert foreign_location.status_code == 404, foreign_location.text
+    assert missing_location.status_code == 404, missing_location.text
+    assert foreign_location.json() == missing_location.json()
+
+    with main_module.SessionLocal() as db:
+        assert db.query(models.WarehouseProductPlacement).filter_by(
+            location_id=ids["warehouse_location_b"], product_id=ids["product"]
+        ).count() == 0
 
 def test_supervisor_jwt_cannot_read_foreign_sales_forecasts_or_warehouse_analytics(auth_client):
     client, ids, store_ids = auth_client
