@@ -1379,3 +1379,8 @@ Os endpoints de revisão humana, histórico e criação de observação resolvem
 O histórico de movimentos tem agora uma interface integrada no dashboard, com filtros por produto/tarefa, indicadores e detalhe da linhagem dos snapshots. A consulta é read-only e respeita RBAC e âmbito de loja. A rota foi adicionada à matriz explícita de políticas, depois de a execução anterior de API CI ter identificado a ausência dessa classificação.
 
 Próxima fatia funcional: modelar divergências entre observações visuais e inventário de referência, mantendo a observação como evidência independente e exigindo revisão humana antes de qualquer ajuste contabilístico. A modelação deverá preservar a distinção entre stock de retaguarda, reservado, disponível, transferido para a prateleira e observado visualmente.
+
+
+## Dashboard — precisão do KPI de urgência
+
+O contador de tarefas urgentes foi alinhado com a taxonomia de prioridades: apenas tarefas `URGENT` activas entram no KPI. Prioridade `HIGH` permanece distinta e visível na distribuição por prioridade.
