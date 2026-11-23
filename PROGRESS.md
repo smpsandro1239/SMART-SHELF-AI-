@@ -628,3 +628,13 @@ Limitação de segurança resolvida em camadas: owner de migrations separado do 
 - Teste autenticado cobre shelf estrangeira e inexistente, igualdade das respostas, ausência de associação indevida e controlo positivo same-store.
 - Commits: código 6a4b783741c9d1b25571ba2f16866b74be90fab0; teste 78d07d3228a4f988539aebb40127332e60376c08.
 - CI, suite local e PostgreSQL 16 ainda não foram executados/confirmados nesta ronda.
+
+
+## 2026-11-23 — BOLA: IDs directos de tarefas de reposição
+
+- GET /api/v1/tasks/{task_id}/events consultava a tarefa antes de autenticar o actor e devolvia 403 para tarefas estrangeiras. A rota valida agora o actor primeiro e devolve HTTP 404 equivalente para tarefa estrangeira e inexistente.
+- A leitura de eventos não usa row lock: resolve a tarefa sem bloqueio, aplica tenant scope e só depois consulta os eventos. Evita introduzir contenção desnecessária numa rota GET.
+- PATCH /api/v1/tasks/{task_id}/status e POST /api/v1/tasks/{task_id}/reconcile-inventory usam agora _lock_store_scoped_record com hide_foreign=True, preservando autorização pré-lock e revalidação pós-lock.
+- Testes comparam respostas para IDs estrangeiros/inexistentes nos três endpoints. A reconciliação negada é verificada sem InventoryMovement persistido; a transição negada mantém estado/eventos inalterados.
+- Commits: eventos 132558c (primeira implementação, substituída pela leitura sem lock em 954f973); status/reconciliação ee40b88; testes de eventos/status f12ed7b; reconciliação cc3dc3a.
+- CI e PostgreSQL 16 para estes commits ainda não confirmados.
