@@ -9,6 +9,8 @@ from __future__ import annotations
 VALID_API_ROLES = frozenset({"ADMIN", "SUPERVISOR", "EMPLOYEE"})
 
 API_ROUTE_POLICIES = (
+    # Device bearer + HMAC authentication is enforced by the dedicated Edge router.
+    ("POST", "/api/v1/edge/events", "PUBLIC"),
     ("POST", "/api/v1/auth/bootstrap", "PUBLIC"),
     ("POST", "/api/v1/auth/login", "PUBLIC"),
     ("GET", "/api/v1/auth/me", "EMPLOYEE_ALLOWLIST"),
