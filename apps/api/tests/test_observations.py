@@ -867,7 +867,11 @@ def test_cross_store_alert_event_history_is_denied(monkeypatch):
             main_module, "_request_user", lambda db, request: foreign_actor
         )
         foreign_store_history = client.get(history_url)
-        assert foreign_store_history.status_code == 403
+        missing_history = client.get(
+            "/api/v1/observation-alerts/2147483000/events"
+        )
+        assert foreign_store_history.status_code == missing_history.status_code == 404
+        assert foreign_store_history.json() == missing_history.json()
 
         # EMPLOYEE is not allowed to inspect alert history, even in another store.
         employee_actor = SimpleNamespace(
