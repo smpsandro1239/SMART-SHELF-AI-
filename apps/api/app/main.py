@@ -1191,7 +1191,8 @@ def get_shelf_observation_consensus(
     if shelf is None:
         raise HTTPException(status_code=404, detail="Shelf not found")
     actor = _request_user(db, request)
-    _enforce_store_scope(actor, shelf.zone.store_id)
+    if actor is not None and actor.role != "ADMIN" and actor.store_id != shelf.zone.store_id:
+        raise HTTPException(status_code=404, detail="Shelf not found")
     if product_id is not None:
         shelf_product = (
             db.query(models.ShelfProduct)
