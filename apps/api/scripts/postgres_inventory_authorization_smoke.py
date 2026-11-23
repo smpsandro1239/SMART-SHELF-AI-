@@ -284,6 +284,31 @@ def main() -> None:
                     path, params=params, headers=supervisor_headers,
                 )
 
+            # Positive control: the same supervisor must be able to execute
+            # the same store-scoped reads inside its own tenant. Exclude the
+            # two resource-ID routes (which intentionally use a nonexistent
+            # pallet ID) and packaging conversion (which has no seeded package).
+            same_store_read_exclusions = {
+                "pallet rotation window",
+                "replenishment unit calculation",
+                "pallet lifecycle events",
+            }
+            same_store_read_count = 0
+            for resource, path, params in foreign_store_reads:
+                if resource in same_store_read_exclusions:
+                    continue
+                own_params = dict(params)
+                own_params["store_id"] = store_a_id
+                response = client.get(
+                    path, params=own_params, headers=supervisor_headers,
+                )
+                assert response.status_code == 200, (
+                    f"SUPERVISOR must be able to read own-store {resource}; "
+                    f"expected HTTP 200, received {response.status_code}: {response.text}"
+                )
+                same_store_read_count += 1
+            assert same_store_read_count == len(foreign_store_reads) - len(same_store_read_exclusions)
+
             for resource, response in requests.items():
                 expected_status = (
                     404 if resource == "task creation with foreign shelf"
