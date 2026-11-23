@@ -668,3 +668,25 @@ def test_foreign_pallet_rotation_policy_id_is_hidden_and_cannot_be_mutated(monke
         persisted_foreign = db.get(models.PalletRotationPolicy, foreign_policy_id)
         assert persisted_foreign is not None
         assert persisted_foreign.is_enabled is True
+
+
+def test_reconciliation_hides_foreign_and_missing_task_ids(monkeypatch):
+    with TestClient(app) as client:
+        own_store_id, _, _, _ = _completed_replenishment(client)
+        _, _, foreign_task_id, _ = _completed_replenishment(client)
+        actor = _supervisor_actor(own_store_id)
+        monkeypatch.setattr(main_module, "_request_user", lambda db, request: actor)
+
+        foreign = client.post(
+            f"/api/v1/tasks/{foreign_task_id}/reconcile-inventory",
+            json={"reason": "Tentativa de reconciliação cross-store."},
+        )
+        missing = client.post(
+            "/api/v1/tasks/2147483000/reconcile-inventory",
+            json={"reason": "Tentativa de reconciliação cross-store."},
+        )
+        assert foreign.status_code == missing.status_code == 404
+        assert foreign.json() == missing.json()
+
+        with TestingSession() as db:
+            assert db.query(models.InventoryMovement).filter_by(task_id=foreign_task_id).count() == 0
