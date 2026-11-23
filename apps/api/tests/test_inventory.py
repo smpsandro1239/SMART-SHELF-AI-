@@ -604,3 +604,67 @@ def test_sales_csv_imports_are_store_scoped_and_rejected_foreign_imports_are_ato
                 db.query(models.HourlyStoreTrafficRecord).count(),
             )
         assert after == before
+
+
+def test_foreign_pallet_rotation_policy_id_is_hidden_and_cannot_be_mutated(monkeypatch):
+    from types import SimpleNamespace
+
+    with TestingSession() as db:
+        store_a = models.Store(code=f"POLICY-A-{uuid4().hex[:8]}", name="Policy tenant A")
+        store_b = models.Store(code=f"POLICY-B-{uuid4().hex[:8]}", name="Policy tenant B")
+        product = models.Product(
+            sku=f"POLICY-SKU-{uuid4().hex[:8]}",
+            name="Global catalogue product",
+            is_active=True,
+        )
+        db.add_all([store_a, store_b, product])
+        db.flush()
+        own_policy = models.PalletRotationPolicy(
+            store_id=store_a.id,
+            product_id=product.id,
+            threshold_ratio=0.5,
+            is_enabled=True,
+        )
+        foreign_policy = models.PalletRotationPolicy(
+            store_id=store_b.id,
+            product_id=product.id,
+            threshold_ratio=0.5,
+            is_enabled=True,
+        )
+        db.add_all([own_policy, foreign_policy])
+        db.commit()
+        own_policy_id = own_policy.id
+        foreign_policy_id = foreign_policy.id
+        store_a_id = store_a.id
+
+    actor = SimpleNamespace(
+        id=987654,
+        role="SUPERVISOR",
+        store_id=store_a_id,
+        is_active=True,
+    )
+    monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: actor)
+
+    with TestClient(app) as client:
+        foreign = client.patch(
+            f"/api/v1/warehouse/pallet-rotation/policies/{foreign_policy_id}",
+            json={"is_enabled": False},
+        )
+        missing = client.patch(
+            "/api/v1/warehouse/pallet-rotation/policies/2147483000",
+            json={"is_enabled": False},
+        )
+        own = client.patch(
+            f"/api/v1/warehouse/pallet-rotation/policies/{own_policy_id}",
+            json={"is_enabled": False},
+        )
+
+    assert foreign.status_code == 404, foreign.text
+    assert missing.status_code == 404, missing.text
+    assert own.status_code == 200, own.text
+    assert own.json()["is_enabled"] is False
+
+    with TestingSession() as db:
+        persisted_foreign = db.get(models.PalletRotationPolicy, foreign_policy_id)
+        assert persisted_foreign is not None
+        assert persisted_foreign.is_enabled is True
