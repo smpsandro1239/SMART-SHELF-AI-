@@ -63,6 +63,13 @@ def main() -> None:
         )
         db.add_all([own_pallet, foreign_pallet])
         db.flush()
+        db.add(models.PalletRotationPolicy(
+            store_id=store_a.id,
+            product_id=product.id,
+            threshold_ratio=0.5,
+            is_enabled=True,
+        ))
+        db.flush()
 
         supervisor = models.User(
             email=f"pg-supervisor-{suffix}@example.test",
