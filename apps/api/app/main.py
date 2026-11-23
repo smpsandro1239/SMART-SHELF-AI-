@@ -4285,20 +4285,17 @@ def review_product_embedding_exemplar(
     if initial is None:
         raise HTTPException(status_code=404, detail="Embedding exemplar not found")
     actor = _request_user(db, request)
-    # Reject reviewer-ineligible image-less and self-review requests before
-    # taking the global catalogue product lock. The checks are repeated against
-    # the refreshed exemplar below to defend against concurrent ownership edits.
-    if actor is not None and actor.role != "ADMIN":
-        if initial.shelf_image_id is None:
-            raise HTTPException(
-                status_code=403,
-                detail="Access to exemplars without a source image is restricted to administrators",
-            )
-        if initial.created_by_user_id == actor.id:
-            raise HTTPException(
-                status_code=403,
-                detail="A different reviewer must approve or reject an exemplar created by this user",
-            )
+    # Image-less exemplars have no tenant-bound source to authorize against;
+    # only ADMIN may review them. Reject before taking the global product lock.
+    if (
+        initial.shelf_image_id is None
+        and actor is not None
+        and actor.role != "ADMIN"
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="Access to exemplars without a source image is restricted to administrators",
+        )
     source_image = None
     if initial.shelf_image_id is not None:
         source_image, _ = _lock_authorized_shelf_image(
@@ -4307,6 +4304,13 @@ def review_product_embedding_exemplar(
             missing_detail="Source shelf image is no longer available",
         )
         _require_active_shelf_image(source_image)
+        # Preserve retention semantics (e.g. 410 for a restricted image), but
+        # reject self-review before locking the shared catalogue product.
+        if actor is not None and actor.role != "ADMIN" and initial.created_by_user_id == actor.id:
+            raise HTTPException(
+                status_code=403,
+                detail="A different reviewer must approve or reject an exemplar created by this user",
+            )
     product = (
         db.query(models.Product)
         .filter(models.Product.id == initial.product_id)
