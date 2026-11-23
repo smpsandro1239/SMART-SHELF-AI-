@@ -784,3 +784,13 @@ Próxima prioridade: continuar auditoria de IDs aninhados em OCR/matching/artefa
 - Corrigido `urgent_active_tasks` para contar apenas tarefas com prioridade `URGENT`; tarefas `HIGH` continuam contabilizadas em `tasks_by_priority`, sem serem apresentadas como urgentes.
 - A regressão existente em `apps/api/tests/test_dashboard_summary.py` já cobre o cenário com uma tarefa URGENT e outra HIGH.
 - Aguardar nova API CI/Quality Gates para confirmar a correção.
+
+
+## 2026-11-23 — Painel operacional de reconciliação do inventário
+- Criado `InventoryReconciliationPanel`, integrado no dashboard para ADMIN e SUPERVISOR.
+- O painel consome `GET /api/v1/inventory/reconciliation`, com filtros por produto e prateleira, indicadores agregados e atualização manual.
+- A interface mantém os domínios separados: objetivo de exposição e quantidade observada na prateleira, versus stock físico registado, reservado e disponível na retaguarda.
+- A diferença apresentada é explicitamente a diferença face ao objetivo de exposição, não uma alteração nem uma inferência do stock contabilístico.
+- São apresentados a origem e a idade do snapshot, a confiança e data da observação e os estados sem medição/snapshot.
+- Não foram criadas mutações de inventário nem ajustes automáticos.
+- Validação de build e Quality Gates do SHA final ainda pendente.
