@@ -342,10 +342,23 @@ def _lock_store_scoped_record(
     record_id: int,
     actor: models.User | None,
     missing_detail: str,
+    *,
+    hide_foreign: bool = False,
 ):
-    """Authorize a record's store before locking it, then recheck after refresh."""
+    """Authorize a record's store before locking it, then recheck after refresh.
+
+    Direct-ID endpoints may opt into a uniform 404 for foreign and missing
+    records so the identifier cannot be used as a cross-tenant existence oracle.
+    """
     initial = db.query(model).filter(model.id == record_id).first()
     if initial is None:
+        raise HTTPException(status_code=404, detail=missing_detail)
+    if (
+        hide_foreign
+        and actor is not None
+        and actor.role != "ADMIN"
+        and actor.store_id != initial.store_id
+    ):
         raise HTTPException(status_code=404, detail=missing_detail)
     _enforce_store_scope(actor, initial.store_id)
     locked = (
@@ -356,6 +369,13 @@ def _lock_store_scoped_record(
         .first()
     )
     if locked is None:
+        raise HTTPException(status_code=404, detail=missing_detail)
+    if (
+        hide_foreign
+        and actor is not None
+        and actor.role != "ADMIN"
+        and actor.store_id != locked.store_id
+    ):
         raise HTTPException(status_code=404, detail=missing_detail)
     _enforce_store_scope(actor, locked.store_id)
     return locked
@@ -5393,11 +5413,15 @@ def update_pallet_rotation_policy(
     request: Request,
     db: Session = Depends(get_db),
 ):
-    policy = db.get(models.PalletRotationPolicy, policy_id)
-    if policy is None:
-        raise HTTPException(status_code=404, detail="Pallet rotation policy not found")
     actor = _request_user(db, request)
-    _enforce_store_scope(actor, policy.store_id)
+    policy = _lock_store_scoped_record(
+        db,
+        models.PalletRotationPolicy,
+        policy_id,
+        actor,
+        "Pallet rotation policy not found",
+        hide_foreign=True,
+    )
     for field, value in payload.model_dump(exclude_unset=True).items():
         setattr(policy, field, value)
     try:
@@ -5916,7 +5940,12 @@ def record_pallet_lifecycle_update(
     """Record a supervised, optimistic-concurrency-protected pallet state update."""
     actor = _request_user(db, request)
     pallet = _lock_store_scoped_record(
-        db, models.StorePallet, pallet_id, actor, "Pallet not found"
+        db,
+        models.StorePallet,
+        pallet_id,
+        actor,
+        "Pallet not found",
+        hide_foreign=True,
     )
 
     if pallet.status != payload.expected_status or float(pallet.base_quantity) != payload.expected_base_quantity:
