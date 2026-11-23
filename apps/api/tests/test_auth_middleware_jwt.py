@@ -456,7 +456,7 @@ def test_supervisor_cannot_read_task_events_from_another_store(auth_client):
         headers=bearer(ids["supervisor_a"], "SUPERVISOR"),
     )
 
-    assert response.status_code == 403
+    assert response.status_code == 404
 
 
 def test_supervisor_cannot_cancel_task_from_another_store(auth_client):
@@ -468,7 +468,7 @@ def test_supervisor_cannot_cancel_task_from_another_store(auth_client):
         headers=bearer(ids["supervisor_a"], "SUPERVISOR"),
     )
 
-    assert response.status_code == 403
+    assert response.status_code == 404
 
 
 
@@ -547,7 +547,7 @@ def test_supervisor_cannot_reconcile_task_from_another_store(auth_client):
         headers=bearer(ids["supervisor_a"], "SUPERVISOR"),
     )
 
-    assert response.status_code == 403
+    assert response.status_code == 404
 
 
 def test_employee_image_list_is_scoped_and_excludes_restricted_images(auth_client):
@@ -606,7 +606,7 @@ def test_employee_cannot_upload_image_to_foreign_store_shelf(
         headers=headers,
     )
 
-    assert response.status_code == 403
+    assert response.status_code == 404
     assert not list(tmp_path.rglob("*"))
     with main_module.SessionLocal() as db:
         after_count = db.query(models.ShelfImage).filter(
@@ -690,7 +690,7 @@ def test_employee_cannot_upload_image_with_foreign_capture_session(
         headers=headers,
     )
 
-    assert response.status_code == 403, response.text
+    assert response.status_code == 404, response.text
     assert not list(tmp_path.rglob("*"))
     with main_module.SessionLocal() as db:
         after_count = db.query(models.ShelfImage).filter(
@@ -771,7 +771,7 @@ def test_supervisor_cannot_access_foreign_retention_or_use_admin_restore(auth_cl
         headers=headers,
     )
 
-    assert history.status_code == 403
+    assert history.status_code == 404
     assert restrict.status_code == 403
     assert restore.status_code == 403
     assert purge_schedule.status_code == 403
@@ -1200,7 +1200,8 @@ def test_supervisor_jwt_cannot_access_foreign_ocr_or_retry_restricted_image(auth
         ),
     }
     for resource, response in requests.items():
-        assert response.status_code == 403, (
+        expected_status = 404 if resource in {"human review history", "human review write"} else 403
+        assert response.status_code == expected_status, (
             f"SUPERVISOR must not access foreign {resource}; "
             f"received HTTP {response.status_code}: {response.text}"
         )
@@ -1680,7 +1681,8 @@ def test_employee_jwt_cannot_read_foreign_image_derived_data_or_content(auth_cli
     }
 
     for resource, response in requests.items():
-        assert response.status_code == 403, (
+        expected_status = 404 if resource == "human review history" else 403
+        assert response.status_code == expected_status, (
             f"EMPLOYEE must not access foreign {resource}; "
             f"received HTTP {response.status_code}: {response.text}"
         )
@@ -3311,7 +3313,7 @@ def test_embedding_exemplar_review_is_scoped_to_source_store_and_reviewer_role(a
         json=review_payload,
         headers=supervisor_headers,
     )
-    assert foreign_store_review.status_code == 403
+    assert foreign_store_review.status_code == 404
 
     employee_review = client.patch(
         f"/api/v1/product-embedding-exemplars/{own_exemplar_id}/review",
@@ -4480,7 +4482,8 @@ def test_supervisor_cannot_access_other_store_warehouse_resources_over_http(auth
     ]
     for method, path, payload in requests:
         response = client.request(method, path, json=payload, headers=headers)
-        assert response.status_code == 403, (
+        expected_status = 404 if path == "/api/v1/warehouse/placements" else 403
+        assert response.status_code == expected_status, (
             f"SUPERVISOR from store A must not access store B warehouse data: "
             f"{method} {path} returned {response.status_code}"
         )
