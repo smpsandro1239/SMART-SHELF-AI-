@@ -4,7 +4,7 @@ This PostgreSQL 16 smoke uses real JWT middleware, database-backed sessions and
 persisted-state assertions. It checks cross-store writes and a broad matrix of
 store_id-scoped sales, forecasting, replenishment and warehouse reads.
 """
-from datetime import timedelta
+from datetime import date, timedelta
 from uuid import uuid4
 
 from fastapi.testclient import TestClient
@@ -157,6 +157,30 @@ def main() -> None:
             source="WMS",
             external_reference=f"PG-AUTH-TASK-STOCK-{suffix}",
             captured_at=completed_at - timedelta(minutes=1),
+        ))
+        # Forecast positive controls require an explicit record for every
+        # calendar day in the default 28-day window. Zero is a confirmed
+        # zero-sales day, not a missing observation.
+        today = date.today()
+        db.add_all([
+            models.DailySalesRecord(
+                store_id=store_a.id,
+                product_id=product.id,
+                sales_date=today - timedelta(days=offset),
+                quantity=0,
+                source="POS",
+                external_reference=f"PG-AUTH-DAILY-{suffix}-{offset}",
+            )
+            for offset in range(28)
+        ])
+        db.add(models.InventorySnapshot(
+            store_id=store_a.id,
+            product_id=product.id,
+            on_hand_quantity=10,
+            reserved_quantity=0,
+            source="WMS",
+            external_reference=f"PG-AUTH-OWN-STOCK-{suffix}",
+            captured_at=completed_at,
         ))
         db.commit()
         store_a_id = store_a.id
