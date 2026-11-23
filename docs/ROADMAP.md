@@ -1,3 +1,7 @@
+## Segurança P0 — IDs de consenso de prateleira (2026-11-23; validação pendente)
+
+O endpoint read-only de consenso por shelf_id oculta agora a existência de prateleiras estrangeiras com HTTP 404, igual ao caso inexistente. A avaliação/persistência de alertas usa o mesmo contrato, sem criar alertas para pedidos negados. Foram acrescentadas regressões HTTP para ambos os caminhos. Commits: 2f4470e (código), 5feffba (teste). CI/PostgreSQL 16 pendente.
+
 ## Segurança P0 — IDs de sessões de captura e alertas (2026-11-23; validação pendente)
 
 As operações directas por ID de sessão de captura e alerta foram alinhadas com a política de ocultação cross-store: escrita com autorização pré-lock e revalidação pós-lock; leitura de eventos sem lock mas com verificação de tenant antes da consulta dos eventos. IDs estrangeiros e inexistentes devolvem HTTP 404 equivalente. Regressões verificam ausência de efeitos persistidos. Commits: b627107 (código), 1a2e776 (testes reforçados). API CI/PostgreSQL 16 ainda não confirmado.
