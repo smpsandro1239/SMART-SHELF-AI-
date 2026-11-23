@@ -663,3 +663,8 @@ Limitação de segurança resolvida em camadas: owner de migrations separado do 
 - O capture_session_id opcional passa a usar _lock_store_scoped_record(..., hide_foreign=True), mantendo o preflight de tenant antes do row lock e a revalidação após o lock. Sessões estrangeiras e inexistentes devolvem HTTP 404 com detalhe uniforme.
 - Testes comparam respostas para prateleira estrangeira/inexistente e sessão de captura estrangeira/inexistente; verificam que pedidos recusados não criam ficheiros nem novos registos ShelfImage.
 - Commits: 90bd84f (preflight upload), 91da9f1/fdcbd55 (teste prateleira), 30f0dda (preflight sessão), 0d7a079/3e1ac0a (teste sessão). CI no HEAD final pendente.
+
+
+### Ajuste de validação PostgreSQL — contrato de ocultação de deteções
+
+A API CI executada no commit 73ad7b4 falhou exclusivamente no script postgres_detection_exemplar_prelock_smoke.py: o smoke ainda esperava HTTP 403 para revisão, histórico e revisão de exemplar cross-store. A implementação passou a ocultar estes IDs com HTTP 404 uniforme, preservando o requisito central do smoke — rejeitar antes de bloquear a imagem/produto. Atualizei as três expectativas e a mensagem do smoke no commit 31e6c9f. O resultado do novo CI ainda está pendente; não considerar a suite aprovada.
