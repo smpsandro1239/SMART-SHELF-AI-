@@ -485,3 +485,11 @@ Limitação de segurança resolvida em camadas: owner de migrations separado do 
 - Mantém os ataques cross-store existentes e acrescenta controlos positivos: criar uma colocação na localização própria e criar uma tarefa na prateleira própria (ambos esperam HTTP 201).
 - O objetivo é provar simultaneamente rejeição de IDs estrangeiros e aceitação de IDs válidos do mesmo tenant, evitando falsos positivos por recurso inexistente.
 - Implementação publicada; validação PostgreSQL 16/CI ainda pendente.
+
+
+### 2026-11-23 — Correcção do controlo positivo de rotação de paletes
+
+- A execução API CI do commit `4b9ab319` identificou uma fixture inválida no controlo positivo: a palete da loja A estava em `READY`/`WAREHOUSE`, mas o endpoint de planeamento só aceita `ON_DISPLAY`/`PARTIAL` em `SALES_FLOOR`.
+- Corrigida a fixture da palete própria para `ON_DISPLAY`/`SALES_FLOOR`, preservando a palete estrangeira em estado de armazém para o teste de isolamento.
+- O diagnóstico foi obtido nos logs do job PostgreSQL; a correcção está publicada no commit `ba551a10` e aguarda nova execução da API CI.
+- A falha era do dado de teste, não evidência de quebra da autorização de tenant; a suite abortou antes dos novos controlos de colocação e tarefa.
