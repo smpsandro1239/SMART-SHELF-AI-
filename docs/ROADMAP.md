@@ -2,9 +2,9 @@
 
 - Smoke PostgreSQL de retenção e autorização multi-loja passou no API CI [45129975394](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45129975394), SHA de código `926abcf1`. A chamada de supervisor de outra loja foi rejeitada com HTTP 403 enquanto a linha da imagem permanecia bloqueada.
 - Docker Compose [45129975482](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45129975482) passou.
+- A falha anterior do Compose smoke por falta de `MIGRATION_DB_USER` foi corrigida em `b4995042`; regressão estática em `edf879a2`. O workflow Compose voltou a passar no SHA `926abcf1`.
 - Quality Gates [45130013285](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45130013285) passou: suite API, compilação Python e build Web.
-- Security Scans [45130013260](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45130013260): Gitleaks, pip-audit, npm audit e ZAP concluíram os respectivos passos com sucesso; job global ainda em execução.
-- API CI [45129975394](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45129975394) concluiu com sucesso no SHA de código `926abcf1`, incluindo migrações PostgreSQL 16, smokes e suite API.
+- API CI [45129975394](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45129975394) concluiu com sucesso no SHA de código `926abcf1`, incluindo migrações PostgreSQL 16, todos os smokes e **1555 passed, 1 skipped**.
 - Quality Gates [45130013285](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45130013285), Security Scans [45130013260](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45130013260) e Docker Compose [45129975482](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45129975482) também passaram.
 - A prova cobre o helper pré-lock através de um handler representativo; a cobertura HTTP/PG dos restantes handlers e o ensaio de volume persistente permanecem em aberto.
 
