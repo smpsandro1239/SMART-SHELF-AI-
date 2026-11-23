@@ -115,6 +115,10 @@ def test_signed_edge_event_http_endpoint_accepts_and_persists_event():
     assert response.json()["duplicate"] is False
     db = Session()
     assert db.query(models.EdgeDeviceEventInbox).count() == 1
+    device = db.query(models.EdgeDevice).filter_by(device_id="edge-http-camera").one()
+    assert device.last_seen_at is not None
+    assert device.last_network_status == "ONLINE"
+    assert device.firmware_version == "1.0.0"
     db.close()
 
 
