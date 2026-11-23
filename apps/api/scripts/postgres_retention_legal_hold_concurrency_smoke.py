@@ -130,7 +130,8 @@ def run_foreign_store_prelock_probe(image_id: int, token: str, suffix: str) -> N
                     else:
                         response = client.request(method, path, json=payload, headers=headers)
                     responses[f"{method} {path}"] = response.status_code
-                    if response.status_code != 403:
+                    expected_status = 404 if path.endswith("/retention/events") else 403
+                    if response.status_code != expected_status:
                         break
             result["responses"] = responses
         finally:
@@ -152,8 +153,13 @@ def run_foreign_store_prelock_probe(image_id: int, token: str, suffix: str) -> N
                         "foreign-store request waited for the source-image lock; tenant authorization must happen first"
                     ) from exc
                 responses = result.get("responses", {})
-                assert len(responses) == 9, result
-                assert set(responses.values()) == {403}, result
+                expected_responses = {
+                    f"{method} {path}": (
+                        404 if path.endswith("/retention/events") else 403
+                    )
+                    for method, path, _payload in requests
+                }
+                assert responses == expected_responses, result
                 assert request_finished.is_set(), "foreign-store requests did not finish before lock release"
             finally:
                 release_lock.set()
