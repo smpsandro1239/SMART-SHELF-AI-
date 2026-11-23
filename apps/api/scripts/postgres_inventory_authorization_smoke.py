@@ -342,6 +342,38 @@ def main() -> None:
                 same_store_read_count += 1
             assert same_store_read_count == len(foreign_store_reads)
 
+            # Nested-ID BOLA controls: the caller is authorized for store A
+            # and supplies store A as the scope, but references real resources
+            # owned by store B. These must not be accepted merely because the
+            # top-level store_id is valid for the caller.
+            foreign_pallet_window = client.get(
+                "/api/v1/warehouse/pallet-rotation/window-plan",
+                params={
+                    "store_id": store_a_id,
+                    "product_id": product_id,
+                    "pallet_id": foreign_pallet_id,
+                    "current_hour": 12,
+                    "residual_base_units": 12,
+                },
+                headers=supervisor_headers,
+            )
+            assert foreign_pallet_window.status_code == 404, (
+                "SUPERVISOR must not resolve a foreign pallet through an own-store "
+                f"rotation request; received {foreign_pallet_window.status_code}: "
+                f"{foreign_pallet_window.text}"
+            )
+
+            foreign_pallet_events = client.get(
+                f"/api/v1/warehouse/pallets/{foreign_pallet_id}/events",
+                params={"store_id": store_a_id},
+                headers=supervisor_headers,
+            )
+            assert foreign_pallet_events.status_code == 404, (
+                "SUPERVISOR must not resolve foreign pallet lifecycle events "
+                f"through an own-store request; received {foreign_pallet_events.status_code}: "
+                f"{foreign_pallet_events.text}"
+            )
+
             for resource, response in requests.items():
                 expected_status = (
                     404 if resource == "task creation with foreign shelf"
