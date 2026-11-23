@@ -523,7 +523,7 @@ def test_image_detection_and_ocr_endpoints_enforce_store_scope(monkeypatch):
                 f"/api/v1/shelf-image-detections/{foreign_detection_id}/reviews",
                 json={"decision": "REJECTED", "notes": "Tentativa cross-store"},
             )
-            assert foreign_review.status_code == 403
+            assert foreign_review.status_code == 404
 
             db.expire_all()
             after_rejected_writes = (
