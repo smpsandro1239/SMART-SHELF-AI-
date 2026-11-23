@@ -1,9 +1,10 @@
-## Segurança P0 — autorização multi-loja antes de locks PostgreSQL (2026-11-23; implementação publicada, CI pendente)
+## Segurança P0 — autorização multi-loja antes de locks PostgreSQL (2026-11-23; CI validada)
 
 - [x] Expandir `postgres_retention_legal_hold_concurrency_smoke.py` com duas lojas e um supervisor de uma loja diferente da imagem alvo.
 - [x] Manter a linha da imagem bloqueada numa transacção PostgreSQL e provar que o pedido `POST /retention/restrict` do supervisor externo termina com HTTP 403 antes de o lock ser libertado.
 - [x] Preservar os ensaios existentes de concorrência legal hold ↔ purge schedule e restore ↔ purge schedule.
 - [x] Docker Compose demo smoke passou no commit de código `926abcf1`: [run 45129975482](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45129975482).
+- [x] Corrigir a falha anterior do Compose smoke: as duas invocações inline do runtime-role smoke passam agora `MIGRATION_DB_USER` via `docker compose exec -e`, com regressão estática. Commits `b4995042` e `edf879a2`; o Compose smoke voltou a passar no SHA `926abcf1`.
 - [x] O passo PostgreSQL `Verify PostgreSQL legal hold and purge schedule concurrency` passou no API CI [45129975394](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45129975394), SHA `926abcf1`; inclui o novo ensaio de supervisor de outra loja com a imagem bloqueada.
 - [x] Quality Gates passou no SHA documental `7b10c5c1`: [run 45130013285](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45130013285), incluindo compilação Python, suite API e build Web.
 - [x] Security Scans: Gitleaks, pip-audit, npm audit e o passo de baseline ZAP concluíram com sucesso no [run 45130013260](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45130013260); o workflow ainda não terminou na última consulta.
