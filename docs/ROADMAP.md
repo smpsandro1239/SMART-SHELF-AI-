@@ -1,3 +1,12 @@
+## 2026-11-23 — Nove rotas HTTP cobertas pelo smoke PostgreSQL pré-lock
+
+- Expandido `postgres_retention_legal_hold_concurrency_smoke.py`: supervisor externo tenta aceder a nove rotas (conteúdo, deteções, evidence fusion, OCR evidence/matches/runs, eventos de retenção, retry e restrict) enquanto outra transacção mantém a linha da imagem bloqueada.
+- As nove rotas responderam HTTP 403 antes da libertação do lock; o passo PostgreSQL passou no API CI [45130818413](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45130818413), SHA `d319d1a4`.
+- Docker Compose [45130818319](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45130818319), Quality Gates [45130818392](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45130818392) e Security Scans [45130818374](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45130818374) passaram. API CI global ainda aguarda a conclusão de `pytest`.
+- Os endpoints ADMIN-only de artefactos, legal hold e purge seguem a política de administrador global. A próxima cobertura de autorização multi-loja deve focar os restantes handlers que permitem SUPERVISOR, em especial operações de escrita/revisão.
+
+---
+
 ## 2026-11-23 — Validação CI da autorização PostgreSQL pré-lock
 
 - Smoke PostgreSQL de retenção e autorização multi-loja passou no API CI [45129975394](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45129975394), SHA de código `926abcf1`. A chamada de supervisor de outra loja foi rejeitada com HTTP 403 enquanto a linha da imagem permanecia bloqueada.
