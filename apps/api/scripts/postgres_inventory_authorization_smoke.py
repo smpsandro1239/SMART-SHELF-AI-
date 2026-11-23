@@ -321,9 +321,9 @@ def main() -> None:
                 )
 
             # Positive control: the same supervisor must be able to execute
-            # the same store-scoped reads inside its own tenant. Exclude the
-            # two resource-ID routes (which intentionally use a nonexistent
-            # pallet ID) and packaging conversion (which has no seeded package).
+            # every store-scoped read inside its own tenant. Real packaging
+            # and pallet rows are seeded above so nested identifiers exercise
+            # successful same-store paths rather than missing-row fallbacks.
             same_store_read_count = 0
             for resource, path, params in foreign_store_reads:
                 own_params = dict(params)
