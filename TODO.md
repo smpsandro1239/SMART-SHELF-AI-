@@ -1,3 +1,11 @@
+## Segurança P0 — IDs de prateleira em criação e consenso (2026-11-23; código/testes publicados, CI pendente)
+
+- [x] Autenticar/validar o papel antes de resolver IDs de prateleira em criação de observações e sessões de captura.
+- [x] Uniformizar 404 para prateleiras estrangeiras e inexistentes na criação de observações/sessões e no consenso.
+- [x] Fazer a avaliação de alertas herdar o contrato 404 do consenso, antes de qualquer persistência.
+- [x] Acrescentar regressões HTTP para IDs estrangeiros/inexistentes e ausência de novas observações/sessões.
+- [ ] Executar API CI/PostgreSQL 16, Quality Gates, Security Scans e Docker Compose no novo SHA.
+
 ## Segurança P0 — ocultação de IDs de consenso de prateleira (2026-11-23; código/testes publicados, CI pendente)
 
 - [x] GET /api/v1/shelves/{shelf_id}/observation-consensus devolve HTTP 404 para prateleiras estrangeiras e inexistentes.
