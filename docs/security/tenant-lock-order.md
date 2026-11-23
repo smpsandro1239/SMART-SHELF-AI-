@@ -145,3 +145,11 @@ As rotas create_observation, create_capture_session e get_shelf_observation_cons
 - Revisão de exemplares: autenticar antes de consultar exemplar_id; imagem estrangeira oculta-se como HTTP 404; imagem de origem indisponível por retenção continua a usar HTTP 410 para o tenant autorizado; lock order imagem → produto → exemplar permanece intacta.
 - O helper _lock_authorized_shelf_image aceita hide_foreign e detalhe de ocultação específico do recurso pai, sem alterar por omissão os contratos dos restantes chamadores.
 - Testes: IDs estrangeiros/inexistentes para retenção, revisão de deteções e revisão de exemplares; validar igualdade de status/detalhe e ausência de registos de revisão não autorizados.
+
+
+## Upload de imagens — escopo de prateleira e sessão de captura (2026-11-23)
+
+- POST /api/v1/shelf-images resolve o actor antes de consultar shelf_id; a prateleira é validada pelo tenant antes de qualquer leitura do conteúdo ou escrita no storage. Prateleira estrangeira e inexistente devolvem HTTP 404 igual.
+- Se capture_session_id for fornecido, _lock_store_scoped_record valida o tenant antes do row lock e revalida após o lock, com hide_foreign=True. Sessão estrangeira e inexistente devolvem HTTP 404 igual.
+- A sessão também tem de pertencer à mesma prateleira e loja do upload; divergência same-store continua a ser erro de validação HTTP 422.
+- Testes cobrem os dois IDs estrangeiros/inexistentes e garantem que a rejeição ocorre antes da criação do ficheiro e do registo ShelfImage.
