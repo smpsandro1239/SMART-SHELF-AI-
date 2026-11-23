@@ -48,3 +48,10 @@ Esta é uma correcção da ordem de locks e uma cobertura estática dos handlers
 ## Revalidação — 2026-11-21
 
 No commit a345746, API CI e Quality Gates passaram com 1422 testes aprovados e 1 ignorado. Os 22 handlers abrangidos pela regra de autorização pré-lock continuam cobertos; PostgreSQL 16 smokes e o workflow de segurança também passaram.
+
+## Evidência adicional — matriz de leituras multi-loja (2026-11-23)
+
+- O smoke `postgres_inventory_authorization_smoke.py` cobre 23 rotas GET de vendas, tráfego, forecasting, replenishment, decisões e warehouse com `store_id` da loja estrangeira.
+- O actor é um SUPERVISOR autenticado por JWT, associado à loja de origem; as respostas esperadas são HTTP 403. O mesmo script mantém as tentativas de escrita cross-store e verifica que não deixam alterações persistidas.
+- A alteração está no commit `40f9456a`; API CI, Quality Gates, Security Scans e Docker Compose ainda aguardam conclusão no SHA.
+- Esta evidência não substitui testes de IDs aninhados, todos os papéis/rotas, leitura positiva same-store ou ensaio de volume persistente.
