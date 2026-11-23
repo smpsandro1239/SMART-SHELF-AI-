@@ -8340,7 +8340,7 @@ def dashboard_summary(
     active_tasks = task_counts["pending"] + task_counts["assigned"] + task_counts["in_progress"]
     urgent_active_tasks = task_query.filter(
         active_task_filter,
-        models.ReplenishmentTask.priority.in_(("HIGH", "URGENT")),
+        models.ReplenishmentTask.priority == "URGENT",
     ).count()
     unassigned_active_tasks = task_query.filter(
         active_task_filter,
