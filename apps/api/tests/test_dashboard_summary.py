@@ -76,7 +76,8 @@ def seed_dashboard_data():
     db.flush()
 
     product = models.Product(sku="DASH-SKU", name="Dashboard product", is_active=True)
-    db.add(product)
+    second_product = models.Product(sku="DASH-SKU-2", name="Second dashboard product", is_active=True)
+    db.add_all([product, second_product])
     db.flush()
 
     db.add_all([
@@ -85,7 +86,7 @@ def seed_dashboard_data():
             priority="URGENT", status="PENDING",
         ),
         models.ReplenishmentTask(
-            store_id=store_a.id, shelf_id=shelf_a1.id, product_id=product.id,
+            store_id=store_a.id, shelf_id=shelf_a1.id, product_id=second_product.id,
             priority="HIGH", status="ASSIGNED", assigned_user_id=employee.id,
             assigned_to=employee.full_name,
         ),
