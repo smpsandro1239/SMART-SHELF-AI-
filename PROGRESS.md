@@ -1,3 +1,34 @@
+## Segurança P0 — autorização pré-lock de planogramas (2026-11-23; CI validada)
+
+- [x] Adicionar preflight de tenant para a prateleira e para imagens de calibração antes de adquirir locks.
+- [x] Aplicar o mesmo padrão às alterações de células, ativação, retirada e comparação por IDs directos.
+- [x] Revalidar o store scope depois dos locks, mantendo a ordem imagem → prateleira → planograma.
+- [x] Autorizar a prateleira mesmo quando não existe planograma ACTIVE, evitando que o serviço devolva um resultado vazio distinto para IDs estrangeiros.
+- [x] Acrescentar regressões HTTP e um smoke PostgreSQL 16 com locks reais mantidos noutras transacções. O smoke rejeita, sem esperar pelo lock, edição, activação e retirada de planogramas estrangeiros, calibração com imagem estrangeira e comparação com imagem estrangeira.
+- [x] API CI [45185460992](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45185460992) passou no SHA b05d3a8; Quality Gates, Security Scans e Docker Compose também passaram. O smoke PostgreSQL confirmou as cinco operações cross-store sob locks reais.
+- [x] Revalidar no HEAD 48859d1: API CI [45186900075](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45186900075), Quality Gates [45186899975](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45186899975), Security Scans [45186899976](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45186899976) e Docker Compose [45186899968](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45186899968) passaram; API CI/Quality Gates executaram **1588 passed, 1 skipped**.
+- [ ] Completar a matriz endpoint × ADMIN/SUPERVISOR/EMPLOYEE × loja para os restantes recursos e IDs aninhados; o smoke actual é direccionado, não exaustivo.
+
+Commits de código/testes: abc60f6, ce63d3e, c1deee7, 94b71f9, f04c74d, b6aec43, cc8a01d, b05d3a8.
+
+---
+
+## Segurança P0 — revisão de exemplares sem lock global antes da autorização (2026-11-23; CI validada)
+
+- [x] Recusar revisão de exemplares sem imagem de origem por utilizadores não ADMIN antes de consultar/bloquear o produto global.
+- [x] Para exemplares com imagem, validar primeiro o acesso à imagem e a retenção; rejeitar auto-revisão antes do lock do produto, preservando HTTP 410 para imagens restringidas.
+- [x] Manter as verificações depois do lock do exemplar para revalidar identidade e autoria perante alterações concorrentes.
+- [x] Acrescentar teste que confirma que uma revisão não autorizada de exemplar sem imagem não executa a query ao catálogo de produtos nem altera o estado PENDING.
+- [x] Expandir postgres_embedding_review_smoke.py: manter o produto bloqueado numa transacção PostgreSQL e provar que um supervisor não autorizado recebe HTTP 403 sem esperar pelo lock.
+- [x] O passo PostgreSQL Verify PostgreSQL concurrent SKU exemplar review serialization passou no API CI [45186900075](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45186900075).
+- [x] Regressão intermédia detectada pelo Quality Gates: a primeira ordenação devolvia 403 antes de validar a retenção de uma imagem restringida, quebrando o contrato HTTP 410. A verificação de auto-revisão foi movida para depois da validação de retenção e antes do lock do produto.
+- [x] HEAD 48859d1: API CI e Quality Gates passaram com **1588 passed, 1 skipped**; Security Scans e Docker Compose também passaram.
+- [ ] Continuar a auditoria de detection_id/exemplar_id em todos os fluxos e confirmar a matriz completa de papéis/lojas.
+
+Commits de implementação/testes: 2cb6b19; correcção de fixture PostgreSQL: 72db929; preservação da semântica de retenção: 48859d1.
+
+---
+
 ## 2026-11-23 — Controlos BOLA para IDs aninhados de paletes
 
 - Acrescentados dois pedidos de ataque no smoke PostgreSQL multi-loja: supervisor autorizado na loja A usa o `store_id` da loja A, mas fornece o ID real de uma palete pertencente à loja B.

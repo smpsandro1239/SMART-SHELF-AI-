@@ -1720,6 +1720,8 @@ Os motivos de ativação/retirada são obrigatórios (3–500 caracteres). Confl
 ## Garantias e limitações atuais
 
 - A camada HTTP e o serviço de domínio validam perfil e âmbito da loja; não dependem apenas do middleware.
+- As operações de planogramas fazem preflight do tenant antes dos locks de imagem/prateleira/planograma e voltam a validar o âmbito após refresh. O smoke PostgreSQL cobre cinco tentativas cross-store com locks reais; evidência nos API CI runs [45185460992](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45185460992) e [45186900075](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45186900075).
+- A revisão de exemplares sem imagem de origem é recusada a supervisores antes do lock do produto global; para imagens de origem, a retenção é validada antes da recusa de auto-revisão. API CI/Quality Gates no HEAD 48859d1: 1588 passed, 1 skipped.
 - As operações de escrita são transacionais e tratam conflitos de constraints como 409.
 - A migration mantém equivalência de guards entre PostgreSQL e SQLite.
 - A eliminação em cascata de células de um rascunho é permitida; células de versões ativas/retiradas permanecem protegidas.

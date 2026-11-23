@@ -140,3 +140,14 @@ O smoke PostgreSQL `postgres_planogram_lifecycle_smoke.py` exercita duas sessõe
 ### Integridade do fingerprint da comparação
 
 A função de fingerprint aceita apenas a versão de esquema actualmente suportada. A versão é fixada no payload canónico, não pode ser substituída por um campo fornecido pelo chamador, e valores não JSON/NaN/infinitos são rejeitados por `allow_nan=False`. O digest ignora apenas o próprio campo `comparison_sha256`; alterações nos resultados por célula alteram a identidade. Os testes cobrem ordem de chaves, binding dos resultados, exclusão do digest próprio, versão desconhecida e valores não finitos.
+
+
+## Segurança multi-loja e ordem de locks — 2026-11-23
+
+O serviço de domínio valida o tenant antes de adquirir locks em operações que recebem shelf_id, planogram_id ou image_id. A criação verifica a prateleira e a imagem de calibração; edição, activação e retirada resolvem a prateleira associada ao planograma e validam o âmbito antes de bloquear imagem/prateleira/planograma. A comparação valida a prateleira, a captura e a imagem de calibração antes de bloquear as imagens por ID crescente.
+
+A leitura do planograma activo também autoriza a prateleira antes de devolver null quando não existe versão activa, evitando resultados diferentes para IDs estrangeiros. As verificações de tenant são repetidas sobre os registos refrescados depois dos locks.
+
+O smoke postgres_planogram_lifecycle_smoke.py mantém locks reais sobre prateleiras/imagens da loja B e tenta cinco operações cross-store com supervisor da loja A: edição, activação, retirada, calibração e comparação. Todas têm de devolver a rejeição de domínio sem aguardar pelo lock estrangeiro. O smoke passou no API CI [45185460992](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45185460992) e foi revalidado no HEAD [48859d1](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45186900075).
+
+A cobertura é direccionada. Não demonstra ainda todas as combinações endpoint × perfil × loja nem validação manual da interface com ADMIN/SUPERVISOR/EMPLOYEE.
