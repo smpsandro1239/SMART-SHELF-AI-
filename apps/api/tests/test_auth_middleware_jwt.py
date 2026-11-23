@@ -4493,12 +4493,26 @@ def test_supervisor_cannot_access_other_store_pallets_policies_or_events_over_ht
             "status": "QUARANTINED",
             "reason": "Cross-store authorization probe",
         }),
+        ("POST", "/api/v1/warehouse/pallets/2147483000/events", {
+            "expected_status": "READY",
+            "expected_base_quantity": 10,
+            "status": "QUARANTINED",
+            "reason": "Missing pallet concealment probe",
+        }),
     ]
     for method, path, payload in requests:
         response = client.request(method, path, json=payload, headers=headers)
         expected_status = (
             404
-            if method == "PATCH" and path.startswith("/api/v1/warehouse/pallet-rotation/policies/")
+            if (
+                method == "PATCH"
+                and path.startswith("/api/v1/warehouse/pallet-rotation/policies/")
+            )
+            or (
+                method == "POST"
+                and path.startswith("/api/v1/warehouse/pallets/")
+                and path.endswith("/events")
+            )
             else 403
         )
         assert response.status_code == expected_status, (
