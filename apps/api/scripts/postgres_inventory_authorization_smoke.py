@@ -483,7 +483,7 @@ def main() -> None:
                 ),
             }
             for resource, response in nested_shelf_reads.items():
-                expected_status = 404 if resource == "foreign shelf observation consensus" else 403
+                expected_status = 404
                 assert response.status_code == expected_status, (
                     f"SUPERVISOR must not resolve {resource}; expected HTTP {expected_status}, "
                     f"received {response.status_code}: {response.text}"
