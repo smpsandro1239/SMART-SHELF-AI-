@@ -1904,3 +1904,8 @@ As rotas directas por ID de sessão de captura e alerta ocultam recursos de outr
 ## Segurança — IDs de consenso de prateleira (2026-11-23)
 
 A consulta de consenso por shelf_id e a avaliação de alertas associada deixam de distinguir prateleiras estrangeiras de IDs inexistentes para SUPERVISOR: ambos devolvem HTTP 404. A avaliação de alertas herda a validação antes de qualquer persistência. Foram adicionados testes HTTP autenticados para os dois percursos. Commits: 2f4470e (código), 5feffba (teste). Validação CI/PostgreSQL 16 pendente.
+
+
+## Segurança — IDs de prateleira em criação e consenso (2026-11-23)
+
+As rotas de criação de observações e sessões de captura e a consulta de consenso validam primeiro o actor e ocultam prateleiras estrangeiras com HTTP 404, igual ao ID inexistente. A avaliação de alertas herda a protecção e não persiste para IDs não autorizados. Testes verificam respostas equivalentes e ausência de novos registos. Commits de código: 9288459, cce1afd; testes: 739a574, d5d6243. CI/PostgreSQL 16 pendente.
