@@ -1889,3 +1889,8 @@ O API CI [45177953932](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/
 ## 2026-11-23 — Ocultação de IDs directos de ciclo de vida de paletes
 
 A rota de escrita de eventos de ciclo de vida usa autorização por loja antes do lock e revalidação após o lock. Para não transformar IDs de paletes em oráculos de existência entre lojas, paletes estrangeiras e IDs inexistentes devolvem HTTP 404. A regressão está coberta por teste HTTP autenticado e aguarda validação CI no commit `ecc652e5`. A cobertura não substitui a matriz BOLA/IDOR completa dos restantes recursos e IDs aninhados.
+
+
+## Segurança — IDs de localizações de armazém
+
+A criação de colocações de armazém valida a localização por ID com autorização de tenant antes do lock e revalidação após o lock. Localizações de outra loja e IDs inexistentes devolvem o mesmo HTTP 404. A regressão HTTP está publicada; a execução de CI/PostgreSQL 16 para esta alteração ainda está pendente. A auditoria global de IDs directos e relações indirectas permanece em curso.
