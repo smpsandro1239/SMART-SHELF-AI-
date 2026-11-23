@@ -1155,3 +1155,12 @@ Validação no commit `311fecc9e13641e6d5eb55465fda646fb2909601`: Quality Gates 
 - Docker Compose [45131503757](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45131503757) passou.
 - No Quality Gates [45131503760](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45131503760), Web build passou, mas o job API foi cancelado durante instalação. Em Security Scans [45131503689](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45131503689), Gitleaks/npm audit passaram e pip-audit/ZAP foram cancelados.
 - O commit posterior `3af7a02b` acrescentou controlos same-store para paletes/embalagem; necessita de validação CI própria.
+
+
+### 2026-11-23 — BOLA: IDs aninhados de paletes entre lojas
+
+- O smoke PostgreSQL multi-loja inclui agora dois ataques em que o supervisor da loja A fornece um `store_id` autorizado, mas referencia uma palete real da loja B.
+- Foram cobertos o planeamento de rotação e a consulta de eventos de ciclo de vida; ambos têm de responder HTTP 404.
+- Commit: `db177bce`.
+- A alteração está publicada em `main`; API CI/PostgreSQL 16, Quality Gates, Security Scans e Docker Compose ainda não foram confirmados para este SHA.
+- Próxima expansão: IDs de localização, shelf, tarefa, packaging e relações indirectas. Não considerar a auditoria BOLA/IDOR global concluída.
