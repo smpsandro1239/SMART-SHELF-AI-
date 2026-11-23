@@ -1,3 +1,7 @@
+## Segurança P0 — ocultação de IDs directos de deteções em observação e histórico (2026-11-23; validação pendente)
+
+A criação de observações a partir de deteções e a consulta do histórico de revisões por `detection_id` passam a usar ocultação cross-store (`hide_foreign=True`), devolvendo HTTP 404 idêntico ao ID inexistente. A autorização é verificada antes do lock da imagem e novamente depois do lock. Testes autenticados cobrem os dois endpoints e o caminho same-store. API CI/PostgreSQL 16, Quality Gates, Security Scans e Docker Compose pendentes.
+
 ## Segurança P0 — IDs de prateleira em criação e consenso (2026-11-23; validação pendente)
 
 As rotas de criação de observações/sessões e a consulta de consenso autenticam o actor antes de resolver shelf_id. Para SUPERVISOR, IDs estrangeiros e inexistentes devolvem HTTP 404 equivalente; a avaliação de alertas herda o mesmo bloqueio antes de persistir. Regressões verificam ausência de novos registos. Commits: 9288459, cce1afd (código); d5d6243 (testes). CI/PostgreSQL 16 pendente.
