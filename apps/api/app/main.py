@@ -306,6 +306,25 @@ def _enforce_store_scope(actor: models.User | None, store_id: int) -> None:
         raise HTTPException(status_code=403, detail="Access to this store is not allowed")
 
 
+def _get_store_scoped_shelf(
+    db: Session,
+    shelf_id: int,
+    actor: models.User | None,
+) -> models.Shelf:
+    """Resolve a shelf only inside the actor's store, without loading foreign rows."""
+    query = (
+        db.query(models.Shelf)
+        .join(models.Zone, models.Shelf.zone_id == models.Zone.id)
+        .filter(models.Shelf.id == shelf_id)
+    )
+    if actor is not None and actor.role != "ADMIN":
+        query = query.filter(models.Zone.store_id == actor.store_id)
+    shelf = query.first()
+    if shelf is None:
+        raise HTTPException(status_code=404, detail="Shelf not found")
+    return shelf
+
+
 def _resolve_detection_source_image_id(
     db: Session,
     detection_id: int,
@@ -598,14 +617,11 @@ def create_zone(payload: ZoneCreate, request: Request, db: Session = Depends(get
 @app.post("/api/v1/shelves", response_model=ShelfRead, status_code=201, tags=["shelves"])
 def create_shelf(payload: ShelfCreate, request: Request, db: Session = Depends(get_db)):
     actor = _request_user(db, request)
-    zone = (
-        db.query(models.Zone)
-        .filter(models.Zone.id == payload.zone_id)
-        .first()
-    )
+    zone_query = db.query(models.Zone).filter(models.Zone.id == payload.zone_id)
+    if actor is not None and actor.role != "ADMIN":
+        zone_query = zone_query.filter(models.Zone.store_id == actor.store_id)
+    zone = zone_query.first()
     if zone is None:
-        raise HTTPException(status_code=404, detail="Zone not found")
-    if actor is not None and actor.role != "ADMIN" and actor.store_id != zone.store_id:
         raise HTTPException(status_code=404, detail="Zone not found")
     item = models.Shelf(**payload.model_dump())
     db.add(item)
@@ -1320,12 +1336,8 @@ def create_capture_session(payload: CaptureSessionCreate, request: Request, db: 
     actor = _request_user(db, request)
     if actor is not None and actor.role == "EMPLOYEE":
         raise HTTPException(status_code=403, detail="Supervisor role required to create capture sessions")
-    shelf = db.query(models.Shelf).join(models.Zone, models.Shelf.zone_id == models.Zone.id).filter(models.Shelf.id == payload.shelf_id).first()
-    if shelf is None:
-        raise HTTPException(status_code=404, detail="Shelf not found")
+    shelf = _get_store_scoped_shelf(db, payload.shelf_id, actor)
     store_id = shelf.zone.store_id
-    if actor is not None and actor.role != "ADMIN" and actor.store_id != store_id:
-        raise HTTPException(status_code=404, detail="Shelf not found")
     started_at = payload.started_at or models.utc_now()
     if started_at.tzinfo is None:
         raise HTTPException(status_code=422, detail="started_at must include a timezone")

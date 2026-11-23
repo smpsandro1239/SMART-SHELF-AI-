@@ -366,3 +366,59 @@ def test_image_upload_hides_foreign_and_missing_capture_session_ids(monkeypatch)
     }
     with Session() as db:
         assert db.query(models.ShelfImage).count() == 0
+
+
+def test_foreign_shelf_preflight_is_tenant_filtered_for_create_routes(monkeypatch):
+    from types import SimpleNamespace
+
+    own_shelf_id, _ = seed_shelves()
+    db = Session()
+    own_store_id = (
+        db.query(models.Zone.store_id)
+        .join(models.Shelf, models.Shelf.zone_id == models.Zone.id)
+        .filter(models.Shelf.id == own_shelf_id)
+        .scalar()
+    )
+    foreign_store = models.Store(code="CAP-PREFLIGHT-FOREIGN", name="Foreign preflight store")
+    db.add(foreign_store)
+    db.flush()
+    foreign_zone = models.Zone(store_id=foreign_store.id, name="Foreign preflight aisle")
+    db.add(foreign_zone)
+    db.flush()
+    foreign_shelf = models.Shelf(zone_id=foreign_zone.id, code="FOREIGN-PREFLIGHT-01")
+    db.add(foreign_shelf)
+    db.commit()
+    foreign_shelf_id = foreign_shelf.id
+    foreign_zone_id = foreign_zone.id
+    db.close()
+
+    supervisor = SimpleNamespace(id=29, role="SUPERVISOR", store_id=own_store_id)
+    monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: supervisor)
+
+    with TestClient(app) as client:
+        foreign_capture = client.post("/api/v1/capture-sessions", json={
+            "shelf_id": foreign_shelf_id,
+            "source_type": "mobile",
+            "capture_mode": "single",
+        })
+        missing_capture = client.post("/api/v1/capture-sessions", json={
+            "shelf_id": 2147483000,
+            "source_type": "mobile",
+            "capture_mode": "single",
+        })
+        foreign_shelf_create = client.post("/api/v1/shelves", json={
+            "zone_id": foreign_zone_id,
+            "code": "SHOULD-NOT-BE-CREATED",
+        })
+        missing_zone_create = client.post("/api/v1/shelves", json={
+            "zone_id": 2147483000,
+            "code": "SHOULD-NOT-BE-CREATED",
+        })
+
+    assert foreign_capture.status_code == missing_capture.status_code == 404
+    assert foreign_capture.json() == missing_capture.json() == {"detail": "Shelf not found"}
+    assert foreign_shelf_create.status_code == missing_zone_create.status_code == 404
+    assert foreign_shelf_create.json() == missing_zone_create.json() == {"detail": "Zone not found"}
+    with Session() as db:
+        assert db.query(models.CaptureSession).count() == 0
+        assert db.query(models.Shelf).filter_by(code="SHOULD-NOT-BE-CREATED").count() == 0
