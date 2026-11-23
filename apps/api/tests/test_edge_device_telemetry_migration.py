@@ -39,7 +39,7 @@ def test_edge_device_telemetry_schema_validates_health_values_and_downgrades(tmp
         assert db.exec_driver_sql("SELECT last_network_status FROM edge_devices WHERE device_id='camera-a'").scalar_one() == "ONLINE"
         with pytest.raises(IntegrityError, match="telemetry violates health constraints"):
             db.exec_driver_sql("UPDATE edge_devices SET battery_pct=101 WHERE device_id='camera-a'")
-        with pytest.raises(IntegrityError, match="CHECK constraint"):
+        with pytest.raises(IntegrityError, match="telemetry violates health constraints"):
             db.exec_driver_sql("UPDATE edge_devices SET last_network_status='UNKNOWN' WHERE device_id='camera-a'")
         _apply(migration, db, "downgrade")
         columns = {row[1] for row in db.exec_driver_sql("PRAGMA table_info(edge_devices)")}
