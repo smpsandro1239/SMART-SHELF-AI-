@@ -1372,3 +1372,10 @@ A rota `GET /api/v1/tasks/{task_id}/events` filtra `task_id` e `store_id` na que
 
 Os endpoints de revisão humana, histórico e criação de observação resolvem agora a imagem de origem através de JOIN Detection → ShelfImage → Shelf → Zone. Para actores não ADMIN, o predicado de loja é aplicado no SELECT, evitando materializar uma detecção estrangeira antes da autorização. Mantém-se a autorização pré-lock e a revalidação pós-lock da imagem. Testes cobrem IDs estrangeiros/inexistentes e os contratos HTTP. API CI/PostgreSQL 16, Quality Gates, Security Scans e Docker Compose pendentes.
 
+
+
+## Inventário — histórico operacional e reconciliação
+
+O histórico de movimentos tem agora uma interface integrada no dashboard, com filtros por produto/tarefa, indicadores e detalhe da linhagem dos snapshots. A consulta é read-only e respeita RBAC e âmbito de loja. A rota foi adicionada à matriz explícita de políticas, depois de a execução anterior de API CI ter identificado a ausência dessa classificação.
+
+Próxima fatia funcional: modelar divergências entre observações visuais e inventário de referência, mantendo a observação como evidência independente e exigindo revisão humana antes de qualquer ajuste contabilístico. A modelação deverá preservar a distinção entre stock de retaguarda, reservado, disponível, transferido para a prateleira e observado visualmente.
