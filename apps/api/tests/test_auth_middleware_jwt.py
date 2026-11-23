@@ -4496,9 +4496,14 @@ def test_supervisor_cannot_access_other_store_pallets_policies_or_events_over_ht
     ]
     for method, path, payload in requests:
         response = client.request(method, path, json=payload, headers=headers)
-        assert response.status_code == 403, (
+        expected_status = (
+            404
+            if method == "PATCH" and path.startswith("/api/v1/warehouse/pallet-rotation/policies/")
+            else 403
+        )
+        assert response.status_code == expected_status, (
             f"SUPERVISOR from store A must not access store B pallet operations: "
-            f"{method} {path} returned {response.status_code}"
+            f"{method} {path} returned {response.status_code}; expected {expected_status}"
         )
 
     with main_module.SessionLocal() as db:

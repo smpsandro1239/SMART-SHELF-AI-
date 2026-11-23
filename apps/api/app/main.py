@@ -5940,12 +5940,7 @@ def record_pallet_lifecycle_update(
     """Record a supervised, optimistic-concurrency-protected pallet state update."""
     actor = _request_user(db, request)
     pallet = _lock_store_scoped_record(
-        db,
-        models.StorePallet,
-        pallet_id,
-        actor,
-        "Pallet not found",
-        hide_foreign=True,
+        db, models.StorePallet, pallet_id, actor, "Pallet not found"
     )
 
     if pallet.status != payload.expected_status or float(pallet.base_quantity) != payload.expected_base_quantity:
