@@ -1322,3 +1322,8 @@ O smoke postgres_detection_exemplar_prelock_smoke.py foi atualizado após a alte
 ## 2026-11-23 — Validação P0 concluída
 
 O commit `1ffe4d3a7567c486f68de5e26051f7bcc0a2c110` concluiu com sucesso a validação da ronda de isolamento multi-tenant: API CI com 1595 testes aprovados e 1 ignorado; smoke tests PostgreSQL 16; Quality Gates; Security Scans (secret scan, dependências Python/Web e OWASP ZAP passive baseline); e Docker Compose demo stack. A primeira execução revelou expectativas 403 obsoletas e uma fixture duplicada; ambas foram corrigidas e a execução final passou. A próxima ronda continua a auditoria de IDs aninhados em OCR, matching, artefactos e warehouse.
+
+## Segurança P0 — histórico de tarefas com predicado SQL multi-tenant (2026-11-23; validação pendente)
+
+A rota `GET /api/v1/tasks/{task_id}/events` filtra `task_id` e `store_id` na query para SUPERVISOR, evitando materializar uma tarefa estrangeira antes da autorização. ADMIN conserva visibilidade global. A regressão verifica 404 indistinguível para tarefa estrangeira/inexistente e acesso ADMIN. API CI/PostgreSQL 16, Quality Gates, Security Scans e Docker Compose do SHA final pendentes.
+
