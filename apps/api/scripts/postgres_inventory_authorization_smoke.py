@@ -49,8 +49,8 @@ def main() -> None:
             packaging_level_id=packaging.id,
             pallet_code=f"PG-PALLET-A-{suffix}",
             base_quantity=12,
-            status="READY",
-            location_type="WAREHOUSE",
+            status="ON_DISPLAY",
+            location_type="SALES_FLOOR",
         )
         foreign_pallet = models.StorePallet(
             store_id=store_b.id,
