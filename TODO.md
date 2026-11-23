@@ -1,3 +1,11 @@
+## Desenvolvimento funcional — histórico de movimentos de inventário (2026-11-23; CI pendente)
+
+- [x] Disponibilizar consulta read-only dos movimentos aprovados em `GET /api/v1/inventory/movements`.
+- [x] Filtrar por loja (obrigatória), produto e tarefa; limitar resultados entre 1 e 500.
+- [x] Restringir leitura a ADMIN e SUPERVISOR, respeitando o âmbito multi-loja.
+- [x] Testar histórico, filtros, ausência de mutação, bloqueio EMPLOYEE e isolamento de loja.
+- [ ] Confirmar API CI e restantes Quality/Security Gates no HEAD desta alteração.
+
 ## Desenvolvimento funcional — KPIs operacionais do dashboard (2026-11-23; código/testes publicados, CI pendente)
 
 - [x] Expor contagens de tarefas por prioridade e estados, mantendo os filtros existentes por loja e utilizador.
