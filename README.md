@@ -1983,3 +1983,8 @@ O endpoint `GET /api/v1/dashboard/summary` fornece agora tarefas por prioridade,
 ## Histórico de movimentos de inventário
 
 A API disponibiliza `GET /api/v1/inventory/movements?store_id={id}` para consultar movimentos de inventário aprovados e imutáveis. A consulta aceita filtros opcionais `product_id` e `task_id`, exige ADMIN ou SUPERVISOR e respeita o âmbito multi-loja. É uma operação exclusivamente de leitura: não cria movimentos nem altera snapshots. Cobertura em `apps/api/tests/test_inventory.py`; CI da alteração pendente.
+
+
+### Histórico operacional de movimentos de inventário
+
+A área de gestão de inventário inclui um histórico de movimentos aprovado e de consulta apenas de leitura. O painel consome `GET /api/v1/inventory/movements`, permite filtrar por produto e tarefa, apresenta o volume de unidades movimentadas e expõe a rastreabilidade de cada operação: tarefa, loja, responsável, justificação e snapshots de origem e resultado. A consulta está disponível a ADMIN e SUPERVISOR, respeitando o âmbito da loja; EMPLOYEE não tem acesso. O histórico não altera snapshots nem cria movimentos.
