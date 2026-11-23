@@ -340,3 +340,63 @@ def test_detection_review_and_history_enforce_source_image_store_scope(monkeypat
         assert db.query(models.DetectionSkuReview).filter(
             models.DetectionSkuReview.detection_id == data["detection_id"]
         ).count() == 1
+
+
+
+def test_shelf_image_upload_hides_foreign_and_missing_shelf_ids(monkeypatch):
+    data = create_detection()
+    with TestingSession() as db:
+        foreign_store = models.Store(
+            code="UPLOAD-FOREIGN",
+            name="Loja estrangeira para upload",
+        )
+        db.add(foreign_store)
+        db.flush()
+        foreign_zone = models.Zone(
+            store_id=foreign_store.id,
+            name="Zona estrangeira",
+        )
+        db.add(foreign_zone)
+        db.flush()
+        foreign_shelf = models.Shelf(
+            zone_id=foreign_zone.id,
+            code="UPLOAD-FOREIGN-SHELF",
+        )
+        actor = models.User(
+            email="upload-scope-supervisor@example.test",
+            full_name="Supervisor upload",
+            password_hash="test-only",
+            role="SUPERVISOR",
+            store_id=data["store_id"],
+            is_active=True,
+        )
+        db.add_all([foreign_shelf, actor])
+        db.commit()
+        foreign_shelf_id = foreign_shelf.id
+        actor_id = actor.id
+
+    with TestingSession() as db:
+        actor = db.get(models.User, actor_id)
+        monkeypatch.setattr(
+            main_module,
+            "_request_user",
+            lambda _db, _request: actor,
+        )
+        with TestClient(app) as client:
+            foreign = client.post(
+                "/api/v1/shelf-images",
+                data={"shelf_id": str(foreign_shelf_id)},
+                files={"image": ("capture.jpg", b"invalid", "image/jpeg")},
+            )
+            missing = client.post(
+                "/api/v1/shelf-images",
+                data={"shelf_id": "2147483000"},
+                files={"image": ("capture.jpg", b"invalid", "image/jpeg")},
+            )
+
+    assert foreign.status_code == missing.status_code == 404
+    assert foreign.json() == missing.json() == {"detail": "Shelf not found"}
+    with TestingSession() as db:
+        assert db.query(models.ShelfImage).filter_by(
+            shelf_id=foreign_shelf_id
+        ).count() == 0
