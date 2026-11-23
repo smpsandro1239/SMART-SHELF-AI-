@@ -1459,3 +1459,13 @@ Critério global: nenhuma capacidade pode ser marcada como concluída sem códig
 - Corrigida a fixture da palete própria para `ON_DISPLAY`/`SALES_FLOOR`, preservando a palete estrangeira em estado de armazém para o teste de isolamento.
 - O diagnóstico foi obtido nos logs do job PostgreSQL; a correcção está publicada no commit `ba551a10` e aguarda nova execução da API CI.
 - A falha era do dado de teste, não evidência de quebra da autorização de tenant; a suite abortou antes dos novos controlos de colocação e tarefa.
+
+
+## Edge AI — não alterar o estado após perda de lease (2026-11-23; teste publicado, CI pendente)
+
+- [x] Acrescentar regressão para handler que termina com sucesso depois de falhar o heartbeat; o resultado local permanece sem ACK e a lease fica recuperável por expiração/fencing.
+- [x] Acrescentar regressões parametrizadas para handler com erro transitório e erro permanente depois de falhar o heartbeat; ambos os caminhos têm de abandonar o resultado sem marcar RETRY ou DEAD_LETTER.
+- [ ] Confirmar API CI, Quality Gates, Security Scans e Docker Compose no commit de teste aec6f2b1701e2fcb92e51ba981c9819d8347c683.
+- [ ] Acrescentar smoke PostgreSQL que force a perda/takeover da lease durante um handler lento e prove que um worker obsoleto não confirma nem altera o estado do evento.
+
+A implementação de produção já verificava lease_lost nos caminhos de sucesso e erro; esta alteração reforça a cobertura de regressão. Os testes SQLite não substituem o smoke de concorrência PostgreSQL.

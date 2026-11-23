@@ -493,3 +493,11 @@ Limitação de segurança resolvida em camadas: owner de migrations separado do 
 - Corrigida a fixture da palete própria para `ON_DISPLAY`/`SALES_FLOOR`, preservando a palete estrangeira em estado de armazém para o teste de isolamento.
 - O diagnóstico foi obtido nos logs do job PostgreSQL; a correcção está publicada no commit `ba551a10` e aguarda nova execução da API CI.
 - A falha era do dado de teste, não evidência de quebra da autorização de tenant; a suite abortou antes dos novos controlos de colocação e tarefa.
+
+
+## 2026-11-23 — Testes de regressão do worker Edge após perda de lease
+
+- Commit aec6f2b1701e2fcb92e51ba981c9819d8347c683: acrescentados casos para falha transitória e permanente do handler depois de falhar a renovação da lease.
+- A expectativa é manter PROCESSING, preservar o proprietário/token para recuperação por expiração e não confirmar nem reclassificar o evento com uma lease perdida.
+- API CI, Quality Gates, Security Scans e Docker Compose foram iniciados para este commit; os resultados ainda não estavam disponíveis no momento deste registo.
+- Próxima prova necessária: smoke PostgreSQL de takeover concorrente durante processamento e rejeição de ACK/falha por fencing obsoleto.

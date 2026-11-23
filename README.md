@@ -1845,3 +1845,12 @@ Commit de código validado: [91ea51e](https://github.com/smpsandro1239/SMART-SHE
 - Security Scans [45065079730](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45065079730): no descendente documental `1566b8ea`, auditorias de dependências, Gitleaks do histórico e OWASP ZAP baseline aprovados.
 
 A assinatura e o anti-rollback protegem a cadeia de release, não a precisão do modelo. O modo real continua sem ser activado até existirem pesos e dataset autorizados e métricas independentes. A separação de credenciais PostgreSQL já está implementada; a validação de permissões ONNX foi aprofundada nesta ronda.
+
+
+## 2026-11-23 — Regressão do worker Edge após perda de lease
+
+Foi acrescentada cobertura parametrizada para os dois caminhos de erro do handler (falha transitória e falha permanente) quando a renovação da lease falha durante o processamento. O worker deve abandonar o resultado local e deixar o registo em PROCESSING, sem concluir nem enviar o evento para retry/dead-letter com um fencing token cuja lease já não está confirmada.
+
+- Implementação de teste: apps/api/tests/test_edge_event_worker.py.
+- Commit de teste: aec6f2b1701e2fcb92e51ba981c9819d8347c683.
+- Validação CI desse commit: em execução no momento do registo; não considerar a regressão validada até API CI, Quality Gates, Security Scans e Docker Compose terminarem.

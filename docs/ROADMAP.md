@@ -1180,3 +1180,12 @@ Validação no commit `311fecc9e13641e6d5eb55465fda646fb2909601`: Quality Gates 
 - Corrigida a fixture da palete própria para `ON_DISPLAY`/`SALES_FLOOR`, preservando a palete estrangeira em estado de armazém para o teste de isolamento.
 - O diagnóstico foi obtido nos logs do job PostgreSQL; a correcção está publicada no commit `ba551a10` e aguarda nova execução da API CI.
 - A falha era do dado de teste, não evidência de quebra da autorização de tenant; a suite abortou antes dos novos controlos de colocação e tarefa.
+
+
+## 2026-11-23 — Regressão do worker Edge após perda de lease (validação pendente)
+
+- Acrescentados testes para os caminhos de sucesso, erro transitório e erro permanente quando o heartbeat perde a lease durante a execução do handler.
+- O worker deve abandonar o resultado local; não pode confirmar, reprogramar retry nem enviar para dead-letter sem lease válida.
+- Commit de teste: aec6f2b1701e2fcb92e51ba981c9819d8347c683.
+- Os quatro workflows foram iniciados; aguarda-se conclusão de API CI, Quality Gates, Security Scans e Docker Compose.
+- A cobertura actual de erro usa SQLite e não substitui um teste PostgreSQL com takeover concorrente e fencing.
