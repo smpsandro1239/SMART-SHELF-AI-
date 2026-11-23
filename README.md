@@ -1919,3 +1919,8 @@ A criação de prateleiras valida agora o tenant da zona de destino antes de per
 ## Segurança — associação de produtos a prateleiras (2026-11-23)
 
 A associação de produtos valida o tenant da prateleira antes de bloquear o produto. Para SUPERVISOR, uma prateleira estrangeira e um ID inexistente devolvem HTTP 404 equivalente; a tentativa não cria uma relação entre lojas. A regressão inclui controlo positivo same-store. Commits: 6a4b783 (código) e 78d07d3 (teste). Validação CI/PostgreSQL 16 pendente.
+
+
+## Segurança — IDs directos de tarefas e eventos (2026-11-23)
+
+Os endpoints de tarefas ocultam agora a existência de recursos de outras lojas: a leitura de eventos devolve HTTP 404 para tarefas estrangeiras e inexistentes, sem row lock; a alteração de estado e a reconciliação de inventário aplicam autorização pré-lock, lock e revalidação, com 404 uniforme. Testes cobrem os três caminhos e a ausência de efeitos laterais. Commits: 954f973, ee40b88, f12ed7b e cc3dc3a. Validação CI/PostgreSQL 16 pendente.
