@@ -1308,3 +1308,8 @@ Os endpoints de eventos de retenção, revisão de deteções e revisão de exem
 ## 2026-11-23 — BOLA: IDs de upload e sessão de captura (validação pendente)
 
 O upload de imagens valida o actor antes de resolver shelf_id e oculta prateleiras estrangeiras como inexistentes. O capture_session_id opcional usa preflight tenant, lock e revalidação, com HTTP 404 uniforme para sessão estrangeira/inexistente. Testes verificam a equivalência das respostas e ausência de efeitos laterais em ficheiros e registos. Commits: 90bd84f, 91da9f1, fdcbd55, 30f0dda, 0d7a079 e 3e1ac0a. CI do HEAD final pendente.
+
+
+### Validação PostgreSQL — deteções e exemplares
+
+O smoke postgres_detection_exemplar_prelock_smoke.py foi atualizado após a alteração deliberada do contrato cross-store de HTTP 403 para HTTP 404 uniforme. O teste continua a manter as locks da imagem e do produto ocupadas e exige que os três pedidos sejam recusados antes de aguardar por elas, sem persistir revisões. Commit de correção: 31e6c9f. Nova execução CI pendente.
