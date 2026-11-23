@@ -110,7 +110,7 @@ Limite: esta evidência não fecha a matriz completa BOLA/IDOR por recurso nem o
 
 ## Cobertura adicional — histórico de eventos de alertas multi-loja (2026-11-21)
 
-A revisão do handler `GET /api/v1/observation-alerts/{alert_id}/events` confirmou que a rota carrega o alerta pai e chama `_require_alert_supervisor`, que verifica o papel e o store scope antes de consultar os eventos. Foi acrescentado o teste HTTP `test_cross_store_alert_event_history_is_denied`: um supervisor de outra loja recebe HTTP 403 ao tentar consultar a cronologia do alerta.
+A revisão inicial do handler `GET /api/v1/observation-alerts/{alert_id}/events` aceitava HTTP 403 para um alerta estrangeiro. Na revisão de 2026-11-23, o acesso de SUPERVISOR foi reforçado: a própria query filtra `alert_id` e `store_id`, pelo que um alerta estrangeiro e um ID inexistente produzem HTTP 404 com corpo idêntico, sem carregar o registo estrangeiro. ADMIN mantém acesso global e EMPLOYEE continua bloqueado com HTTP 403. O teste `test_cross_store_alert_event_history_is_denied` cobre agora os dois casos 404.
 
 Foi removida uma definição de teste duplicada em `test_observations.py`; a segunda definição tinha o mesmo nome e conteúdo, pelo que não cobria um cenário adicional.
 
