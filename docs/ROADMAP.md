@@ -4,7 +4,9 @@
 - Docker Compose [45129975482](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45129975482) passou.
 - Quality Gates [45130013285](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45130013285) passou: suite API, compilação Python e build Web.
 - Security Scans [45130013260](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45130013260): Gitleaks, pip-audit, npm audit e ZAP concluíram os respectivos passos com sucesso; job global ainda em execução.
-- API CI global ainda em execução. A prova cobre o helper pré-lock através de um handler representativo; a cobertura HTTP/PG dos restantes handlers e o ensaio de volume persistente permanecem em aberto.
+- API CI [45129975394](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45129975394) concluiu com sucesso no SHA de código `926abcf1`, incluindo migrações PostgreSQL 16, smokes e suite API.
+- Quality Gates [45130013285](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45130013285), Security Scans [45130013260](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45130013260) e Docker Compose [45129975482](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45129975482) também passaram.
+- A prova cobre o helper pré-lock através de um handler representativo; a cobertura HTTP/PG dos restantes handlers e o ensaio de volume persistente permanecem em aberto.
 
 ---
 
