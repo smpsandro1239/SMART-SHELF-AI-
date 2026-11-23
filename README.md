@@ -1,3 +1,8 @@
+## Segurança multi-loja — IDs de prateleiras em planogramas
+
+As operações de planograma resolvem agora a prateleira com o filtro da loja do actor aplicado directamente na query. Para SUPERVISOR, uma prateleira de outra loja e um ID inexistente produzem HTTP 404 com o mesmo detalhe (`Shelf not found`); ADMIN mantém acesso global. A regressão está em `apps/api/tests/test_capture_sessions.py`. A alteração foi publicada, mas a validação CI/PostgreSQL do novo HEAD ainda está pendente.
+
+
 ## 10-minute demo
 
 O percurso demonstrativo local usa o provider determinístico `MockShelfVisionProvider` e dados fictícios. Não é um modelo treinado nem uma integração POS/ERP/WMS.
