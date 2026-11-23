@@ -17,6 +17,8 @@ type InventoryMovement = {
 
 type Props = { token: string; storeId: number | null };
 
+const API_BASE = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
+
 function formatMovementDate(value: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "Data indisponível";
@@ -45,7 +47,7 @@ export default function InventoryMovementHistory({ token, storeId }: Props) {
       const params = new URLSearchParams({ store_id: String(storeId), limit: "100" });
       if (productFilter.trim()) params.set("product_id", productFilter.trim());
       if (taskFilter.trim()) params.set("task_id", taskFilter.trim());
-      const response = await fetch(`/api/v1/inventory/movements?${params.toString()}`, {
+      const response = await fetch(`${API_BASE}/api/v1/inventory/movements?${params.toString()}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const payload = await response.json().catch(() => ({}));
