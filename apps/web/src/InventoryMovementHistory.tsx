@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ChevronDown, ChevronUp, Clock3, Filter, History, Package, RefreshCw } from "lucide-react";
+import { ChevronDown, ChevronUp, Clock3, Filter, Package, RefreshCw } from "lucide-react";
 
 type InventoryMovement = {
   id: number;
