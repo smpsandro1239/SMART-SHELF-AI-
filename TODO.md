@@ -1,3 +1,15 @@
+## Segurança P0 — ocultação de IDs directos de deteções em fluxos de observação e histórico (2026-11-23; implementação/testes publicados, CI pendente)
+
+- [x] Aplicar `hide_foreign=True` na criação de observações a partir de `detection_id`.
+- [x] Aplicar `hide_foreign=True` na consulta do histórico de revisões por `detection_id`.
+- [x] Preservar autorização pré-lock e revalidar o tenant depois do lock da imagem.
+- [x] Acrescentar regressões autenticadas que comparam deteção estrangeira com ID inexistente nos dois endpoints e confirmam HTTP 404 idêntico.
+- [ ] Validar API CI/PostgreSQL 16, Quality Gates, Security Scans e Docker Compose no novo SHA.
+
+Decisão: todos os endpoints multi-loja que recebem um identificador directo de deteção ocultam a existência de deteções estrangeiras com o mesmo contrato 404 dos IDs inexistentes. A autorização continua a ser aplicada antes do lock e revalidada depois do lock da imagem de origem.
+
+---
+
 ## Segurança P0 — IDs de prateleira em criação e consenso (2026-11-23; código/testes publicados, CI pendente)
 
 - [x] Autenticar/validar o papel antes de resolver IDs de prateleira em criação de observações e sessões de captura.
