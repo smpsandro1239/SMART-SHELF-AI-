@@ -1219,6 +1219,18 @@ def test_supervisor_cannot_upload_image_to_foreign_store_shelf(monkeypatch, tmp_
         own_zone = db.get(models.Zone, own_shelf.zone_id)
         foreign_image = db.get(models.ShelfImage, foreign_image_id)
         foreign_shelf_id = foreign_image.shelf_id
+        foreign_shelf = db.get(models.Shelf, foreign_shelf_id)
+        foreign_zone = db.get(models.Zone, foreign_shelf.zone_id)
+        foreign_session = models.CaptureSession(
+            store_id=foreign_zone.store_id,
+            shelf_id=foreign_shelf_id,
+            source_type="mobile",
+            capture_mode="single",
+        )
+        db.add(foreign_session)
+        db.flush()
+        foreign_session_id = foreign_session.id
+        own_shelf_id = own_shelf.id
         actor = SimpleNamespace(
             id=777,
             role="SUPERVISOR",
@@ -1243,9 +1255,29 @@ def test_supervisor_cannot_upload_image_to_foreign_store_shelf(monkeypatch, tmp_
             data={"shelf_id": "2147483000"},
             files={"image": ("missing.png", image_bytes.getvalue(), "image/png")},
         )
+        foreign_session_bytes = BytesIO(image_bytes.getvalue())
+        foreign_session_response = client.post(
+            "/api/v1/shelf-images",
+            data={
+                "shelf_id": str(own_shelf_id),
+                "capture_session_id": str(foreign_session_id),
+            },
+            files={"image": ("foreign-session.png", foreign_session_bytes.getvalue(), "image/png")},
+        )
+        missing_session_bytes = BytesIO(image_bytes.getvalue())
+        missing_session_response = client.post(
+            "/api/v1/shelf-images",
+            data={
+                "shelf_id": str(own_shelf_id),
+                "capture_session_id": "2147483000",
+            },
+            files={"image": ("missing-session.png", missing_session_bytes.getvalue(), "image/png")},
+        )
 
     assert response.status_code == missing.status_code == 404
     assert response.json() == missing.json()
+    assert foreign_session_response.status_code == missing_session_response.status_code == 404
+    assert foreign_session_response.json() == missing_session_response.json()
     assert not list(tmp_path.rglob("*"))
     with TestingSession() as db:
         assert db.query(models.ShelfImage).filter(
