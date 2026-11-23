@@ -47,8 +47,11 @@ def isolated_database():
 
 
 def create_store_and_product(client):
-    store = client.post("/api/v1/stores", json={"code": "INV-01", "name": "Loja inventário"})
-    product = client.post("/api/v1/products", json={"sku": "INV-SKU-01", "name": "Arroz 1 kg"})
+    suffix = uuid4().hex[:8].upper()
+    store = client.post("/api/v1/stores", json={"code": f"INV-{suffix}", "name": "Loja inventário"})
+    product = client.post("/api/v1/products", json={"sku": f"INV-SKU-{suffix}", "name": "Arroz 1 kg"})
+    assert store.status_code == 201, store.text
+    assert product.status_code == 201, product.text
     return store.json()["id"], product.json()["id"]
 
 
