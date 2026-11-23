@@ -15,7 +15,9 @@ Commit: `3af7a02b`. A prova cobre agora 23 leituras estrangeiras e 23 controlos 
 - [x] Expandir `postgres_inventory_authorization_smoke.py` com 23 pedidos GET cross-store para vendas diárias/horárias/tráfego, perfis de procura, previsão de procura/risco, portefólios, recomendações, plano e workload de reposição, decisões operacionais, localizações, paletes, políticas e eventos de paletes.
 - [x] Executar os pedidos com JWT real de SUPERVISOR da loja A e `store_id` da loja B; todos têm de devolver HTTP 403 antes da leitura de dados.
 - [x] Manter os testes existentes de negação de escrita em inventário, placement e tarefas, incluindo verificações de ausência de persistência, e os controlos positivos na loja própria.
-- [ ] Confirmar API CI/PostgreSQL 16, Quality Gates, Security Scans e Docker Compose no SHA `40f9456a`; workflows iniciados, resultados ainda não observados.
+- [x] API CI/PostgreSQL 16 passou no SHA `40f9456a` (run `45131503709`): todos os smokes, incluindo as 23 leituras cross-store, passaram; suite API **1555 passed, 1 skipped**.
+- [x] Docker Compose demo smoke passou no SHA `40f9456a` (run `45131503757`); Web TypeScript/produção e detector Impeccable passaram no Quality Gates (run `45131503760`).
+- [ ] Quality Gates API foi cancelado durante instalação de dependências e Security Scans foi parcialmente cancelado (pip-audit e ZAP); repetir/obter execução integral num SHA posterior.
 - [ ] Acrescentar matriz positiva de leituras same-store e ampliar a auditoria BOLA/IDOR a endpoints que recebem IDs aninhados ou relações indirectas.
 - [ ] Ensaiar volume PostgreSQL persistente preexistente e operações API reais com principal runtime; não executar contra produção.
 
