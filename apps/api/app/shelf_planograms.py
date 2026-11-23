@@ -64,6 +64,36 @@ def _lock_source_image(
     return image
 
 
+def _preflight_shelf_scope(db: Session, shelf_id: int, actor: models.User) -> int:
+    """Check tenant ownership without acquiring a row lock."""
+    row = (
+        db.query(models.Zone.store_id)
+        .join(models.Shelf, models.Shelf.zone_id == models.Zone.id)
+        .filter(models.Shelf.id == shelf_id)
+        .first()
+    )
+    if row is None:
+        raise ShelfPlanogramError("Shelf not found")
+    _enforce_store_scope(actor, row[0])
+    return row[0]
+
+
+def _preflight_source_image_scope(db: Session, image_id: int | None, actor: models.User) -> None:
+    """Reject foreign image IDs before the image -> shelf lock sequence."""
+    if image_id is None:
+        return
+    row = (
+        db.query(models.Zone.store_id)
+        .join(models.Shelf, models.Shelf.zone_id == models.Zone.id)
+        .join(models.ShelfImage, models.ShelfImage.shelf_id == models.Shelf.id)
+        .filter(models.ShelfImage.id == image_id)
+        .first()
+    )
+    if row is None:
+        raise ShelfPlanogramError("Calibration image not found")
+    _enforce_store_scope(actor, row[0])
+
+
 def _lock_shelf(db: Session, shelf_id: int) -> tuple[models.Shelf, int]:
     result = (
         db.query(models.Shelf, models.Zone.store_id)
@@ -234,8 +264,10 @@ def create_draft_planogram(
     )
     normalized_cells = _validated_cells(cells)
 
+    _preflight_shelf_scope(db, shelf_id, actor)
     image = None
     if source == "IMAGE":
+        _preflight_source_image_scope(db, calibration_image_id, actor)
         image = _lock_source_image(
             db, calibration_image_id, expected_sha256=digest
         )
@@ -280,6 +312,8 @@ def replace_draft_planogram_cells(
     actor = _active_actor(db, actor_user_id)
     normalized_cells = _validated_cells(cells)
     shelf_id, image_id, image_sha256 = _load_planogram_context(db, planogram_id)
+    _preflight_shelf_scope(db, shelf_id, actor)
+    _preflight_source_image_scope(db, image_id, actor)
     image = _lock_source_image(
         db, image_id, shelf_id=shelf_id, expected_sha256=image_sha256
     ) if image_id is not None else None
@@ -340,6 +374,8 @@ def activate_planogram(
     """Activate a draft and retire the previous active version atomically."""
     actor = _active_actor(db, actor_user_id)
     shelf_id, image_id, image_sha256 = _load_planogram_context(db, planogram_id)
+    _preflight_shelf_scope(db, shelf_id, actor)
+    _preflight_source_image_scope(db, image_id, actor)
     image = _lock_source_image(
         db, image_id, shelf_id=shelf_id, expected_sha256=image_sha256
     ) if image_id is not None else None
@@ -406,6 +442,8 @@ def retire_planogram(
     """Retire an active planogram without deleting its history."""
     actor = _active_actor(db, actor_user_id)
     shelf_id, image_id, image_sha256 = _load_planogram_context(db, planogram_id)
+    _preflight_shelf_scope(db, shelf_id, actor)
+    _preflight_source_image_scope(db, image_id, actor)
     image = _lock_source_image(
         db, image_id, shelf_id=shelf_id, expected_sha256=image_sha256, require_active=False
     ) if image_id is not None else None
@@ -458,6 +496,8 @@ def load_active_planogram_for_comparison(
         )
         .first()
     )
+    _preflight_shelf_scope(db, shelf_id, actor)
+    _preflight_source_image_scope(db, comparison_image_id, actor)
     candidate_id = candidate.id if candidate is not None else None
     calibration_image_id = (
         candidate.calibration_image_id if candidate is not None else None
@@ -466,6 +506,7 @@ def load_active_planogram_for_comparison(
         candidate.calibration_image_sha256 if candidate is not None else None
     )
 
+    _preflight_source_image_scope(db, calibration_image_id, actor)
     image_ids = sorted({
         comparison_image_id,
         *([calibration_image_id] if calibration_image_id is not None else []),
@@ -561,6 +602,8 @@ def load_active_planogram_for_shelf(
     )
     if row is None:
         return None
+    _preflight_shelf_scope(db, shelf_id, actor)
+    _preflight_source_image_scope(db, row.calibration_image_id, actor)
     image = _lock_source_image(
         db, row.calibration_image_id, shelf_id=shelf_id, expected_sha256=row.calibration_image_sha256
     ) if row.calibration_image_id is not None else None
