@@ -1317,3 +1317,8 @@ O upload de imagens valida o actor antes de resolver shelf_id e oculta prateleir
 ### Validação PostgreSQL — deteções e exemplares
 
 O smoke postgres_detection_exemplar_prelock_smoke.py foi atualizado após a alteração deliberada do contrato cross-store de HTTP 403 para HTTP 404 uniforme. O teste continua a manter as locks da imagem e do produto ocupadas e exige que os três pedidos sejam recusados antes de aguardar por elas, sem persistir revisões. Commit de correção: 31e6c9f. Nova execução CI pendente.
+
+
+## 2026-11-23 — Validação P0 concluída
+
+O commit `1ffe4d3a7567c486f68de5e26051f7bcc0a2c110` concluiu com sucesso a validação da ronda de isolamento multi-tenant: API CI com 1595 testes aprovados e 1 ignorado; smoke tests PostgreSQL 16; Quality Gates; Security Scans (secret scan, dependências Python/Web e OWASP ZAP passive baseline); e Docker Compose demo stack. A primeira execução revelou expectativas 403 obsoletas e uma fixture duplicada; ambas foram corrigidas e a execução final passou. A próxima ronda continua a auditoria de IDs aninhados em OCR, matching, artefactos e warehouse.
