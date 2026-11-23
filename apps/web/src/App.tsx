@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import PlanogramComparison from "./PlanogramComparison";
+import InventoryMovementHistory from "./InventoryMovementHistory";
 import {
   Activity, AlertTriangle, ArrowDownToLine, ArrowUpRight, Boxes, CheckCircle2,
   CircleUserRound, Clock3, LogOut, PackageSearch, RefreshCw, ShieldCheck,
@@ -895,6 +896,7 @@ export default function App() {
               </div>
             </>}
           </section>}
+          {(user?.role === "ADMIN" || user?.role === "SUPERVISOR") && <InventoryMovementHistory token={token} storeId={Number(selectedStoreId || storeFilter || user.store_id || 0) || null} />}
           <section id="capture-workspace" className="capture-grid">
             <article className="panel capture-panel">
               <div className="panel-heading"><div><p className="eyebrow">VISÃO COMPUTACIONAL</p><h2>Nova captura de prateleira</h2><p className="muted">Envia uma fotografia para registo e futura análise automática.</p></div><div className="capture-icon"><PackageSearch size={20} /></div></div>
