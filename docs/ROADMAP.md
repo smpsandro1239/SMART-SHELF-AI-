@@ -1164,3 +1164,11 @@ Validação no commit `311fecc9e13641e6d5eb55465fda646fb2909601`: Quality Gates 
 - Commit: `db177bce`.
 - A alteração está publicada em `main`; API CI/PostgreSQL 16, Quality Gates, Security Scans e Docker Compose ainda não foram confirmados para este SHA.
 - Próxima expansão: IDs de localização, shelf, tarefa, packaging e relações indirectas. Não considerar a auditoria BOLA/IDOR global concluída.
+
+
+### 2026-11-23 — Controlos positivos para IDs aninhados de localização e prateleira
+
+- O smoke PostgreSQL cria agora uma localização física e uma prateleira com atribuição de produto na loja do supervisor, além dos recursos equivalentes da loja estrangeira.
+- Mantém os ataques cross-store existentes e acrescenta controlos positivos: criar uma colocação na localização própria e criar uma tarefa na prateleira própria (ambos esperam HTTP 201).
+- O objetivo é provar simultaneamente rejeição de IDs estrangeiros e aceitação de IDs válidos do mesmo tenant, evitando falsos positivos por recurso inexistente.
+- Implementação publicada; validação PostgreSQL 16/CI ainda pendente.
