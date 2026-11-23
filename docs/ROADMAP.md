@@ -1,3 +1,7 @@
+## Segurança P0 — IDs de sessões de captura e alertas (2026-11-23; validação pendente)
+
+As operações directas por ID de sessão de captura e alerta foram alinhadas com a política de ocultação cross-store: escrita com autorização pré-lock e revalidação pós-lock; leitura de eventos sem lock mas com verificação de tenant antes da consulta dos eventos. IDs estrangeiros e inexistentes devolvem HTTP 404 equivalente. Regressões verificam ausência de efeitos persistidos. Commits: b627107 (código), 1a2e776 (testes reforçados). API CI/PostgreSQL 16 ainda não confirmado.
+
 ## Segurança P0 — IDs de localizações de armazém (2026-11-23; CI pendente)
 
 A criação de colocações valida agora a localização através do helper multi-tenant com autorização antes do lock e revalidação depois do lock. IDs estrangeiros e inexistentes produzem o mesmo HTTP 404. Foi adicionada regressão HTTP autenticada e verificação de não persistência. Commits: a77c679 (código) e a4d41af (teste). A validação CI/PostgreSQL 16 ainda está pendente; a matriz de IDs de prateleira e relações indirectas permanece aberta.
