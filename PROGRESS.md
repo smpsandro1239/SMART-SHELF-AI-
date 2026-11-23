@@ -1,3 +1,11 @@
+## 2026-11-23 — Histórico de movimentos de inventário
+
+- Implementado `GET /api/v1/inventory/movements`, endpoint read-only para consultar transferências BACKROOM_TO_SHELF já reconciliadas.
+- A loja é obrigatória; filtros opcionais por produto e tarefa. Limite de resultados normalizado para 1–500.
+- A leitura exige ADMIN ou SUPERVISOR e aplica o âmbito de loja antes de consultar movimentos.
+- Adicionados dois testes em `apps/api/tests/test_inventory.py`: consulta/filtros sem mutação e rejeição de EMPLOYEE/loja estrangeira.
+- Commits: `7ce55e4e` (API) e `20c0947e` (testes). CI pendente; sem execução local nesta sessão.
+
 ## 2026-11-23 — Desenvolvimento funcional do dashboard operacional
 
 - Expandido `GET /api/v1/dashboard/summary` com tarefas por prioridade, tarefas activas urgentes, tarefas activas sem atribuição e taxa de conclusão.
