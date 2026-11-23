@@ -1,3 +1,14 @@
+## 2026-11-23 — Controlos positivos same-store para recursos logísticos reais
+
+- O smoke `postgres_inventory_authorization_smoke.py` cria agora um nível de embalagem CASE e uma palete válida em cada loja.
+- Os pedidos de leitura cross-store usam o ID real da palete estrangeira; os controlos positivos substituem-no pelo ID da palete da loja do supervisor.
+- Foram removidas as três exclusões anteriores: cálculo de unidades de reposição, plano de rotação de palete e eventos de ciclo de vida. A expectativa passa a ser HTTP 200 para todos os 23 controlos same-store e HTTP 403 para as 23 leituras cross-store.
+- Commit de código: `3af7a02b`.
+- API CI, Quality Gates, Security Scans e Docker Compose deste novo SHA ainda não foram confirmados. A alteração foi publicada no GitHub; não foi executada localmente nesta sessão.
+- Próximo passo: validar o smoke em PostgreSQL 16 e expandir a matriz para IDs aninhados/relacionais.
+
+---
+
 ## 2026-11-23 — Expansão da matriz PostgreSQL de leituras cross-store
 
 - Actualizado `apps/api/scripts/postgres_inventory_authorization_smoke.py` para exercitar 23 endpoints GET que recebem `store_id` em vendas, tráfego, forecasting, replenishment, decisões operacionais e warehouse.
