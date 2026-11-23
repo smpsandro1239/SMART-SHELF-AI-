@@ -1284,3 +1284,8 @@ Validação no commit `311fecc9e13641e6d5eb55465fda646fb2909601`: Quality Gates 
 ## 2026-11-23 — BOLA: criação de prateleiras por zona (validação pendente)
 
 A rota POST /api/v1/shelves passa a validar o store_id da zona antes de criar a prateleira. SUPERVISOR não pode usar um zone_id estrangeiro; zonas estrangeiras e IDs inexistentes devolvem HTTP 404 equivalente. O teste autenticado cobre tentativa cross-store, controlo positivo same-store e ausência de persistência. Commits: aa46a255 (código), 716c359 (teste). CI/PostgreSQL 16 pendente.
+
+
+## 2026-11-23 — BOLA: associação de produtos a prateleiras (validação pendente)
+
+POST /api/v1/shelf-products valida agora o actor antes de resolver shelf_id e oculta prateleiras estrangeiras com HTTP 404, igual ao caso inexistente, antes de bloquear o produto. A regressão autenticada verifica ausência de associação cross-store e criação same-store válida. Commits: 6a4b783 (código), 78d07d3 (teste). CI/PostgreSQL 16 pendente.
