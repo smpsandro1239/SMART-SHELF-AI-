@@ -706,14 +706,16 @@ def test_active_planogram_service_rejects_foreign_shelf_without_active_planogram
 
 
 
-def test_supervisor_cannot_create_shelf_under_foreign_or_missing_zone(planogram_api):
+def test_supervisor_cannot_create_shelf_under_foreign_or_missing_zone(planogram_api, monkeypatch):
     client, ids = planogram_api
-    headers = _headers(ids["supervisor_a"], "SUPERVISOR")
+    from types import SimpleNamespace
+    monkeypatch.setattr(main_module, "settings", main_module.settings.model_copy(update={"app_env": "test"}))
+    actor = SimpleNamespace(id=ids["supervisor_a"], role="SUPERVISOR", store_id=ids["store_a"])
+    monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: actor)
 
     foreign = client.post(
         "/api/v1/shelves",
         json={"zone_id": ids["zone_b"], "code": "FORGED-01"},
-        headers=headers,
     )
     missing = client.post(
         "/api/v1/shelves",
@@ -737,9 +739,17 @@ def test_supervisor_cannot_create_shelf_under_foreign_or_missing_zone(planogram_
 
 
 
-def test_supervisor_cannot_assign_product_to_foreign_shelf(planogram_api):
+def test_supervisor_cannot_assign_product_to_foreign_shelf(planogram_api, monkeypatch):
     client, ids = planogram_api
-    headers = _headers(ids["supervisor_a"], "SUPERVISOR")
+    from types import SimpleNamespace
+    monkeypatch.setattr(main_module, "settings", main_module.settings.model_copy(update={"app_env": "test"}))
+    actor = SimpleNamespace(id=ids["supervisor_a"], role="SUPERVISOR", store_id=ids["store_a"])
+    monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: actor)
+    with main_module.SessionLocal() as db:
+        own_product = models.Product(sku="PLANO-OWN-ASSIGN", name="Own shelf assignment product", is_active=True)
+        db.add(own_product)
+        db.commit()
+        own_product_id = own_product.id
     payload = {
         "shelf_id": ids["shelf_b"],
         "product_id": ids["product_a"],
@@ -747,24 +757,17 @@ def test_supervisor_cannot_assign_product_to_foreign_shelf(planogram_api):
         "min_display_quantity": 3,
     }
 
-    foreign = client.post("/api/v1/shelf-products", json=payload, headers=headers)
+    foreign = client.post("/api/v1/shelf-products", json=payload)
     missing = client.post(
         "/api/v1/shelf-products",
         json={**payload, "shelf_id": 2147483000},
-        headers=headers,
     )
     assert foreign.status_code == missing.status_code == 404
     assert foreign.json() == missing.json()
 
-    own_product = client.post(
-        "/api/v1/products",
-        json={"sku": "PLANO-OWN-ASSIGN", "name": "Own shelf assignment product"},
-        headers=headers,
-    )
-    assert own_product.status_code == 201, own_product.text
     own = client.post(
         "/api/v1/shelf-products",
-        json={**payload, "shelf_id": ids["shelf_a"], "product_id": own_product.json()["id"]},
+        json={**payload, "shelf_id": ids["shelf_a"], "product_id": own_product_id},
         headers=headers,
     )
     assert own.status_code == 201, own.text
@@ -774,5 +777,5 @@ def test_supervisor_cannot_assign_product_to_foreign_shelf(planogram_api):
             shelf_id=ids["shelf_b"], product_id=ids["product_a"]
         ).count() == 0
         assert db.query(models.ShelfProduct).filter_by(
-            shelf_id=ids["shelf_a"], product_id=own_product.json()["id"]
+            shelf_id=ids["shelf_a"], product_id=own_product_id
         ).count() == 1
