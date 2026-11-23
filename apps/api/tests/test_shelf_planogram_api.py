@@ -12,6 +12,7 @@ from sqlalchemy.pool import StaticPool
 from app import main as main_module, models
 from app.database import Base, get_db
 from app.security import create_access_token, hash_password
+import app.shelf_planograms as planogram_service
 
 
 @pytest.fixture
@@ -561,8 +562,16 @@ def test_comparison_fingerprint_is_canonical_and_binds_schema_and_cell_results()
     with pytest.raises(ValueError):
         comparison_fingerprint({**snapshot, "non_finite": float("nan")})
 
-def test_planogram_id_mutations_enforce_store_scope(planogram_api):
+def test_planogram_id_mutations_enforce_store_scope(planogram_api, monkeypatch):
     client, ids = planogram_api
+    shelf_lock_calls = []
+    original_lock_shelf = planogram_service._lock_shelf
+
+    def track_shelf_lock(db, shelf_id):
+        shelf_lock_calls.append(shelf_id)
+        return original_lock_shelf(db, shelf_id)
+
+    monkeypatch.setattr(planogram_service, "_lock_shelf", track_shelf_lock)
     supervisor_a = _headers(ids["supervisor_a"], "SUPERVISOR")
     supervisor_b = _headers(ids["supervisor_b"], "SUPERVISOR")
 
@@ -593,6 +602,7 @@ def test_planogram_id_mutations_enforce_store_scope(planogram_api):
     )
     assert update_foreign_draft.status_code == 403
     assert activate_foreign_draft.status_code == 403
+    assert shelf_lock_calls == [], "Foreign planogram IDs must be rejected before locking the shelf"
 
     activated_by_owner = client.post(
         f"/api/v1/planograms/{planogram_id}/activate",
@@ -600,6 +610,7 @@ def test_planogram_id_mutations_enforce_store_scope(planogram_api):
         headers=supervisor_b,
     )
     assert activated_by_owner.status_code == 200, activated_by_owner.text
+    assert shelf_lock_calls == [ids["shelf_b"]]
 
     retire_foreign_active = client.post(
         f"/api/v1/planograms/{planogram_id}/retire",
@@ -607,6 +618,7 @@ def test_planogram_id_mutations_enforce_store_scope(planogram_api):
         headers=supervisor_a,
     )
     assert retire_foreign_active.status_code == 403
+    assert shelf_lock_calls == [ids["shelf_b"]], "Foreign retirement must not acquire a shelf lock"
 
     history = client.get(
         f"/api/v1/shelves/{ids['shelf_b']}/planograms",
