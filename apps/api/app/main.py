@@ -4285,6 +4285,20 @@ def review_product_embedding_exemplar(
     if initial is None:
         raise HTTPException(status_code=404, detail="Embedding exemplar not found")
     actor = _request_user(db, request)
+    # Reject reviewer-ineligible image-less and self-review requests before
+    # taking the global catalogue product lock. The checks are repeated against
+    # the refreshed exemplar below to defend against concurrent ownership edits.
+    if actor is not None and actor.role != "ADMIN":
+        if initial.shelf_image_id is None:
+            raise HTTPException(
+                status_code=403,
+                detail="Access to exemplars without a source image is restricted to administrators",
+            )
+        if initial.created_by_user_id == actor.id:
+            raise HTTPException(
+                status_code=403,
+                detail="A different reviewer must approve or reject an exemplar created by this user",
+            )
     source_image = None
     if initial.shelf_image_id is not None:
         source_image, _ = _lock_authorized_shelf_image(

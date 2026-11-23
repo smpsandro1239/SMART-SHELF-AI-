@@ -5,7 +5,7 @@ os.environ["DATABASE_URL"] = "sqlite:///./test_unused.db"
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -921,3 +921,63 @@ def test_matching_registry_skips_exemplar_when_source_image_hash_changes():
             assert registry._exemplars == ()
             assert result.status == "UNKNOWN"
             assert result.product_id is None
+
+def test_image_less_exemplar_non_admin_is_rejected_before_product_lock(monkeypatch):
+    with TestClient(app) as client:
+        product_id = create_product(client)
+        created = client.post(
+            "/api/v1/product-embedding-exemplars",
+            json=exemplar_payload(product_id, image_sha256="7" * 64),
+        )
+        assert created.status_code == 201, created.text
+        exemplar_id = created.json()["id"]
+
+        with TestingSession() as db:
+            creator = models.User(
+                email="image-less-exemplar-creator@example.test",
+                full_name="Criador",
+                password_hash="test-only-not-used",
+                role="ADMIN",
+                is_active=True,
+            )
+            reviewer = models.User(
+                email="image-less-exemplar-supervisor@example.test",
+                full_name="Supervisor",
+                password_hash="test-only-not-used",
+                role="SUPERVISOR",
+                is_active=True,
+            )
+            db.add_all([creator, reviewer])
+            db.flush()
+            row = db.get(models.ProductEmbeddingExemplar, exemplar_id)
+            row.created_by_user_id = creator.id
+            reviewer_id = reviewer.id
+            db.commit()
+
+        monkeypatch.setattr(
+            main_module,
+            "_request_user",
+            lambda request_db, _request: request_db.get(models.User, reviewer_id),
+        )
+        statements = []
+
+        def capture_statement(_connection, _cursor, statement, _parameters, _context, _executemany):
+            statements.append(statement.lower())
+
+        event.listen(TEST_ENGINE, "before_cursor_execute", capture_statement)
+        try:
+            response = client.patch(
+                f"/api/v1/product-embedding-exemplars/{exemplar_id}/review",
+                json={"review_status": "REJECTED", "review_notes": "Revisão não autorizada"},
+            )
+        finally:
+            event.remove(TEST_ENGINE, "before_cursor_execute", capture_statement)
+
+        assert response.status_code == 403
+        assert not any("from products" in statement for statement in statements), (
+            "A revisão não autorizada não pode consultar/bloquear o produto antes da recusa"
+        )
+        with TestingSession() as db:
+            stored = db.get(models.ProductEmbeddingExemplar, exemplar_id)
+            assert stored.review_status == "PENDING"
+            assert stored.reviewed_at is None
