@@ -3068,7 +3068,13 @@ def create_observation_from_demo_detection(
     if initial_detection is None:
         raise HTTPException(status_code=404, detail="Detection not found")
     source_image_id = initial_detection.shelf_image_id
-    image, _ = _lock_authorized_shelf_image(db, source_image_id, actor)
+    image, _ = _lock_authorized_shelf_image(
+        db,
+        source_image_id,
+        actor,
+        hide_foreign=True,
+        hidden_foreign_detail="Detection not found",
+    )
     detection = (
         db.query(models.ShelfImageDetection)
         .filter(
@@ -4183,7 +4189,13 @@ def list_detection_sku_reviews(
     if initial_detection is None:
         raise HTTPException(status_code=404, detail="Detection not found")
     source_image_id = initial_detection.shelf_image_id
-    image_record, _ = _lock_authorized_shelf_image(db, source_image_id, actor)
+    image_record, _ = _lock_authorized_shelf_image(
+        db,
+        source_image_id,
+        actor,
+        hide_foreign=True,
+        hidden_foreign_detail="Detection not found",
+    )
     _require_active_shelf_image(image_record)
     detection = (
         db.query(models.ShelfImageDetection)
