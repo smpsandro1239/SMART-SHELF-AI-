@@ -128,3 +128,11 @@ O endpoint GET /api/v1/shelves/{shelf_id}/observation-consensus compara o tenant
 ## IDs de prateleira — criação e consenso (2026-11-23)
 
 As rotas create_observation, create_capture_session e get_shelf_observation_consensus executam a autenticação/validação de papel antes da consulta do ID de prateleira. Para SUPERVISOR, IDs de outra loja e IDs inexistentes devolvem HTTP 404 equivalente. A avaliação de alertas usa o mesmo caminho de consenso e não persiste quando a prateleira não é autorizada. Testes HTTP cobrem os cenários negativos e ausência de efeitos. Commits de código 9288459/cce1afd; testes 739a574/d5d6243. CI/PostgreSQL 16 pendente.
+
+
+## IDs directos de tarefas — ocultação e leitura sem lock (2026-11-23)
+
+- GET /api/v1/tasks/{task_id}/events autentica/responde primeiro com actor, resolve a tarefa sem row lock e oculta tarefas estrangeiras com HTTP 404 igual ao ID inexistente antes de consultar eventos.
+- PATCH /api/v1/tasks/{task_id}/status e POST /api/v1/tasks/{task_id}/reconcile-inventory executam preflight tenant, lock e revalidação através de _lock_store_scoped_record(hide_foreign=True).
+- Testes de regressão comparam respostas estrangeira/inexistente para os três endpoints; verificam ausência de transição/eventos e ausência de InventoryMovement quando a reconciliação é negada.
+- Commits: GET 954f973; mutations ee40b88; testes f12ed7b e cc3dc3a. Validação CI/PostgreSQL 16 pendente.
