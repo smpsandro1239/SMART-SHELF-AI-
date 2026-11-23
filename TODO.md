@@ -1604,3 +1604,12 @@ A implementação de produção já verificava lease_lost nos caminhos de sucess
 - [x] Cobrir tentativa cross-store, resposta equivalente, ausência de associação persistida e controlo positivo same-store.
 - [ ] Executar testes focados e workflows API CI, Quality Gates, Security Scans e Docker Compose.
 - [ ] Continuar auditoria de IDs directos de tarefas e movimentos de inventário.
+
+
+## Segurança P0 — IDs directos de tarefas e eventos de reposição (2026-11-23; código/testes publicados, CI pendente)
+
+- [x] A leitura de eventos de tarefa autentica o actor antes de resolver task_id e oculta tarefas estrangeiras com HTTP 404 igual ao ID inexistente, sem adquirir row lock numa rota GET.
+- [x] A alteração de estado e a reconciliação de inventário usam autorização pré-lock com hide_foreign=True para IDs directos de tarefas.
+- [x] Testes comparam respostas cross-store/inexistente para eventos, alteração de estado e reconciliação; confirmam que a tentativa de reconciliação não cria InventoryMovement.
+- [ ] Confirmar API CI, Quality Gates, Security Scans e Docker Compose no HEAD final; executar smoke PostgreSQL 16.
+- [ ] Continuar auditoria de IDs directos de movimentos, eventos de paletes e entidades de warehouse.
