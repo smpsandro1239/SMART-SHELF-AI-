@@ -1228,7 +1228,7 @@ def test_supervisor_cannot_upload_image_to_foreign_store_shelf(monkeypatch, tmp_
             capture_mode="single",
         )
         db.add(foreign_session)
-        db.flush()
+        db.commit()
         foreign_session_id = foreign_session.id
         own_shelf_id = own_shelf.id
         actor = SimpleNamespace(
