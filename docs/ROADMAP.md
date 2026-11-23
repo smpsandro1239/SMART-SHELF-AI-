@@ -1299,3 +1299,8 @@ A leitura de eventos de tarefa autentica o actor antes de resolver task_id e ocu
 ## 2026-11-23 — BOLA: IDs de evidência de visão computacional (validação pendente)
 
 Os endpoints de eventos de retenção, revisão de deteções e revisão de exemplares autenticam o actor antes de resolver IDs diretos. Recursos de outra loja são ocultados com HTTP 404 equivalente ao ID pai inexistente; a rota GET não adquire row lock e a ordem de locks imagem → produto → exemplar permanece inalterada. Testes cobrem IDs estrangeiros/inexistentes e controlos de operação same-store. Commits: e402eda, 956431e, 11305cc, 1420ed4 e 57cdab3. A expectativa do smoke PostgreSQL para warehouse placement foi alinhada em 9f5ebe0. CI atual ainda em execução.
+
+
+## 2026-11-23 — BOLA: IDs de upload e sessão de captura (validação pendente)
+
+O upload de imagens valida o actor antes de resolver shelf_id e oculta prateleiras estrangeiras como inexistentes. O capture_session_id opcional usa preflight tenant, lock e revalidação, com HTTP 404 uniforme para sessão estrangeira/inexistente. Testes verificam a equivalência das respostas e ausência de efeitos laterais em ficheiros e registos. Commits: 90bd84f, 91da9f1, fdcbd55, 30f0dda, 0d7a079 e 3e1ac0a. CI do HEAD final pendente.
