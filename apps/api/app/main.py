@@ -6858,6 +6858,154 @@ def list_inventory_movements(
     )
 
 
+
+@app.get("/api/v1/inventory/reconciliation", tags=["inventory"])
+def get_inventory_reconciliation(
+    store_id: int,
+    shelf_id: int | None = None,
+    product_id: int | None = None,
+    limit: int = 100,
+    request: Request = None,
+    db: Session = Depends(get_db),
+):
+    """Compare shelf display targets with the latest measured shelf observation.
+
+    Backroom snapshots are returned as a separate stock domain; they are never
+    treated as the quantity physically present on the shelf and no stock is changed.
+    """
+    actor = _request_user(db, request)
+    if actor is None or actor.role not in {"ADMIN", "SUPERVISOR"}:
+        raise HTTPException(status_code=403, detail="Supervisor role required")
+    _enforce_store_scope(actor, store_id)
+    if db.get(models.Store, store_id) is None:
+        raise HTTPException(status_code=404, detail="Store not found")
+
+    latest_observation_id = (
+        db.query(models.Observation.id)
+        .filter(
+            models.Observation.shelf_id == models.ShelfProduct.shelf_id,
+            models.Observation.product_id == models.ShelfProduct.product_id,
+        )
+        .order_by(models.Observation.observed_at.desc(), models.Observation.id.desc())
+        .limit(1)
+        .correlate(models.ShelfProduct)
+        .scalar_subquery()
+    )
+    latest_snapshot_id = (
+        db.query(models.InventorySnapshot.id)
+        .filter(
+            models.InventorySnapshot.store_id == store_id,
+            models.InventorySnapshot.product_id == models.ShelfProduct.product_id,
+        )
+        .order_by(models.InventorySnapshot.captured_at.desc(), models.InventorySnapshot.id.desc())
+        .limit(1)
+        .correlate(models.ShelfProduct)
+        .scalar_subquery()
+    )
+    query = (
+        db.query(
+            models.ShelfProduct,
+            models.Shelf,
+            models.Zone,
+            models.Product,
+            latest_observation_id.label("latest_observation_id"),
+            latest_snapshot_id.label("latest_snapshot_id"),
+        )
+        .join(models.Shelf, models.ShelfProduct.shelf_id == models.Shelf.id)
+        .join(models.Zone, models.Shelf.zone_id == models.Zone.id)
+        .join(models.Product, models.ShelfProduct.product_id == models.Product.id)
+        .filter(
+            models.Zone.store_id == store_id,
+            models.Product.is_active.is_(True),
+        )
+    )
+    if shelf_id is not None:
+        query = query.filter(models.ShelfProduct.shelf_id == shelf_id)
+    if product_id is not None:
+        query = query.filter(models.ShelfProduct.product_id == product_id)
+
+    rows = query.order_by(
+        models.Zone.name.asc(), models.Shelf.code.asc(), models.Product.sku.asc()
+    ).limit(max(1, min(limit, 500))).all()
+    observation_ids = [row[4] for row in rows if row[4] is not None]
+    snapshot_ids = [row[5] for row in rows if row[5] is not None]
+    observations = {
+        item.id: item for item in db.query(models.Observation).filter(
+            models.Observation.id.in_(observation_ids)
+        ).all()
+    } if observation_ids else {}
+    snapshots = {
+        item.id: item for item in db.query(models.InventorySnapshot).filter(
+            models.InventorySnapshot.id.in_(snapshot_ids)
+        ).all()
+    } if snapshot_ids else {}
+
+    result = []
+    now = models.utc_now()
+    for link, shelf, zone, product, observation_id, snapshot_id in rows:
+        observation = observations.get(observation_id)
+        snapshot = snapshots.get(snapshot_id)
+        observed_quantity = (
+            float(observation.observed_quantity)
+            if observation is not None and observation.observed_quantity is not None
+            else None
+        )
+        target_quantity = float(link.target_quantity)
+        delta = observed_quantity - target_quantity if observed_quantity is not None else None
+        if observation is None:
+            display_status = "NO_OBSERVATION"
+        elif observed_quantity is None:
+            display_status = "NO_MEASURED_QUANTITY"
+        elif delta < 0:
+            display_status = "BELOW_TARGET"
+        elif delta > 0:
+            display_status = "ABOVE_TARGET"
+        else:
+            display_status = "AT_TARGET"
+
+        snapshot_age_minutes = None
+        if snapshot is not None:
+            captured_at = snapshot.captured_at
+            if captured_at.tzinfo is None:
+                captured_at = captured_at.replace(tzinfo=timezone.utc)
+            snapshot_age_minutes = max(0.0, (now - captured_at).total_seconds() / 60)
+
+        result.append({
+            "store_id": store_id,
+            "zone_id": zone.id,
+            "zone_name": zone.name,
+            "shelf_id": shelf.id,
+            "shelf_code": shelf.code,
+            "product_id": product.id,
+            "product_sku": product.sku,
+            "product_name": product.name,
+            "display_target_quantity": target_quantity,
+            "observed_shelf_quantity": observed_quantity,
+            "display_delta": delta,
+            "display_status": display_status,
+            "observation_id": observation.id if observation else None,
+            "observation_status": observation.status if observation else None,
+            "observation_source": observation.source if observation else None,
+            "observation_confidence": observation.confidence if observation else None,
+            "observed_at": observation.observed_at if observation else None,
+            "backroom_snapshot_id": snapshot.id if snapshot else None,
+            "backroom_on_hand_quantity": float(snapshot.on_hand_quantity) if snapshot else None,
+            "backroom_reserved_quantity": float(snapshot.reserved_quantity) if snapshot else None,
+            "backroom_available_quantity": float(snapshot.available_quantity) if snapshot else None,
+            "backroom_source": snapshot.source if snapshot else None,
+            "backroom_captured_at": snapshot.captured_at if snapshot else None,
+            "backroom_snapshot_age_minutes": round(snapshot_age_minutes, 2) if snapshot_age_minutes is not None else None,
+        })
+    return {
+        "store_id": store_id,
+        "count": len(result),
+        "limit": max(1, min(limit, 500)),
+        "generated_at": now,
+        "note": "Display target and measured shelf quantity are separate from backroom stock. Differences are informational and never modify accounting inventory.",
+        "items": result,
+    }
+
+
 @app.post(
     "/api/v1/tasks/{task_id}/reconcile-inventory",
     response_model=InventoryMovementRead,
