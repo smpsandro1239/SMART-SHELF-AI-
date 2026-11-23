@@ -1294,3 +1294,8 @@ POST /api/v1/shelf-products valida agora o actor antes de resolver shelf_id e oc
 ## 2026-11-23 — BOLA: IDs directos de tarefas e eventos (validação pendente)
 
 A leitura de eventos de tarefa autentica o actor antes de resolver task_id e oculta IDs estrangeiros com HTTP 404 igual ao caso inexistente, sem row lock na rota GET. A alteração de estado e a reconciliação usam _lock_store_scoped_record com hide_foreign=True. Testes cobrem igualdade das respostas cross-store/inexistente, ausência de eventos/alterações e ausência de movimentos de inventário em reconciliação negada. Commits: 954f973 (GET), ee40b88 (PATCH/reconciliação), f12ed7b e cc3dc3a (testes). CI/PostgreSQL 16 pendente.
+
+
+## 2026-11-23 — BOLA: IDs de evidência de visão computacional (validação pendente)
+
+Os endpoints de eventos de retenção, revisão de deteções e revisão de exemplares autenticam o actor antes de resolver IDs diretos. Recursos de outra loja são ocultados com HTTP 404 equivalente ao ID pai inexistente; a rota GET não adquire row lock e a ordem de locks imagem → produto → exemplar permanece inalterada. Testes cobrem IDs estrangeiros/inexistentes e controlos de operação same-store. Commits: e402eda, 956431e, 11305cc, 1420ed4 e 57cdab3. A expectativa do smoke PostgreSQL para warehouse placement foi alinhada em 9f5ebe0. CI atual ainda em execução.
