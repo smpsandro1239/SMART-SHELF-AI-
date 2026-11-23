@@ -8290,18 +8290,52 @@ def dashboard_summary(
         status.lower(): task_query.filter(models.ReplenishmentTask.status == status).count()
         for status in ("PENDING", "ASSIGNED", "IN_PROGRESS", "COMPLETED", "CANCELLED")
     }
+    task_priority_counts = {
+        priority.lower(): task_query.filter(models.ReplenishmentTask.priority == priority).count()
+        for priority in ("LOW", "NORMAL", "HIGH", "URGENT")
+    }
+    active_task_filter = models.ReplenishmentTask.status.in_(
+        ("PENDING", "ASSIGNED", "IN_PROGRESS")
+    )
+    active_tasks = task_counts["pending"] + task_counts["assigned"] + task_counts["in_progress"]
+    urgent_active_tasks = task_query.filter(
+        active_task_filter,
+        models.ReplenishmentTask.priority.in_(("HIGH", "URGENT")),
+    ).count()
+    unassigned_active_tasks = task_query.filter(
+        active_task_filter,
+        models.ReplenishmentTask.assigned_user_id.is_(None),
+    ).count()
+    total_tasks = sum(task_counts.values())
+    completion_rate_percent = round(
+        (task_counts["completed"] / total_tasks) * 100, 1
+    ) if total_tasks else 0.0
+
     observation_counts = {
         status.lower(): observation_query.filter(models.Observation.status == status).count()
         for status in ("LOW_STOCK", "EMPTY", "UNKNOWN", "OCCLUDED")
     }
+    attention_observations = observation_counts["low_stock"] + observation_counts["empty"]
+    shelves_requiring_attention = (
+        observation_query
+        .filter(models.Observation.status.in_(("LOW_STOCK", "EMPTY")))
+        .with_entities(func.count(func.distinct(models.Observation.shelf_id)))
+        .scalar()
+        or 0
+    )
     return {
         "store_id": user.store_id if user.role != "ADMIN" else store_id,
         "role": user.role,
         "tasks": task_counts,
+        "tasks_by_priority": task_priority_counts,
         "observations": observation_counts,
-        "active_tasks": task_counts["pending"] + task_counts["assigned"] + task_counts["in_progress"],
-        "shelves_requiring_attention": observation_counts["low_stock"] + observation_counts["empty"],
-        "note": "Counts are based on recorded observations; they are not a live computer-vision feed.",
+        "active_tasks": active_tasks,
+        "urgent_active_tasks": urgent_active_tasks,
+        "unassigned_active_tasks": unassigned_active_tasks,
+        "completion_rate_percent": completion_rate_percent,
+        "attention_observations": attention_observations,
+        "shelves_requiring_attention": shelves_requiring_attention,
+        "note": "Counts are based on recorded observations; they are not a live computer-vision feed. Completion rate is completed tasks divided by all visible tasks, including cancelled tasks.",
     }
 
 @app.post(
