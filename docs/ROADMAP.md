@@ -1137,3 +1137,13 @@ Validação no commit `311fecc9e13641e6d5eb55465fda646fb2909601`: Quality Gates 
 - Runtime passa a `NOINHERIT`; smoke PostgreSQL verifica `rolinherit=false`.
 - API/worker dependem do sucesso de provisioning e migrations; falha de provisionamento impede o arranque.
 - CI API/Quality/Security/Compose passou no HEAD `aeff4a3b`. O smoke Compose simulou ownership e membership legados e confirmou a reconciliação; continua pendente um ensaio operacional com volume persistente real preservado entre reinícios, fora do runner efémero.
+
+
+### 2026-11-23 — Controlos positivos same-store com IDs logísticos reais
+
+- O smoke PostgreSQL multi-loja passou a criar packaging CASE e paletes válidas nas duas lojas.
+- As 23 leituras same-store passaram a incluir cálculo de unidades, plano de rotação de palete e eventos de palete, anteriormente excluídos por falta de dados válidos.
+- As leituras cross-store usam o ID real da palete da loja estrangeira; os controlos positivos usam o ID da palete própria. Isto evita falsos positivos por HTTP 404 causado por IDs inexistentes.
+- Commit de implementação: `3af7a02b`.
+- Validação CI/PostgreSQL 16 pendente; não considerar a ampliação validada até o workflow terminar com sucesso.
+- A matriz endpoint × perfil × loja, a auditoria de IDs aninhados e o ensaio de volume PostgreSQL persistente continuam em aberto.
