@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import PlanogramComparison from "./PlanogramComparison";
 import InventoryMovementHistory from "./InventoryMovementHistory";
+import InventoryReconciliationPanel from "./InventoryReconciliationPanel";
 import InventoryReconciliation from "./InventoryReconciliation";
 import {
   Activity, AlertTriangle, ArrowDownToLine, ArrowUpRight, Boxes, CheckCircle2,
@@ -898,6 +899,7 @@ export default function App() {
             </>}
           </section>}
           {(user?.role === "ADMIN" || user?.role === "SUPERVISOR") && <InventoryMovementHistory token={token} storeId={user.role === "ADMIN" ? (Number(storeFilter || selectedStoreId || 0) || null) : user.store_id} />}
+          {(user?.role === "ADMIN" || user?.role === "SUPERVISOR") && <InventoryReconciliationPanel token={token} storeId={user.role === "ADMIN" ? (Number(storeFilter || selectedStoreId || 0) || null) : user.store_id} />}
           {(user?.role === "ADMIN" || user?.role === "SUPERVISOR") && <InventoryReconciliation token={token} storeId={user.role === "ADMIN" ? (Number(storeFilter || selectedStoreId || 0) || null) : user.store_id} />}
           <section id="capture-workspace" className="capture-grid">
             <article className="panel capture-panel">
