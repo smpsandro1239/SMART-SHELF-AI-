@@ -149,6 +149,47 @@ def main() -> None:
             completed_at=completed_at,
         )
         db.add(foreign_task)
+        foreign_observation = models.Observation(
+            shelf_id=foreign_shelf.id,
+            product_id=product.id,
+            source="fixed_camera",
+            status="LOW_STOCK",
+            confidence=0.9,
+            observed_quantity=1,
+            observed_at=completed_at,
+            model_version="authorization-smoke",
+        )
+        foreign_capture_session = models.CaptureSession(
+            store_id=store_b.id,
+            shelf_id=foreign_shelf.id,
+            source_type="fixed_camera",
+            capture_mode="single",
+            started_at=completed_at,
+        )
+        foreign_alert = models.ObservationAlert(
+            store_id=store_b.id,
+            shelf_id=foreign_shelf.id,
+            product_id=product.id,
+            condition="LOW_STOCK",
+            status="OPEN",
+            first_seen_at=completed_at,
+            last_seen_at=completed_at,
+            confirmation_count=2,
+            average_confidence=0.9,
+            sources=["fixed_camera"],
+        )
+        db.add_all([foreign_observation, foreign_capture_session, foreign_alert])
+        db.flush()
+        foreign_observation_id = foreign_observation.id
+        foreign_capture_session_id = foreign_capture_session.id
+        foreign_alert_id = foreign_alert.id
+        db.add(models.ObservationAlertEvent(
+            alert_id=foreign_alert.id,
+            event_type="CREATED",
+            to_status="OPEN",
+            reason="PostgreSQL authorization smoke fixture",
+            created_at=completed_at,
+        ))
         db.add(models.InventorySnapshot(
             store_id=store_b.id,
             product_id=product.id,
@@ -287,7 +328,97 @@ def main() -> None:
                     },
                     headers=supervisor_headers,
                 ),
+                "observation creation with foreign shelf": client.post(
+                    "/api/v1/observations",
+                    json={
+                        "shelf_id": foreign_shelf_id,
+                        "product_id": product_id,
+                        "source": "mobile",
+                        "status": "UNKNOWN",
+                    },
+                    headers=supervisor_headers,
+                ),
+                "capture session creation with foreign shelf": client.post(
+                    "/api/v1/capture-sessions",
+                    json={
+                        "shelf_id": foreign_shelf_id,
+                        "source_type": "mobile",
+                        "capture_mode": "single",
+                    },
+                    headers=supervisor_headers,
+                ),
+                "planogram creation with foreign shelf": client.post(
+                    f"/api/v1/shelves/{foreign_shelf_id}/planograms",
+                    json={
+                        "calibration_source": "MANUAL",
+                        "cells": [{
+                            "cell_code": "FOREIGN-CELL",
+                            "row_index": 0,
+                            "column_index": 0,
+                            "x_min": 0.0,
+                            "y_min": 0.0,
+                            "x_max": 1.0,
+                            "y_max": 1.0,
+                            "expected_product_id": product_id,
+                            "expected_facings": 1,
+                        }],
+                    },
+                    headers=supervisor_headers,
+                ),
+                "foreign observation alert events": client.get(
+                    f"/api/v1/observation-alerts/{foreign_alert_id}/events",
+                    headers=supervisor_headers,
+                ),
             }
+
+            # Nested shelf filters must not disclose rows belonging to another
+            # tenant, even when the caller supplies a real foreign shelf ID.
+            nested_filtered_reads = {
+                "foreign shelf observations": client.get(
+                    "/api/v1/observations",
+                    params={"shelf_id": foreign_shelf_id},
+                    headers=supervisor_headers,
+                ),
+                "foreign shelf capture sessions": client.get(
+                    "/api/v1/capture-sessions",
+                    params={"shelf_id": foreign_shelf_id},
+                    headers=supervisor_headers,
+                ),
+                "foreign shelf alerts": client.get(
+                    "/api/v1/observation-alerts",
+                    params={"shelf_id": foreign_shelf_id},
+                    headers=supervisor_headers,
+                ),
+            }
+            for resource, response in nested_filtered_reads.items():
+                assert response.status_code == 200, (
+                    f"SUPERVISOR nested {resource} query should be safely scoped; "
+                    f"received {response.status_code}: {response.text}"
+                )
+                assert response.json() == [], (
+                    f"SUPERVISOR must not receive foreign rows from {resource}: "
+                    f"{response.json()}"
+                )
+
+            nested_shelf_reads = {
+                "foreign shelf observation consensus": client.get(
+                    f"/api/v1/shelves/{foreign_shelf_id}/observation-consensus",
+                    headers=supervisor_headers,
+                ),
+                "foreign shelf planograms": client.get(
+                    f"/api/v1/shelves/{foreign_shelf_id}/planograms",
+                    headers=supervisor_headers,
+                ),
+                "foreign active shelf planogram": client.get(
+                    f"/api/v1/shelves/{foreign_shelf_id}/planograms/active",
+                    headers=supervisor_headers,
+                ),
+            }
+            for resource, response in nested_shelf_reads.items():
+                assert response.status_code == 403, (
+                    f"SUPERVISOR must not resolve {resource}; expected HTTP 403, "
+                    f"received {response.status_code}: {response.text}"
+                )
 
             # Exercise read-only store_id query parameters across forecasting,
             # sales, replenishment and warehouse APIs. The scope guard must
@@ -502,6 +633,40 @@ def main() -> None:
                     .count()
                     == 0
                 )
+                assert (
+                    db.query(models.Observation)
+                    .filter(
+                        models.Observation.shelf_id == foreign_shelf_id,
+                        models.Observation.notes.is_(None),
+                        models.Observation.model_version.is_(None),
+                    )
+                    .count()
+                    == 1
+                )
+                assert (
+                    db.query(models.CaptureSession)
+                    .filter(
+                        models.CaptureSession.shelf_id == foreign_shelf_id,
+                        models.CaptureSession.store_id == store_b_id,
+                    )
+                    .count()
+                    == 1
+                )
+                assert (
+                    db.query(models.ObservationAlert)
+                    .filter(
+                        models.ObservationAlert.id == foreign_alert_id,
+                        models.ObservationAlert.status == "OPEN",
+                    )
+                    .count()
+                    == 1
+                )
+                assert (
+                    db.query(models.ObservationAlertEvent)
+                    .filter(models.ObservationAlertEvent.alert_id == foreign_alert_id)
+                    .count()
+                    == 1
+                )
             finally:
                 db.close()
 
@@ -555,6 +720,29 @@ def main() -> None:
                 headers=supervisor_headers,
             )
             assert own_task.status_code == 201, own_task.text
+
+            own_observation = client.post(
+                "/api/v1/observations",
+                json={
+                    "shelf_id": own_shelf_id,
+                    "product_id": product_id,
+                    "source": "mobile",
+                    "status": "UNKNOWN",
+                },
+                headers=supervisor_headers,
+            )
+            assert own_observation.status_code == 201, own_observation.text
+
+            own_capture_session = client.post(
+                "/api/v1/capture-sessions",
+                json={
+                    "shelf_id": own_shelf_id,
+                    "source_type": "mobile",
+                    "capture_mode": "single",
+                },
+                headers=supervisor_headers,
+            )
+            assert own_capture_session.status_code == 201, own_capture_session.text
 
     finally:
         main_module.settings = original_settings
