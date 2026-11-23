@@ -60,9 +60,11 @@ def seed_device():
     register_edge_device(
         db, device_id="edge-http-camera", store_id=store.id, device_type="fixed_camera"
     )
+    store_id = store.id
     token, credential = issue_edge_device_credential(db, device_id="edge-http-camera")
+    credential_id = credential.credential_id
     db.close()
-    return store.id, token, credential.credential_id
+    return store_id, token, credential_id
 
 
 def build_event(store_id, *, sequence=1, event_id=None):
