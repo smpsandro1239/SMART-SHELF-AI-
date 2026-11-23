@@ -1,3 +1,15 @@
+## 2026-11-23 — Prova PostgreSQL de autorização multi-loja antes de lock (código publicado; CI pendente)
+
+- O smoke de retenção PostgreSQL cria agora uma segunda loja e um supervisor pertencente a essa loja.
+- Enquanto outra sessão mantém a linha de uma imagem bloqueada com `FOR UPDATE`, o supervisor externo tenta restringir a imagem através da API.
+- O teste exige HTTP 403 antes da libertação do lock; se o handler tentar adquirir o lock antes da autorização, a chamada excede o timeout e o smoke falha.
+- Os ensaios anteriores de concorrência entre legal hold, agendamento de purga e restauro foram preservados.
+- O smoke já está ligado ao job PostgreSQL da API CI através do passo existente `Verify PostgreSQL legal hold and purge schedule concurrency`.
+- Commits: `25a34b8f` e `926abcf1`.
+- **Validação pendente:** a nova execução API CI/PostgreSQL 16, Quality Gates, Security Scans e Docker Compose tem de terminar no SHA desta alteração. Não foi executado localmente nesta sessão.
+
+---
+
 ## 2026-11-23 — Autorização de tenant antes de locks em retenção e artefactos (código publicado; CI em execução)
 
 - A auditoria da ordem de locks encontrou dez handlers que adquiriam `FOR UPDATE` na imagem antes de validar a loja. Embora alguns validassem o tenant mais tarde, um pedido sem autorização podia adquirir locks de recursos de outra loja antes da rejeição.
