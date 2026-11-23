@@ -52,6 +52,15 @@ def upgrade() -> None:
             name="ck_edge_event_processing_finished_state",
         ),
     )
+    # Preserve events accepted before this migration: every inbox record receives
+    # exactly one durable processing control row.
+    op.execute(sa.text("""
+        INSERT INTO edge_device_event_processing
+            (inbox_id, status, attempt_count, max_attempts, available_at,
+             fencing_token, created_at, updated_at)
+        SELECT id, 'PENDING', 0, 8, received_at, 0, received_at, received_at
+        FROM edge_device_event_inbox
+    """))
     op.create_index(
         "ix_edge_event_processing_claim",
         "edge_device_event_processing",
