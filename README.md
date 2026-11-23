@@ -1947,3 +1947,7 @@ O upload de imagens autentica o actor antes de resolver a prateleira e aplica is
 ## Estado de validação de segurança — 23-11-2026
 
 A ronda de isolamento multi-tenant e ocultação de IDs diretos foi validada no commit `1ffe4d3a`: API CI **1595 passed, 1 skipped**, smoke tests PostgreSQL 16 aprovados, Quality Gates aprovados, Security Scans aprovados e Docker Compose demo smoke aprovado. A cobertura inclui tarefas, inventário, prateleiras, captura, alertas, evidência de visão computacional, retenção/legal hold e planogramas. A auditoria continua para os restantes IDs aninhados de OCR, matching, artefactos e warehouse.
+
+## Isolamento multi-loja do histórico de tarefas
+
+A leitura de `GET /api/v1/tasks/{task_id}/events` aplica `task_id` e `store_id` no mesmo predicado SQL para SUPERVISOR. Tarefas estrangeiras e IDs inexistentes devolvem HTTP 404 equivalente; ADMIN conserva visibilidade global. A cobertura automatizada inclui ambos os cenários e o controlo administrativo. A validação CI da alteração mais recente permanece pendente.
