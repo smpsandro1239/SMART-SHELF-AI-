@@ -1340,17 +1340,19 @@ async def upload_shelf_image(
     db: Session = Depends(get_db),
 ):
     """Store a validated shelf photograph; analysis is queued for a later CV stage."""
+    actor = _request_user(db, request)
     shelf = (
         db.query(models.Shelf)
         .join(models.Zone, models.Shelf.zone_id == models.Zone.id)
         .filter(models.Shelf.id == shelf_id)
         .first()
     )
-    if shelf is None:
+    if shelf is None or (
+        actor is not None
+        and actor.role != "ADMIN"
+        and shelf.zone.store_id != actor.store_id
+    ):
         raise HTTPException(status_code=404, detail="Shelf not found")
-    actor = _request_user(db, request)
-    if actor is not None and actor.role != "ADMIN" and shelf.zone.store_id != actor.store_id:
-        raise HTTPException(status_code=403, detail="Access to this shelf is not allowed")
 
     capture_session = None
     if capture_session_id is not None:
