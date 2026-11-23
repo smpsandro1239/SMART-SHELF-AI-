@@ -1789,3 +1789,13 @@ A implementação de produção já verificava lease_lost nos caminhos de sucess
 - [ ] Confirmar API CI e Quality Gates após a correção do KPI.
 - [ ] Implementar divergências entre stock observado e stock de referência sem mutação contabilística automática.
 - [ ] Formalizar estados separados de retaguarda, reservado, disponível, prateleira e observado visualmente.
+
+
+## Inventário — painel de reconciliação operacional
+- [x] Integrar a reconciliação de exposição/retaguarda no dashboard para ADMIN e SUPERVISOR.
+- [x] Permitir filtrar por produto e prateleira, com atualização manual e limite explícito.
+- [x] Distinguir objetivo de exposição, quantidade observada, diferença face ao objetivo e snapshot de retaguarda.
+- [x] Apresentar separadamente stock físico registado, reservado e disponível na retaguarda, com fonte e idade do snapshot.
+- [x] Mostrar estados sem observação/medição e ausência de snapshot, sem inferir quantidades em falta.
+- [x] Explicitar que diferenças são informativas e nunca ajustam automaticamente o inventário contabilístico.
+- [ ] Validar build Web CI e Quality Gates no SHA final desta integração.
