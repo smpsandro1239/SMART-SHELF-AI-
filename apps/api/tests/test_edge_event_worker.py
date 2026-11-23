@@ -124,3 +124,39 @@ def test_worker_abandons_result_when_lease_renewal_fails(session_factory, monkey
     assert row.status == "PROCESSING"
     assert row.lease_owner == "edge-worker-a"
     assert row.finished_at is None
+
+
+@pytest.mark.parametrize(
+    "handler_error",
+    [
+        RuntimeError("transient handler failure"),
+        EdgeEventHandlerError("INVALID_CAPTURE", retryable=False),
+    ],
+    ids=["retryable-handler-error", "permanent-handler-error"],
+)
+def test_worker_does_not_change_state_after_lease_renewal_failure(
+    session_factory, monkeypatch, handler_error
+):
+    renewal_failed = threading.Event()
+
+    def fail_renewal(*_args, **_kwargs):
+        renewal_failed.set()
+        raise RuntimeError("database connection interrupted")
+
+    monkeypatch.setattr("app.edge_event_worker.renew_edge_event_lease", fail_renewal)
+
+    def failing_handler(_event):
+        assert renewal_failed.wait(timeout=4)
+        raise handler_error
+
+    assert process_one_edge_event(
+        session_factory,
+        worker_id="edge-worker-a",
+        lease_seconds=5,
+        handlers={"DEVICE_HEARTBEAT": failing_handler},
+    )
+
+    row = _processing(session_factory)
+    assert row.status == "PROCESSING"
+    assert row.lease_owner == "edge-worker-a"
+    assert row.finished_at is None
