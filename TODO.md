@@ -1,3 +1,11 @@
+## Segurança P0 — ocultação de IDs de localizações de armazém (2026-11-23; código/teste publicados, CI pendente)
+
+- [x] Na criação de colocações, resolver a localização por ID através do helper de autorização multi-loja, verificando o tenant antes do lock e revalidando depois do lock.
+- [x] Uniformizar HTTP 404 para localização estrangeira e ID inexistente, sem revelar a existência do identificador.
+- [x] Acrescentar regressão HTTP autenticada para supervisor da loja A com localização real da loja B e ID inexistente; verificar que não é criada qualquer colocação.
+- [ ] Executar API CI/PostgreSQL 16, Quality Gates, Security Scans e Docker Compose no commit de código/testes.
+- [ ] Alargar a mesma revisão a IDs directos de prateleiras e restantes relações logísticas.
+
 ## Segurança P0 — ocultação de IDs directos de ciclo de vida de paletes (2026-11-23; código publicado, CI pendente)
 
 - [x] Repor `hide_foreign=True` no acesso à palete por ID directo antes e depois do lock PostgreSQL.
