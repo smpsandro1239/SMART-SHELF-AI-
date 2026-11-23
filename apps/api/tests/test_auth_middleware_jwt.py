@@ -897,11 +897,18 @@ def test_supervisor_observations_are_scoped_to_own_store(auth_client):
         json={"shelf_id": ids["shelf_b"], "source": "simulation", "status": "EMPTY"},
         headers=headers,
     )
+    missing_create = client.post(
+        "/api/v1/observations",
+        json={"shelf_id": 2147483000, "source": "simulation", "status": "EMPTY"},
+        headers=headers,
+    )
 
     assert all(row["shelf_id"] != ids["shelf_b"] for row in own.json())
     assert foreign_filter.status_code == 200
     assert foreign_filter.json() == []
-    assert foreign_create.status_code == 403
+    assert foreign_create.status_code == 404
+    assert missing_create.status_code == 404
+    assert foreign_create.json() == missing_create.json()
 
 
 def test_supervisor_capture_sessions_are_scoped_to_own_store(auth_client):
@@ -922,6 +929,11 @@ def test_supervisor_capture_sessions_are_scoped_to_own_store(auth_client):
     foreign_create = client.post(
         "/api/v1/capture-sessions",
         json={"shelf_id": ids["shelf_b"], "source_type": "mobile"},
+        headers=headers,
+    )
+    missing_create = client.post(
+        "/api/v1/capture-sessions",
+        json={"shelf_id": 2147483000, "source_type": "mobile"},
         headers=headers,
     )
     foreign_close = client.post(
@@ -948,7 +960,9 @@ def test_supervisor_capture_sessions_are_scoped_to_own_store(auth_client):
     assert own_shelf.json()[0]["shelf_id"] == ids["shelf_a_assigned"]
     assert foreign_shelf.status_code == 200
     assert foreign_shelf.json() == []
-    assert foreign_create.status_code == 403
+    assert foreign_create.status_code == 404
+    assert missing_create.status_code == 404
+    assert foreign_create.json() == missing_create.json()
     assert foreign_close.status_code == 404
     assert missing_close.status_code == 404
     assert foreign_close.json() == missing_close.json()
