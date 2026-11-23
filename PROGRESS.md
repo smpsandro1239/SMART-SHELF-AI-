@@ -1,3 +1,10 @@
+## 2026-11-23 — Ocultação de IDs directos de deteções em observação e histórico
+
+- `POST /api/v1/shelf-image-detections/{detection_id}/observation` e `GET /api/v1/shelf-image-detections/{detection_id}/reviews` ocultam agora deteções de outras lojas com HTTP 404 idêntico ao ID inexistente.
+- Mantida a ordem de autorização: descoberta read-only da imagem, autorização pré-lock, lock da imagem, revalidação pós-lock e só depois leitura/escrita dependente da deteção.
+- Testes autenticados comparam status e corpo para IDs estrangeiros/inexistentes nos dois endpoints; verificam que o fluxo próprio continua permitido.
+- Implementação e testes publicados; CI/PostgreSQL 16 ainda pendentes.
+
 ## 2026-11-23 — Ocultação de IDs de prateleira em criação e consenso
 
 - create_observation e create_capture_session validam o actor antes da consulta à prateleira; para SUPERVISOR, prateleiras estrangeiras e inexistentes devolvem HTTP 404 equivalente.
