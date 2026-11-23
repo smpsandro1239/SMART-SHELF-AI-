@@ -928,6 +928,10 @@ def test_supervisor_capture_sessions_are_scoped_to_own_store(auth_client):
         f"/api/v1/capture-sessions/{ids['capture_session_b']}/close",
         headers=headers,
     )
+    missing_close = client.post(
+        "/api/v1/capture-sessions/2147483000/close",
+        headers=headers,
+    )
     admin_listed = client.get(
         "/api/v1/capture-sessions",
         headers=bearer(ids["admin"], "ADMIN"),
@@ -945,7 +949,9 @@ def test_supervisor_capture_sessions_are_scoped_to_own_store(auth_client):
     assert foreign_shelf.status_code == 200
     assert foreign_shelf.json() == []
     assert foreign_create.status_code == 403
-    assert foreign_close.status_code == 403
+    assert foreign_close.status_code == 404
+    assert missing_close.status_code == 404
+    assert foreign_close.json() == missing_close.json()
     assert admin_listed.status_code == 200
     assert {item["store_id"] for item in admin_listed.json()} == {
         store_ids["a"], store_ids["b"]
@@ -1392,12 +1398,25 @@ def test_observation_alert_jwt_roles_and_store_scope(auth_client):
         json={"status": "ACKNOWLEDGED"},
         headers=bearer(ids["supervisor_a"], "SUPERVISOR"),
     )
+    missing_update = client.patch(
+        "/api/v1/observation-alerts/2147483000",
+        json={"status": "ACKNOWLEDGED"},
+        headers=bearer(ids["supervisor_a"], "SUPERVISOR"),
+    )
     foreign_events = client.get(
         f"/api/v1/observation-alerts/{foreign_alert_id}/events",
         headers=bearer(ids["supervisor_a"], "SUPERVISOR"),
     )
-    assert foreign_update.status_code == 403
-    assert foreign_events.status_code == 403
+    missing_events = client.get(
+        "/api/v1/observation-alerts/2147483000/events",
+        headers=bearer(ids["supervisor_a"], "SUPERVISOR"),
+    )
+    assert foreign_update.status_code == 404
+    assert missing_update.status_code == 404
+    assert foreign_update.json() == missing_update.json()
+    assert foreign_events.status_code == 404
+    assert missing_events.status_code == 404
+    assert foreign_events.json() == missing_events.json()
 
     own_update = client.patch(
         f"/api/v1/observation-alerts/{alert_id}",
