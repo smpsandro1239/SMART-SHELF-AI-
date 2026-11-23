@@ -337,7 +337,7 @@ def test_store_scoped_lock_handlers_authorize_before_their_first_lock():
         "reconcile_completed_replenishment": "_lock_store_scoped_record",
         "update_replenishment_task_status": "_lock_store_scoped_record",
         "upload_shelf_image": "_lock_store_scoped_record",
-        "update_observation_alert": "_require_alert_supervisor",
+        "update_observation_alert": "_lock_store_scoped_record",
     }
     for handler_name, authorization_helper in handlers.items():
         source = inspect.getsource(getattr(main_module, handler_name))
