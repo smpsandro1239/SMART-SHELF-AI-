@@ -1942,3 +1942,8 @@ Os endpoints de eventos de retenção, revisão de deteções e revisão de exem
 ## Segurança — uploads e sessões de captura
 
 O upload de imagens autentica o actor antes de resolver a prateleira e aplica isolamento por loja também ao campo capture_session_id opcional, com autorização pré-lock e revalidação pós-lock. IDs estrangeiros e inexistentes são ocultados com HTTP 404 uniforme. Os testes verificam que pedidos recusados não criam ficheiros nem registos de imagem. Validação CI do HEAD final pendente.
+
+
+## Estado de validação de segurança — 23-11-2026
+
+A ronda de isolamento multi-tenant e ocultação de IDs diretos foi validada no commit `1ffe4d3a`: API CI **1595 passed, 1 skipped**, smoke tests PostgreSQL 16 aprovados, Quality Gates aprovados, Security Scans aprovados e Docker Compose demo smoke aprovado. A cobertura inclui tarefas, inventário, prateleiras, captura, alertas, evidência de visão computacional, retenção/legal hold e planogramas. A auditoria continua para os restantes IDs aninhados de OCR, matching, artefactos e warehouse.
