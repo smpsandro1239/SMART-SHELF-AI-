@@ -1933,3 +1933,8 @@ Os endpoints de tarefas ocultam agora a existência de recursos de outras lojas:
 ## Segurança — IDs de evidência de visão computacional (2026-11-23)
 
 Os endpoints de eventos de retenção, revisão de deteções e revisão de exemplares autenticam o actor antes de resolver IDs diretos. Imagens, deteções e exemplares de outra loja são ocultados com HTTP 404 equivalente ao recurso inexistente. A leitura de retenção não introduz row locks e as operações de revisão mantêm a ordem de locks da evidência. Foram adicionados testes de regressão para IDs estrangeiros/inexistentes. A validação CI correspondente está em curso.
+
+
+## Segurança — uploads e sessões de captura
+
+O upload de imagens autentica o actor antes de resolver a prateleira e aplica isolamento por loja também ao campo capture_session_id opcional, com autorização pré-lock e revalidação pós-lock. IDs estrangeiros e inexistentes são ocultados com HTTP 404 uniforme. Os testes verificam que pedidos recusados não criam ficheiros nem registos de imagem. Validação CI do HEAD final pendente.
