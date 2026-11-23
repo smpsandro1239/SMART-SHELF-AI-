@@ -364,5 +364,203 @@ def main() -> None:
         else:
             raise AssertionError("Restricted comparison image remained eligible")
 
+
+    # Cross-store preflight must finish while foreign rows are deliberately
+    # locked by another PostgreSQL transaction. This is a real row-lock probe,
+    # not a SQLite/mock assertion.
+    from app.shelf_planograms import ShelfPlanogramError, retire_planogram
+
+    with SessionLocal() as db:
+        foreign_store = models.Store(
+            code=f"PLANOGRAM-FOREIGN-{suffix}",
+            name="Foreign planogram smoke store",
+        )
+        db.add(foreign_store)
+        db.flush()
+        foreign_zone = models.Zone(store_id=foreign_store.id, name="Foreign zone")
+        db.add(foreign_zone)
+        db.flush()
+        foreign_shelf = models.Shelf(
+            zone_id=foreign_zone.id,
+            code=f"FOREIGN-{suffix}",
+        )
+        foreign_supervisor = models.User(
+            email=f"planogram-supervisor-{suffix}@example.test",
+            full_name="Foreign planogram smoke supervisor",
+            password_hash="not-a-real-password-hash",
+            role="SUPERVISOR",
+            store_id=store_id,
+            is_active=True,
+        )
+        foreign_product = models.Product(
+            sku=f"PLANOGRAM-FOREIGN-SKU-{suffix}",
+            name="Foreign planogram smoke product",
+            is_active=True,
+        )
+        db.add_all([foreign_shelf, foreign_supervisor, foreign_product])
+        db.flush()
+        db.add(models.ShelfProduct(
+            shelf_id=foreign_shelf.id,
+            product_id=foreign_product.id,
+            target_quantity=10,
+            min_display_quantity=2,
+        ))
+        foreign_image = models.ShelfImage(
+            shelf_id=foreign_shelf.id,
+            original_filename=f"foreign-calibration-{suffix}.jpg",
+            storage_path=f"/tmp/foreign-calibration-{suffix}.jpg",
+            mime_type="image/jpeg",
+            file_size_bytes=128,
+            sha256="c" * 64,
+            analysis_status="COMPLETED",
+            model_version="foreign-calibration-smoke-v1",
+            retention_status="ACTIVE",
+        )
+        db.add(foreign_image)
+        db.commit()
+        foreign_shelf_id = foreign_shelf.id
+        foreign_actor_id = foreign_supervisor.id
+        foreign_product_id = foreign_product.id
+        foreign_image_id = foreign_image.id
+
+    with SessionLocal() as db:
+        foreign_draft = create_draft_planogram(
+            db,
+            shelf_id=foreign_shelf_id,
+            actor_user_id=actor_id,
+            cells=[_cell("FOREIGN-DRAFT", foreign_product_id, x_min=0.0, x_max=0.5, facings=2)],
+        )
+        foreign_active = create_draft_planogram(
+            db,
+            shelf_id=foreign_shelf_id,
+            actor_user_id=actor_id,
+            cells=[_cell("FOREIGN-ACTIVE", foreign_product_id, x_min=0.0, x_max=0.5, facings=2)],
+        )
+        db.commit()
+        foreign_draft_id = foreign_draft.id
+        foreign_active_id = foreign_active.id
+        activate_planogram(
+            db,
+            planogram_id=foreign_active_id,
+            actor_user_id=actor_id,
+            reason="Prepare foreign active planogram",
+        )
+        db.commit()
+
+    def _assert_rejected_without_waiting_for_foreign_lock(
+        lock_query,
+        operation,
+        description: str,
+    ) -> None:
+        lock_acquired = Event()
+        release_lock = Event()
+
+        def hold_foreign_row():
+            with SessionLocal() as lock_db:
+                lock_db.execute(lock_query).scalar_one()
+                lock_acquired.set()
+                if not release_lock.wait(timeout=10):
+                    raise TimeoutError(f"Timed out holding {description} lock")
+                lock_db.rollback()
+
+        def invoke_as_foreign_supervisor():
+            if not lock_acquired.wait(timeout=10):
+                raise TimeoutError(f"Could not acquire {description} lock")
+            with SessionLocal() as operation_db:
+                try:
+                    operation(operation_db)
+                except ShelfPlanogramError as exc:
+                    assert "not allowed" in str(exc).lower(), str(exc)
+                    operation_db.rollback()
+                    return
+                raise AssertionError(f"{description} was not rejected for a foreign supervisor")
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            lock_future = executor.submit(hold_foreign_row)
+            if not lock_acquired.wait(timeout=10):
+                release_lock.set()
+                raise TimeoutError(f"Could not acquire {description} lock")
+            operation_future = executor.submit(invoke_as_foreign_supervisor)
+            try:
+                operation_future.result(timeout=2)
+            except TimeoutError as exc:
+                raise AssertionError(
+                    f"Cross-store {description} authorization waited for a PostgreSQL row lock"
+                ) from exc
+            finally:
+                release_lock.set()
+            lock_future.result(timeout=10)
+
+    from sqlalchemy import select as sql_select
+
+    foreign_shelf_lock = (
+        sql_select(models.Shelf)
+        .where(models.Shelf.id == foreign_shelf_id)
+        .with_for_update()
+    )
+    foreign_image_lock = (
+        sql_select(models.ShelfImage)
+        .where(models.ShelfImage.id == foreign_image_id)
+        .with_for_update()
+    )
+    _assert_rejected_without_waiting_for_foreign_lock(
+        foreign_shelf_lock,
+        lambda operation_db: replace_draft_planogram_cells(
+            operation_db,
+            planogram_id=foreign_draft_id,
+            actor_user_id=foreign_actor_id,
+            cells=[_cell("DENIED-EDIT", foreign_product_id, x_min=0.0, x_max=0.5, facings=3)],
+        ),
+        "foreign planogram edit",
+    )
+    _assert_rejected_without_waiting_for_foreign_lock(
+        foreign_shelf_lock,
+        lambda operation_db: activate_planogram(
+            operation_db,
+            planogram_id=foreign_draft_id,
+            actor_user_id=foreign_actor_id,
+            reason="Foreign activation attempt",
+        ),
+        "foreign planogram activation",
+    )
+    _assert_rejected_without_waiting_for_foreign_lock(
+        foreign_shelf_lock,
+        lambda operation_db: retire_planogram(
+            operation_db,
+            planogram_id=foreign_active_id,
+            actor_user_id=foreign_actor_id,
+            reason="Foreign retirement attempt",
+        ),
+        "foreign planogram retirement",
+    )
+    _assert_rejected_without_waiting_for_foreign_lock(
+        foreign_image_lock,
+        lambda operation_db: create_draft_planogram(
+            operation_db,
+            shelf_id=shelf_id,
+            actor_user_id=actor_id,
+            cells=[_cell("FOREIGN-IMAGE-CALIBRATION", product_id, x_min=0.0, x_max=0.5, facings=2)],
+            calibration_source="IMAGE",
+            calibration_image_id=foreign_image_id,
+            calibration_image_sha256="c" * 64,
+        ),
+        "foreign calibration image",
+    )
+    _assert_rejected_without_waiting_for_foreign_lock(
+        foreign_image_lock,
+        lambda operation_db: load_active_planogram_for_comparison(
+            operation_db,
+            shelf_id=shelf_id,
+            actor_user_id=actor_id,
+            comparison_image_id=foreign_image_id,
+        ),
+        "foreign comparison image",
+    )
+    print(
+        "PostgreSQL cross-store planogram preflight passed: foreign draft edit, "
+        "activation, retirement, calibration and comparison were rejected while "
+        "the corresponding foreign shelf/image row remained locked."
+    )
+
 if __name__ == "__main__":
     main()
