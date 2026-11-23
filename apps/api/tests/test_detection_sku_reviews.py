@@ -320,6 +320,17 @@ def test_detection_review_and_history_enforce_source_image_store_scope(monkeypat
             foreign_history = client.get(
                 f"/api/v1/shelf-image-detections/{foreign_detection_id}/reviews"
             )
+            missing_history = client.get(
+                "/api/v1/shelf-image-detections/2147483000/reviews"
+            )
+            foreign_observation = client.post(
+                f"/api/v1/shelf-image-detections/{foreign_detection_id}/observation",
+                json={"product_id": data["proposed_product_id"], "confirmed_status": "EMPTY"},
+            )
+            missing_observation = client.post(
+                "/api/v1/shelf-image-detections/2147483000/observation",
+                json={"product_id": data["proposed_product_id"], "confirmed_status": "EMPTY"},
+            )
             own_review = client.post(
                 f"/api/v1/shelf-image-detections/{data['detection_id']}/reviews",
                 json={"decision": "CONFIRMED"},
@@ -330,7 +341,10 @@ def test_detection_review_and_history_enforce_source_image_store_scope(monkeypat
 
     assert foreign_review.status_code == missing_review.status_code == 404
     assert foreign_review.json() == missing_review.json()
-    assert foreign_history.status_code == 403
+    assert foreign_history.status_code == missing_history.status_code == 404
+    assert foreign_history.json() == missing_history.json()
+    assert foreign_observation.status_code == missing_observation.status_code == 404
+    assert foreign_observation.json() == missing_observation.json()
     assert own_review.status_code == 201
     assert own_history.status_code == 200
     with TestingSession() as db:
