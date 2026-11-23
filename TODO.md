@@ -1613,3 +1613,13 @@ A implementação de produção já verificava lease_lost nos caminhos de sucess
 - [x] Testes comparam respostas cross-store/inexistente para eventos, alteração de estado e reconciliação; confirmam que a tentativa de reconciliação não cria InventoryMovement.
 - [ ] Confirmar API CI, Quality Gates, Security Scans e Docker Compose no HEAD final; executar smoke PostgreSQL 16.
 - [ ] Continuar auditoria de IDs directos de movimentos, eventos de paletes e entidades de warehouse.
+
+
+## Segurança P0 — IDs de evidência de visão computacional (2026-11-23; implementação/testes publicados, CI em execução)
+
+- [x] Autenticar o actor antes de resolver IDs de imagens, deteções ou exemplares em endpoints de revisão/leitura de retenção.
+- [x] Ocultar imagens, deteções e exemplares de outra loja com HTTP 404 e detalhe igual ao recurso pai inexistente.
+- [x] Preservar a ordem de locks imagem → produto → exemplar e o HTTP 410 para imagens indisponíveis por retenção quando o recurso pertence à loja autorizada.
+- [x] Adicionar regressões para IDs estrangeiros/inexistentes em retenção, revisão de deteções e revisão de exemplares.
+- [ ] Confirmar API CI, Quality Gates, Security Scans e Docker Compose no HEAD final; investigar qualquer falha antes de declarar validação concluída.
+- [ ] Continuar auditoria de endpoints de leitura/revisão de evidência OCR, matching e retenção com IDs aninhados.
