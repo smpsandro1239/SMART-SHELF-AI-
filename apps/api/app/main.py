@@ -306,6 +306,30 @@ def _enforce_store_scope(actor: models.User | None, store_id: int) -> None:
         raise HTTPException(status_code=403, detail="Access to this store is not allowed")
 
 
+def _resolve_detection_source_image_id(
+    db: Session,
+    detection_id: int,
+    actor: models.User | None,
+) -> int:
+    """Resolve a detection's source image without materializing foreign detections."""
+    query = (
+        db.query(models.ShelfImageDetection.shelf_image_id)
+        .join(
+            models.ShelfImage,
+            models.ShelfImage.id == models.ShelfImageDetection.shelf_image_id,
+        )
+        .join(models.Shelf, models.Shelf.id == models.ShelfImage.shelf_id)
+        .join(models.Zone, models.Zone.id == models.Shelf.zone_id)
+        .filter(models.ShelfImageDetection.id == detection_id)
+    )
+    if actor is not None and actor.role != "ADMIN":
+        query = query.filter(models.Zone.store_id == actor.store_id)
+    source_image_id = query.scalar()
+    if source_image_id is None:
+        raise HTTPException(status_code=404, detail="Detection not found")
+    return source_image_id
+
+
 def _lock_authorized_shelf_image(
     db: Session,
     image_id: int,
@@ -3075,10 +3099,7 @@ def create_observation_from_demo_detection(
     # Discover the parent without locking, then follow the global image -> detection
     # lock order used by the vision worker and retention transitions. Locking the
     # detection first here could deadlock with a worker holding the image row.
-    initial_detection = db.get(models.ShelfImageDetection, detection_id)
-    if initial_detection is None:
-        raise HTTPException(status_code=404, detail="Detection not found")
-    source_image_id = initial_detection.shelf_image_id
+    source_image_id = _resolve_detection_source_image_id(db, detection_id, actor)
     image, _ = _lock_authorized_shelf_image(
         db,
         source_image_id,
@@ -4113,10 +4134,7 @@ def create_detection_sku_review(
     against a stale detection that the worker replaced while the request waited.
     """
     actor = _request_user(db, request)
-    initial_detection = db.get(models.ShelfImageDetection, detection_id)
-    if initial_detection is None:
-        raise HTTPException(status_code=404, detail="Detection not found")
-    source_image_id = initial_detection.shelf_image_id
+    source_image_id = _resolve_detection_source_image_id(db, detection_id, actor)
 
     image_record, _ = _lock_authorized_shelf_image(
         db,
@@ -4196,10 +4214,7 @@ def list_detection_sku_reviews(
     db: Session = Depends(get_db),
 ):
     actor = _request_user(db, request)
-    initial_detection = db.get(models.ShelfImageDetection, detection_id)
-    if initial_detection is None:
-        raise HTTPException(status_code=404, detail="Detection not found")
-    source_image_id = initial_detection.shelf_image_id
+    source_image_id = _resolve_detection_source_image_id(db, detection_id, actor)
     image_record, _ = _lock_authorized_shelf_image(
         db,
         source_image_id,
