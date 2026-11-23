@@ -43,6 +43,8 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if hasattr(args, "expires_in_seconds") and not 60 <= args.expires_in_seconds <= 90 * 24 * 60 * 60:
+        build_parser().error("--expires-in-seconds must be between 60 and 7776000")
     db = SessionLocal()
     try:
         if args.command == "register":
