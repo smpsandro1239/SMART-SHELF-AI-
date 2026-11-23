@@ -11,6 +11,7 @@ from app.edge_event_processing import (
     claim_next_edge_event,
     complete_edge_event,
     fail_edge_event,
+    renew_edge_event_lease,
 )
 
 
@@ -124,3 +125,58 @@ def test_worker_identity_and_lease_bounds_are_validated(db):
     with pytest.raises(ValueError, match="lease_seconds"):
         claim_next_edge_event(db, worker_id="worker-a", lease_seconds=1, now=now)
     assert db.get(models.EdgeDeviceEventProcessing, processing_id).status == "PENDING"
+
+
+def test_lease_renewal_extends_current_lease_without_shortening_it(db):
+    processing_id, now = seed_event(db)
+    claim = claim_next_edge_event(db, worker_id="worker-a", lease_seconds=30, now=now)
+    original_expiry = claim["lease_expires_at"]
+    renewed = renew_edge_event_lease(
+        db, processing_id=processing_id, worker_id="worker-a",
+        fencing_token=claim["fencing_token"], lease_seconds=60,
+        now=now + timedelta(seconds=5),
+    )
+    assert renewed == now + timedelta(seconds=65)
+    assert renewed > original_expiry
+
+    unchanged = renew_edge_event_lease(
+        db, processing_id=processing_id, worker_id="worker-a",
+        fencing_token=claim["fencing_token"], lease_seconds=5,
+        now=now + timedelta(seconds=6),
+    )
+    assert unchanged == renewed
+
+
+def test_expired_or_fenced_worker_cannot_renew_lease(db):
+    processing_id, now = seed_event(db)
+    first = claim_next_edge_event(db, worker_id="worker-a", lease_seconds=5, now=now)
+    second = claim_next_edge_event(
+        db, worker_id="worker-b", lease_seconds=30, now=now + timedelta(seconds=6)
+    )
+    with pytest.raises(EdgeEventProcessingError, match="stale"):
+        renew_edge_event_lease(
+            db, processing_id=processing_id, worker_id="worker-a",
+            fencing_token=first["fencing_token"], lease_seconds=60,
+            now=now + timedelta(seconds=7),
+        )
+    with pytest.raises(EdgeEventProcessingError, match="stale"):
+        renew_edge_event_lease(
+            db, processing_id=processing_id, worker_id="worker-b",
+            fencing_token=second["fencing_token"], lease_seconds=60,
+            now=now + timedelta(seconds=37),
+        )
+
+
+def test_lease_renewal_validates_arguments(db):
+    processing_id, now = seed_event(db)
+    claim = claim_next_edge_event(db, worker_id="worker-a", now=now)
+    with pytest.raises(ValueError, match="lease_seconds"):
+        renew_edge_event_lease(
+            db, processing_id=processing_id, worker_id="worker-a",
+            fencing_token=claim["fencing_token"], lease_seconds=1, now=now,
+        )
+    with pytest.raises(ValueError, match="fencing_token"):
+        renew_edge_event_lease(
+            db, processing_id=processing_id, worker_id="worker-a",
+            fencing_token=0, lease_seconds=30, now=now,
+        )
