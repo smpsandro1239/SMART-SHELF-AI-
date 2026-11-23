@@ -1,3 +1,11 @@
+## 2026-11-23 — Isolamento PostgreSQL de artefactos externos
+
+- Expandido `apps/api/scripts/postgres_artifact_consumption_smoke.py`, já integrado no API CI, para testar combinações de IDs reais entre imagens da mesma loja e de lojas diferentes.
+- Cinco combinações de `image_id`, `artifact_id` e `store_id` têm de ser rejeitadas antes da chamada ao provider.
+- Criado um controlo positivo em que a leitura da loja A continua a funcionar apesar de existir uma integração REVOKED na loja B com o mesmo identificador de sistema externo.
+- Acrescentada uma tentativa de inserir um artefacto filho associado a um pai de outra imagem da mesma loja; a FK composta PostgreSQL tem de rejeitar a operação.
+- Commit de código: `2bf0d075`. CI ainda pendente; não declarar validação PostgreSQL até terminar a execução.
+
 ## 2026-11-23 — Hardening de IDs multi-loja em planogramas e Warehouse
 
 - Corrigida a regressão de contrato dos planogramas: os testes HTTP passaram a exigir HTTP 404 para prateleiras estrangeiras e inexistentes, com payload idêntico. A comparação de planogramas recebeu o mesmo controlo negativo.
