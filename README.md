@@ -1894,3 +1894,8 @@ A rota de escrita de eventos de ciclo de vida usa autorização por loja antes d
 ## Segurança — IDs de localizações de armazém
 
 A criação de colocações de armazém valida a localização por ID com autorização de tenant antes do lock e revalidação após o lock. Localizações de outra loja e IDs inexistentes devolvem o mesmo HTTP 404. A regressão HTTP está publicada; a execução de CI/PostgreSQL 16 para esta alteração ainda está pendente. A auditoria global de IDs directos e relações indirectas permanece em curso.
+
+
+## Segurança — IDs de sessões de captura e alertas (2026-11-23)
+
+As rotas directas por ID de sessão de captura e alerta ocultam recursos de outras lojas: o fecho de sessão e a actualização de alerta fazem autorização antes do lock e revalidam após o lock; a consulta de eventos valida o tenant antes de ler os eventos. IDs estrangeiros e inexistentes devolvem HTTP 404 equivalente. Foram acrescentados testes para confirmar ausência de mutações. Commits de código/testes: b627107 e 1a2e776. A validação CI/PostgreSQL 16 permanece pendente.
