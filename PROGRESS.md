@@ -1,3 +1,11 @@
+## 2026-11-23 — Ocultação de IDs de prateleira em criação e consenso
+
+- create_observation e create_capture_session validam o actor antes da consulta à prateleira; para SUPERVISOR, prateleiras estrangeiras e inexistentes devolvem HTTP 404 equivalente.
+- get_shelf_observation_consensus valida também o papel antes da consulta e oculta IDs de prateleiras estrangeiras com HTTP 404. A avaliação de alertas herda este contrato e falha antes de persistir.
+- Testes HTTP comparam respostas estrangeira/inexistente na criação de observações, sessões, consenso e avaliação de alertas; verificam ainda que não são criados registos nas prateleiras estrangeiras.
+- Commits: código 9288459, cce1afd; testes 739a574 e d5d6243.
+- CI e execução PostgreSQL 16 ainda não confirmados.
+
 ## 2026-11-23 — Ocultação de IDs de consenso de prateleira
 
 - A leitura de consenso por shelf_id devolve agora o mesmo HTTP 404 para prateleiras estrangeiras e inexistentes, em vez de distinguir 403/404.
