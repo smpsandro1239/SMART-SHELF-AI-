@@ -397,6 +397,15 @@ def ingest_edge_event(
             occurred_at=event.occurred_at, payload=event.model_dump(mode="json"),
             fingerprint_sha256=fingerprint, received_at=current,
         ))
+        db.flush()
+        inbox_row = db.query(models.EdgeDeviceEventInbox).filter_by(
+            device_id=device.device_id, event_id=event.event_id
+        ).one()
+        db.add(models.EdgeDeviceEventProcessing(
+            inbox_id=inbox_row.id, status="PENDING", attempt_count=0,
+            max_attempts=8, available_at=current, fencing_token=0,
+            created_at=current, updated_at=current,
+        ))
         cursor.last_sequence = event.sequence_number
         cursor.updated_at = current
         db.commit()
