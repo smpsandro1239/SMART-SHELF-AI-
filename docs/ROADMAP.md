@@ -1189,3 +1189,13 @@ Validação no commit `311fecc9e13641e6d5eb55465fda646fb2909601`: Quality Gates 
 - Commit de teste: aec6f2b1701e2fcb92e51ba981c9819d8347c683.
 - Os quatro workflows foram iniciados; aguarda-se conclusão de API CI, Quality Gates, Security Scans e Docker Compose.
 - A cobertura actual de erro usa SQLite e não substitui um teste PostgreSQL com takeover concorrente e fencing.
+
+
+## 2026-11-23 — BOLA: recursos aninhados de prateleira (validação pendente)
+
+- Ampliado postgres_inventory_authorization_smoke.py com observações, sessões de captura, alertas e eventos reais de loja estrangeira.
+- Testadas tentativas cross-store de criar observações/sessões/planogramas, ler consenso/planogramas/eventos e filtrar listagens por shelf_id estrangeiro.
+- Controlos same-store para observação e sessão de captura mantêm HTTP 201.
+- Commits: d4429b0fa1ab3d2c729d6c5b8b29f38dc5cdf731 e 99a69a7415bc552b0cf104861d93881dac6259e1.
+- CI/PostgreSQL 16 do SHA final ainda pendentes.
+- A cobertura actual continua centrada no actor SUPERVISOR e nos recursos escolhidos; não representa a matriz completa de todos os papéis e endpoints.

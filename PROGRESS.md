@@ -501,3 +501,15 @@ Limitação de segurança resolvida em camadas: owner de migrations separado do 
 - A expectativa é manter PROCESSING, preservar o proprietário/token para recuperação por expiração e não confirmar nem reclassificar o evento com uma lease perdida.
 - API CI, Quality Gates, Security Scans e Docker Compose foram iniciados para este commit; os resultados ainda não estavam disponíveis no momento deste registo.
 - Próxima prova necessária: smoke PostgreSQL de takeover concorrente durante processamento e rejeição de ACK/falha por fencing obsoleto.
+
+
+## 2026-11-23 — Expansão dos testes BOLA para recursos aninhados de prateleira
+
+- O smoke PostgreSQL passou a criar uma observação, sessão de captura, alerta e evento de auditoria reais na loja B.
+- Acrescentados ataques com shelf_id estrangeiro contra criação de observação, criação de sessão, criação/listagem de planogramas, consenso e leitura de eventos de alerta.
+- Acrescentados controlos de não divulgação para listagens de observações, sessões e alertas filtradas por prateleira estrangeira.
+- Os controlos positivos same-store existentes foram preservados e estendidos a observações e sessões.
+- Commits de implementação: d4429b0fa1ab3d2c729d6c5b8b29f38dc5cdf731 e 99a69a7415bc552b0cf104861d93881dac6259e1.
+- Validação PostgreSQL 16 ainda pendente para o SHA final 99a69a7; não houve execução local do script.
+- Na ronda anterior, API CI e Docker Compose passaram no commit aec6f2b; Quality Gates e Security Scans foram cancelados.
+- Próxima prova: CI do smoke de autorização, depois matriz de roles e takeover PostgreSQL do worker Edge.

@@ -1854,3 +1854,19 @@ Foi acrescentada cobertura parametrizada para os dois caminhos de erro do handle
 - Implementação de teste: apps/api/tests/test_edge_event_worker.py.
 - Commit de teste: aec6f2b1701e2fcb92e51ba981c9819d8347c683.
 - Validação CI desse commit: em execução no momento do registo; não considerar a regressão validada até API CI, Quality Gates, Security Scans e Docker Compose terminarem.
+
+
+## 2026-11-23 — Expansão da auditoria BOLA de IDs aninhados de prateleira
+
+O smoke PostgreSQL de autorização foi ampliado com recursos reais de teste na loja estrangeira: observação, sessão de captura e alerta com evento de auditoria. Para um SUPERVISOR autenticado na loja A, são agora exercitados:
+
+- Recusa de criação de observação e sessão de captura na prateleira estrangeira.
+- Recusa de criação/listagem de planogramas e leitura de consenso na prateleira estrangeira.
+- Recusa de consulta de eventos de alerta estrangeiro.
+- Listagens filtradas por IDs estrangeiros de prateleira não podem devolver observações, sessões nem alertas da loja B.
+- Verificação de persistência dos registos estrangeiros e ausência de novas observações/sessões criadas pelas tentativas negadas.
+- Controlos positivos same-store para observação e sessão de captura, além dos controlos de inventário, colocação e tarefa já existentes.
+
+Implementação: apps/api/scripts/postgres_inventory_authorization_smoke.py. Commits: d4429b0fa1ab3d2c729d6c5b8b29f38dc5cdf731 e 99a69a7415bc552b0cf104861d93881dac6259e1. Validação PostgreSQL 16 e CI deste novo SHA ainda pendentes; não declarar a cobertura aprovada até o workflow API CI terminar.
+
+A ronda anterior do worker Edge ficou parcialmente validada: API CI e Docker Compose passaram no commit aec6f2b; Quality Gates e Security Scans foram cancelados. A cobertura de erro após perda da lease existe, mas ainda falta o smoke PostgreSQL de takeover/fencing concorrente.

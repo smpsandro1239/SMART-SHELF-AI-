@@ -55,3 +55,15 @@ No commit a345746, API CI e Quality Gates passaram com 1422 testes aprovados e 1
 - O actor é um SUPERVISOR autenticado por JWT, associado à loja de origem; as respostas esperadas são HTTP 403. O mesmo script mantém as tentativas de escrita cross-store e verifica que não deixam alterações persistidas.
 - A alteração está no commit `40f9456a`; API CI, Quality Gates, Security Scans e Docker Compose ainda aguardam conclusão no SHA.
 - Esta evidência não substitui testes de IDs aninhados, todos os papéis/rotas, leitura positiva same-store ou ensaio de volume persistente.
+
+
+## Cobertura adicional de IDs aninhados — 2026-11-23
+
+O smoke PostgreSQL foi ampliado para testar isolamento por shelf_id em recursos indirectos:
+
+- Observações, sessões de captura e alertas existentes na loja estrangeira não são devolvidos por listagens filtradas com o ID real da prateleira estrangeira.
+- Criação de observações, sessões de captura e planogramas através de uma prateleira estrangeira é recusada.
+- Leitura de consenso, planogramas e eventos de alertas estrangeiros é recusada.
+- Os controlos positivos same-store para observação e sessão de captura confirmam que a autorização não bloqueia recursos próprios.
+
+A implementação está publicada no commit 99a69a7415bc552b0cf104861d93881dac6259e1; a execução PostgreSQL 16/CI ainda está pendente. Esta cobertura não substitui a matriz integral endpoint x ADMIN/SUPERVISOR/EMPLOYEE.

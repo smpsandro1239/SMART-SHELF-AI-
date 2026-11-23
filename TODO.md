@@ -1469,3 +1469,21 @@ Critério global: nenhuma capacidade pode ser marcada como concluída sem códig
 - [ ] Acrescentar smoke PostgreSQL que force a perda/takeover da lease durante um handler lento e prove que um worker obsoleto não confirma nem altera o estado do evento.
 
 A implementação de produção já verificava lease_lost nos caminhos de sucesso e erro; esta alteração reforça a cobertura de regressão. Os testes SQLite não substituem o smoke de concorrência PostgreSQL.
+
+
+## Segurança — BOLA em recursos aninhados de prateleira (2026-11-23; implementação publicada, CI pendente)
+
+- [x] Acrescentar fixtures PostgreSQL reais de observação, sessão de captura, alerta e evento de auditoria pertencentes à loja estrangeira.
+- [x] Testar que SUPERVISOR não cria observações, sessões de captura ou planogramas usando IDs de prateleiras de outra loja.
+- [x] Testar que consenso, listagem de planogramas, planograma activo e eventos de alertas estrangeiros não são acessíveis por IDs aninhados.
+- [x] Testar que filtros por shelf_id estrangeiro não devolvem observações, sessões ou alertas da outra loja.
+- [x] Manter controlos positivos same-store e verificar que tentativas negadas não criam observações nem sessões adicionais.
+- [ ] Executar e confirmar API CI/PostgreSQL 16 no commit 99a69a7415bc552b0cf104861d93881dac6259e1.
+- [ ] Alargar a matriz autenticada a ADMIN, SUPERVISOR e EMPLOYEE por endpoint, incluindo relações indirectas de imagens, planogramas, deteções e tarefas.
+
+## Edge AI — validação da ronda anterior
+
+- [x] API CI passou no commit aec6f2b1701e2fcb92e51ba981c9819d8347c683.
+- [x] Docker Compose Smoke passou no mesmo commit.
+- [ ] Quality Gates e Security Scans foram cancelados; repetir a validação num commit posterior.
+- [ ] Criar smoke PostgreSQL de takeover concorrente durante handler lento e provar rejeição de ACK/falha por fencing obsoleto.
