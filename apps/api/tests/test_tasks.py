@@ -903,7 +903,7 @@ def test_pallet_lifecycle_audit_endpoints_enforce_store_scope(monkeypatch):
                 "reason": "Colocação na exposição",
             },
         )
-        assert foreign_update.status_code == 403
+        assert foreign_update.status_code == 404
 
         with TestingSession() as state_db:
             foreign_pallet_after = state_db.get(models.StorePallet, foreign_pallet_id)
