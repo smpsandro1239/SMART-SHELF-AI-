@@ -1,3 +1,14 @@
+## 2026-11-23 — Prova PostgreSQL de autorização pré-lock entre lojas (implementação publicada; CI pendente)
+
+- O smoke de retenção usa duas lojas e um supervisor da loja externa à imagem.
+- A linha da imagem fica bloqueada numa sessão PostgreSQL; o pedido externo de restrição tem de responder HTTP 403 antes da libertação do lock. Isto verifica o comportamento em PostgreSQL real e não apenas a ordem estática do código.
+- Os ensaios concorrentes de legal hold/purge e restore/purge continuam incluídos.
+- O smoke é executado pelo passo já existente no API CI.
+- Commits: `25a34b8f`, `926abcf1`.
+- A execução CI no novo SHA ainda não foi confirmada. A cobertura dos restantes endpoints multi-loja de retenção/artefactos continua pendente.
+
+---
+
 ## 2026-11-23 — Autorização de tenant antes de locks em retenção e artefactos (código publicado; CI em execução)
 
 - A auditoria da ordem de locks encontrou dez handlers que adquiriam `FOR UPDATE` na imagem antes de validar a loja. Embora alguns validassem o tenant mais tarde, um pedido sem autorização podia adquirir locks de recursos de outra loja antes da rejeição.
