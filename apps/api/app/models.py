@@ -1230,6 +1230,48 @@ class EdgeDeviceEventInbox(Base):
     received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
 
 
+class EdgeDeviceEventProcessing(Base):
+    """Mutable processing control row; the authenticated event inbox remains immutable."""
+    __tablename__ = "edge_device_event_processing"
+    __table_args__ = (
+        UniqueConstraint("inbox_id", name="uq_edge_event_processing_inbox"),
+        CheckConstraint(
+            "status IN ('PENDING', 'PROCESSING', 'PROCESSED', 'RETRY', 'DEAD_LETTER')",
+            name="ck_edge_event_processing_status",
+        ),
+        CheckConstraint("attempt_count >= 0 AND max_attempts > 0", name="ck_edge_event_processing_attempts"),
+        CheckConstraint("fencing_token >= 0", name="ck_edge_event_processing_fencing"),
+        CheckConstraint(
+            "(status = 'PROCESSING' AND lease_owner IS NOT NULL AND lease_expires_at IS NOT NULL) "
+            "OR (status <> 'PROCESSING' AND lease_owner IS NULL AND lease_expires_at IS NULL)",
+            name="ck_edge_event_processing_lease_state",
+        ),
+        CheckConstraint(
+            "(status IN ('PROCESSED', 'DEAD_LETTER') AND finished_at IS NOT NULL) "
+            "OR (status NOT IN ('PROCESSED', 'DEAD_LETTER') AND finished_at IS NULL)",
+            name="ck_edge_event_processing_finished_state",
+        ),
+        Index("ix_edge_event_processing_claim", "status", "available_at", "lease_expires_at", "id"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    inbox_id: Mapped[int] = mapped_column(
+        ForeignKey("edge_device_event_inbox.id", ondelete="RESTRICT"), nullable=False
+    )
+    status: Mapped[str] = mapped_column(String(16), default="PENDING", nullable=False)
+    attempt_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    max_attempts: Mapped[int] = mapped_column(Integer, default=8, nullable=False)
+    available_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    lease_owner: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    fencing_token: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    last_error_code: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+
 class DatasetWorker(Base):
     """Registered non-human identity allowed to process dataset execution jobs."""
     __tablename__ = "dataset_workers"
