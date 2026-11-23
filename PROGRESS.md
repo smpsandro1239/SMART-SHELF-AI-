@@ -620,3 +620,11 @@ Limitação de segurança resolvida em camadas: owner de migrations separado do 
 - Foi acrescentado teste HTTP autenticado com zona estrangeira, ID inexistente e controlo positivo same-store; verifica também que a tentativa negada não cria a prateleira.
 - Commits: código aa46a2553ac37e479c7b9564ff8c2b69ffa24cb5; teste 716c359afbad17e2280014f938d2c2d71c899c80.
 - CI, execução local e PostgreSQL 16 ainda não foram confirmados.
+
+
+## 2026-11-23 — BOLA: associação de produto a prateleira estrangeira
+
+- A rota POST /api/v1/shelf-products consultava primeiro o shelf_id e devolvia 403 para prateleiras estrangeiras, distinguindo-as de IDs inexistentes. A validação do actor foi antecipada e a resposta passou a HTTP 404 uniforme antes do lock do produto.
+- Teste autenticado cobre shelf estrangeira e inexistente, igualdade das respostas, ausência de associação indevida e controlo positivo same-store.
+- Commits: código 6a4b783741c9d1b25571ba2f16866b74be90fab0; teste 78d07d3228a4f988539aebb40127332e60376c08.
+- CI, suite local e PostgreSQL 16 ainda não foram executados/confirmados nesta ronda.
