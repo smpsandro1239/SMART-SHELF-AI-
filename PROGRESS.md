@@ -11,7 +11,7 @@
 
 ---
 
-## 2026-11-23 — Prova PostgreSQL de autorização multi-loja antes de lock (código publicado; CI pendente)
+## 2026-11-23 — Prova PostgreSQL de autorização multi-loja antes de lock (CI validada; cobertura adicional pendente)
 
 - O smoke de retenção PostgreSQL cria agora uma segunda loja e um supervisor pertencente a essa loja.
 - Enquanto outra sessão mantém a linha de uma imagem bloqueada com `FOR UPDATE`, o supervisor externo tenta restringir a imagem através da API.
@@ -19,7 +19,7 @@
 - Os ensaios anteriores de concorrência entre legal hold, agendamento de purga e restauro foram preservados.
 - O smoke já está ligado ao job PostgreSQL da API CI através do passo existente `Verify PostgreSQL legal hold and purge schedule concurrency`.
 - Commits: `25a34b8f` e `926abcf1`.
-- **Validação pendente:** a nova execução API CI/PostgreSQL 16, Quality Gates, Security Scans e Docker Compose tem de terminar no SHA desta alteração. Não foi executado localmente nesta sessão.
+- **Validação concluída:** API CI [45129975394](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45129975394) passou com 1555 testes aprovados e 1 ignorado; Quality Gates [45130013285](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45130013285), Security Scans [45130013260](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45130013260) e Docker Compose [45129975482](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45129975482) passaram. Não foi executado localmente nesta sessão.
 
 ---
 
