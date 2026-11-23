@@ -288,3 +288,81 @@ def test_capture_session_listing_is_store_scoped_even_with_foreign_shelf_filter(
         assert all(item.store_id == own_store_id for item in own_store_sessions)
     finally:
         db.close()
+
+
+def test_image_upload_hides_foreign_and_missing_capture_session_ids(monkeypatch):
+    from types import SimpleNamespace
+
+    own_shelf_id, _ = seed_shelves()
+    db = Session()
+    own_store_id = (
+        db.query(models.Zone.store_id)
+        .join(models.Shelf, models.Shelf.zone_id == models.Zone.id)
+        .filter(models.Shelf.id == own_shelf_id)
+        .scalar()
+    )
+    foreign_store = models.Store(
+        code="CAP-UPLOAD-FOREIGN",
+        name="Foreign capture session store",
+    )
+    db.add(foreign_store)
+    db.flush()
+    foreign_zone = models.Zone(
+        store_id=foreign_store.id,
+        name="Foreign aisle",
+    )
+    db.add(foreign_zone)
+    db.flush()
+    foreign_shelf = models.Shelf(
+        zone_id=foreign_zone.id,
+        code="FOREIGN-UPLOAD-01",
+    )
+    db.add(foreign_shelf)
+    db.flush()
+    foreign_session = models.CaptureSession(
+        store_id=foreign_store.id,
+        shelf_id=foreign_shelf.id,
+        source_type="fixed_camera",
+        capture_mode="single",
+        started_at=models.utc_now(),
+    )
+    db.add(foreign_session)
+    db.commit()
+    foreign_session_id = foreign_session.id
+    db.close()
+
+    supervisor = SimpleNamespace(
+        id=17,
+        role="SUPERVISOR",
+        store_id=own_store_id,
+    )
+    monkeypatch.setattr(
+        main_module,
+        "_request_user",
+        lambda _db, _request: supervisor,
+    )
+
+    with TestClient(app) as client:
+        foreign = client.post(
+            "/api/v1/shelf-images",
+            data={
+                "shelf_id": str(own_shelf_id),
+                "capture_session_id": str(foreign_session_id),
+            },
+            files={"image": ("frame.jpg", b"invalid", "image/jpeg")},
+        )
+        missing = client.post(
+            "/api/v1/shelf-images",
+            data={
+                "shelf_id": str(own_shelf_id),
+                "capture_session_id": "2147483000",
+            },
+            files={"image": ("frame.jpg", b"invalid", "image/jpeg")},
+        )
+
+    assert foreign.status_code == missing.status_code == 404
+    assert foreign.json() == missing.json() == {
+        "detail": "Capture session not found"
+    }
+    with Session() as db:
+        assert db.query(models.ShelfImage).count() == 0
