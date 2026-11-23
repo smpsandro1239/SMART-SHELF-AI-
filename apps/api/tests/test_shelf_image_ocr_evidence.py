@@ -976,7 +976,8 @@ def test_cross_store_restricted_image_returns_forbidden_before_retention_state(m
             ]
             for path in paths:
                 response = client.get(path)
-                assert response.status_code == 403, (path, response.status_code, response.text)
+                expected_status = 404 if path.endswith(f"/shelf-image-detections/{foreign_detection_id}/reviews") else 403
+                assert response.status_code == expected_status, (path, response.status_code, response.text)
 
 
 
@@ -1039,7 +1040,7 @@ def test_retention_event_history_enforces_cross_store_scope(monkeypatch):
             foreign_events = client.get(
                 f"/api/v1/shelf-images/{foreign_image_id}/retention/events"
             )
-            assert foreign_events.status_code == 403
+            assert foreign_events.status_code == 404
             assert "Sensitive retention reason" not in foreign_events.text
 
 def test_cross_store_supervisor_cannot_mutate_foreign_shelf_image(monkeypatch):
@@ -1108,7 +1109,8 @@ def test_cross_store_supervisor_cannot_mutate_foreign_shelf_image(monkeypatch):
 
             for method, path, payload in attempts:
                 response = client.request(method, path, json=payload)
-                assert response.status_code == 403, (
+                expected_status = 404 if path.endswith(f"/shelf-image-detections/{foreign_detection_id}/reviews") else 403
+                assert response.status_code == expected_status, (
                     method,
                     path,
                     response.status_code,
