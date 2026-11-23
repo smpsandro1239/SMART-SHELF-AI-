@@ -720,7 +720,6 @@ def test_supervisor_cannot_create_shelf_under_foreign_or_missing_zone(planogram_
     missing = client.post(
         "/api/v1/shelves",
         json={"zone_id": 2147483000, "code": "MISSING-01"},
-        headers=headers,
     )
     assert foreign.status_code == missing.status_code == 404
     assert foreign.json() == missing.json()
@@ -768,7 +767,6 @@ def test_supervisor_cannot_assign_product_to_foreign_shelf(planogram_api, monkey
     own = client.post(
         "/api/v1/shelf-products",
         json={**payload, "shelf_id": ids["shelf_a"], "product_id": own_product_id},
-        headers=headers,
     )
     assert own.status_code == 201, own.text
 
