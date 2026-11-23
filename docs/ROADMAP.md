@@ -1,3 +1,7 @@
+## Segurança P0 — IDs de prateleira em criação e consenso (2026-11-23; validação pendente)
+
+As rotas de criação de observações/sessões e a consulta de consenso autenticam o actor antes de resolver shelf_id. Para SUPERVISOR, IDs estrangeiros e inexistentes devolvem HTTP 404 equivalente; a avaliação de alertas herda o mesmo bloqueio antes de persistir. Regressões verificam ausência de novos registos. Commits: 9288459, cce1afd (código); d5d6243 (testes). CI/PostgreSQL 16 pendente.
+
 ## Segurança P0 — IDs de consenso de prateleira (2026-11-23; validação pendente)
 
 O endpoint read-only de consenso por shelf_id oculta agora a existência de prateleiras estrangeiras com HTTP 404, igual ao caso inexistente. A avaliação/persistência de alertas usa o mesmo contrato, sem criar alertas para pedidos negados. Foram acrescentadas regressões HTTP para ambos os caminhos. Commits: 2f4470e (código), 5feffba (teste). CI/PostgreSQL 16 pendente.
