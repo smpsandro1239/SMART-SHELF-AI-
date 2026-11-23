@@ -1997,3 +1997,14 @@ A área de gestão de inventário inclui um histórico de movimentos aprovado e 
 - A compilação TypeScript e o build de produção passaram no Quality Gates do SHA `8e92494b446a2f0c233755316ada70407b596cd1`.
 - A suite API detectou uma expectativa incoerente no KPI `urgent_active_tasks`: o código contava prioridades HIGH e URGENT, enquanto o contrato/teste e o rótulo do dashboard definem apenas URGENT. Corrigida a query para contar exclusivamente tarefas URGENT activas.
 - Security Scans passaram no SHA `8e92494b446a2f0c233755316ada70407b596cd1`. A nova execução API/Quality Gates após a correção ainda está pendente.
+
+
+## Inventário operacional — reconciliação e histórico
+
+O dashboard de ADMIN e SUPERVISOR inclui:
+- **Histórico de movimentos:** consulta read-only dos movimentos aprovados, com filtros por produto/tarefa, indicadores e detalhe dos snapshots de origem e resultado.
+- **Reconciliação da exposição:** compara a quantidade observada na prateleira com o objetivo de exposição configurado para a associação produto/prateleira.
+- **Stock de retaguarda:** apresenta separadamente stock físico registado, reservado e disponível, bem como fonte e idade do snapshot.
+- **Evidência e frescura:** mostra data/confiança da observação e identifica referências sem medição ou sem snapshot.
+
+A diferença de exposição é uma métrica operacional face ao objetivo da prateleira; não representa, por si só, uma divergência do inventário contabilístico. A visão de retaguarda mantém-se num domínio separado. Nenhuma destas consultas altera snapshots, movimentos ou quantidades contabilísticas. Uma futura divergência formal deverá seguir um processo de revisão humana e auditoria.
