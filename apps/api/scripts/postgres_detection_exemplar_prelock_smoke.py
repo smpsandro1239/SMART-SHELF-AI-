@@ -2,7 +2,7 @@
 
 A supervisor from store A supplies real detection/exemplar IDs belonging to
 store B while the source image and global product rows are locked. All direct-ID
-operations must return HTTP 403 without waiting for either lock or mutating data.
+operations must return concealed HTTP 404 without waiting for either lock or mutating data.
 """
 from concurrent.futures import ThreadPoolExecutor
 from threading import Event
@@ -165,9 +165,9 @@ def main() -> None:
                         "instead of rejecting before lock acquisition"
                     ) from exc
                 assert results == {
-                    "detection_review": 403,
-                    "detection_history": 403,
-                    "exemplar_review": 403,
+                    "detection_review": 404,
+                    "detection_history": 404,
+                    "exemplar_review": 404,
                 }, results
             finally:
                 release_locks.set()
@@ -187,7 +187,7 @@ def main() -> None:
 
     print(
         "PostgreSQL direct-ID tenant pre-lock smoke passed: detection review, "
-        "review history and exemplar review all returned HTTP 403 while both "
+        "review history and exemplar review all returned concealed HTTP 404 while both "
         "source-image and product rows were locked; no review was persisted."
     )
 
