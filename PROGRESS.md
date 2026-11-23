@@ -776,3 +776,11 @@ Próxima prioridade: continuar auditoria de IDs aninhados em OCR/matching/artefa
 - A rota `GET /api/v1/inventory/movements` foi adicionada à matriz explícita de autorização. A auditoria estrita tinha falhado porque a rota nova não estava classificada; a classificação foi corrigida antes da próxima execução.
 - A interface usa `VITE_API_BASE_URL` quando configurado e mantém a apresentação em pt-PT.
 - Validação: código publicado; a execução de Web CI e Quality Gates do novo HEAD está pendente de conclusão. Não declarar build/testes aprovados até obter os resultados finais.
+
+
+## 2026-11-23 — Correção de semântica do KPI de tarefas urgentes
+
+- A Quality Gates do HEAD `8e92494b446a2f0c233755316ada70407b596cd1` identificou uma divergência: o contador de tarefas urgentes incluía também prioridade HIGH.
+- Corrigido `urgent_active_tasks` para contar apenas tarefas com prioridade `URGENT`; tarefas `HIGH` continuam contabilizadas em `tasks_by_priority`, sem serem apresentadas como urgentes.
+- A regressão existente em `apps/api/tests/test_dashboard_summary.py` já cobre o cenário com uma tarefa URGENT e outra HIGH.
+- Aguardar nova API CI/Quality Gates para confirmar a correção.
