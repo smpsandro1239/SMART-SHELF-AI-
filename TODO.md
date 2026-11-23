@@ -1,3 +1,15 @@
+## Segurança P0 — rejeição de IDs aninhados de paletes entre lojas (2026-11-23; código publicado, CI pendente)
+
+- [x] Acrescentar controlo BOLA para pedido de planeamento de rotação com `store_id` autorizado da loja A e `pallet_id` real da loja B.
+- [x] Acrescentar controlo BOLA para consulta de eventos de ciclo de vida com `store_id` da loja A e ID real da palete da loja B.
+- [x] Exigir HTTP 404 em ambos os casos, evitando resolver recursos estrangeiros através de um âmbito autorizado.
+- [ ] Executar API CI/PostgreSQL 16, Quality Gates, Security Scans e Docker Compose no commit `db177bce`.
+- [ ] Alargar a mesma matriz a IDs estrangeiros de localização, shelf, tarefa, packaging e outros recursos relacionados.
+
+Commit: `db177bce`. São dois controlos adicionais de IDs aninhados; não constituem cobertura global BOLA/IDOR.
+
+---
+
 ## Segurança P0 — controlos positivos same-store com IDs logísticos reais (2026-11-23; implementação publicada, CI pendente)
 
 - [x] Semear níveis de embalagem CASE e paletes reais para ambas as lojas no smoke PostgreSQL de autorização.
