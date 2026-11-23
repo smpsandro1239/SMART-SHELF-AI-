@@ -734,3 +734,45 @@ def test_supervisor_cannot_create_shelf_under_foreign_or_missing_zone(planogram_
     with main_module.SessionLocal() as db:
         assert db.query(models.Shelf).filter_by(zone_id=ids["zone_b"], code="FORGED-01").count() == 0
         assert db.query(models.Shelf).filter_by(zone_id=ids["zone_a"], code="OWN-02").count() == 1
+
+
+
+def test_supervisor_cannot_assign_product_to_foreign_shelf(planogram_api):
+    client, ids = planogram_api
+    headers = _headers(ids["supervisor_a"], "SUPERVISOR")
+    payload = {
+        "shelf_id": ids["shelf_b"],
+        "product_id": ids["product_a"],
+        "target_quantity": 12,
+        "min_display_quantity": 3,
+    }
+
+    foreign = client.post("/api/v1/shelf-products", json=payload, headers=headers)
+    missing = client.post(
+        "/api/v1/shelf-products",
+        json={**payload, "shelf_id": 2147483000},
+        headers=headers,
+    )
+    assert foreign.status_code == missing.status_code == 404
+    assert foreign.json() == missing.json()
+
+    own_product = client.post(
+        "/api/v1/products",
+        json={"sku": "PLANO-OWN-ASSIGN", "name": "Own shelf assignment product"},
+        headers=headers,
+    )
+    assert own_product.status_code == 201, own_product.text
+    own = client.post(
+        "/api/v1/shelf-products",
+        json={**payload, "shelf_id": ids["shelf_a"], "product_id": own_product.json()["id"]},
+        headers=headers,
+    )
+    assert own.status_code == 201, own.text
+
+    with main_module.SessionLocal() as db:
+        assert db.query(models.ShelfProduct).filter_by(
+            shelf_id=ids["shelf_b"], product_id=ids["product_a"]
+        ).count() == 0
+        assert db.query(models.ShelfProduct).filter_by(
+            shelf_id=ids["shelf_a"], product_id=own_product.json()["id"]
+        ).count() == 1
