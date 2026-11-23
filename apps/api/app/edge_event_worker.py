@@ -109,11 +109,23 @@ def process_one_edge_event(
         daemon=True,
     )
     heartbeat_thread.start()
+
+    def stop_and_join_heartbeat() -> None:
+        stop_heartbeat.set()
+        heartbeat_thread.join(timeout=heartbeat_interval + 1)
+        if heartbeat_thread.is_alive():
+            # A renewal may still be in flight. Do not race it with complete/fail;
+            # leave the lease for normal expiry and fenced recovery by another worker.
+            lease_lost.set()
+            logger.error(
+                "Edge event heartbeat did not stop promptly; abandoning local result: inbox_id=%s",
+                claim["inbox_id"],
+            )
+
     try:
         handler(claim)
     except EdgeEventHandlerError as exc:
-        stop_heartbeat.set()
-        heartbeat_thread.join(timeout=heartbeat_interval + 1)
+        stop_and_join_heartbeat()
         if lease_lost.is_set():
             return True
         with session_factory() as db:
@@ -131,8 +143,7 @@ def process_one_edge_event(
         )
         return True
     except Exception:
-        stop_heartbeat.set()
-        heartbeat_thread.join(timeout=heartbeat_interval + 1)
+        stop_and_join_heartbeat()
         if lease_lost.is_set():
             return True
         with session_factory() as db:
@@ -147,8 +158,7 @@ def process_one_edge_event(
         logger.exception("Edge event handler failed: inbox_id=%s", claim["inbox_id"])
         return True
     else:
-        stop_heartbeat.set()
-        heartbeat_thread.join(timeout=heartbeat_interval + 1)
+        stop_and_join_heartbeat()
         if lease_lost.is_set():
             # A worker whose lease could not be renewed must never acknowledge
             # side effects; a replacement worker will recover the expired lease.
