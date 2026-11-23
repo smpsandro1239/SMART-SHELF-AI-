@@ -80,6 +80,16 @@ def main() -> None:
             store_id=None,
             is_active=True,
         )
+        own_location = models.WarehouseLocation(
+            store_id=store_a.id,
+            code=f"PG-BIN-A-{suffix}",
+            aisle="A",
+            rack="01",
+            bin_code="01",
+            distance_to_picking_m=8,
+            max_volume_cm3=100000,
+            max_weight_kg=100,
+        )
         foreign_location = models.WarehouseLocation(
             store_id=store_b.id,
             code=f"PG-BIN-{suffix}",
@@ -90,26 +100,36 @@ def main() -> None:
             max_volume_cm3=100000,
             max_weight_kg=100,
         )
-        db.add_all([supervisor, admin, foreign_location])
+        db.add_all([supervisor, admin, own_location, foreign_location])
         db.flush()
 
         # Seed a completed foreign task and its source stock snapshot for
         # real JWT-backed cross-store authorization checks.
+        own_zone = models.Zone(store_id=store_a.id, name="PG own task zone")
         foreign_zone = models.Zone(store_id=store_b.id, name="PG foreign task zone")
-        db.add(foreign_zone)
+        db.add_all([own_zone, foreign_zone])
         db.flush()
+        own_shelf = models.Shelf(zone_id=own_zone.id, code=f"PG-OWN-SHELF-{suffix}")
         foreign_shelf = models.Shelf(
             zone_id=foreign_zone.id,
             code=f"PG-TASK-SHELF-{suffix}",
         )
-        db.add(foreign_shelf)
+        db.add_all([own_shelf, foreign_shelf])
         db.flush()
-        db.add(models.ShelfProduct(
-            shelf_id=foreign_shelf.id,
-            product_id=product.id,
-            target_quantity=8,
-            min_display_quantity=1,
-        ))
+        db.add_all([
+            models.ShelfProduct(
+                shelf_id=own_shelf.id,
+                product_id=product.id,
+                target_quantity=8,
+                min_display_quantity=1,
+            ),
+            models.ShelfProduct(
+                shelf_id=foreign_shelf.id,
+                product_id=product.id,
+                target_quantity=8,
+                min_display_quantity=1,
+            ),
+        ])
         completed_at = models.utc_now()
         foreign_task = models.ReplenishmentTask(
             store_id=store_b.id,
@@ -137,7 +157,9 @@ def main() -> None:
         product_id = product.id
         supervisor_id = supervisor.id
         admin_id = admin.id
+        own_location_id = own_location.id
         foreign_location_id = foreign_location.id
+        own_shelf_id = own_shelf.id
         foreign_shelf_id = foreign_shelf.id
         own_pallet_id = own_pallet.id
         foreign_pallet_id = foreign_pallet.id
@@ -476,6 +498,31 @@ def main() -> None:
                 headers=supervisor_headers,
             )
             assert own_policy.status_code == 200, own_policy.text
+
+            # Positive controls for nested resource IDs: a valid location and
+            # shelf belonging to the caller's own store must remain usable.
+            own_placement = client.post(
+                "/api/v1/warehouse/placements",
+                json={
+                    "location_id": own_location_id,
+                    "product_id": product_id,
+                    "quantity": 5,
+                },
+                headers=supervisor_headers,
+            )
+            assert own_placement.status_code == 201, own_placement.text
+
+            own_task = client.post(
+                "/api/v1/tasks",
+                json={
+                    "store_id": store_a_id,
+                    "shelf_id": own_shelf_id,
+                    "product_id": product_id,
+                    "requested_quantity": 1,
+                },
+                headers=supervisor_headers,
+            )
+            assert own_task.status_code == 201, own_task.text
 
     finally:
         main_module.settings = original_settings
