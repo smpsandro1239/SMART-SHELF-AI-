@@ -325,7 +325,7 @@ def _lock_authorized_shelf_image(
         and actor.role != "ADMIN"
         and actor.store_id != initial_store_id
     ):
-        raise HTTPException(status_code=missing_status_code, detail=missing_detail)
+        raise HTTPException(status_code=404, detail="Shelf image not found")
     _enforce_store_scope(actor, initial_store_id)
 
     image = (
