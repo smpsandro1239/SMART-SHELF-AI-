@@ -1,3 +1,12 @@
+## 2026-11-23 — Ocultação de IDs de prateleiras nas operações de planograma
+
+- A função `_planogram_shelf_scope` passou a aplicar `Zone.store_id == actor.store_id` na própria query para SUPERVISOR, mantendo ADMIN global.
+- IDs de prateleiras estrangeiras e inexistentes devolvem HTTP 404 com detalhe idêntico (`Shelf not found`).
+- Foi actualizada a regressão em `apps/api/tests/test_capture_sessions.py` para exigir o novo contrato.
+- Commits: teste `5eadb280`; implementação `ccb30063`.
+- Validação automatizada deste HEAD ainda pendente; não foi executado pytest localmente nesta sessão.
+
+
 ## Reforço BOLA — histórico de eventos de paletes (2026-11-23)
 
 - O smoke PostgreSQL de autorização de inventário já exercitava leituras same-store e cross-store do histórico de paletes.
