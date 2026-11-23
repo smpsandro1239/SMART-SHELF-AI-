@@ -1,9 +1,8 @@
-"""Verify inventory, warehouse and task cross-store authorization on PostgreSQL 16.
+"""Verify cross-store authorization for inventory, warehouse and operations APIs.
 
-This smoke test runs after Alembic migrations and uses real JWT middleware,
-PostgreSQL-backed sessions, and persisted-state assertions. It intentionally
-creates two stores and checks that a supervisor from store A cannot read or
-mutate store B inventory, warehouse placements or replenishment tasks.
+This PostgreSQL 16 smoke uses real JWT middleware, database-backed sessions and
+persisted-state assertions. It checks cross-store writes and a broad matrix of
+store_id-scoped sales, forecasting, replenishment and warehouse reads.
 """
 from datetime import timedelta
 from uuid import uuid4
@@ -201,6 +200,90 @@ def main() -> None:
                 ),
             }
 
+            # Exercise read-only store_id query parameters across forecasting,
+            # sales, replenishment and warehouse APIs. The scope guard must
+            # reject the foreign tenant before reading any of its data.
+            foreign_store_reads = [
+                ("daily sales history", "/api/v1/sales/daily", {
+                    "store_id": store_b_id, "product_id": product_id, "source": "POS",
+                }),
+                ("hourly sales history", "/api/v1/sales/hourly", {
+                    "store_id": store_b_id,
+                }),
+                ("hourly traffic history", "/api/v1/sales/traffic/hourly", {
+                    "store_id": store_b_id,
+                }),
+                ("pallet hourly profile", "/api/v1/warehouse/pallet-rotation/hourly-profile", {
+                    "store_id": store_b_id, "product_id": product_id,
+                }),
+                ("traffic peaks", "/api/v1/forecasting/traffic-peaks", {
+                    "store_id": store_b_id,
+                }),
+                ("hourly demand forecast", "/api/v1/forecasting/hourly-demand", {
+                    "store_id": store_b_id, "product_id": product_id,
+                }),
+                ("weekday hourly profile", "/api/v1/warehouse/pallet-rotation/weekday-hourly-profile", {
+                    "store_id": store_b_id, "product_id": product_id,
+                }),
+                ("pallet rotation window", "/api/v1/warehouse/pallet-rotation/window-plan", {
+                    "store_id": store_b_id, "product_id": product_id,
+                    "pallet_id": 999999999, "current_hour": 12, "residual_base_units": 5,
+                }),
+                ("history-based pallet portfolio", "/api/v1/warehouse/pallet-rotation/portfolio-from-history", {
+                    "store_id": store_b_id, "current_hour": 12,
+                }),
+                ("pallet portfolio", "/api/v1/warehouse/pallet-rotation/portfolio", {
+                    "store_id": store_b_id, "traffic_level": "LOW",
+                    "forecast_consumption_until_low_traffic": 5,
+                }),
+                ("replenishment unit calculation", "/api/v1/warehouse/replenishment-units", {
+                    "store_id": store_b_id, "product_id": product_id,
+                    "required_base_units": 5, "packaging_code": "CASE",
+                }),
+                ("physical warehouse slotting", "/api/v1/warehouse/physical-slotting", {
+                    "store_id": store_b_id, "product_id": product_id, "required_quantity": 5,
+                }),
+                ("daily demand forecast", "/api/v1/forecasting/demand", {
+                    "store_id": store_b_id, "product_id": product_id,
+                    "source": "POS", "lead_time_days": 2,
+                }),
+                ("stockout risk", "/api/v1/forecasting/stockout-risk", {
+                    "store_id": store_b_id, "product_id": product_id,
+                    "source": "POS", "lead_time_days": 2,
+                }),
+                ("store stockout risk portfolio", "/api/v1/forecasting/stockout-risk/portfolio", {
+                    "store_id": store_b_id, "source": "POS", "lead_time_days": 2,
+                }),
+                ("replenishment recommendations", "/api/v1/replenishment/recommendations", {
+                    "store_id": store_b_id,
+                }),
+                ("replenishment plan", "/api/v1/replenishment/plan", {
+                    "store_id": store_b_id,
+                }),
+                ("replenishment workload", "/api/v1/replenishment/workload", {
+                    "store_id": store_b_id,
+                }),
+                ("operational decisions", "/api/v1/operational-decisions", {
+                    "store_id": store_b_id,
+                }),
+                ("warehouse locations", "/api/v1/warehouse/locations", {
+                    "store_id": store_b_id,
+                }),
+                ("store pallets", "/api/v1/warehouse/pallets", {
+                    "store_id": store_b_id,
+                }),
+                ("pallet rotation policies", "/api/v1/warehouse/pallet-rotation/policies", {
+                    "store_id": store_b_id,
+                }),
+                ("pallet lifecycle events", f"/api/v1/warehouse/pallets/999999999/events", {
+                    "store_id": store_b_id,
+                }),
+            ]
+            for resource, path, params in foreign_store_reads:
+                requests[f"foreign {resource}"] = client.get(
+                    path, params=params, headers=supervisor_headers,
+                )
+
             for resource, response in requests.items():
                 expected_status = (
                     404 if resource == "task creation with foreign shelf"
@@ -308,9 +391,10 @@ def main() -> None:
         main_module.settings = original_settings
 
     print(
-        "PostgreSQL inventory authorization smoke passed: "
-        "task list, lifecycle, audit and reconciliation denied across stores; foreign-shelf task creation rejected; inventory controls remain enforced, "
-        "and same-store supervisor operations succeeded."
+        "PostgreSQL inventory/operations authorization smoke passed: cross-store "
+        "inventory, task and warehouse writes were denied without persistence; "
+        "store-scoped sales, forecast, replenishment and warehouse reads were "
+        "denied; same-store supervisor operations succeeded."
     )
 
 
