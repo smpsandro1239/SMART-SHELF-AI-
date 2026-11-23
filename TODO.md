@@ -7,7 +7,9 @@
 - [x] O passo PostgreSQL `Verify PostgreSQL legal hold and purge schedule concurrency` passou no API CI [45129975394](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45129975394), SHA `926abcf1`; inclui o novo ensaio de supervisor de outra loja com a imagem bloqueada.
 - [x] Quality Gates passou no SHA documental `7b10c5c1`: [run 45130013285](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45130013285), incluindo compilação Python, suite API e build Web.
 - [x] Security Scans: Gitleaks, pip-audit, npm audit e o passo de baseline ZAP concluíram com sucesso no [run 45130013260](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45130013260); o workflow ainda não terminou na última consulta.
-- [ ] Aguardar conclusão do API CI [45129975394](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45129975394) e do workflow Security Scans [45130013260](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45130013260).
+- [x] API CI passou integralmente no SHA de código `926abcf1`: [run 45129975394](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45129975394), incluindo migrações PostgreSQL 16, smokes operacionais, runtime role e suite API.
+- [x] Security Scans terminou com sucesso no SHA documental `7b10c5c1`: [run 45130013260](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45130013260), incluindo Gitleaks, pip-audit, npm audit e OWASP ZAP passive baseline.
+- [ ] Ensaiar volume persistente preexistente e operações API reais com principal runtime; não executar contra produção.
 - [ ] Expandir a prova PostgreSQL multi-loja para os restantes fluxos de retenção e os endpoints de artefactos; o novo smoke cobre o caminho comum de autorização pré-lock e os testes estáticos cobrem a utilização dos helpers.
 - [ ] Executar testes de integração dedicados com duas lojas para todos os endpoints de retenção/artefactos.
 - [ ] Ensaiar volume persistente e operações reais com principal runtime.
@@ -40,7 +42,7 @@ Commits: `f6e2156e`, `659586be`, `7f372fbc`, `cbc6a1a6`, `70b1b351`.
 - [x] Passar `MIGRATION_DB_USER=postgres` explicitamente no job PostgreSQL 16 da API CI.
 - [x] Validação anterior à correcção: API CI [45083455380](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45083455380) e Docker Compose [45083455389](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45083455389) passaram no SHA `72d4034d`; Quality Gates [45083489901](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45083489901) e Security Scans [45083489889](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45083489889) passaram no SHA `9bad015c`. Estes resultados antecedem a correcção do filtro por owner.
 - [x] API CI e smoke PostgreSQL 16 passaram no SHA `8e5a6810` (run [45084795278](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45084795278)); Quality Gates [45084849142](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45084849142) e Security Scans [45084849107](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45084849107) passaram no SHA documental `00d6ef51`. Estes resultados validam a correcção do âmbito dos ACLs, mas antecedem a alteração de autorização pré-lock de 2026-11-23.
-- [ ] Executar novamente API CI, Quality Gates, Security Scans e Docker Compose no SHA da correcção de autorização pré-lock (`70b1b351`).
+- [x] API CI/PostgreSQL 16 e Docker Compose passaram no descendente de código `926abcf1`; Quality Gates e Security Scans passaram no descendente documental `7b10c5c1`. Ver evidência e runs na secção acima.
 - [ ] Ensaiar com volume PostgreSQL persistente preexistente, incluindo role legado, memberships, ownership e grants; não executar contra produção.
 - [ ] Executar operações API reais com o principal runtime após bootstrap e confirmar leitura/escrita nos módulos operacionais sem permissões adicionais.
 
