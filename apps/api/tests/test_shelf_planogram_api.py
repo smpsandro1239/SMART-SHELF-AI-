@@ -164,9 +164,16 @@ def test_planogram_api_enforces_role_and_store_isolation(planogram_api):
         f"/api/v1/shelves/{ids['shelf_a']}/planograms",
         headers=_headers(ids["employee_a"], "EMPLOYEE"),
     )
+    foreign_missing = client.get(
+        "/api/v1/shelves/2147483647/planograms",
+        headers=_headers(ids["supervisor_a"], "SUPERVISOR"),
+    )
     missing = client.get(f"/api/v1/shelves/{ids['shelf_a']}/planograms")
     assert own.status_code == 200
-    assert foreign.status_code == 403
+    assert foreign.status_code == 404
+    assert foreign.json()["detail"] == "Shelf not found"
+    assert foreign_missing.status_code == 404
+    assert foreign_missing.json() == foreign.json()
     assert employee.status_code == 403
     assert missing.status_code == 401
 
@@ -394,12 +401,19 @@ def test_planogram_comparison_enforces_role_store_and_image_state(planogram_api)
         f"/api/v1/shelves/{ids['shelf_b']}/planograms/comparison/{image_id}",
         headers=supervisor_a,
     )
+    foreign_missing = client.get(
+        f"/api/v1/shelves/2147483647/planograms/comparison/{image_id}",
+        headers=supervisor_a,
+    )
     employee = client.get(
         f"/api/v1/shelves/{ids['shelf_a']}/planograms/comparison/{image_id}",
         headers=_headers(ids["employee_a"], "EMPLOYEE"),
     )
     assert own_pending.status_code == 409
-    assert foreign.status_code == 403
+    assert foreign.status_code == 404
+    assert foreign.json()["detail"] == "Shelf not found"
+    assert foreign_missing.status_code == 404
+    assert foreign_missing.json() == foreign.json()
     assert employee.status_code == 403
 
 
