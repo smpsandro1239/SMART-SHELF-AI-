@@ -1289,3 +1289,8 @@ A rota POST /api/v1/shelves passa a validar o store_id da zona antes de criar a 
 ## 2026-11-23 — BOLA: associação de produtos a prateleiras (validação pendente)
 
 POST /api/v1/shelf-products valida agora o actor antes de resolver shelf_id e oculta prateleiras estrangeiras com HTTP 404, igual ao caso inexistente, antes de bloquear o produto. A regressão autenticada verifica ausência de associação cross-store e criação same-store válida. Commits: 6a4b783 (código), 78d07d3 (teste). CI/PostgreSQL 16 pendente.
+
+
+## 2026-11-23 — BOLA: IDs directos de tarefas e eventos (validação pendente)
+
+A leitura de eventos de tarefa autentica o actor antes de resolver task_id e oculta IDs estrangeiros com HTTP 404 igual ao caso inexistente, sem row lock na rota GET. A alteração de estado e a reconciliação usam _lock_store_scoped_record com hide_foreign=True. Testes cobrem igualdade das respostas cross-store/inexistente, ausência de eventos/alterações e ausência de movimentos de inventário em reconciliação negada. Commits: 954f973 (GET), ee40b88 (PATCH/reconciliação), f12ed7b e cc3dc3a (testes). CI/PostgreSQL 16 pendente.
