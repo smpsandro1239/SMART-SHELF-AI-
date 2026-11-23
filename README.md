@@ -1914,3 +1914,8 @@ As rotas de criação de observações e sessões de captura e a consulta de con
 ## Segurança — criação de prateleiras por zona (2026-11-23)
 
 A criação de prateleiras valida agora o tenant da zona de destino antes de persistir. Um SUPERVISOR não consegue criar uma prateleira numa zona de outra loja; a resposta é HTTP 404, igual à de um ID inexistente, para não expor a existência da zona. O teste autenticado inclui controlo positivo same-store e verifica ausência de efeitos laterais. Commits: aa46a255 (código) e 716c359 (teste). A validação CI/PostgreSQL 16 ainda está pendente.
+
+
+## Segurança — associação de produtos a prateleiras (2026-11-23)
+
+A associação de produtos valida o tenant da prateleira antes de bloquear o produto. Para SUPERVISOR, uma prateleira estrangeira e um ID inexistente devolvem HTTP 404 equivalente; a tentativa não cria uma relação entre lojas. A regressão inclui controlo positivo same-store. Commits: 6a4b783 (código) e 78d07d3 (teste). Validação CI/PostgreSQL 16 pendente.
