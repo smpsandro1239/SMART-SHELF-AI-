@@ -53,7 +53,7 @@ jobs:
             exit 1
           fi
 
-          docker compose exec -T api python -c "import os, runpy; os.environ['RUNTIME_DATABASE_URL'] = os.environ['DATABASE_URL']; runpy.run_path('scripts/postgres_runtime_role_smoke.py', run_name='__main__')"
+          docker compose exec -T -e MIGRATION_DB_USER="${POSTGRES_USER:-smart_shelf}" api python -c "import os, runpy; os.environ['RUNTIME_DATABASE_URL'] = os.environ['DATABASE_URL']; runpy.run_path('scripts/postgres_runtime_role_smoke.py', run_name='__main__')"
 
           # Simulate a legacy persistent volume where runtime accidentally owns a trust table
           # and inherits an unrelated role. The provisioning service must repair both.
@@ -63,7 +63,7 @@ jobs:
           ALTER TABLE public.vision_model_release_states OWNER TO smart_shelf_runtime;
           SQL
           docker compose run --rm provision-runtime-role
-          docker compose exec -T api python -c "import os, runpy; os.environ['RUNTIME_DATABASE_URL'] = os.environ['DATABASE_URL']; runpy.run_path('scripts/postgres_runtime_role_smoke.py', run_name='__main__')"
+          docker compose exec -T -e MIGRATION_DB_USER="${POSTGRES_USER:-smart_shelf}" api python -c "import os, runpy; os.environ['RUNTIME_DATABASE_URL'] = os.environ['DATABASE_URL']; runpy.run_path('scripts/postgres_runtime_role_smoke.py', run_name='__main__')"
           docker compose exec -T db psql --username smart_shelf --dbname smart_shelf --set=ON_ERROR_STOP=1 --command="DROP ROLE legacy_runtime_smoke"
           curl --fail --silent http://127.0.0.1:8000/health/ready >/dev/null
           docker compose exec -T api python -m app.demo.seed
