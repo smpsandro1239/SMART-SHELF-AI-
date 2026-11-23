@@ -1,3 +1,13 @@
+## Desenvolvimento funcional — KPIs operacionais do dashboard (2026-11-23; código/testes publicados, CI pendente)
+
+- [x] Expor contagens de tarefas por prioridade e estados, mantendo os filtros existentes por loja e utilizador.
+- [x] Expor tarefas activas urgentes e tarefas activas sem atribuição.
+- [x] Calcular taxa de conclusão com denominador explícito (todas as tarefas visíveis, incluindo canceladas).
+- [x] Corrigir `shelves_requiring_attention`: contar prateleiras distintas, não somar observações repetidas.
+- [x] Distinguir `attention_observations` de `shelves_requiring_attention`.
+- [x] Acrescentar testes para SUPERVISOR, EMPLOYEE e ADMIN, isolamento multi-loja e observações duplicadas.
+- [ ] Confirmar API CI/PostgreSQL 16, Quality Gates, Security Scans e Docker Compose no novo HEAD.
+
 ## Segurança P0 — paridade BOLA para IDs de deteção e exemplares (2026-11-23; smoke reforçado, CI pendente)
 
 - [x] No smoke PostgreSQL pré-lock, comparar o status e o corpo completos para IDs reais estrangeiros e IDs inexistentes nos endpoints de revisão e histórico de deteções.
