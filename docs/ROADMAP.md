@@ -1147,3 +1147,11 @@ Validação no commit `311fecc9e13641e6d5eb55465fda646fb2909601`: Quality Gates 
 - Commit de implementação: `3af7a02b`.
 - Validação CI/PostgreSQL 16 pendente; não considerar a ampliação validada até o workflow terminar com sucesso.
 - A matriz endpoint × perfil × loja, a auditoria de IDs aninhados e o ensaio de volume PostgreSQL persistente continuam em aberto.
+
+
+### Evidência CI — smoke inicial de leituras multi-loja (2026-11-23)
+
+- API CI [45131503709](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45131503709) passou no SHA `40f9456a`, com PostgreSQL 16, todos os smokes e **1555 passed, 1 skipped**.
+- Docker Compose [45131503757](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45131503757) passou.
+- No Quality Gates [45131503760](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45131503760), Web build passou, mas o job API foi cancelado durante instalação. Em Security Scans [45131503689](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45131503689), Gitleaks/npm audit passaram e pip-audit/ZAP foram cancelados.
+- O commit posterior `3af7a02b` acrescentou controlos same-store para paletes/embalagem; necessita de validação CI própria.
