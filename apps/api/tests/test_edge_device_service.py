@@ -7,7 +7,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app import models
 from app.database import Base
-from app.edge_event_contract import EdgeEventEnvelope
+from app.edge_event_contract import EdgeEventContractError, EdgeEventEnvelope
 from app.edge_device_service import (
     EdgeDeviceAuthenticationError,
     EdgeDeviceAuthorizationError,
@@ -188,7 +188,7 @@ def test_ingestion_rejects_sequence_gap_and_event_id_reuse_with_changed_payload(
         **first.model_dump(mode="json"),
         "payload": {"firmware_version": "9.9.9"},
     })
-    with pytest.raises(EdgeDeviceError, match="reused with different content"):
+    with pytest.raises(EdgeEventContractError, match="reused with different content"):
         ingest_edge_event(db, principal=principal, event=changed)
 
 
