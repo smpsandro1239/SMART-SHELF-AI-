@@ -1,3 +1,17 @@
+## Segurança P0 — autorização de tenant antes de locks de retenção e artefactos (2026-11-23; CI em execução)
+
+- [x] Corrigir `restore_shelf_image`, `apply_shelf_image_legal_hold`, `release_shelf_image_legal_hold`, `schedule_shelf_image_purge` e `cancel_shelf_image_purge_schedule` para resolver e validar o tenant antes de bloquear a imagem, usando `_lock_authorized_shelf_image`.
+- [x] Corrigir `get_shelf_image_purge_eligibility` para validar a loja antes do primeiro lock e revalidar a linhagem depois do lock.
+- [x] Corrigir `register_shelf_image_artifact_reference`, `create_shelf_image_artifact_inventory_snapshot`, `get_shelf_image_artifact_access_decision` e `create_shelf_image_artifact_disposition_event` com a mesma regra de autorização pré-lock.
+- [x] Expandir o teste estático de ordem de locks para cobrir os dez handlers.
+- [x] Auditoria estática do código actual confirma que os dez handlers autorizam antes do primeiro `FOR UPDATE`.
+- [ ] Executar API CI, Quality Gates, Security Scans e Docker Compose no SHA `cbc6a1a6`; workflows disparados e ainda em execução.
+- [ ] Acrescentar/confirmar testes PostgreSQL multi-store de negação cruzada para cada fluxo de retenção e artefactos; a auditoria estática não substitui testes de integração.
+- [ ] Ensaiar volume persistente PostgreSQL e operações reais com principal runtime.
+
+Commits: `f6e2156e`, `659586be`, `7f372fbc`, `cbc6a1a6`.
+
+---
 ## Segurança P0 — verificação efectiva do principal PostgreSQL runtime (2026-11-22)
 
 - [x] Expandir `apps/api/scripts/postgres_runtime_role_smoke.py` para verificar LOGIN, NOSUPERUSER, NOCREATEDB, NOCREATEROLE, NOREPLICATION, NOBYPASSRLS e NOINHERIT.
@@ -7,9 +21,8 @@
 - [x] Restringir a leitura de `pg_default_acl` ao `defaclrole` do principal de migrations (`MIGRATION_DB_USER`), evitando agregar ACLs de owners diferentes.
 - [x] Passar `MIGRATION_DB_USER=postgres` explicitamente no job PostgreSQL 16 da API CI.
 - [x] Validação anterior à correcção: API CI [45083455380](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45083455380) e Docker Compose [45083455389](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45083455389) passaram no SHA `72d4034d`; Quality Gates [45083489901](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45083489901) e Security Scans [45083489889](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45083489889) passaram no SHA `9bad015c`. Estes resultados antecedem a correcção do filtro por owner.
-- [ ] Reexecutar API CI/PostgreSQL 16 smoke e Quality Gates após a correcção por owner; não existe ainda resultado para o novo SHA.
-- [ ] Ensaiar com volume PostgreSQL persistente preexistente, incluindo role legado, memberships, ownership e grants; não executar contra produção.
-- [ ] Executar operações API reais com o principal runtime após bootstrap e confirmar leitura/escrita nos módulos operacionais sem permissões adicionais.
+- [x] API CI e smoke PostgreSQL 16 passaram no SHA `8e5a6810` (run [45084795278](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45084795278)); Quality Gates [45084849142](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45084849142) e Security Scans [45084849107](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45084849107) passaram no SHA documental `00d6ef51`. Estes resultados validam a correcção do âmbito dos ACLs, mas antecedem a alteração de autorização pré-lock de 2026-11-23.
+- [ ] Executar novamente API CI, Quality Gates, Security Scans e Docker Compose no SHA da correcção de autorização pré-lock (`cbc6a1a6`).
 - [ ] Ensaiar com volume PostgreSQL persistente preexistente, incluindo role legado, memberships, ownership e grants; não executar contra produção.
 - [ ] Executar operações API reais com o principal runtime após bootstrap e confirmar leitura/escrita nos módulos operacionais sem permissões adicionais.
 
