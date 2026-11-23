@@ -1191,6 +1191,7 @@ class EdgeDeviceRequestNonce(Base):
 class EdgeDeviceEventCursor(Base):
     """Monotonic accepted-event cursor for each physical device."""
     __tablename__ = "edge_device_event_cursors"
+    __table_args__ = (CheckConstraint("last_sequence >= 0", name="ck_edge_device_cursor_nonnegative"),)
 
     device_id: Mapped[str] = mapped_column(ForeignKey("edge_devices.device_id", ondelete="RESTRICT"), primary_key=True)
     last_sequence: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
