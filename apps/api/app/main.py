@@ -6818,6 +6818,46 @@ def get_latest_inventory_snapshot(
     return item
 
 
+@app.get(
+    "/api/v1/inventory/movements",
+    response_model=list[InventoryMovementRead],
+    tags=["inventory"],
+)
+def list_inventory_movements(
+    store_id: int,
+    product_id: int | None = None,
+    task_id: int | None = None,
+    limit: int = 100,
+    request: Request = None,
+    db: Session = Depends(get_db),
+):
+    """List immutable, approved stock movements for one authorized store."""
+    actor = _request_user(db, request)
+    if actor is None:
+        raise HTTPException(status_code=401, detail="Authentication is required")
+    if actor.role not in {"ADMIN", "SUPERVISOR"}:
+        raise HTTPException(status_code=403, detail="Supervisor role required")
+    _enforce_store_scope(actor, store_id)
+    if db.get(models.Store, store_id) is None:
+        raise HTTPException(status_code=404, detail="Store not found")
+
+    query = db.query(models.InventoryMovement).filter(
+        models.InventoryMovement.store_id == store_id
+    )
+    if product_id is not None:
+        query = query.filter(models.InventoryMovement.product_id == product_id)
+    if task_id is not None:
+        query = query.filter(models.InventoryMovement.task_id == task_id)
+    return (
+        query.order_by(
+            models.InventoryMovement.created_at.desc(),
+            models.InventoryMovement.id.desc(),
+        )
+        .limit(max(1, min(limit, 500)))
+        .all()
+    )
+
+
 @app.post(
     "/api/v1/tasks/{task_id}/reconcile-inventory",
     response_model=InventoryMovementRead,
