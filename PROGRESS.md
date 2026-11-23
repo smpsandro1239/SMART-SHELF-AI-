@@ -648,3 +648,11 @@ Limitação de segurança resolvida em camadas: owner de migrations separado do 
 - Testes adicionados/ajustados: comparação de IDs estrangeiros e inexistentes em retenção, revisão de deteções e revisão de exemplares; os testes existentes preservam controlos same-store, revisão independente e ausência de persistência não autorizada.
 - Durante a validação PostgreSQL anterior, API CI detetou um contrato smoke desatualizado: criação de warehouse placement numa localização estrangeira passou a devolver 404, mas o smoke ainda esperava 403. A expectativa foi atualizada em 9f5ebe0. Nova execução CI para as alterações atuais está em curso.
 - Commits principais: e402eda (ordem de autenticação/escopo), 956431e (detalhes uniformes), 11305cc (teste deteções), 1420ed4 (teste exemplares), 57cdab3 (teste retenção), 9f5ebe0 (smoke warehouse).
+
+
+## 2026-11-23 — BOLA: upload de imagens e IDs de sessões de captura
+
+- POST /api/v1/shelf-images autentica agora o actor antes de resolver shelf_id e devolve HTTP 404 uniforme para prateleiras estrangeiras e inexistentes.
+- O capture_session_id opcional passa a usar _lock_store_scoped_record(..., hide_foreign=True), mantendo o preflight de tenant antes do row lock e a revalidação após o lock. Sessões estrangeiras e inexistentes devolvem HTTP 404 com detalhe uniforme.
+- Testes comparam respostas para prateleira estrangeira/inexistente e sessão de captura estrangeira/inexistente; verificam que pedidos recusados não criam ficheiros nem novos registos ShelfImage.
+- Commits: 90bd84f (preflight upload), 91da9f1/fdcbd55 (teste prateleira), 30f0dda (preflight sessão), 0d7a079/3e1ac0a (teste sessão). CI no HEAD final pendente.
