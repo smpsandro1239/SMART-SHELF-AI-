@@ -1779,3 +1779,13 @@ A implementação de produção já verificava lease_lost nos caminhos de sucess
 
 - [x] Separar prioridade HIGH de URGENT no KPI `urgent_active_tasks`; o indicador conta apenas tarefas URGENT activas.
 - [ ] Confirmar API CI e Quality Gates no SHA da correção.
+
+
+## Inventário — histórico de movimentos (2026-11-23)
+
+- [x] Integrar histórico read-only no dashboard para ADMIN/SUPERVISOR, com filtros por produto/tarefa e detalhe da linhagem dos snapshots.
+- [x] Classificar a rota na matriz RBAC explícita e respeitar loja activa/escopo do utilizador.
+- [x] Corrigir o KPI de tarefas urgentes para contar apenas prioridade URGENT activa, alinhando implementação, contrato e teste.
+- [ ] Confirmar API CI e Quality Gates após a correção do KPI.
+- [ ] Implementar divergências entre stock observado e stock de referência sem mutação contabilística automática.
+- [ ] Formalizar estados separados de retaguarda, reservado, disponível, prateleira e observado visualmente.
