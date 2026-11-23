@@ -30,6 +30,40 @@ def main() -> None:
         db.add_all([store_a, store_b, product])
         db.flush()
 
+        # Seed valid same-store and foreign-store resources so the positive
+        # controls exercise real nested identifiers rather than 404 fallbacks.
+        packaging = models.ProductPackagingLevel(
+            product_id=product.id,
+            code="CASE",
+            name="Case of 12",
+            package_type="CASE",
+            base_units_per_package=12,
+            is_ordering_unit=True,
+            is_replenishment_unit=True,
+        )
+        db.add(packaging)
+        db.flush()
+        own_pallet = models.StorePallet(
+            store_id=store_a.id,
+            product_id=product.id,
+            packaging_level_id=packaging.id,
+            pallet_code=f"PG-PALLET-A-{suffix}",
+            base_quantity=12,
+            status="READY",
+            location_type="WAREHOUSE",
+        )
+        foreign_pallet = models.StorePallet(
+            store_id=store_b.id,
+            product_id=product.id,
+            packaging_level_id=packaging.id,
+            pallet_code=f"PG-PALLET-B-{suffix}",
+            base_quantity=12,
+            status="READY",
+            location_type="WAREHOUSE",
+        )
+        db.add_all([own_pallet, foreign_pallet])
+        db.flush()
+
         supervisor = models.User(
             email=f"pg-supervisor-{suffix}@example.test",
             full_name="PostgreSQL authorization supervisor",
@@ -105,6 +139,8 @@ def main() -> None:
         admin_id = admin.id
         foreign_location_id = foreign_location.id
         foreign_shelf_id = foreign_shelf.id
+        own_pallet_id = own_pallet.id
+        foreign_pallet_id = foreign_pallet.id
         foreign_task_id = foreign_task.id
     finally:
         db.close()
@@ -227,7 +263,7 @@ def main() -> None:
                 }),
                 ("pallet rotation window", "/api/v1/warehouse/pallet-rotation/window-plan", {
                     "store_id": store_b_id, "product_id": product_id,
-                    "pallet_id": 999999999, "current_hour": 12, "residual_base_units": 5,
+                    "pallet_id": foreign_pallet_id, "current_hour": 12, "residual_base_units": 5,
                 }),
                 ("history-based pallet portfolio", "/api/v1/warehouse/pallet-rotation/portfolio-from-history", {
                     "store_id": store_b_id, "current_hour": 12,
@@ -275,7 +311,7 @@ def main() -> None:
                 ("pallet rotation policies", "/api/v1/warehouse/pallet-rotation/policies", {
                     "store_id": store_b_id,
                 }),
-                ("pallet lifecycle events", f"/api/v1/warehouse/pallets/999999999/events", {
+                ("pallet lifecycle events", f"/api/v1/warehouse/pallets/{foreign_pallet_id}/events", {
                     "store_id": store_b_id,
                 }),
             ]
@@ -288,17 +324,14 @@ def main() -> None:
             # the same store-scoped reads inside its own tenant. Exclude the
             # two resource-ID routes (which intentionally use a nonexistent
             # pallet ID) and packaging conversion (which has no seeded package).
-            same_store_read_exclusions = {
-                "pallet rotation window",
-                "replenishment unit calculation",
-                "pallet lifecycle events",
-            }
             same_store_read_count = 0
             for resource, path, params in foreign_store_reads:
-                if resource in same_store_read_exclusions:
-                    continue
                 own_params = dict(params)
                 own_params["store_id"] = store_a_id
+                if resource == "pallet rotation window":
+                    own_params["pallet_id"] = own_pallet_id
+                if resource == "pallet lifecycle events":
+                    path = f"/api/v1/warehouse/pallets/{own_pallet_id}/events"
                 response = client.get(
                     path, params=own_params, headers=supervisor_headers,
                 )
@@ -307,7 +340,7 @@ def main() -> None:
                     f"expected HTTP 200, received {response.status_code}: {response.text}"
                 )
                 same_store_read_count += 1
-            assert same_store_read_count == len(foreign_store_reads) - len(same_store_read_exclusions)
+            assert same_store_read_count == len(foreign_store_reads)
 
             for resource, response in requests.items():
                 expected_status = (
