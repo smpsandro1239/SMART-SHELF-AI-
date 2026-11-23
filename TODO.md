@@ -1,3 +1,14 @@
+## Segurança P0 — consulta de histórico de alertas sem oráculo cross-store (2026-11-23; implementação/testes publicados, CI pendente)
+
+- [x] Fazer a consulta de alertas para SUPERVISOR filtrar `alert_id` e `store_id` na mesma query, sem carregar previamente alertas estrangeiros.
+- [x] Preservar visibilidade global de ADMIN e recusa HTTP 403 para EMPLOYEE.
+- [x] Acrescentar regressão que compara alerta de outra loja com ID inexistente: HTTP 404 e corpo idêntico.
+- [ ] Validar API CI/PostgreSQL 16, Quality Gates, Security Scans e Docker Compose no SHA desta alteração.
+
+Decisão: os handlers read-only por ID directo também aplicam o tenant no predicado SQL sempre que possível. A política de ocultação é HTTP 404 para IDs estrangeiros/inexistentes; não é necessário adquirir row lock numa consulta de histórico imutável.
+
+---
+
 ## Segurança P0 — ocultação de IDs directos de deteções em fluxos de observação e histórico (2026-11-23; implementação/testes publicados, CI pendente)
 
 - [x] Aplicar `hide_foreign=True` na criação de observações a partir de `detection_id`.
