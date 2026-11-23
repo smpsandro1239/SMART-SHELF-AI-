@@ -4,7 +4,8 @@
 - Criado smoke PostgreSQL 16 com supervisor de outra loja, IDs reais estrangeiros e locks simultâneos sobre imagem e produto; as três operações têm de responder HTTP 403 sem esperar.
 - O smoke confirma também ausência de persistência de revisão e manutenção do exemplar em PENDING.
 - Novo passo API CI: `Verify PostgreSQL direct-ID detection and exemplar tenant pre-lock authorization`.
-- Ainda não validado por CI. A matriz global de endpoints/papéis/tenants, relações indirectas e volume persistente continuam pendentes.
+- API CI [45194763822](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45194763822) passou no SHA `fefb56f`, com o smoke PostgreSQL 16 e **1588 passed, 1 skipped**. Quality Gates [45194764768](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45194764768), Security Scans [45194765202](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45194765202) e Docker Compose [45194764844](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45194764844) também passaram.
+- A matriz global de endpoints/papéis/tenants, relações indirectas e volume persistente continuam pendentes.
 
 ## Segurança P0 — autorização pré-lock de planogramas (2026-11-23; CI validada)
 

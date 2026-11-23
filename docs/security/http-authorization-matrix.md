@@ -489,3 +489,8 @@ A suite API passou com 1413 testes aprovados e 1 ignorado. A auditoria completa 
 ## Atualização — IDs directos de deteção e exemplar (2026-11-23; CI pendente)
 
 Os handlers de revisão de SKU por detection_id (POST e GET do histórico) e de revisão por exemplar_id (PATCH) foram revistos. A sequência observada é: leitura inicial sem lock apenas para descobrir a imagem, autorização do store scope através de `_lock_authorized_shelf_image`, lock da imagem, revalidação da entidade e, quando aplicável, lock do produto/exemplar. A revisão de deteção valida ainda que o produto escolhido está atribuído à prateleira da imagem. O novo smoke PostgreSQL bloqueia simultaneamente imagem e produto e exige rejeição cross-store antes de qualquer espera. A evidência CI ainda está pendente; isto não fecha a matriz BOLA/IDOR.
+
+
+### Evidência PostgreSQL — IDs directos de deteção e exemplar (2026-11-23)
+
+O smoke `postgres_detection_exemplar_prelock_smoke.py` passou no API CI [45194763822](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45194763822), SHA `fefb56f`. Com as linhas da imagem e do produto bloqueadas, um SUPERVISOR de outra loja recebeu HTTP 403 em POST de revisão da deteção, GET do histórico e PATCH de revisão do exemplar, sem esperar pelos locks e sem persistir alterações. A suite API terminou com **1588 passed, 1 skipped**. Quality Gates [45194764768](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45194764768), Security Scans [45194765202](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45194765202) e Docker Compose [45194764844](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45194764844) passaram. A evidência é específica a estes três fluxos e não encerra a auditoria BOLA/IDOR global.

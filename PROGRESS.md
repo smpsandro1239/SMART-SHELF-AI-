@@ -3,7 +3,8 @@
 - Auditoria dirigida aos handlers de revisão de deteção, histórico e revisão de exemplares. Os três resolvem a imagem de origem, aplicam autorização de tenant antes do lock da imagem e mantêm validação de estado/identidade após os locks.
 - Adicionado `postgres_detection_exemplar_prelock_smoke.py`: supervisor da loja A tenta usar IDs reais da loja B enquanto as linhas de `ShelfImage` e `Product` estão bloqueadas.
 - O smoke exige HTTP 403 imediato nas três operações e confirma que não é criado `DetectionSkuReview` nem alterado o exemplar PENDING.
-- O passo foi ligado ao API CI com PostgreSQL 16. A validação ainda está pendente; a publicação do script/workflow não equivale a execução.
+- O passo PostgreSQL 16 passou no API CI [45194763822](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45194763822), no SHA `fefb56f`; a suite terminou com **1588 passed, 1 skipped**.
+- Quality Gates [45194764768](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45194764768) passou, incluindo compilação Python, testes API e build Web. Security Scans [45194765202](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45194765202) passou (Gitleaks, pip-audit, npm audit e ZAP Passive Baseline). Docker Compose [45194764844](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45194764844) passou.
 - Limite: cobertura focada em três operações e um perfil; não fecha BOLA/IDOR nem a matriz ADMIN/SUPERVISOR/EMPLOYEE.
 
 ## Segurança P0 — autorização pré-lock de planogramas (2026-11-23; CI validada)

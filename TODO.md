@@ -4,7 +4,10 @@
 - [x] Confirmar que a listagem de deteções é ancorada numa imagem previamente autorizada e activa; as rotas por ID directo de deteção passam pelo helper de autorização da imagem.
 - [x] Acrescentar smoke PostgreSQL 16 com um supervisor da loja A e IDs reais de deteção/exemplar da loja B, mantendo simultaneamente bloqueadas as linhas da imagem e do produto.
 - [x] Exigir HTTP 403, sem espera pelos locks, em revisão da deteção, histórico de revisão e revisão do exemplar; verificar ausência de alterações persistidas.
-- [ ] Validar o novo smoke e a suite completa nos workflows API CI, Quality Gates, Security Scans e Docker Compose.
+- [x] API CI [45194763822](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45194763822) passou no SHA `fefb56f`; o novo smoke PostgreSQL 16 passou e a suite terminou com **1588 passed, 1 skipped**.
+- [x] Quality Gates [45194764768](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45194764768) passou: suite API **1588 passed, 1 skipped**, compilação Python e build TypeScript/produção aprovados.
+- [x] Security Scans [45194765202](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45194765202) passou: Gitleaks, pip-audit, npm audit e OWASP ZAP Passive Baseline.
+- [x] Docker Compose [45194764844](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45194764844) passou.
 - [ ] Alargar a matriz aos IDs directos e relações indirectas restantes; este smoke cobre três operações, não todos os endpoints nem todos os papéis.
 - [ ] Ensaiar volume PostgreSQL persistente preexistente com principal runtime, sem usar dados de produção.
 
