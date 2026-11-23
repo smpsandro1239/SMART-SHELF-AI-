@@ -1,3 +1,15 @@
+## Segurança P0 — ocultação de IDs directos de ciclo de vida de paletes (2026-11-23; código publicado, CI pendente)
+
+- [x] Repor `hide_foreign=True` no acesso à palete por ID directo antes e depois do lock PostgreSQL.
+- [x] Uniformizar a resposta HTTP 404 para paletes estrangeiras e IDs inexistentes na rota de registo de eventos de ciclo de vida.
+- [x] Acrescentar regressão HTTP autenticada para ambos os casos, mantendo a verificação de que nenhuma palete ou evento é alterado.
+- [ ] Confirmar API CI/PostgreSQL 16, Quality Gates, Security Scans e Docker Compose no commit de código/testes `ecc652e575757e49198b1ff013f484250b9c6482`.
+- [ ] Continuar a matriz BOLA/IDOR para IDs aninhados de localização, prateleira, tarefa, embalagem e relações indirectas.
+
+Decisão: endpoints por ID directo que expõem recursos multi-loja ocultam a existência de IDs estrangeiros com 404, desde que a identidade do actor esteja autenticada. A autorização continua a ocorrer antes do lock e é revalidada depois do lock. ADMIN mantém a política global definida para o recurso.
+
+---
+
 ## Segurança P0 — autorização pré-lock de IDs directos de deteções e exemplares (2026-11-23; smoke PostgreSQL adicionado, CI pendente)
 
 - [x] Auditar os handlers POST/GET de revisão de deteções e PATCH de revisão de exemplares: resolver a imagem de origem, validar o tenant e só depois adquirir locks de imagem/produto; manter revalidação pós-lock.
