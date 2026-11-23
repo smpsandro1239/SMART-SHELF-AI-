@@ -629,3 +629,61 @@ def test_planogram_id_mutations_enforce_store_scope(planogram_api, monkeypatch):
         (planogram_id, "ACTIVE")
     ]
 
+
+def test_foreign_calibration_and_comparison_images_are_rejected_before_lock(planogram_api, monkeypatch):
+    client, ids = planogram_api
+    with main_module.SessionLocal() as db:
+        foreign_image = models.ShelfImage(
+            shelf_id=ids["shelf_b"],
+            original_filename="foreign-calibration.jpg",
+            storage_path="/tmp/foreign-calibration.jpg",
+            mime_type="image/jpeg",
+            file_size_bytes=100,
+            sha256="a" * 64,
+        )
+        db.add(foreign_image)
+        db.commit()
+        foreign_image_id = foreign_image.id
+
+    image_lock_calls = []
+    original_lock_image = planogram_service._lock_source_image
+
+    def track_image_lock(db, image_id, **kwargs):
+        image_lock_calls.append(image_id)
+        return original_lock_image(db, image_id, **kwargs)
+
+    monkeypatch.setattr(planogram_service, "_lock_source_image", track_image_lock)
+    supervisor_a = _headers(ids["supervisor_a"], "SUPERVISOR")
+
+    foreign_calibration = client.post(
+        f"/api/v1/shelves/{ids['shelf_a']}/planograms",
+        json={
+            "calibration_source": "IMAGE",
+            "calibration_image_id": foreign_image_id,
+            "calibration_image_sha256": "a" * 64,
+            "cells": _payload(ids["product_a"])["cells"],
+        },
+        headers=supervisor_a,
+    )
+    assert foreign_calibration.status_code == 403
+    assert image_lock_calls == [], "Foreign calibration image must be rejected before its row lock"
+
+    own_planogram = client.post(
+        f"/api/v1/shelves/{ids['shelf_a']}/planograms",
+        json=_payload(ids["product_a"]),
+        headers=supervisor_a,
+    )
+    assert own_planogram.status_code == 201, own_planogram.text
+    activated = client.post(
+        f"/api/v1/planograms/{own_planogram.json()['id']}/activate",
+        json={"reason": "Comparison authorization fixture"},
+        headers=supervisor_a,
+    )
+    assert activated.status_code == 200, activated.text
+
+    comparison = client.get(
+        f"/api/v1/shelves/{ids['shelf_a']}/planograms/comparison/{foreign_image_id}",
+        headers=supervisor_a,
+    )
+    assert comparison.status_code == 403
+    assert image_lock_calls == [], "Foreign comparison image must be rejected before its row lock"
