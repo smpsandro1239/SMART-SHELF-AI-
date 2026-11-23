@@ -1279,3 +1279,8 @@ Validação no commit `311fecc9e13641e6d5eb55465fda646fb2909601`: Quality Gates 
 - A decisão segue o contrato de não divulgação já aplicado à alteração de políticas de rotação e mantém a autorização antes dos locks PostgreSQL.
 - Commits: `4873087c` e `ecc652e5`.
 - Validação CI do novo HEAD pendente; não considerar a tarefa concluída até os workflows relevantes terminarem.
+
+
+## 2026-11-23 — BOLA: criação de prateleiras por zona (validação pendente)
+
+A rota POST /api/v1/shelves passa a validar o store_id da zona antes de criar a prateleira. SUPERVISOR não pode usar um zone_id estrangeiro; zonas estrangeiras e IDs inexistentes devolvem HTTP 404 equivalente. O teste autenticado cobre tentativa cross-store, controlo positivo same-store e ausência de persistência. Commits: aa46a255 (código), 716c359 (teste). CI/PostgreSQL 16 pendente.
