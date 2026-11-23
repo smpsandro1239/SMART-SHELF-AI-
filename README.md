@@ -39,6 +39,10 @@ O serviço one-shot `provision-runtime-role` executa o bootstrap actualizado em 
 
 O projecto fixa quatro conjuntos de skills versionados como submódulos Git: [Superpowers](https://github.com/obra/superpowers) para processo de engenharia/TDD/debugging/revisão; [Impeccable](https://github.com/pbakaus/impeccable) para auditoria e qualidade UX/UI; [Frontend Design](https://github.com/Ilm-Alan/frontend-design) para direcção visual de novas superfícies; e [OWASP Secure Agent Playbook](https://github.com/OWASP/secure-agent-playbook) para revisão de segurança da API/código, dependências e segredos. Inicializar com `git submodule update --init --recursive`. Entradas dos agentes em `.agents/skills/`; regras e limites em [AGENTS.md](AGENTS.md) e [docs/engineering/agent-skill-stack.md](docs/engineering/agent-skill-stack.md). Não são dependências runtime. Worktrees/subagentes só são usados quando o runtime os suporta; Frontend Design não substitui automaticamente o design system existente.
 
+## Isolamento multi-loja do histórico de alertas
+
+A leitura de `GET /api/v1/observation-alerts/{alert_id}/events` aplica o âmbito da loja directamente no predicado SQL para SUPERVISOR. Um alerta de outra loja e um ID inexistente devolvem HTTP 404 com o mesmo corpo; ADMIN conserva visibilidade global e EMPLOYEE não tem permissão para consultar o histórico.
+
 ## Isolamento multi-loja de deteções
 
 Os endpoints que recebem `detection_id` directamente ocultam recursos de outras lojas com HTTP 404 indistinguível de um identificador inexistente. A autorização é validada antes do lock da imagem de origem e novamente após o lock, antes de consultar o histórico ou criar uma observação. A cobertura automatizada compara os dois cenários; a validação CI da revisão actual permanece pendente até os workflows terminarem.
