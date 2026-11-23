@@ -1,3 +1,17 @@
+## Segurança P0 — autorização multi-loja antes de locks PostgreSQL (2026-11-23; implementação publicada, CI pendente)
+
+- [x] Expandir `postgres_retention_legal_hold_concurrency_smoke.py` com duas lojas e um supervisor de uma loja diferente da imagem alvo.
+- [x] Manter a linha da imagem bloqueada numa transacção PostgreSQL e provar que o pedido `POST /retention/restrict` do supervisor externo termina com HTTP 403 antes de o lock ser libertado.
+- [x] Preservar os ensaios existentes de concorrência legal hold ↔ purge schedule e restore ↔ purge schedule.
+- [ ] Executar API CI/PostgreSQL 16, Quality Gates, Security Scans e Docker Compose no novo SHA.
+- [ ] Expandir a prova PostgreSQL multi-loja para os restantes fluxos de retenção e os endpoints de artefactos; o novo smoke cobre o caminho comum de autorização pré-lock e os testes estáticos cobrem a utilização dos helpers.
+- [ ] Executar testes de integração dedicados com duas lojas para todos os endpoints de retenção/artefactos.
+- [ ] Ensaiar volume persistente e operações reais com principal runtime.
+
+Commits: `25a34b8f` (smoke PostgreSQL) e `926abcf1` (documentação/contrato do smoke).
+
+---
+
 ## Segurança P0 — autorização de tenant antes de locks de retenção e artefactos (2026-11-23; CI em execução)
 
 - [x] Corrigir `restore_shelf_image`, `apply_shelf_image_legal_hold`, `release_shelf_image_legal_hold`, `schedule_shelf_image_purge` e `cancel_shelf_image_purge_schedule` para resolver e validar o tenant antes de bloquear a imagem, usando `_lock_authorized_shelf_image`.
