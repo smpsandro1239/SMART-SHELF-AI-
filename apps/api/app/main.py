@@ -1092,25 +1092,17 @@ def update_observation_alert(
     request: Request,
     db: Session = Depends(get_db),
 ):
-    alert = (
-        db.query(models.ObservationAlert)
-        .filter(models.ObservationAlert.id == alert_id)
-        .first()
+    actor = _request_user(db, request)
+    if actor is None or actor.role not in {"ADMIN", "SUPERVISOR"}:
+        raise HTTPException(status_code=403, detail="Supervisor role required")
+    alert = _lock_store_scoped_record(
+        db,
+        models.ObservationAlert,
+        alert_id,
+        actor,
+        "Observation alert not found",
+        hide_foreign=True,
     )
-    if alert is None:
-        raise HTTPException(status_code=404, detail="Observation alert not found")
-
-    actor = _require_alert_supervisor(db, request, alert.store_id)
-    alert = (
-        db.query(models.ObservationAlert)
-        .filter(models.ObservationAlert.id == alert_id)
-        .with_for_update()
-        .populate_existing()
-        .first()
-    )
-    if alert is None:
-        raise HTTPException(status_code=404, detail="Observation alert not found")
-    _enforce_store_scope(actor, alert.store_id)
 
     previous_status = alert.status
     if payload.status == "ACKNOWLEDGED":
@@ -1141,10 +1133,14 @@ def update_observation_alert(
     tags=["observation alerts"],
 )
 def list_observation_alert_events(alert_id: int, request: Request, db: Session = Depends(get_db)):
+    actor = _request_user(db, request)
+    if actor is None or actor.role not in {"ADMIN", "SUPERVISOR"}:
+        raise HTTPException(status_code=403, detail="Supervisor role required")
     alert = db.get(models.ObservationAlert, alert_id)
     if alert is None:
         raise HTTPException(status_code=404, detail="Observation alert not found")
-    actor = _require_alert_supervisor(db, request, alert.store_id)
+    if actor.role != "ADMIN" and actor.store_id != alert.store_id:
+        raise HTTPException(status_code=404, detail="Observation alert not found")
     return (
         db.query(models.ObservationAlertEvent)
         .filter(models.ObservationAlertEvent.alert_id == alert_id)
@@ -1301,7 +1297,12 @@ def list_capture_sessions(request: Request, shelf_id: int | None = None, include
 def close_capture_session(session_id: int, request: Request, db: Session = Depends(get_db)):
     actor = _request_user(db, request)
     item = _lock_store_scoped_record(
-        db, models.CaptureSession, session_id, actor, "Capture session not found"
+        db,
+        models.CaptureSession,
+        session_id,
+        actor,
+        "Capture session not found",
+        hide_foreign=True,
     )
     if actor is not None and actor.role == "EMPLOYEE":
         raise HTTPException(status_code=403, detail="Supervisor role required to close capture sessions")
