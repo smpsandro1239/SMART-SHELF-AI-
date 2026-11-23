@@ -896,7 +896,7 @@ export default function App() {
               </div>
             </>}
           </section>}
-          {(user?.role === "ADMIN" || user?.role === "SUPERVISOR") && <InventoryMovementHistory token={token} storeId={Number(selectedStoreId || storeFilter || user.store_id || 0) || null} />}
+          {(user?.role === "ADMIN" || user?.role === "SUPERVISOR") && <InventoryMovementHistory token={token} storeId={user.role === "ADMIN" ? (Number(storeFilter || selectedStoreId || 0) || null) : user.store_id} />}
           <section id="capture-workspace" className="capture-grid">
             <article className="panel capture-panel">
               <div className="panel-heading"><div><p className="eyebrow">VISÃO COMPUTACIONAL</p><h2>Nova captura de prateleira</h2><p className="muted">Envia uma fotografia para registo e futura análise automática.</p></div><div className="capture-icon"><PackageSearch size={20} /></div></div>
