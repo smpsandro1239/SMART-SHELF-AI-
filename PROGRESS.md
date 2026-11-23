@@ -638,3 +638,13 @@ Limitação de segurança resolvida em camadas: owner de migrations separado do 
 - Testes comparam respostas para IDs estrangeiros/inexistentes nos três endpoints. A reconciliação negada é verificada sem InventoryMovement persistido; a transição negada mantém estado/eventos inalterados.
 - Commits: eventos 132558c (primeira implementação, substituída pela leitura sem lock em 954f973); status/reconciliação ee40b88; testes de eventos/status f12ed7b; reconciliação cc3dc3a.
 - CI e PostgreSQL 16 para estes commits ainda não confirmados.
+
+
+## 2026-11-23 — BOLA: IDs de evidência de visão computacional
+
+- GET /api/v1/shelf-images/{image_id}/retention/events resolvia a imagem antes de autenticar o actor. A autenticação/RBAC passou para o início; a consulta de tenant agora devolve HTTP 404 uniforme para imagem estrangeira e inexistente, sem introduzir row lock numa rota GET.
+- POST /api/v1/shelf-image-detections/{detection_id}/reviews autentica agora antes de consultar detection_id. A imagem de origem é validada com hide_foreign=True; a resposta para deteção estrangeira é HTTP 404 com o mesmo detalhe de uma deteção inexistente. A ordem imagem → produto continua preservada.
+- PATCH /api/v1/product-embedding-exemplars/{exemplar_id}/review autentica antes de resolver exemplar_id e oculta a imagem de origem estrangeira com HTTP 404 uniforme. A semântica HTTP 410 para imagem de origem indisponível por retenção é preservada para recursos autorizados.
+- Testes adicionados/ajustados: comparação de IDs estrangeiros e inexistentes em retenção, revisão de deteções e revisão de exemplares; os testes existentes preservam controlos same-store, revisão independente e ausência de persistência não autorizada.
+- Durante a validação PostgreSQL anterior, API CI detetou um contrato smoke desatualizado: criação de warehouse placement numa localização estrangeira passou a devolver 404, mas o smoke ainda esperava 403. A expectativa foi atualizada em 9f5ebe0. Nova execução CI para as alterações atuais está em curso.
+- Commits principais: e402eda (ordem de autenticação/escopo), 956431e (detalhes uniformes), 11305cc (teste deteções), 1420ed4 (teste exemplares), 57cdab3 (teste retenção), 9f5ebe0 (smoke warehouse).
