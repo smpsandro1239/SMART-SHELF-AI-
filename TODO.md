@@ -1,3 +1,16 @@
+## Segurança P0 — matriz PostgreSQL de leituras multi-loja (2026-11-23; implementação publicada, CI pendente)
+
+- [x] Expandir `postgres_inventory_authorization_smoke.py` com 23 pedidos GET cross-store para vendas diárias/horárias/tráfego, perfis de procura, previsão de procura/risco, portefólios, recomendações, plano e workload de reposição, decisões operacionais, localizações, paletes, políticas e eventos de paletes.
+- [x] Executar os pedidos com JWT real de SUPERVISOR da loja A e `store_id` da loja B; todos têm de devolver HTTP 403 antes da leitura de dados.
+- [x] Manter os testes existentes de negação de escrita em inventário, placement e tarefas, incluindo verificações de ausência de persistência, e os controlos positivos na loja própria.
+- [ ] Confirmar API CI/PostgreSQL 16, Quality Gates, Security Scans e Docker Compose no SHA `40f9456a`; workflows iniciados, resultados ainda não observados.
+- [ ] Acrescentar matriz positiva de leituras same-store e ampliar a auditoria BOLA/IDOR a endpoints que recebem IDs aninhados ou relações indirectas.
+- [ ] Ensaiar volume PostgreSQL persistente preexistente e operações API reais com principal runtime; não executar contra produção.
+
+Commit de teste: `40f9456a`. A matriz é uma cobertura de integração direccionada, não prova formal de todos os endpoints.
+
+---
+
 ## Segurança P0 — autorização multi-loja antes de locks PostgreSQL (2026-11-23; CI validada)
 
 - [x] Expandir `postgres_retention_legal_hold_concurrency_smoke.py` com duas lojas e um supervisor de uma loja diferente da imagem alvo.
