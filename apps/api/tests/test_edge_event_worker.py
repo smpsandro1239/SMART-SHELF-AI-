@@ -61,13 +61,9 @@ def test_worker_processes_heartbeat_and_completes_inbox(session_factory):
 
 
 def test_worker_dead_letters_event_without_registered_domain_handler(session_factory):
-    with session_factory() as db:
-        inbox = db.query(models.EdgeDeviceEventInbox).one()
-        inbox.event_type = "SHELF_CAPTURED"
-        processing = db.query(models.EdgeDeviceEventProcessing).one()
-        db.commit()
-
-    assert process_one_edge_event(session_factory, worker_id="edge-worker-a")
+    assert process_one_edge_event(
+        session_factory, worker_id="edge-worker-a", handlers={}
+    )
     row = _processing(session_factory)
     assert row.status == "DEAD_LETTER"
     assert row.last_error_code == "HANDLER_NOT_IMPLEMENTED"
