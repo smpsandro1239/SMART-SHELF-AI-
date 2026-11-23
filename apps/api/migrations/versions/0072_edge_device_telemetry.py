@@ -32,12 +32,13 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_constraint("ck_edge_device_storage_free_bytes", "edge_devices", type_="check")
-    op.drop_constraint("ck_edge_device_battery_pct", "edge_devices", type_="check")
-    op.drop_constraint("ck_edge_device_network_status", "edge_devices", type_="check")
-    op.drop_index("ix_edge_devices_last_seen_at", table_name="edge_devices")
-    op.drop_column("edge_devices", "storage_free_bytes")
-    op.drop_column("edge_devices", "battery_pct")
-    op.drop_column("edge_devices", "firmware_version")
-    op.drop_column("edge_devices", "last_network_status")
-    op.drop_column("edge_devices", "last_seen_at")
+    with op.batch_alter_table("edge_devices") as batch_op:
+        batch_op.drop_constraint("ck_edge_device_storage_free_bytes", type_="check")
+        batch_op.drop_constraint("ck_edge_device_battery_pct", type_="check")
+        batch_op.drop_constraint("ck_edge_device_network_status", type_="check")
+        batch_op.drop_index("ix_edge_devices_last_seen_at")
+        batch_op.drop_column("storage_free_bytes")
+        batch_op.drop_column("battery_pct")
+        batch_op.drop_column("firmware_version")
+        batch_op.drop_column("last_network_status")
+        batch_op.drop_column("last_seen_at")
