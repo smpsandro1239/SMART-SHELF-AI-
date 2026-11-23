@@ -522,7 +522,7 @@ def test_shelf_observation_consensus_endpoint_enforces_store_scope(monkeypatch):
         shelf = client.post("/api/v1/shelves", json={"zone_id": zone.json()["id"], "code": "CONS-02"})
         monkeypatch.setattr(main_module, "_request_user", lambda db, request: SimpleNamespace(id=91, role="SUPERVISOR", store_id=999))
         response = client.get(f"/api/v1/shelves/{shelf.json()['id']}/observation-consensus")
-        assert response.status_code == 403
+        assert response.status_code == 404
 
 
 
@@ -778,7 +778,7 @@ def test_observation_alerts_are_store_scoped(monkeypatch):
             f"/api/v1/shelves/{shelf_id}/observation-alerts/evaluate",
             params={"product_id": product_id, "minimum_confirmations": 3},
         )
-        assert evaluate.status_code == 403
+        assert evaluate.status_code == 404
 
         employee_actor = SimpleNamespace(
             id=actor.id, role="EMPLOYEE", store_id=store_id
@@ -836,7 +836,7 @@ def test_cross_store_alert_update_checks_scope_before_acquiring_row_lock(monkeyp
             FakeSession(),
         )
 
-    assert error.value.status_code == 403
+    assert error.value.status_code == 404
     assert lock_attempts == []
     assert alert.status == "OPEN"
 
