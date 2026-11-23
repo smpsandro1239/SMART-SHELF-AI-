@@ -349,6 +349,29 @@ def test_store_scoped_lock_handlers_authorize_before_their_first_lock():
         )
 
 
+def test_authorized_shelf_image_lock_rejects_foreign_store_before_query_lock(monkeypatch):
+    from types import SimpleNamespace
+
+    from fastapi import HTTPException
+
+    import app.main as main_module
+
+    query_calls = []
+    monkeypatch.setattr(main_module, "_shelf_image_store_id", lambda db, image_id: 22)
+
+    class FakeSession:
+        def query(self, model):
+            query_calls.append(model)
+            raise AssertionError("A foreign-store request must be rejected before querying the lock target")
+
+    supervisor = SimpleNamespace(id=7, role="SUPERVISOR", store_id=11)
+    with pytest.raises(HTTPException) as error:
+        main_module._lock_authorized_shelf_image(FakeSession(), 41, supervisor)
+
+    assert error.value.status_code == 403
+    assert query_calls == []
+
+
 def test_store_scoped_record_lock_rejects_foreign_store_before_lock():
     from types import SimpleNamespace
 
