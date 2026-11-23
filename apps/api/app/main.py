@@ -8090,16 +8090,24 @@ def update_replenishment_task_status(
 @app.get("/api/v1/tasks/{task_id}/events", response_model=list[ReplenishmentTaskEventRead], tags=["tasks"])
 def list_replenishment_task_events(task_id: int, request: Request, db: Session = Depends(get_db)):
     actor = _request_user(db, request)
-    task = (
-        db.query(models.ReplenishmentTask)
-        .filter(models.ReplenishmentTask.id == task_id)
-        .first()
-    )
-    if task is None or (
-        actor is not None
-        and actor.role != "ADMIN"
-        and actor.store_id != task.store_id
-    ):
+    if actor is None or actor.role == "ADMIN":
+        task = (
+            db.query(models.ReplenishmentTask)
+            .filter(models.ReplenishmentTask.id == task_id)
+            .first()
+        )
+    else:
+        # Apply tenant scope in SQL so a foreign task is never materialized
+        # before the read authorization decision.
+        task = (
+            db.query(models.ReplenishmentTask)
+            .filter(
+                models.ReplenishmentTask.id == task_id,
+                models.ReplenishmentTask.store_id == actor.store_id,
+            )
+            .first()
+        )
+    if task is None:
         raise HTTPException(status_code=404, detail="Task not found")
     return (
         db.query(models.ReplenishmentTaskEvent)
