@@ -341,6 +341,13 @@ def _lock_authorized_shelf_image(
     store_id = _shelf_image_store_id(db, image_id)
     if store_id is None:
         raise HTTPException(status_code=missing_status_code, detail=missing_detail)
+    if (
+        hide_foreign
+        and actor is not None
+        and actor.role != "ADMIN"
+        and actor.store_id != store_id
+    ):
+        raise HTTPException(status_code=404, detail=hidden_foreign_detail)
     _enforce_store_scope(actor, store_id)
     return image, store_id
 
