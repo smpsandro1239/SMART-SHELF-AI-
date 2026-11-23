@@ -693,3 +693,66 @@ def test_reconciliation_hides_foreign_and_missing_task_ids(monkeypatch):
 
         with TestingSession() as db:
             assert db.query(models.InventoryMovement).filter_by(task_id=foreign_task_id).count() == 0
+
+
+def test_inventory_movement_history_is_scoped_filterable_and_read_only(monkeypatch):
+    with TestClient(app) as client:
+        store_id, product_id, task_id, _ = _completed_replenishment(client)
+        actor = _supervisor_actor(store_id)
+        monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: actor)
+
+        reconciled = client.post(
+            f"/api/v1/tasks/{task_id}/reconcile-inventory",
+            json={"reason": "Reposição validada para histórico."},
+        )
+        assert reconciled.status_code == 201, reconciled.text
+        movement_id = reconciled.json()["id"]
+
+        history = client.get(
+            "/api/v1/inventory/movements",
+            params={"store_id": store_id},
+        )
+        assert history.status_code == 200, history.text
+        assert [item["id"] for item in history.json()] == [movement_id]
+        assert history.json()[0]["task_id"] == task_id
+        assert history.json()[0]["product_id"] == product_id
+
+        by_task = client.get(
+            "/api/v1/inventory/movements",
+            params={"store_id": store_id, "task_id": task_id},
+        )
+        assert by_task.status_code == 200
+        assert [item["id"] for item in by_task.json()] == [movement_id]
+
+        by_other_product = client.get(
+            "/api/v1/inventory/movements",
+            params={"store_id": store_id, "product_id": product_id + 99999},
+        )
+        assert by_other_product.status_code == 200
+        assert by_other_product.json() == []
+
+        with TestingSession() as db:
+            before = db.query(models.InventoryMovement).count()
+        assert before == 1
+
+
+def test_inventory_movement_history_rejects_employee_and_foreign_store(monkeypatch):
+    with TestClient(app) as client:
+        store_id, _, _, _ = _completed_replenishment(client)
+        foreign_store_id, _, _, _ = _completed_replenishment(client)
+
+        employee = _supervisor_actor(store_id, role="EMPLOYEE")
+        monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: employee)
+        forbidden_role = client.get(
+            "/api/v1/inventory/movements",
+            params={"store_id": store_id},
+        )
+        assert forbidden_role.status_code == 403
+
+        supervisor = _supervisor_actor(store_id)
+        monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: supervisor)
+        foreign_store = client.get(
+            "/api/v1/inventory/movements",
+            params={"store_id": foreign_store_id},
+        )
+        assert foreign_store.status_code == 403
