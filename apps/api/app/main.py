@@ -1364,7 +1364,12 @@ async def upload_shelf_image(
     capture_session = None
     if capture_session_id is not None:
         capture_session = _lock_store_scoped_record(
-            db, models.CaptureSession, capture_session_id, actor, "Capture session not found"
+            db,
+            models.CaptureSession,
+            capture_session_id,
+            actor,
+            "Capture session not found",
+            hide_foreign=True,
         )
         if capture_session.shelf_id != shelf.id or capture_session.store_id != shelf.zone.store_id:
             raise HTTPException(status_code=422, detail="Capture session does not belong to this shelf")
