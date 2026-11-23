@@ -1,3 +1,12 @@
+## 2026-11-23 — Desenvolvimento funcional do dashboard operacional
+
+- Expandido `GET /api/v1/dashboard/summary` com tarefas por prioridade, tarefas activas urgentes, tarefas activas sem atribuição e taxa de conclusão.
+- Corrigida a semântica de `shelves_requiring_attention`: agora conta prateleiras distintas com pelo menos uma observação LOW_STOCK ou EMPTY, evitando duplicação quando existem várias observações na mesma prateleira.
+- Adicionado `attention_observations` para preservar a métrica de volume de observações e não confundi-la com o número de prateleiras.
+- Mantidos os filtros: ADMIN global ou por loja, SUPERVISOR limitado à própria loja e EMPLOYEE apenas às suas tarefas atribuídas.
+- Testes adicionados em `apps/api/tests/test_dashboard_summary.py` para KPIs, duplicação de observações e fronteiras RBAC.
+- Commits: `2447d628` (API), `4da1c2f1` e `1ac4948b` (testes). CI ainda pendente; não foi executado localmente nesta sessão.
+
 ## 2026-11-23 — Reforço da prova BOLA de deteções e exemplares
 
 - O smoke PostgreSQL `postgres_detection_exemplar_prelock_smoke.py` compara agora respostas completas (status + JSON) entre IDs reais cross-store e IDs inexistentes para revisão de deteções, histórico de revisões e revisão de exemplares.
