@@ -1,3 +1,12 @@
+## Segurança P0 — ocultação de IDs de sessões de captura e alertas (2026-11-23; código/testes publicados, CI pendente)
+
+- [x] Fechar sessão por ID com autorização pré-lock e revalidação pós-lock, ocultando IDs de outras lojas com HTTP 404.
+- [x] Actualizar alertas por ID com _lock_store_scoped_record(..., hide_foreign=True).
+- [x] Ocultar alertas estrangeiros na consulta de eventos; manter leitura global para ADMIN.
+- [x] Testar IDs estrangeiros e inexistentes com respostas 404 indistinguíveis, incluindo ausência de mutações em sessões e alertas.
+- [ ] Executar API CI/PostgreSQL 16, Quality Gates, Security Scans e Docker Compose no novo SHA.
+- [ ] Continuar a auditoria de IDs directos e relações indirectas de prateleiras.
+
 ## Segurança P0 — ocultação de IDs de localizações de armazém (2026-11-23; código/teste publicados, CI pendente)
 
 - [x] Na criação de colocações, resolver a localização por ID através do helper de autorização multi-loja, verificando o tenant antes do lock e revalidando depois do lock.
