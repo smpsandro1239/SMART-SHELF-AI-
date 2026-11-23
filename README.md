@@ -1909,3 +1909,8 @@ A consulta de consenso por shelf_id e a avaliação de alertas associada deixam 
 ## Segurança — IDs de prateleira em criação e consenso (2026-11-23)
 
 As rotas de criação de observações e sessões de captura e a consulta de consenso validam primeiro o actor e ocultam prateleiras estrangeiras com HTTP 404, igual ao ID inexistente. A avaliação de alertas herda a protecção e não persiste para IDs não autorizados. Testes verificam respostas equivalentes e ausência de novos registos. Commits de código: 9288459, cce1afd; testes: 739a574, d5d6243. CI/PostgreSQL 16 pendente.
+
+
+## Segurança — criação de prateleiras por zona (2026-11-23)
+
+A criação de prateleiras valida agora o tenant da zona de destino antes de persistir. Um SUPERVISOR não consegue criar uma prateleira numa zona de outra loja; a resposta é HTTP 404, igual à de um ID inexistente, para não expor a existência da zona. O teste autenticado inclui controlo positivo same-store e verifica ausência de efeitos laterais. Commits: aa46a255 (código) e 716c359 (teste). A validação CI/PostgreSQL 16 ainda está pendente.
