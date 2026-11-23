@@ -1770,17 +1770,9 @@ def register_shelf_image_artifact_reference(
     actor = _request_user(db, request)
     if actor is None or actor.role != "ADMIN":
         raise HTTPException(status_code=403, detail="Administrator role required")
-    image = db.query(models.ShelfImage).filter(
-        models.ShelfImage.id == image_id
-    ).with_for_update().first()
-    if image is None:
-        raise HTTPException(status_code=404, detail="Shelf image not found")
+    image, store_id = _lock_authorized_shelf_image(db, image_id, actor)
     if image.retention_status == "PURGED":
         raise HTTPException(status_code=409, detail="Cannot register a new artifact against a purged image")
-    store_id = _shelf_image_store_id(db, image_id)
-    if store_id is None:
-        raise HTTPException(status_code=409, detail="Shelf image has no valid store lineage")
-    _enforce_store_scope(actor, store_id)
 
     # Keep registration in the same lock order as inventory and consumption:
     # image -> external integration -> artifact references.
@@ -1916,22 +1908,9 @@ def create_shelf_image_artifact_inventory_snapshot(
     if actor is None or actor.role != "ADMIN":
         raise HTTPException(status_code=403, detail="Administrator role required")
 
-    image = (
-        db.query(models.ShelfImage)
-        .filter(models.ShelfImage.id == image_id)
-        .with_for_update()
-        .populate_existing()
-        .first()
-    )
-    if image is None:
-        raise HTTPException(status_code=404, detail="Shelf image not found")
+    image, store_id = _lock_authorized_shelf_image(db, image_id, actor)
     if image.retention_status == "PURGED":
         raise HTTPException(status_code=409, detail="Cannot attest inventory for a purged image")
-
-    store_id = _shelf_image_store_id(db, image_id)
-    if store_id is None:
-        raise HTTPException(status_code=409, detail="Shelf image has no valid store lineage")
-    _enforce_store_scope(actor, store_id)
 
     integration = db.query(models.StoreExternalIntegration).filter(
         models.StoreExternalIntegration.store_id == store_id,
@@ -2191,20 +2170,7 @@ def get_shelf_image_artifact_access_decision(
     if actor is None or actor.role != "ADMIN":
         raise HTTPException(status_code=403, detail="Administrator role required")
 
-    image = (
-        db.query(models.ShelfImage)
-        .filter(models.ShelfImage.id == image_id)
-        .with_for_update()
-        .populate_existing()
-        .first()
-    )
-    if image is None:
-        raise HTTPException(status_code=404, detail="Shelf image not found")
-
-    store_id = _shelf_image_store_id(db, image_id)
-    if store_id is None:
-        raise HTTPException(status_code=409, detail="Shelf image has no valid store lineage")
-    _enforce_store_scope(actor, store_id)
+    image, store_id = _lock_authorized_shelf_image(db, image_id, actor)
 
     # Resolve the source key without locking, then acquire rows in the same
     # image -> integration -> artifact order used by the atomic consumer.
@@ -2362,18 +2328,9 @@ def create_shelf_image_artifact_disposition_event(
     if actor is None or actor.role != "ADMIN":
         raise HTTPException(status_code=403, detail="Administrator role required")
 
-    image = db.query(models.ShelfImage).filter(
-        models.ShelfImage.id == image_id
-    ).with_for_update().first()
-    if image is None:
-        raise HTTPException(status_code=404, detail="Shelf image not found")
+    image, store_id = _lock_authorized_shelf_image(db, image_id, actor)
     if image.retention_status == "PURGED":
         raise HTTPException(status_code=409, detail="Cannot change disposition after image purge")
-
-    store_id = _shelf_image_store_id(db, image_id)
-    if store_id is None:
-        raise HTTPException(status_code=409, detail="Shelf image has no valid store lineage")
-    _enforce_store_scope(actor, store_id)
 
     artifact = db.query(models.ShelfImageArtifactReference).filter(
         models.ShelfImageArtifactReference.id == artifact_id,
