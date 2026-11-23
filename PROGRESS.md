@@ -1,3 +1,10 @@
+## 2026-11-23 — Isolamento SQL directo no histórico de alertas
+
+- A consulta `GET /api/v1/observation-alerts/{alert_id}/events` passou a filtrar `alert_id` e `store_id` na mesma query para SUPERVISOR; o handler deixa de carregar uma linha estrangeira antes da autorização.
+- ADMIN mantém acesso global; EMPLOYEE continua a receber HTTP 403.
+- Teste autenticado compara alerta estrangeiro e ID inexistente, exigindo HTTP 404 e corpo idêntico.
+- Código/testes e documentação publicados; CI/PostgreSQL 16 ainda pendentes.
+
 ## 2026-11-23 — Ocultação de IDs directos de deteções em observação e histórico
 
 - `POST /api/v1/shelf-image-detections/{detection_id}/observation` e `GET /api/v1/shelf-image-detections/{detection_id}/reviews` ocultam agora deteções de outras lojas com HTTP 404 idêntico ao ID inexistente.
