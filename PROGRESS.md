@@ -690,3 +690,10 @@ A execução final do GitHub Actions foi concluída com sucesso no commit `1ffe4
 A primeira execução integral após a alteração de contratos encontrou 24 testes com expectativas antigas (403 em vez de 404) e um teste com fixture duplicada. As expectativas foram alinhadas com a ocultação uniforme de IDs estrangeiros; os fixtures foram isolados e os testes reexecutados. A execução final passou sem falhas.
 
 Próxima prioridade: continuar auditoria de IDs aninhados em OCR/matching/artefactos e warehouse, preservando preflight de tenant, ordem global de locks e ausência de efeitos laterais.
+
+## 2026-11-23 — Isolamento SQL directo no histórico de tarefas
+
+- `GET /api/v1/tasks/{task_id}/events` passou a resolver tarefas de SUPERVISOR com `task_id` e `store_id` no mesmo predicado SQL; uma tarefa estrangeira deixa de ser carregada antes da decisão de autorização.
+- ADMIN mantém consulta global; a regressão confirma acesso administrativo e compara o 404/corpo de IDs estrangeiros e inexistentes para SUPERVISOR.
+- Código e teste publicados. A suite e os workflows do SHA final ainda carecem de confirmação.
+
