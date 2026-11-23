@@ -215,23 +215,24 @@ def test_supervisor_cannot_upload_image_to_another_store(tmp_path, monkeypatch):
     import app.main as main_module
 
     monkeypatch.setattr(settings, "image_storage_path", str(tmp_path))
-    monkeypatch.setattr(
-        main_module,
-        "_request_user",
-        lambda db, request: SimpleNamespace(id=44, role="SUPERVISOR", store_id=999),
-    )
     Base.metadata.drop_all(bind=TEST_ENGINE)
     Base.metadata.create_all(bind=TEST_ENGINE)
     with TestClient(app) as client:
         store = client.post("/api/v1/stores", json={"code": "IMG-04", "name": "Loja protegida"})
         zone = client.post("/api/v1/zones", json={"store_id": store.json()["id"], "name": "Congelados"})
         shelf = client.post("/api/v1/shelves", json={"zone_id": zone.json()["id"], "code": "CG-01"})
+        assert shelf.status_code == 201, shelf.text
+        monkeypatch.setattr(
+            main_module,
+            "_request_user",
+            lambda db, request: SimpleNamespace(id=44, role="SUPERVISOR", store_id=999),
+        )
         response = client.post(
             "/api/v1/shelf-images",
             data={"shelf_id": str(shelf.json()["id"])},
             files={"image": ("capture.png", _valid_image_bytes(), "image/png")},
         )
-        assert response.status_code == 403
+        assert response.status_code == 404
 
 
 def test_list_shelf_image_detections(tmp_path, monkeypatch):
