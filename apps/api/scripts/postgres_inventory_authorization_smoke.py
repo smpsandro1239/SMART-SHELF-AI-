@@ -720,6 +720,7 @@ def main() -> None:
                         "observation creation with foreign shelf",
                         "capture session creation with foreign shelf",
                         "foreign observation alert events",
+                        "planogram creation with foreign shelf",
                     }
                     else 403
                 )
