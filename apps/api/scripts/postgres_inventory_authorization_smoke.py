@@ -633,25 +633,26 @@ def main() -> None:
                     .count()
                     == 0
                 )
+                persisted_observation = db.get(models.Observation, foreign_observation_id)
+                assert persisted_observation is not None
+                assert persisted_observation.shelf_id == foreign_shelf_id
+                assert persisted_observation.model_version == "authorization-smoke"
                 assert (
                     db.query(models.Observation)
                     .filter(
                         models.Observation.shelf_id == foreign_shelf_id,
-                        models.Observation.notes.is_(None),
-                        models.Observation.model_version.is_(None),
+                        models.Observation.source == "mobile",
+                        models.Observation.status == "UNKNOWN",
                     )
                     .count()
-                    == 1
+                    == 0
                 )
-                assert (
-                    db.query(models.CaptureSession)
-                    .filter(
-                        models.CaptureSession.shelf_id == foreign_shelf_id,
-                        models.CaptureSession.store_id == store_b_id,
-                    )
-                    .count()
-                    == 1
+                persisted_capture_session = db.get(
+                    models.CaptureSession, foreign_capture_session_id
                 )
+                assert persisted_capture_session is not None
+                assert persisted_capture_session.store_id == store_b_id
+                assert persisted_capture_session.shelf_id == foreign_shelf_id
                 assert (
                     db.query(models.ObservationAlert)
                     .filter(
