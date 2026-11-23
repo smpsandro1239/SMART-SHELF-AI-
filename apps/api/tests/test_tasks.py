@@ -697,6 +697,16 @@ def test_task_event_and_transition_endpoints_reject_cross_store_access(monkeypat
             assert foreign_events.status_code == missing_events.status_code == 404
             assert foreign_events.json() == missing_events.json()
 
+            # ADMIN retains global visibility after the supervisor lookup is
+            # tenant-scoped directly in SQL.
+            actor.role = "ADMIN"
+            admin_foreign_events = client.get(
+                f"/api/v1/tasks/{foreign_task.json()['id']}/events"
+            )
+            assert admin_foreign_events.status_code == 200
+            assert len(admin_foreign_events.json()) == 1
+            actor.role = "SUPERVISOR"
+
             foreign_task_id = foreign_task.json()["id"]
             before_foreign_state = db.query(models.ReplenishmentTask).filter_by(
                 id=foreign_task_id
