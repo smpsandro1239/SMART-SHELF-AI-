@@ -239,7 +239,7 @@ def sign_edge_device_request(*, bearer_token: str, method: str, request_target: 
     if match is None or not _NONCE.fullmatch(nonce or ""):
         raise EdgeDeviceAuthenticationError("invalid signing input")
     credential_id, secret = match.groups()
-    key = hashlib.sha256(secret.encode("ascii")).digest()
+    key = hmac.new(secret.encode("ascii"), b"SMART-SHELF-EDGE-HMAC-SHA256-V1", hashlib.sha256).digest()
     canonical = _canonical_signed_request(
         credential_id=credential_id, method=method, request_target=request_target,
         timestamp=timestamp, nonce=nonce, body=body,
@@ -290,8 +290,10 @@ def authenticate_edge_device_request(
         credential_id=credential_id, method=method, request_target=request_target,
         timestamp=timestamp, nonce=nonce, body=body,
     )
-    # Derive the MAC key from the presented secret, never from the persisted verifier.
-    signing_key = hashlib.sha256(supplied_secret.encode("ascii")).digest()
+    # Use domain-separated HMAC key derivation. The persisted SHA-256 verifier is not a signing key.
+    signing_key = hmac.new(
+        supplied_secret.encode("ascii"), b"SMART-SHELF-EDGE-HMAC-SHA256-V1", hashlib.sha256
+    ).digest()
     expected = hmac.new(signing_key, canonical, hashlib.sha256).hexdigest()
     if not hmac.compare_digest(expected, signature):
         raise EdgeDeviceAuthenticationError("invalid signed request")
