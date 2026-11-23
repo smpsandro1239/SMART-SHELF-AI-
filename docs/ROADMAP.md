@@ -1,3 +1,9 @@
+## 2026-11-23 — Visibilidade operacional do ledger de inventário
+
+- O produto passa a expor o histórico read-only de movimentos de inventário reconciliados, filtrável por loja, produto e tarefa.
+- A consulta mantém o princípio de aprovação humana e registos imutáveis; não cria movimentos nem altera snapshots.
+- Acesso limitado a ADMIN/SUPERVISOR com validação de âmbito da loja. Testes de filtros, autorização e ausência de mutação adicionados; CI pendente.
+
 ## 2026-11-23 — Dashboard operacional: métricas accionáveis
 
 - O resumo operacional inclui distribuição de tarefas por prioridade, tarefas urgentes activas, tarefas activas sem atribuição e taxa de conclusão.
