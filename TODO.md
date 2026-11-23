@@ -1443,3 +1443,11 @@ Critério global: nenhuma capacidade pode ser marcada como concluída sem códig
 - [x] Testar falhas RuntimeError e TimeoutError no worker: estado FAILED, erro sanitizado, deteções anteriores preservadas e nenhum snapshot de inventário criado.
 - [x] Validar no commit a345746200eb6ea8b0035bd2cdba7c188de87ef9: API CI [44885522283](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44885522283), Quality Gates [44885522309](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44885522309) e Docker Compose [44885522318](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44885522318) passaram com **1422 passed, 1 skipped**.
 - [ ] Validar com modelo ONNX real versionado, dataset autorizado e métricas reproduzíveis; os testes de contrato não medem precisão nem substituem avaliação por SKU/cenário.
+
+
+### 2026-11-23 — Controlos positivos para IDs aninhados de localização e prateleira
+
+- O smoke PostgreSQL cria agora uma localização física e uma prateleira com atribuição de produto na loja do supervisor, além dos recursos equivalentes da loja estrangeira.
+- Mantém os ataques cross-store existentes e acrescenta controlos positivos: criar uma colocação na localização própria e criar uma tarefa na prateleira própria (ambos esperam HTTP 201).
+- O objetivo é provar simultaneamente rejeição de IDs estrangeiros e aceitação de IDs válidos do mesmo tenant, evitando falsos positivos por recurso inexistente.
+- Implementação publicada; validação PostgreSQL 16/CI ainda pendente.
