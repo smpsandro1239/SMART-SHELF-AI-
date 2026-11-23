@@ -1773,3 +1773,9 @@ A implementação de produção já verificava lease_lost nos caminhos de sucess
 - [x] Classificar explicitamente a rota GET de histórico na matriz de políticas RBAC.
 - [ ] Implementar divergências entre stock observado na prateleira e stock de referência, sem alterar automaticamente o inventário contabilístico.
 - [ ] Separar explicitamente stock de retaguarda, reservado, disponível e stock físico observado na prateleira.
+
+
+## Dashboard — semântica do indicador de urgência
+
+- [x] Separar prioridade HIGH de URGENT no KPI `urgent_active_tasks`; o indicador conta apenas tarefas URGENT activas.
+- [ ] Confirmar API CI e Quality Gates no SHA da correção.
