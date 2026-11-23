@@ -1979,3 +1979,7 @@ A leitura de `GET /api/v1/tasks/{task_id}/events` aplica `task_id` e `store_id` 
 ## Dashboard operacional — KPIs de execução
 
 O endpoint `GET /api/v1/dashboard/summary` fornece agora tarefas por prioridade, tarefas activas urgentes, tarefas activas sem atribuição e taxa de conclusão. A métrica `shelves_requiring_attention` conta prateleiras distintas com observações `LOW_STOCK` ou `EMPTY`; `attention_observations` apresenta separadamente o volume dessas observações, evitando contar várias vezes a mesma prateleira. Os filtros existentes mantêm-se: ADMIN pode consultar globalmente ou por loja, SUPERVISOR fica limitado à sua loja e EMPLOYEE vê apenas as suas tarefas atribuídas. Cobertura em `apps/api/tests/test_dashboard_summary.py`; validação CI do novo HEAD pendente.
+
+## Histórico de movimentos de inventário
+
+A API disponibiliza `GET /api/v1/inventory/movements?store_id={id}` para consultar movimentos de inventário aprovados e imutáveis. A consulta aceita filtros opcionais `product_id` e `task_id`, exige ADMIN ou SUPERVISOR e respeita o âmbito multi-loja. É uma operação exclusivamente de leitura: não cria movimentos nem altera snapshots. Cobertura em `apps/api/tests/test_inventory.py`; CI da alteração pendente.
