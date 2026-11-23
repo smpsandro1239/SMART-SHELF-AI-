@@ -1,3 +1,12 @@
+## 2026-11-23 — Ocultação de IDs de sessões de captura e alertas
+
+- A rota POST /api/v1/capture-sessions/{session_id}/close passa a usar o helper de lock multi-tenant com hide_foreign=True.
+- PATCH /api/v1/observation-alerts/{alert_id} passa a resolver e bloquear o alerta através do helper, com ocultação de IDs estrangeiros.
+- GET /api/v1/observation-alerts/{alert_id}/events mantém a leitura sem lock, mas devolve 404 para alertas estrangeiros e inexistentes.
+- Testes HTTP comparam respostas estrangeiras/inexistentes e confirmam que uma sessão estrangeira não é fechada e que o alerta/eventos não são alterados.
+- Commits: código b627107c517b91caf04a9b5ab2cc6d1f84552b20; teste fe021e303e87f47f638e31661cf97ff6e285bff3 e reforço 1a2e776dfcb3886a4e14b7581b0980a91bbbecb4.
+- Execução de testes e CI deste SHA ainda não confirmada.
+
 ## 2026-11-23 — Ocultação de IDs de localizações de armazém
 
 - A rota POST /api/v1/warehouse/placements deixou de carregar a localização sem lock e só depois aplicar o store scope.
