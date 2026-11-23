@@ -3,7 +3,11 @@
 - [x] Expandir `postgres_retention_legal_hold_concurrency_smoke.py` com duas lojas e um supervisor de uma loja diferente da imagem alvo.
 - [x] Manter a linha da imagem bloqueada numa transacção PostgreSQL e provar que o pedido `POST /retention/restrict` do supervisor externo termina com HTTP 403 antes de o lock ser libertado.
 - [x] Preservar os ensaios existentes de concorrência legal hold ↔ purge schedule e restore ↔ purge schedule.
-- [ ] Executar API CI/PostgreSQL 16, Quality Gates, Security Scans e Docker Compose no novo SHA.
+- [x] Docker Compose demo smoke passou no commit de código `926abcf1`: [run 45129975482](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45129975482).
+- [x] O passo PostgreSQL `Verify PostgreSQL legal hold and purge schedule concurrency` passou no API CI [45129975394](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45129975394), SHA `926abcf1`; inclui o novo ensaio de supervisor de outra loja com a imagem bloqueada.
+- [x] Quality Gates passou no SHA documental `7b10c5c1`: [run 45130013285](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45130013285), incluindo compilação Python, suite API e build Web.
+- [x] Security Scans: Gitleaks, pip-audit, npm audit e o passo de baseline ZAP concluíram com sucesso no [run 45130013260](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45130013260); o workflow ainda não terminou na última consulta.
+- [ ] Aguardar conclusão do API CI [45129975394](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45129975394) e do workflow Security Scans [45130013260](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45130013260).
 - [ ] Expandir a prova PostgreSQL multi-loja para os restantes fluxos de retenção e os endpoints de artefactos; o novo smoke cobre o caminho comum de autorização pré-lock e os testes estáticos cobrem a utilização dos helpers.
 - [ ] Executar testes de integração dedicados com duas lojas para todos os endpoints de retenção/artefactos.
 - [ ] Ensaiar volume persistente e operações reais com principal runtime.
@@ -19,8 +23,8 @@ Commits: `25a34b8f` (smoke PostgreSQL) e `926abcf1` (documentação/contrato do 
 - [x] Corrigir `register_shelf_image_artifact_reference`, `create_shelf_image_artifact_inventory_snapshot`, `get_shelf_image_artifact_access_decision` e `create_shelf_image_artifact_disposition_event` com a mesma regra de autorização pré-lock.
 - [x] Expandir o teste estático de ordem de locks para cobrir os dez handlers.
 - [x] Auditoria estática do código actual confirma que os dez handlers autorizam antes do primeiro `FOR UPDATE`.
-- [ ] Executar API CI, Quality Gates, Security Scans e Docker Compose no SHA `70b1b351`; workflows disparados e ainda em execução.
-- [ ] Acrescentar/confirmar testes PostgreSQL multi-store de negação cruzada para cada fluxo de retenção e artefactos; a auditoria estática não substitui testes de integração.
+- [x] Validar em PostgreSQL o caminho comum de autorização pré-lock: supervisor de outra loja recebe 403 enquanto a imagem está bloqueada; smoke [45129975394](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45129975394), SHA `926abcf1`.
+- [ ] Acrescentar/confirmar testes PostgreSQL multi-store de negação cruzada para cada fluxo de retenção e artefactos; a prova actual cobre um handler representativo e os testes estáticos verificam a utilização do helper nos restantes.
 - [ ] Ensaiar volume persistente PostgreSQL e operações reais com principal runtime.
 
 Commits: `f6e2156e`, `659586be`, `7f372fbc`, `cbc6a1a6`, `70b1b351`.
