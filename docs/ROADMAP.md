@@ -1327,3 +1327,8 @@ O commit `1ffe4d3a7567c486f68de5e26051f7bcc0a2c110` concluiu com sucesso a valid
 
 A rota `GET /api/v1/tasks/{task_id}/events` filtra `task_id` e `store_id` na query para SUPERVISOR, evitando materializar uma tarefa estrangeira antes da autorização. ADMIN conserva visibilidade global. A regressão verifica 404 indistinguível para tarefa estrangeira/inexistente e acesso ADMIN. API CI/PostgreSQL 16, Quality Gates, Security Scans e Docker Compose do SHA final pendentes.
 
+
+## Segurança P0 — preflight SQL multi-tenant para detection_id (2026-11-23; CI pendente)
+
+Os endpoints de revisão humana, histórico e criação de observação resolvem agora a imagem de origem através de JOIN Detection → ShelfImage → Shelf → Zone. Para actores não ADMIN, o predicado de loja é aplicado no SELECT, evitando materializar uma detecção estrangeira antes da autorização. Mantém-se a autorização pré-lock e a revalidação pós-lock da imagem. Testes cobrem IDs estrangeiros/inexistentes e os contratos HTTP. API CI/PostgreSQL 16, Quality Gates, Security Scans e Docker Compose pendentes.
+

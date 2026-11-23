@@ -1676,3 +1676,12 @@ A implementação de produção já verificava lease_lost nos caminhos de sucess
 - [x] Reforçar a regressão: SUPERVISOR recebe 404 equivalente para tarefa estrangeira/inexistente; ADMIN mantém acesso à tarefa estrangeira.
 - [ ] Validar API CI/PostgreSQL 16, Quality Gates, Security Scans e Docker Compose no SHA final.
 
+
+## Segurança P0 — preflight de detection_id com tenant no SELECT (2026-11-23; implementação/testes publicados, CI pendente)
+
+- [x] Resolver a imagem de origem através de JOIN Detection → ShelfImage → Shelf → Zone.
+- [x] Aplicar `store_id` no SELECT para actores não ADMIN, antes de materializar a detecção estrangeira.
+- [x] Preservar o lock da imagem e a revalidação de tenant pós-lock, mantendo a ordem global imagem → detecção.
+- [x] Reforçar o teste directo do resolver para IDs estrangeiros e inexistentes, além dos testes HTTP existentes.
+- [ ] Validar API CI/PostgreSQL 16, Quality Gates, Security Scans e Docker Compose no SHA desta alteração.
+

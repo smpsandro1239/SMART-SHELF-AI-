@@ -126,3 +126,9 @@ Esta evidência cobre a rota de eventos de alertas, não fecha a matriz completa
 ## Revalidação — histórico de tarefas (2026-11-23)
 
 A rota `GET /api/v1/tasks/{task_id}/events` aplica agora o âmbito da loja no próprio SELECT para actores não ADMIN. IDs estrangeiros e inexistentes produzem o mesmo 404 sem carregar previamente a tarefa estrangeira. ADMIN conserva a leitura global. O teste HTTP cobre os dois casos e o acesso administrativo; validação CI do commit desta alteração pendente.
+
+
+
+## Revalidação — preflight de IDs directos de deteção (2026-11-23)
+
+Os endpoints `POST /api/v1/shelf-image-detections/{detection_id}/reviews`, `GET .../reviews` e `POST .../observation` já ocultavam IDs estrangeiros na resposta e mantinham a ordem de locks imagem → detecção. O preflight foi agora reforçado: a resolução da imagem de origem faz JOIN até Zone e aplica `store_id` no SELECT para actores não ADMIN, em vez de carregar primeiro a detecção por chave primária. O helper de lock continua a revalidar o tenant depois do lock. Testes HTTP e teste directo do resolver cobrem IDs estrangeiros/inexistentes; CI pendente.

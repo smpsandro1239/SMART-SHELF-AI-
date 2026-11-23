@@ -697,3 +697,11 @@ Próxima prioridade: continuar auditoria de IDs aninhados em OCR/matching/artefa
 - ADMIN mantém consulta global; a regressão confirma acesso administrativo e compara o 404/corpo de IDs estrangeiros e inexistentes para SUPERVISOR.
 - Código e teste publicados. A suite e os workflows do SHA final ainda carecem de confirmação.
 
+
+## 2026-11-23 — Preflight SQL multi-tenant de detection_id
+
+- Os três endpoints de revisão, histórico e criação de observação deixaram de usar `db.get(ShelfImageDetection, detection_id)` antes da autorização da imagem.
+- Novo resolver faz JOIN da detecção à imagem/prateleira/zona e, para actores não ADMIN, aplica `Zone.store_id == actor.store_id` no próprio SELECT. A imagem continua a ser bloqueada e revalidada pelo helper existente antes da leitura/escrita da detecção.
+- Teste directo confirma que IDs estrangeiros e inexistentes são ocultados pelo resolver; regressões HTTP existentes continuam a comparar respostas e a verificar ausência de persistência.
+- Código e testes publicados; validação CI do SHA final pendente.
+
