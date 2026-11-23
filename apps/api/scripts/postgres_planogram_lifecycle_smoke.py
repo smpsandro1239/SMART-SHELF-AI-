@@ -72,7 +72,7 @@ def main() -> None:
             min_display_quantity=2,
         ))
         db.commit()
-        shelf_id, actor_id, product_id = shelf.id, admin.id, product.id
+        shelf_id, actor_id, product_id, store_id = shelf.id, admin.id, product.id, store.id
 
     with SessionLocal() as db:
         first = create_draft_planogram(
@@ -538,7 +538,7 @@ def main() -> None:
         lambda operation_db: create_draft_planogram(
             operation_db,
             shelf_id=shelf_id,
-            actor_user_id=actor_id,
+            actor_user_id=foreign_actor_id,
             cells=[_cell("FOREIGN-IMAGE-CALIBRATION", product_id, x_min=0.0, x_max=0.5, facings=2)],
             calibration_source="IMAGE",
             calibration_image_id=foreign_image_id,
@@ -551,7 +551,7 @@ def main() -> None:
         lambda operation_db: load_active_planogram_for_comparison(
             operation_db,
             shelf_id=shelf_id,
-            actor_user_id=actor_id,
+            actor_user_id=foreign_actor_id,
             comparison_image_id=foreign_image_id,
         ),
         "foreign comparison image",
