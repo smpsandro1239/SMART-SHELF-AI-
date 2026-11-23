@@ -1,4 +1,6 @@
 from datetime import datetime, timezone
+import hashlib
+import hmac
 from uuid import uuid4
 
 import pytest
@@ -20,6 +22,7 @@ from app.edge_device_service import (
     register_edge_device,
     revoke_edge_device_credential,
     sign_edge_device_request,
+    _canonical_signed_request,
 )
 
 
@@ -109,10 +112,23 @@ def test_provisioning_rejects_unknown_store_type_and_duplicate_device(db):
 def test_signed_request_authenticates_device_and_consumes_nonce_once(db):
     store_id, _ = seed_store(db)
     register_edge_device(db, device_id="camera-signed", store_id=store_id, device_type="fixed_camera")
-    token, _ = issue_edge_device_credential(db, device_id="camera-signed")
+    token, credential = issue_edge_device_credential(db, device_id="camera-signed")
     body = b'{"event":"heartbeat"}'
     timestamp = int(datetime.now(timezone.utc).timestamp())
     nonce = "n" * 32
+    canonical = _canonical_signed_request(
+        credential_id=credential.credential_id, method="POST",
+        request_target="/api/v1/edge/events", timestamp=timestamp,
+        nonce=nonce, body=body,
+    )
+    database_verifier_signature = hmac.new(
+        bytes.fromhex(credential.secret_sha256), canonical, hashlib.sha256
+    ).hexdigest()
+    with pytest.raises(EdgeDeviceAuthenticationError):
+        authenticate_edge_device_request(
+            db, bearer_token=token, method="POST", request_target="/api/v1/edge/events",
+            timestamp=timestamp, nonce=nonce, signature=database_verifier_signature, body=body,
+        )
     signature = sign_edge_device_request(
         bearer_token=token, method="POST", request_target="/api/v1/edge/events",
         timestamp=timestamp, nonce=nonce, body=body,
