@@ -1,3 +1,9 @@
+## 2026-11-23 — Paridade de respostas BOLA em deteções e exemplares
+
+- Reforçado o smoke PostgreSQL pré-lock para comparar corpo JSON e status entre IDs estrangeiros reais e IDs inexistentes em três operações direct-ID: revisão de deteção, histórico de revisão e revisão de exemplar.
+- Os pedidos são executados enquanto locks PostgreSQL reais da imagem e do produto permanecem retidos; o smoke exige HTTP 404 equivalente e ausência de mutações.
+- Commit `1cdc4f67` publicado. API CI/PostgreSQL 16 e restantes workflows ainda pendentes.
+
 ## 2026-11-23 — Validação de isolamento de IDs em planogramas e Warehouse
 
 - O contrato de ocultação de prateleiras em planogramas foi alinhado nos testes HTTP e no smoke PostgreSQL: IDs estrangeiros e inexistentes devolvem HTTP 404 equivalente.
