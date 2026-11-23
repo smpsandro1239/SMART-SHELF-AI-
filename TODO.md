@@ -7,19 +7,17 @@
 - [x] Corrigir a falha anterior do Compose smoke: as duas invocações inline do runtime-role smoke passam agora `MIGRATION_DB_USER` via `docker compose exec -e`, com regressão estática. Commits `b4995042` e `edf879a2`; o Compose smoke voltou a passar no SHA `926abcf1`.
 - [x] O passo PostgreSQL `Verify PostgreSQL legal hold and purge schedule concurrency` passou no API CI [45129975394](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45129975394), SHA `926abcf1`; inclui o novo ensaio de supervisor de outra loja com a imagem bloqueada.
 - [x] Quality Gates passou no SHA documental `7b10c5c1`: [run 45130013285](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45130013285), incluindo compilação Python, suite API e build Web.
-- [x] Security Scans: Gitleaks, pip-audit, npm audit e o passo de baseline ZAP concluíram com sucesso no [run 45130013260](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45130013260); o workflow ainda não terminou na última consulta.
-- [x] API CI passou integralmente no SHA de código `926abcf1`: [run 45129975394](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45129975394), incluindo migrações PostgreSQL 16, smokes operacionais, runtime role e suite API.
+- [x] Security Scans terminou com sucesso no [run 45130013260](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45130013260): Gitleaks, pip-audit, npm audit e OWASP ZAP passive baseline.
+- [x] API CI passou integralmente no SHA de código `926abcf1`: [run 45129975394](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45129975394), incluindo migrações PostgreSQL 16, smokes operacionais, runtime role e **1555 passed, 1 skipped**.
 - [x] Security Scans terminou com sucesso no SHA documental `7b10c5c1`: [run 45130013260](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45130013260), incluindo Gitleaks, pip-audit, npm audit e OWASP ZAP passive baseline.
-- [ ] Ensaiar volume persistente preexistente e operações API reais com principal runtime; não executar contra produção.
-- [ ] Expandir a prova PostgreSQL multi-loja para os restantes fluxos de retenção e os endpoints de artefactos; o novo smoke cobre o caminho comum de autorização pré-lock e os testes estáticos cobrem a utilização dos helpers.
-- [ ] Executar testes de integração dedicados com duas lojas para todos os endpoints de retenção/artefactos.
-- [ ] Ensaiar volume persistente e operações reais com principal runtime.
+- [ ] Expandir a prova PostgreSQL multi-loja para os restantes fluxos de retenção e endpoints de artefactos; o smoke actual cobre um handler representativo e os testes estáticos verificam a utilização dos helpers.
+- [ ] Ensaiar um volume PostgreSQL persistente preexistente e executar operações API reais com o principal runtime; nunca executar estes ensaios contra produção.
 
 Commits: `25a34b8f` (smoke PostgreSQL) e `926abcf1` (documentação/contrato do smoke).
 
 ---
 
-## Segurança P0 — autorização de tenant antes de locks de retenção e artefactos (2026-11-23; CI em execução)
+## Segurança P0 — autorização de tenant antes de locks de retenção e artefactos (2026-11-23; CI validada, cobertura adicional pendente)
 
 - [x] Corrigir `restore_shelf_image`, `apply_shelf_image_legal_hold`, `release_shelf_image_legal_hold`, `schedule_shelf_image_purge` e `cancel_shelf_image_purge_schedule` para resolver e validar o tenant antes de bloquear a imagem, usando `_lock_authorized_shelf_image`.
 - [x] Corrigir `get_shelf_image_purge_eligibility` para validar a loja antes do primeiro lock e revalidar a linhagem depois do lock.
