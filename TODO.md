@@ -1658,3 +1658,13 @@ A implementação de produção já verificava lease_lost nos caminhos de sucess
 
 - [x] Corrigir o contrato do smoke PostgreSQL de pre-lock de deteções/exemplares: após a ocultação cross-store, os três endpoints devolvem HTTP 404 (em vez do antigo 403) e continuam a ser rejeitados antes de esperar pelos locks da imagem/produto.
 - [ ] Reexecutar API CI no HEAD com a expectativa corrigida e confirmar o smoke concorrente PostgreSQL.
+
+
+## Fecho de validação P0 — isolamento multi-tenant e IDs diretos (2026-11-23)
+
+- [x] API CI no HEAD `1ffe4d3a7567c486f68de5e26051f7bcc0a2c110`: 1595 testes aprovados, 1 ignorado.
+- [x] PostgreSQL 16: migrations, autorização cross-store, lock ordering, retenção/legal hold, deteções/exemplares, inventário, tarefas, captura, planogramas e anti-rollback ONNX smoke tests aprovados.
+- [x] Quality Gates: testes/compilação Python e TypeScript/build de produção aprovados.
+- [x] Security Scans: secret scan, auditoria de dependências Python/Web e OWASP ZAP passive baseline aprovados.
+- [x] Docker Compose demo stack smoke aprovado.
+- [ ] Continuar auditoria de IDs aninhados em OCR, matching, artefactos e restantes endpoints de warehouse; manter regressões de tenant e de ausência de efeitos laterais.
