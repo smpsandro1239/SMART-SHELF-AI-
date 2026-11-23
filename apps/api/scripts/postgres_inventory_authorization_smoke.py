@@ -63,12 +63,19 @@ def main() -> None:
         )
         db.add_all([own_pallet, foreign_pallet])
         db.flush()
-        db.add(models.PalletRotationPolicy(
+        own_rotation_policy = models.PalletRotationPolicy(
             store_id=store_a.id,
             product_id=product.id,
             threshold_ratio=0.5,
             is_enabled=True,
-        ))
+        )
+        foreign_rotation_policy = models.PalletRotationPolicy(
+            store_id=store_b.id,
+            product_id=product.id,
+            threshold_ratio=0.5,
+            is_enabled=True,
+        )
+        db.add_all([own_rotation_policy, foreign_rotation_policy])
         db.flush()
 
         supervisor = models.User(
@@ -244,6 +251,7 @@ def main() -> None:
         foreign_shelf_id = foreign_shelf.id
         own_pallet_id = own_pallet.id
         foreign_pallet_id = foreign_pallet.id
+        foreign_rotation_policy_id = foreign_rotation_policy.id
         foreign_task_id = foreign_task.id
     finally:
         db.close()
@@ -643,6 +651,63 @@ def main() -> None:
                 f"missing={missing_pallet_events.text!r}"
             )
 
+            lifecycle_update = {
+                "expected_status": "READY",
+                "expected_base_quantity": 12,
+                "status": "ON_DISPLAY",
+                "location_type": "SALES_FLOOR",
+                "reason": "Cross-store authorization regression",
+            }
+            foreign_pallet_update = client.post(
+                f"/api/v1/warehouse/pallets/{foreign_pallet_id}/events",
+                json=lifecycle_update,
+                headers=supervisor_headers,
+            )
+            missing_pallet_update = client.post(
+                "/api/v1/warehouse/pallets/-1/events",
+                json=lifecycle_update,
+                headers=supervisor_headers,
+            )
+            assert foreign_pallet_update.status_code == 404, foreign_pallet_update.text
+            assert missing_pallet_update.status_code == 404, missing_pallet_update.text
+            assert foreign_pallet_update.text == missing_pallet_update.text, (
+                "Foreign and missing pallet IDs must expose indistinguishable "
+                f"lifecycle-write responses: foreign={foreign_pallet_update.text!r}, "
+                f"missing={missing_pallet_update.text!r}"
+            )
+
+            foreign_policy_update = client.patch(
+                f"/api/v1/warehouse/pallet-rotation/policies/{foreign_rotation_policy_id}",
+                json={"is_enabled": False},
+                headers=supervisor_headers,
+            )
+            missing_policy_update = client.patch(
+                "/api/v1/warehouse/pallet-rotation/policies/-1",
+                json={"is_enabled": False},
+                headers=supervisor_headers,
+            )
+            assert foreign_policy_update.status_code == 404, foreign_policy_update.text
+            assert missing_policy_update.status_code == 404, missing_policy_update.text
+            assert foreign_policy_update.text == missing_policy_update.text, (
+                "Foreign and missing policy IDs must expose indistinguishable "
+                f"responses: foreign={foreign_policy_update.text!r}, "
+                f"missing={missing_policy_update.text!r}"
+            )
+
+            own_pallet_update = client.post(
+                f"/api/v1/warehouse/pallets/{own_pallet_id}/events",
+                json={
+                    "expected_status": "ON_DISPLAY",
+                    "expected_base_quantity": 12,
+                    "status": "PARTIAL",
+                    "base_quantity": 10,
+                    "reason": "Same-store lifecycle positive control",
+                },
+                headers=supervisor_headers,
+            )
+            assert own_pallet_update.status_code == 201, own_pallet_update.text
+            assert own_pallet_update.json()["pallet_id"] == own_pallet_id
+
             for resource, response in requests.items():
                 expected_status = (
                     404
@@ -697,6 +762,21 @@ def main() -> None:
                     .count()
                 )
                 assert placement_count == 0, placement_count
+
+                foreign_pallet_state = db.get(models.StorePallet, foreign_pallet_id)
+                assert foreign_pallet_state is not None
+                assert foreign_pallet_state.status == "READY"
+                assert float(foreign_pallet_state.base_quantity) == 12
+                assert db.query(models.PalletRotationEvent).filter_by(
+                    pallet_id=foreign_pallet_id
+                ).count() == 0
+
+                foreign_policy_state = db.get(
+                    models.PalletRotationPolicy,
+                    foreign_rotation_policy_id,
+                )
+                assert foreign_policy_state is not None
+                assert foreign_policy_state.is_enabled is True
             finally:
                 db.close()
 
