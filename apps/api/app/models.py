@@ -1114,6 +1114,113 @@ class DatasetExecutionJobEvent(Base):
 
 
 
+class EdgeDevice(Base):
+    """Store-bound physical edge device identity, independent from dataset workers."""
+    __tablename__ = "edge_devices"
+    __table_args__ = (
+        CheckConstraint("status IN ('ACTIVE', 'DISABLED')", name="ck_edge_device_status"),
+        CheckConstraint("device_type IN ('fixed_camera', 'robot', 'mobile', 'gateway')", name="ck_edge_device_type"),
+        Index("ix_edge_devices_store_status", "store_id", "status"),
+    )
+
+    device_id: Mapped[str] = mapped_column(String(120), primary_key=True)
+    store_id: Mapped[int] = mapped_column(ForeignKey("stores.id", ondelete="RESTRICT"), nullable=False)
+    device_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    status: Mapped[str] = mapped_column(String(12), default="ACTIVE", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    disabled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class EdgeDeviceCredential(Base):
+    """Individually revocable, hashed credential for one registered edge device."""
+    __tablename__ = "edge_device_credentials"
+    __table_args__ = (
+        UniqueConstraint("credential_id", name="uq_edge_device_credential_public_id"),
+        CheckConstraint("length(secret_sha256) = 64", name="ck_edge_device_credential_digest"),
+        CheckConstraint("expires_at > created_at", name="ck_edge_device_credential_expiry"),
+        Index("ix_edge_device_credentials_device_expiry", "device_id", "expires_at"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    credential_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    device_id: Mapped[str] = mapped_column(ForeignKey("edge_devices.device_id", ondelete="RESTRICT"), nullable=False, index=True)
+    secret_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    scopes: Mapped[list] = mapped_column(JSON, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    replaced_by_credential_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+
+
+class EdgeDeviceAuditEvent(Base):
+    """Append-only audit trail for edge device and credential lifecycle operations."""
+    __tablename__ = "edge_device_audit_events"
+    __table_args__ = (
+        CheckConstraint(
+            "event_type IN ('DEVICE_REGISTERED', 'DEVICE_DISABLED', 'CREDENTIAL_ISSUED', 'CREDENTIAL_ROTATED', 'CREDENTIAL_REVOKED')",
+            name="ck_edge_device_audit_event_type",
+        ),
+        Index("ix_edge_device_audit_events_device_created", "device_id", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    device_id: Mapped[str] = mapped_column(ForeignKey("edge_devices.device_id", ondelete="RESTRICT"), nullable=False)
+    credential_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    event_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    details: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+
+class EdgeDeviceRequestNonce(Base):
+    """Short-lived anti-replay nonce scoped to an edge-device credential."""
+    __tablename__ = "edge_device_request_nonces"
+    __table_args__ = (
+        UniqueConstraint("credential_id", "nonce_sha256", name="uq_edge_device_nonce_credential_digest"),
+        CheckConstraint("length(nonce_sha256) = 64", name="ck_edge_device_nonce_digest"),
+        Index("ix_edge_device_request_nonces_expires", "expires_at"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    credential_id: Mapped[str] = mapped_column(ForeignKey("edge_device_credentials.credential_id", ondelete="RESTRICT"), nullable=False)
+    nonce_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    request_timestamp: Mapped[int] = mapped_column(Integer, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+
+class EdgeDeviceEventCursor(Base):
+    """Monotonic accepted-event cursor for each physical device."""
+    __tablename__ = "edge_device_event_cursors"
+
+    device_id: Mapped[str] = mapped_column(ForeignKey("edge_devices.device_id", ondelete="RESTRICT"), primary_key=True)
+    last_sequence: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+
+class EdgeDeviceEventInbox(Base):
+    """Durable, immutable inbox of authenticated edge events awaiting processing."""
+    __tablename__ = "edge_device_event_inbox"
+    __table_args__ = (
+        UniqueConstraint("device_id", "event_id", name="uq_edge_device_inbox_event"),
+        UniqueConstraint("device_id", "sequence_number", name="uq_edge_device_inbox_sequence"),
+        CheckConstraint("sequence_number > 0", name="ck_edge_device_inbox_sequence_positive"),
+        CheckConstraint("length(fingerprint_sha256) = 64", name="ck_edge_device_inbox_fingerprint"),
+        Index("ix_edge_device_inbox_store_received", "store_id", "received_at"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    device_id: Mapped[str] = mapped_column(ForeignKey("edge_devices.device_id", ondelete="RESTRICT"), nullable=False)
+    event_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    sequence_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    event_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    store_id: Mapped[int] = mapped_column(ForeignKey("stores.id", ondelete="RESTRICT"), nullable=False)
+    shelf_id: Mapped[int | None] = mapped_column(ForeignKey("shelves.id", ondelete="RESTRICT"), nullable=True)
+    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    payload: Mapped[dict] = mapped_column(JSON, nullable=False)
+    fingerprint_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+
 class DatasetWorker(Base):
     """Registered non-human identity allowed to process dataset execution jobs."""
     __tablename__ = "dataset_workers"
