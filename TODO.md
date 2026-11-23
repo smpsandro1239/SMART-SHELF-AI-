@@ -1595,3 +1595,12 @@ A implementação de produção já verificava lease_lost nos caminhos de sucess
 - [x] Preservar a criação same-store e verificar que a tentativa cross-store não persiste uma prateleira.
 - [ ] Executar teste focado, suite API, PostgreSQL 16, Quality Gates, Security Scans e Docker Compose no novo HEAD.
 - [ ] Continuar auditoria das relações produto-prateleira e IDs directos de tarefas/movimentos.
+
+
+## Segurança P0 — associação de produto a prateleira (2026-11-23; implementação/teste publicados, CI pendente)
+
+- [x] Validar identidade do actor antes de resolver o shelf_id fornecido.
+- [x] Ocultar prateleiras estrangeiras com HTTP 404 igual a IDs inexistentes antes do lock do produto.
+- [x] Cobrir tentativa cross-store, resposta equivalente, ausência de associação persistida e controlo positivo same-store.
+- [ ] Executar testes focados e workflows API CI, Quality Gates, Security Scans e Docker Compose.
+- [ ] Continuar auditoria de IDs directos de tarefas e movimentos de inventário.
