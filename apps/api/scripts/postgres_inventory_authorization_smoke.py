@@ -630,7 +630,11 @@ def main() -> None:
 
             for resource, response in requests.items():
                 expected_status = (
-                    404 if resource == "task creation with foreign shelf"
+                    404
+                    if resource in {
+                        "task creation with foreign shelf",
+                        "foreign warehouse placement creation",
+                    }
                     else 403
                 )
                 assert response.status_code == expected_status, (
