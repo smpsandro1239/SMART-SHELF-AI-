@@ -1668,3 +1668,11 @@ A implementação de produção já verificava lease_lost nos caminhos de sucess
 - [x] Security Scans: secret scan, auditoria de dependências Python/Web e OWASP ZAP passive baseline aprovados.
 - [x] Docker Compose demo stack smoke aprovado.
 - [ ] Continuar auditoria de IDs aninhados em OCR, matching, artefactos e restantes endpoints de warehouse; manter regressões de tenant e de ausência de efeitos laterais.
+
+## Segurança P0 — consulta de eventos de tarefas com predicado SQL multi-tenant (2026-11-23; código/teste publicados, CI pendente)
+
+- [x] Fazer a consulta de tarefas para SUPERVISOR filtrar `task_id` e `store_id` na mesma query, sem materializar tarefas estrangeiras antes da autorização.
+- [x] Preservar visibilidade global de ADMIN e compatibilidade de execução de testes sem actor.
+- [x] Reforçar a regressão: SUPERVISOR recebe 404 equivalente para tarefa estrangeira/inexistente; ADMIN mantém acesso à tarefa estrangeira.
+- [ ] Validar API CI/PostgreSQL 16, Quality Gates, Security Scans e Docker Compose no SHA final.
+
