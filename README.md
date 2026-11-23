@@ -1,6 +1,14 @@
 ## Segurança multi-loja — IDs de prateleiras em planogramas
 
-As operações de planograma resolvem agora a prateleira com o filtro da loja do actor aplicado directamente na query. Para SUPERVISOR, uma prateleira de outra loja e um ID inexistente produzem HTTP 404 com o mesmo detalhe (`Shelf not found`); ADMIN mantém acesso global. A regressão está em `apps/api/tests/test_capture_sessions.py`. A alteração foi publicada, mas a validação CI/PostgreSQL do novo HEAD ainda está pendente.
+A resolução de prateleiras em operações de planograma aplica o tenant directamente na query. Para SUPERVISOR, uma prateleira estrangeira e um ID inexistente devolvem HTTP 404 com o mesmo detalhe (`Shelf not found`); ADMIN mantém acesso global. Os testes HTTP comparam os dois casos também na listagem e na comparação com evidência.
+
+Validação no commit `a29a7ea2fde29d7a49576c435700c7516b00f2a2`: API CI [45268275419](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45268275419), Quality Gates [45268275423](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45268275423), Security Scans [45268275427](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45268275427) e Docker Compose [45268275477](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45268275477) passaram.
+
+## Segurança multi-loja — IDs directos de Warehouse
+
+O smoke PostgreSQL 16 valida agora os IDs directos de paletes e políticas de rotação. Para um SUPERVISOR da loja A, eventos de palete e políticas da loja B são indistinguíveis de IDs inexistentes (HTTP 404 e corpo idêntico). As tentativas de escrita não alteram a palete estrangeira, não criam eventos e não desactivam a política. O controlo positivo same-store confirma que a actualização do ciclo de vida continua operacional. A consulta de histórico, o planeamento de rotação e a colocação em armazém mantêm os filtros de tenant.
+
+A validação completa do commit `a29a7ea2fde29d7a49576c435700c7516b00f2a2` passou: API CI com **1599 testes aprovados e 1 ignorado**, incluindo migrations e smokes PostgreSQL 16; Quality Gates com **1599 testes aprovados e 1 ignorado**, compilação Python e build Web; Security Scans (Gitleaks, pip-audit, npm audit e OWASP ZAP passive baseline); Docker Compose demo smoke.
 
 
 ## 10-minute demo

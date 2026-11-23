@@ -1,9 +1,26 @@
+## Segurança P0 — IDs directos de Warehouse: paletes e políticas (2026-11-23; CI validada)
+
+- [x] Reforçar o smoke PostgreSQL 16 para comparar a leitura de eventos de uma palete estrangeira com um ID inexistente (HTTP 404 e corpo idêntico).
+- [x] Cobrir a escrita de eventos de ciclo de vida de paletes estrangeiras e inexistentes com respostas equivalentes, sem alterar estado nem criar eventos.
+- [x] Cobrir a actualização de políticas de rotação por ID estrangeiro/inexistente, confirmando que a política estrangeira permanece activa.
+- [x] Preservar o controlo positivo same-store: um SUPERVISOR actualiza a própria palete e recebe HTTP 201.
+- [x] Corrigir expectativas de autorização dos planogramas para o contrato de ocultação HTTP 404, incluindo criação, listagem e comparação.
+- [x] API CI [45268275419](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45268275419): migrations e smokes PostgreSQL 16 aprovados; **1599 passed, 1 skipped**.
+- [x] Quality Gates [45268275423](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45268275423): **1599 passed, 1 skipped**, compilação Python e build Web aprovados.
+- [x] Security Scans [45268275427](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45268275427): Gitleaks, pip-audit, npm audit e OWASP ZAP passive baseline aprovados.
+- [x] Docker Compose demo smoke [45268275477](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45268275477) aprovado.
+- [ ] Continuar a matriz BOLA/IDOR nos restantes recursos e relações indirectas; esta ronda cobre os caminhos Warehouse identificados, não todos os endpoints do produto.
+
+Decisão: ADMIN mantém o âmbito global previsto. SUPERVISOR só pode resolver e alterar recursos da própria loja; IDs estrangeiros e inexistentes são indistinguíveis. Escritas continuam a exigir autorização antes do lock e revalidação depois do lock. A visão computacional não movimenta inventário.
+
+---
+
 ## Segurança P0 — ocultação de IDs de prateleiras em operações de planograma (2026-11-23)
 
 - [x] Aplicar o filtro de tenant directamente à query que resolve a prateleira para operações de planograma.
 - [x] Uniformizar HTTP 404 e o detalhe `Shelf not found` para prateleiras estrangeiras e inexistentes, sem consultar primeiro o `store_id` de uma linha estrangeira.
 - [x] Actualizar a regressão unitária para exigir o contrato de ocultação.
-- [ ] Validar o teste focado, API CI/PostgreSQL 16, Quality Gates, Security Scans e Docker Compose no HEAD final.
+- [x] Validado no commit `a29a7ea2fde29d7a49576c435700c7516b00f2a2`: API CI [45268275419](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45268275419), Quality Gates [45268275423](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45268275423), Security Scans [45268275427](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45268275427) e Docker Compose [45268275477](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45268275477) passaram. API CI e Quality Gates: 1599 passed, 1 skipped.
 
 Decisão: ADMIN mantém visibilidade global. SUPERVISOR só resolve prateleiras da sua loja; um ID estrangeiro é indistinguível de um ID inexistente. A query deixa de materializar previamente o tenant da prateleira estrangeira.
 
@@ -13,7 +30,7 @@ Decisão: ADMIN mantém visibilidade global. SUPERVISOR só resolve prateleiras 
 - [x] Manter a resolução da palete limitada por pallet_id e store_id antes de consultar os eventos.
 - [x] Reforçar o smoke PostgreSQL multi-loja: comparar a resposta HTTP da palete estrangeira com a de um ID inexistente e exigir HTTP 404 com corpo idêntico.
 - [x] Preservar o controlo positivo same-store já existente no smoke, garantindo HTTP 200 para o histórico da própria loja.
-- [ ] Validar API CI/PostgreSQL 16, Quality Gates, Security Scans e Docker Compose no novo SHA.
+- [x] Validado no commit `a29a7ea2fde29d7a49576c435700c7516b00f2a2`: API CI [45268275419](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45268275419), Quality Gates [45268275423](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45268275423), Security Scans [45268275427](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45268275427) e Docker Compose [45268275477](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45268275477) passaram; smoke PostgreSQL 16 e 1599 testes passaram.
 
 Decisão: o histórico é consultado apenas depois de a palete pai ser resolvida no tenant autorizado. A igualdade de respostas 404 evita que o endpoint funcione como oráculo de existência para IDs de paletes estrangeiras.
 
@@ -79,7 +96,7 @@ Decisão: todos os endpoints multi-loja que recebem um identificador directo de 
 - [x] Repor `hide_foreign=True` no acesso à palete por ID directo antes e depois do lock PostgreSQL.
 - [x] Uniformizar a resposta HTTP 404 para paletes estrangeiras e IDs inexistentes na rota de registo de eventos de ciclo de vida.
 - [x] Acrescentar regressão HTTP autenticada para ambos os casos, mantendo a verificação de que nenhuma palete ou evento é alterado.
-- [ ] Confirmar API CI/PostgreSQL 16, Quality Gates, Security Scans e Docker Compose no commit de código/testes `ecc652e575757e49198b1ff013f484250b9c6482`.
+- [x] Revalidado no commit `a29a7ea2fde29d7a49576c435700c7516b00f2a2`: API CI/PostgreSQL 16, Quality Gates, Security Scans e Docker Compose passaram; o smoke compara IDs estrangeiros e inexistentes e confirma ausência de mutações.
 - [ ] Continuar a matriz BOLA/IDOR para IDs aninhados de localização, prateleira, tarefa, embalagem e relações indirectas.
 
 Decisão: endpoints por ID directo que expõem recursos multi-loja ocultam a existência de IDs estrangeiros com 404, desde que a identidade do actor esteja autenticada. A autorização continua a ocorrer antes do lock e é revalidada depois do lock. ADMIN mantém a política global definida para o recurso.

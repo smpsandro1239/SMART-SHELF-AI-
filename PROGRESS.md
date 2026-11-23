@@ -1,3 +1,15 @@
+## 2026-11-23 — Hardening de IDs multi-loja em planogramas e Warehouse
+
+- Corrigida a regressão de contrato dos planogramas: os testes HTTP passaram a exigir HTTP 404 para prateleiras estrangeiras e inexistentes, com payload idêntico. A comparação de planogramas recebeu o mesmo controlo negativo.
+- O primeiro smoke PostgreSQL depois da alteração revelou uma expectativa antiga de HTTP 403 na criação de planogramas; a expectativa foi actualizada para 404, em linha com a política de ocultação. Não foi alterada a autorização funcional de EMPLOYEE.
+- Expandido `postgres_inventory_authorization_smoke.py`: GET de eventos de paletes estrangeiras, POST de ciclo de vida de paletes estrangeiras, PATCH de política de rotação estrangeira, comparação com IDs inexistentes, controlos positivos same-store e verificações de ausência de mutação.
+- O smoke confirmou que a palete estrangeira permanece em `READY`, sem novos eventos, e que a política estrangeira permanece activa. A actualização da palete da própria loja foi aceite.
+- API CI [45268275419](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45268275419): PostgreSQL 16, migrations, todos os smokes e **1599 passed, 1 skipped**.
+- Quality Gates [45268275423](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45268275423): **1599 passed, 1 skipped**, compilação Python e build Web.
+- Security Scans [45268275427](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45268275427): Gitleaks, pip-audit, npm audit e OWASP ZAP passive baseline aprovados.
+- Docker Compose [45268275477](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45268275477) aprovado.
+- Commit de validação: `a29a7ea2fde29d7a49576c435700c7516b00f2a2`.
+
 ## 2026-11-23 — Ocultação de IDs de prateleiras nas operações de planograma
 
 - A função `_planogram_shelf_scope` passou a aplicar `Zone.store_id == actor.store_id` na própria query para SUPERVISOR, mantendo ADMIN global.

@@ -1,3 +1,12 @@
+## 2026-11-23 — Validação de isolamento de IDs em planogramas e Warehouse
+
+- O contrato de ocultação de prateleiras em planogramas foi alinhado nos testes HTTP e no smoke PostgreSQL: IDs estrangeiros e inexistentes devolvem HTTP 404 equivalente.
+- O smoke Warehouse passou a validar IDs directos de paletes e políticas de rotação, incluindo leitura/escrita, comparação com IDs inexistentes, ausência de mutações estrangeiras e controlo positivo same-store.
+- API CI [45268275419](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45268275419): PostgreSQL 16, migrations e smokes aprovados; **1599 passed, 1 skipped**.
+- Quality Gates [45268275423](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45268275423): **1599 passed, 1 skipped**, compilação Python e build Web.
+- Security Scans [45268275427](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45268275427) e Docker Compose [45268275477](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45268275477) passaram.
+- Limite: a matriz BOLA/IDOR global permanece aberta; esta ronda não demonstra cobertura de todos os endpoints e relações indirectas.
+
 ## 2026-11-23 — Segurança de planogramas: ocultação de IDs cross-store
 
 - Implementado: a resolução da prateleira aplica o tenant na query para SUPERVISOR; ADMIN mantém visibilidade global.
