@@ -1,3 +1,13 @@
+## 2026-11-23 — Validação CI da autorização PostgreSQL pré-lock
+
+- Smoke PostgreSQL de retenção e autorização multi-loja passou no API CI [45129975394](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45129975394), SHA de código `926abcf1`. A chamada de supervisor de outra loja foi rejeitada com HTTP 403 enquanto a linha da imagem permanecia bloqueada.
+- Docker Compose [45129975482](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45129975482) passou.
+- Quality Gates [45130013285](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45130013285) passou: suite API, compilação Python e build Web.
+- Security Scans [45130013260](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45130013260): Gitleaks, pip-audit, npm audit e ZAP concluíram os respectivos passos com sucesso; job global ainda em execução.
+- API CI global ainda em execução. A prova cobre o helper pré-lock através de um handler representativo; a cobertura HTTP/PG dos restantes handlers e o ensaio de volume persistente permanecem em aberto.
+
+---
+
 ## 2026-11-23 — Prova PostgreSQL de autorização pré-lock entre lojas (implementação publicada; CI pendente)
 
 - O smoke de retenção usa duas lojas e um supervisor da loja externa à imagem.
