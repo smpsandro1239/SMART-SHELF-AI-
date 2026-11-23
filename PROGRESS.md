@@ -569,3 +569,12 @@ Limitação de segurança resolvida em camadas: owner de migrations separado do 
 - A suite pytest completa continuava em execução; não declarar API CI integralmente verde.
 - Docker Compose Smoke [45177953980](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45177953980) passou.
 - Quality Gates e Security Scans foram cancelados após o push documental posterior; devem ser repetidos num commit posterior.
+
+
+## 2026-11-23 — Ocultação de IDs directos de ciclo de vida de paletes
+
+- Auditoria ao commit `e9ce6e52` identificou uma regressão: o handler `POST /api/v1/warehouse/pallets/{pallet_id}/events` deixou de passar `hide_foreign=True` ao helper `_lock_store_scoped_record`, embora a alteração anterior tivesse explicitamente introduzido a ocultação de IDs de paletes estrangeiras.
+- Reposto `hide_foreign=True`. A verificação de tenant ocorre antes da aquisição do lock e volta a ocorrer após o refresh da linha bloqueada.
+- O teste HTTP autenticado passou a exigir HTTP 404 tanto para a palete real da loja estrangeira como para um ID inexistente, evitando um oráculo de existência. As verificações de estado da palete e contagem de eventos mantêm-se.
+- Commits publicados: `4873087c` (correcção) e `ecc652e5` (regressão).
+- API CI, Quality Gates, Security Scans e Docker Compose do novo HEAD ainda não confirmados. Não foi executada suite local nesta sessão.
