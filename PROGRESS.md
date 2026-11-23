@@ -1,3 +1,13 @@
+## 2026-11-23 — Controlos BOLA para IDs aninhados de paletes
+
+- Acrescentados dois pedidos de ataque no smoke PostgreSQL multi-loja: supervisor autorizado na loja A usa o `store_id` da loja A, mas fornece o ID real de uma palete pertencente à loja B.
+- Cobertos o endpoint de plano de rotação e o endpoint de eventos de ciclo de vida.
+- Ambos exigem HTTP 404, comprovando que o filtro da entidade filha respeita a loja indicada e não devolve a existência/conteúdo da palete estrangeira.
+- Commit: `db177bce`.
+- CI para este novo commit ainda não confirmada. Próximo passo: validar em PostgreSQL 16 e expandir a matriz para IDs de localização, shelf, tarefa e packaging.
+
+---
+
 ## 2026-11-23 — Controlos positivos same-store para recursos logísticos reais
 
 - O smoke `postgres_inventory_authorization_smoke.py` cria agora um nível de embalagem CASE e uma palete válida em cada loja.
