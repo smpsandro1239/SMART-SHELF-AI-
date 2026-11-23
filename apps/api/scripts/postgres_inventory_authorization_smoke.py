@@ -633,7 +633,7 @@ def main() -> None:
                     404
                     if resource in {
                         "task creation with foreign shelf",
-                        "foreign warehouse placement creation",
+                        "warehouse placement creation",
                     }
                     else 403
                 )
