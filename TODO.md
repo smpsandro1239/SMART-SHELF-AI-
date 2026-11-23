@@ -1623,3 +1623,11 @@ A implementação de produção já verificava lease_lost nos caminhos de sucess
 - [x] Adicionar regressões para IDs estrangeiros/inexistentes em retenção, revisão de deteções e revisão de exemplares.
 - [ ] Confirmar API CI, Quality Gates, Security Scans e Docker Compose no HEAD final; investigar qualquer falha antes de declarar validação concluída.
 - [ ] Continuar auditoria de endpoints de leitura/revisão de evidência OCR, matching e retenção com IDs aninhados.
+
+
+## Segurança P0 — uploads de imagens e sessões de captura (2026-11-23)
+
+- [x] Autenticar o actor antes de resolver shelf_id no upload de imagens e ocultar prateleiras estrangeiras como inexistentes.
+- [x] Ocultar capture_session_id estrangeiro com HTTP 404 igual ao ID inexistente, usando preflight de tenant antes do row lock e revalidação pós-lock.
+- [x] Testar prateleiras estrangeiras/inexistentes e sessões estrangeiras/inexistentes; confirmar ausência de ficheiros e de novas imagens após pedidos recusados.
+- [ ] Confirmar API CI, Quality Gates, Security Scans e Docker Compose no HEAD final.
