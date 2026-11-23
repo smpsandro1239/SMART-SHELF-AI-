@@ -97,6 +97,7 @@ def create_detection(*, proposed_product_id=None, second_product=False):
         "proposed_product_id": first.id,
         "correct_product_id": second.id if second is not None else None,
         "image_id": image.id,
+        "store_id": store.id,
     }
     db.close()
     return result
@@ -252,3 +253,85 @@ def test_detection_review_history_supports_stable_offset_pagination():
     assert [item["decision"] for item in page_one.json()] == ["CONFIRMED"]
     assert [item["decision"] for item in page_two.json()] == ["CORRECTED"]
     assert [item["decision"] for item in clamped.json()] == ["CONFIRMED"]
+
+
+def test_detection_review_and_history_enforce_source_image_store_scope(monkeypatch):
+    data = create_detection()
+    with TestingSession() as db:
+        foreign_store = models.Store(code="REVIEW-FOREIGN", name="Loja estrangeira")
+        db.add(foreign_store)
+        db.flush()
+        foreign_zone = models.Zone(store_id=foreign_store.id, name="Zona estrangeira")
+        db.add(foreign_zone)
+        db.flush()
+        foreign_shelf = models.Shelf(zone_id=foreign_zone.id, code="S-FOREIGN")
+        db.add(foreign_shelf)
+        db.flush()
+        foreign_image = models.ShelfImage(
+            shelf_id=foreign_shelf.id,
+            original_filename="foreign.jpg",
+            storage_path="/tmp/foreign-review-shelf.jpg",
+            mime_type="image/jpeg",
+            file_size_bytes=100,
+            sha256="e" * 64,
+            analysis_status="COMPLETED",
+            model_version="detector-v1",
+        )
+        actor = models.User(
+            email="review-scope-supervisor@example.test",
+            full_name="Supervisor da loja A",
+            password_hash="test-only-not-used",
+            role="SUPERVISOR",
+            store_id=data["store_id"],
+            is_active=True,
+        )
+        db.add_all([foreign_image, actor])
+        db.flush()
+        foreign_detection = models.ShelfImageDetection(
+            shelf_image_id=foreign_image.id,
+            product_id=data["proposed_product_id"],
+            label="product",
+            confidence=0.90,
+            x_min=0.1,
+            y_min=0.1,
+            x_max=0.8,
+            y_max=0.8,
+            model_version="detector-v1",
+            sku_match_status="MATCHED",
+        )
+        db.add(foreign_detection)
+        db.commit()
+        foreign_detection_id = foreign_detection.id
+        actor_id = actor.id
+
+    with TestingSession() as db:
+        actor = db.get(models.User, actor_id)
+        monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: actor)
+
+        with TestClient(app) as client:
+            foreign_review = client.post(
+                f"/api/v1/shelf-image-detections/{foreign_detection_id}/reviews",
+                json={"decision": "CONFIRMED"},
+            )
+            foreign_history = client.get(
+                f"/api/v1/shelf-image-detections/{foreign_detection_id}/reviews"
+            )
+            own_review = client.post(
+                f"/api/v1/shelf-image-detections/{data['detection_id']}/reviews",
+                json={"decision": "CONFIRMED"},
+            )
+            own_history = client.get(
+                f"/api/v1/shelf-image-detections/{data['detection_id']}/reviews"
+            )
+
+    assert foreign_review.status_code == 403
+    assert foreign_history.status_code == 403
+    assert own_review.status_code == 201
+    assert own_history.status_code == 200
+    with TestingSession() as db:
+        assert db.query(models.DetectionSkuReview).filter(
+            models.DetectionSkuReview.detection_id == foreign_detection_id
+        ).count() == 0
+        assert db.query(models.DetectionSkuReview).filter(
+            models.DetectionSkuReview.detection_id == data["detection_id"]
+        ).count() == 1
