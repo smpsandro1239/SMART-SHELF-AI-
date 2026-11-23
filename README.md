@@ -1,3 +1,9 @@
+## Segurança multi-loja — isolamento de artefactos externos
+
+O smoke PostgreSQL de consumo de artefactos verifica combinações cruzadas de `image_id`, `artifact_id` e `store_id`, incluindo duas imagens na mesma loja e recursos de outra loja. Os casos inválidos têm de falhar antes de contactar o provider. O controlo positivo confirma que a integração activa da loja proprietária é seleccionada mesmo quando outra loja tem uma integração revogada com o mesmo identificador de sistema externo. A FK composta impede ainda que um artefacto filho referencie um pai de outra imagem.
+
+A validação desta alteração está pendente no API CI/PostgreSQL 16 e nos Quality Gates.
+
 ## Segurança multi-loja — IDs de prateleiras em planogramas
 
 A resolução de prateleiras em operações de planograma aplica o tenant directamente na query. Para SUPERVISOR, uma prateleira estrangeira e um ID inexistente devolvem HTTP 404 com o mesmo detalhe (`Shelf not found`); ADMIN mantém acesso global. Os testes HTTP comparam os dois casos também na listagem e na comparação com evidência.
