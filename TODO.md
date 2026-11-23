@@ -1586,3 +1586,12 @@ A implementação de produção já verificava lease_lost nos caminhos de sucess
 - [x] Smoke PostgreSQL 16 de autorização passou no API CI 45177953932, passo 31, no commit 26a97f7136eace2bc0b4f428731db3990163aa93.
 - [ ] Aguardar conclusão da suite pytest completa do API CI.
 - [ ] Continuar matriz endpoint × papel × tenant para rotas restantes e relações indirectas.
+
+
+## Segurança P0 — criação de prateleiras por zona (2026-11-23; implementação/teste publicados, CI pendente)
+
+- [x] Resolver a zona antes de criar a prateleira e verificar o tenant associado.
+- [x] Para SUPERVISOR, devolver HTTP 404 tanto para uma zona estrangeira como para um ID inexistente.
+- [x] Preservar a criação same-store e verificar que a tentativa cross-store não persiste uma prateleira.
+- [ ] Executar teste focado, suite API, PostgreSQL 16, Quality Gates, Security Scans e Docker Compose no novo HEAD.
+- [ ] Continuar auditoria das relações produto-prateleira e IDs directos de tarefas/movimentos.
