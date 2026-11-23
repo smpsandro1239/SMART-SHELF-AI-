@@ -582,6 +582,7 @@ def test_planogram_id_mutations_enforce_store_scope(planogram_api, monkeypatch):
     )
     assert created.status_code == 201, created.text
     planogram_id = created.json()["id"]
+    shelf_lock_calls.clear()  # Ignore the authorised fixture-creation lock.
 
     replacement = {
         "cells": [{
