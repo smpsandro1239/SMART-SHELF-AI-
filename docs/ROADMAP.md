@@ -1384,3 +1384,10 @@ Próxima fatia funcional: modelar divergências entre observações visuais e in
 ## Dashboard — precisão do KPI de urgência
 
 O contador de tarefas urgentes foi alinhado com a taxonomia de prioridades: apenas tarefas `URGENT` activas entram no KPI. Prioridade `HIGH` permanece distinta e visível na distribuição por prioridade.
+
+
+## 2026-11-23 — Histórico operacional de inventário
+
+O dashboard inclui agora a consulta do histórico de movimentos, com filtros, métricas e detalhe da linhagem dos snapshots. O painel é read-only e visível a ADMIN/SUPERVISOR. A política RBAC explícita inclui a rota de movimentos. A execução TypeScript/build passou; a suite API revelou um KPI de urgências que incluía HIGH indevidamente. A query foi corrigida para contar apenas URGENT, ficando a validação final do novo SHA pendente.
+
+Próxima entrega: divergências auditáveis entre observação visual e stock de referência, sem ajustes contabilísticos automáticos; em paralelo, definir a semântica dos diferentes estados/localizações do stock com base nos modelos existentes.
