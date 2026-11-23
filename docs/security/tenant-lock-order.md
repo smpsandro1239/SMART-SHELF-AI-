@@ -118,3 +118,8 @@ A validação é automatizada. Não substitui a matriz integral BOLA/IDOR, ensai
 - A actualização de alertas usa o mesmo helper; a leitura de eventos não adquire lock, mas valida o store_id antes de consultar eventos.
 - Para SUPERVISOR, IDs estrangeiros e inexistentes devolvem HTTP 404 equivalente. ADMIN mantém acesso global e EMPLOYEE continua bloqueado pelo RBAC.
 - Regressões HTTP verificam igualdade das respostas 404 e ausência de alterações na sessão/alerta estrangeiro. Código b627107; testes 1a2e776. CI/PostgreSQL 16 ainda pendente.
+
+
+## Ocultação de IDs directos de consenso de prateleira — 2026-11-23
+
+O endpoint GET /api/v1/shelves/{shelf_id}/observation-consensus compara o tenant da prateleira antes de consultar evidência. Para SUPERVISOR, uma prateleira estrangeira e um ID inexistente devolvem o mesmo HTTP 404. A rota POST /api/v1/shelves/{shelf_id}/observation-alerts/evaluate herda o contrato e não persiste alertas quando a prateleira não é autorizada. Testes autenticados cobrem ambos os percursos. Código 2f4470e; teste 5feffba. CI/PostgreSQL 16 pendente.
