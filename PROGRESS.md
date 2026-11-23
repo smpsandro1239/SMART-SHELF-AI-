@@ -1,3 +1,13 @@
+## 2026-11-23 — Expansão da prova PostgreSQL pré-lock para nove rotas HTTP
+
+- O smoke `postgres_retention_legal_hold_concurrency_smoke.py` testa agora nove rotas de imagem com um supervisor de outra loja: conteúdo, deteções, evidence fusion, OCR evidence/matches/runs, eventos de retenção, retry e restrict.
+- A transacção concorrente mantém a linha `shelf_images` bloqueada. Todas as rotas têm de responder HTTP 403 antes da libertação do lock; qualquer handler que tente bloquear a imagem antes de autorizar provoca timeout e falha o smoke.
+- O passo `Verify PostgreSQL legal hold and purge schedule concurrency` passou no API CI [45130818413](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45130818413), SHA `d319d1a4`.
+- Docker Compose [45130818319](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45130818319), Quality Gates [45130818392](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45130818392) e Security Scans [45130818374](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45130818374) passaram. A suite pytest do API CI ainda estava em execução na última consulta.
+- Os endpoints de artefactos, legal hold e purge que exigem ADMIN seguem a política de administrador global; não são casos de negação cross-store para SUPERVISOR. A revisão dos restantes handlers de escrita/revisão continua pendente.
+
+---
+
 ## 2026-11-23 — Resultados CI da prova PostgreSQL multi-loja pré-lock
 
 - O smoke PostgreSQL `Verify PostgreSQL legal hold and purge schedule concurrency` concluiu com sucesso no API CI [45129975394](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45129975394), commit de código `926abcf1`. O teste executou o pedido de supervisor estrangeiro enquanto a imagem estava bloqueada e confirmou rejeição HTTP 403 sem aguardar pelo lock.
