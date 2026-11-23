@@ -727,7 +727,6 @@ def test_supervisor_cannot_create_shelf_under_foreign_or_missing_zone(planogram_
     own = client.post(
         "/api/v1/shelves",
         json={"zone_id": ids["zone_a"], "code": "OWN-02"},
-        headers=headers,
     )
     assert own.status_code == 201, own.text
     assert own.json()["code"] == "OWN-02"
