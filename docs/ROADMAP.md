@@ -1254,3 +1254,12 @@ Validação no commit `311fecc9e13641e6d5eb55465fda646fb2909601`: Quality Gates 
 - O passo PostgreSQL 16 **Verify PostgreSQL inventory and warehouse cross-store authorization** passou no API CI [45177953932](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45177953932), para o commit de código `26a97f7136eace2bc0b4f428731db3990163aa93`.
 - Docker Compose Smoke [45177953980](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45177953980) passou.
 - A suite pytest completa ainda estava em execução; Quality Gates e Security Scans foram cancelados e permanecem por repetir.
+
+
+## 2026-11-23 — Ocultação de IDs directos de ciclo de vida de paletes
+
+- Reposto o modo `hide_foreign=True` na rota de escrita de eventos de ciclo de vida de paletes.
+- Regressão coberta por pedido autenticado contra uma palete estrangeira real e contra um ID inexistente; ambos devem devolver 404 sem persistir eventos nem alterar estado.
+- A decisão segue o contrato de não divulgação já aplicado à alteração de políticas de rotação e mantém a autorização antes dos locks PostgreSQL.
+- Commits: `4873087c` e `ecc652e5`.
+- Validação CI do novo HEAD pendente; não considerar a tarefa concluída até os workflows relevantes terminarem.
