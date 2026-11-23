@@ -1260,14 +1260,14 @@ def get_shelf_observation_consensus(
 @app.post("/api/v1/capture-sessions", response_model=CaptureSessionRead, status_code=201, tags=["computer-vision"])
 def create_capture_session(payload: CaptureSessionCreate, request: Request, db: Session = Depends(get_db)):
     actor = _request_user(db, request)
+    if actor is not None and actor.role == "EMPLOYEE":
+        raise HTTPException(status_code=403, detail="Supervisor role required to create capture sessions")
     shelf = db.query(models.Shelf).join(models.Zone, models.Shelf.zone_id == models.Zone.id).filter(models.Shelf.id == payload.shelf_id).first()
     if shelf is None:
         raise HTTPException(status_code=404, detail="Shelf not found")
     store_id = shelf.zone.store_id
     if actor is not None and actor.role != "ADMIN" and actor.store_id != store_id:
         raise HTTPException(status_code=404, detail="Shelf not found")
-    if actor is not None and actor.role == "EMPLOYEE":
-        raise HTTPException(status_code=403, detail="Supervisor role required to create capture sessions")
     started_at = payload.started_at or models.utc_now()
     if started_at.tzinfo is None:
         raise HTTPException(status_code=422, detail="started_at must include a timezone")
