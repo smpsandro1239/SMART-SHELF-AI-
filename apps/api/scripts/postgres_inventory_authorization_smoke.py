@@ -352,6 +352,7 @@ def main() -> None:
                 own_params["store_id"] = store_a_id
                 if resource == "pallet rotation window":
                     own_params["pallet_id"] = own_pallet_id
+                    own_params["residual_base_units"] = 12
                 if resource == "pallet lifecycle events":
                     path = f"/api/v1/warehouse/pallets/{own_pallet_id}/events"
                 response = client.get(
