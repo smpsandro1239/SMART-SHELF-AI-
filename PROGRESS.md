@@ -766,3 +766,13 @@ Próxima prioridade: continuar auditoria de IDs aninhados em OCR/matching/artefa
 - Teste directo confirma que IDs estrangeiros e inexistentes são ocultados pelo resolver; regressões HTTP existentes continuam a comparar respostas e a verificar ausência de persistência.
 - Código e testes publicados; validação CI do SHA final pendente.
 
+
+
+## 2026-11-23 — Interface de histórico de movimentos de inventário
+
+- Criado o componente `InventoryMovementHistory` e integrado no dashboard para ADMIN e SUPERVISOR.
+- O painel consulta a API existente, respeita o filtro de loja (incluindo a seleção do ADMIN), permite filtrar por produto/tarefa e apresenta métricas agregadas sobre os 100 registos mais recentes.
+- Cada linha pode ser expandida para mostrar IDs de tarefa, loja, actor, snapshot de origem/resultado, tipo e justificação. A interface é explicitamente read-only.
+- A rota `GET /api/v1/inventory/movements` foi adicionada à matriz explícita de autorização. A auditoria estrita tinha falhado porque a rota nova não estava classificada; a classificação foi corrigida antes da próxima execução.
+- A interface usa `VITE_API_BASE_URL` quando configurado e mantém a apresentação em pt-PT.
+- Validação: código publicado; a execução de Web CI e Quality Gates do novo HEAD está pendente de conclusão. Não declarar build/testes aprovados até obter os resultados finais.
