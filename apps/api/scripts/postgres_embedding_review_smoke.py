@@ -37,6 +37,8 @@ def main() -> None:
             role="ADMIN",
             is_active=True,
         )
+        db.add_all([store, product, reviewer_a, reviewer_b])
+        db.flush()
         supervisor = models.User(
             email=f"pg-review-supervisor-{suffix}@example.test",
             full_name="PostgreSQL store supervisor",
@@ -45,7 +47,7 @@ def main() -> None:
             store_id=store.id,
             is_active=True,
         )
-        db.add_all([store, product, reviewer_a, reviewer_b, supervisor])
+        db.add(supervisor)
         db.flush()
         zone = models.Zone(store_id=store.id, name="Review smoke zone")
         db.add(zone)
