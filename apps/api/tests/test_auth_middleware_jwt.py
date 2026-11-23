@@ -952,6 +952,9 @@ def test_supervisor_capture_sessions_are_scoped_to_own_store(auth_client):
     assert foreign_close.status_code == 404
     assert missing_close.status_code == 404
     assert foreign_close.json() == missing_close.json()
+    with main_module.SessionLocal() as db:
+        foreign_session = db.get(models.CaptureSession, ids["capture_session_b"])
+        assert foreign_session.ended_at is None
     assert admin_listed.status_code == 200
     assert {item["store_id"] for item in admin_listed.json()} == {
         store_ids["a"], store_ids["b"]
@@ -1417,6 +1420,12 @@ def test_observation_alert_jwt_roles_and_store_scope(auth_client):
     assert foreign_events.status_code == 404
     assert missing_events.status_code == 404
     assert foreign_events.json() == missing_events.json()
+    with main_module.SessionLocal() as db:
+        persisted_foreign_alert = db.get(models.ObservationAlert, foreign_alert_id)
+        assert persisted_foreign_alert.status == "OPEN"
+        assert db.query(models.ObservationAlertEvent).filter_by(
+            alert_id=foreign_alert_id
+        ).count() == 1
 
     own_update = client.patch(
         f"/api/v1/observation-alerts/{alert_id}",
