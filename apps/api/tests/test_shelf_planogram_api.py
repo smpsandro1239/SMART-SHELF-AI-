@@ -54,6 +54,7 @@ def planogram_api(monkeypatch):
         db.flush()
         ids = {
             "store_a": store_a.id, "store_b": store_b.id,
+            "zone_a": zone_a.id, "zone_b": zone_b.id,
             "shelf_a": shelf_a.id, "shelf_b": shelf_b.id,
             "product_a": product_a.id, "product_b": product_b.id,
             **{key: value.id for key, value in users.items()},
@@ -702,3 +703,34 @@ def test_active_planogram_service_rejects_foreign_shelf_without_active_planogram
                 shelf_id=ids["shelf_b"],
                 actor_user_id=ids["supervisor_a"],
             )
+
+
+
+def test_supervisor_cannot_create_shelf_under_foreign_or_missing_zone(planogram_api):
+    client, ids = planogram_api
+    headers = _headers(ids["supervisor_a"], "SUPERVISOR")
+
+    foreign = client.post(
+        "/api/v1/shelves",
+        json={"zone_id": ids["zone_b"], "code": "FORGED-01"},
+        headers=headers,
+    )
+    missing = client.post(
+        "/api/v1/shelves",
+        json={"zone_id": 2147483000, "code": "MISSING-01"},
+        headers=headers,
+    )
+    assert foreign.status_code == missing.status_code == 404
+    assert foreign.json() == missing.json()
+
+    own = client.post(
+        "/api/v1/shelves",
+        json={"zone_id": ids["zone_a"], "code": "OWN-02"},
+        headers=headers,
+    )
+    assert own.status_code == 201, own.text
+    assert own.json()["code"] == "OWN-02"
+
+    with main_module.SessionLocal() as db:
+        assert db.query(models.Shelf).filter_by(zone_id=ids["zone_b"], code="FORGED-01").count() == 0
+        assert db.query(models.Shelf).filter_by(zone_id=ids["zone_a"], code="OWN-02").count() == 1
