@@ -1159,10 +1159,21 @@ def list_observation_alert_events(alert_id: int, request: Request, db: Session =
     actor = _request_user(db, request)
     if actor is None or actor.role not in {"ADMIN", "SUPERVISOR"}:
         raise HTTPException(status_code=403, detail="Supervisor role required")
-    alert = db.get(models.ObservationAlert, alert_id)
+    if actor.role == "ADMIN":
+        alert = db.get(models.ObservationAlert, alert_id)
+    else:
+        # Scope the lookup itself to the actor's store. This avoids loading a
+        # foreign alert before authorization and gives foreign/missing IDs the
+        # same read-only lookup and HTTP response.
+        alert = (
+            db.query(models.ObservationAlert)
+            .filter(
+                models.ObservationAlert.id == alert_id,
+                models.ObservationAlert.store_id == actor.store_id,
+            )
+            .first()
+        )
     if alert is None:
-        raise HTTPException(status_code=404, detail="Observation alert not found")
-    if actor.role != "ADMIN" and actor.store_id != alert.store_id:
         raise HTTPException(status_code=404, detail="Observation alert not found")
     return (
         db.query(models.ObservationAlertEvent)
