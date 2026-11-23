@@ -414,3 +414,40 @@
 .reconciliation-safety-note{display:flex;align-items:flex-start;gap:7px;margin:13px 0 0;padding:10px;border-radius:8px;background:#fff8e9;color:#8b7138;font-size:9px;line-height:1.5}
 .reconciliation-safety-note svg{flex-shrink:0}
 @media(max-width:700px){.reconciliation-metrics{grid-template-columns:1fr 1fr}.reconciliation-values{grid-template-columns:1fr 1fr}.reconciliation-heading{flex-direction:column}.reconciliation-backroom{align-items:flex-start}.reconciliation-backroom-title{width:100%}}
+
+
+/* Inventory reconciliation: shelf display target and backroom stock remain separate domains */
+.inventory-reconciliation-panel{margin-top:18px}
+.inventory-reconciliation-filters{display:grid;grid-template-columns:minmax(150px,1fr) minmax(150px,1fr) auto auto;align-items:end;gap:10px;margin:16px 0}
+.inventory-reconciliation-filters label{display:grid;gap:6px;color:#536477;font-size:10px;font-weight:700}
+.inventory-reconciliation-filters label span{display:flex;align-items:center;gap:5px}
+.inventory-reconciliation-filters input{width:100%;min-width:0;border:1px solid #dfe6ed;border-radius:8px;padding:9px 10px;background:#fff;color:#304255;font-size:11px}
+.inventory-reconciliation-metrics{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin:14px 0}
+.inventory-reconciliation-metrics>div{display:grid;gap:6px;min-width:0;padding:10px;border:1px solid #e8edf2;border-radius:9px;background:#fafbfd}
+.inventory-reconciliation-metrics span{font-size:9px;color:#8290a0}
+.inventory-reconciliation-metrics strong{font-size:17px;color:#304256}
+.inventory-reconciliation-metrics .warning strong{color:#b66a22}
+.inventory-reconciliation-metrics .success strong{color:#21845f}
+.inventory-reconciliation-list{display:grid;gap:10px}
+.inventory-reconciliation-row{border:1px solid #e8edf2;border-radius:10px;padding:12px}
+.inventory-reconciliation-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.inventory-reconciliation-heading>div{display:grid;gap:5px;min-width:0}
+.inventory-reconciliation-heading strong{font-size:11px;color:#304256}
+.inventory-reconciliation-heading strong small{margin-left:5px;color:#8290a0;font-size:9px;font-weight:500}
+.inventory-reconciliation-heading>div>span{font-size:9px;color:#8290a0}
+.inventory-reconciliation-status{display:inline-flex;align-items:center;gap:5px;padding:6px 8px;border-radius:7px;font-size:9px;white-space:nowrap}
+.inventory-reconciliation-status.warning{background:#fff4e6;color:#a65d16}
+.inventory-reconciliation-status.success{background:#eaf6ef;color:#21845f}
+.inventory-reconciliation-status.info{background:#edf4fc;color:#426f9e}
+.inventory-reconciliation-status.neutral{background:#f0f3f6;color:#718092}
+.inventory-reconciliation-domains{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:12px}
+.inventory-domain{display:grid;gap:8px;padding:10px;border:1px solid #edf0f3;border-radius:8px;background:#fbfcfd}
+.inventory-domain-title{font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:#66788b}
+.inventory-domain>div{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.inventory-domain>div span{font-size:9px;color:#8290a0}
+.inventory-domain>div strong{font-size:10px;color:#304256;text-align:right}
+.inventory-domain>div strong.negative{color:#b66a22}
+.inventory-domain>small{font-size:9px;line-height:1.5;color:#8290a0}
+.inventory-reconciliation-footnote{display:flex;justify-content:space-between;gap:10px;margin-top:10px;padding-top:9px;border-top:1px solid #f0f2f4;font-size:9px;color:#8290a0}
+.inventory-reconciliation-note{margin-top:10px;font-size:9px;line-height:1.5;color:#8290a0}
+@media(max-width:760px){.inventory-reconciliation-filters{grid-template-columns:1fr 1fr}.inventory-reconciliation-filters .row-action{grid-column:1/-1;justify-content:center}.inventory-reconciliation-filters .inventory-history-limit{grid-column:1/-1;padding:0}.inventory-reconciliation-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.inventory-reconciliation-domains{grid-template-columns:1fr}.inventory-reconciliation-footnote{flex-direction:column}}
