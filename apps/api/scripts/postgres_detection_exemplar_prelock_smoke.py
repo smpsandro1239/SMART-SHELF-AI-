@@ -142,10 +142,30 @@ def main() -> None:
                 },
                 headers=headers,
             )
+            missing_detection_review = client.post(
+                "/api/v1/shelf-image-detections/2147483000/reviews",
+                json={"decision": "REJECTED", "notes": "Missing-ID parity check"},
+                headers=headers,
+            )
+            missing_detection_history = client.get(
+                "/api/v1/shelf-image-detections/2147483000/reviews",
+                headers=headers,
+            )
+            missing_exemplar_review = client.patch(
+                "/api/v1/product-embedding-exemplars/2147483000/review",
+                json={
+                    "review_status": "REJECTED",
+                    "review_notes": "Missing-ID parity check",
+                },
+                headers=headers,
+            )
         results.update(
-            detection_review=reviewed.status_code,
-            detection_history=history.status_code,
-            exemplar_review=exemplar_review.status_code,
+            detection_review=(reviewed.status_code, reviewed.json()),
+            detection_history=(history.status_code, history.json()),
+            exemplar_review=(exemplar_review.status_code, exemplar_review.json()),
+            missing_detection_review=(missing_detection_review.status_code, missing_detection_review.json()),
+            missing_detection_history=(missing_detection_history.status_code, missing_detection_history.json()),
+            missing_exemplar_review=(missing_exemplar_review.status_code, missing_exemplar_review.json()),
         )
 
     original_settings = main_module.settings
@@ -164,11 +184,10 @@ def main() -> None:
                         "a cross-store detection/exemplar request waited for a locked row "
                         "instead of rejecting before lock acquisition"
                     ) from exc
-                assert results == {
-                    "detection_review": 404,
-                    "detection_history": 404,
-                    "exemplar_review": 404,
-                }, results
+                assert results["detection_review"] == results["missing_detection_review"], results
+                assert results["detection_history"] == results["missing_detection_history"], results
+                assert results["exemplar_review"] == results["missing_exemplar_review"], results
+                assert all(result[0] == 404 for result in results.values()), results
             finally:
                 release_locks.set()
             lock_future.result(timeout=10)
@@ -186,9 +205,9 @@ def main() -> None:
         main_module.settings = original_settings
 
     print(
-        "PostgreSQL direct-ID tenant pre-lock smoke passed: detection review, "
-        "review history and exemplar review all returned concealed HTTP 404 while both "
-        "source-image and product rows were locked; no review was persisted."
+        "PostgreSQL direct-ID tenant pre-lock smoke passed: foreign and missing detection/exemplar "
+        "IDs returned identical concealed HTTP 404 responses while source-image and product rows "
+        "were locked; no review was persisted."
     )
 
 
