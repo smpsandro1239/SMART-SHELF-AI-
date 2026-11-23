@@ -153,3 +153,10 @@ As rotas create_observation, create_capture_session e get_shelf_observation_cons
 - Se capture_session_id for fornecido, _lock_store_scoped_record valida o tenant antes do row lock e revalida após o lock, com hide_foreign=True. Sessão estrangeira e inexistente devolvem HTTP 404 igual.
 - A sessão também tem de pertencer à mesma prateleira e loja do upload; divergência same-store continua a ser erro de validação HTTP 422.
 - Testes cobrem os dois IDs estrangeiros/inexistentes e garantem que a rejeição ocorre antes da criação do ficheiro e do registo ShelfImage.
+
+
+## Validação integrada — 2026-11-23
+
+No HEAD `1ffe4d3a7567c486f68de5e26051f7bcc0a2c110`, a API CI terminou com 1595 testes aprovados e 1 ignorado. Os smoke tests PostgreSQL 16 confirmaram a rejeição pré-lock de IDs estrangeiros em tarefas, deteções/exemplares e retenção, além da preservação de concorrência/lock ordering em inventário, sessões de captura, legal hold, matching, planogramas e publicação de artefactos. Quality Gates, Security Scans e Docker Compose demo smoke também passaram.
+
+O histórico de alertas usa lookup diretamente filtrado por `alert_id + actor.store_id` para SUPERVISOR, produzindo 404 uniforme sem carregar primeiro um alerta estrangeiro; ADMIN mantém leitura global. Mutação de alertas usa preflight e lock scoped com `hide_foreign=True`.
