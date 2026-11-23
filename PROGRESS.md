@@ -1,3 +1,11 @@
+## 2026-11-23 — Ocultação de IDs de consenso de prateleira
+
+- A leitura de consenso por shelf_id devolve agora o mesmo HTTP 404 para prateleiras estrangeiras e inexistentes, em vez de distinguir 403/404.
+- A avaliação de alertas por shelf_id herda o mesmo comportamento, porque consulta o endpoint/função de consenso antes de persistir alertas.
+- Testes HTTP autenticados comparam os corpos de resposta para ID estrangeiro e ID inexistente, tanto no consenso como na avaliação de alertas.
+- Commits: código 2f4470e692f6faed30accf5dcc26ab57c18c94d1; teste 5feffbabd91c9fee0d6e4f2da9236f7a54258a70.
+- Testes e CI deste SHA ainda não foram executados/confirmados.
+
 ## 2026-11-23 — Ocultação de IDs de sessões de captura e alertas
 
 - A rota POST /api/v1/capture-sessions/{session_id}/close passa a usar o helper de lock multi-tenant com hide_foreign=True.
