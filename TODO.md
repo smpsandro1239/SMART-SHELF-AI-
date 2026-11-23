@@ -7,11 +7,12 @@
 - [x] Corrigir a falha anterior do Compose smoke: as duas invocações inline do runtime-role smoke passam agora `MIGRATION_DB_USER` via `docker compose exec -e`, com regressão estática. Commits `b4995042` e `edf879a2`; o Compose smoke voltou a passar no SHA `926abcf1`.
 - [x] O passo PostgreSQL `Verify PostgreSQL legal hold and purge schedule concurrency` passou no API CI [45129975394](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45129975394), SHA `926abcf1`; inclui o novo ensaio de supervisor de outra loja com a imagem bloqueada.
 - [x] Expandir o ensaio para nove rotas HTTP (conteúdo, deteções, evidence fusion, OCR evidence/matches/runs, eventos de retenção, retry e restrict); o novo passo PostgreSQL passou no API CI [45130818413](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45130818413), SHA `d319d1a4`.
-- [x] Quality Gates passou no SHA documental `7b10c5c1`: [run 45130013285](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45130013285), incluindo compilação Python, suite API e build Web.
-- [x] Security Scans terminou com sucesso no [run 45130013260](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45130013260): Gitleaks, pip-audit, npm audit e OWASP ZAP passive baseline.
+- [x] Quality Gates passou no SHA de código/testes `d319d1a4`: [run 45130818392](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45130818392), incluindo compilação Python, suite API e build Web.
+- [x] Security Scans terminou com sucesso no [run 45130818374](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45130818374), SHA `d319d1a4`: Gitleaks, pip-audit, npm audit e OWASP ZAP passive baseline.
 - [x] API CI passou integralmente no SHA de código `926abcf1`: [run 45129975394](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45129975394), incluindo migrações PostgreSQL 16, smokes operacionais, runtime role e **1555 passed, 1 skipped**.
+- [x] API CI voltou a passar no SHA `d319d1a4`: [run 45130818413](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45130818413), **1555 passed, 1 skipped**, incluindo o smoke multi-rota de nove endpoints.
 - [x] Security Scans terminou com sucesso no SHA documental `7b10c5c1`: [run 45130013260](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45130013260), incluindo Gitleaks, pip-audit, npm audit e OWASP ZAP passive baseline.
-- [ ] Expandir a prova PostgreSQL multi-loja para os restantes fluxos de retenção e endpoints de artefactos; o smoke actual cobre um handler representativo e os testes estáticos verificam a utilização dos helpers.
+- [ ] Expandir a prova PostgreSQL aos restantes handlers de escrita/revisão que usam `_lock_authorized_shelf_image`; o smoke actual cobre nove rotas HTTP de leitura, retry, eventos de retenção e restrição. Os endpoints ADMIN-only de artefactos/legal hold/purge seguem a política de administrador global.
 - [ ] Ensaiar um volume PostgreSQL persistente preexistente e executar operações API reais com o principal runtime; nunca executar estes ensaios contra produção.
 
 Commits: `25a34b8f` (smoke PostgreSQL) e `926abcf1` (documentação/contrato do smoke).
