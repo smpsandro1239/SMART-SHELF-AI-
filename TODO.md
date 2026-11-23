@@ -1,3 +1,16 @@
+## Segurança P0 — isolamento de IDs de artefactos externos (2026-11-23; smoke PostgreSQL adicionado, CI pendente)
+
+- [x] Expandir `postgres_artifact_consumption_smoke.py` com duas imagens na mesma loja e uma segunda loja, incluindo artefactos persistidos em ambas.
+- [x] Rejeitar combinações cruzadas de `image_id`, `artifact_id` e `store_id` em cinco direcções, antes de qualquer chamada ao provider.
+- [x] Confirmar que uma integração REVOKED noutra loja, com o mesmo `external_system`, não interfere com a leitura válida da loja proprietária.
+- [x] Preservar controlo positivo: leitura same-store devolve os bytes esperados e invoca o provider uma única vez.
+- [x] Verificar em PostgreSQL que uma referência filha não pode apontar para um artefacto pai de outra imagem da mesma loja (FK composta).
+- [ ] Confirmar API CI/PostgreSQL 16, Quality Gates e Security Scans no commit de código `2bf0d075`.
+
+Limite: o smoke usa um provider determinístico e valida a fronteira transaccional/identidade; não demonstra conectividade com fornecedores externos. A API não expõe um parâmetro `integration_id` para consumo, pelo que a selecção da integração continua a ser resolvida internamente por `store_id + external_system`.
+
+---
+
 ## Segurança P0 — IDs directos de Warehouse: paletes e políticas (2026-11-23; CI validada)
 
 - [x] Reforçar o smoke PostgreSQL 16 para comparar a leitura de eventos de uma palete estrangeira com um ID inexistente (HTTP 404 e corpo idêntico).
