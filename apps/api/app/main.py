@@ -1423,16 +1423,7 @@ def restore_shelf_image(image_id: int, payload: ShelfImageRetentionRequest, requ
     actor = _request_user(db, request)
     if actor is not None and actor.role != "ADMIN":
         raise HTTPException(status_code=403, detail="Administrator role required to restore an image")
-    item = (
-        db.query(models.ShelfImage)
-        .filter(models.ShelfImage.id == image_id)
-        .with_for_update()
-        .populate_existing()
-        .first()
-    )
-    if item is None:
-        raise HTTPException(status_code=404, detail="Shelf image not found")
-    _enforce_store_scope(actor, _shelf_image_store_id(db, image_id))
+    item, _ = _lock_authorized_shelf_image(db, image_id, actor)
     if item.retention_status != "RESTRICTED":
         raise HTTPException(status_code=409, detail="Only restricted images can be restored")
     previous_purge_date = item.purge_not_before.isoformat() if item.purge_not_before else None
@@ -1476,16 +1467,7 @@ def apply_shelf_image_legal_hold(
     actor = _request_user(db, request)
     if actor is None or actor.role != "ADMIN":
         raise HTTPException(status_code=403, detail="Administrator role required to apply a legal hold")
-    item = (
-        db.query(models.ShelfImage)
-        .filter(models.ShelfImage.id == image_id)
-        .with_for_update()
-        .populate_existing()
-        .first()
-    )
-    if item is None:
-        raise HTTPException(status_code=404, detail="Shelf image not found")
-    _enforce_store_scope(actor, _shelf_image_store_id(db, image_id))
+    item, _ = _lock_authorized_shelf_image(db, image_id, actor)
     if item.retention_status == "PURGED":
         raise HTTPException(status_code=409, detail="A purged image cannot be placed under legal hold")
     if not item.legal_hold:
@@ -1513,16 +1495,7 @@ def release_shelf_image_legal_hold(
     actor = _request_user(db, request)
     if actor is None or actor.role != "ADMIN":
         raise HTTPException(status_code=403, detail="Administrator role required to release a legal hold")
-    item = (
-        db.query(models.ShelfImage)
-        .filter(models.ShelfImage.id == image_id)
-        .with_for_update()
-        .populate_existing()
-        .first()
-    )
-    if item is None:
-        raise HTTPException(status_code=404, detail="Shelf image not found")
-    _enforce_store_scope(actor, _shelf_image_store_id(db, image_id))
+    item, _ = _lock_authorized_shelf_image(db, image_id, actor)
     if not item.legal_hold:
         return item
     reason = payload.reason.strip()
@@ -1552,16 +1525,7 @@ def schedule_shelf_image_purge(
     actor = _request_user(db, request)
     if actor is None or actor.role != "ADMIN":
         raise HTTPException(status_code=403, detail="Administrator role required")
-    item = (
-        db.query(models.ShelfImage)
-        .filter(models.ShelfImage.id == image_id)
-        .with_for_update()
-        .populate_existing()
-        .first()
-    )
-    if item is None:
-        raise HTTPException(status_code=404, detail="Shelf image not found")
-    _enforce_store_scope(actor, _shelf_image_store_id(db, image_id))
+    item, _ = _lock_authorized_shelf_image(db, image_id, actor)
     if item.retention_status != "RESTRICTED":
         raise HTTPException(status_code=409, detail="Only restricted images can be scheduled for purge")
     if item.legal_hold:
@@ -1605,16 +1569,7 @@ def cancel_shelf_image_purge_schedule(
     actor = _request_user(db, request)
     if actor is None or actor.role != "ADMIN":
         raise HTTPException(status_code=403, detail="Administrator role required")
-    item = (
-        db.query(models.ShelfImage)
-        .filter(models.ShelfImage.id == image_id)
-        .with_for_update()
-        .populate_existing()
-        .first()
-    )
-    if item is None:
-        raise HTTPException(status_code=404, detail="Shelf image not found")
-    _enforce_store_scope(actor, _shelf_image_store_id(db, image_id))
+    item, _ = _lock_authorized_shelf_image(db, image_id, actor)
     if item.retention_status != "RESTRICTED":
         raise HTTPException(status_code=409, detail="Only restricted images can have a purge schedule cancelled")
     if item.purge_not_before is None and item.retention_policy_version is None:
@@ -2554,6 +2509,10 @@ def get_shelf_image_purge_eligibility(
     if actor is None or actor.role != "ADMIN":
         raise HTTPException(status_code=403, detail="Administrator role required")
 
+    store_id = _shelf_image_store_id(db, image_id)
+    if store_id is None:
+        raise HTTPException(status_code=409, detail="Shelf image has no valid store lineage")
+    _enforce_store_scope(actor, store_id)
     item = (
         db.query(models.ShelfImage)
         .filter(models.ShelfImage.id == image_id)
@@ -2563,10 +2522,10 @@ def get_shelf_image_purge_eligibility(
     )
     if item is None:
         raise HTTPException(status_code=404, detail="Shelf image not found")
-    store_id = _shelf_image_store_id(db, image_id)
-    if store_id is None:
+    locked_store_id = _shelf_image_store_id(db, image_id)
+    if locked_store_id is None:
         raise HTTPException(status_code=409, detail="Shelf image has no valid store lineage")
-    _enforce_store_scope(actor, store_id)
+    _enforce_store_scope(actor, locked_store_id)
 
     # Match integration registration's parent-row lock to prevent phantom
     # required integrations during the retention coverage scan.
