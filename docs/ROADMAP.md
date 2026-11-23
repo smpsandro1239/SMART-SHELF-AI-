@@ -1,3 +1,10 @@
+## 2026-11-23 — Dashboard operacional: métricas accionáveis
+
+- O resumo operacional inclui distribuição de tarefas por prioridade, tarefas urgentes activas, tarefas activas sem atribuição e taxa de conclusão.
+- A métrica de prateleiras com necessidade de atenção passou a contar IDs de prateleira distintos, não o número de observações. `attention_observations` mantém a contagem de evidências.
+- O cálculo respeita a visibilidade por papel e loja; EMPLOYEE só agrega tarefas atribuídas ao próprio utilizador.
+- Testes unitários dedicados cobrem os três papéis e dados duplicados. CI do novo HEAD pendente.
+
 ## 2026-11-23 — Paridade de respostas BOLA em deteções e exemplares
 
 - Reforçado o smoke PostgreSQL pré-lock para comparar corpo JSON e status entre IDs estrangeiros reais e IDs inexistentes em três operações direct-ID: revisão de deteção, histórico de revisão e revisão de exemplar.
