@@ -709,7 +709,12 @@ def test_task_event_and_transition_endpoints_reject_cross_store_access(monkeypat
                 f"/api/v1/tasks/{foreign_task.json()['id']}/status",
                 json={"status": "CANCELLED", "exception_reason": "Tentativa cross-store"},
             )
-            assert foreign_transition.status_code == 403
+            missing_transition = client.patch(
+                "/api/v1/tasks/2147483000/status",
+                json={"status": "CANCELLED", "exception_reason": "Tentativa cross-store"},
+            )
+            assert foreign_transition.status_code == missing_transition.status_code == 404
+            assert foreign_transition.json() == missing_transition.json()
 
             db.expire_all()
             after_foreign_state = db.query(models.ReplenishmentTask).filter_by(
