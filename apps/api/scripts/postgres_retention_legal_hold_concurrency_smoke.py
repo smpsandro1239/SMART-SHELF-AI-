@@ -122,6 +122,12 @@ def run_foreign_store_prelock_probe(image_id: int, token: str, suffix: str) -> N
              {"reason": "Cross-store pre-lock authorization probe"}),
         ]
         responses: dict[str, int] = {}
+        expected_responses = {
+            f"{method} {path}": (
+                404 if path.endswith("/retention/events") else 403
+            )
+            for method, path, _payload in requests
+        }
         try:
             with TestClient(app) as client:
                 for method, path, payload in requests:
@@ -134,6 +140,7 @@ def run_foreign_store_prelock_probe(image_id: int, token: str, suffix: str) -> N
                     if response.status_code != expected_status:
                         break
             result["responses"] = responses
+            result["expected_responses"] = expected_responses
         finally:
             app.dependency_overrides.pop(main_module.get_db, None)
             request_finished.set()
@@ -153,12 +160,7 @@ def run_foreign_store_prelock_probe(image_id: int, token: str, suffix: str) -> N
                         "foreign-store request waited for the source-image lock; tenant authorization must happen first"
                     ) from exc
                 responses = result.get("responses", {})
-                expected_responses = {
-                    f"{method} {path}": (
-                        404 if path.endswith("/retention/events") else 403
-                    )
-                    for method, path, _payload in requests
-                }
+                expected_responses = result.get("expected_responses", {})
                 assert responses == expected_responses, result
                 assert request_finished.is_set(), "foreign-store requests did not finish before lock release"
             finally:
