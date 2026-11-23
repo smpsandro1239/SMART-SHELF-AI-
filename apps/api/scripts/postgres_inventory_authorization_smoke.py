@@ -87,6 +87,14 @@ def main() -> None:
             store_id=None,
             is_active=True,
         )
+        employee = models.User(
+            email=f"pg-employee-{suffix}@example.test",
+            full_name="PostgreSQL authorization employee",
+            password_hash="smoke-test-only",
+            role="EMPLOYEE",
+            store_id=store_a.id,
+            is_active=True,
+        )
         own_location = models.WarehouseLocation(
             store_id=store_a.id,
             code=f"PG-BIN-A-{suffix}",
@@ -107,7 +115,7 @@ def main() -> None:
             max_volume_cm3=100000,
             max_weight_kg=100,
         )
-        db.add_all([supervisor, admin, own_location, foreign_location])
+        db.add_all([supervisor, admin, employee, own_location, foreign_location])
         db.flush()
 
         # Seed a completed foreign task and its source stock snapshot for
@@ -229,6 +237,7 @@ def main() -> None:
         product_id = product.id
         supervisor_id = supervisor.id
         admin_id = admin.id
+        employee_id = employee.id
         own_location_id = own_location.id
         foreign_location_id = foreign_location.id
         own_shelf_id = own_shelf.id
@@ -245,6 +254,7 @@ def main() -> None:
     )
     supervisor_headers = _bearer(supervisor_id, "SUPERVISOR")
     admin_headers = _bearer(admin_id, "ADMIN")
+    employee_headers = _bearer(employee_id, "EMPLOYEE")
 
     try:
         with TestClient(app) as client:
@@ -398,6 +408,64 @@ def main() -> None:
                 assert response.json() == [], (
                     f"SUPERVISOR must not receive foreign rows from {resource}: "
                     f"{response.json()}"
+                )
+
+            # ADMIN is the cross-store control: prove the foreign fixtures are
+            # real and visible to the privileged actor, not merely absent data.
+            admin_foreign_observations = client.get(
+                "/api/v1/observations",
+                params={"shelf_id": foreign_shelf_id},
+                headers=admin_headers,
+            )
+            admin_foreign_sessions = client.get(
+                "/api/v1/capture-sessions",
+                params={"shelf_id": foreign_shelf_id},
+                headers=admin_headers,
+            )
+            admin_foreign_alerts = client.get(
+                "/api/v1/observation-alerts",
+                params={"shelf_id": foreign_shelf_id},
+                headers=admin_headers,
+            )
+            assert admin_foreign_observations.status_code == 200
+            assert foreign_observation_id in {
+                item["id"] for item in admin_foreign_observations.json()
+            }
+            assert admin_foreign_sessions.status_code == 200
+            assert foreign_capture_session_id in {
+                item["id"] for item in admin_foreign_sessions.json()
+            }
+            assert admin_foreign_alerts.status_code == 200
+            assert foreign_alert_id in {
+                item["id"] for item in admin_foreign_alerts.json()
+            }
+
+            # EMPLOYEE is denied by the explicit RBAC policy even for resources
+            # belonging to the employee's own store.
+            employee_denied_reads = {
+                "observations": client.get(
+                    "/api/v1/observations",
+                    params={"shelf_id": own_shelf_id},
+                    headers=employee_headers,
+                ),
+                "capture sessions": client.get(
+                    "/api/v1/capture-sessions",
+                    params={"shelf_id": own_shelf_id},
+                    headers=employee_headers,
+                ),
+                "observation alerts": client.get(
+                    "/api/v1/observation-alerts",
+                    headers=employee_headers,
+                ),
+                "planograms": client.get(
+                    f"/api/v1/shelves/{own_shelf_id}/planograms",
+                    headers=employee_headers,
+                ),
+            }
+            for resource, response in employee_denied_reads.items():
+                assert response.status_code == 403, (
+                    f"EMPLOYEE must not read {resource}; expected HTTP 403, "
+                    f"received {response.status_code}: {response.text}"
                 )
 
             nested_shelf_reads = {
