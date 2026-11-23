@@ -1884,3 +1884,8 @@ Commit de código: 26a97f7136eace2bc0b4f428731db3990163aa93. CI/PostgreSQL 16 de
 ## Evidência PostgreSQL — isolamento de prateleiras e RBAC (2026-11-23)
 
 O API CI [45177953932](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45177953932), no commit de código `26a97f7136eace2bc0b4f428731db3990163aa93`, executou com sucesso o passo **Verify PostgreSQL inventory and warehouse cross-store authorization**. O smoke alargado com observações, sessões, alertas, IDs de prateleira e controlos ADMIN/SUPERVISOR/EMPLOYEE passou em PostgreSQL 16. A suite pytest completa ainda estava em execução no momento deste registo. Docker Compose Smoke [45177953980](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45177953980) passou; Quality Gates e Security Scans foram cancelados após a actualização subsequente da documentação.
+
+
+## 2026-11-23 — Ocultação de IDs directos de ciclo de vida de paletes
+
+A rota de escrita de eventos de ciclo de vida usa autorização por loja antes do lock e revalidação após o lock. Para não transformar IDs de paletes em oráculos de existência entre lojas, paletes estrangeiras e IDs inexistentes devolvem HTTP 404. A regressão está coberta por teste HTTP autenticado e aguarda validação CI no commit `ecc652e5`. A cobertura não substitui a matriz BOLA/IDOR completa dos restantes recursos e IDs aninhados.
