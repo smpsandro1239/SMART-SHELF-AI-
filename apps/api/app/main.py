@@ -5202,10 +5202,14 @@ def create_warehouse_placement(
     db: Session = Depends(get_db),
 ):
     actor = _request_user(db, request)
-    location = db.get(models.WarehouseLocation, payload.location_id)
-    if location is None:
-        raise HTTPException(status_code=404, detail="Warehouse location not found")
-    _enforce_store_scope(actor, location.store_id)
+    location = _lock_store_scoped_record(
+        db,
+        models.WarehouseLocation,
+        payload.location_id,
+        actor,
+        "Warehouse location not found",
+        hide_foreign=True,
+    )
     if not location.is_active:
         raise HTTPException(status_code=409, detail="Cannot place stock in an inactive warehouse location")
     product = db.get(models.Product, payload.product_id)
