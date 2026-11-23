@@ -521,3 +521,11 @@ Limitação de segurança resolvida em camadas: owner de migrations separado do 
 - Acrescentados controlos ADMIN que leem as fixtures reais da loja B, demonstrando que as respostas vazias do SUPERVISOR são efeito do isolamento de tenant.
 - Commit: 26a97f7136eace2bc0b4f428731db3990163aa93.
 - A validação CI/PostgreSQL 16 deste commit ainda está pendente.
+
+
+## 2026-11-23 — Validação PostgreSQL do smoke BOLA/RBAC
+
+- API CI [45177953932](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45177953932), commit de código `26a97f7136eace2bc0b4f428731db3990163aa93`: o passo **Verify PostgreSQL inventory and warehouse cross-store authorization** terminou com sucesso em PostgreSQL 16. Isto valida os testes adicionados de observações, sessões, alertas, planogramas e papéis ADMIN/SUPERVISOR/EMPLOYEE.
+- A suite pytest completa continuava em execução; não declarar API CI integralmente verde.
+- Docker Compose Smoke [45177953980](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45177953980) passou.
+- Quality Gates e Security Scans foram cancelados após o push documental posterior; devem ser repetidos num commit posterior.

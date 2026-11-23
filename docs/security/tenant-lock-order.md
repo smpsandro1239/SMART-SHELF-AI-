@@ -77,3 +77,8 @@ O smoke multi-loja também comprova:
 - EMPLOYEE recebe 403 nos endpoints de observações, sessões de captura, alertas e planogramas, mesmo quando consulta recursos da loja A.
 
 Commit `26a97f7136eace2bc0b4f428731db3990163aa93`; validação PostgreSQL 16/CI pendente. Esta amostra não é a matriz completa de todos os endpoints.
+
+
+## Evidência de execução PostgreSQL — 2026-11-23
+
+O passo **Verify PostgreSQL inventory and warehouse cross-store authorization** passou no API CI [45177953932](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45177953932), em PostgreSQL 16, no commit de código `26a97f7136eace2bc0b4f428731db3990163aa93`. A evidência cobre as novas fixtures e tentativas BOLA/RBAC documentadas acima. A suite pytest completa ainda estava em execução, pelo que este resultado não equivale à conclusão integral do API CI.

@@ -1478,7 +1478,8 @@ A implementação de produção já verificava lease_lost nos caminhos de sucess
 - [x] Testar que consenso, listagem de planogramas, planograma activo e eventos de alertas estrangeiros não são acessíveis por IDs aninhados.
 - [x] Testar que filtros por shelf_id estrangeiro não devolvem observações, sessões ou alertas da outra loja.
 - [x] Manter controlos positivos same-store e verificar que tentativas negadas não criam observações nem sessões adicionais.
-- [ ] Executar e confirmar API CI/PostgreSQL 16 no commit 99a69a7415bc552b0cf104861d93881dac6259e1.
+- [x] Smoke de autorização PostgreSQL 16 passou no API CI [45177953932](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45177953932), passo 31, no commit de código 26a97f7136eace2bc0b4f428731db3990163aa93.
+- [ ] Aguardar conclusão da suite pytest completa no API CI 45177953932.
 - [ ] Alargar a matriz autenticada a ADMIN, SUPERVISOR e EMPLOYEE por endpoint, incluindo relações indirectas de imagens, planogramas, deteções e tarefas.
 
 ## Edge AI — validação da ronda anterior
@@ -1494,5 +1495,6 @@ A implementação de produção já verificava lease_lost nos caminhos de sucess
 - [x] Adicionar actor EMPLOYEE autenticado à fixture PostgreSQL multi-loja.
 - [x] Confirmar que ADMIN consegue consultar os IDs reais de observações, sessões e alertas da loja estrangeira.
 - [x] Confirmar que EMPLOYEE recebe HTTP 403 em observações, sessões, alertas e planogramas, mesmo para a própria loja.
-- [ ] Executar API CI/PostgreSQL 16 e confirmar o commit 26a97f7136eace2bc0b4f428731db3990163aa93.
+- [x] Smoke PostgreSQL 16 de autorização passou no API CI 45177953932, passo 31, no commit 26a97f7136eace2bc0b4f428731db3990163aa93.
+- [ ] Aguardar conclusão da suite pytest completa do API CI.
 - [ ] Continuar matriz endpoint × papel × tenant para rotas restantes e relações indirectas.

@@ -1877,3 +1877,8 @@ A ronda anterior do worker Edge ficou parcialmente validada: API CI e Docker Com
 A mesma fixture PostgreSQL agora inclui um utilizador EMPLOYEE da loja A. O smoke verifica que os endpoints de observações, sessões de captura, alertas e planogramas recusam o papel EMPLOYEE (HTTP 403), mesmo quando os recursos pertencem à própria loja. Em paralelo, o ADMIN consulta as observações, sessões e alertas da loja B e tem de receber os IDs exactos das fixtures estrangeiras. Isto prova que as respostas vazias do SUPERVISOR decorrem do isolamento de tenant, e não da ausência de dados.
 
 Commit de código: 26a97f7136eace2bc0b4f428731db3990163aa93. CI/PostgreSQL 16 deste SHA ainda pendentes.
+
+
+## Evidência PostgreSQL — isolamento de prateleiras e RBAC (2026-11-23)
+
+O API CI [45177953932](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45177953932), no commit de código `26a97f7136eace2bc0b4f428731db3990163aa93`, executou com sucesso o passo **Verify PostgreSQL inventory and warehouse cross-store authorization**. O smoke alargado com observações, sessões, alertas, IDs de prateleira e controlos ADMIN/SUPERVISOR/EMPLOYEE passou em PostgreSQL 16. A suite pytest completa ainda estava em execução no momento deste registo. Docker Compose Smoke [45177953980](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45177953980) passou; Quality Gates e Security Scans foram cancelados após a actualização subsequente da documentação.
