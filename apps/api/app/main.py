@@ -669,24 +669,15 @@ def _require_planogram_actor(db: Session, request: Request):
 
 
 def _planogram_shelf_scope(db: Session, shelf_id: int, actor: models.User) -> models.Shelf:
-    store_id = (
-        db.query(models.Zone.store_id)
-        .join(models.Shelf, models.Shelf.zone_id == models.Zone.id)
-        .filter(models.Shelf.id == shelf_id)
-        .scalar()
-    )
-    if store_id is None:
-        raise HTTPException(status_code=404, detail="Shelf not found")
-    _enforce_store_scope(actor, store_id)
-    shelf = (
+    """Resolve a planogram shelf inside the actor's tenant without exposing foreign IDs."""
+    query = (
         db.query(models.Shelf)
         .join(models.Zone, models.Shelf.zone_id == models.Zone.id)
-        .filter(
-            models.Shelf.id == shelf_id,
-            models.Zone.store_id == store_id,
-        )
-        .first()
+        .filter(models.Shelf.id == shelf_id)
     )
+    if actor.role != "ADMIN":
+        query = query.filter(models.Zone.store_id == actor.store_id)
+    shelf = query.first()
     if shelf is None:
         raise HTTPException(status_code=404, detail="Shelf not found")
     return shelf
