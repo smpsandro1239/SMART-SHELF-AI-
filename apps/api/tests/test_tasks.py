@@ -693,7 +693,9 @@ def test_task_event_and_transition_endpoints_reject_cross_store_access(monkeypat
             assert len(own_events.json()) == 1
 
             foreign_events = client.get(f"/api/v1/tasks/{foreign_task.json()['id']}/events")
-            assert foreign_events.status_code == 403
+            missing_events = client.get("/api/v1/tasks/2147483000/events")
+            assert foreign_events.status_code == missing_events.status_code == 404
+            assert foreign_events.json() == missing_events.json()
 
             foreign_task_id = foreign_task.json()["id"]
             before_foreign_state = db.query(models.ReplenishmentTask).filter_by(
