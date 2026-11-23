@@ -377,6 +377,17 @@ def ingest_edge_event(
             raise EdgeDeviceReplayError("event sequence is older than the accepted cursor")
         if disposition.value == "GAP":
             raise EdgeDeviceReplayError("event sequence gap detected; missing events must be delivered first")
+        device.last_seen_at = current
+        if event.event_type == "DEVICE_HEARTBEAT":
+            if "firmware_version" in event.payload:
+                device.firmware_version = event.payload["firmware_version"]
+            if "network_status" in event.payload:
+                device.last_network_status = event.payload["network_status"]
+            if "battery_pct" in event.payload:
+                device.battery_pct = float(event.payload["battery_pct"])
+            if "storage_free_bytes" in event.payload:
+                device.storage_free_bytes = event.payload["storage_free_bytes"]
+
         db.add(models.EdgeDeviceEventInbox(
             device_id=device.device_id, event_id=event.event_id,
             sequence_number=event.sequence_number, event_type=event.event_type,
