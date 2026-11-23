@@ -1,3 +1,13 @@
+## 2026-11-23 — Matriz PostgreSQL de leituras cross-store (código publicado; CI pendente)
+
+- O smoke de autorização de inventário passou a testar 23 rotas GET com `store_id` explícito, cobrindo vendas, tráfego, forecasting, reposição, decisões e warehouse.
+- Um SUPERVISOR da loja A tenta consultar a loja B; cada resposta esperada é HTTP 403 antes da leitura dos registos. As negações de escrita e verificações de não persistência existentes foram preservadas.
+- Commit: `40f9456a`.
+- API CI [45131503709](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45131503709), Docker Compose [45131503757](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45131503757), Quality Gates [45131503760](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45131503760) e Security Scans [45131503689](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45131503689) estão em execução/pendentes. Não marcar ainda como validado.
+- A cobertura ainda não constitui a matriz completa endpoint × perfil × loja; permanecem IDs aninhados, fluxos indirectos, testes positivos same-store e volume persistente.
+
+---
+
 ## 2026-11-23 — Nove rotas HTTP cobertas pelo smoke PostgreSQL pré-lock
 
 - Expandido `postgres_retention_legal_hold_concurrency_smoke.py`: supervisor externo tenta aceder a nove rotas (conteúdo, deteções, evidence fusion, OCR evidence/matches/runs, eventos de retenção, retry e restrict) enquanto outra transacção mantém a linha da imagem bloqueada.
