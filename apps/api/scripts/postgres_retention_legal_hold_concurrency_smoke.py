@@ -1,8 +1,9 @@
-"""Prove PostgreSQL serializes retention, legal-hold and purge HTTP transitions.
+"""Prove PostgreSQL tenant pre-lock authorization and retention concurrency.
 
-The smoke exercises both commit orders for legal hold versus purge scheduling,
-and restore versus purge scheduling. Each competing HTTP request must wait on
-the source-image row lock and then revalidate the committed state.
+The smoke first proves that a supervisor from another store is rejected while
+the source-image row is locked, without waiting for that lock. It then exercises
+both commit orders for legal hold versus purge scheduling and restore versus
+purge scheduling; authorized requests must wait and revalidate committed state.
 """
 from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta, timezone
@@ -414,9 +415,10 @@ def main() -> None:
         )
 
     print(
-        "PostgreSQL retention concurrency smoke passed: legal hold and restore "
-        "both serialize correctly against purge scheduling; conflicting schedules "
-        "are rejected and restore cancels a previously committed schedule with "
+        "PostgreSQL retention security/concurrency smoke passed: foreign-store "
+        "supervisor was rejected before waiting on the source-image lock; legal "
+        "hold and restore serialize correctly against purge scheduling; conflicting "
+        "schedules are rejected and restore cancels a committed schedule with "
         "append-only audit history."
     )
 
