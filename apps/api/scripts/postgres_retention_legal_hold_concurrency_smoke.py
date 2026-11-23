@@ -108,15 +108,31 @@ def run_foreign_store_prelock_probe(image_id: int, token: str, suffix: str) -> N
 
     def invoke_endpoint() -> None:
         app.dependency_overrides[main_module.get_db] = scoped_get_db
+        headers = {"Authorization": f"Bearer {token}"}
+        requests = [
+            ("GET", f"/api/v1/shelf-images/{image_id}/content", None),
+            ("GET", f"/api/v1/shelf-images/{image_id}/detections", None),
+            ("GET", f"/api/v1/shelf-images/{image_id}/evidence-fusion", None),
+            ("GET", f"/api/v1/shelf-images/{image_id}/ocr-evidence", None),
+            ("GET", f"/api/v1/shelf-images/{image_id}/ocr-matches", None),
+            ("GET", f"/api/v1/shelf-images/{image_id}/ocr-runs", None),
+            ("GET", f"/api/v1/shelf-images/{image_id}/retention/events", None),
+            ("POST", f"/api/v1/shelf-images/{image_id}/retry", None),
+            ("POST", f"/api/v1/shelf-images/{image_id}/retention/restrict",
+             {"reason": "Cross-store pre-lock authorization probe"}),
+        ]
+        responses: dict[str, int] = {}
         try:
             with TestClient(app) as client:
-                response = client.post(
-                    f"/api/v1/shelf-images/{image_id}/retention/restrict",
-                    json={"reason": "Cross-store pre-lock authorization probe"},
-                    headers={"Authorization": f"Bearer {token}"},
-                )
-            result["status_code"] = response.status_code
-            result["body"] = response.json()
+                for method, path, payload in requests:
+                    if payload is None:
+                        response = client.request(method, path, headers=headers)
+                    else:
+                        response = client.request(method, path, json=payload, headers=headers)
+                    responses[f"{method} {path}"] = response.status_code
+                    if response.status_code != 403:
+                        break
+            result["responses"] = responses
         finally:
             app.dependency_overrides.pop(main_module.get_db, None)
             request_finished.set()
@@ -130,13 +146,15 @@ def run_foreign_store_prelock_probe(image_id: int, token: str, suffix: str) -> N
                 assert image_locked.wait(timeout=10), "pre-lock probe did not acquire source image"
                 request_future = executor.submit(invoke_endpoint)
                 try:
-                    request_future.result(timeout=3)
+                    request_future.result(timeout=8)
                 except TimeoutError as exc:
                     raise AssertionError(
                         "foreign-store request waited for the source-image lock; tenant authorization must happen first"
                     ) from exc
-                assert result.get("status_code") == 403, result
-                assert request_finished.is_set(), "foreign-store request did not finish before lock release"
+                responses = result.get("responses", {})
+                assert len(responses) == 9, result
+                assert set(responses.values()) == {403}, result
+                assert request_finished.is_set(), "foreign-store requests did not finish before lock release"
             finally:
                 release_lock.set()
             holder_future.result(timeout=10)
@@ -416,7 +434,8 @@ def main() -> None:
 
     print(
         "PostgreSQL retention security/concurrency smoke passed: foreign-store "
-        "supervisor was rejected before waiting on the source-image lock; legal "
+        "supervisor was rejected before waiting on the source-image lock across "
+        "nine image read/retry/retention endpoints; legal "
         "hold and restore serialize correctly against purge scheduling; conflicting "
         "schedules are rejected and restore cancels a committed schedule with "
         "append-only audit history."
