@@ -6771,7 +6771,12 @@ def reconcile_completed_replenishment(
         raise HTTPException(status_code=403, detail="Supervisor approval is required")
 
     task = _lock_store_scoped_record(
-        db, models.ReplenishmentTask, task_id, actor, "Task not found"
+        db,
+        models.ReplenishmentTask,
+        task_id,
+        actor,
+        "Task not found",
+        hide_foreign=True,
     )
     product = db.query(models.Product).filter(models.Product.id == task.product_id).with_for_update().first()
     if product is None:
@@ -7931,7 +7936,12 @@ def update_replenishment_task_status(
 ):
     actor = _request_user(db, request)
     task = _lock_store_scoped_record(
-        db, models.ReplenishmentTask, task_id, actor, "Task not found"
+        db,
+        models.ReplenishmentTask,
+        task_id,
+        actor,
+        "Task not found",
+        hide_foreign=True,
     )
     if actor is not None and actor.role == "EMPLOYEE":
         if task.assigned_user_id != actor.id:
