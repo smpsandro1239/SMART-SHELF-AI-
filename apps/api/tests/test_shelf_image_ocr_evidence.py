@@ -1237,8 +1237,15 @@ def test_supervisor_cannot_upload_image_to_foreign_store_shelf(monkeypatch, tmp_
             data={"shelf_id": str(foreign_shelf_id)},
             files={"image": ("foreign.png", image_bytes.getvalue(), "image/png")},
         )
+        image_bytes.seek(0)
+        missing = client.post(
+            "/api/v1/shelf-images",
+            data={"shelf_id": "2147483000"},
+            files={"image": ("missing.png", image_bytes.getvalue(), "image/png")},
+        )
 
-    assert response.status_code == 403
+    assert response.status_code == missing.status_code == 404
+    assert response.json() == missing.json()
     assert not list(tmp_path.rglob("*"))
     with TestingSession() as db:
         assert db.query(models.ShelfImage).filter(
