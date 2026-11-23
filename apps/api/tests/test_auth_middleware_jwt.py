@@ -909,6 +909,8 @@ def test_supervisor_observations_are_scoped_to_own_store(auth_client):
     assert foreign_create.status_code == 404
     assert missing_create.status_code == 404
     assert foreign_create.json() == missing_create.json()
+    with main_module.SessionLocal() as db:
+        assert db.query(models.Observation).filter_by(shelf_id=ids["shelf_b"]).count() == 1
 
 
 def test_supervisor_capture_sessions_are_scoped_to_own_store(auth_client):
@@ -969,6 +971,7 @@ def test_supervisor_capture_sessions_are_scoped_to_own_store(auth_client):
     with main_module.SessionLocal() as db:
         foreign_session = db.get(models.CaptureSession, ids["capture_session_b"])
         assert foreign_session.ended_at is None
+        assert db.query(models.CaptureSession).filter_by(shelf_id=ids["shelf_b"]).count() == 1
     assert admin_listed.status_code == 200
     assert {item["store_id"] for item in admin_listed.json()} == {
         store_ids["a"], store_ids["b"]
