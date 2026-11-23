@@ -1,3 +1,7 @@
+## Segurança P0 — IDs de localizações de armazém (2026-11-23; CI pendente)
+
+A criação de colocações valida agora a localização através do helper multi-tenant com autorização antes do lock e revalidação depois do lock. IDs estrangeiros e inexistentes produzem o mesmo HTTP 404. Foi adicionada regressão HTTP autenticada e verificação de não persistência. Commits: a77c679 (código) e a4d41af (teste). A validação CI/PostgreSQL 16 ainda está pendente; a matriz de IDs de prateleira e relações indirectas permanece aberta.
+
 ## Segurança P0 — IDs directos de deteção e exemplar: autorização antes de locks (2026-11-23; CI pendente)
 
 - A revisão humana de deteções, o histórico por detection_id e a revisão de exemplares foram auditados quanto à ordem imagem → produto → exemplar e à validação de tenant antes dos locks.
