@@ -634,6 +634,12 @@ def main() -> None:
                     if resource in {
                         "task creation with foreign shelf",
                         "warehouse placement creation",
+                        "foreign task lifecycle update",
+                        "foreign task audit events",
+                        "foreign task inventory reconciliation",
+                        "observation creation with foreign shelf",
+                        "capture session creation with foreign shelf",
+                        "foreign observation alert events",
                     }
                     else 403
                 )
