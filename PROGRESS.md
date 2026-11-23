@@ -2,9 +2,9 @@
 
 - O smoke PostgreSQL `Verify PostgreSQL legal hold and purge schedule concurrency` concluiu com sucesso no API CI [45129975394](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45129975394), commit de código `926abcf1`. O teste executou o pedido de supervisor estrangeiro enquanto a imagem estava bloqueada e confirmou rejeição HTTP 403 sem aguardar pelo lock.
 - Docker Compose demo smoke passou em [45129975482](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45129975482), no mesmo SHA de código.
+- A falha anterior do Compose smoke foi causada pela ausência de `MIGRATION_DB_USER` nas invocações inline do runtime-role smoke. Corrigido em `b4995042`, com regressão estática em `edf879a2`; a execução Compose acima passou no SHA `926abcf1`.
 - Quality Gates passou em [45130013285](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45130013285), SHA documental `7b10c5c1`: compilação Python, suite API e build Web concluídos com sucesso.
-- Security Scans [45130013260](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45130013260): Gitleaks, pip-audit, npm audit e baseline ZAP passaram; o workflow ainda estava em execução na última consulta.
-- API CI terminou com sucesso em [45129975394](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45129975394), SHA de código `926abcf1`: migrações PostgreSQL 16, todos os smokes, provisionamento/verificação da role runtime e suite API passaram.
+- API CI terminou com sucesso em [45129975394](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45129975394), SHA de código `926abcf1`: migrações PostgreSQL 16, todos os smokes, provisionamento/verificação da role runtime e **1555 testes aprovados, 1 ignorado**.
 - Security Scans terminou com sucesso em [45130013260](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45130013260), SHA documental `7b10c5c1`: Gitleaks, pip-audit, npm audit e OWASP ZAP passive baseline passaram.
 - Quality Gates [45130013285](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45130013285) e Docker Compose [45129975482](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45129975482) também passaram.
 - **Ainda pendente:** integração multi-loja HTTP/PG dos restantes handlers, ensaio de volume persistente preexistente e operações reais com principal runtime.
