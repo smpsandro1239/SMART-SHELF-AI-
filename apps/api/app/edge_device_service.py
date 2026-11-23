@@ -290,7 +290,9 @@ def authenticate_edge_device_request(
         credential_id=credential_id, method=method, request_target=request_target,
         timestamp=timestamp, nonce=nonce, body=body,
     )
-    expected = hmac.new(bytes.fromhex(credential.secret_sha256), canonical, hashlib.sha256).hexdigest()
+    # Derive the MAC key from the presented secret, never from the persisted verifier.
+    signing_key = hashlib.sha256(supplied_secret.encode("ascii")).digest()
+    expected = hmac.new(signing_key, canonical, hashlib.sha256).hexdigest()
     if not hmac.compare_digest(expected, signature):
         raise EdgeDeviceAuthenticationError("invalid signed request")
     try:
