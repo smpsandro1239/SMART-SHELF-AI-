@@ -5,6 +5,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from fastapi import HTTPException
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -1386,3 +1387,44 @@ def test_artifact_reference_and_disposition_histories_support_stable_pagination(
     assert [row.id for row in reference_clamped] == [references[0].id]
     assert [row.sequence_number for row in event_first] == [1]
     assert [row.sequence_number for row in event_second] == [2]
+
+
+
+def test_retention_event_read_hides_foreign_and_missing_image_ids(db_session, tmp_path, monkeypatch):
+    image_id, _ = build_restricted_image(
+        db_session, tmp_path, with_detection=False
+    )
+    other_store = models.Store(
+        code="PURGE-FOREIGN-ACTOR",
+        name="Actor store",
+    )
+    db_session.add(other_store)
+    db_session.flush()
+    actor = models.User(
+        email="retention-scope-supervisor@example.test",
+        full_name="Supervisor de outra loja",
+        password_hash="test-only",
+        role="SUPERVISOR",
+        store_id=other_store.id,
+        is_active=True,
+    )
+    db_session.add(actor)
+    db_session.commit()
+    monkeypatch.setattr(
+        main_module,
+        "_request_user",
+        lambda _db, _request: actor,
+    )
+    request = SimpleNamespace(state=SimpleNamespace(user_id=actor.id))
+
+    with pytest.raises(HTTPException) as foreign:
+        main_module.list_shelf_image_retention_events(
+            image_id, request, 100, 0, db_session
+        )
+    with pytest.raises(HTTPException) as missing:
+        main_module.list_shelf_image_retention_events(
+            2147483000, request, 100, 0, db_session
+        )
+
+    assert foreign.value.status_code == missing.value.status_code == 404
+    assert foreign.value.detail == missing.value.detail == "Shelf image not found"
