@@ -1,3 +1,11 @@
+## 2026-11-23 — Segurança de planogramas: ocultação de IDs cross-store
+
+- Implementado: a resolução da prateleira aplica o tenant na query para SUPERVISOR; ADMIN mantém visibilidade global.
+- Contrato: IDs estrangeiros/inexistentes devolvem HTTP 404 `Shelf not found`.
+- Teste: regressão em `apps/api/tests/test_capture_sessions.py`.
+- Estado: código e teste publicados; execução de CI e smoke PostgreSQL no HEAD final pendentes.
+
+
 ## Segurança P0 — histórico de eventos de paletes sem oráculo BOLA (2026-11-23; CI pendente)
 
 O endpoint GET /api/v1/warehouse/pallets/{pallet_id}/events resolve primeiro a palete com id e store_id, só depois consulta os eventos. O smoke PostgreSQL multi-loja foi reforçado para comparar uma palete estrangeira real com um ID inexistente, exigindo HTTP 404 e corpo idêntico. O controlo positivo same-store continua a exigir HTTP 200. Falta validar o novo smoke no API CI/PostgreSQL 16 e nos restantes workflows.
