@@ -1391,3 +1391,7 @@ O contador de tarefas urgentes foi alinhado com a taxonomia de prioridades: apen
 O dashboard inclui agora a consulta do histórico de movimentos, com filtros, métricas e detalhe da linhagem dos snapshots. O painel é read-only e visível a ADMIN/SUPERVISOR. A política RBAC explícita inclui a rota de movimentos. A execução TypeScript/build passou; a suite API revelou um KPI de urgências que incluía HIGH indevidamente. A query foi corrigida para contar apenas URGENT, ficando a validação final do novo SHA pendente.
 
 Próxima entrega: divergências auditáveis entre observação visual e stock de referência, sem ajustes contabilísticos automáticos; em paralelo, definir a semântica dos diferentes estados/localizações do stock com base nos modelos existentes.
+
+
+## Inventário — reconciliação operacional integrada
+O dashboard passa a apresentar, em separado, o objetivo de exposição, a última quantidade observada na prateleira e o snapshot autoritativo da retaguarda (on-hand, reservado e disponível). A diferença é uma métrica de exposição e não uma divergência contabilística. A interface expõe idade/fonte dos dados e ausência de evidência; não altera inventário. Próxima evolução: workflow de divergências formais com revisão humana, estados e trilho de auditoria, sem reconciliação automática de quantidades contabilísticas.
