@@ -314,6 +314,7 @@ def _lock_authorized_shelf_image(
     missing_status_code: int = 404,
     missing_detail: str = "Shelf image not found",
     hide_foreign: bool = False,
+    hidden_foreign_detail: str = "Shelf image not found",
 ) -> tuple[models.ShelfImage, int]:
     """Check tenant scope before locking a source image, then recheck after the lock."""
     initial_store_id = _shelf_image_store_id(db, image_id)
@@ -325,7 +326,7 @@ def _lock_authorized_shelf_image(
         and actor.role != "ADMIN"
         and actor.store_id != initial_store_id
     ):
-        raise HTTPException(status_code=404, detail="Shelf image not found")
+        raise HTTPException(status_code=404, detail=hidden_foreign_detail)
     _enforce_store_scope(actor, initial_store_id)
 
     image = (
@@ -4087,7 +4088,11 @@ def create_detection_sku_review(
     source_image_id = initial_detection.shelf_image_id
 
     image_record, _ = _lock_authorized_shelf_image(
-        db, source_image_id, actor, hide_foreign=True
+        db,
+        source_image_id,
+        actor,
+        hide_foreign=True,
+        hidden_foreign_detail="Detection not found",
     )
     if image_record.retention_status != "ACTIVE":
         _require_active_shelf_image(image_record)
@@ -4349,6 +4354,7 @@ def review_product_embedding_exemplar(
             missing_status_code=410,
             missing_detail="Source shelf image is no longer available",
             hide_foreign=True,
+            hidden_foreign_detail="Embedding exemplar not found",
         )
         _require_active_shelf_image(source_image)
         # Preserve retention semantics (e.g. 410 for a restricted image), but
