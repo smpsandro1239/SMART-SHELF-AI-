@@ -1899,3 +1899,8 @@ A criação de colocações de armazém valida a localização por ID com autori
 ## Segurança — IDs de sessões de captura e alertas (2026-11-23)
 
 As rotas directas por ID de sessão de captura e alerta ocultam recursos de outras lojas: o fecho de sessão e a actualização de alerta fazem autorização antes do lock e revalidam após o lock; a consulta de eventos valida o tenant antes de ler os eventos. IDs estrangeiros e inexistentes devolvem HTTP 404 equivalente. Foram acrescentados testes para confirmar ausência de mutações. Commits de código/testes: b627107 e 1a2e776. A validação CI/PostgreSQL 16 permanece pendente.
+
+
+## Segurança — IDs de consenso de prateleira (2026-11-23)
+
+A consulta de consenso por shelf_id e a avaliação de alertas associada deixam de distinguir prateleiras estrangeiras de IDs inexistentes para SUPERVISOR: ambos devolvem HTTP 404. A avaliação de alertas herda a validação antes de qualquer persistência. Foram adicionados testes HTTP autenticados para os dois percursos. Commits: 2f4470e (código), 5feffba (teste). Validação CI/PostgreSQL 16 pendente.
