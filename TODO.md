@@ -1,3 +1,15 @@
+## Segurança P0 — controlos positivos same-store com IDs logísticos reais (2026-11-23; implementação publicada, CI pendente)
+
+- [x] Semear níveis de embalagem CASE e paletes reais para ambas as lojas no smoke PostgreSQL de autorização.
+- [x] Remover exclusões dos controlos positivos para cálculo de unidades de reposição, plano de rotação de palete e eventos de ciclo de vida.
+- [x] Usar o ID da palete da loja B nos pedidos cross-store e o ID da palete da loja A nos controlos same-store, evitando que um 404 por recurso inexistente seja confundido com autorização.
+- [ ] Confirmar API CI/PostgreSQL 16, Quality Gates, Security Scans e Docker Compose no commit `3af7a02b`.
+- [ ] Continuar a matriz BOLA/IDOR para IDs aninhados e relações indirectas nos restantes handlers.
+
+Commit: `3af7a02b`. A prova cobre agora 23 leituras estrangeiras e 23 controlos positivos na loja própria; não representa ainda uma matriz exaustiva de todos os endpoints.
+
+---
+
 ## Segurança P0 — matriz PostgreSQL de leituras multi-loja (2026-11-23; implementação publicada, CI pendente)
 
 - [x] Expandir `postgres_inventory_authorization_smoke.py` com 23 pedidos GET cross-store para vendas diárias/horárias/tráfego, perfis de procura, previsão de procura/risco, portefólios, recomendações, plano e workload de reposição, decisões operacionais, localizações, paletes, políticas e eventos de paletes.
