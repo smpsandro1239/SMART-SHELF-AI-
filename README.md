@@ -62,6 +62,11 @@ O projecto fixa quatro conjuntos de skills versionados como submódulos Git: [Su
 
 A leitura de `GET /api/v1/observation-alerts/{alert_id}/events` aplica o âmbito da loja directamente no predicado SQL para SUPERVISOR. Um alerta de outra loja e um ID inexistente devolvem HTTP 404 com o mesmo corpo; ADMIN conserva visibilidade global e EMPLOYEE não tem permissão para consultar o histórico.
 
+
+## BOLA — paridade de IDs directos de deteções e exemplares
+
+O smoke PostgreSQL pré-lock compara respostas HTTP completas (status e corpo JSON) para IDs estrangeiros reais e IDs inexistentes nos endpoints de revisão/histórico de deteções e revisão de exemplares. Os pedidos são feitos enquanto as linhas de origem e catálogo estão bloqueadas; exige-se HTTP 404 indistinguível e ausência de revisões persistidas. O reforço foi publicado no commit `1cdc4f67`; validação CI ainda pendente.
+
 ## Isolamento multi-loja de deteções
 
 Os endpoints que recebem `detection_id` directamente ocultam recursos de outras lojas com HTTP 404 indistinguível de um identificador inexistente. A autorização é validada antes do lock da imagem de origem e novamente após o lock, antes de consultar o histórico ou criar uma observação. A cobertura automatizada compara os dois cenários; a validação CI da revisão actual permanece pendente até os workflows terminarem.
