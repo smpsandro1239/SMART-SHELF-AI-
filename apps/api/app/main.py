@@ -669,15 +669,26 @@ def _require_planogram_actor(db: Session, request: Request):
 
 
 def _planogram_shelf_scope(db: Session, shelf_id: int, actor: models.User) -> models.Shelf:
+    store_id = (
+        db.query(models.Zone.store_id)
+        .join(models.Shelf, models.Shelf.zone_id == models.Zone.id)
+        .filter(models.Shelf.id == shelf_id)
+        .scalar()
+    )
+    if store_id is None:
+        raise HTTPException(status_code=404, detail="Shelf not found")
+    _enforce_store_scope(actor, store_id)
     shelf = (
         db.query(models.Shelf)
         .join(models.Zone, models.Shelf.zone_id == models.Zone.id)
-        .filter(models.Shelf.id == shelf_id)
+        .filter(
+            models.Shelf.id == shelf_id,
+            models.Zone.store_id == store_id,
+        )
         .first()
     )
     if shelf is None:
         raise HTTPException(status_code=404, detail="Shelf not found")
-    _enforce_store_scope(actor, shelf.zone.store_id)
     return shelf
 
 
@@ -1257,16 +1268,7 @@ def get_shelf_observation_consensus(
 ):
     """Evaluate repeated evidence for one shelf without creating alerts or tasks."""
     actor = _request_user(db, request)
-    shelf = (
-        db.query(models.Shelf)
-        .join(models.Zone, models.Shelf.zone_id == models.Zone.id)
-        .filter(models.Shelf.id == shelf_id)
-        .first()
-    )
-    if shelf is None:
-        raise HTTPException(status_code=404, detail="Shelf not found")
-    if actor is not None and actor.role != "ADMIN" and actor.store_id != shelf.zone.store_id:
-        raise HTTPException(status_code=404, detail="Shelf not found")
+    shelf = _get_store_scoped_shelf(db, shelf_id, actor)
     if product_id is not None:
         shelf_product = (
             db.query(models.ShelfProduct)
@@ -1395,18 +1397,7 @@ async def upload_shelf_image(
 ):
     """Store a validated shelf photograph; analysis is queued for a later CV stage."""
     actor = _request_user(db, request)
-    shelf = (
-        db.query(models.Shelf)
-        .join(models.Zone, models.Shelf.zone_id == models.Zone.id)
-        .filter(models.Shelf.id == shelf_id)
-        .first()
-    )
-    if shelf is None or (
-        actor is not None
-        and actor.role != "ADMIN"
-        and shelf.zone.store_id != actor.store_id
-    ):
-        raise HTTPException(status_code=404, detail="Shelf not found")
+    shelf = _get_store_scoped_shelf(db, shelf_id, actor)
 
     capture_session = None
     if capture_session_id is not None:

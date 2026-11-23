@@ -422,3 +422,120 @@ def test_foreign_shelf_preflight_is_tenant_filtered_for_create_routes(monkeypatc
     with Session() as db:
         assert db.query(models.CaptureSession).count() == 0
         assert db.query(models.Shelf).filter_by(code="SHOULD-NOT-BE-CREATED").count() == 0
+
+
+def test_shelf_image_upload_hides_foreign_and_missing_shelf_ids(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    own_shelf_id, _ = seed_shelves()
+    db = Session()
+    own_store_id = (
+        db.query(models.Zone.store_id)
+        .join(models.Shelf, models.Shelf.zone_id == models.Zone.id)
+        .filter(models.Shelf.id == own_shelf_id)
+        .scalar()
+    )
+    foreign_store = models.Store(code="CAP-UPLOAD-SHELF-FOREIGN", name="Foreign shelf upload store")
+    db.add(foreign_store)
+    db.flush()
+    foreign_zone = models.Zone(store_id=foreign_store.id, name="Foreign aisle")
+    db.add(foreign_zone)
+    db.flush()
+    foreign_shelf = models.Shelf(zone_id=foreign_zone.id, code="FOREIGN-UPLOAD-SHELF")
+    db.add(foreign_shelf)
+    db.commit()
+    foreign_shelf_id = foreign_shelf.id
+    db.close()
+
+    monkeypatch.setattr(main_module.settings, "image_storage_path", str(tmp_path))
+    supervisor = SimpleNamespace(id=31, role="SUPERVISOR", store_id=own_store_id)
+    monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: supervisor)
+
+    with TestClient(app) as client:
+        foreign = client.post(
+            "/api/v1/shelf-images",
+            data={"shelf_id": str(foreign_shelf_id)},
+            files={"image": ("frame.jpg", _valid_image_bytes(), "image/jpeg")},
+        )
+        missing = client.post(
+            "/api/v1/shelf-images",
+            data={"shelf_id": "2147483000"},
+            files={"image": ("frame.jpg", _valid_image_bytes(), "image/jpeg")},
+        )
+
+    assert foreign.status_code == missing.status_code == 404
+    assert foreign.json() == missing.json() == {"detail": "Shelf not found"}
+    with Session() as db:
+        assert db.query(models.ShelfImage).count() == 0
+
+
+def test_observation_consensus_hides_foreign_and_missing_shelf_ids(monkeypatch):
+    from types import SimpleNamespace
+
+    own_shelf_id, _ = seed_shelves()
+    db = Session()
+    own_store_id = (
+        db.query(models.Zone.store_id)
+        .join(models.Shelf, models.Shelf.zone_id == models.Zone.id)
+        .filter(models.Shelf.id == own_shelf_id)
+        .scalar()
+    )
+    foreign_store = models.Store(code="CAP-CONSENSUS-FOREIGN", name="Foreign consensus store")
+    db.add(foreign_store)
+    db.flush()
+    foreign_zone = models.Zone(store_id=foreign_store.id, name="Foreign aisle")
+    db.add(foreign_zone)
+    db.flush()
+    foreign_shelf = models.Shelf(zone_id=foreign_zone.id, code="FOREIGN-CONSENSUS")
+    db.add(foreign_shelf)
+    db.commit()
+    foreign_shelf_id = foreign_shelf.id
+    db.close()
+
+    supervisor = SimpleNamespace(id=32, role="SUPERVISOR", store_id=own_store_id)
+    monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: supervisor)
+
+    with TestClient(app) as client:
+        foreign = client.get(f"/api/v1/shelves/{foreign_shelf_id}/observation-consensus")
+        missing = client.get("/api/v1/shelves/2147483000/observation-consensus")
+        own = client.get(f"/api/v1/shelves/{own_shelf_id}/observation-consensus")
+
+    assert foreign.status_code == missing.status_code == 404
+    assert foreign.json() == missing.json() == {"detail": "Shelf not found"}
+    assert own.status_code == 200
+
+
+def test_planogram_shelf_scope_preserves_forbidden_and_missing_contracts():
+    from types import SimpleNamespace
+    from fastapi import HTTPException
+
+    own_shelf_id, _ = seed_shelves()
+    db = Session()
+    foreign_store = models.Store(code="CAP-PLANOGRAM-FOREIGN", name="Foreign planogram store")
+    db.add(foreign_store)
+    db.flush()
+    foreign_zone = models.Zone(store_id=foreign_store.id, name="Foreign planogram aisle")
+    db.add(foreign_zone)
+    db.flush()
+    foreign_shelf = models.Shelf(zone_id=foreign_zone.id, code="FOREIGN-PLANOGRAM")
+    db.add(foreign_shelf)
+    db.commit()
+    foreign_shelf_id = foreign_shelf.id
+    own_store_id = (
+        db.query(models.Zone.store_id)
+        .join(models.Shelf, models.Shelf.zone_id == models.Zone.id)
+        .filter(models.Shelf.id == own_shelf_id)
+        .scalar()
+    )
+    actor = SimpleNamespace(role="SUPERVISOR", store_id=own_store_id)
+
+    try:
+        assert main_module._planogram_shelf_scope(db, own_shelf_id, actor).id == own_shelf_id
+        with pytest.raises(HTTPException) as foreign_error:
+            main_module._planogram_shelf_scope(db, foreign_shelf_id, actor)
+        with pytest.raises(HTTPException) as missing_error:
+            main_module._planogram_shelf_scope(db, 2147483000, actor)
+        assert foreign_error.value.status_code == 403
+        assert missing_error.value.status_code == 404
+    finally:
+        db.close()
