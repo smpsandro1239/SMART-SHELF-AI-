@@ -337,7 +337,12 @@ def test_embedding_exemplars_are_scoped_to_source_image_store(monkeypatch):
                 f"/api/v1/product-embedding-exemplars/{foreign_created.json()['id']}/review",
                 json={"review_status": "REJECTED", "review_notes": "Tentativa cross-store"},
             )
-            assert foreign_review.status_code == 403
+            missing_review = client.patch(
+                "/api/v1/product-embedding-exemplars/2147483000/review",
+                json={"review_status": "REJECTED", "review_notes": "Tentativa cross-store"},
+            )
+            assert foreign_review.status_code == missing_review.status_code == 404
+            assert foreign_review.json() == missing_review.json()
 
             self_review = client.patch(
                 f"/api/v1/product-embedding-exemplars/{own_created.json()['id']}/review",
