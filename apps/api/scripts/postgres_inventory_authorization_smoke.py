@@ -483,8 +483,8 @@ def main() -> None:
                 ),
             }
             for resource, response in nested_shelf_reads.items():
-                assert response.status_code == 403, (
-                    f"SUPERVISOR must not resolve {resource}; expected HTTP 403, "
+                assert response.status_code == 404, (
+                    f"SUPERVISOR must not resolve foreign {resource}; expected concealed HTTP 404, "
                     f"received {response.status_code}: {response.text}"
                 )
 
