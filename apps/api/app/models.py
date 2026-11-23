@@ -1,6 +1,6 @@
 from datetime import date, datetime, timezone
 
-from sqlalchemy import JSON, Date, DateTime, ForeignKey, String, Text, Float, Integer, Boolean, Numeric, UniqueConstraint, CheckConstraint, ForeignKeyConstraint, Index, text
+from sqlalchemy import JSON, Date, DateTime, ForeignKey, String, Text, Float, Integer, Boolean, Numeric, UniqueConstraint, CheckConstraint, ForeignKeyConstraint, Index, BigInteger, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -1121,6 +1121,9 @@ class EdgeDevice(Base):
         CheckConstraint("status IN ('ACTIVE', 'DISABLED')", name="ck_edge_device_status"),
         CheckConstraint("device_type IN ('fixed_camera', 'robot', 'mobile', 'gateway')", name="ck_edge_device_type"),
         Index("ix_edge_devices_store_status", "store_id", "status"),
+        CheckConstraint("last_network_status IS NULL OR last_network_status IN ('ONLINE', 'DEGRADED', 'OFFLINE')", name="ck_edge_device_network_status"),
+        CheckConstraint("battery_pct IS NULL OR (battery_pct >= 0 AND battery_pct <= 100)", name="ck_edge_device_battery_pct"),
+        CheckConstraint("storage_free_bytes IS NULL OR storage_free_bytes >= 0", name="ck_edge_device_storage_free_bytes"),
     )
 
     device_id: Mapped[str] = mapped_column(String(120), primary_key=True)
@@ -1129,6 +1132,11 @@ class EdgeDevice(Base):
     status: Mapped[str] = mapped_column(String(12), default="ACTIVE", nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
     disabled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    last_network_status: Mapped[str | None] = mapped_column(String(12), nullable=True)
+    firmware_version: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    battery_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
+    storage_free_bytes: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
 
 
 class EdgeDeviceCredential(Base):
