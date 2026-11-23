@@ -123,6 +123,49 @@ def claim_next_edge_event(
         raise
 
 
+
+def renew_edge_event_lease(
+    db: Session,
+    *,
+    processing_id: int,
+    worker_id: str,
+    fencing_token: int,
+    lease_seconds: int = 60,
+    now: datetime | None = None,
+) -> datetime:
+    """Extend the current unexpired lease without allowing stale workers to renew it."""
+    if isinstance(processing_id, bool) or not isinstance(processing_id, int) or processing_id <= 0:
+        raise ValueError("processing_id must be a positive integer")
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,159}", worker_id or ""):
+        raise ValueError("worker_id must be 1-160 safe ASCII characters")
+    if isinstance(fencing_token, bool) or not isinstance(fencing_token, int) or fencing_token <= 0:
+        raise ValueError("fencing_token must be a positive integer")
+    if isinstance(lease_seconds, bool) or not isinstance(lease_seconds, int) or not 5 <= lease_seconds <= 3600:
+        raise ValueError("lease_seconds must be between 5 and 3600")
+    current = _utc(now or _now())
+    try:
+        item = (
+            db.query(models.EdgeDeviceEventProcessing)
+            .filter_by(id=processing_id)
+            .with_for_update()
+            .first()
+        )
+        if (
+            item is None or item.status != "PROCESSING"
+            or item.lease_owner != worker_id or item.fencing_token != fencing_token
+            or item.lease_expires_at is None or _utc(item.lease_expires_at) <= current
+        ):
+            raise EdgeEventProcessingError("worker lease is stale or no longer owned")
+        expiry = max(_utc(item.lease_expires_at), current + timedelta(seconds=lease_seconds))
+        item.lease_expires_at = expiry
+        item.updated_at = current
+        db.commit()
+        return expiry
+    except Exception:
+        db.rollback()
+        raise
+
+
 def complete_edge_event(
     db: Session,
     *,
