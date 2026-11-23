@@ -33,6 +33,7 @@ from jwt import InvalidTokenError
 
 from app.config import settings
 from app.database import get_db, SessionLocal
+from app.edge_device_http import router as edge_device_router
 from app import models
 from app.api_security_policy import api_role_denial, is_public_api_route
 from app.artifact_access_policy import evaluate_artifact_access
@@ -119,6 +120,8 @@ app = FastAPI(
     docs_url=_docs_url_for_environment(settings.app_env),
     redoc_url=None,
 )
+
+app.include_router(edge_device_router)
 
 
 def _json_safe_validation_value(value):
