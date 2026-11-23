@@ -1,3 +1,9 @@
+## 2026-11-23 — Reforço da prova BOLA de deteções e exemplares
+
+- O smoke PostgreSQL `postgres_detection_exemplar_prelock_smoke.py` compara agora respostas completas (status + JSON) entre IDs reais cross-store e IDs inexistentes para revisão de deteções, histórico de revisões e revisão de exemplares.
+- As seis chamadas continuam a ser executadas enquanto as linhas da imagem e do produto estão bloqueadas; todas têm de devolver HTTP 404 idêntico por par e não podem persistir revisões.
+- Commit: `1cdc4f67`. A validação CI do novo commit está pendente; não foi executado localmente nesta sessão.
+
 ## 2026-11-23 — Isolamento PostgreSQL de artefactos externos
 
 - Expandido `apps/api/scripts/postgres_artifact_consumption_smoke.py`, já integrado no API CI, para testar combinações de IDs reais entre imagens da mesma loja e de lojas diferentes.
