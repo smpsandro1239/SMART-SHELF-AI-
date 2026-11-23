@@ -1643,3 +1643,7 @@ A implementação de produção já verificava lease_lost nos caminhos de sucess
 - [x] Ocultar capture_session_id estrangeiro com HTTP 404 igual ao ID inexistente, usando preflight de tenant antes do row lock e revalidação pós-lock.
 - [x] Testar prateleiras estrangeiras/inexistentes e sessões estrangeiras/inexistentes; confirmar ausência de ficheiros e de novas imagens após pedidos recusados.
 - [ ] Confirmar API CI, Quality Gates, Security Scans e Docker Compose no HEAD final.
+
+
+- [x] Corrigir o contrato do smoke PostgreSQL de pre-lock de deteções/exemplares: após a ocultação cross-store, os três endpoints devolvem HTTP 404 (em vez do antigo 403) e continuam a ser rejeitados antes de esperar pelos locks da imagem/produto.
+- [ ] Reexecutar API CI no HEAD com a expectativa corrigida e confirmar o smoke concorrente PostgreSQL.
