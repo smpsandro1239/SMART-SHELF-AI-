@@ -12,6 +12,7 @@ VISION_ONNX = ROOT / "apps" / "api" / "app" / "vision_onnx.py"
 ROLE_SMOKE = ROOT / "apps" / "api" / "scripts" / "postgres_runtime_role_smoke.py"
 MODEL_TRUST_MIGRATION = ROOT / "apps" / "api" / "migrations" / "versions" / "0070_vision_model_trust_runtime_readonly.py"
 MODEL_RELEASE_CLI = ROOT / "apps" / "api" / "scripts" / "register_vision_model_release.py"
+COMPOSE_SMOKE = ROOT / ".github" / "workflows" / "demo-compose-smoke.yml"
 
 
 def _service_block(compose: str, service: str) -> str:
@@ -168,3 +169,10 @@ def test_runtime_role_smoke_checks_login_ownership_and_future_object_acl_contrac
     assert "missing_operational_grant" in smoke
     assert "relation.relkind IN ('r', 'p')" in smoke
     assert "has_table_privilege(current_user, relation.oid, required.privilege)" in smoke
+
+
+def test_demo_compose_runtime_smokes_pass_the_migration_owner():
+    workflow = COMPOSE_SMOKE.read_text(encoding="utf-8")
+
+    assert workflow.count('MIGRATION_DB_USER="${POSTGRES_USER:-smart_shelf}"') == 2
+    assert workflow.count("postgres_runtime_role_smoke.py") == 2
