@@ -478,3 +478,10 @@ Limitação de segurança resolvida em camadas: owner de migrations separado do 
 - O API CI recebe explicitamente `POSTGRES_PASSWORD` para exercitar o mesmo script de provisionamento por TCP.
 - README, guia do manifesto, DEMO, segredos de produção, ADR-009, TODO e instruções da API actualizados para remover comandos Alembic no container runtime.
 - API CI [45076219787](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45076219787), Quality Gates [45076219801](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45076219801), Security Scans [45076219740](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45076219740) e Docker Compose [45076219751](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45076219751) passaram no HEAD `aeff4a3b`; suite API **1552 passed, 1 skipped**. O Compose smoke simulou um volume legado ao atribuir ownership de uma tabela ao runtime e uma membership indevida, e confirmou a reconciliação automática.
+
+### 2026-11-23 — Controlos positivos para IDs aninhados de localização e prateleira
+
+- O smoke PostgreSQL cria agora uma localização física e uma prateleira com atribuição de produto na loja do supervisor, além dos recursos equivalentes da loja estrangeira.
+- Mantém os ataques cross-store existentes e acrescenta controlos positivos: criar uma colocação na localização própria e criar uma tarefa na prateleira própria (ambos esperam HTTP 201).
+- O objetivo é provar simultaneamente rejeição de IDs estrangeiros e aceitação de IDs válidos do mesmo tenant, evitando falsos positivos por recurso inexistente.
+- Implementação publicada; validação PostgreSQL 16/CI ainda pendente.
