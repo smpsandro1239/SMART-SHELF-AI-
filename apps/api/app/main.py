@@ -8019,12 +8019,15 @@ def update_replenishment_task_status(
 
 @app.get("/api/v1/tasks/{task_id}/events", response_model=list[ReplenishmentTaskEventRead], tags=["tasks"])
 def list_replenishment_task_events(task_id: int, request: Request, db: Session = Depends(get_db)):
-    task = db.get(models.ReplenishmentTask, task_id)
-    if task is None:
-        raise HTTPException(status_code=404, detail="Task not found")
     actor = _request_user(db, request)
-    if actor is not None and actor.role != "ADMIN" and task.store_id != actor.store_id:
-        raise HTTPException(status_code=403, detail="Access to this task is not allowed")
+    task = _lock_store_scoped_record(
+        db,
+        models.ReplenishmentTask,
+        task_id,
+        actor,
+        "Task not found",
+        hide_foreign=True,
+    )
     return (
         db.query(models.ReplenishmentTaskEvent)
         .filter(models.ReplenishmentTaskEvent.task_id == task_id)
