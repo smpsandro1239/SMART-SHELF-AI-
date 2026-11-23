@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+import threading
 
 import pytest
 from sqlalchemy import create_engine
@@ -97,3 +98,29 @@ def test_worker_respects_explicit_non_retryable_handler_failure(session_factory)
     row = _processing(session_factory)
     assert row.status == "DEAD_LETTER"
     assert row.last_error_code == "INVALID_CAPTURE"
+
+
+def test_worker_abandons_result_when_lease_renewal_fails(session_factory, monkeypatch):
+    renewal_started = threading.Event()
+
+    def fail_renewal(*_args, **_kwargs):
+        renewal_started.set()
+        raise RuntimeError("database connection interrupted")
+
+    monkeypatch.setattr("app.edge_event_worker.renew_edge_event_lease", fail_renewal)
+
+    def wait_for_renewal_failure(_event):
+        assert renewal_started.wait(timeout=4)
+
+    assert process_one_edge_event(
+        session_factory,
+        worker_id="edge-worker-a",
+        lease_seconds=5,
+        handlers={"DEVICE_HEARTBEAT": wait_for_renewal_failure},
+    )
+    row = _processing(session_factory)
+    # A failed heartbeat must never be followed by a local acknowledgement.
+    # The lease remains recoverable after expiry by a worker with a new fence.
+    assert row.status == "PROCESSING"
+    assert row.lease_owner == "edge-worker-a"
+    assert row.finished_at is None
