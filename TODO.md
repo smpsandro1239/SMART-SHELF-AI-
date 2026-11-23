@@ -1,3 +1,14 @@
+## Segurança P0 — histórico de eventos de paletes sem oráculo cross-store (2026-11-23; smoke PostgreSQL reforçado)
+
+- [x] Manter a resolução da palete limitada por pallet_id e store_id antes de consultar os eventos.
+- [x] Reforçar o smoke PostgreSQL multi-loja: comparar a resposta HTTP da palete estrangeira com a de um ID inexistente e exigir HTTP 404 com corpo idêntico.
+- [x] Preservar o controlo positivo same-store já existente no smoke, garantindo HTTP 200 para o histórico da própria loja.
+- [ ] Validar API CI/PostgreSQL 16, Quality Gates, Security Scans e Docker Compose no novo SHA.
+
+Decisão: o histórico é consultado apenas depois de a palete pai ser resolvida no tenant autorizado. A igualdade de respostas 404 evita que o endpoint funcione como oráculo de existência para IDs de paletes estrangeiras.
+
+---
+
 ## Segurança P0 — consulta de histórico de alertas sem oráculo cross-store (2026-11-23; implementação/testes publicados, CI pendente)
 
 - [x] Fazer a consulta de alertas para SUPERVISOR filtrar `alert_id` e `store_id` na mesma query, sem carregar previamente alertas estrangeiros.

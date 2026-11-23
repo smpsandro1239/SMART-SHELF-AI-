@@ -1,3 +1,7 @@
+## Segurança P0 — histórico de eventos de paletes sem oráculo BOLA (2026-11-23; CI pendente)
+
+O endpoint GET /api/v1/warehouse/pallets/{pallet_id}/events resolve primeiro a palete com id e store_id, só depois consulta os eventos. O smoke PostgreSQL multi-loja foi reforçado para comparar uma palete estrangeira real com um ID inexistente, exigindo HTTP 404 e corpo idêntico. O controlo positivo same-store continua a exigir HTTP 200. Falta validar o novo smoke no API CI/PostgreSQL 16 e nos restantes workflows.
+
 ## Segurança P0 — histórico de alertas com predicado SQL multi-tenant (2026-11-23; CI pendente)
 
 A rota `GET /api/v1/observation-alerts/{alert_id}/events` filtra `alert_id` e `store_id` na mesma query para SUPERVISOR, evitando carregar alertas estrangeiros antes de aplicar a autorização. ADMIN conserva visibilidade global e EMPLOYEE continua proibido. Regressão HTTP compara alerta estrangeiro com ID inexistente (404 e corpo idêntico). CI/PostgreSQL 16, Quality Gates, Security Scans e Docker Compose pendentes.

@@ -628,6 +628,21 @@ def main() -> None:
                 f"{foreign_pallet_events.text}"
             )
 
+            missing_pallet_events = client.get(
+                "/api/v1/warehouse/pallets/-1/events",
+                params={"store_id": store_a_id},
+                headers=supervisor_headers,
+            )
+            assert missing_pallet_events.status_code == 404, (
+                "A missing pallet lifecycle history must return HTTP 404; "
+                f"received {missing_pallet_events.status_code}: {missing_pallet_events.text}"
+            )
+            assert foreign_pallet_events.text == missing_pallet_events.text, (
+                "Foreign and missing pallet IDs must expose indistinguishable "
+                f"lifecycle-history responses: foreign={foreign_pallet_events.text!r}, "
+                f"missing={missing_pallet_events.text!r}"
+            )
+
             for resource, response in requests.items():
                 expected_status = (
                     404

@@ -1,3 +1,12 @@
+## Reforço BOLA — histórico de eventos de paletes (2026-11-23)
+
+- O smoke PostgreSQL de autorização de inventário já exercitava leituras same-store e cross-store do histórico de paletes.
+- Foi acrescentada uma comparação explícita entre uma palete real da loja B consultada pelo supervisor da loja A e um ID inexistente (-1), ambos com store_id da loja A.
+- O critério de segurança é HTTP 404 e corpo de resposta exactamente igual; o controlo positivo same-store permanece HTTP 200.
+- A alteração está publicada no commit que acompanha esta atualização documental. CI pendente até conclusão dos workflows no SHA final.
+
+---
+
 ## 2026-11-23 — Isolamento SQL directo no histórico de alertas
 
 - A consulta `GET /api/v1/observation-alerts/{alert_id}/events` passou a filtrar `alert_id` e `store_id` na mesma query para SUPERVISOR; o handler deixa de carregar uma linha estrangeira antes da autorização.

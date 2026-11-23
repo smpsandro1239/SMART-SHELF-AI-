@@ -1,3 +1,9 @@
+## Actualização — histórico de eventos de paletes e ocultação de IDs (2026-11-23)
+
+A rota GET /api/v1/warehouse/pallets/{pallet_id}/events resolve a palete através do par id + store_id antes de consultar o histórico. O smoke PostgreSQL multi-loja já cobria o ID estrangeiro e o acesso positivo same-store; foi reforçado para comparar a resposta da palete estrangeira real com a de um ID inexistente, ambos consultados no âmbito da loja do actor. O critério é HTTP 404 com corpo exactamente igual, mantendo HTTP 200 no controlo same-store.
+
+Esta cobertura é direccionada ao histórico de paletes e não substitui a matriz completa BOLA/IDOR de todos os endpoints, perfis e relações indirectas. A validação CI do novo smoke permanece pendente até os workflows terminarem.
+
 # Revisão inicial de segurança da API — 2026-11-20
 
 ## Estado e âmbito
