@@ -1,3 +1,16 @@
+## 2026-11-23 — Autorização de tenant antes de locks em retenção e artefactos (código publicado; CI em execução)
+
+- A auditoria da ordem de locks encontrou dez handlers que adquiriam `FOR UPDATE` na imagem antes de validar a loja. Embora alguns validassem o tenant mais tarde, um pedido sem autorização podia adquirir locks de recursos de outra loja antes da rejeição.
+- Corrigidos os cinco fluxos de retenção (restauro, legal hold apply/release e agendamento/cancelamento de purga), a consulta de elegibilidade de purga e quatro fluxos de artefactos externos (registo, snapshot de inventário, diagnóstico de acesso e evento de disposição).
+- Os nove handlers que operam sobre a imagem usam agora `_lock_authorized_shelf_image`, que verifica a loja antes do lock e volta a verificar a linhagem depois. A elegibilidade mantém o erro específico de linhagem inválida e faz o preflight antes do lock.
+- `test_security.py` passou a exigir a ordem autorização → lock nos dez handlers. Uma verificação estática adicional no código publicado confirmou os dez casos.
+- Corrigida também a duplicação de duas tarefas pendentes em `TODO.md`.
+- Commits de código/testes: `f6e2156e`, `659586be`, `7f372fbc`, `cbc6a1a6`; TODO: `fcb685bf`.
+- CI actual no SHA de código/testes `cbc6a1a6`: API CI [45127205680](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45127205680), Quality Gates [45127205615](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45127205615), Security Scans [45127205627](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45127205627) e Docker Compose [45127205559](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45127205559) foram iniciados; resultados ainda não confirmados.
+- Validação anterior da correcção PostgreSQL default ACL: API CI/PostgreSQL 16 run [45084795278](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45084795278) passou; Quality Gates [45084849142](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45084849142) e Security Scans [45084849107](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45084849107) passaram no SHA documental `00d6ef51`.
+- **Ainda em aberto:** testes de integração PostgreSQL com duas lojas para estes dez fluxos, ensaio de volume persistente e operações reais API com principal runtime. A auditoria estática não substitui estes ensaios.
+
+---
 ## 2026-11-22 — Correcção do âmbito dos default ACLs PostgreSQL (código publicado; CI pendente)
 
 - A revisão do smoke identificou que a query de `pg_default_acl` agregava permissões concedidas ao runtime por qualquer owner, em vez de verificar especificamente os objectos futuros criados pelo principal de migrations.
