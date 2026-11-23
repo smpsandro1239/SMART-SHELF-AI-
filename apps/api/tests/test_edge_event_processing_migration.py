@@ -61,7 +61,7 @@ def test_edge_event_processing_migration_backfills_inbox_and_downgrades(tmp_path
                 """INSERT INTO edge_device_event_processing
                 (inbox_id, status, attempt_count, max_attempts, available_at,
                  fencing_token, created_at, updated_at)
-                VALUES (2, 'UNKNOWN', 0, 8, ?, 0, ?, ?)""",
+                VALUES (1, 'UNKNOWN', 0, 8, ?, 0, ?, ?)""",
                 (now, now, now),
             )
         with pytest.raises(IntegrityError, match="CHECK constraint"):
@@ -69,7 +69,7 @@ def test_edge_event_processing_migration_backfills_inbox_and_downgrades(tmp_path
                 """INSERT INTO edge_device_event_processing
                 (inbox_id, status, attempt_count, max_attempts, available_at,
                  lease_owner, lease_expires_at, fencing_token, created_at, updated_at)
-                VALUES (2, 'PROCESSING', 1, 8, ?, NULL, ?, 1, ?, ?)""",
+                VALUES (1, 'PROCESSING', 1, 8, ?, NULL, ?, 1, ?, ?)""",
                 (now, now, now, now),
             )
         _apply(migration, db, "downgrade")
