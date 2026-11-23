@@ -16,7 +16,9 @@
 - Mantidos os testes existentes de escrita cruzada e as verificações de estado persistido (inventário, policies, placements, tarefas, movimentos e eventos).
 - O script já está integrado no job API CI através do passo `Verify PostgreSQL inventory and warehouse cross-store authorization`.
 - Commit: `40f9456a`.
-- API CI [45131503709](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45131503709), Docker Compose [45131503757](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45131503757), Quality Gates [45131503760](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45131503760) e Security Scans [45131503689](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45131503689) foram iniciados; ainda não existe resultado confirmado para este SHA.
+- API CI [45131503709](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45131503709) passou no SHA `40f9456a`: PostgreSQL 16, todos os smokes (incluindo 23 leituras cross-store) e suite API **1555 passed, 1 skipped**.
+- Docker Compose [45131503757](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45131503757) passou. No Quality Gates [45131503760](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45131503760), Web build e detector Impeccable passaram, mas o job API foi cancelado durante instalação de dependências. Em Security Scans [45131503689](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45131503689), Gitleaks e npm audit passaram; pip-audit e ZAP foram cancelados. Estes dois workflows necessitam de nova execução integral.
+- A ampliação posterior para paletes/packaging same-store foi publicada no commit `3af7a02b`; ainda sem CI confirmada.
 - A matriz não cobre todas as combinações endpoint × role × tenant. Permanecem pendentes a matriz positiva same-store, IDs aninhados/relacionais e volume PostgreSQL persistente.
 
 ---
