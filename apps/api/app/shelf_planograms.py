@@ -588,6 +588,9 @@ def load_active_planogram_for_shelf(
 ) -> models.ShelfPlanogram | None:
     """Load the active version only after revalidating its calibration source."""
     actor = _active_actor(db, actor_user_id)
+    # Authorize the shelf even when it has no ACTIVE planogram. Otherwise the
+    # service can return a distinguishable empty result for foreign shelf IDs.
+    _preflight_shelf_scope(db, shelf_id, actor)
     row = (
         db.query(
             models.ShelfPlanogram.id,
@@ -602,7 +605,6 @@ def load_active_planogram_for_shelf(
     )
     if row is None:
         return None
-    _preflight_shelf_scope(db, shelf_id, actor)
     _preflight_source_image_scope(db, row.calibration_image_id, actor)
     image = _lock_source_image(
         db, row.calibration_image_id, shelf_id=shelf_id, expected_sha256=row.calibration_image_sha256
