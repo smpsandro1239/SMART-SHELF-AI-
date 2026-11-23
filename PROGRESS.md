@@ -1,3 +1,15 @@
+## 2026-11-23 — Expansão da matriz PostgreSQL de leituras cross-store
+
+- Actualizado `apps/api/scripts/postgres_inventory_authorization_smoke.py` para exercitar 23 endpoints GET que recebem `store_id` em vendas, tráfego, forecasting, replenishment, decisões operacionais e warehouse.
+- Cada pedido usa um JWT real de SUPERVISOR da loja A e identifica a loja B. A expectativa é HTTP 403 antes de consultar dados da loja estrangeira.
+- Mantidos os testes existentes de escrita cruzada e as verificações de estado persistido (inventário, policies, placements, tarefas, movimentos e eventos).
+- O script já está integrado no job API CI através do passo `Verify PostgreSQL inventory and warehouse cross-store authorization`.
+- Commit: `40f9456a`.
+- API CI [45131503709](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45131503709), Docker Compose [45131503757](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45131503757), Quality Gates [45131503760](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45131503760) e Security Scans [45131503689](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45131503689) foram iniciados; ainda não existe resultado confirmado para este SHA.
+- A matriz não cobre todas as combinações endpoint × role × tenant. Permanecem pendentes a matriz positiva same-store, IDs aninhados/relacionais e volume PostgreSQL persistente.
+
+---
+
 ## 2026-11-23 — Expansão da prova PostgreSQL pré-lock para nove rotas HTTP
 
 - O smoke `postgres_retention_legal_hold_concurrency_smoke.py` testa agora nove rotas de imagem com um supervisor de outra loja: conteúdo, deteções, evidence fusion, OCR evidence/matches/runs, eventos de retenção, retry e restrict.
