@@ -1,3 +1,11 @@
+## 2026-11-23 — Ocultação de IDs de localizações de armazém
+
+- A rota POST /api/v1/warehouse/placements deixou de carregar a localização sem lock e só depois aplicar o store scope.
+- Passa a usar _lock_store_scoped_record com hide_foreign=True: autorização pré-lock, lock da linha e revalidação pós-lock.
+- Adicionada regressão autenticada que compara a resposta para uma localização real de outra loja com a resposta para um ID inexistente (HTTP 404), e confirma ausência de colocação persistida.
+- Commits de código/teste: a77c6793489f1594a4705d7b258dd7639ce3433e e a4d41af39e7bc66b611456184d0c4ac0203aa8d6.
+- Testes e workflows deste SHA ainda não foram executados/confirmados. A auditoria BOLA/IDOR de prateleiras e relações logísticas continua aberta.
+
 ## 2026-11-23 — Pré-lock PostgreSQL para IDs directos de deteção e exemplar
 
 - Auditoria dirigida aos handlers de revisão de deteção, histórico e revisão de exemplares. Os três resolvem a imagem de origem, aplicam autorização de tenant antes do lock da imagem e mantêm validação de estado/identidade após os locks.
