@@ -19,13 +19,19 @@ from app.main import app
 from app.security import create_access_token
 
 
-def create_fixture(suffix: str) -> tuple[int, int, int]:
+def create_fixture(suffix: str) -> tuple[int, int, int, int, int, int]:
     with SessionLocal() as db:
         store = models.Store(
             code=f"PG-RETENTION-RACE-{suffix}",
             name="PostgreSQL retention concurrency smoke",
         )
         db.add(store)
+        db.flush()
+        foreign_store = models.Store(
+            code=f"PG-RETENTION-FOREIGN-{suffix}",
+            name="PostgreSQL foreign retention smoke store",
+        )
+        db.add(foreign_store)
         db.flush()
         admin = models.User(
             email=f"pg-retention-race-{suffix}@example.test",
@@ -35,7 +41,15 @@ def create_fixture(suffix: str) -> tuple[int, int, int]:
             store_id=store.id,
             is_active=True,
         )
-        db.add(admin)
+        foreign_supervisor = models.User(
+            email=f"pg-retention-foreign-{suffix}@example.test",
+            full_name="Foreign-store retention supervisor",
+            password_hash="smoke-test-only",
+            role="SUPERVISOR",
+            store_id=foreign_store.id,
+            is_active=True,
+        )
+        db.add_all([admin, foreign_supervisor])
         db.flush()
         zone = models.Zone(store_id=store.id, name="Retention race zone")
         db.add(zone)
@@ -59,7 +73,75 @@ def create_fixture(suffix: str) -> tuple[int, int, int]:
             db.flush()
             image_ids.append(image.id)
         db.commit()
-        return (*image_ids, admin.id)
+        return (*image_ids, admin.id, foreign_supervisor.id)
+
+
+def run_foreign_store_prelock_probe(image_id: int, token: str, suffix: str) -> None:
+    """Prove a foreign-store supervisor is rejected without waiting for the image lock."""
+    image_locked = Event()
+    release_lock = Event()
+    request_finished = Event()
+    result: dict[str, object] = {}
+    application_name = f"ss-retention-foreign-prelock-{suffix}"
+
+    def lock_holder() -> None:
+        with SessionLocal() as db:
+            db.query(models.ShelfImage).filter(
+                models.ShelfImage.id == image_id
+            ).with_for_update().one()
+            image_locked.set()
+            if not release_lock.wait(timeout=15):
+                raise TimeoutError("foreign-store pre-lock probe did not release the image lock")
+            db.rollback()
+
+    def scoped_get_db():
+        db = SessionLocal()
+        try:
+            db.execute(
+                text("SELECT set_config('application_name', :name, false)"),
+                {"name": application_name},
+            )
+            yield db
+        finally:
+            db.close()
+
+    def invoke_endpoint() -> None:
+        app.dependency_overrides[main_module.get_db] = scoped_get_db
+        try:
+            with TestClient(app) as client:
+                response = client.post(
+                    f"/api/v1/shelf-images/{image_id}/retention/restrict",
+                    json={"reason": "Cross-store pre-lock authorization probe"},
+                    headers={"Authorization": f"Bearer {token}"},
+                )
+            result["status_code"] = response.status_code
+            result["body"] = response.json()
+        finally:
+            app.dependency_overrides.pop(main_module.get_db, None)
+            request_finished.set()
+
+    original_settings = main_module.settings
+    main_module.settings = original_settings.model_copy(update={"app_env": "production"})
+    try:
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            holder_future = executor.submit(lock_holder)
+            try:
+                assert image_locked.wait(timeout=10), "pre-lock probe did not acquire source image"
+                request_future = executor.submit(invoke_endpoint)
+                try:
+                    request_future.result(timeout=3)
+                except TimeoutError as exc:
+                    raise AssertionError(
+                        "foreign-store request waited for the source-image lock; tenant authorization must happen first"
+                    ) from exc
+                assert result.get("status_code") == 403, result
+                assert request_finished.is_set(), "foreign-store request did not finish before lock release"
+            finally:
+                release_lock.set()
+            holder_future.result(timeout=10)
+    finally:
+        app.dependency_overrides.pop(main_module.get_db, None)
+        main_module.settings = original_settings
 
 
 def run_serialized_race(
@@ -166,8 +248,10 @@ def run_serialized_race(
 
 def main() -> None:
     suffix = uuid4().hex[:10]
-    hold_first_id, schedule_first_id, restore_first_id, restore_after_schedule_id, admin_id = create_fixture(suffix)
+    hold_first_id, schedule_first_id, restore_first_id, restore_after_schedule_id, admin_id, foreign_supervisor_id = create_fixture(suffix)
     token, _ = create_access_token(user_id=admin_id, role="ADMIN")
+    foreign_token, _ = create_access_token(user_id=foreign_supervisor_id, role="SUPERVISOR")
+    run_foreign_store_prelock_probe(hold_first_id, foreign_token, suffix)
     scheduled_at = (models.utc_now() + timedelta(days=30)).astimezone(timezone.utc)
 
     def commit_legal_hold(db, image) -> None:
