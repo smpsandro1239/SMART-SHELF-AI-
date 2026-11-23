@@ -11,6 +11,7 @@ from time import monotonic, sleep
 from uuid import uuid4
 
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 
 from app import models
 from app.artifact_consumption import consume_external_artifact_bytes
@@ -131,6 +132,183 @@ def main() -> None:
     )
     try:
         image_id, artifact_id, store_id, integration_id = create_fixture(suffix, payload)
+
+        # Build real PostgreSQL scope probes: another image in the same store,
+        # and an image/integration/artifact in a different store. The foreign
+        # integration deliberately uses the same external-system key but is
+        # revoked; it must never shadow the active integration in the owner store.
+        with SessionLocal() as db:
+            own_image = db.get(models.ShelfImage, image_id)
+            own_integration = db.get(models.StoreExternalIntegration, integration_id)
+            assert own_image is not None and own_integration is not None
+            admin_id = own_integration.created_by_user_id
+            own_shelf = db.get(models.Shelf, own_image.shelf_id)
+            assert own_shelf is not None
+            own_zone = db.get(models.Zone, own_shelf.zone_id)
+            assert own_zone is not None
+
+            sibling_shelf = models.Shelf(
+                zone_id=own_zone.id,
+                code=f"ART-CONSUME-SIBLING-{suffix}",
+            )
+            foreign_store = models.Store(
+                code=f"PG-ART-CONSUME-FOREIGN-{suffix}",
+                name="Foreign artifact store",
+            )
+            db.add_all([sibling_shelf, foreign_store])
+            db.flush()
+            sibling_image = models.ShelfImage(
+                shelf_id=sibling_shelf.id,
+                original_filename="sibling-artifact.jpg",
+                storage_path=f"/tmp/sibling-artifact-{suffix}.jpg",
+                mime_type="image/jpeg",
+                file_size_bytes=12,
+                sha256="b" * 64,
+                retention_status="ACTIVE",
+                legal_hold=False,
+            )
+            foreign_zone = models.Zone(
+                store_id=foreign_store.id,
+                name="Foreign artifact zone",
+            )
+            db.add_all([sibling_image, foreign_zone])
+            db.flush()
+            foreign_shelf = models.Shelf(
+                zone_id=foreign_zone.id,
+                code=f"ART-CONSUME-FOREIGN-{suffix}",
+            )
+            db.add(foreign_shelf)
+            db.flush()
+            foreign_image = models.ShelfImage(
+                shelf_id=foreign_shelf.id,
+                original_filename="foreign-artifact.jpg",
+                storage_path=f"/tmp/foreign-artifact-{suffix}.jpg",
+                mime_type="image/jpeg",
+                file_size_bytes=12,
+                sha256="c" * 64,
+                retention_status="ACTIVE",
+                legal_hold=False,
+            )
+            foreign_integration = models.StoreExternalIntegration(
+                store_id=foreign_store.id,
+                external_system="postgres-artifact-smoke",
+                provider="foreign-smoke-provider",
+                status="REVOKED",
+                required_for_retention=True,
+                capabilities=["READ"],
+                created_by_user_id=admin_id,
+                updated_by_user_id=admin_id,
+            )
+            db.add_all([foreign_image, foreign_integration])
+            db.flush()
+            sibling_artifact = models.ShelfImageArtifactReference(
+                shelf_image_id=sibling_image.id,
+                store_id=store_id,
+                artifact_type="CROP",
+                external_system="postgres-artifact-smoke",
+                external_reference=f"sibling/{suffix}",
+                sha256="d" * 64,
+                declared_by_user_id=admin_id,
+            )
+            foreign_artifact = models.ShelfImageArtifactReference(
+                shelf_image_id=foreign_image.id,
+                store_id=foreign_store.id,
+                artifact_type="BACKUP",
+                external_system="postgres-artifact-smoke",
+                external_reference=f"foreign/{suffix}",
+                sha256="e" * 64,
+                declared_by_user_id=admin_id,
+            )
+            db.add_all([sibling_artifact, foreign_artifact])
+            db.commit()
+            sibling_image_id = sibling_image.id
+            sibling_artifact_id = sibling_artifact.id
+            foreign_image_id = foreign_image.id
+            foreign_artifact_id = foreign_artifact.id
+
+        # Exercise every mixed-ID direction against persisted PostgreSQL rows.
+        # Each mismatch must fail before the provider callback is invoked.
+        scope_provider_calls = []
+
+        def reject_scope_probe(*, probe_image_id: int, probe_artifact_id: int, probe_store_id: int) -> None:
+            try:
+                consume_external_artifact_bytes(
+                    image_id=probe_image_id,
+                    artifact_id=probe_artifact_id,
+                    store_id=probe_store_id,
+                    fetch_bytes=lambda *args: scope_provider_calls.append(args) or payload,
+                )
+            except LookupError:
+                return
+            raise AssertionError(
+                "PostgreSQL accepted a mixed image/artifact/store identifier tuple: "
+                f"{probe_image_id}/{probe_artifact_id}/{probe_store_id}"
+            )
+
+        reject_scope_probe(
+            probe_image_id=image_id,
+            probe_artifact_id=sibling_artifact_id,
+            probe_store_id=store_id,
+        )
+        reject_scope_probe(
+            probe_image_id=sibling_image_id,
+            probe_artifact_id=artifact_id,
+            probe_store_id=store_id,
+        )
+        reject_scope_probe(
+            probe_image_id=image_id,
+            probe_artifact_id=foreign_artifact_id,
+            probe_store_id=store_id,
+        )
+        reject_scope_probe(
+            probe_image_id=foreign_image_id,
+            probe_artifact_id=foreign_artifact_id,
+            probe_store_id=store_id,
+        )
+        reject_scope_probe(
+            probe_image_id=image_id,
+            probe_artifact_id=artifact_id,
+            probe_store_id=store_id + 1,
+        )
+        assert scope_provider_calls == [], (
+            "provider was invoked for a mixed image/artifact/store identifier tuple"
+        )
+
+        # A valid same-store read must still use the active owner-store
+        # integration, even when another store has a revoked integration with
+        # the identical external_system value.
+        positive_provider_calls = []
+        positive_payload = consume_external_artifact_bytes(
+            image_id=image_id,
+            artifact_id=artifact_id,
+            store_id=store_id,
+            fetch_bytes=lambda *args: positive_provider_calls.append(args) or payload,
+        )
+        assert positive_payload == payload
+        assert positive_provider_calls == [("postgres-artifact-smoke", f"smoke/{suffix}")]
+
+        # The composite parent FK must reject a child declaration whose
+        # parent belongs to another image, even when both images share a store.
+        with SessionLocal() as db:
+            invalid_child = models.ShelfImageArtifactReference(
+                parent_reference_id=artifact_id,
+                shelf_image_id=sibling_image_id,
+                store_id=store_id,
+                artifact_type="CROP",
+                external_system="postgres-artifact-smoke",
+                external_reference=f"invalid-child/{suffix}",
+                sha256="f" * 64,
+                declared_by_user_id=admin_id,
+            )
+            db.add(invalid_child)
+            try:
+                db.commit()
+            except IntegrityError:
+                db.rollback()
+            else:
+                raise AssertionError(
+                    "PostgreSQL accepted an artifact parent from a different source image"
+                )
 
         app_name = f"ss-artifact-read-{suffix}"
         fetch_started = Event()
