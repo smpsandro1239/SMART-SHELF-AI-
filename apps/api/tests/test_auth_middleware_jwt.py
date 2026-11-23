@@ -1342,7 +1342,14 @@ def test_observation_alert_jwt_roles_and_store_scope(auth_client):
         params=params_b,
         headers=bearer(ids["supervisor_a"], "SUPERVISOR"),
     )
-    assert foreign_evaluation.status_code == 403
+    missing_evaluation = client.post(
+        "/api/v1/shelves/2147483000/observation-alerts/evaluate",
+        params=params_b,
+        headers=bearer(ids["supervisor_a"], "SUPERVISOR"),
+    )
+    assert foreign_evaluation.status_code == 404
+    assert missing_evaluation.status_code == 404
+    assert foreign_evaluation.json() == missing_evaluation.json()
 
     foreign_alert = client.post(
         f"/api/v1/shelves/{ids['shelf_b']}/observation-alerts/evaluate",
@@ -3046,7 +3053,14 @@ def test_shelf_observation_consensus_is_scoped_to_supervisor_store(auth_client):
         params={"product_id": ids["product"]},
         headers=bearer(ids["supervisor_a"], "SUPERVISOR"),
     )
-    assert foreign_response.status_code == 403
+    missing_response = client.get(
+        "/api/v1/shelves/2147483000/observation-consensus",
+        params={"product_id": ids["product"]},
+        headers=bearer(ids["supervisor_a"], "SUPERVISOR"),
+    )
+    assert foreign_response.status_code == 404
+    assert missing_response.status_code == 404
+    assert foreign_response.json() == missing_response.json()
 
     employee_response = client.get(
         f"/api/v1/shelves/{ids['shelf_a_assigned']}/observation-consensus",
