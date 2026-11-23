@@ -4,6 +4,7 @@ os.environ["APP_ENV"] = "test"
 os.environ["DATABASE_URL"] = "sqlite:///./test_unused.db"
 
 import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -306,6 +307,16 @@ def test_detection_review_and_history_enforce_source_image_store_scope(monkeypat
 
     with TestingSession() as db:
         actor = db.get(models.User, actor_id)
+        with pytest.raises(HTTPException) as foreign_lookup:
+            main_module._resolve_detection_source_image_id(
+                db, foreign_detection_id, actor
+            )
+        assert foreign_lookup.value.status_code == 404
+        with pytest.raises(HTTPException) as missing_lookup:
+            main_module._resolve_detection_source_image_id(
+                db, 2147483000, actor
+            )
+        assert missing_lookup.value.status_code == 404
         monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: actor)
 
         with TestClient(app) as client:
