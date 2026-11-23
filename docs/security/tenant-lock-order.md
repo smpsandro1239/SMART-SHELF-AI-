@@ -123,3 +123,8 @@ A validação é automatizada. Não substitui a matriz integral BOLA/IDOR, ensai
 ## Ocultação de IDs directos de consenso de prateleira — 2026-11-23
 
 O endpoint GET /api/v1/shelves/{shelf_id}/observation-consensus compara o tenant da prateleira antes de consultar evidência. Para SUPERVISOR, uma prateleira estrangeira e um ID inexistente devolvem o mesmo HTTP 404. A rota POST /api/v1/shelves/{shelf_id}/observation-alerts/evaluate herda o contrato e não persiste alertas quando a prateleira não é autorizada. Testes autenticados cobrem ambos os percursos. Código 2f4470e; teste 5feffba. CI/PostgreSQL 16 pendente.
+
+
+## IDs de prateleira — criação e consenso (2026-11-23)
+
+As rotas create_observation, create_capture_session e get_shelf_observation_consensus executam a autenticação/validação de papel antes da consulta do ID de prateleira. Para SUPERVISOR, IDs de outra loja e IDs inexistentes devolvem HTTP 404 equivalente. A avaliação de alertas usa o mesmo caminho de consenso e não persiste quando a prateleira não é autorizada. Testes HTTP cobrem os cenários negativos e ausência de efeitos. Commits de código 9288459/cce1afd; testes 739a574/d5d6243. CI/PostgreSQL 16 pendente.
