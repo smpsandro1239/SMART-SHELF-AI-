@@ -237,5 +237,5 @@ def test_shelf_product_assignment_is_scoped_to_supervisor_store(monkeypatch):
                 "target_quantity": 10,
             },
         )
-        assert foreign_assignment.status_code == 403
+        assert foreign_assignment.status_code == 404
 
