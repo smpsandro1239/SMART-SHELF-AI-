@@ -505,7 +505,7 @@ def test_observation_consensus_hides_foreign_and_missing_shelf_ids(monkeypatch):
     assert own.status_code == 200
 
 
-def test_planogram_shelf_scope_preserves_forbidden_and_missing_contracts():
+def test_planogram_shelf_scope_hides_foreign_and_missing_shelves():
     from types import SimpleNamespace
     from fastapi import HTTPException
 
@@ -535,7 +535,9 @@ def test_planogram_shelf_scope_preserves_forbidden_and_missing_contracts():
             main_module._planogram_shelf_scope(db, foreign_shelf_id, actor)
         with pytest.raises(HTTPException) as missing_error:
             main_module._planogram_shelf_scope(db, 2147483000, actor)
-        assert foreign_error.value.status_code == 403
+        assert foreign_error.value.status_code == 404
+        assert foreign_error.value.detail == "Shelf not found"
         assert missing_error.value.status_code == 404
+        assert missing_error.value.detail == "Shelf not found"
     finally:
         db.close()
