@@ -121,3 +121,8 @@ Foi removida uma definição de teste duplicada em `test_observations.py`; a seg
 - Security Scans [44893270848](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44893270848): sucesso; pip-audit sem vulnerabilidades conhecidas, npm audit sem vulnerabilidades acima do limiar, Gitleaks sem leaks e ZAP passivo/safe-mode concluído.
 
 Esta evidência cobre a rota de eventos de alertas, não fecha a matriz completa endpoint × papel × loja nem substitui DAST autenticado/pentest.
+
+
+## Revalidação — histórico de tarefas (2026-11-23)
+
+A rota `GET /api/v1/tasks/{task_id}/events` aplica agora o âmbito da loja no próprio SELECT para actores não ADMIN. IDs estrangeiros e inexistentes produzem o mesmo 404 sem carregar previamente a tarefa estrangeira. ADMIN conserva a leitura global. O teste HTTP cobre os dois casos e o acesso administrativo; validação CI do commit desta alteração pendente.
