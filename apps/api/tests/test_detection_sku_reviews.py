@@ -313,6 +313,10 @@ def test_detection_review_and_history_enforce_source_image_store_scope(monkeypat
                 f"/api/v1/shelf-image-detections/{foreign_detection_id}/reviews",
                 json={"decision": "CONFIRMED"},
             )
+            missing_review = client.post(
+                "/api/v1/shelf-image-detections/2147483000/reviews",
+                json={"decision": "CONFIRMED"},
+            )
             foreign_history = client.get(
                 f"/api/v1/shelf-image-detections/{foreign_detection_id}/reviews"
             )
@@ -324,7 +328,8 @@ def test_detection_review_and_history_enforce_source_image_store_scope(monkeypat
                 f"/api/v1/shelf-image-detections/{data['detection_id']}/reviews"
             )
 
-    assert foreign_review.status_code == 403
+    assert foreign_review.status_code == missing_review.status_code == 404
+    assert foreign_review.json() == missing_review.json()
     assert foreign_history.status_code == 403
     assert own_review.status_code == 201
     assert own_history.status_code == 200
