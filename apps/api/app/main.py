@@ -313,10 +313,18 @@ def _lock_authorized_shelf_image(
     *,
     missing_status_code: int = 404,
     missing_detail: str = "Shelf image not found",
+    hide_foreign: bool = False,
 ) -> tuple[models.ShelfImage, int]:
     """Check tenant scope before locking a source image, then recheck after the lock."""
     initial_store_id = _shelf_image_store_id(db, image_id)
     if initial_store_id is None:
+        raise HTTPException(status_code=missing_status_code, detail=missing_detail)
+    if (
+        hide_foreign
+        and actor is not None
+        and actor.role != "ADMIN"
+        and actor.store_id != initial_store_id
+    ):
         raise HTTPException(status_code=missing_status_code, detail=missing_detail)
     _enforce_store_scope(actor, initial_store_id)
 
@@ -2886,15 +2894,21 @@ def list_shelf_image_retention_events(
     db: Session = Depends(get_db),
 ):
     """List immutable retention history with bounded, stable chronological pagination."""
-    item = db.get(models.ShelfImage, image_id)
-    if item is None:
-        raise HTTPException(status_code=404, detail="Shelf image not found")
     actor = _request_user(db, request)
     if actor is None and settings.app_env != "test":
         raise HTTPException(status_code=401, detail="Authenticated user required")
     if actor is not None and actor.role not in {"ADMIN", "SUPERVISOR"}:
         raise HTTPException(status_code=403, detail="Supervisor role required")
-    _enforce_store_scope(actor, _shelf_image_store_id(db, image_id))
+    store_id = _shelf_image_store_id(db, image_id)
+    if store_id is None or (
+        actor is not None
+        and actor.role != "ADMIN"
+        and actor.store_id != store_id
+    ):
+        raise HTTPException(status_code=404, detail="Shelf image not found")
+    item = db.get(models.ShelfImage, image_id)
+    if item is None or _shelf_image_store_id(db, image_id) != store_id:
+        raise HTTPException(status_code=404, detail="Shelf image not found")
     return (
         db.query(models.ShelfImageRetentionEvent)
         .filter(models.ShelfImageRetentionEvent.shelf_image_id == image_id)
@@ -4066,13 +4080,15 @@ def create_detection_sku_review(
     image -> product lock order. This prevents a review from being appended
     against a stale detection that the worker replaced while the request waited.
     """
+    actor = _request_user(db, request)
     initial_detection = db.get(models.ShelfImageDetection, detection_id)
     if initial_detection is None:
         raise HTTPException(status_code=404, detail="Detection not found")
     source_image_id = initial_detection.shelf_image_id
 
-    actor = _request_user(db, request)
-    image_record, _ = _lock_authorized_shelf_image(db, source_image_id, actor)
+    image_record, _ = _lock_authorized_shelf_image(
+        db, source_image_id, actor, hide_foreign=True
+    )
     if image_record.retention_status != "ACTIVE":
         _require_active_shelf_image(image_record)
 
@@ -4311,10 +4327,10 @@ def review_product_embedding_exemplar(
     """Approve or reject a pending exemplar with reviewer attribution."""
     # Follow the worker's lock order: source image, catalogue product,
     # exemplar. This prevents inversion with matching's prelocked image set.
+    actor = _request_user(db, request)
     initial = db.get(models.ProductEmbeddingExemplar, exemplar_id)
     if initial is None:
         raise HTTPException(status_code=404, detail="Embedding exemplar not found")
-    actor = _request_user(db, request)
     # Image-less exemplars have no tenant-bound source to authorize against;
     # only ADMIN may review them. Reject before taking the global product lock.
     if (
@@ -4332,6 +4348,7 @@ def review_product_embedding_exemplar(
             db, initial.shelf_image_id, actor,
             missing_status_code=410,
             missing_detail="Source shelf image is no longer available",
+            hide_foreign=True,
         )
         _require_active_shelf_image(source_image)
         # Preserve retention semantics (e.g. 410 for a restricted image), but
