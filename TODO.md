@@ -1,3 +1,10 @@
+## Segurança P0 — paridade BOLA para IDs de deteção e exemplares (2026-11-23; smoke reforçado, CI pendente)
+
+- [x] No smoke PostgreSQL pré-lock, comparar o status e o corpo completos para IDs reais estrangeiros e IDs inexistentes nos endpoints de revisão e histórico de deteções.
+- [x] Aplicar a mesma comparação à revisão de exemplares, mantendo bloqueadas as linhas PostgreSQL da imagem e do produto durante os pedidos.
+- [x] Confirmar HTTP 404 indistinguível nos seis pedidos e ausência de persistência de revisões.
+- [ ] Confirmar API CI/PostgreSQL 16, Quality Gates, Security Scans e Docker Compose no novo commit.
+
 ## Segurança P0 — isolamento de IDs de artefactos externos (2026-11-23; smoke PostgreSQL adicionado, CI pendente)
 
 - [x] Expandir `postgres_artifact_consumption_smoke.py` com duas imagens na mesma loja e uma segunda loja, incluindo artefactos persistidos em ambas.
