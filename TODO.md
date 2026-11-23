@@ -1761,3 +1761,15 @@ A implementação de produção já verificava lease_lost nos caminhos de sucess
 - [x] Reforçar o teste directo do resolver para IDs estrangeiros e inexistentes, além dos testes HTTP existentes.
 - [ ] Validar API CI/PostgreSQL 16, Quality Gates, Security Scans e Docker Compose no SHA desta alteração.
 
+
+
+## Inventário — interface de histórico de movimentos
+
+- [x] Criar painel React para consultar movimentos por loja.
+- [x] Adicionar filtros por ID de produto e tarefa, atualização manual e limite explícito de 100 registos.
+- [x] Apresentar indicadores de movimentos encontrados, unidades movimentadas e data do movimento mais recente.
+- [x] Disponibilizar detalhe auditável por movimento, incluindo snapshots, responsável e justificação.
+- [x] Restringir a apresentação a ADMIN/SUPERVISOR e usar o filtro de loja activo para ADMIN.
+- [x] Classificar explicitamente a rota GET de histórico na matriz de políticas RBAC.
+- [ ] Implementar divergências entre stock observado na prateleira e stock de referência, sem alterar automaticamente o inventário contabilístico.
+- [ ] Separar explicitamente stock de retaguarda, reservado, disponível e stock físico observado na prateleira.
