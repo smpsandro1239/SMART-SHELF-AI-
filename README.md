@@ -1988,3 +1988,12 @@ A API disponibiliza `GET /api/v1/inventory/movements?store_id={id}` para consult
 ### Histórico operacional de movimentos de inventário
 
 A área de gestão de inventário inclui um histórico de movimentos aprovado e de consulta apenas de leitura. O painel consome `GET /api/v1/inventory/movements`, permite filtrar por produto e tarefa, apresenta o volume de unidades movimentadas e expõe a rastreabilidade de cada operação: tarefa, loja, responsável, justificação e snapshots de origem e resultado. A consulta está disponível a ADMIN e SUPERVISOR, respeitando o âmbito da loja; EMPLOYEE não tem acesso. O histórico não altera snapshots nem cria movimentos.
+
+
+## 2026-11-23 — Histórico de movimentos: interface operacional e validação
+
+- Integrado no dashboard um painel de histórico de inventário para ADMIN e SUPERVISOR, com seleção da loja, filtros por produto/tarefa, atualização manual, métricas e detalhe de snapshots/actor/justificação.
+- O painel consulta os 100 movimentos mais recentes e não altera inventário. A API continua a impor o âmbito da loja e a política RBAC explícita classifica a rota como `SUPERVISOR_OR_ADMIN`.
+- A compilação TypeScript e o build de produção passaram no Quality Gates do SHA `8e92494b446a2f0c233755316ada70407b596cd1`.
+- A suite API detectou uma expectativa incoerente no KPI `urgent_active_tasks`: o código contava prioridades HIGH e URGENT, enquanto o contrato/teste e o rótulo do dashboard definem apenas URGENT. Corrigida a query para contar exclusivamente tarefas URGENT activas.
+- Security Scans passaram no SHA `8e92494b446a2f0c233755316ada70407b596cd1`. A nova execução API/Quality Gates após a correção ainda está pendente.
