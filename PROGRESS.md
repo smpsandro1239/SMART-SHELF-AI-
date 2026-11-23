@@ -675,3 +675,18 @@ Limitação de segurança resolvida em camadas: owner de migrations separado do 
 ### Ajuste de validação PostgreSQL — contrato de ocultação de deteções
 
 A API CI executada no commit 73ad7b4 falhou exclusivamente no script postgres_detection_exemplar_prelock_smoke.py: o smoke ainda esperava HTTP 403 para revisão, histórico e revisão de exemplar cross-store. A implementação passou a ocultar estes IDs com HTTP 404 uniforme, preservando o requisito central do smoke — rejeitar antes de bloquear a imagem/produto. Atualizei as três expectativas e a mensagem do smoke no commit 31e6c9f. O resultado do novo CI ainda está pendente; não considerar a suite aprovada.
+
+
+## 2026-11-23 — Validação integral concluída no HEAD 1ffe4d3a
+
+A execução final do GitHub Actions foi concluída com sucesso no commit `1ffe4d3a7567c486f68de5e26051f7bcc0a2c110` (branch `main`):
+
+- API CI: **1595 passed, 1 skipped**. Incluiu a suite pytest e os smoke tests PostgreSQL 16.
+- Smoke PostgreSQL: autorização de inventário/tarefas/warehouse, sessão de captura, retenção e legal hold, IDs diretos de deteções/exemplares, concorrência de revisão, planogramas, integridade de inventário e anti-rollback ONNX passaram.
+- Quality Gates: Python tests/compilation e TypeScript/production build passaram.
+- Security Scans: Git history secret scan, Python dependency audit, Web dependency audit e OWASP ZAP passive baseline passaram.
+- Docker Compose demo stack smoke passou.
+
+A primeira execução integral após a alteração de contratos encontrou 24 testes com expectativas antigas (403 em vez de 404) e um teste com fixture duplicada. As expectativas foram alinhadas com a ocultação uniforme de IDs estrangeiros; os fixtures foram isolados e os testes reexecutados. A execução final passou sem falhas.
+
+Próxima prioridade: continuar auditoria de IDs aninhados em OCR/matching/artefactos e warehouse, preservando preflight de tenant, ordem global de locks e ausência de efeitos laterais.
