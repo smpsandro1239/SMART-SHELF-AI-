@@ -132,6 +132,11 @@ type Summary = {
   store_id: number | null; role: Role; active_tasks: number;
   shelves_requiring_attention: number;
   tasks: Record<string, number>; observations: Record<string, number>; note: string;
+  tasks_by_priority?: Record<string, number>;
+  urgent_active_tasks?: number;
+  unassigned_active_tasks?: number;
+  completion_rate_percent?: number;
+  attention_observations?: number;
 };
 
 function formatDurationMinutes(value: number | null | undefined): string {
@@ -728,7 +733,7 @@ export default function App() {
             <Metric icon={<AlertTriangle />} label="Prateleiras a necessitar de atenção" value={summary.shelves_requiring_attention} tone="orange" detail="Rutura ou stock baixo" onClick={() => navigateToSection("operational-decisions")} />
             <Metric icon={<Clock3 />} label="Tarefas ativas" value={summary.active_tasks} tone="blue" detail="Pendentes, atribuídas ou em curso" onClick={() => { setTaskFocusFilter("ACTIVE"); navigateToSection("replenishment-tasks"); }} />
             <Metric icon={<CheckCircle2 />} label="Tarefas concluídas" value={summary.tasks.completed || 0} tone="green" detail="No conjunto de registos consultado" onClick={() => { setTaskFocusFilter("COMPLETED"); navigateToSection("replenishment-tasks"); }} />
-            <Metric icon={<Truck />} label="Tarefas urgentes" value={tasks.filter(t => t.priority === "URGENT" && !["COMPLETED", "CANCELLED"].includes(t.status)).length} tone="purple" detail="A aguardar intervenção" onClick={() => { setTaskFocusFilter("URGENT"); navigateToSection("replenishment-tasks"); }} />
+            <Metric icon={<Truck />} label="Tarefas urgentes" value={summary.urgent_active_tasks ?? tasks.filter(t => t.priority === "URGENT" && !["COMPLETED", "CANCELLED"].includes(t.status)).length} tone="purple" detail="A aguardar intervenção" onClick={() => { setTaskFocusFilter("URGENT"); navigateToSection("replenishment-tasks"); }} />
           </section>
           <section className="content-grid">
             <article id="replenishment-tasks" className="panel task-panel">
@@ -763,7 +768,12 @@ export default function App() {
               <StatusBar label="Atribuídas" value={summary.tasks.assigned || 0} total={taskTotal} color="violet" onClick={() => { setTaskFocusFilter("ASSIGNED"); navigateToSection("replenishment-tasks"); }} />
               <StatusBar label="Em execução" value={summary.tasks.in_progress || 0} total={taskTotal} color="blue" onClick={() => { setTaskFocusFilter("IN_PROGRESS"); navigateToSection("replenishment-tasks"); }} />
               <StatusBar label="Concluídas" value={summary.tasks.completed || 0} total={taskTotal} color="green" onClick={() => { setTaskFocusFilter("COMPLETED"); navigateToSection("replenishment-tasks"); }} />
-              <div className="panel-note"><AlertTriangle size={16} /><span>{summary.observations.empty || 0} prateleiras sem stock e {summary.observations.low_stock || 0} com stock baixo, segundo as observações registadas.</span></div>
+              <div className="dashboard-insights" aria-label="Indicadores de execução">
+                <div><span>Tarefas sem atribuição</span><strong>{summary.unassigned_active_tasks ?? 0}</strong></div>
+                <div><span>Taxa de conclusão</span><strong>{(summary.completion_rate_percent ?? 0).toLocaleString("pt-PT", { maximumFractionDigits: 1 })}%</strong></div>
+                <div><span>Observações de atenção</span><strong>{summary.attention_observations ?? ((summary.observations.empty || 0) + (summary.observations.low_stock || 0))}</strong></div>
+              </div>
+              <div className="panel-note"><AlertTriangle size={16} /><span>{summary.observations.empty || 0} observações de prateleiras sem stock e {summary.observations.low_stock || 0} observações de stock baixo. O indicador superior conta prateleiras distintas.</span></div>
             </article>
           </section>
           {(user?.role === "ADMIN" || user?.role === "SUPERVISOR") && <section id="operational-decisions" className="panel decision-panel">
