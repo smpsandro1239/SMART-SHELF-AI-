@@ -688,3 +688,17 @@ def test_foreign_calibration_and_comparison_images_are_rejected_before_lock(plan
     )
     assert comparison.status_code == 403
     assert image_lock_calls == [], "Foreign comparison image must be rejected before its row lock"
+
+
+def test_active_planogram_service_rejects_foreign_shelf_without_active_planogram(planogram_api):
+    _client, ids = planogram_api
+    with main_module.SessionLocal() as db:
+        with pytest.raises(
+            planogram_service.ShelfPlanogramError,
+            match="Access to this shelf is not allowed",
+        ):
+            planogram_service.load_active_planogram_for_shelf(
+                db,
+                shelf_id=ids["shelf_b"],
+                actor_user_id=ids["supervisor_a"],
+            )
