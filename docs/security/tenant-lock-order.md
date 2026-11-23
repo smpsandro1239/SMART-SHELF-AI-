@@ -136,3 +136,12 @@ As rotas create_observation, create_capture_session e get_shelf_observation_cons
 - PATCH /api/v1/tasks/{task_id}/status e POST /api/v1/tasks/{task_id}/reconcile-inventory executam preflight tenant, lock e revalidação através de _lock_store_scoped_record(hide_foreign=True).
 - Testes de regressão comparam respostas estrangeira/inexistente para os três endpoints; verificam ausência de transição/eventos e ausência de InventoryMovement quando a reconciliação é negada.
 - Commits: GET 954f973; mutations ee40b88; testes f12ed7b e cc3dc3a. Validação CI/PostgreSQL 16 pendente.
+
+
+## Evidência de visão computacional — preflight de tenant (2026-11-23)
+
+- Eventos de retenção: autenticar e validar RBAC antes de resolver image_id; obter store_id pela relação imagem → prateleira → zona; ocultar imagem estrangeira e inexistente com HTTP 404; só depois consultar a linha e os eventos. A rota GET permanece sem row lock.
+- Revisão de deteções: autenticar antes de consultar detection_id; resolver a imagem de origem; validar tenant antes do lock da imagem; voltar a carregar a deteção depois do lock, preservando a ordem imagem → produto e a proteção contra revisão de uma deteção substituída.
+- Revisão de exemplares: autenticar antes de consultar exemplar_id; imagem estrangeira oculta-se como HTTP 404; imagem de origem indisponível por retenção continua a usar HTTP 410 para o tenant autorizado; lock order imagem → produto → exemplar permanece intacta.
+- O helper _lock_authorized_shelf_image aceita hide_foreign e detalhe de ocultação específico do recurso pai, sem alterar por omissão os contratos dos restantes chamadores.
+- Testes: IDs estrangeiros/inexistentes para retenção, revisão de deteções e revisão de exemplares; validar igualdade de status/detalhe e ausência de registos de revisão não autorizados.
