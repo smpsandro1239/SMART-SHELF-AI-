@@ -110,3 +110,11 @@ No HEAD 48859d1e1e0cc0581c5cdf69b14db6a5cfed6794:
 - Docker Compose [45186899968](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45186899968): stack demonstrativa aprovada.
 
 A validação é automatizada. Não substitui a matriz integral BOLA/IDOR, ensaio de volume persistente preexistente, revisão manual da interface ou avaliação com modelos/imagens reais.
+
+
+## Ocultação de IDs directos de sessões e alertas — 2026-11-23
+
+- O fecho de sessões de captura usa _lock_store_scoped_record com hide_foreign=True: o tenant é verificado antes do lock e revalidado depois.
+- A actualização de alertas usa o mesmo helper; a leitura de eventos não adquire lock, mas valida o store_id antes de consultar eventos.
+- Para SUPERVISOR, IDs estrangeiros e inexistentes devolvem HTTP 404 equivalente. ADMIN mantém acesso global e EMPLOYEE continua bloqueado pelo RBAC.
+- Regressões HTTP verificam igualdade das respostas 404 e ausência de alterações na sessão/alerta estrangeiro. Código b627107; testes 1a2e776. CI/PostgreSQL 16 ainda pendente.
