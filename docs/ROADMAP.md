@@ -1,3 +1,7 @@
+## Segurança P0 — histórico de alertas com predicado SQL multi-tenant (2026-11-23; CI pendente)
+
+A rota `GET /api/v1/observation-alerts/{alert_id}/events` filtra `alert_id` e `store_id` na mesma query para SUPERVISOR, evitando carregar alertas estrangeiros antes de aplicar a autorização. ADMIN conserva visibilidade global e EMPLOYEE continua proibido. Regressão HTTP compara alerta estrangeiro com ID inexistente (404 e corpo idêntico). CI/PostgreSQL 16, Quality Gates, Security Scans e Docker Compose pendentes.
+
 ## Segurança P0 — ocultação de IDs directos de deteções em observação e histórico (2026-11-23; validação pendente)
 
 A criação de observações a partir de deteções e a consulta do histórico de revisões por `detection_id` passam a usar ocultação cross-store (`hide_foreign=True`), devolvendo HTTP 404 idêntico ao ID inexistente. A autorização é verificada antes do lock da imagem e novamente depois do lock. Testes autenticados cobrem os dois endpoints e o caminho same-store. API CI/PostgreSQL 16, Quality Gates, Security Scans e Docker Compose pendentes.
