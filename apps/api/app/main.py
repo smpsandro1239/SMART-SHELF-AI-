@@ -843,6 +843,7 @@ def retire_shelf_planogram(
 
 @app.post("/api/v1/observations", response_model=ObservationRead, status_code=201, tags=["observations"])
 def create_observation(payload: ObservationCreate, request: Request, db: Session = Depends(get_db)):
+    actor = _request_user(db, request)
     shelf_scope = (
         db.query(models.Shelf)
         .join(models.Zone, models.Shelf.zone_id == models.Zone.id)
@@ -851,9 +852,8 @@ def create_observation(payload: ObservationCreate, request: Request, db: Session
     )
     if shelf_scope is None:
         raise HTTPException(status_code=404, detail="Shelf not found")
-    actor = _request_user(db, request)
     if actor is not None and actor.role != "ADMIN" and shelf_scope.zone.store_id != actor.store_id:
-        raise HTTPException(status_code=403, detail="Access to this shelf is not allowed")
+        raise HTTPException(status_code=404, detail="Shelf not found")
     reserved_demo_evidence_fields = (
         "demo_detection_id=",
         "shelf_image_id=",
@@ -1182,6 +1182,7 @@ def get_shelf_observation_consensus(
     db: Session = Depends(get_db),
 ):
     """Evaluate repeated evidence for one shelf without creating alerts or tasks."""
+    actor = _request_user(db, request)
     shelf = (
         db.query(models.Shelf)
         .join(models.Zone, models.Shelf.zone_id == models.Zone.id)
@@ -1190,7 +1191,6 @@ def get_shelf_observation_consensus(
     )
     if shelf is None:
         raise HTTPException(status_code=404, detail="Shelf not found")
-    actor = _request_user(db, request)
     if actor is not None and actor.role != "ADMIN" and actor.store_id != shelf.zone.store_id:
         raise HTTPException(status_code=404, detail="Shelf not found")
     if product_id is not None:
@@ -1264,7 +1264,8 @@ def create_capture_session(payload: CaptureSessionCreate, request: Request, db: 
     if shelf is None:
         raise HTTPException(status_code=404, detail="Shelf not found")
     store_id = shelf.zone.store_id
-    _enforce_store_scope(actor, store_id)
+    if actor is not None and actor.role != "ADMIN" and actor.store_id != store_id:
+        raise HTTPException(status_code=404, detail="Shelf not found")
     if actor is not None and actor.role == "EMPLOYEE":
         raise HTTPException(status_code=403, detail="Supervisor role required to create capture sessions")
     started_at = payload.started_at or models.utc_now()
