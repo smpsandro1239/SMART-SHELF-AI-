@@ -756,3 +756,58 @@ def test_inventory_movement_history_rejects_employee_and_foreign_store(monkeypat
             params={"store_id": foreign_store_id},
         )
         assert foreign_store.status_code == 403
+
+
+def test_inventory_reconciliation_separates_shelf_observation_from_backroom_stock(monkeypatch):
+    with TestClient(app) as client:
+        store_id, product_id = create_store_and_product(client)
+        zone = client.post("/api/v1/zones", json={"store_id": store_id, "name": "Bebidas"}).json()
+        shelf = client.post("/api/v1/shelves", json={"zone_id": zone["id"], "code": "BEB-RECON"}).json()
+        link = client.post("/api/v1/shelf-products", json={
+            "shelf_id": shelf["id"], "product_id": product_id,
+            "target_quantity": 12, "min_display_quantity": 3,
+        })
+        assert link.status_code == 201, link.text
+        observation = client.post("/api/v1/observations", json={
+            "shelf_id": shelf["id"], "product_id": product_id,
+            "status": "LOW_STOCK", "source": "manual",
+            "confidence": 0.96, "observed_quantity": 4,
+        })
+        assert observation.status_code == 201, observation.text
+        snapshot = client.post("/api/v1/inventory/snapshots", json={
+            "store_id": store_id, "product_id": product_id,
+            "on_hand_quantity": 30, "reserved_quantity": 5,
+            "source": "ERP", "external_reference": f"RECON-{uuid4().hex[:8]}",
+        })
+        assert snapshot.status_code == 201, snapshot.text
+
+        actor = _supervisor_actor(store_id)
+        monkeypatch.setattr(main_module, "_request_user", lambda db, request: actor)
+        response = client.get(f"/api/v1/inventory/reconciliation?store_id={store_id}")
+        assert response.status_code == 200, response.text
+        payload = response.json()
+        assert payload["count"] == 1
+        item = payload["items"][0]
+        assert item["display_target_quantity"] == 12
+        assert item["observed_shelf_quantity"] == 4
+        assert item["display_delta"] == -8
+        assert item["display_status"] == "BELOW_TARGET"
+        assert item["backroom_on_hand_quantity"] == 30
+        assert item["backroom_reserved_quantity"] == 5
+        assert item["backroom_available_quantity"] == 25
+        assert item["backroom_snapshot_id"] == snapshot.json()["id"]
+
+
+def test_inventory_reconciliation_rejects_employee_and_foreign_store(monkeypatch):
+    with TestClient(app) as client:
+        store_id, _ = create_store_and_product(client)
+        employee = _supervisor_actor(store_id, role="EMPLOYEE")
+        monkeypatch.setattr(main_module, "_request_user", lambda db, request: employee)
+        denied = client.get(f"/api/v1/inventory/reconciliation?store_id={store_id}")
+        assert denied.status_code == 403
+
+        supervisor = _supervisor_actor(store_id)
+        monkeypatch.setattr(main_module, "_request_user", lambda db, request: supervisor)
+        foreign = client.get(f"/api/v1/inventory/reconciliation?store_id={store_id + 999}")
+        assert foreign.status_code == 403
+
