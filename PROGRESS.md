@@ -3,7 +3,8 @@
 - O smoke `postgres_retention_legal_hold_concurrency_smoke.py` testa agora nove rotas de imagem com um supervisor de outra loja: conteúdo, deteções, evidence fusion, OCR evidence/matches/runs, eventos de retenção, retry e restrict.
 - A transacção concorrente mantém a linha `shelf_images` bloqueada. Todas as rotas têm de responder HTTP 403 antes da libertação do lock; qualquer handler que tente bloquear a imagem antes de autorizar provoca timeout e falha o smoke.
 - O passo `Verify PostgreSQL legal hold and purge schedule concurrency` passou no API CI [45130818413](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45130818413), SHA `d319d1a4`.
-- Docker Compose [45130818319](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45130818319), Quality Gates [45130818392](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45130818392) e Security Scans [45130818374](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45130818374) passaram. A suite pytest do API CI ainda estava em execução na última consulta.
+- Docker Compose [45130818319](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45130818319), Quality Gates [45130818392](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45130818392) e Security Scans [45130818374](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45130818374) passaram.
+- API CI terminou com sucesso: **1555 passed, 1 skipped** no [run 45130818413](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45130818413).
 - Os endpoints de artefactos, legal hold e purge que exigem ADMIN seguem a política de administrador global; não são casos de negação cross-store para SUPERVISOR. A revisão dos restantes handlers de escrita/revisão continua pendente.
 
 ---
