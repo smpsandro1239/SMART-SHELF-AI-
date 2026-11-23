@@ -770,7 +770,7 @@ def test_inventory_reconciliation_separates_shelf_observation_from_backroom_stoc
         assert link.status_code == 201, link.text
         observation = client.post("/api/v1/observations", json={
             "shelf_id": shelf["id"], "product_id": product_id,
-            "status": "LOW_STOCK", "source": "manual",
+            "status": "LOW_STOCK", "source": "mobile",
             "confidence": 0.96, "observed_quantity": 4,
         })
         assert observation.status_code == 201, observation.text
