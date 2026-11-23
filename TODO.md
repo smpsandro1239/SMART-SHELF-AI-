@@ -1,3 +1,13 @@
+## Segurança P0 — ocultação de IDs de prateleiras em operações de planograma (2026-11-23)
+
+- [x] Aplicar o filtro de tenant directamente à query que resolve a prateleira para operações de planograma.
+- [x] Uniformizar HTTP 404 e o detalhe `Shelf not found` para prateleiras estrangeiras e inexistentes, sem consultar primeiro o `store_id` de uma linha estrangeira.
+- [x] Actualizar a regressão unitária para exigir o contrato de ocultação.
+- [ ] Validar o teste focado, API CI/PostgreSQL 16, Quality Gates, Security Scans e Docker Compose no HEAD final.
+
+Decisão: ADMIN mantém visibilidade global. SUPERVISOR só resolve prateleiras da sua loja; um ID estrangeiro é indistinguível de um ID inexistente. A query deixa de materializar previamente o tenant da prateleira estrangeira.
+
+
 ## Segurança P0 — histórico de eventos de paletes sem oráculo cross-store (2026-11-23; smoke PostgreSQL reforçado)
 
 - [x] Manter a resolução da palete limitada por pallet_id e store_id antes de consultar os eventos.
