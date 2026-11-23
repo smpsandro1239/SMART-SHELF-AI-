@@ -67,3 +67,13 @@ O smoke PostgreSQL foi ampliado para testar isolamento por shelf_id em recursos 
 - Os controlos positivos same-store para observação e sessão de captura confirmam que a autorização não bloqueia recursos próprios.
 
 A implementação está publicada no commit 99a69a7415bc552b0cf104861d93881dac6259e1; a execução PostgreSQL 16/CI ainda está pendente. Esta cobertura não substitui a matriz integral endpoint x ADMIN/SUPERVISOR/EMPLOYEE.
+
+
+## Matriz RBAC — ADMIN e EMPLOYEE (2026-11-23)
+
+O smoke multi-loja também comprova:
+
+- ADMIN consegue consultar os IDs concretos das observações, sessões e alertas seedados na loja B.
+- EMPLOYEE recebe 403 nos endpoints de observações, sessões de captura, alertas e planogramas, mesmo quando consulta recursos da loja A.
+
+Commit `26a97f7136eace2bc0b4f428731db3990163aa93`; validação PostgreSQL 16/CI pendente. Esta amostra não é a matriz completa de todos os endpoints.

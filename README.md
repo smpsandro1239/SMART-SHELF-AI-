@@ -1870,3 +1870,10 @@ O smoke PostgreSQL de autorização foi ampliado com recursos reais de teste na 
 Implementação: apps/api/scripts/postgres_inventory_authorization_smoke.py. Commits: d4429b0fa1ab3d2c729d6c5b8b29f38dc5cdf731 e 99a69a7415bc552b0cf104861d93881dac6259e1. Validação PostgreSQL 16 e CI deste novo SHA ainda pendentes; não declarar a cobertura aprovada até o workflow API CI terminar.
 
 A ronda anterior do worker Edge ficou parcialmente validada: API CI e Docker Compose passaram no commit aec6f2b; Quality Gates e Security Scans foram cancelados. A cobertura de erro após perda da lease existe, mas ainda falta o smoke PostgreSQL de takeover/fencing concorrente.
+
+
+## 2026-11-23 — Matriz RBAC adicional no smoke multi-loja
+
+A mesma fixture PostgreSQL agora inclui um utilizador EMPLOYEE da loja A. O smoke verifica que os endpoints de observações, sessões de captura, alertas e planogramas recusam o papel EMPLOYEE (HTTP 403), mesmo quando os recursos pertencem à própria loja. Em paralelo, o ADMIN consulta as observações, sessões e alertas da loja B e tem de receber os IDs exactos das fixtures estrangeiras. Isto prova que as respostas vazias do SUPERVISOR decorrem do isolamento de tenant, e não da ausência de dados.
+
+Commit de código: 26a97f7136eace2bc0b4f428731db3990163aa93. CI/PostgreSQL 16 deste SHA ainda pendentes.

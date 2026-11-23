@@ -1199,3 +1199,11 @@ Validação no commit `311fecc9e13641e6d5eb55465fda646fb2909601`: Quality Gates 
 - Commits: d4429b0fa1ab3d2c729d6c5b8b29f38dc5cdf731 e 99a69a7415bc552b0cf104861d93881dac6259e1.
 - CI/PostgreSQL 16 do SHA final ainda pendentes.
 - A cobertura actual continua centrada no actor SUPERVISOR e nos recursos escolhidos; não representa a matriz completa de todos os papéis e endpoints.
+
+
+## 2026-11-23 — Extensão da matriz de papéis no smoke multi-loja
+
+- ADMIN confirma visibilidade das fixtures reais estrangeiras (observação, sessão e alerta).
+- EMPLOYEE é recusado em observações, sessões de captura, alertas e planogramas, inclusive na própria loja, de acordo com a política explícita RBAC.
+- Commit: 26a97f7136eace2bc0b4f428731db3990163aa93.
+- CI/PostgreSQL 16 pendentes; a matriz integral por endpoint e papel continua em aberto.

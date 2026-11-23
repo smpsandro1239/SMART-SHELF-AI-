@@ -1487,3 +1487,12 @@ A implementação de produção já verificava lease_lost nos caminhos de sucess
 - [x] Docker Compose Smoke passou no mesmo commit.
 - [ ] Quality Gates e Security Scans foram cancelados; repetir a validação num commit posterior.
 - [ ] Criar smoke PostgreSQL de takeover concorrente durante handler lento e provar rejeição de ACK/falha por fencing obsoleto.
+
+
+## Segurança — matriz RBAC multi-loja adicional (2026-11-23; implementação publicada, CI pendente)
+
+- [x] Adicionar actor EMPLOYEE autenticado à fixture PostgreSQL multi-loja.
+- [x] Confirmar que ADMIN consegue consultar os IDs reais de observações, sessões e alertas da loja estrangeira.
+- [x] Confirmar que EMPLOYEE recebe HTTP 403 em observações, sessões, alertas e planogramas, mesmo para a própria loja.
+- [ ] Executar API CI/PostgreSQL 16 e confirmar o commit 26a97f7136eace2bc0b4f428731db3990163aa93.
+- [ ] Continuar matriz endpoint × papel × tenant para rotas restantes e relações indirectas.

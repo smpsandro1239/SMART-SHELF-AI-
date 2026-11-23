@@ -513,3 +513,11 @@ Limitação de segurança resolvida em camadas: owner de migrations separado do 
 - Validação PostgreSQL 16 ainda pendente para o SHA final 99a69a7; não houve execução local do script.
 - Na ronda anterior, API CI e Docker Compose passaram no commit aec6f2b; Quality Gates e Security Scans foram cancelados.
 - Próxima prova: CI do smoke de autorização, depois matriz de roles e takeover PostgreSQL do worker Edge.
+
+
+## 2026-11-23 — Controlos ADMIN/EMPLOYEE no smoke de autorização
+
+- Criado actor EMPLOYEE da loja A para validar negações RBAC em endpoints de observações, sessões de captura, alertas e planogramas.
+- Acrescentados controlos ADMIN que leem as fixtures reais da loja B, demonstrando que as respostas vazias do SUPERVISOR são efeito do isolamento de tenant.
+- Commit: 26a97f7136eace2bc0b4f428731db3990163aa93.
+- A validação CI/PostgreSQL 16 deste commit ainda está pendente.
