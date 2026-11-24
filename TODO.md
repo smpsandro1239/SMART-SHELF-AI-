@@ -1,3 +1,10 @@
+## Reposição — bloquear evidência com timestamp futuro (2026-11-24; implementação/teste publicados, CI pendente)
+
+- [x] Introduzir o estado `INVALID_OBSERVATION_TIMESTAMP` nas recomendações de reposição.
+- [x] Impedir a geração de quantidade sugerida quando a observação mais recente está datada no futuro.
+- [x] Explicar que é necessário verificar a sincronização do relógio antes de criar uma tarefa.
+- [ ] Validar testes focados, suite API e CI PostgreSQL no HEAD final.
+
 ## Inventário — frescura das observações de prateleira (2026-11-24; implementação/testes publicados, CI pendente)
 
 - [x] Expor `observation_age_minutes` na reconciliação para distinguir evidência recente de evidência antiga.
