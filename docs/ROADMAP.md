@@ -1407,3 +1407,8 @@ O dashboard passa a apresentar, em separado, o objetivo de exposição, a últim
 
 A resposta de reconciliação inclui agora `observation_age_minutes`, permitindo avaliar a idade da evidência visual sem confundir dados antigos com medições actuais. Não é imposto um limite de obsolescência até existir uma política operacional configurada. A ausência de observação continua representada por `null`. Teste com relógio controlado: 90 minutos; CI pendente.
 
+
+
+### Integridade da criação de tarefas — revalidação sob lock
+
+A criação a partir de recomendação recalcula agora a recomendação depois de adquirir o lock estável da loja. Isto evita usar uma decisão calculada antes da secção crítica quando os dados de stock ou evidência podem ter mudado. A garantia depende de os escritores concorrentes de inventário respeitarem o mesmo lock; validar em PostgreSQL 16 e com teste concorrente dedicado.
