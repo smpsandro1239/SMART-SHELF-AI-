@@ -1891,3 +1891,19 @@ The shift's net planned capacity is calculated as `(ends_at - starts_at) - break
 - [ ] Confirm PostgreSQL migration and all GitHub Actions checks complete successfully.
 
 Capacity is calculated conservatively from the current instant until the active shift ends, less the full configured break duration, then less the estimated duration of the employee's active assigned tasks. Explicit UNAVAILABLE intervals block assignment. AVAILABLE records are currently informational; the presence of a shift is the positive eligibility requirement. This iteration does not yet schedule tasks into future shifts or model break placement within a shift.
+
+
+## Capacity-aware task planning — 2026-11-24
+
+- [x] Added `estimated_duration_minutes` (1–480; default 15) and optional normalized `required_skill_code` to replenishment tasks.
+- [x] Added Alembic migration `0075_task_capacity`.
+- [x] Replaced the previous unconstrained balancing behaviour in the automatic assignment endpoint with persisted workforce eligibility.
+- [x] Only active employees with a currently scheduled shift, no active unavailability interval, the required competency and sufficient remaining minutes can receive a task.
+- [x] Active assigned/in-progress tasks consume their estimated duration before new work is allocated.
+- [x] Priority order remains URGENT > HIGH > NORMAL > LOW; tasks that do not fit remain pending and are counted as unassigned.
+- [x] Workforce mutations serialize on the store row, preventing concurrent shift/availability/skill changes from racing with assignment planning on PostgreSQL.
+- [x] Added planner unit tests and API integration coverage for required skills and capacity limits.
+- [ ] Validate all migrations and API tests in the current PostgreSQL-backed GitHub Actions run.
+- [ ] Add workforce update/cancellation endpoints and a preview/simulation mode for supervisors.
+
+Capacity is calculated conservatively from the current time to the end of the active shift, less the configured break minutes and estimated active workload. In-progress tasks are charged their full estimate because the current task model does not yet persist remaining effort.
