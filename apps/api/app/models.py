@@ -601,6 +601,8 @@ class ReplenishmentTask(Base):
     assigned_to: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
     assigned_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     requested_quantity: Mapped[float | None] = mapped_column(Numeric(12, 3), nullable=True)
+    estimated_duration_minutes: Mapped[int] = mapped_column(Integer, default=15, nullable=False)
+    required_skill_code: Mapped[str | None] = mapped_column(String(60), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
