@@ -209,6 +209,34 @@ class InventoryReconciliationCreate(BaseModel):
     reason: str = Field(min_length=3, max_length=1000)
 
 
+class InventoryReconciliationRecordCreate(BaseModel):
+    store_id: int
+    shelf_id: int
+    product_id: int
+    reason: str = Field(min_length=3, max_length=1000)
+
+    @field_validator("reason")
+    @classmethod
+    def validate_reconciliation_reason(cls, value: str) -> str:
+        normalized = value.strip()
+        if len(normalized) < 3:
+            raise ValueError("reason must contain at least 3 non-space characters")
+        return normalized
+
+
+class InventoryReconciliationReview(BaseModel):
+    decision: Literal["APPROVED", "REJECTED", "NEEDS_INVESTIGATION"]
+    reason: str = Field(min_length=3, max_length=1000)
+
+    @field_validator("reason")
+    @classmethod
+    def validate_review_reason(cls, value: str) -> str:
+        normalized = value.strip()
+        if len(normalized) < 3:
+            raise ValueError("reason must contain at least 3 non-space characters")
+        return normalized
+
+
 class InventoryMovementRead(BaseModel):
     id: int
     task_id: int
