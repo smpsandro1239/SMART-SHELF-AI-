@@ -7284,7 +7284,12 @@ def get_inventory_reconciliation_dashboard(store_id: int, request: Request = Non
             "absolute_delta_total": 0.0, "latest_created_at": record.created_at,
         })
         group["reconciliation_count"] += 1
-        group["recurring_count_30d"] += int(record.created_at >= recurrence_start)
+        record_created_at = record.created_at
+        if record_created_at.tzinfo is None:
+            record_created_at = record_created_at.replace(tzinfo=timezone.utc)
+        else:
+            record_created_at = record_created_at.astimezone(timezone.utc)
+        group["recurring_count_30d"] += int(record_created_at >= recurrence_start)
         group["divergence_count"] += int(record.comparison_status == "DIVERGENCE")
         if record.wms_erp_delta is not None:
             group["absolute_delta_total"] += abs(float(record.wms_erp_delta))
