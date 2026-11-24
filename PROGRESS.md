@@ -802,6 +802,12 @@ Foi adicionada uma regressão em `apps/api/tests/test_inventory.py` para uma ass
 Commit de teste: `3f5c0b012fd4104edc1cf55c24d308668a99a1d1`. A documentação de acompanhamento foi actualizada no commit `e629bd65952b976d4546e6f55325151590561ada`. A validação automatizada do novo HEAD continua pendente; não considerar o teste aprovado até a execução CI terminar.
 
 
+## 2026-11-24 — Detecção de timestamps futuros na evidência visual
+
+- A reconciliação expõe agora `observation_timestamp_in_future`, para distinguir relógios divergentes de observações genuinamente recentes.
+- A idade continua limitada a zero para evitar valores negativos, mas o novo indicador torna explícito que o timestamp está no futuro relativamente ao relógio UTC da API.
+- Teste acrescentado para uma observação cinco minutos no futuro; a validação CI deste HEAD ainda está pendente.
+
 ## 2026-11-24 — Frescura da evidência visual na reconciliação
 
 - `GET /api/v1/inventory/reconciliation` passa a devolver `observation_age_minutes`, calculado a partir de `observed_at` e do relógio UTC da aplicação.
