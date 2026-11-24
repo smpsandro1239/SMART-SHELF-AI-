@@ -1964,3 +1964,13 @@ Capacity is calculated conservatively from the current time to the end of the ac
 - [ ] Criar gestão autenticada dos mapeamentos externos.
 - [ ] Executar o serviço num worker durável e integrar um secret manager.
 - [ ] Homologar pelo menos um adapter real com documentação e credenciais do fornecedor.
+
+
+## Administração de mappings ERP/WMS
+- [x] API autenticada para listar, criar e actualizar mappings por loja.
+- [x] Permissões ADMIN/SUPERVISOR com isolamento por loja.
+- [x] Exigir integração activa da fonte e produto interno activo.
+- [x] Registar criação, alteração, desactivação e reactivação em audit trail append-only.
+- [x] Impedir alteração da identidade externa e eliminação física do mapping na base de dados.
+- [ ] Implementar worker durável com leases, fencing e recuperação de execuções STARTED abandonadas.
+- [ ] Integrar secret manager e adapter real homologado.
