@@ -109,6 +109,8 @@ from app.schemas import (
     ShelfPlanogramCreate, ShelfPlanogramCellsReplace, ShelfPlanogramLifecycleRequest, ShelfPlanogramRead,
     ShelfPlanogramComparisonRead,
     InventorySourceSyncCreate, InventorySourceSyncComplete,
+    InventoryExternalProductMappingCreate, InventoryExternalProductMappingUpdate,
+    InventoryExternalProductMappingRead,
 )
 from app.schemas import (
     EmployeeShiftCreate, EmployeeShiftRead,
@@ -7376,6 +7378,224 @@ def _inventory_source_sync_payload(record: models.InventorySourceSync, db: Sessi
         "created_at": record.created_at,
         "events": [{"id": e.id, "event_type": e.event_type, "actor_user_id": e.actor_user_id,
                     "details": e.details, "created_at": e.created_at} for e in events],
+    }
+
+
+
+
+def _external_product_mapping_state(record: models.InventoryExternalProductMapping) -> dict:
+    return {
+        "store_id": record.store_id,
+        "source": record.source,
+        "external_product_id": record.external_product_id,
+        "external_sku": record.external_sku,
+        "product_id": record.product_id,
+        "active": record.active,
+    }
+
+
+def _require_mapping_admin_scope(actor: models.User | None, store_id: int) -> None:
+    if actor is None:
+        raise HTTPException(status_code=401, detail="Authentication is required")
+    if actor.role not in {"ADMIN", "SUPERVISOR"}:
+        raise HTTPException(status_code=403, detail="Supervisor role required")
+    _enforce_store_scope(actor, store_id)
+
+
+@app.get(
+    "/api/v1/stores/{store_id}/inventory/external-mappings",
+    tags=["inventory"],
+)
+def list_inventory_external_product_mappings(
+    store_id: int,
+    source: str | None = None,
+    active: bool | None = None,
+    limit: int = 100,
+    request: Request = None,
+    db: Session = Depends(get_db),
+):
+    """List external SKU mappings for one authorized store."""
+    actor = _request_user(db, request)
+    _require_mapping_admin_scope(actor, store_id)
+    if db.get(models.Store, store_id) is None:
+        raise HTTPException(status_code=404, detail="Store not found")
+    if source is not None and source not in {"ERP", "WMS"}:
+        raise HTTPException(status_code=422, detail="source must be ERP or WMS")
+    if limit < 1 or limit > 200:
+        raise HTTPException(status_code=422, detail="limit must be between 1 and 200")
+    query = db.query(models.InventoryExternalProductMapping).filter_by(store_id=store_id)
+    if source is not None:
+        query = query.filter_by(source=source)
+    if active is not None:
+        query = query.filter_by(active=active)
+    records = query.order_by(
+        models.InventoryExternalProductMapping.source,
+        models.InventoryExternalProductMapping.external_sku,
+        models.InventoryExternalProductMapping.id,
+    ).limit(limit).all()
+    return {
+        "store_id": store_id,
+        "items": [InventoryExternalProductMappingRead.model_validate(item).model_dump() for item in records],
+    }
+
+
+@app.post(
+    "/api/v1/stores/{store_id}/inventory/external-mappings",
+    status_code=201,
+    tags=["inventory"],
+)
+def create_inventory_external_product_mapping(
+    store_id: int,
+    payload: InventoryExternalProductMappingCreate,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Create an explicit external-to-internal mapping with an audit event."""
+    actor = _request_user(db, request)
+    _require_mapping_admin_scope(actor, store_id)
+    if db.get(models.Store, store_id) is None:
+        raise HTTPException(status_code=404, detail="Store not found")
+    integration = db.query(models.StoreExternalIntegration).filter_by(
+        store_id=store_id,
+        external_system=payload.source,
+        status="ACTIVE",
+    ).first()
+    if integration is None:
+        raise HTTPException(status_code=409, detail="An active integration for this source is required")
+    if db.query(models.StoreExternalIntegration.id).filter_by(
+        store_id=store_id, external_system=payload.source, provider=integration.provider, status="ACTIVE"
+    ).first() is None:
+        raise HTTPException(status_code=409, detail="The source integration is not available")
+    product = db.query(models.Product).filter_by(id=payload.product_id, is_active=True).first()
+    if product is None:
+        raise HTTPException(status_code=404, detail="Active internal product not found")
+    now = models.utc_now()
+    record = models.InventoryExternalProductMapping(
+        store_id=store_id,
+        source=payload.source,
+        external_product_id=payload.external_product_id,
+        external_sku=payload.external_sku,
+        product_id=payload.product_id,
+        active=True,
+        created_by_user_id=actor.id,
+        updated_by_user_id=actor.id,
+        created_at=now,
+        updated_at=now,
+    )
+    db.add(record)
+    try:
+        db.flush()
+        state = _external_product_mapping_state(record)
+        db.add(models.InventoryExternalProductMappingEvent(
+            mapping_id=record.id,
+            actor_user_id=actor.id,
+            event_type="CREATED",
+            before_state=None,
+            after_state=state,
+            reason=payload.reason,
+            created_at=now,
+        ))
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="External ID or SKU is already mapped for this store and source") from exc
+    db.refresh(record)
+    return InventoryExternalProductMappingRead.model_validate(record)
+
+
+@app.patch(
+    "/api/v1/stores/{store_id}/inventory/external-mappings/{mapping_id}",
+    tags=["inventory"],
+)
+def update_inventory_external_product_mapping(
+    store_id: int,
+    mapping_id: int,
+    payload: InventoryExternalProductMappingUpdate,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Change the target product or activation state without deleting history."""
+    actor = _request_user(db, request)
+    _require_mapping_admin_scope(actor, store_id)
+    record = db.query(models.InventoryExternalProductMapping).filter_by(
+        id=mapping_id, store_id=store_id
+    ).with_for_update().first()
+    if record is None:
+        raise HTTPException(status_code=404, detail="Mapping not found")
+    changes = payload.model_dump(exclude={"reason"}, exclude_unset=True)
+    if "product_id" in changes:
+        product = db.query(models.Product).filter_by(id=changes["product_id"], is_active=True).first()
+        if product is None:
+            raise HTTPException(status_code=404, detail="Active internal product not found")
+    before = _external_product_mapping_state(record)
+    for field, value in changes.items():
+        setattr(record, field, value)
+    after = _external_product_mapping_state(record)
+    if before == after:
+        raise HTTPException(status_code=409, detail="The requested mapping change has no effect")
+    now = models.utc_now()
+    record.updated_by_user_id = actor.id
+    record.updated_at = now
+    if before["active"] != after["active"]:
+        event_type = "REACTIVATED" if after["active"] else "DEACTIVATED"
+    else:
+        event_type = "UPDATED"
+    db.add(models.InventoryExternalProductMappingEvent(
+        mapping_id=record.id,
+        actor_user_id=actor.id,
+        event_type=event_type,
+        before_state=before,
+        after_state=after,
+        reason=payload.reason,
+        created_at=now,
+    ))
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="The target product change conflicts with an existing mapping") from exc
+    db.refresh(record)
+    return {
+        "mapping": InventoryExternalProductMappingRead.model_validate(record).model_dump(),
+        "event_type": event_type,
+    }
+
+
+@app.get(
+    "/api/v1/stores/{store_id}/inventory/external-mappings/{mapping_id}/events",
+    tags=["inventory"],
+)
+def list_inventory_external_product_mapping_events(
+    store_id: int,
+    mapping_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Return the immutable audit history for one store-scoped mapping."""
+    actor = _request_user(db, request)
+    _require_mapping_admin_scope(actor, store_id)
+    mapping = db.query(models.InventoryExternalProductMapping).filter_by(
+        id=mapping_id, store_id=store_id
+    ).first()
+    if mapping is None:
+        raise HTTPException(status_code=404, detail="Mapping not found")
+    events = db.query(models.InventoryExternalProductMappingEvent).filter_by(
+        mapping_id=mapping_id
+    ).order_by(
+        models.InventoryExternalProductMappingEvent.created_at,
+        models.InventoryExternalProductMappingEvent.id,
+    ).all()
+    return {
+        "mapping_id": mapping_id,
+        "items": [{
+            "id": item.id,
+            "actor_user_id": item.actor_user_id,
+            "event_type": item.event_type,
+            "before_state": item.before_state,
+            "after_state": item.after_state,
+            "reason": item.reason,
+            "created_at": item.created_at,
+        } for item in events],
     }
 
 
