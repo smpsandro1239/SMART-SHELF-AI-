@@ -853,6 +853,11 @@ def test_inventory_reconciliation_flags_future_dated_observation(monkeypatch):
         shelf = client.post("/api/v1/shelves", json={
             "zone_id": zone["id"], "code": "FUTURE-OBS",
         }).json()
+        assignment = client.post("/api/v1/shelf-products", json={
+            "shelf_id": shelf["id"], "product_id": product_id,
+            "target_quantity": 10, "min_display_quantity": 2,
+        })
+        assert assignment.status_code == 201, assignment.text
         observation_time = datetime(2026, 1, 1, 12, 5, tzinfo=timezone.utc)
         created = client.post("/api/v1/observations", json={
             "shelf_id": shelf["id"], "product_id": product_id,
