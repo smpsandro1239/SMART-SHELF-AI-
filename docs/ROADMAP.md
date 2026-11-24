@@ -1528,3 +1528,9 @@ Capacity is calculated conservatively from the current time to the end of the ac
 A camada de serviço já liga adapters configurados no deployment ao ledger e aos snapshots. A migração 0078 cria mappings explícitos por loja/fonte; a 0079 permite registar o external_run_id na única transição STARTED → SUCCESS/PARTIAL/FAILED, sem reabrir ou alterar execuções concluídas. O orquestrador executa páginas em transacções independentes e deixa evidência das páginas confirmadas se uma página posterior falhar.
 
 Continua pendente: API de gestão de mappings, worker durável/scheduler, secret manager e adapter real homologado. O serviço não cria reconciliações nem aprova divergências.
+
+
+### Administração segura dos mappings externos
+A gestão de SKU externos passa a estar disponível por API autenticada e limitada à loja do utilizador (ADMIN pode gerir todas as lojas; SUPERVISOR apenas a sua). Criação requer integração activa e produto interno activo. Alterações exigem motivo, são auditadas e não alteram a identidade externa do mapping. Desactivação substitui eliminação; histórico append-only protegido por triggers.
+
+Próximo marco operacional: worker durável com leases/fencing e recuperação segura, seguido de secret manager e adapter real homologado.
