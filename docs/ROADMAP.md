@@ -1,3 +1,10 @@
+## 2026-11-24 — Integridade semântica da reconciliação de inventário
+
+- Acrescentada regressão para produto associado a prateleira sem observação nem snapshot de retaguarda.
+- A API deve preservar `NO_OBSERVATION` e valores quantitativos `null`; ausência de evidência nunca é convertida em stock zero nem numa divergência contabilística.
+- O teste verifica que a consulta não cria movimentos ou snapshots.
+- Commit de teste: `3f5c0b012fd4104edc1cf55c24d308668a99a1d1`. CI ainda pendente.
+
 ## 2026-11-23 — Visibilidade operacional do ledger de inventário
 
 - O produto passa a expor o histórico read-only de movimentos de inventário reconciliados, filtrável por loja, produto e tarefa.
