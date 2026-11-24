@@ -108,6 +108,11 @@ from app.schemas import (
     ShelfPlanogramCreate, ShelfPlanogramCellsReplace, ShelfPlanogramLifecycleRequest, ShelfPlanogramRead,
     ShelfPlanogramComparisonRead,
 )
+from app.schemas import (
+    EmployeeShiftCreate, EmployeeShiftRead,
+    EmployeeSkillCreate, EmployeeSkillRead,
+    EmployeeAvailabilityCreate, EmployeeAvailabilityRead,
+)
 
 def _docs_url_for_environment(environment: str) -> str | None:
     """Expose interactive API docs only outside production."""
@@ -8573,6 +8578,164 @@ def create_user(payload: UserCreate, request: Request, db: Session = Depends(get
 def list_users(request: Request, limit: int = 100, db: Session = Depends(get_db)):
     _request_user(db, request)
     return db.query(models.User).order_by(models.User.id).limit(max(1, min(limit, 500))).all()
+
+
+
+def _require_staff_manager(db: Session, request: Request, store_id: int):
+    actor = _request_user(db, request)
+    if actor is None or actor.role not in {"ADMIN", "SUPERVISOR"}:
+        raise HTTPException(status_code=403, detail="Supervisor role required")
+    _enforce_store_scope(actor, store_id)
+    if db.get(models.Store, store_id) is None:
+        raise HTTPException(status_code=404, detail="Store not found")
+    return actor
+
+
+def _require_active_store_employee(db: Session, store_id: int, employee_id: int):
+    employee = db.query(models.User).filter(
+        models.User.id == employee_id,
+        models.User.store_id == store_id,
+        models.User.role == "EMPLOYEE",
+        models.User.is_active.is_(True),
+    ).first()
+    if employee is None:
+        raise HTTPException(status_code=404, detail="Active employee not found in this store")
+    return employee
+
+
+@app.post("/api/v1/staff/shifts", response_model=EmployeeShiftRead, status_code=201, tags=["staff"])
+def create_employee_shift(payload: EmployeeShiftCreate, request: Request, db: Session = Depends(get_db)):
+    actor = _require_staff_manager(db, request, payload.store_id)
+    _require_active_store_employee(db, payload.store_id, payload.employee_id)
+    overlapping = db.query(models.EmployeeShift).filter(
+        models.EmployeeShift.employee_id == payload.employee_id,
+        models.EmployeeShift.store_id == payload.store_id,
+        models.EmployeeShift.status == "SCHEDULED",
+        models.EmployeeShift.starts_at < payload.ends_at,
+        models.EmployeeShift.ends_at > payload.starts_at,
+    ).first()
+    if overlapping is not None:
+        raise HTTPException(status_code=409, detail={
+            "code": "SHIFT_OVERLAP", "conflicting_shift_id": overlapping.id,
+            "message": "O funcionário já tem um turno agendado neste intervalo.",
+        })
+    shift = models.EmployeeShift(
+        **payload.model_dump(),
+        created_by_user_id=actor.id,
+    )
+    db.add(shift)
+    db.commit()
+    db.refresh(shift)
+    return shift
+
+
+@app.get("/api/v1/staff/shifts", response_model=list[EmployeeShiftRead], tags=["staff"])
+def list_employee_shifts(
+    store_id: int, request: Request, employee_id: int | None = None,
+    from_date: datetime | None = None, to_date: datetime | None = None,
+    db: Session = Depends(get_db),
+):
+    _require_staff_manager(db, request, store_id)
+    query = db.query(models.EmployeeShift).filter(models.EmployeeShift.store_id == store_id)
+    if employee_id is not None:
+        _require_active_store_employee(db, store_id, employee_id)
+        query = query.filter(models.EmployeeShift.employee_id == employee_id)
+    if from_date is not None:
+        query = query.filter(models.EmployeeShift.ends_at > from_date)
+    if to_date is not None:
+        query = query.filter(models.EmployeeShift.starts_at < to_date)
+    if from_date is not None and to_date is not None and to_date <= from_date:
+        raise HTTPException(status_code=422, detail="to_date tem de ser posterior a from_date")
+    return query.order_by(models.EmployeeShift.starts_at, models.EmployeeShift.employee_id).limit(1000).all()
+
+
+@app.post("/api/v1/staff/skills", response_model=EmployeeSkillRead, status_code=201, tags=["staff"])
+def create_employee_skill(payload: EmployeeSkillCreate, request: Request, db: Session = Depends(get_db)):
+    actor = _require_staff_manager(db, request, payload.store_id)
+    _require_active_store_employee(db, payload.store_id, payload.employee_id)
+    skill_code = payload.skill_code.strip().upper()
+    existing = db.query(models.EmployeeSkill).filter(
+        models.EmployeeSkill.employee_id == payload.employee_id,
+        models.EmployeeSkill.skill_code == skill_code,
+    ).first()
+    if existing is not None:
+        raise HTTPException(status_code=409, detail={
+            "code": "EMPLOYEE_SKILL_EXISTS", "skill_id": existing.id,
+            "message": "A competência já está registada para este funcionário.",
+        })
+    skill = models.EmployeeSkill(
+        store_id=payload.store_id, employee_id=payload.employee_id,
+        skill_code=skill_code, level=payload.level, created_by_user_id=actor.id,
+    )
+    db.add(skill)
+    db.commit()
+    db.refresh(skill)
+    return skill
+
+
+@app.get("/api/v1/staff/skills", response_model=list[EmployeeSkillRead], tags=["staff"])
+def list_employee_skills(
+    store_id: int, request: Request, employee_id: int | None = None,
+    skill_code: str | None = None, db: Session = Depends(get_db),
+):
+    _require_staff_manager(db, request, store_id)
+    query = db.query(models.EmployeeSkill).filter(models.EmployeeSkill.store_id == store_id)
+    if employee_id is not None:
+        _require_active_store_employee(db, store_id, employee_id)
+        query = query.filter(models.EmployeeSkill.employee_id == employee_id)
+    if skill_code:
+        query = query.filter(models.EmployeeSkill.skill_code == skill_code.strip().upper())
+    return query.order_by(models.EmployeeSkill.employee_id, models.EmployeeSkill.skill_code).limit(1000).all()
+
+
+@app.post("/api/v1/staff/availability", response_model=EmployeeAvailabilityRead, status_code=201, tags=["staff"])
+def create_employee_availability(
+    payload: EmployeeAvailabilityCreate, request: Request, db: Session = Depends(get_db),
+):
+    actor = _require_staff_manager(db, request, payload.store_id)
+    _require_active_store_employee(db, payload.store_id, payload.employee_id)
+    overlapping = db.query(models.EmployeeAvailability).filter(
+        models.EmployeeAvailability.employee_id == payload.employee_id,
+        models.EmployeeAvailability.store_id == payload.store_id,
+        models.EmployeeAvailability.starts_at < payload.ends_at,
+        models.EmployeeAvailability.ends_at > payload.starts_at,
+    ).first()
+    if overlapping is not None:
+        raise HTTPException(status_code=409, detail={
+            "code": "AVAILABILITY_OVERLAP", "conflicting_record_id": overlapping.id,
+            "message": "Já existe um registo de disponibilidade neste intervalo.",
+        })
+    record = models.EmployeeAvailability(
+        **payload.model_dump(), created_by_user_id=actor.id,
+    )
+    db.add(record)
+    db.commit()
+    db.refresh(record)
+    return record
+
+
+@app.get("/api/v1/staff/availability", response_model=list[EmployeeAvailabilityRead], tags=["staff"])
+def list_employee_availability(
+    store_id: int, request: Request, employee_id: int | None = None,
+    from_date: datetime | None = None, to_date: datetime | None = None,
+    db: Session = Depends(get_db),
+):
+    _require_staff_manager(db, request, store_id)
+    query = db.query(models.EmployeeAvailability).filter(
+        models.EmployeeAvailability.store_id == store_id,
+    )
+    if employee_id is not None:
+        _require_active_store_employee(db, store_id, employee_id)
+        query = query.filter(models.EmployeeAvailability.employee_id == employee_id)
+    if from_date is not None:
+        query = query.filter(models.EmployeeAvailability.ends_at > from_date)
+    if to_date is not None:
+        query = query.filter(models.EmployeeAvailability.starts_at < to_date)
+    if from_date is not None and to_date is not None and to_date <= from_date:
+        raise HTTPException(status_code=422, detail="to_date tem de ser posterior a from_date")
+    return query.order_by(
+        models.EmployeeAvailability.starts_at, models.EmployeeAvailability.employee_id,
+    ).limit(1000).all()
 
 
 @app.get("/api/v1/store-employees", response_model=list[StoreEmployeeRead], tags=["authentication"])
