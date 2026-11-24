@@ -228,6 +228,14 @@ def test_operations_dashboard_preserves_employee_and_admin_scope():
     assert admin_result["summary"]["total"] == 5
     assert sum(row["total"] for row in admin_result["by_zone"]) == 5
 
+    with Session() as db:
+        with pytest.raises(HTTPException) as foreign_store:
+            call_operations_dashboard(
+                db, ids["supervisor"], store_id=ids["store_b"],
+                from_date=today, to_date=today,
+            )
+        assert foreign_store.value.status_code == 403
+
 
 def test_operations_dashboard_rejects_invalid_or_excessive_periods():
     ids = seed_dashboard_data()
