@@ -271,6 +271,16 @@ class ReplenishmentTaskCreate(BaseModel):
     required_skill_code: str | None = Field(default=None, min_length=2, max_length=60, pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:-]*$")
     notes: str | None = Field(default=None, max_length=2000)
 
+    @field_validator("required_skill_code")
+    @classmethod
+    def normalize_required_skill(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip().upper()
+        if not normalized:
+            raise ValueError("required_skill_code cannot be blank")
+        return normalized
+
 
 class ReplenishmentTaskStatusUpdate(BaseModel):
     status: TaskStatus
