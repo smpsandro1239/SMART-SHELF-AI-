@@ -1116,3 +1116,80 @@ def test_inventory_reconciliation_dashboard_rejects_employee(monkeypatch):
         response = client.get("/api/v1/inventory/reconciliations/dashboard", params={"store_id": store_id})
         assert response.status_code == 403
 
+
+
+def test_inventory_source_sync_lifecycle_history_and_health(monkeypatch):
+    with TestClient(app) as client:
+        store_id, _ = create_store_and_product(client)
+        supervisor = _supervisor_actor(store_id)
+        monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: supervisor)
+
+        started = client.post("/api/v1/inventory/source-syncs", json={
+            "store_id": store_id, "source": "ERP", "provider": "ERP-connector",
+            "external_run_id": "erp-run-001",
+        })
+        assert started.status_code == 201, started.text
+        attempt = started.json()
+        assert attempt["status"] == "STARTED"
+        assert attempt["events"][0]["event_type"] == "STARTED"
+
+        completed = client.post(f"/api/v1/inventory/source-syncs/{attempt['id']}/complete", json={
+            "status": "SUCCESS", "received_records": 120, "processed_records": 120,
+        })
+        assert completed.status_code == 200, completed.text
+        result = completed.json()
+        assert result["status"] == "SUCCESS"
+        assert result["duration_ms"] is not None and result["duration_ms"] >= 0
+        assert [event["event_type"] for event in result["events"]] == ["STARTED", "COMPLETED"]
+
+        duplicate = client.post(f"/api/v1/inventory/source-syncs/{attempt['id']}/complete", json={
+            "status": "SUCCESS", "received_records": 120, "processed_records": 120,
+        })
+        assert duplicate.status_code == 409
+
+        failed = client.post("/api/v1/inventory/source-syncs", json={
+            "store_id": store_id, "source": "WMS", "provider": "WMS-connector",
+        })
+        assert failed.status_code == 201, failed.text
+        failed_result = client.post(f"/api/v1/inventory/source-syncs/{failed.json()['id']}/complete", json={
+            "status": "FAILED", "received_records": 0, "processed_records": 0,
+            "error_code": "UPSTREAM_TIMEOUT", "error_message": "O sistema WMS não respondeu dentro do prazo.",
+        })
+        assert failed_result.status_code == 200, failed_result.text
+
+        history = client.get("/api/v1/inventory/source-syncs", params={"store_id": store_id})
+        assert history.status_code == 200, history.text
+        assert len(history.json()["items"]) == 2
+
+        health = client.get("/api/v1/inventory/source-syncs/health", params={"store_id": store_id})
+        assert health.status_code == 200, health.text
+        assert health.json()["sources"]["ERP"]["stale"] is False
+        assert health.json()["sources"]["WMS"]["stale"] is True
+        assert health.json()["sources"]["WMS"]["alert_code"] == "SOURCE_NEVER_SYNCHRONIZED"
+        assert health.json()["sources"]["WMS"]["latest_attempt_failed"] is True
+
+        with TestingSession() as db:
+            assert db.query(models.InventoryMovement).count() == 0
+
+
+def test_inventory_source_sync_rejects_employee_and_invalid_completion(monkeypatch):
+    with TestClient(app) as client:
+        store_id, _ = create_store_and_product(client)
+        employee = _supervisor_actor(store_id, role="EMPLOYEE")
+        monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: employee)
+        denied = client.post("/api/v1/inventory/source-syncs", json={
+            "store_id": store_id, "source": "ERP", "provider": "ERP-connector",
+        })
+        assert denied.status_code == 403
+
+        supervisor = _supervisor_actor(store_id)
+        monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: supervisor)
+        started = client.post("/api/v1/inventory/source-syncs", json={
+            "store_id": store_id, "source": "WMS", "provider": "WMS-connector",
+        })
+        assert started.status_code == 201, started.text
+        invalid = client.post(f"/api/v1/inventory/source-syncs/{started.json()['id']}/complete", json={
+            "status": "FAILED", "received_records": 1, "processed_records": 2,
+        })
+        assert invalid.status_code == 422
+
