@@ -1413,3 +1413,54 @@ class InventorySourceSyncComplete(BaseModel):
         if self.status == "SUCCESS" and (self.error_code or self.error_message):
             raise ValueError("Uma sincronização SUCCESS não pode conter erro")
         return self
+
+
+class InventoryExternalProductMappingCreate(BaseModel):
+    source: Literal["ERP", "WMS"]
+    external_product_id: str = Field(min_length=1, max_length=120)
+    external_sku: str = Field(min_length=1, max_length=120)
+    product_id: int = Field(gt=0)
+    reason: str = Field(min_length=5, max_length=1000)
+
+    @field_validator("external_product_id", "external_sku", "reason")
+    @classmethod
+    def normalize_mapping_text(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized or any(ord(ch) < 32 or 127 <= ord(ch) <= 159 for ch in normalized):
+            raise ValueError("Mapping text must be non-empty and contain no control characters")
+        return normalized
+
+
+class InventoryExternalProductMappingUpdate(BaseModel):
+    product_id: int | None = Field(default=None, gt=0)
+    active: bool | None = None
+    reason: str = Field(min_length=5, max_length=1000)
+
+    @field_validator("reason")
+    @classmethod
+    def normalize_mapping_reason(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized or any(ord(ch) < 32 or 127 <= ord(ch) <= 159 for ch in normalized):
+            raise ValueError("A valid audit reason is required")
+        return normalized
+
+    @model_validator(mode="after")
+    def require_change(self):
+        if self.product_id is None and self.active is None:
+            raise ValueError("At least one mapping field must change")
+        return self
+
+
+class InventoryExternalProductMappingRead(BaseModel):
+    id: int
+    store_id: int
+    source: str
+    external_product_id: str
+    external_sku: str
+    product_id: int
+    active: bool
+    created_by_user_id: int
+    updated_by_user_id: int
+    created_at: datetime
+    updated_at: datetime
+    model_config = ConfigDict(from_attributes=True)
