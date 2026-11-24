@@ -8673,6 +8673,7 @@ def _require_active_store_employee(db: Session, store_id: int, employee_id: int)
 def create_employee_shift(payload: EmployeeShiftCreate, request: Request, db: Session = Depends(get_db)):
     actor = _require_staff_manager(db, request, payload.store_id)
     _require_active_store_employee(db, payload.store_id, payload.employee_id)
+    _lock_store_for_task_creation(db, payload.store_id)
     overlapping = db.query(models.EmployeeShift).filter(
         models.EmployeeShift.employee_id == payload.employee_id,
         models.EmployeeShift.store_id == payload.store_id,
@@ -8719,6 +8720,7 @@ def list_employee_shifts(
 def create_employee_skill(payload: EmployeeSkillCreate, request: Request, db: Session = Depends(get_db)):
     actor = _require_staff_manager(db, request, payload.store_id)
     _require_active_store_employee(db, payload.store_id, payload.employee_id)
+    _lock_store_for_task_creation(db, payload.store_id)
     skill_code = payload.skill_code.strip().upper()
     existing = db.query(models.EmployeeSkill).filter(
         models.EmployeeSkill.employee_id == payload.employee_id,
@@ -8760,6 +8762,7 @@ def create_employee_availability(
 ):
     actor = _require_staff_manager(db, request, payload.store_id)
     _require_active_store_employee(db, payload.store_id, payload.employee_id)
+    _lock_store_for_task_creation(db, payload.store_id)
     overlapping = db.query(models.EmployeeAvailability).filter(
         models.EmployeeAvailability.employee_id == payload.employee_id,
         models.EmployeeAvailability.store_id == payload.store_id,
