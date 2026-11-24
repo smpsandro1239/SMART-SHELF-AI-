@@ -838,3 +838,6 @@ Commit de teste: `3f5c0b012fd4104edc1cf55c24d308668a99a1d1`. A documentação de
 - Para ambos os estados, a quantidade sugerida permanece `null`; a rota de criação a partir de recomendação rejeita a operação porque o estado não é `NEEDS_REPLENISHMENT`.
 - Adicionado teste parametrizado para snapshot com dois dias e snapshot cinco minutos no futuro, verificando também a rejeição da tarefa.
 - Commits: `56a7d676` (motor), `9cc700d1` (schema), `8bd5a880` (testes). Execução local e CI ainda não confirmadas.
+
+- Teste adicional `test_replenishment_uses_store_and_source_inventory_freshness_policy` confirma que a política configurada por loja/origem prevalece sobre o limite predefinido. Commit: `92e166a7`.
+- Durante a revisão do diff foi corrigido um bloco duplicado introduzido na primeira edição do motor; o fluxo final foi relido no GitHub. Ainda sem execução local dos testes.
