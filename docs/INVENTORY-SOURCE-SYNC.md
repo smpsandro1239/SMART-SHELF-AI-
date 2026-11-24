@@ -55,3 +55,23 @@ Um adapter real deverá:
 - separar a ingestão técnica da reconciliação e da aprovação humana.
 
 A implementação de adapters fica bloqueada até existir documentação e ambiente de homologação do fornecedor.
+
+## Orquestrador de ingestão (primeira implementação)
+
+O módulo `apps/api/app/inventory_connectors/orchestrator.py` disponibiliza `run_inventory_source_sync` para execução por um worker confiável (não é uma rota HTTP pública). O worker tem de resolver previamente a factory do adapter e as credenciais através da configuração segura do deployment.
+
+A execução:
+- exige integração ACTIVE para a loja, fonte e fornecedor exactos;
+- usa o código da loja como identificador externo até existir um campo de código externo dedicado;
+- exige um mapeamento activo e exacto por loja, fonte, ID externo e SKU;
+- valida a identidade do lote em todas as páginas;
+- aplica timeout e até três tentativas com backoff por página;
+- limita cada execução a 1000 páginas e rejeita cursores repetidos;
+- persiste cada página numa transacção e usa a chave única existente (loja, produto, fonte, referência externa) para idempotência;
+- aceita replays idênticos sem duplicar snapshots e rejeita referências repetidas com conteúdo diferente;
+- conclui o ledger com SUCCESS, PARTIAL ou FAILED e contagens;
+- sanitiza mensagens de erro para não registar detalhes do fornecedor potencialmente sensíveis.
+
+Foi adicionada a tabela `inventory_external_product_mappings`, com unicidade por loja/fonte/ID externo e por loja/fonte/SKU. O mapeamento é explícito: não existe correspondência automática por semelhança de SKU.
+
+**Limites desta fase:** ainda não existe API de administração dos mapeamentos, worker/scheduler executável, secret manager integrado ou adapter de fornecedor real. A função é a camada de serviço que um worker futuro poderá invocar. As páginas já confirmadas permanecem como evidência se uma página posterior falhar; o ledger termina em PARTIAL. Nenhum passo altera stock de origem, cria movimentos, inicia reconciliação ou aprova divergências.
