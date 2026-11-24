@@ -7351,22 +7351,6 @@ def list_replenishment_recommendations(
                 if status in {"STALE_INVENTORY", "INVALID_INVENTORY_TIMESTAMP"}:
                     suggested_quantity = None
             elif observation.status == "UNKNOWN":
-                    status = "NEEDS_REPLENISHMENT"
-                    explanation = "A prateleira apresenta baixa disponibilidade e existe stock na retaguarda; a quantidade exata ainda não foi medida."
-                else:
-                    decision = suggest_shelf_refill(ShelfRefillInput(
-                        shelf_quantity=observed_shelf_quantity,
-                        target_quantity=link.target_quantity,
-                        min_display_quantity=link.min_display_quantity,
-                        backroom_available_quantity=available,
-                        observation_confidence=observation.confidence,
-                        observation_age_minutes=observation_age_minutes,
-                        max_observation_age_minutes=stale_after_minutes,
-                    ))
-                    status = decision.status
-                    suggested_quantity = decision.suggested_quantity
-                    explanation = decision.explanation
-            elif observation.status == "UNKNOWN":
                 status = "LOW_CONFIDENCE"
                 explanation = "O estado visual é desconhecido e deve ser confirmado."
 
