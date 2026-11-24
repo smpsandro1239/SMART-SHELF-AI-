@@ -8290,9 +8290,13 @@ def auto_assign_replenishment_tasks(
         shift = shifts_by_employee.get(employee.id)
         remaining_minutes = 0
         if shift is not None:
+            shift_end = shift.ends_at
+            if shift_end.tzinfo is None or shift_end.utcoffset() is None:
+                # SQLite test databases return naive values for timezone-aware columns.
+                shift_end = shift_end.replace(tzinfo=timezone.utc)
             remaining_minutes = max(
                 0,
-                int((shift.ends_at - now).total_seconds() // 60) - shift.break_minutes,
+                int((shift_end - now).total_seconds() // 60) - shift.break_minutes,
             )
         employee_inputs.append({
             "id": employee.id,
