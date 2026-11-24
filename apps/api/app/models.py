@@ -1628,3 +1628,47 @@ class EmployeeAvailability(Base):
     created_by_user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
 
+
+
+class InventorySourceSync(Base):
+    """Persistent lifecycle record for one ERP/WMS synchronization attempt."""
+    __tablename__ = "inventory_source_syncs"
+    __table_args__ = (
+        CheckConstraint("source IN ('ERP', 'WMS')", name="ck_inventory_source_sync_source"),
+        CheckConstraint("status IN ('STARTED', 'SUCCESS', 'PARTIAL', 'FAILED')", name="ck_inventory_source_sync_status"),
+        CheckConstraint("received_records IS NULL OR received_records >= 0", name="ck_inventory_source_sync_received_nonnegative"),
+        CheckConstraint("processed_records IS NULL OR processed_records >= 0", name="ck_inventory_source_sync_processed_nonnegative"),
+        CheckConstraint("processed_records IS NULL OR received_records IS NULL OR processed_records <= received_records", name="ck_inventory_source_sync_processed_lte_received"),
+        CheckConstraint("(status = 'STARTED' AND finished_at IS NULL) OR (status <> 'STARTED' AND finished_at IS NOT NULL)", name="ck_inventory_source_sync_completion_time"),
+        Index("ix_inventory_source_sync_store_source_started", "store_id", "source", "started_at"),
+        Index("ix_inventory_source_sync_store_status_started", "store_id", "status", "started_at"),
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    store_id: Mapped[int] = mapped_column(ForeignKey("stores.id", ondelete="RESTRICT"), nullable=False)
+    source: Mapped[str] = mapped_column(String(8), nullable=False)
+    provider: Mapped[str] = mapped_column(String(120), nullable=False)
+    external_run_id: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    status: Mapped[str] = mapped_column(String(12), default="STARTED", nullable=False)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    received_records: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    processed_records: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    error_code: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_by_user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+
+class InventorySourceSyncEvent(Base):
+    """Append-only audit events for inventory source synchronization attempts."""
+    __tablename__ = "inventory_source_sync_events"
+    __table_args__ = (
+        CheckConstraint("event_type IN ('STARTED', 'COMPLETED')", name="ck_inventory_source_sync_event_type"),
+        Index("ix_inventory_source_sync_events_sync_created", "sync_id", "created_at"),
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    sync_id: Mapped[int] = mapped_column(ForeignKey("inventory_source_syncs.id", ondelete="RESTRICT"), nullable=False)
+    event_type: Mapped[str] = mapped_column(String(12), nullable=False)
+    actor_user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
+    details: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
