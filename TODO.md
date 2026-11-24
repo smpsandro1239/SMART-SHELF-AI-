@@ -1,3 +1,16 @@
+## Integrações ERP/WMS — contrato de adapters (2026-11-24; contrato publicado, sem conectores reais)
+
+- [x] Definir protocolo assíncrono read-only para adapters ERP/WMS.
+- [x] Normalizar SKU, identificador externo, quantidades decimais, referência e timestamp com fuso horário.
+- [x] Validar precisão compatível com Numeric(12, 3), quantidades não negativas e reservado ≤ físico.
+- [x] Rejeitar referências externas e SKU duplicados dentro do mesmo lote.
+- [x] Carregar factories confiáveis por caminho module:callable, falhando de forma explícita quando não configuradas ou incompatíveis.
+- [x] Acrescentar testes de contrato e validação.
+- [ ] Integrar o contrato a um worker/orquestrador, com credenciais em secret manager, timeout, paginação e retries controlados.
+- [ ] Implementar e homologar adapters específicos após receber documentação e credenciais dos fornecedores.
+
+Limite: este commit não inclui conectores ERP/WMS, chamadas de rede, scheduler, gravação de snapshots nem credenciais. Nenhum adapter mock é registado como integração real.
+
 ## Inventário — histórico de sincronizações ERP/WMS (2026-11-24; implementação publicada, CI pendente)
 
 - [x] Persistir tentativas ERP/WMS com início, conclusão, fornecedor, referência externa, contagens, duração e erros.
