@@ -881,6 +881,56 @@ def test_inventory_reconciliation_flags_future_dated_observation(monkeypatch):
         assert item["observation_timestamp_in_future"] is True
 
 
+def test_inventory_reconciliation_compares_fresh_erp_and_wms_snapshots(monkeypatch):
+    with TestClient(app) as client:
+        store_id, product_id = create_store_and_product(client)
+        zone = client.post("/api/v1/zones", json={
+            "store_id": store_id, "name": "Zona ERP WMS",
+        }).json()
+        shelf = client.post("/api/v1/shelves", json={
+            "zone_id": zone["id"], "code": "ERP-WMS-01",
+        }).json()
+        linked = client.post("/api/v1/shelf-products", json={
+            "shelf_id": shelf["id"], "product_id": product_id,
+            "target_quantity": 10, "min_display_quantity": 2,
+        })
+        assert linked.status_code == 201, linked.text
+
+        erp = client.post("/api/v1/inventory/snapshots", json={
+            "store_id": store_id, "product_id": product_id,
+            "on_hand_quantity": 30, "reserved_quantity": 5,
+            "source": "ERP", "external_reference": "ERP-CHECK-01",
+        })
+        wms = client.post("/api/v1/inventory/snapshots", json={
+            "store_id": store_id, "product_id": product_id,
+            "on_hand_quantity": 26, "reserved_quantity": 3,
+            "source": "WMS", "external_reference": "WMS-CHECK-01",
+        })
+        assert erp.status_code == 201, erp.text
+        assert wms.status_code == 201, wms.text
+
+        actor = _supervisor_actor(store_id)
+        monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: actor)
+        response = client.get(
+            "/api/v1/inventory/reconciliation",
+            params={"store_id": store_id},
+        )
+        assert response.status_code == 200, response.text
+        item = response.json()["items"][0]
+        assert item["erp_snapshot_id"] == erp.json()["id"]
+        assert item["wms_snapshot_id"] == wms.json()["id"]
+        assert item["erp_available_quantity"] == 25
+        assert item["wms_available_quantity"] == 23
+        assert item["erp_freshness_status"] == "CURRENT"
+        assert item["wms_freshness_status"] == "CURRENT"
+        assert item["wms_erp_available_delta"] == -2
+        assert item["wms_erp_comparison_status"] == "DIVERGENCE"
+
+        with TestingSession() as db:
+            assert db.query(models.InventoryMovement).count() == 0
+            assert db.query(models.InventorySnapshot).count() == 2
+
+
 def test_inventory_reconciliation_rejects_employee_and_foreign_store(monkeypatch):
     with TestClient(app) as client:
         store_id, _ = create_store_and_product(client)
