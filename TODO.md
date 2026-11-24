@@ -1,3 +1,10 @@
+## Inventário — ausência de evidência na reconciliação (2026-11-24; teste publicado, CI pendente)
+
+- [x] Acrescentar regressão para associação produto/prateleira sem observação e sem snapshot de retaguarda.
+- [x] Exigir estado `NO_OBSERVATION`, quantidades/diferenças `null` e ausência de inferência de stock zero.
+- [x] Confirmar que a consulta read-only não cria movimentos nem snapshots.
+- [ ] Executar teste focado, API CI/PostgreSQL 16, Quality Gates e Security Scans no HEAD desta alteração.
+
 ## Desenvolvimento funcional — histórico de movimentos de inventário (2026-11-23; CI pendente)
 
 - [x] Disponibilizar consulta read-only dos movimentos aprovados em `GET /api/v1/inventory/movements`.
