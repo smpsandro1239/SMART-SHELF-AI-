@@ -880,9 +880,10 @@ Nota: o dashboard agrega tarefas registadas, não constitui um feed em tempo rea
 - [x] Require timezone-aware timestamps and validate interval ordering and break duration.
 - [x] Add regression tests for persistence, capacity arithmetic, duplicates, overlaps and tenant isolation.
 - [ ] Validate migration and test suite on PostgreSQL 16 through GitHub Actions.
-- [ ] Add update/cancellation workflows and feed these persisted constraints into capacity-aware task planning.
+- [ ] Add update/cancellation workflows for shifts and availability records.
+- [x] Feed persisted workforce constraints into the capacity-aware task planner.
 
-The shift's net planned capacity is calculated as `(ends_at - starts_at) - break_minutes`. This initial delivery records the workforce constraints; it does not yet make the auto-assignment algorithm capacity-aware. Existing automatic assignment remains unchanged until the next planning phase is implemented and validated.
+The shift's net planned capacity is calculated as `(ends_at - starts_at) - break_minutes`. This note describes the initial workforce data-model delivery. The subsequent capacity-aware planning phase below supersedes its original limitation and now consumes these persisted constraints during automatic assignment.
 
 
 ## Capacity-aware workforce planning (2026-11-24)
