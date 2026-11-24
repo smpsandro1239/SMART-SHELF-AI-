@@ -802,6 +802,12 @@ Foi adicionada uma regressão em `apps/api/tests/test_inventory.py` para uma ass
 Commit de teste: `3f5c0b012fd4104edc1cf55c24d308668a99a1d1`. A documentação de acompanhamento foi actualizada no commit `e629bd65952b976d4546e6f55325151590561ada`. A validação automatizada do novo HEAD continua pendente; não considerar o teste aprovado até a execução CI terminar.
 
 
+## 2026-11-24 — Protecção do motor de recomendações contra relógios divergentes
+
+- O motor de recomendações de reposição passa a devolver `INVALID_OBSERVATION_TIMESTAMP` quando a observação mais recente tem data futura relativamente ao relógio UTC da API.
+- A recomendação não inclui quantidade sugerida nesse cenário, mesmo que exista stock disponível na retaguarda; evita-se transformar evidência temporalmente inválida numa tarefa operacional.
+- Foi acrescentado teste com timestamp cinco minutos no futuro. CI ainda não confirmado para este HEAD.
+
 ## 2026-11-24 — Detecção de timestamps futuros na evidência visual
 
 - A reconciliação expõe agora `observation_timestamp_in_future`, para distinguir relógios divergentes de observações genuinamente recentes.
