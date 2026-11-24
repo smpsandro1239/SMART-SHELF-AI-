@@ -1402,3 +1402,8 @@ Próxima entrega: divergências auditáveis entre observação visual e stock de
 
 ## Inventário — reconciliação operacional integrada
 O dashboard passa a apresentar, em separado, o objetivo de exposição, a última quantidade observada na prateleira e o snapshot autoritativo da retaguarda (on-hand, reservado e disponível). A diferença é uma métrica de exposição e não uma divergência contabilística. A interface expõe idade/fonte dos dados e ausência de evidência; não altera inventário. Próxima evolução: workflow de divergências formais com revisão humana, estados e trilho de auditoria, sem reconciliação automática de quantidades contabilísticas.
+
+## 2026-11-24 — Frescura temporal das observações na reconciliação
+
+A resposta de reconciliação inclui agora `observation_age_minutes`, permitindo avaliar a idade da evidência visual sem confundir dados antigos com medições actuais. Não é imposto um limite de obsolescência até existir uma política operacional configurada. A ausência de observação continua representada por `null`. Teste com relógio controlado: 90 minutos; CI pendente.
+
