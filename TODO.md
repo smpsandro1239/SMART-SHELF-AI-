@@ -2,6 +2,7 @@
 
 - [x] Expor `observation_age_minutes` na reconciliação para distinguir evidência recente de evidência antiga.
 - [x] Calcular a idade em UTC, arredondada a duas casas decimais, sem transformar observações ausentes em idade zero.
+- [x] Sinalizar timestamps futuros (`observation_timestamp_in_future`) em vez de os apresentar silenciosamente como observações com idade zero.
 - [x] Cobrir observação com 90 minutos e ausência de observação com `null`.
 - [ ] Validar teste focado, API CI/PostgreSQL 16, Quality Gates e Security Scans no HEAD final.
 
