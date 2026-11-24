@@ -1,4 +1,5 @@
 import os
+from datetime import date, timedelta
 from types import SimpleNamespace
 
 os.environ["APP_ENV"] = "test"
@@ -173,3 +174,75 @@ def test_dashboard_preserves_employee_and_admin_visibility_boundaries():
     assert admin_summary["tasks"]["pending"] == 2
     assert admin_summary["observations"]["empty"] == 2
     assert admin_summary["shelves_requiring_attention"] == 3
+
+
+def call_operations_dashboard(db, user_id, store_id=None, from_date=None, to_date=None):
+    request = SimpleNamespace(state=SimpleNamespace(user_id=user_id))
+    return main_module.dashboard_operations(
+        request=request, store_id=store_id, from_date=from_date, to_date=to_date, db=db
+    )
+
+
+def test_operations_dashboard_breaks_down_employee_zone_product_and_period():
+    ids = seed_dashboard_data()
+    today = date.today()
+    with Session() as db:
+        result = call_operations_dashboard(
+            db, ids["supervisor"], from_date=today, to_date=today
+        )
+
+    assert result["store_id"] == ids["store_a"]
+    assert result["period"] == {
+        "from": today.isoformat(), "to": today.isoformat(), "timezone": "UTC"
+    }
+    assert result["summary"]["total"] == 4
+    assert result["summary"]["pending"] == 1
+    assert result["summary"]["completed"] == 1
+    assert result["summary"]["urgent"] == 1
+    assert result["summary"]["completion_rate_percent"] == 25.0
+    assert len(result["by_zone"]) == 1
+    assert result["by_zone"][0]["zone_name"] == "A"
+    assert result["by_zone"][0]["total"] == 4
+
+    employees = {row["employee_name"]: row for row in result["by_employee"]}
+    assert employees["Dashboard Employee"]["total"] == 2
+    assert employees["Dashboard Employee"]["completed"] == 1
+    products = {row["sku"]: row for row in result["by_product"]}
+    assert products["DASH-SKU"]["total"] == 3
+    assert products["DASH-SKU-2"]["total"] == 1
+
+
+def test_operations_dashboard_preserves_employee_and_admin_scope():
+    ids = seed_dashboard_data()
+    today = date.today()
+    with Session() as db:
+        employee_result = call_operations_dashboard(
+            db, ids["employee"], from_date=today, to_date=today
+        )
+        admin_result = call_operations_dashboard(
+            db, ids["admin"], from_date=today, to_date=today
+        )
+
+    assert employee_result["summary"]["total"] == 2
+    assert sum(row["total"] for row in employee_result["by_employee"]) == 2
+    assert admin_result["summary"]["total"] == 5
+    assert sum(row["total"] for row in admin_result["by_zone"]) == 5
+
+
+def test_operations_dashboard_rejects_invalid_or_excessive_periods():
+    ids = seed_dashboard_data()
+    from fastapi import HTTPException
+    with Session() as db:
+        with pytest.raises(HTTPException) as reversed_period:
+            call_operations_dashboard(
+                db, ids["supervisor"],
+                from_date=date.today(), to_date=date.today() - timedelta(days=1),
+            )
+        assert reversed_period.value.status_code == 422
+
+        with pytest.raises(HTTPException) as excessive_period:
+            call_operations_dashboard(
+                db, ids["supervisor"],
+                from_date=date.today() - timedelta(days=366), to_date=date.today(),
+            )
+        assert excessive_period.value.status_code == 422
