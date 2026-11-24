@@ -33,7 +33,7 @@ def test_assignment_plan_uses_priority_then_stable_task_order():
         {"id": 10, "priority": "HIGH"},
     ]
 
-    plan = build_balanced_assignment_plan(employees, tasks)
+    plan = build_balanced_assignment_plan(employees, [], tasks)
 
     assert [item["task_id"] for item in plan] == [20, 10, 30]
     assert [item["assigned_user_id"] for item in plan] == [1, 2, 1]
