@@ -1074,3 +1074,45 @@ def test_inventory_reconciliation_ledger_rejects_employee(monkeypatch):
             "product_id": product_id, "reason": "Pedido não autorizado",
         })
         assert denied.status_code == 403
+
+
+def test_inventory_reconciliation_dashboard_aggregates_ledger_and_freshness(monkeypatch):
+    with TestClient(app) as client:
+        store_id, product_id = create_store_and_product(client)
+        zone = client.post("/api/v1/zones", json={"store_id": store_id, "name": "Dashboard"}).json()
+        shelf = client.post("/api/v1/shelves", json={"zone_id": zone["id"], "code": "DASH-01"}).json()
+        assert client.post("/api/v1/shelf-products", json={"shelf_id": shelf["id"], "product_id": product_id, "target_quantity": 10, "min_display_quantity": 2}).status_code == 201
+        observation = client.post("/api/v1/observations", json={"shelf_id": shelf["id"], "product_id": product_id, "observed_quantity": 7, "source": "manual"})
+        erp = client.post("/api/v1/inventory/snapshots", json={"store_id": store_id, "product_id": product_id, "on_hand_quantity": 30, "reserved_quantity": 0, "source": "ERP", "external_reference": "DASH-ERP-01"})
+        wms = client.post("/api/v1/inventory/snapshots", json={"store_id": store_id, "product_id": product_id, "on_hand_quantity": 25, "reserved_quantity": 0, "source": "WMS", "external_reference": "DASH-WMS-01"})
+        assert observation.status_code == 201, observation.text
+        assert erp.status_code == 201, erp.text
+        assert wms.status_code == 201, wms.text
+        creator = _supervisor_actor(store_id)
+        monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: creator)
+        for reason in ("Auditoria inicial", "Auditoria de seguimento"):
+            created = client.post("/api/v1/inventory/reconciliations", json={"store_id": store_id, "shelf_id": shelf["id"], "product_id": product_id, "reason": reason})
+            assert created.status_code == 201, created.text
+        response = client.get("/api/v1/inventory/reconciliations/dashboard", params={"store_id": store_id})
+        assert response.status_code == 200, response.text
+        payload = response.json()
+        assert payload["total_reconciliations"] == 2
+        assert payload["unique_products"] == 1
+        assert payload["recurring_products_30d"] == 1
+        assert payload["review_status_counts"]["PENDING"] == 2
+        assert payload["product_ranking"][0]["is_recurring"] is True
+        assert payload["source_freshness"]["ERP"]["current"] == 1
+        assert payload["source_freshness"]["WMS"]["current"] == 1
+        assert payload["source_freshness"]["SHELF"]["current"] == 1
+        with TestingSession() as db:
+            assert db.query(models.InventoryMovement).count() == 0
+
+
+def test_inventory_reconciliation_dashboard_rejects_employee(monkeypatch):
+    with TestClient(app) as client:
+        store_id, _ = create_store_and_product(client)
+        employee = _supervisor_actor(store_id, role="EMPLOYEE")
+        monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: employee)
+        response = client.get("/api/v1/inventory/reconciliations/dashboard", params={"store_id": store_id})
+        assert response.status_code == 403
+
