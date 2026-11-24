@@ -29,9 +29,11 @@ def test_external_product_mapping_is_unique_per_store_and_source(tmp_path):
             VALUES (?, ?, ?, ?, ?, 1, 1, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"""
         connection.exec_driver_sql(base, (1, "ERP", "ext-1", "SKU-1", 1))
         with pytest.raises(IntegrityError):
-            connection.exec_driver_sql(base, (1, "ERP", "ext-2", "SKU-2", 2))
+            connection.exec_driver_sql(base, (1, "ERP", "ext-1", "SKU-2", 2))
         with pytest.raises(IntegrityError):
-            connection.exec_driver_sql(base, (1, "ERP", "ext-1", "SKU-3", 2))
+            connection.exec_driver_sql(base, (1, "ERP", "ext-2", "SKU-1", 2))
+        with pytest.raises(IntegrityError):
+            connection.exec_driver_sql(base, (1, "ERP", "ext-2", "SKU-2", 1))
         connection.exec_driver_sql(base, (2, "ERP", "ext-1", "SKU-1", 2))
         connection.exec_driver_sql(base, (1, "WMS", "ext-1", "SKU-1", 2))
     engine.dispose()

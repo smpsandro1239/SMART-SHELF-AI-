@@ -1715,3 +1715,58 @@ class InventorySourceSyncEvent(Base):
     actor_user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
     details: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+
+class InventorySyncJob(Base):
+    """Durable, idempotent request to synchronize one store/source."""
+    __tablename__ = "inventory_sync_jobs"
+    __table_args__ = (
+        CheckConstraint("source IN ('ERP', 'WMS')", name="ck_inventory_sync_job_source"),
+        CheckConstraint("status IN ('QUEUED', 'RUNNING', 'SUCCEEDED', 'PARTIAL', 'FAILED', 'CANCELLED')", name="ck_inventory_sync_job_status"),
+        CheckConstraint("attempt_count >= 0 AND max_attempts BETWEEN 1 AND 10 AND attempt_count <= max_attempts", name="ck_inventory_sync_job_attempts"),
+        CheckConstraint("fencing_token >= 0", name="ck_inventory_sync_job_fencing"),
+        CheckConstraint("(status = 'RUNNING' AND lease_owner IS NOT NULL AND lease_token IS NOT NULL AND lease_expires_at IS NOT NULL) OR (status <> 'RUNNING' AND lease_owner IS NULL AND lease_token IS NULL AND lease_expires_at IS NULL)", name="ck_inventory_sync_job_lease_state"),
+        CheckConstraint("(status IN ('SUCCEEDED', 'PARTIAL', 'FAILED', 'CANCELLED') AND finished_at IS NOT NULL) OR (status IN ('QUEUED', 'RUNNING') AND finished_at IS NULL)", name="ck_inventory_sync_job_finished_state"),
+        UniqueConstraint("store_id", "source", "idempotency_key", name="uq_inventory_sync_job_idempotency"),
+        Index("ix_inventory_sync_jobs_claim", "status", "scheduled_at", "lease_expires_at", "created_at", "id"),
+        Index("ix_inventory_sync_jobs_store_created", "store_id", "created_at"),
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    store_id: Mapped[int] = mapped_column(ForeignKey("stores.id", ondelete="RESTRICT"), nullable=False)
+    source: Mapped[str] = mapped_column(String(8), nullable=False)
+    provider: Mapped[str] = mapped_column(String(120), nullable=False)
+    idempotency_key: Mapped[str] = mapped_column(String(160), nullable=False)
+    requested_by_user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
+    status: Mapped[str] = mapped_column(String(12), default="QUEUED", nullable=False)
+    attempt_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    max_attempts: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    scheduled_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    lease_owner: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    lease_token: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    fencing_token: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    latest_sync_id: Mapped[int | None] = mapped_column(ForeignKey("inventory_source_syncs.id", ondelete="RESTRICT"), nullable=True)
+    error_code: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+
+class InventorySyncJobEvent(Base):
+    """Append-only lifecycle audit for durable ERP/WMS sync jobs."""
+    __tablename__ = "inventory_sync_job_events"
+    __table_args__ = (
+        CheckConstraint("event_type IN ('QUEUED', 'CLAIMED', 'LEASE_EXPIRED', 'HEARTBEAT', 'RETRY_SCHEDULED', 'SUCCEEDED', 'PARTIAL', 'FAILED', 'CANCELLED')", name="ck_inventory_sync_job_event_type"),
+        UniqueConstraint("job_id", "sequence_number", name="uq_inventory_sync_job_event_sequence"),
+        Index("ix_inventory_sync_job_events_job_created", "job_id", "created_at"),
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    job_id: Mapped[int] = mapped_column(ForeignKey("inventory_sync_jobs.id", ondelete="RESTRICT"), nullable=False)
+    sequence_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    event_type: Mapped[str] = mapped_column(String(24), nullable=False)
+    worker_id: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    fencing_token: Mapped[int] = mapped_column(Integer, nullable=False)
+    details: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)

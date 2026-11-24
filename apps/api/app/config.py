@@ -18,6 +18,8 @@ class Settings(BaseSettings):
     dataset_output_storage_path: str = "./storage/dataset-outputs"
     max_dataset_output_bytes: int = Field(default=2147483648, ge=1024, le=10737418240)
     vision_provider_factory: str = ""
+    inventory_erp_adapter_factory: str = ""
+    inventory_wms_adapter_factory: str = ""
     vision_provider_mode: str = "disabled"
     vision_sku_match_labels: str = "product"
     ocr_provider_factory: str = ""

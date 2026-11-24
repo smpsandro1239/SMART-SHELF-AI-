@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 from datetime import timezone
 from decimal import Decimal
-from typing import Any
+from typing import Any, Callable
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -73,7 +73,10 @@ def _complete_sync(
     error_code: str | None = None,
     error_message: str | None = None,
     external_run_id: str | None = None,
+    lease_guard: Callable[[Session], Any] | None = None,
 ) -> None:
+    if lease_guard is not None:
+        lease_guard(db)
     now = models.utc_now()
     sync.status = status
     if external_run_id is not None:
@@ -107,6 +110,7 @@ async def run_inventory_source_sync(
     adapter: InventorySourceAdapter,
     actor_user_id: int,
     page_timeout_seconds: int = DEFAULT_PAGE_TIMEOUT_SECONDS,
+    lease_guard: Callable[[Session], Any] | None = None,
 ) -> dict[str, int | str]:
     """Fetch and persist one provider's complete paginated inventory snapshot.
 
@@ -134,6 +138,7 @@ async def run_inventory_source_sync(
     if integration is None or integration.provider != adapter.provider:
         raise InventorySyncOrchestrationError("No active store integration matches this provider")
 
+    lease_job = lease_guard(db) if lease_guard is not None else None
     now = models.utc_now()
     sync = models.InventorySourceSync(
         store_id=store_id,
@@ -146,6 +151,8 @@ async def run_inventory_source_sync(
     )
     db.add(sync)
     db.flush()
+    if lease_job is not None:
+        lease_job.latest_sync_id = sync.id
     db.add(models.InventorySourceSyncEvent(
         sync_id=sync.id,
         event_type="STARTED",
@@ -226,6 +233,8 @@ async def run_inventory_source_sync(
                 ))
                 page_processed += 1
             try:
+                if lease_guard is not None:
+                    lease_guard(db)
                 db.commit()
             except IntegrityError as exc:
                 db.rollback()
@@ -238,7 +247,7 @@ async def run_inventory_source_sync(
                 _complete_sync(
                     db, sync, actor_user_id, status="SUCCESS",
                     received=received, processed=processed,
-                    external_run_id=external_run_id,
+                    external_run_id=external_run_id, lease_guard=lease_guard,
                 )
                 return {"sync_id": sync.id, "status": "SUCCESS", "received_records": received, "processed_records": processed}
             if batch.next_cursor in seen_cursors or batch.next_cursor == cursor:
@@ -255,7 +264,7 @@ async def run_inventory_source_sync(
             received=received, processed=processed,
             error_code="SYNC_CANCELLED",
             error_message="Synchronization was cancelled; committed pages remain available as evidence.",
-            external_run_id=external_run_id,
+            external_run_id=external_run_id, lease_guard=lease_guard,
         )
         raise
     except Exception as exc:
@@ -268,7 +277,7 @@ async def run_inventory_source_sync(
             db, sync, actor_user_id, status=status,
             received=received, processed=processed,
             error_code=code, error_message=message,
-            external_run_id=external_run_id,
+            external_run_id=external_run_id, lease_guard=lease_guard,
         )
         if isinstance(exc, asyncio.CancelledError):
             raise
