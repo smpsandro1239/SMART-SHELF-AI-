@@ -7303,10 +7303,54 @@ def list_replenishment_recommendations(
                 elif inventory is None:
                     status = "INVENTORY_UNKNOWN"
                     explanation = "Não existe snapshot de inventário; verificar stock antes de repor."
-                elif available <= 0:
-                    status = "BACKROOM_OUT_OF_STOCK"
-                    explanation = "A prateleira necessita de atenção, mas o stock disponível na retaguarda é zero."
-                elif observed_shelf_quantity is None:
+                else:
+                    inventory_at = inventory.captured_at
+                    if inventory_at.tzinfo is None:
+                        inventory_at = inventory_at.replace(tzinfo=timezone.utc)
+                    else:
+                        inventory_at = inventory_at.astimezone(timezone.utc)
+                    inventory_age_minutes = (now - inventory_at).total_seconds() / 60
+                    freshness_policy = (
+                        db.query(models.InventoryFreshnessPolicy)
+                        .filter_by(store_id=store_id, source=inventory.source)
+                        .first()
+                    )
+                    max_inventory_age_minutes = (
+                        freshness_policy.max_age_minutes if freshness_policy else 240
+                    )
+                    if inventory_age_minutes < 0:
+                        status = "INVALID_INVENTORY_TIMESTAMP"
+                        explanation = "O snapshot de inventário tem uma data futura; confirmar a sincronização do sistema de origem."
+                    elif inventory_age_minutes > max_inventory_age_minutes:
+                        status = "STALE_INVENTORY"
+                        explanation = (
+                            "O snapshot de inventário excede a validade configurada "
+                            f"({max_inventory_age_minutes} minutos); atualizar o stock antes de repor."
+                        )
+                    elif available <= 0:
+                        status = "BACKROOM_OUT_OF_STOCK"
+                        explanation = "A prateleira necessita de atenção, mas o stock disponível na retaguarda é zero."
+                    elif observed_shelf_quantity is None:
+                        status = "NEEDS_REPLENISHMENT"
+                        explanation = "A prateleira apresenta baixa disponibilidade e existe stock na retaguarda; a quantidade exata ainda não foi medida."
+                    else:
+                        decision = suggest_shelf_refill(ShelfRefillInput(
+                            shelf_quantity=observed_shelf_quantity,
+                            target_quantity=link.target_quantity,
+                            min_display_quantity=link.min_display_quantity,
+                            backroom_available_quantity=available,
+                            observation_confidence=observation.confidence,
+                            observation_age_minutes=observation_age_minutes,
+                            max_observation_age_minutes=stale_after_minutes,
+                        ))
+                        status = decision.status
+                        suggested_quantity = decision.suggested_quantity
+                        explanation = decision.explanation
+                # A recommendation is actionable only when both visual evidence
+                # and the authoritative backroom snapshot are temporally valid.
+                if status in {"STALE_INVENTORY", "INVALID_INVENTORY_TIMESTAMP"}:
+                    suggested_quantity = None
+            elif observation.status == "UNKNOWN":
                     status = "NEEDS_REPLENISHMENT"
                     explanation = "A prateleira apresenta baixa disponibilidade e existe stock na retaguarda; a quantidade exata ainda não foi medida."
                 else:
