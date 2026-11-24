@@ -8,6 +8,7 @@ are bounded and snapshot identity is protected by the database uniqueness key.
 from __future__ import annotations
 
 import asyncio
+from datetime import timezone
 from decimal import Decimal
 from typing import Any
 
@@ -30,11 +31,17 @@ class InventorySyncOrchestrationError(RuntimeError):
     """A synchronization run cannot safely continue."""
 
 
+def _utc(value):
+    if value.tzinfo is None or value.utcoffset() is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
 def _same_snapshot(existing: models.InventorySnapshot, item: Any) -> bool:
     return (
         Decimal(str(existing.on_hand_quantity)) == item.on_hand_quantity
         and Decimal(str(existing.reserved_quantity)) == item.reserved_quantity
-        and existing.captured_at == item.captured_at
+        and _utc(existing.captured_at) == _utc(item.captured_at)
     )
 
 
@@ -185,6 +192,9 @@ async def run_inventory_source_sync(
                     raise InventorySyncOrchestrationError(
                         "A source product has no active, exact store-scoped SKU mapping"
                     )
+                product = db.query(models.Product).filter_by(id=mapping.product_id, is_active=True).first()
+                if product is None:
+                    raise InventorySyncOrchestrationError("Mapped internal product is missing or inactive")
                 existing = (
                     db.query(models.InventorySnapshot)
                     .filter_by(
@@ -234,6 +244,16 @@ async def run_inventory_source_sync(
             cursor = batch.next_cursor
 
         raise InventorySyncOrchestrationError("Provider exceeded the maximum page count")
+    except asyncio.CancelledError:
+        db.rollback()
+        _complete_sync(
+            db, sync, actor_user_id,
+            status="PARTIAL" if processed else "FAILED",
+            received=received, processed=processed,
+            error_code="SYNC_CANCELLED",
+            error_message="Synchronization was cancelled; committed pages remain available as evidence.",
+        )
+        raise
     except Exception as exc:
         db.rollback()
         status = "PARTIAL" if processed else "FAILED"
