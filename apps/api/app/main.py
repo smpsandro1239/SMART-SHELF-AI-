@@ -8691,6 +8691,126 @@ def dashboard_summary(
         "note": "Counts are based on recorded observations; they are not a live computer-vision feed. Completion rate is completed tasks divided by all visible tasks, including cancelled tasks.",
     }
 
+@app.get("/api/v1/dashboard/operations", tags=["dashboard"])
+def dashboard_operations(
+    request: Request,
+    store_id: int | None = None,
+    from_date: date | None = None,
+    to_date: date | None = None,
+    db: Session = Depends(get_db),
+):
+    """Return date-bounded operational breakdowns by employee, zone and product."""
+    user = db.get(models.User, request.state.user_id)
+    if user is None or not user.is_active:
+        raise HTTPException(status_code=401, detail="Authenticated user not found")
+
+    today = datetime.now(timezone.utc).date()
+    effective_to = to_date or today
+    effective_from = from_date or (effective_to - timedelta(days=29))
+    if effective_from > effective_to:
+        raise HTTPException(status_code=422, detail="from_date must be on or before to_date")
+    if (effective_to - effective_from).days > 365:
+        raise HTTPException(status_code=422, detail="Date range cannot exceed 366 days")
+
+    if user.role == "ADMIN":
+        scoped_store_id = store_id
+    else:
+        if user.store_id is None:
+            raise HTTPException(status_code=403, detail="User is not associated with a store")
+        if store_id is not None and store_id != user.store_id:
+            raise HTTPException(status_code=403, detail="Access to this store is not allowed")
+        scoped_store_id = user.store_id
+
+    base = (
+        db.query(models.ReplenishmentTask)
+        .join(models.Shelf, models.ReplenishmentTask.shelf_id == models.Shelf.id)
+        .join(models.Zone, models.Shelf.zone_id == models.Zone.id)
+        .join(models.Product, models.ReplenishmentTask.product_id == models.Product.id)
+        .outerjoin(models.User, models.ReplenishmentTask.assigned_user_id == models.User.id)
+        .filter(
+            models.ReplenishmentTask.created_at >= datetime.combine(
+                effective_from, datetime.min.time(), tzinfo=timezone.utc
+            ),
+            models.ReplenishmentTask.created_at < datetime.combine(
+                effective_to + timedelta(days=1), datetime.min.time(), tzinfo=timezone.utc
+            ),
+        )
+    )
+    if scoped_store_id is not None:
+        base = base.filter(models.ReplenishmentTask.store_id == scoped_store_id)
+    if user.role == "EMPLOYEE":
+        base = base.filter(models.ReplenishmentTask.assigned_user_id == user.id)
+
+    def grouped(dimensions):
+        rows = (
+            base.with_entities(
+                *dimensions,
+                func.count(models.ReplenishmentTask.id).label("total"),
+                func.sum(case((models.ReplenishmentTask.status == "PENDING", 1), else_=0)).label("pending"),
+                func.sum(case((models.ReplenishmentTask.status == "ASSIGNED", 1), else_=0)).label("assigned"),
+                func.sum(case((models.ReplenishmentTask.status == "IN_PROGRESS", 1), else_=0)).label("in_progress"),
+                func.sum(case((models.ReplenishmentTask.status == "COMPLETED", 1), else_=0)).label("completed"),
+                func.sum(case((models.ReplenishmentTask.status == "CANCELLED", 1), else_=0)).label("cancelled"),
+                func.sum(case((models.ReplenishmentTask.priority == "URGENT", 1), else_=0)).label("urgent"),
+                func.coalesce(func.sum(models.ReplenishmentTask.actual_quantity), 0).label("actual_quantity"),
+            )
+            .group_by(*dimensions)
+            .all()
+        )
+        result = []
+        for row in rows:
+            key_values = row[:len(dimensions)]
+            metrics = row[len(dimensions):]
+            result.append({
+                **{dimension.key: value for dimension, value in zip(dimensions, key_values)},
+                "total": int(metrics[0] or 0),
+                "pending": int(metrics[1] or 0),
+                "assigned": int(metrics[2] or 0),
+                "in_progress": int(metrics[3] or 0),
+                "completed": int(metrics[4] or 0),
+                "cancelled": int(metrics[5] or 0),
+                "urgent": int(metrics[6] or 0),
+                "actual_quantity": float(metrics[7] or 0),
+                "completion_rate_percent": round((int(metrics[4] or 0) / int(metrics[0])) * 100, 1) if metrics[0] else 0.0,
+            })
+        return result
+
+    overall = grouped([]) if False else None
+    totals = (
+        base.with_entities(
+            func.count(models.ReplenishmentTask.id),
+            func.sum(case((models.ReplenishmentTask.status == "PENDING", 1), else_=0)),
+            func.sum(case((models.ReplenishmentTask.status == "ASSIGNED", 1), else_=0)),
+            func.sum(case((models.ReplenishmentTask.status == "IN_PROGRESS", 1), else_=0)),
+            func.sum(case((models.ReplenishmentTask.status == "COMPLETED", 1), else_=0)),
+            func.sum(case((models.ReplenishmentTask.status == "CANCELLED", 1), else_=0)),
+            func.sum(case((models.ReplenishmentTask.priority == "URGENT", 1), else_=0)),
+            func.coalesce(func.sum(models.ReplenishmentTask.actual_quantity), 0),
+        ).first()
+    )
+    total_count = int(totals[0] or 0)
+    completed_count = int(totals[4] or 0)
+    return {
+        "store_id": scoped_store_id,
+        "period": {"from": effective_from.isoformat(), "to": effective_to.isoformat(), "timezone": "UTC"},
+        "summary": {
+            "total": total_count,
+            "pending": int(totals[1] or 0),
+            "assigned": int(totals[2] or 0),
+            "in_progress": int(totals[3] or 0),
+            "completed": completed_count,
+            "cancelled": int(totals[5] or 0),
+            "urgent": int(totals[6] or 0),
+            "actual_quantity": float(totals[7] or 0),
+            "completion_rate_percent": round((completed_count / total_count) * 100, 1) if total_count else 0.0,
+        },
+        "by_employee": grouped([models.User.id.label("employee_id"), models.User.full_name.label("employee_name")]),
+        "by_zone": grouped([models.Zone.id.label("zone_id"), models.Zone.name.label("zone_name")]),
+        "by_product": grouped([models.Product.id.label("product_id"), models.Product.sku.label("sku"), models.Product.name.label("product_name")]),
+        "visibility": "EMPLOYEE vê apenas tarefas atribuídas a si; SUPERVISOR vê a própria loja; ADMIN pode consultar uma loja ou o conjunto da plataforma.",
+    }
+
+
 @app.post(
     "/api/v1/tasks/from-operational-decision",
     response_model=ReplenishmentTaskRead,
