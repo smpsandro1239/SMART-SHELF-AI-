@@ -1190,3 +1190,42 @@ def test_replenishment_rejects_stale_or_future_inventory_snapshot(
             "requested_quantity": 2,
         })
         assert task.status_code == 409, task.text
+
+
+def test_replenishment_uses_store_and_source_inventory_freshness_policy():
+    with TestClient(app) as client:
+        store_id, shelf_id, product_id = create_task_context(client)
+        observation = client.post("/api/v1/observations", json={
+            "shelf_id": shelf_id,
+            "source": "simulation",
+            "status": "LOW_STOCK",
+            "confidence": 0.99,
+        })
+        assert observation.status_code == 201, observation.text
+
+        snapshot = client.post("/api/v1/inventory/snapshots", json={
+            "store_id": store_id,
+            "product_id": product_id,
+            "on_hand_quantity": 20,
+            "reserved_quantity": 0,
+            "source": "WMS",
+            "captured_at": (datetime.now(timezone.utc) - timedelta(minutes=20)).isoformat(),
+        })
+        assert snapshot.status_code == 201, snapshot.text
+
+        with TestingSession() as db:
+            db.add(models.InventoryFreshnessPolicy(
+                store_id=store_id,
+                source="WMS",
+                max_age_minutes=10,
+            ))
+            db.commit()
+
+        response = client.get(
+            "/api/v1/replenishment/recommendations",
+            params={"store_id": store_id, "product_id": product_id},
+        )
+        assert response.status_code == 200, response.text
+        recommendation = response.json()[0]
+        assert recommendation["recommendation_status"] == "STALE_INVENTORY"
+        assert recommendation["suggested_quantity"] is None
