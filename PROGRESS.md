@@ -953,3 +953,9 @@ Migração 0076 e testes de API/migração adicionados. Validação CI do commit
 Implementados os modelos/migrações 0078 e 0079 para mapeamento externo de produtos e finalização segura do identificador da execução no ledger. Foi criado `inventory_connectors/orchestrator.py`, invocável por worker confiável, com verificação da integração activa, mapping exacto por loja/fonte, paginação, timeout, três tentativas com backoff, limite de 1000 páginas, detecção de cursor repetido, persistência transaccional por página e idempotência por referência externa. Replays idênticos são aceites; referências repetidas com conteúdo diferente são rejeitadas. Os testes focam retries, comparação temporal e trigger de identidade da execução.
 
 Limites: ainda não há API de administração de mappings, worker/scheduler durável, secret manager ligado ou adapter de fornecedor real. Não afirmar integração operacional até homologação.
+
+
+## Administração de mappings ERP/WMS (24-11-2026)
+Implementada API de listagem, criação e actualização de mappings externos por loja, com autorização ADMIN/SUPERVISOR, controlo de store scope, exigência de integração activa e produto interno activo. A API exige motivo de auditoria, não permite apagar mappings e disponibiliza endpoint de histórico. Migração 0080 adiciona eventos append-only; migração 0081 torna a identidade externa imutável e bloqueia DELETE ao nível da base de dados. Foram acrescentados testes de API, permissões, duplicados, histórico e triggers.
+
+Pendente: worker durável, gestão de secrets, recuperação de STARTED abandonados e adapters reais.
