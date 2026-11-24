@@ -794,3 +794,10 @@ Próxima prioridade: continuar auditoria de IDs aninhados em OCR/matching/artefa
 - São apresentados a origem e a idade do snapshot, a confiança e data da observação e os estados sem medição/snapshot.
 - Não foram criadas mutações de inventário nem ajustes automáticos.
 - Validação de build e Quality Gates do SHA final ainda pendente.
+
+## 2026-11-24 — Reconciliação: ausência de evidência não significa stock zero
+
+Foi adicionada uma regressão em `apps/api/tests/test_inventory.py` para uma associação produto/prateleira sem observação visual e sem snapshot de retaguarda. O contrato esperado é `NO_OBSERVATION`, quantidade observada e diferença nulas, e campos de stock de retaguarda nulos. O teste confirma ainda que a consulta não cria `InventoryMovement` nem `InventorySnapshot`.
+
+Commit de teste: `3f5c0b012fd4104edc1cf55c24d308668a99a1d1`. A documentação de acompanhamento foi actualizada no commit `e629bd65952b976d4546e6f55325151590561ada`. A validação automatizada do novo HEAD continua pendente; não considerar o teste aprovado até a execução CI terminar.
+
