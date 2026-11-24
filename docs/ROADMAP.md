@@ -1,3 +1,12 @@
+## 2026-11-24 — Contrato técnico para adapters ERP/WMS
+
+- Protocolo assíncrono e read-only para fornecedores ERP/WMS.
+- DTO normalizado com SKU, ID externo, quantidades decimais, referência idempotente e timestamp timezone-aware.
+- Validação de limites compatíveis com o schema de snapshots e rejeição de duplicados dentro do lote.
+- Loader de factories confiáveis, sem adapter de fallback ou mock apresentado como integração.
+- Próxima etapa: orquestrador/worker com identidade de serviço, gestão de segredos, timeouts, paginação, retries limitados, idempotência persistente e homologação de conectores reais.
+- Estado: contrato e testes publicados; sem conectividade externa ou escrita de snapshots nesta fase.
+
 ## 2026-11-24 — Observabilidade de sincronizações ERP/WMS
 
 - Ledger persistente de tentativas ERP/WMS com lifecycle STARTED/SUCCESS/PARTIAL/FAILED, contagens, duração, erros e referência externa.
