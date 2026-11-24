@@ -1494,3 +1494,14 @@ Capacity is calculated conservatively from the current time to the end of the ac
 - Corrigidas três falhas da suite API detectadas no workflow anterior, relacionadas com import de HTTPException, fixture de observação sem associação SKU/prateleira e fixture que tentava repetir a transição para ASSIGNED.
 - API CI, Quality Gates, Web CI, Security Scans e Docker Compose do HEAD final ainda pendentes.
 - Não existe ainda adapter ERP/WMS real; a comparação depende de snapshots previamente ingeridos e não constitui ajuste contabilístico.
+
+
+## Ledger auditável — P0 implementado; CI pendente
+
+- Ledger persistente por loja, prateleira e produto.
+- Snapshot imutável de contagem de prateleira, WMS, ERP, IDs, timestamps e diferenças.
+- Workflow de revisão humana maker-checker com decisão justificada e eventos append-only.
+- Triggers protegem a evidência e o histórico de auditoria.
+- Interface React para criar registos e rever pendentes.
+- Separação explícita face a `inventory_movements` e aos saldos contabilísticos.
+- Próximos passos: dashboard agregado, adapters reais ERP/WMS e histórico de sincronizações.

@@ -922,3 +922,10 @@ Capacity is calculated conservatively from the current time to the end of the ac
 A API de reconciliação passou a obter snapshots independentes por fonte ERP e WMS, com quantidades on-hand/reservadas/disponíveis, timestamp, idade e frescura. A diferença WMS−ERP só é calculada quando ambas as fontes estão dentro da política de frescura; estados em falta, stale ou futuros permanecem explícitos e não são convertidos em zero. O dashboard apresenta os dois domínios lado a lado e mantém o comportamento read-only. Foram corrigidas três regressões de testes já existentes no HEAD (import ausente, associação SKU/prateleira em fixture e transição de tarefa duplicada) e acrescentado teste de divergência ERP/WMS. GitHub Actions no SHA actual ainda em execução; não declarar a validação concluída antes dos resultados finais.
 
 Limitação: a API recebe snapshots, mas não existe ainda ligação real a ERP/WMS. A comparação é operacional e informativa; não actualiza inventário contabilístico nem cria movimentos automaticamente.
+
+
+## Ledger auditável de reconciliação
+
+Implementado ledger persistente independente dos movimentos contabilísticos. Cada registo congela loja, prateleira, produto, observação, snapshots WMS/ERP/retaguarda, quantidades, diferenças e timestamps. Estados de revisão PENDING, APPROVED, REJECTED e NEEDS_INVESTIGATION. A revisão exige ADMIN/SUPERVISOR diferente do autor e justificação obrigatória. Eventos append-only; triggers impedem alterações à evidência e aos eventos. UI permite registar, consultar e rever reconciliações. Nenhum endpoint deste fluxo cria movimentos ou altera saldos.
+
+Migração 0076 e testes de API/migração adicionados. Validação CI do commit final pendente.

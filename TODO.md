@@ -1919,3 +1919,15 @@ Capacity is calculated conservatively from the current time to the end of the ac
 - [ ] Confirmar API CI, Quality Gates, Web CI, Security Scans e Docker Compose no HEAD final.
 - [ ] Definir contrato semântico de stock por fonte e validar a comparação com operadores/dados reais antes de tratar divergências como discrepâncias contabilísticas.
 - [ ] Implementar adapters ERP/WMS reais, idempotência de ingestão, cursor/offset de sincronização e histórico de execução por integração.
+
+
+## Ledger auditável de reconciliação
+
+- [x] Persistir evidência por loja/prateleira/produto, incluindo quantidades, diferenças, IDs e timestamps.
+- [x] Rever com estados PENDING / APPROVED / REJECTED / NEEDS_INVESTIGATION e justificação.
+- [x] Exigir revisor diferente do autor (maker-checker).
+- [x] Proteger evidência e eventos com triggers de integridade.
+- [x] Disponibilizar histórico e ações no painel React.
+- [ ] Confirmar API CI, Web CI, Quality Gates, Security Scans e Docker Compose no commit final.
+- [ ] Dashboard agregado por loja/produto e métricas de divergência.
+- [ ] Adapters ERP/WMS reais e histórico de execuções/erros de sincronização.

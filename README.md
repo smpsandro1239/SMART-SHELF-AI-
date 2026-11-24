@@ -2015,3 +2015,10 @@ A diferença de exposição é uma métrica operacional face ao objetivo da prat
 A consulta `GET /api/v1/inventory/reconciliation` passou a expor separadamente o snapshot mais recente de ERP e WMS para cada associação produto/prateleira. Para cada fonte apresenta quantidade física registada, reservado, disponível, timestamp, idade e estado de frescura (`CURRENT`, `STALE`, `FUTURE` ou `MISSING`). A comparação WMS−ERP da quantidade disponível só é calculada quando ambas as fontes existem e estão dentro da política de frescura; caso contrário, o estado identifica a evidência em falta, desactualizada ou temporalmente inválida.
 
 O dashboard apresenta os dois domínios em separado e evidencia divergências sem escrever movimentos, snapshots ou quantidades contabilísticas. A política por loja/fonte mantém o fallback de 240 minutos. Os snapshots continuam a ser recebidos através da API; isto não constitui ainda uma integração operacional real com ERP ou WMS. A validação GitHub Actions desta implementação está em curso.
+
+
+## Ledger auditável de reconciliação
+
+A API disponibiliza um ledger operacional separado dos movimentos de inventário. `POST /api/v1/inventory/reconciliations` congela a evidência de prateleira, WMS e ERP, incluindo quantidades, diferenças, IDs dos snapshots e timestamps. `GET /api/v1/inventory/reconciliations` consulta o histórico. `POST /api/v1/inventory/reconciliations/{id}/review` permite a ADMIN/SUPERVISOR aprovar, rejeitar ou encaminhar para investigação com justificação.
+
+A evidência é imutável na base de dados e os eventos são append-only. A revisão exige um utilizador diferente do autor (maker-checker). Consultar a reconciliação não cria registos automaticamente. O ledger não cria `InventoryMovement`, não altera snapshots e não actualiza saldos contabilísticos. Migração: `0076_inventory_reconciliation_ledger`.
