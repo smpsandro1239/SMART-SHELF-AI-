@@ -47,6 +47,7 @@ def _event(db, job, kind, worker=None, details=None):
         worker_id=worker, fencing_token=job.fencing_token,
         details=details or {}, created_at=models.utc_now(),
     ))
+    db.flush()
 
 
 def enqueue_inventory_sync_job(db: Session, *, store_id: int, source: str, provider: str,
@@ -63,11 +64,6 @@ def enqueue_inventory_sync_job(db: Session, *, store_id: int, source: str, provi
         raise InventorySyncJobError("scheduled_at must include a timezone")
     if db.get(models.Store, store_id) is None or db.get(models.User, requested_by_user_id) is None:
         raise InventorySyncJobError("store or requesting user does not exist")
-    integration = db.query(models.StoreExternalIntegration).filter_by(
-        store_id=store_id, external_system=source, provider=provider, status="ACTIVE"
-    ).first()
-    if integration is None:
-        raise InventorySyncJobNotConfigured("No active store integration matches this provider")
     existing = db.query(models.InventorySyncJob).filter_by(
         store_id=store_id, source=source, idempotency_key=key
     ).first()
@@ -75,6 +71,11 @@ def enqueue_inventory_sync_job(db: Session, *, store_id: int, source: str, provi
         if existing.provider != provider:
             raise InventorySyncJobConflict("idempotency_key belongs to a different provider")
         return existing
+    integration = db.query(models.StoreExternalIntegration).filter_by(
+        store_id=store_id, external_system=source, provider=provider, status="ACTIVE"
+    ).first()
+    if integration is None:
+        raise InventorySyncJobNotConfigured("No active store integration matches this provider")
     now = models.utc_now()
     job = models.InventorySyncJob(
         store_id=store_id, source=source, provider=provider, idempotency_key=key,

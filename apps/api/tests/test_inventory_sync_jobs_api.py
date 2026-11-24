@@ -47,4 +47,4 @@ def test_enqueue_list_and_events_are_store_scoped(db_session):
     assert [item["event_type"] for item in events["items"]] == ["QUEUED"]
     with pytest.raises(HTTPException) as foreign:
         main_module.list_store_inventory_sync_job_events(store_b.id, first["id"], request, db_session)
-    assert foreign.value.status_code == 404
+    assert foreign.value.status_code == 403

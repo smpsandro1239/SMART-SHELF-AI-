@@ -1,5 +1,5 @@
 """Durable ERP/WMS queue, retry and fencing regression tests."""
-from datetime import timedelta
+from datetime import timedelta, timezone
 import pytest
 from sqlalchemy import create_engine, event, update
 from sqlalchemy.orm import sessionmaker
@@ -91,7 +91,10 @@ def test_failure_schedules_retry_then_terminal_failure(db):
     first = claim_next_inventory_sync_job(db, worker_id="worker-a", lease_seconds=30)
     retry = fail_or_retry_inventory_sync_job(db, job_id=job.id, worker_id="worker-a",
         lease_token=first.lease_token, fencing_token=first.fencing_token, error_code="PROVIDER_TIMEOUT")
-    assert retry.status == "QUEUED" and retry.scheduled_at > models.utc_now()
+    scheduled = retry.scheduled_at
+    if scheduled.tzinfo is None:
+        scheduled = scheduled.replace(tzinfo=timezone.utc)
+    assert retry.status == "QUEUED" and scheduled > models.utc_now()
     retry.scheduled_at = models.utc_now() - timedelta(seconds=1)
     db.commit()
     second = claim_next_inventory_sync_job(db, worker_id="worker-b", lease_seconds=30)
