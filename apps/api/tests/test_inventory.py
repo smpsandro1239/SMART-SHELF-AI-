@@ -206,6 +206,47 @@ def test_replenishment_recommendation_uses_observation_and_backroom_stock():
         assert recommendation["suggested_quantity"] is None
 
 
+def test_replenishment_blocks_future_dated_observation(monkeypatch):
+    with TestClient(app) as client:
+        store_id, product_id = create_store_and_product(client)
+        zone = client.post("/api/v1/zones", json={
+            "store_id": store_id, "name": "Zona relógio",
+        }).json()
+        shelf = client.post("/api/v1/shelves", json={
+            "zone_id": zone["id"], "code": "FUTURE-REPLENISH",
+        }).json()
+        assignment = client.post("/api/v1/shelf-products", json={
+            "shelf_id": shelf["id"], "product_id": product_id,
+            "target_quantity": 10, "min_display_quantity": 2,
+        })
+        assert assignment.status_code == 201, assignment.text
+
+        reference_time = datetime(2026, 1, 1, 12, 0, tzinfo=timezone.utc)
+        observation = client.post("/api/v1/observations", json={
+            "shelf_id": shelf["id"], "product_id": product_id,
+            "status": "LOW_STOCK", "source": "mobile",
+            "confidence": 0.99, "observed_quantity": 0,
+            "observed_at": (reference_time + timedelta(minutes=5)).isoformat(),
+        })
+        assert observation.status_code == 201, observation.text
+        inventory = client.post("/api/v1/inventory/snapshots", json={
+            "store_id": store_id, "product_id": product_id,
+            "on_hand_quantity": 20, "reserved_quantity": 0, "source": "ERP",
+        })
+        assert inventory.status_code == 201, inventory.text
+
+        monkeypatch.setattr(main_module.models, "utc_now", lambda: reference_time)
+        response = client.get(
+            "/api/v1/replenishment/recommendations",
+            params={"store_id": store_id},
+        )
+        assert response.status_code == 200, response.text
+        recommendation = response.json()[0]
+        assert recommendation["recommendation_status"] == "INVALID_OBSERVATION_TIMESTAMP"
+        assert recommendation["suggested_quantity"] is None
+        assert "futuro" in recommendation["explanation"].lower()
+
+
 def test_replenishment_does_not_recommend_when_backroom_is_empty():
     with TestClient(app) as client:
         store_id, product_id = create_store_and_product(client)
