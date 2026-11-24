@@ -1388,3 +1388,28 @@ class EmployeeAvailabilityRead(BaseModel):
     created_at: datetime
     model_config = ConfigDict(from_attributes=True)
 
+
+
+class InventorySourceSyncCreate(BaseModel):
+    store_id: int = Field(gt=0)
+    source: Literal["ERP", "WMS"]
+    provider: str = Field(min_length=2, max_length=120)
+    external_run_id: str | None = Field(default=None, max_length=200)
+
+
+class InventorySourceSyncComplete(BaseModel):
+    status: Literal["SUCCESS", "PARTIAL", "FAILED"]
+    received_records: int = Field(ge=0)
+    processed_records: int = Field(ge=0)
+    error_code: str | None = Field(default=None, min_length=1, max_length=100)
+    error_message: str | None = Field(default=None, min_length=1, max_length=2000)
+
+    @model_validator(mode="after")
+    def validate_completion(self):
+        if self.processed_records > self.received_records:
+            raise ValueError("processed_records não pode exceder received_records")
+        if self.status == "FAILED" and (not self.error_code or not self.error_message):
+            raise ValueError("Uma sincronização FAILED exige código e descrição do erro")
+        if self.status == "SUCCESS" and (self.error_code or self.error_message):
+            raise ValueError("Uma sincronização SUCCESS não pode conter erro")
+        return self
