@@ -583,6 +583,7 @@ class ReplenishmentTask(Base):
         CheckConstraint("priority IN ('LOW', 'NORMAL', 'HIGH', 'URGENT')", name="ck_task_priority"),
         CheckConstraint("status IN ('PENDING', 'ASSIGNED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED')", name="ck_task_status"),
         CheckConstraint("requested_quantity IS NULL OR requested_quantity > 0", name="ck_task_quantity_positive"),
+        CheckConstraint("estimated_duration_minutes BETWEEN 1 AND 480", name="ck_task_estimated_duration_positive"),
         Index(
             "uq_active_task_store_shelf_product",
             "store_id", "shelf_id", "product_id",
