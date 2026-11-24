@@ -24,6 +24,7 @@ def upgrade() -> None:
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
         sa.UniqueConstraint("store_id", "source", "external_product_id", name="uq_inventory_external_mapping_external_id"),
         sa.UniqueConstraint("store_id", "source", "external_sku", name="uq_inventory_external_mapping_sku"),
+        sa.UniqueConstraint("store_id", "source", "product_id", name="uq_inventory_external_mapping_product"),
         sa.CheckConstraint("source IN ('ERP', 'WMS')", name="ck_inventory_external_mapping_source"),
     )
     op.create_index("ix_inventory_external_mapping_product", "inventory_external_product_mappings", ["store_id", "product_id"])
