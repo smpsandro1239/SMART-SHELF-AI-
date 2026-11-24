@@ -1,3 +1,11 @@
+## 2026-11-24 — Observabilidade de sincronizações ERP/WMS
+
+- Ledger persistente de tentativas ERP/WMS com lifecycle STARTED/SUCCESS/PARTIAL/FAILED, contagens, duração, erros e referência externa.
+- Eventos de auditoria append-only; a base de dados permite apenas uma transição STARTED → terminal e bloqueia eliminações.
+- Histórico e health endpoints por loja, com alertas calculados para fontes sem sucesso registado ou além da janela de frescura.
+- UI React para estado das fontes e histórico recente.
+- Limite: não existe ainda conectividade ERP/WMS real, scheduler, retries nem notificações. Adapters dependem de contratos, credenciais e homologação.
+
 ## 2026-11-24 — Integridade semântica da reconciliação de inventário
 
 - Acrescentada regressão para produto associado a prateleira sem observação nem snapshot de retaguarda.
