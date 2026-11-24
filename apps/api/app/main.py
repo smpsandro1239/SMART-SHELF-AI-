@@ -8225,6 +8225,16 @@ def auto_assign_replenishment_tasks(
             models.ReplenishmentTask.store_id == store_id,
             models.ReplenishmentTask.status.in_(("PENDING", "ASSIGNED", "IN_PROGRESS")),
         )
+        .order_by(
+            case(
+                (models.ReplenishmentTask.priority == "URGENT", 0),
+                (models.ReplenishmentTask.priority == "HIGH", 1),
+                (models.ReplenishmentTask.priority == "NORMAL", 2),
+                else_=3,
+            ),
+            models.ReplenishmentTask.created_at.asc(),
+            models.ReplenishmentTask.id.asc(),
+        )
         .with_for_update(of=models.ReplenishmentTask)
         .all()
     )
