@@ -13,9 +13,10 @@ _PRIORITY_ORDER = {"URGENT": 0, "HIGH": 1, "NORMAL": 2, "LOW": 3}
 
 def build_balanced_assignment_plan(
     employees: list[dict[str, Any]],
-    tasks: list[dict[str, Any]],
+    existing_tasks: list[dict[str, Any]],
+    pending_tasks: list[dict[str, Any]],
 ) -> list[dict[str, int]]:
-    """Assign tasks to the least-loaded employee, preferring zone continuity.
+    """Assign pending tasks to the least-loaded employee, preferring zone continuity.
 
     Existing active workload is counted before planning. Within equal workload,
     an employee already working in the task's zone is preferred; stable employee
@@ -25,7 +26,7 @@ def build_balanced_assignment_plan(
         (employee for employee in employees if employee.get("active", True)),
         key=lambda employee: int(employee["id"]),
     )
-    if not eligible or not tasks:
+    if not eligible or not pending_tasks:
         return []
 
     loads: Counter[int] = Counter()
@@ -33,7 +34,7 @@ def build_balanced_assignment_plan(
         int(employee["id"]): Counter() for employee in eligible
     }
 
-    for task in tasks:
+    for task in existing_tasks:
         assignee = task.get("assigned_user_id")
         if assignee is None or int(assignee) not in zone_loads:
             continue
@@ -44,7 +45,7 @@ def build_balanced_assignment_plan(
             zone_loads[employee_id][str(zone)] += 1
 
     pending = sorted(
-        tasks,
+        pending_tasks,
         key=lambda task: (
             _PRIORITY_ORDER.get(str(task.get("priority", "NORMAL")).upper(), 2),
             int(task.get("id", 0)),
