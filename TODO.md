@@ -1908,3 +1908,14 @@ Capacity is calculated conservatively from the current instant until the active 
 - [ ] Add workforce update/cancellation endpoints and a preview/simulation mode for supervisors.
 
 Capacity is calculated conservatively from the current time to the end of the active shift, less the configured break minutes and estimated active workload. In-progress tasks are charged their full estimate because the current task model does not yet persist remaining effort.
+
+
+## 2026-11-24 — Reconciliação multi-fonte ERP/WMS (implementação publicada; CI pendente)
+
+- [x] Expor o último snapshot ERP e o último snapshot WMS separadamente por produto/loja.
+- [x] Apresentar on-hand, reservado, disponível, timestamp, idade e estado de frescura por fonte.
+- [x] Calcular a diferença WMS−ERP apenas quando ambas as fontes têm evidência actual e válida; sinalizar divergência, ausência, stale ou timestamp futuro.
+- [x] Mostrar os domínios ERP e WMS em separado no painel React, sem mutações de inventário.
+- [ ] Confirmar API CI, Quality Gates, Web CI, Security Scans e Docker Compose no HEAD final.
+- [ ] Definir contrato semântico de stock por fonte e validar a comparação com operadores/dados reais antes de tratar divergências como discrepâncias contabilísticas.
+- [ ] Implementar adapters ERP/WMS reais, idempotência de ingestão, cursor/offset de sincronização e histórico de execução por integração.

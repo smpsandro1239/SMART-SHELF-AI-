@@ -2008,3 +2008,10 @@ O dashboard de ADMIN e SUPERVISOR inclui:
 - **Evidência e frescura:** mostra data/confiança da observação e identifica referências sem medição ou sem snapshot.
 
 A diferença de exposição é uma métrica operacional face ao objetivo da prateleira; não representa, por si só, uma divergência do inventário contabilístico. A visão de retaguarda mantém-se num domínio separado. Nenhuma destas consultas altera snapshots, movimentos ou quantidades contabilísticas. Uma futura divergência formal deverá seguir um processo de revisão humana e auditoria.
+
+
+## 2026-11-24 — Reconciliação multi-fonte ERP/WMS
+
+A consulta `GET /api/v1/inventory/reconciliation` passou a expor separadamente o snapshot mais recente de ERP e WMS para cada associação produto/prateleira. Para cada fonte apresenta quantidade física registada, reservado, disponível, timestamp, idade e estado de frescura (`CURRENT`, `STALE`, `FUTURE` ou `MISSING`). A comparação WMS−ERP da quantidade disponível só é calculada quando ambas as fontes existem e estão dentro da política de frescura; caso contrário, o estado identifica a evidência em falta, desactualizada ou temporalmente inválida.
+
+O dashboard apresenta os dois domínios em separado e evidencia divergências sem escrever movimentos, snapshots ou quantidades contabilísticas. A política por loja/fonte mantém o fallback de 240 minutos. Os snapshots continuam a ser recebidos através da API; isto não constitui ainda uma integração operacional real com ERP ou WMS. A validação GitHub Actions desta implementação está em curso.
