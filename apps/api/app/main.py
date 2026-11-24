@@ -7225,10 +7225,14 @@ def review_inventory_reconciliation(reconciliation_id: int, payload: InventoryRe
         raise HTTPException(status_code=401, detail="Authentication is required")
     if actor.role not in {"ADMIN", "SUPERVISOR"}:
         raise HTTPException(status_code=403, detail="Supervisor approval is required")
-    record = db.query(models.InventoryReconciliation).filter(models.InventoryReconciliation.id == reconciliation_id).with_for_update().first()
-    if record is None:
-        raise HTTPException(status_code=404, detail="Reconciliation record not found")
-    _enforce_store_scope(actor, record.store_id)
+    record = _lock_store_scoped_record(
+        db,
+        models.InventoryReconciliation,
+        reconciliation_id,
+        actor,
+        "Reconciliation record not found",
+        hide_foreign=True,
+    )
     if record.review_status != "PENDING":
         raise HTTPException(status_code=409, detail="Only pending reconciliations can be reviewed")
     if actor.id == record.created_by_user_id:
