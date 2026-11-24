@@ -75,3 +75,11 @@ A execução:
 Foi adicionada a tabela `inventory_external_product_mappings`, com unicidade por loja/fonte/ID externo e por loja/fonte/SKU. O mapeamento é explícito: não existe correspondência automática por semelhança de SKU.
 
 **Limites desta fase:** ainda não existe API de administração dos mapeamentos, worker/scheduler executável, secret manager integrado ou adapter de fornecedor real. A função é a camada de serviço que um worker futuro poderá invocar. As páginas já confirmadas permanecem como evidência se uma página posterior falhar; o ledger termina em PARTIAL. Nenhum passo altera stock de origem, cria movimentos, inicia reconciliação ou aprova divergências.
+
+
+### Migrações e rastreabilidade da orquestração
+- `0078_inventory_external_product_mapping`: mappings explícitos de produto externo, únicos por loja/fonte/ID externo e por loja/fonte/SKU.
+- `0079_inventory_sync_run_identity`: permite fixar o `external_run_id` apenas durante a transição terminal do ledger, mantendo a regra de uma única conclusão.
+- `run_inventory_source_sync`: serviço de worker com integração ACTIVE, fornecedor exacto, mapping exacto, paginação limitada, timeout/retries, transacção por página e replay idempotente.
+
+A contagem `processed_records` inclui snapshots novos e replays idênticos já persistidos. Se houver falha após páginas confirmadas, o ledger termina em PARTIAL; os snapshots dessas páginas permanecem como evidência. A API de gestão dos mappings, worker durável, secret manager e adapter real continuam pendentes.
