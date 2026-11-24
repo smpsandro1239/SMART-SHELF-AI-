@@ -1082,7 +1082,7 @@ def test_inventory_reconciliation_dashboard_aggregates_ledger_and_freshness(monk
         zone = client.post("/api/v1/zones", json={"store_id": store_id, "name": "Dashboard"}).json()
         shelf = client.post("/api/v1/shelves", json={"zone_id": zone["id"], "code": "DASH-01"}).json()
         assert client.post("/api/v1/shelf-products", json={"shelf_id": shelf["id"], "product_id": product_id, "target_quantity": 10, "min_display_quantity": 2}).status_code == 201
-        observation = client.post("/api/v1/observations", json={"shelf_id": shelf["id"], "product_id": product_id, "observed_quantity": 7, "source": "manual"})
+        observation = client.post("/api/v1/observations", json={"shelf_id": shelf["id"], "product_id": product_id, "observed_quantity": 7, "source": "mobile"})
         erp = client.post("/api/v1/inventory/snapshots", json={"store_id": store_id, "product_id": product_id, "on_hand_quantity": 30, "reserved_quantity": 0, "source": "ERP", "external_reference": "DASH-ERP-01"})
         wms = client.post("/api/v1/inventory/snapshots", json={"store_id": store_id, "product_id": product_id, "on_hand_quantity": 25, "reserved_quantity": 0, "source": "WMS", "external_reference": "DASH-WMS-01"})
         assert observation.status_code == 201, observation.text
