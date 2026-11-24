@@ -1434,3 +1434,20 @@ A API disponibiliza agora uma primeira distribuição automática de tarefas pen
 - [ ] Executar API CI/PostgreSQL 16 e validar o consumo destas métricas pela interface Web.
 
 Nota: o dashboard agrega tarefas registadas, não constitui um feed em tempo real; as datas do filtro são interpretadas em UTC. A análise de produtividade não deve ser usada isoladamente para avaliação individual, pois não ajusta ainda por horas de turno, complexidade ou dificuldade das tarefas.
+
+
+## Workforce foundation — shifts, skills and availability (2026-11-24)
+
+- [x] Persist employee shifts with start/end timestamps, break minutes, status and creator audit.
+- [x] Persist normalized employee competencies with proficiency levels from 1 to 5.
+- [x] Persist explicit AVAILABLE/UNAVAILABLE intervals.
+- [x] Add Alembic migration `0074_employee_workforce`.
+- [x] Add store-scoped supervisor/admin endpoints to create and list shifts, skills and availability.
+- [x] Reject inactive, foreign-store and non-employee identities; enforce store scope for supervisors.
+- [x] Reject overlapping scheduled shifts and contradictory availability intervals.
+- [x] Require timezone-aware timestamps and validate interval ordering and break duration.
+- [x] Add regression tests for persistence, capacity arithmetic, duplicates, overlaps and tenant isolation.
+- [ ] Validate migration and test suite on PostgreSQL 16 through GitHub Actions.
+- [ ] Add update/cancellation workflows and feed these persisted constraints into capacity-aware task planning.
+
+The shift's net planned capacity is calculated as `(ends_at - starts_at) - break_minutes`. This initial delivery records the workforce constraints; it does not yet make the auto-assignment algorithm capacity-aware. Existing automatic assignment remains unchanged until the next planning phase is implemented and validated.
