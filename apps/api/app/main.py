@@ -7619,6 +7619,12 @@ def create_task_from_recommendation(
     actor = _request_user(db, request)
     if actor is not None and actor.role != "ADMIN" and actor.store_id != payload.store_id:
         raise HTTPException(status_code=403, detail="Access to this store is not allowed")
+    # Serialize the decision and task creation against other task creators and
+    # store-scoped inventory writers. The recommendation must be calculated
+    # after acquiring this lock; calculating it before the lock creates a
+    # time-of-check/time-of-use window in which stock or shelf evidence can change.
+    _lock_store_for_task_creation(db, payload.store_id)
+
     recommendations = list_replenishment_recommendations(
         store_id=payload.store_id,
         product_id=payload.product_id,
@@ -7641,7 +7647,6 @@ def create_task_from_recommendation(
             detail=f"Cannot create replenishment task: recommendation status is {recommendation['recommendation_status']}",
         )
 
-    _lock_store_for_task_creation(db, payload.store_id)
     active_task = db.query(models.ReplenishmentTask).filter(
         models.ReplenishmentTask.store_id == payload.store_id,
         models.ReplenishmentTask.shelf_id == payload.shelf_id,
