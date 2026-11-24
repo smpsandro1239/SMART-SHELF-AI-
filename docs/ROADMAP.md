@@ -1451,3 +1451,18 @@ Nota: o dashboard agrega tarefas registadas, não constitui um feed em tempo rea
 - [ ] Add update/cancellation workflows and feed these persisted constraints into capacity-aware task planning.
 
 The shift's net planned capacity is calculated as `(ends_at - starts_at) - break_minutes`. This initial delivery records the workforce constraints; it does not yet make the auto-assignment algorithm capacity-aware. Existing automatic assignment remains unchanged until the next planning phase is implemented and validated.
+
+
+## Capacity-aware workforce planning (2026-11-24)
+
+- [x] Add task-level estimated duration (1–480 minutes; default 15) and optional required competency.
+- [x] Persist the new task fields through migration `0075_task_capacity`; existing tasks receive the safe 15-minute default.
+- [x] Normalize competency codes and enforce duration bounds in request schemas and the database model.
+- [x] Replace count-only auto-assignment with a planner that checks an active scheduled shift, explicit unavailability, required competency and remaining shift minutes.
+- [x] Deduct estimated minutes for already assigned/in-progress tasks before assigning additional work.
+- [x] Keep priority ordering URGENT > HIGH > NORMAL > LOW; tasks that do not fit remaining capacity or competency constraints remain pending.
+- [x] Record the planning rationale in the task event history and return assigned/unassigned counts.
+- [x] Add unit tests for shift eligibility, unavailability, competency matching, priority and capacity overbooking; extend the API lifecycle and auto-assignment integration tests.
+- [ ] Confirm PostgreSQL migration and all GitHub Actions checks complete successfully.
+
+Capacity is calculated conservatively from the current instant until the active shift ends, less the full configured break duration, then less the estimated duration of the employee's active assigned tasks. Explicit UNAVAILABLE intervals block assignment. AVAILABLE records are currently informational; the presence of a shift is the positive eligibility requirement. This iteration does not yet schedule tasks into future shifts or model break placement within a shift.
