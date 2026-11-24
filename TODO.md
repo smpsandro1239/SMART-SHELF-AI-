@@ -1953,3 +1953,14 @@ Capacity is calculated conservatively from the current time to the end of the ac
 - [ ] Confirmar API CI, Web CI, Quality Gates, Security Scans e Docker Compose no commit final.
 - [ ] Dashboard agregado por loja/produto e métricas de divergência.
 - [ ] Adapters ERP/WMS reais e histórico de execuções/erros de sincronização.
+
+
+## ERP/WMS — próxima fatia de integração
+- [x] Persistir mapeamentos externos de produto por loja e fonte, com unicidade de ID externo e SKU.
+- [x] Implementar serviço de orquestração paginada, com isolamento por loja e fornecedor.
+- [x] Aplicar timeout, retries limitados, backoff, limite de páginas e detecção de cursor repetido.
+- [x] Persistir snapshots por página e garantir replay idempotente pela referência externa.
+- [x] Ligar o resultado ao ledger, incluindo conclusão parcial/falhada e identidade externa da execução.
+- [ ] Criar gestão autenticada dos mapeamentos externos.
+- [ ] Executar o serviço num worker durável e integrar um secret manager.
+- [ ] Homologar pelo menos um adapter real com documentação e credenciais do fornecedor.
