@@ -85,7 +85,7 @@ from app.schemas import (
     ObservationCreate, ObservationRead, ObservationAlertRead, ObservationAlertUpdate, ObservationAlertEventRead, ShelfCreate, ShelfRead,
     StoreCreate, StoreRead, ZoneCreate, ZoneRead,
     ProductCreate, ProductRead, ShelfProductCreate, ShelfProductRead,
-    InventorySnapshotCreate, InventorySnapshotRead, InventoryReconciliationCreate, InventoryMovementRead, InventoryFreshnessPolicyUpsert, InventoryFreshnessPolicyRead, ReplenishmentRecommendationRead,
+    InventorySnapshotCreate, InventorySnapshotRead, InventoryReconciliationCreate, InventoryReconciliationRecordCreate, InventoryReconciliationReview, InventoryMovementRead, InventoryFreshnessPolicyUpsert, InventoryFreshnessPolicyRead, ReplenishmentRecommendationRead,
     DailySalesRecordCreate, DailySalesRecordRead, SalesSource,
     HourlySalesRecordCreate, HourlySalesRecordRead, HourlyStoreTrafficRecordCreate, HourlyStoreTrafficRecordRead,
     HourlySalesBatchCreate, HourlyStoreTrafficBatchCreate,
@@ -7123,6 +7123,125 @@ def get_inventory_reconciliation(
         "note": "Display target and measured shelf quantity are separate from backroom stock. Differences are informational and never modify accounting inventory.",
         "items": result,
     }
+
+
+@app.post("/api/v1/inventory/reconciliations", tags=["inventory"], status_code=201)
+def create_inventory_reconciliation_record(payload: InventoryReconciliationRecordCreate, request: Request, db: Session = Depends(get_db)):
+    """Persist a point-in-time three-domain comparison; never changes stock."""
+    actor = _request_user(db, request)
+    if actor is None:
+        raise HTTPException(status_code=401, detail="Authentication is required")
+    if actor.role not in {"ADMIN", "SUPERVISOR"}:
+        raise HTTPException(status_code=403, detail="Supervisor approval is required")
+    _enforce_store_scope(actor, payload.store_id)
+    if db.get(models.Store, payload.store_id) is None:
+        raise HTTPException(status_code=404, detail="Store not found")
+    current = get_inventory_reconciliation(store_id=payload.store_id, shelf_id=payload.shelf_id, product_id=payload.product_id, limit=10, request=request, db=db)
+    if not current["items"]:
+        raise HTTPException(status_code=404, detail="No active shelf/product assignment found")
+    item = current["items"][0]
+    now = models.utc_now()
+    evidence = {
+        "captured_at": now.isoformat(),
+        "store_id": item["store_id"], "shelf_id": item["shelf_id"], "shelf_code": item["shelf_code"],
+        "product_id": item["product_id"], "product_sku": item["product_sku"], "product_name": item["product_name"],
+        "observation": {"id": item["observation_id"], "quantity": item["observed_shelf_quantity"], "observed_at": item["observed_at"].isoformat() if item["observed_at"] else None, "source": item["observation_source"], "confidence": item["observation_confidence"]},
+        "backroom": {"snapshot_id": item["backroom_snapshot_id"], "on_hand": item["backroom_on_hand_quantity"], "reserved": item["backroom_reserved_quantity"], "available": item["backroom_available_quantity"], "source": item["backroom_source"], "captured_at": item["backroom_captured_at"].isoformat() if item["backroom_captured_at"] else None},
+        "erp": {"snapshot_id": item["erp_snapshot_id"], "on_hand": item["erp_on_hand_quantity"], "reserved": item["erp_reserved_quantity"], "available": item["erp_available_quantity"], "source": item["erp_source"], "captured_at": item["erp_captured_at"].isoformat() if item["erp_captured_at"] else None, "freshness": item["erp_freshness_status"]},
+        "wms": {"snapshot_id": item["wms_snapshot_id"], "on_hand": item["wms_on_hand_quantity"], "reserved": item["wms_reserved_quantity"], "available": item["wms_available_quantity"], "source": item["wms_source"], "captured_at": item["wms_captured_at"].isoformat() if item["wms_captured_at"] else None, "freshness": item["wms_freshness_status"]},
+        "display_target_quantity": item["display_target_quantity"], "display_status": item["display_status"],
+        "wms_erp_comparison_status": item["wms_erp_comparison_status"],
+    }
+    record = models.InventoryReconciliation(
+        store_id=payload.store_id, shelf_id=payload.shelf_id, product_id=payload.product_id,
+        observation_id=item["observation_id"], backroom_snapshot_id=item["backroom_snapshot_id"],
+        erp_snapshot_id=item["erp_snapshot_id"], wms_snapshot_id=item["wms_snapshot_id"],
+        display_target_quantity=item["display_target_quantity"], display_quantity=item["observed_shelf_quantity"],
+        wms_available_quantity=item["wms_available_quantity"], erp_available_quantity=item["erp_available_quantity"],
+        display_delta=item["display_delta"],
+        display_vs_wms_delta=round(item["observed_shelf_quantity"] - item["wms_available_quantity"], 3) if item["observed_shelf_quantity"] is not None and item["wms_available_quantity"] is not None else None,
+        display_vs_erp_delta=round(item["observed_shelf_quantity"] - item["erp_available_quantity"], 3) if item["observed_shelf_quantity"] is not None and item["erp_available_quantity"] is not None else None,
+        wms_erp_delta=item["wms_erp_available_delta"], comparison_status=item["wms_erp_comparison_status"],
+        evidence=evidence, created_by_user_id=actor.id, created_at=now,
+    )
+    db.add(record)
+    db.flush()
+    db.add(models.InventoryReconciliationEvent(
+        reconciliation_id=record.id, event_type="CREATED", actor_user_id=actor.id, reason=payload.reason,
+        evidence={"comparison_status": record.comparison_status, "snapshot_ids": {"observation": record.observation_id, "backroom": record.backroom_snapshot_id, "erp": record.erp_snapshot_id, "wms": record.wms_snapshot_id}},
+        created_at=now,
+    ))
+    db.commit()
+    db.refresh(record)
+    return _inventory_reconciliation_record_payload(record, db)
+
+
+def _inventory_reconciliation_record_payload(record, db):
+    creator = db.get(models.User, record.created_by_user_id)
+    reviewer = db.get(models.User, record.reviewed_by_user_id) if record.reviewed_by_user_id else None
+    events = db.query(models.InventoryReconciliationEvent).filter_by(reconciliation_id=record.id).order_by(models.InventoryReconciliationEvent.created_at.asc(), models.InventoryReconciliationEvent.id.asc()).all()
+    return {
+        "id": record.id, "store_id": record.store_id, "shelf_id": record.shelf_id, "product_id": record.product_id,
+        "observation_id": record.observation_id, "backroom_snapshot_id": record.backroom_snapshot_id,
+        "erp_snapshot_id": record.erp_snapshot_id, "wms_snapshot_id": record.wms_snapshot_id,
+        "display_target_quantity": float(record.display_target_quantity),
+        "display_quantity": float(record.display_quantity) if record.display_quantity is not None else None,
+        "wms_available_quantity": float(record.wms_available_quantity) if record.wms_available_quantity is not None else None,
+        "erp_available_quantity": float(record.erp_available_quantity) if record.erp_available_quantity is not None else None,
+        "display_delta": float(record.display_delta) if record.display_delta is not None else None,
+        "display_vs_wms_delta": float(record.display_vs_wms_delta) if record.display_vs_wms_delta is not None else None,
+        "display_vs_erp_delta": float(record.display_vs_erp_delta) if record.display_vs_erp_delta is not None else None,
+        "wms_erp_delta": float(record.wms_erp_delta) if record.wms_erp_delta is not None else None,
+        "comparison_status": record.comparison_status, "evidence": record.evidence,
+        "review_status": record.review_status, "created_by_user_id": record.created_by_user_id,
+        "created_by_name": creator.full_name if creator else None, "reviewed_by_user_id": record.reviewed_by_user_id,
+        "reviewed_by_name": reviewer.full_name if reviewer else None, "reviewed_at": record.reviewed_at,
+        "review_reason": record.review_reason, "created_at": record.created_at,
+        "events": [{"id": e.id, "event_type": e.event_type, "actor_user_id": e.actor_user_id, "reason": e.reason, "evidence": e.evidence, "created_at": e.created_at} for e in events],
+    }
+
+
+@app.get("/api/v1/inventory/reconciliations", tags=["inventory"])
+def list_inventory_reconciliation_records(store_id: int, product_id: int | None = None, review_status: str | None = None, limit: int = 100, request: Request = None, db: Session = Depends(get_db)):
+    actor = _request_user(db, request)
+    if actor is None or actor.role not in {"ADMIN", "SUPERVISOR"}:
+        raise HTTPException(status_code=403, detail="Supervisor role required")
+    _enforce_store_scope(actor, store_id)
+    query = db.query(models.InventoryReconciliation).filter_by(store_id=store_id)
+    if product_id is not None:
+        query = query.filter(models.InventoryReconciliation.product_id == product_id)
+    if review_status is not None:
+        if review_status not in {"PENDING", "APPROVED", "REJECTED", "NEEDS_INVESTIGATION"}:
+            raise HTTPException(status_code=422, detail="Invalid review_status")
+        query = query.filter(models.InventoryReconciliation.review_status == review_status)
+    records = query.order_by(models.InventoryReconciliation.created_at.desc(), models.InventoryReconciliation.id.desc()).limit(max(1, min(limit, 500))).all()
+    return {"store_id": store_id, "count": len(records), "items": [_inventory_reconciliation_record_payload(record, db) for record in records]}
+
+
+@app.post("/api/v1/inventory/reconciliations/{reconciliation_id}/review", tags=["inventory"])
+def review_inventory_reconciliation(reconciliation_id: int, payload: InventoryReconciliationReview, request: Request, db: Session = Depends(get_db)):
+    actor = _request_user(db, request)
+    if actor is None:
+        raise HTTPException(status_code=401, detail="Authentication is required")
+    if actor.role not in {"ADMIN", "SUPERVISOR"}:
+        raise HTTPException(status_code=403, detail="Supervisor approval is required")
+    record = db.query(models.InventoryReconciliation).filter(models.InventoryReconciliation.id == reconciliation_id).with_for_update().first()
+    if record is None:
+        raise HTTPException(status_code=404, detail="Reconciliation record not found")
+    _enforce_store_scope(actor, record.store_id)
+    if record.review_status != "PENDING":
+        raise HTTPException(status_code=409, detail="Only pending reconciliations can be reviewed")
+    if actor.id == record.created_by_user_id:
+        raise HTTPException(status_code=409, detail="A different supervisor must review this reconciliation")
+    now = models.utc_now()
+    record.review_status = payload.decision
+    record.reviewed_by_user_id = actor.id
+    record.reviewed_at = now
+    record.review_reason = payload.reason
+    db.add(models.InventoryReconciliationEvent(reconciliation_id=record.id, event_type=payload.decision, actor_user_id=actor.id, reason=payload.reason, evidence={"previous_status": "PENDING", "new_status": payload.decision}, created_at=now))
+    db.commit()
+    db.refresh(record)
+    return _inventory_reconciliation_record_payload(record, db)
 
 
 @app.post(
