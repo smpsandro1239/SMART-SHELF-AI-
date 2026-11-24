@@ -1,3 +1,12 @@
+## 2026-11-24 — Contrato de adapters ERP/WMS
+
+- Criado o pacote `app.inventory_connectors` com protocolo assíncrono read-only e lote normalizado.
+- A validação rejeita quantidades negativas/não finitas, precisão superior a três casas decimais, reservado superior ao físico, timestamps sem fuso horário, SKU/referências duplicados e identificadores inválidos.
+- O loader aceita apenas factories de deployment configuradas no formato `module:callable`; configuração ausente, factory inválida ou fonte incompatível falha explicitamente.
+- Testes dedicados cobrem validação de evidência, paginação, ausência de configuração e conformidade de adapters.
+- Limite deliberado: ainda não existe adapter de fornecedor, worker, scheduler, credencial ou sincronização automática. Não são criados snapshots nem movimentos por este contrato.
+- Commits: `04ae70f` (pacote), `5074be6` (contrato), `e9951bf` (testes). CI do novo HEAD pendente.
+
 ## 2026-11-24 — Histórico e saúde das sincronizações ERP/WMS
 
 - Criadas as tabelas inventory_source_syncs e inventory_source_sync_events, com eventos append-only e transição única STARTED → estado terminal.
