@@ -68,10 +68,13 @@ def test_task_lifecycle_pending_assignment_start_and_completion():
         created = client.post("/api/v1/tasks", json={
             "store_id": store_id, "shelf_id": shelf_id, "product_id": product_id,
             "priority": "HIGH", "requested_quantity": 8,
+            "estimated_duration_minutes": 25, "required_skill_code": "forklift",
         })
         assert created.status_code == 201
         task = created.json()
         assert task["status"] == "PENDING"
+        assert task["estimated_duration_minutes"] == 25
+        assert task["required_skill_code"] == "FORKLIFT"
         task_id = task["id"]
 
         assigned = client.patch(f"/api/v1/tasks/{task_id}/status", json={
