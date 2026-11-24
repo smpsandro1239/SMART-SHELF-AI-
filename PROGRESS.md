@@ -947,3 +947,9 @@ Limitação: a API recebe snapshots, mas não existe ainda ligação real a ERP/
 Implementado ledger persistente independente dos movimentos contabilísticos. Cada registo congela loja, prateleira, produto, observação, snapshots WMS/ERP/retaguarda, quantidades, diferenças e timestamps. Estados de revisão PENDING, APPROVED, REJECTED e NEEDS_INVESTIGATION. A revisão exige ADMIN/SUPERVISOR diferente do autor e justificação obrigatória. Eventos append-only; triggers impedem alterações à evidência e aos eventos. UI permite registar, consultar e rever reconciliações. Nenhum endpoint deste fluxo cria movimentos ou altera saldos.
 
 Migração 0076 e testes de API/migração adicionados. Validação CI do commit final pendente.
+
+
+## ERP/WMS — orquestração e mapeamento (24-11-2026)
+Implementados os modelos/migrações 0078 e 0079 para mapeamento externo de produtos e finalização segura do identificador da execução no ledger. Foi criado `inventory_connectors/orchestrator.py`, invocável por worker confiável, com verificação da integração activa, mapping exacto por loja/fonte, paginação, timeout, três tentativas com backoff, limite de 1000 páginas, detecção de cursor repetido, persistência transaccional por página e idempotência por referência externa. Replays idênticos são aceites; referências repetidas com conteúdo diferente são rejeitadas. Os testes focam retries, comparação temporal e trigger de identidade da execução.
+
+Limites: ainda não há API de administração de mappings, worker/scheduler durável, secret manager ligado ou adapter de fornecedor real. Não afirmar integração operacional até homologação.
