@@ -50,6 +50,7 @@ from app.replenishment_planning import build_replenishment_plan
 from app.replenishment_risk_bridge import enrich_replenishment_with_stockout_risk
 from app.replenishment_workload import summarize_workload
 from app.replenishment_assignment import build_balanced_assignment_plan
+from app.workforce_planner import build_capacity_aware_assignment_plan
 from app.replenishment_effort import enrich_plan_with_effort_estimates
 from app.warehouse_pick_planning import build_warehouse_pick_plan
 from app.warehouse_slotting import recommend_warehouse_slotting, recommend_physical_slot
@@ -8204,24 +8205,21 @@ def auto_assign_replenishment_tasks(
     request: Request = None,
     db: Session = Depends(get_db),
 ):
-    """Distribute unassigned tasks using current workload, priority and zone continuity."""
+    """Assign tasks only within persisted shift, availability, skill and time capacity."""
     actor = _request_user(db, request)
     if actor is None or actor.role not in {"ADMIN", "SUPERVISOR"}:
         raise HTTPException(status_code=403, detail="Supervisor role required")
     _enforce_store_scope(actor, store_id)
+    if db.get(models.Store, store_id) is None:
+        raise HTTPException(status_code=404, detail="Store not found")
     _lock_store_for_task_creation(db, store_id)
 
+    now = models.utc_now()
     employees = db.query(models.User).filter(
         models.User.store_id == store_id,
         models.User.role == "EMPLOYEE",
         models.User.is_active.is_(True),
     ).order_by(models.User.id.asc()).all()
-    if not employees:
-        raise HTTPException(
-            status_code=409,
-            detail={"code": "NO_ELIGIBLE_EMPLOYEES", "message": "Não existem funcionários activos nesta loja."},
-        )
-
     active_rows = (
         db.query(models.ReplenishmentTask, models.Zone.name)
         .outerjoin(models.Shelf, models.ReplenishmentTask.shelf_id == models.Shelf.id)
@@ -8251,30 +8249,83 @@ def auto_assign_replenishment_tasks(
     ][:max(1, min(limit, 200))]
     if not pending_rows:
         return {
-            "store_id": store_id,
-            "assigned_count": 0,
-            "assignments": [],
-            "policy": "Sem tarefas pendentes elegíveis para distribuição.",
+            "store_id": store_id, "assigned_count": 0, "assignments": [],
+            "unassigned_count": 0, "reason": "Sem tarefas pendentes elegíveis.",
+            "generated_at": now,
         }
 
-    employee_inputs = [{"id": employee.id, "active": employee.is_active} for employee in employees]
+    employee_ids = [employee.id for employee in employees]
+    shifts = db.query(models.EmployeeShift).filter(
+        models.EmployeeShift.store_id == store_id,
+        models.EmployeeShift.employee_id.in_(employee_ids or [-1]),
+        models.EmployeeShift.status == "SCHEDULED",
+        models.EmployeeShift.starts_at <= now,
+        models.EmployeeShift.ends_at > now,
+    ).order_by(models.EmployeeShift.starts_at.desc(), models.EmployeeShift.id.desc()).all()
+    shifts_by_employee = {}
+    for shift in shifts:
+        shifts_by_employee.setdefault(shift.employee_id, shift)
+
+    unavailable_rows = db.query(models.EmployeeAvailability).filter(
+        models.EmployeeAvailability.store_id == store_id,
+        models.EmployeeAvailability.employee_id.in_(employee_ids or [-1]),
+        models.EmployeeAvailability.status == "UNAVAILABLE",
+        models.EmployeeAvailability.starts_at <= now,
+        models.EmployeeAvailability.ends_at > now,
+    ).all()
+    unavailable_ids = {row.employee_id for row in unavailable_rows}
+
+    skills = db.query(models.EmployeeSkill).filter(
+        models.EmployeeSkill.store_id == store_id,
+        models.EmployeeSkill.employee_id.in_(employee_ids or [-1]),
+    ).all()
+    skills_by_employee = {}
+    for skill in skills:
+        skills_by_employee.setdefault(skill.employee_id, []).append({
+            "skill_code": skill.skill_code, "level": skill.level,
+        })
+
+    employee_inputs = []
+    for employee in employees:
+        shift = shifts_by_employee.get(employee.id)
+        remaining_minutes = 0
+        if shift is not None:
+            remaining_minutes = max(
+                0,
+                int((shift.ends_at - now).total_seconds() // 60) - shift.break_minutes,
+            )
+        employee_inputs.append({
+            "id": employee.id,
+            "active": employee.is_active,
+            "on_shift": shift is not None,
+            "available": employee.id not in unavailable_ids,
+            "remaining_capacity_minutes": remaining_minutes,
+            "skills": skills_by_employee.get(employee.id, []),
+        })
+
     existing_inputs = [
         {
             "id": task.id,
             "assigned_user_id": task.assigned_user_id,
             "zone_name": zone_name,
+            "estimated_duration_minutes": task.estimated_duration_minutes,
         }
         for task, zone_name in active_rows
         if task.status in {"ASSIGNED", "IN_PROGRESS"} and task.assigned_user_id is not None
     ]
     pending_inputs = [
-        {"id": task.id, "priority": task.priority, "zone_name": zone_name}
+        {
+            "id": task.id,
+            "priority": task.priority,
+            "zone_name": zone_name,
+            "estimated_duration_minutes": task.estimated_duration_minutes,
+            "required_skill_code": task.required_skill_code,
+        }
         for task, zone_name in pending_rows
     ]
-    plan = build_balanced_assignment_plan(employee_inputs, existing_inputs, pending_inputs)
+    plan = build_capacity_aware_assignment_plan(employee_inputs, existing_inputs, pending_inputs)
     tasks_by_id = {task.id: task for task, _ in pending_rows}
     employees_by_id = {employee.id: employee for employee in employees}
-    now = models.utc_now()
     assignments = []
     for item in plan:
         task = tasks_by_id[item["task_id"]]
@@ -8286,21 +8337,32 @@ def auto_assign_replenishment_tasks(
         _record_task_event(
             db, task, "STATUS_CHANGED", actor,
             from_status="PENDING", to_status="ASSIGNED",
-            reason="Distribuição automática por carga, prioridade e continuidade de zona.",
+            reason=(
+                "Planeamento automático com capacidade restante do turno, "
+                "disponibilidade, competências, duração estimada e prioridade."
+            ),
         )
         assignments.append({
             "task_id": task.id,
             "assigned_user_id": employee.id,
             "employee_name": employee.full_name,
             "priority": task.priority,
+            "estimated_duration_minutes": task.estimated_duration_minutes,
         })
 
     db.commit()
+    assigned_ids = {item["task_id"] for item in plan}
+    unassigned_count = len(pending_rows) - len(assigned_ids)
     return {
         "store_id": store_id,
         "assigned_count": len(assignments),
         "assignments": assignments,
-        "policy": "Prioridade URGENT > HIGH > NORMAL > LOW; distribuição pelo menor número de tarefas activas, com preferência por continuidade na mesma zona e desempate pelo ID do funcionário.",
+        "unassigned_count": unassigned_count,
+        "policy": (
+            "Atribuição limitada a funcionários com turno activo, sem indisponibilidade "
+            "registada, competência requerida e minutos suficientes. A carga activa "
+            "consome capacidade estimada; prioridades URGENT > HIGH > NORMAL > LOW."
+        ),
         "generated_at": now,
     }
 
