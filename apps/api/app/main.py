@@ -49,6 +49,7 @@ from app.stockout_risk import StockoutRiskInput, assess_stockout_risk
 from app.replenishment_planning import build_replenishment_plan
 from app.replenishment_risk_bridge import enrich_replenishment_with_stockout_risk
 from app.replenishment_workload import summarize_workload
+from app.replenishment_assignment import build_balanced_assignment_plan
 from app.replenishment_effort import enrich_plan_with_effort_estimates
 from app.warehouse_pick_planning import build_warehouse_pick_plan
 from app.warehouse_slotting import recommend_warehouse_slotting, recommend_physical_slot
@@ -8188,6 +8189,103 @@ def operational_decisions(
         "forecast_policy": "Média diária simples dos dias com vendas registadas na janela móvel de sete dias; não ajusta promoções, sazonalidade, tráfego ou dias sem registo.",
         "decisions": decisions,
         "side_effects": {"tasks_created": 0, "inventory_changed": False},
+    }
+
+
+@app.post("/api/v1/replenishment/auto-assign", tags=["replenishment"])
+def auto_assign_replenishment_tasks(
+    store_id: int,
+    limit: int = 100,
+    request: Request = None,
+    db: Session = Depends(get_db),
+):
+    """Distribute unassigned tasks using current workload, priority and zone continuity."""
+    actor = _request_user(db, request)
+    if actor is None or actor.role not in {"ADMIN", "SUPERVISOR"}:
+        raise HTTPException(status_code=403, detail="Supervisor role required")
+    _enforce_store_scope(actor, store_id)
+    _lock_store_for_task_creation(db, store_id)
+
+    employees = db.query(models.User).filter(
+        models.User.store_id == store_id,
+        models.User.role == "EMPLOYEE",
+        models.User.is_active.is_(True),
+    ).order_by(models.User.id.asc()).all()
+    if not employees:
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "NO_ELIGIBLE_EMPLOYEES", "message": "Não existem funcionários activos nesta loja."},
+        )
+
+    active_rows = (
+        db.query(models.ReplenishmentTask, models.Zone.name)
+        .outerjoin(models.Shelf, models.ReplenishmentTask.shelf_id == models.Shelf.id)
+        .outerjoin(models.Zone, models.Shelf.zone_id == models.Zone.id)
+        .filter(
+            models.ReplenishmentTask.store_id == store_id,
+            models.ReplenishmentTask.status.in_(("PENDING", "ASSIGNED", "IN_PROGRESS")),
+        )
+        .all()
+    )
+    pending_rows = [
+        (task, zone_name) for task, zone_name in active_rows
+        if task.status == "PENDING"
+        and task.assigned_user_id is None
+        and not task.assigned_to
+    ][:max(1, min(limit, 200))]
+    if not pending_rows:
+        return {
+            "store_id": store_id,
+            "assigned_count": 0,
+            "assignments": [],
+            "policy": "Sem tarefas pendentes elegíveis para distribuição.",
+        }
+
+    employee_inputs = [{"id": employee.id, "active": employee.is_active} for employee in employees]
+    existing_inputs = [
+        {
+            "id": task.id,
+            "assigned_user_id": task.assigned_user_id,
+            "zone_name": zone_name,
+        }
+        for task, zone_name in active_rows
+        if task.status in {"ASSIGNED", "IN_PROGRESS"} and task.assigned_user_id is not None
+    ]
+    pending_inputs = [
+        {"id": task.id, "priority": task.priority, "zone_name": zone_name}
+        for task, zone_name in pending_rows
+    ]
+    plan = build_balanced_assignment_plan(employee_inputs, existing_inputs, pending_inputs)
+    tasks_by_id = {task.id: task for task, _ in pending_rows}
+    employees_by_id = {employee.id: employee for employee in employees}
+    now = models.utc_now()
+    assignments = []
+    for item in plan:
+        task = tasks_by_id[item["task_id"]]
+        employee = employees_by_id[item["assigned_user_id"]]
+        task.assigned_user_id = employee.id
+        task.assigned_to = employee.full_name
+        task.status = "ASSIGNED"
+        task.updated_at = now
+        _record_task_event(
+            db, task, "STATUS_CHANGED", actor,
+            from_status="PENDING", to_status="ASSIGNED",
+            reason="Distribuição automática por carga, prioridade e continuidade de zona.",
+        )
+        assignments.append({
+            "task_id": task.id,
+            "assigned_user_id": employee.id,
+            "employee_name": employee.full_name,
+            "priority": task.priority,
+        })
+
+    db.commit()
+    return {
+        "store_id": store_id,
+        "assigned_count": len(assignments),
+        "assignments": assignments,
+        "policy": "Prioridade URGENT > HIGH > NORMAL > LOW; distribuição pelo menor número de tarefas activas, com preferência por continuidade na mesma zona e desempate pelo ID do funcionário.",
+        "generated_at": now,
     }
 
 
