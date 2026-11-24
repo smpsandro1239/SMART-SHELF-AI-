@@ -1823,3 +1823,12 @@ A implementação de produção já verificava lease_lost nos caminhos de sucess
 - [ ] Validar build Web CI e Quality Gates no SHA final desta integração.
 
 - [ ] Validar por CI/PostgreSQL 16 a reavaliação da recomendação sob lock na criação de tarefas; ampliar testes concorrentes de alterações de stock/evidência.
+
+## Reposição — validade temporal do inventário de retaguarda (2026-11-24; implementação/testes publicados, CI pendente)
+
+- [x] Aplicar a política de frescura por loja e origem ao motor de recomendações.
+- [x] Sinalizar snapshots futuros como `INVALID_INVENTORY_TIMESTAMP`.
+- [x] Sinalizar snapshots fora da validade como `STALE_INVENTORY`.
+- [x] Não produzir quantidades sugeridas nem permitir criação de tarefas com inventário temporalmente inválido.
+- [x] Adicionar testes parametrizados para snapshot antigo e futuro, incluindo tentativa de criação de tarefa.
+- [ ] Executar suite de tarefas/inventário e validar PostgreSQL/CI no HEAD final.
