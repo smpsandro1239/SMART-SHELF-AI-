@@ -6909,6 +6909,30 @@ def get_inventory_reconciliation(
         .correlate(models.ShelfProduct)
         .scalar_subquery()
     )
+    latest_erp_snapshot_id = (
+        db.query(models.InventorySnapshot.id)
+        .filter(
+            models.InventorySnapshot.store_id == store_id,
+            models.InventorySnapshot.product_id == models.ShelfProduct.product_id,
+            models.InventorySnapshot.source == "ERP",
+        )
+        .order_by(models.InventorySnapshot.captured_at.desc(), models.InventorySnapshot.id.desc())
+        .limit(1)
+        .correlate(models.ShelfProduct)
+        .scalar_subquery()
+    )
+    latest_wms_snapshot_id = (
+        db.query(models.InventorySnapshot.id)
+        .filter(
+            models.InventorySnapshot.store_id == store_id,
+            models.InventorySnapshot.product_id == models.ShelfProduct.product_id,
+            models.InventorySnapshot.source == "WMS",
+        )
+        .order_by(models.InventorySnapshot.captured_at.desc(), models.InventorySnapshot.id.desc())
+        .limit(1)
+        .correlate(models.ShelfProduct)
+        .scalar_subquery()
+    )
     query = (
         db.query(
             models.ShelfProduct,
@@ -6917,6 +6941,8 @@ def get_inventory_reconciliation(
             models.Product,
             latest_observation_id.label("latest_observation_id"),
             latest_snapshot_id.label("latest_snapshot_id"),
+            latest_erp_snapshot_id.label("latest_erp_snapshot_id"),
+            latest_wms_snapshot_id.label("latest_wms_snapshot_id"),
         )
         .join(models.Shelf, models.ShelfProduct.shelf_id == models.Shelf.id)
         .join(models.Zone, models.Shelf.zone_id == models.Zone.id)
@@ -6935,7 +6961,7 @@ def get_inventory_reconciliation(
         models.Zone.name.asc(), models.Shelf.code.asc(), models.Product.sku.asc()
     ).limit(max(1, min(limit, 500))).all()
     observation_ids = [row[4] for row in rows if row[4] is not None]
-    snapshot_ids = [row[5] for row in rows if row[5] is not None]
+    snapshot_ids = list({snapshot_id for row in rows for snapshot_id in row[5:8] if snapshot_id is not None})
     observations = {
         item.id: item for item in db.query(models.Observation).filter(
             models.Observation.id.in_(observation_ids)
@@ -6947,11 +6973,21 @@ def get_inventory_reconciliation(
         ).all()
     } if snapshot_ids else {}
 
+    freshness_policies = {
+        policy.source: policy.max_age_minutes
+        for policy in db.query(models.InventoryFreshnessPolicy).filter(
+            models.InventoryFreshnessPolicy.store_id == store_id,
+            models.InventoryFreshnessPolicy.source.in_(["ERP", "WMS"]),
+        ).all()
+    }
+
     result = []
     now = models.utc_now()
-    for link, shelf, zone, product, observation_id, snapshot_id in rows:
+    for link, shelf, zone, product, observation_id, snapshot_id, erp_snapshot_id, wms_snapshot_id in rows:
         observation = observations.get(observation_id)
         snapshot = snapshots.get(snapshot_id)
+        erp_snapshot = snapshots.get(erp_snapshot_id)
+        wms_snapshot = snapshots.get(wms_snapshot_id)
         observed_quantity = (
             float(observation.observed_quantity)
             if observation is not None and observation.observed_quantity is not None
@@ -6988,6 +7024,48 @@ def get_inventory_reconciliation(
                 captured_at = captured_at.replace(tzinfo=timezone.utc)
             snapshot_age_minutes = max(0.0, (now - captured_at).total_seconds() / 60)
 
+        def source_evidence(source_snapshot):
+            if source_snapshot is None:
+                return {
+                    "snapshot_id": None, "on_hand_quantity": None,
+                    "reserved_quantity": None, "available_quantity": None,
+                    "source": None, "captured_at": None, "age_minutes": None,
+                    "freshness_status": "MISSING",
+                }
+            captured = source_snapshot.captured_at
+            if captured.tzinfo is None:
+                captured = captured.replace(tzinfo=timezone.utc)
+            else:
+                captured = captured.astimezone(timezone.utc)
+            age = (now - captured).total_seconds() / 60
+            max_age = freshness_policies.get(source_snapshot.source, 240)
+            freshness = "FUTURE" if age < 0 else "STALE" if age > max_age else "CURRENT"
+            return {
+                "snapshot_id": source_snapshot.id,
+                "on_hand_quantity": float(source_snapshot.on_hand_quantity),
+                "reserved_quantity": float(source_snapshot.reserved_quantity),
+                "available_quantity": float(source_snapshot.available_quantity),
+                "source": source_snapshot.source,
+                "captured_at": source_snapshot.captured_at,
+                "age_minutes": round(max(0.0, age), 2),
+                "freshness_status": freshness,
+            }
+
+        erp = source_evidence(erp_snapshot)
+        wms = source_evidence(wms_snapshot)
+        source_delta = None
+        if erp["freshness_status"] == "CURRENT" and wms["freshness_status"] == "CURRENT":
+            source_delta = round(wms["available_quantity"] - erp["available_quantity"], 3)
+            source_comparison_status = "IN_SYNC" if source_delta == 0 else "DIVERGENCE"
+        elif erp["freshness_status"] == "MISSING":
+            source_comparison_status = "MISSING_ERP"
+        elif wms["freshness_status"] == "MISSING":
+            source_comparison_status = "MISSING_WMS"
+        elif "FUTURE" in {erp["freshness_status"], wms["freshness_status"]}:
+            source_comparison_status = "INVALID_TIMESTAMP"
+        else:
+            source_comparison_status = "STALE_SOURCE"
+
         result.append({
             "store_id": store_id,
             "zone_id": zone.id,
@@ -7018,6 +7096,24 @@ def get_inventory_reconciliation(
             "backroom_source": snapshot.source if snapshot else None,
             "backroom_captured_at": snapshot.captured_at if snapshot else None,
             "backroom_snapshot_age_minutes": round(snapshot_age_minutes, 2) if snapshot_age_minutes is not None else None,
+            "erp_snapshot_id": erp["snapshot_id"],
+            "erp_on_hand_quantity": erp["on_hand_quantity"],
+            "erp_reserved_quantity": erp["reserved_quantity"],
+            "erp_available_quantity": erp["available_quantity"],
+            "erp_source": erp["source"],
+            "erp_captured_at": erp["captured_at"],
+            "erp_snapshot_age_minutes": erp["age_minutes"],
+            "erp_freshness_status": erp["freshness_status"],
+            "wms_snapshot_id": wms["snapshot_id"],
+            "wms_on_hand_quantity": wms["on_hand_quantity"],
+            "wms_reserved_quantity": wms["reserved_quantity"],
+            "wms_available_quantity": wms["available_quantity"],
+            "wms_source": wms["source"],
+            "wms_captured_at": wms["captured_at"],
+            "wms_snapshot_age_minutes": wms["age_minutes"],
+            "wms_freshness_status": wms["freshness_status"],
+            "wms_erp_available_delta": source_delta,
+            "wms_erp_comparison_status": source_comparison_status,
         })
     return {
         "store_id": store_id,
