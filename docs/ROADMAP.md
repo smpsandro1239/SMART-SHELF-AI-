@@ -1412,3 +1412,8 @@ A resposta de reconciliação inclui agora `observation_age_minutes`, permitindo
 ### Integridade da criação de tarefas — revalidação sob lock
 
 A criação a partir de recomendação recalcula agora a recomendação depois de adquirir o lock estável da loja. Isto evita usar uma decisão calculada antes da secção crítica quando os dados de stock ou evidência podem ter mudado. A garantia depende de os escritores concorrentes de inventário respeitarem o mesmo lock; validar em PostgreSQL 16 e com teste concorrente dedicado.
+
+
+### Validade temporal do inventário de retaguarda
+
+O motor de recomendações aplica agora a política de frescura por loja e origem aos snapshots de retaguarda. Evidência antiga ou futura deixa de suportar recomendações accionáveis e impede a criação de tarefas derivadas. Estados novos: `STALE_INVENTORY` e `INVALID_INVENTORY_TIMESTAMP`. A validação automatizada está publicada, mas aguarda execução em CI/PostgreSQL.
