@@ -17,7 +17,7 @@ def test_assignment_plan_balances_existing_workload_and_prefers_zone_continuity(
         {"id": 9, "priority": "URGENT", "zone_name": "B"},
     ]
 
-    plan = build_balanced_assignment_plan(employees, existing + pending)
+    plan = build_balanced_assignment_plan(employees, existing, pending)
 
     assert plan == [
         {"task_id": 9, "assigned_user_id": 30},
@@ -40,6 +40,6 @@ def test_assignment_plan_uses_priority_then_stable_task_order():
 
 
 def test_assignment_plan_is_empty_without_eligible_employees_or_tasks():
-    assert build_balanced_assignment_plan([], [{"id": 1}]) == []
-    assert build_balanced_assignment_plan([{"id": 1, "active": False}], [{"id": 1}]) == []
-    assert build_balanced_assignment_plan([{"id": 1}], []) == []
+    assert build_balanced_assignment_plan([], [], [{"id": 1}]) == []
+    assert build_balanced_assignment_plan([{"id": 1, "active": False}], [], [{"id": 1}]) == []
+    assert build_balanced_assignment_plan([{"id": 1}], [], []) == []
