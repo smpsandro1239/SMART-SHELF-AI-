@@ -1417,3 +1417,8 @@ A criação a partir de recomendação recalcula agora a recomendação depois d
 ### Validade temporal do inventário de retaguarda
 
 O motor de recomendações aplica agora a política de frescura por loja e origem aos snapshots de retaguarda. Evidência antiga ou futura deixa de suportar recomendações accionáveis e impede a criação de tarefas derivadas. Estados novos: `STALE_INVENTORY` e `INVALID_INVENTORY_TIMESTAMP`. A validação automatizada está publicada, mas aguarda execução em CI/PostgreSQL.
+
+
+### Distribuição operacional de tarefas
+
+A API disponibiliza agora uma primeira distribuição automática de tarefas pendentes por funcionário, usando carga activa, prioridade e continuidade de zona. A atribuição fica registada no histórico da tarefa. A evolução seguinte deverá incorporar turnos, competências, disponibilidade e capacidade horária, sem inferir esses dados a partir do histórico.
