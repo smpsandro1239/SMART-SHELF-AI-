@@ -1511,3 +1511,65 @@ class VisionModelReleaseEvent(Base):
     decision: Mapped[str] = mapped_column(String(32), nullable=False)
     reason: Mapped[str] = mapped_column(String(500), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+class EmployeeShift(Base):
+    """Persisted employee shift with an explicit working-capacity window."""
+    __tablename__ = "employee_shifts"
+    __table_args__ = (
+        CheckConstraint("ends_at > starts_at", name="ck_employee_shift_time_range"),
+        CheckConstraint("break_minutes >= 0", name="ck_employee_shift_break_nonnegative"),
+        CheckConstraint("status IN ('SCHEDULED', 'CANCELLED')", name="ck_employee_shift_status"),
+        Index("ix_employee_shifts_store_start", "store_id", "starts_at"),
+        Index("ix_employee_shifts_employee_start", "employee_id", "starts_at"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    store_id: Mapped[int] = mapped_column(ForeignKey("stores.id", ondelete="CASCADE"), nullable=False)
+    employee_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    ends_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    break_minutes: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    status: Mapped[str] = mapped_column(String(12), default="SCHEDULED", nullable=False)
+    notes: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    created_by_user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+
+class EmployeeSkill(Base):
+    """Employee competency, unique per employee and normalized skill code."""
+    __tablename__ = "employee_skills"
+    __table_args__ = (
+        UniqueConstraint("employee_id", "skill_code", name="uq_employee_skill_code"),
+        CheckConstraint("level BETWEEN 1 AND 5", name="ck_employee_skill_level"),
+        Index("ix_employee_skills_store_code", "store_id", "skill_code"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    store_id: Mapped[int] = mapped_column(ForeignKey("stores.id", ondelete="CASCADE"), nullable=False)
+    employee_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    skill_code: Mapped[str] = mapped_column(String(60), nullable=False)
+    level: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    created_by_user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+
+class EmployeeAvailability(Base):
+    """Explicit availability/unavailability interval for an employee."""
+    __tablename__ = "employee_availability"
+    __table_args__ = (
+        CheckConstraint("ends_at > starts_at", name="ck_employee_availability_time_range"),
+        CheckConstraint("status IN ('AVAILABLE', 'UNAVAILABLE')", name="ck_employee_availability_status"),
+        Index("ix_employee_availability_employee_start", "employee_id", "starts_at"),
+        Index("ix_employee_availability_store_start", "store_id", "starts_at"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    store_id: Mapped[int] = mapped_column(ForeignKey("stores.id", ondelete="CASCADE"), nullable=False)
+    employee_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    ends_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    status: Mapped[str] = mapped_column(String(12), nullable=False)
+    reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    created_by_user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+
