@@ -1974,3 +1974,16 @@ Capacity is calculated conservatively from the current time to the end of the ac
 - [x] Impedir alteração da identidade externa e eliminação física do mapping na base de dados.
 - [ ] Implementar worker durável com leases, fencing e recuperação de execuções STARTED abandonadas.
 - [ ] Integrar secret manager e adapter real homologado.
+
+
+## ERP/WMS — fila durável
+- [x] Fila persistente por loja/fonte com chave de idempotência.
+- [x] Worker independente da API HTTP e serviço Docker Compose isolado.
+- [x] Leases, lease token aleatório, fencing token monotónico e recuperação de leases expirados.
+- [x] Guard de lease na mesma transação de cada commit de página.
+- [x] Retries limitados com backoff e eventos append-only.
+- [x] API de enqueue, consulta de jobs e histórico com autorização multi-loja.
+- [ ] Adapter real ERP/WMS e homologação do fornecedor.
+- [ ] Integração com Vault/Secrets Manager ou gestor de segredos escolhido no deployment.
+- [ ] Testes concorrentes multi-worker em PostgreSQL 16 e recuperação após kill -9 durante uma página.
+- [ ] Agendamento recorrente por loja/fonte e janelas operacionais.

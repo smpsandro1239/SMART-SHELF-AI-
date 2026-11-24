@@ -1464,3 +1464,25 @@ class InventoryExternalProductMappingRead(BaseModel):
     created_at: datetime
     updated_at: datetime
     model_config = ConfigDict(from_attributes=True)
+
+
+class InventorySyncJobEnqueue(BaseModel):
+    source: Literal["ERP", "WMS"]
+    provider: str = Field(min_length=1, max_length=120)
+    idempotency_key: str = Field(min_length=1, max_length=160)
+    scheduled_at: datetime | None = None
+
+    @field_validator("provider", "idempotency_key")
+    @classmethod
+    def normalize_job_text(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized or any(ord(ch) < 32 or 127 <= ord(ch) <= 159 for ch in normalized):
+            raise ValueError("O fornecedor e a chave de idempotência têm de ser válidos.")
+        return normalized
+
+    @field_validator("scheduled_at")
+    @classmethod
+    def require_timezone(cls, value: datetime | None) -> datetime | None:
+        if value is not None and (value.tzinfo is None or value.utcoffset() is None):
+            raise ValueError("scheduled_at tem de incluir fuso horário.")
+        return value

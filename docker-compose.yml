@@ -184,6 +184,35 @@ services:
         condition: service_healthy
 
 
+
+  inventory-sync-worker:
+    build:
+      context: ./apps/api
+    restart: unless-stopped
+    user: "65532:65532"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=32m,mode=1777,uid=65532,gid=65532
+    command: ["python", "-m", "app.inventory_sync_worker", "--poll-interval", "${INVENTORY_SYNC_POLL_INTERVAL:-5}"]
+    environment:
+      APP_ENV: ${APP_ENV:-development}
+      HOME: /tmp
+      TMPDIR: /tmp
+      DATABASE_URL: postgresql+psycopg://${APP_DB_USER:-smart_shelf_runtime}:${APP_DB_PASSWORD:-local_runtime_change_me}@db:5432/${POSTGRES_DB:-smart_shelf}
+      INVENTORY_ERP_ADAPTER_FACTORY: ${INVENTORY_ERP_ADAPTER_FACTORY:-}
+      INVENTORY_WMS_ADAPTER_FACTORY: ${INVENTORY_WMS_ADAPTER_FACTORY:-}
+      INVENTORY_SYNC_WORKER_ID: ${INVENTORY_SYNC_WORKER_ID:-inventory-sync-worker-1}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
 volumes:
   shelf_images:
   dataset_outputs:

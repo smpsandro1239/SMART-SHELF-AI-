@@ -959,3 +959,15 @@ Limites: ainda não há API de administração de mappings, worker/scheduler dur
 Implementada API de listagem, criação e actualização de mappings externos por loja, com autorização ADMIN/SUPERVISOR, controlo de store scope, exigência de integração activa e produto interno activo. A API exige motivo de auditoria, não permite apagar mappings e disponibiliza endpoint de histórico. Migração 0080 adiciona eventos append-only; migração 0081 torna a identidade externa imutável e bloqueia DELETE ao nível da base de dados. Foram acrescentados testes de API, permissões, duplicados, histórico e triggers.
 
 Pendente: worker durável, gestão de secrets, recuperação de STARTED abandonados e adapters reais.
+
+
+## 2026-11-24 — Fila durável de sincronizações ERP/WMS
+
+- Criada a migração 0083 com fila persistente e eventos append-only.
+- Implementados enqueue idempotente, claims com `FOR UPDATE SKIP LOCKED`, lease token aleatório, fencing token monotónico, recuperação de lease expirado, heartbeat, retries e backoff.
+- Criado worker independente `app.inventory_sync_worker`; adapters são carregados apenas por factories confiáveis de deployment.
+- O orquestrador recebe um lease guard e valida/renova a posse na mesma transação que confirma cada página.
+- Adicionados endpoints de enqueue, consulta e auditoria com isolamento por loja e política de autorização explícita.
+- Adicionado serviço Docker Compose isolado para o worker.
+- Corrigido teste da migração 0078: a expectativa anterior rejeitava indevidamente uma segunda associação com identificador/SKU/produto distintos. O teste passa agora a validar separadamente as três regras de unicidade.
+- Ainda não existem adapters reais nem integração com gestor externo de segredos. CI e testes PostgreSQL desta fase aguardam validação.

@@ -33,6 +33,10 @@ from jwt import InvalidTokenError
 
 from app.config import settings
 from app.database import get_db, SessionLocal
+from app.inventory_sync_jobs import (
+    InventorySyncJobConflict, InventorySyncJobError, InventorySyncJobNotConfigured,
+    enqueue_inventory_sync_job,
+)
 from app.edge_device_http import router as edge_device_router
 from app import models
 from app.api_security_policy import api_role_denial, is_public_api_route
@@ -110,7 +114,7 @@ from app.schemas import (
     ShelfPlanogramComparisonRead,
     InventorySourceSyncCreate, InventorySourceSyncComplete,
     InventoryExternalProductMappingCreate, InventoryExternalProductMappingUpdate,
-    InventoryExternalProductMappingRead,
+    InventoryExternalProductMappingRead, InventorySyncJobEnqueue,
 )
 from app.schemas import (
     EmployeeShiftCreate, EmployeeShiftRead,
@@ -7593,6 +7597,88 @@ def list_inventory_external_product_mapping_events(
             "created_at": item.created_at,
         } for item in events],
     }
+
+
+
+def _inventory_sync_job_payload(job: models.InventorySyncJob) -> dict:
+    return {
+        "id": job.id, "store_id": job.store_id, "source": job.source,
+        "provider": job.provider, "status": job.status,
+        "attempt_count": job.attempt_count, "max_attempts": job.max_attempts,
+        "scheduled_at": job.scheduled_at, "started_at": job.started_at,
+        "finished_at": job.finished_at, "lease_owner": job.lease_owner,
+        "fencing_token": job.fencing_token, "latest_sync_id": job.latest_sync_id,
+        "error_code": job.error_code, "error_message": job.error_message,
+        "created_at": job.created_at, "updated_at": job.updated_at,
+    }
+
+
+@app.post("/api/v1/stores/{store_id}/inventory/sync-jobs", status_code=202, tags=["inventory"])
+def enqueue_store_inventory_sync_job(
+    store_id: int, payload: InventorySyncJobEnqueue, request: Request,
+    db: Session = Depends(get_db),
+):
+    """Queue a read-only ERP/WMS sync; adapter code and credentials stay in deployment config."""
+    actor = _request_user(db, request)
+    _require_mapping_admin_scope(actor, store_id)
+    try:
+        job = enqueue_inventory_sync_job(
+            db, store_id=store_id, source=payload.source, provider=payload.provider,
+            idempotency_key=payload.idempotency_key, requested_by_user_id=actor.id,
+            scheduled_at=payload.scheduled_at,
+        )
+    except InventorySyncJobConflict as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except InventorySyncJobNotConfigured as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except InventorySyncJobError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return _inventory_sync_job_payload(job)
+
+
+@app.get("/api/v1/stores/{store_id}/inventory/sync-jobs", tags=["inventory"])
+def list_store_inventory_sync_jobs(
+    store_id: int, source: str | None = None, status: str | None = None,
+    limit: int = 100, request: Request = None, db: Session = Depends(get_db),
+):
+    actor = _request_user(db, request)
+    _require_mapping_admin_scope(actor, store_id)
+    if db.get(models.Store, store_id) is None:
+        raise HTTPException(status_code=404, detail="Store not found")
+    if source is not None and source not in {"ERP", "WMS"}:
+        raise HTTPException(status_code=422, detail="source must be ERP or WMS")
+    allowed = {"QUEUED", "RUNNING", "SUCCEEDED", "PARTIAL", "FAILED", "CANCELLED"}
+    if status is not None and status not in allowed:
+        raise HTTPException(status_code=422, detail="Invalid synchronization job status")
+    if limit < 1 or limit > 200:
+        raise HTTPException(status_code=422, detail="limit must be between 1 and 200")
+    query = db.query(models.InventorySyncJob).filter_by(store_id=store_id)
+    if source is not None:
+        query = query.filter_by(source=source)
+    if status is not None:
+        query = query.filter_by(status=status)
+    jobs = query.order_by(models.InventorySyncJob.created_at.desc(), models.InventorySyncJob.id.desc()).limit(limit).all()
+    return {"store_id": store_id, "items": [_inventory_sync_job_payload(job) for job in jobs]}
+
+
+@app.get("/api/v1/stores/{store_id}/inventory/sync-jobs/{job_id}/events", tags=["inventory"])
+def list_store_inventory_sync_job_events(
+    store_id: int, job_id: int, request: Request, db: Session = Depends(get_db),
+):
+    actor = _request_user(db, request)
+    _require_mapping_admin_scope(actor, store_id)
+    job = db.query(models.InventorySyncJob).filter_by(id=job_id, store_id=store_id).first()
+    if job is None:
+        raise HTTPException(status_code=404, detail="Synchronization job not found")
+    events = db.query(models.InventorySyncJobEvent).filter_by(job_id=job_id).order_by(
+        models.InventorySyncJobEvent.sequence_number.asc()
+    ).all()
+    return {"job_id": job_id, "items": [{
+        "sequence_number": event.sequence_number, "event_type": event.event_type,
+        "worker_id": event.worker_id, "fencing_token": event.fencing_token,
+        "details": event.details, "created_at": event.created_at,
+    } for event in events]}
+
 
 
 @app.post("/api/v1/inventory/source-syncs", status_code=201, tags=["inventory"])

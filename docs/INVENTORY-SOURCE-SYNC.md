@@ -107,3 +107,26 @@ A regra de unicidade cobre agora também o produto interno: numa mesma loja e fo
 - A constraint é também declarada no modelo SQLAlchemy para manter alinhados ORM, SQLite e PostgreSQL.
 
 A instalação de testes inclui `pytest-asyncio`, necessário para executar os testes assíncronos do contrato do adapter e dos retries do orquestrador.
+
+
+## Fila durável e worker independente (primeira versão)
+
+A migração `0083_inventory_sync_jobs` cria `inventory_sync_jobs` e `inventory_sync_job_events`. A API coloca pedidos na fila; o processo independente `app.inventory_sync_worker` consulta a fila sem manter pedidos HTTP abertos.
+
+- `POST /api/v1/stores/{store_id}/inventory/sync-jobs` cria um job idempotente por loja/fonte/chave.
+- `GET /api/v1/stores/{store_id}/inventory/sync-jobs` consulta estado e tentativas.
+- `GET /api/v1/stores/{store_id}/inventory/sync-jobs/{job_id}/events` consulta auditoria append-only.
+- PostgreSQL usa `SELECT ... FOR UPDATE SKIP LOCKED` para claims concorrentes.
+- Cada claim cria lease token aleatório e incrementa fencing token monotónico.
+- Leases expirados podem ser recuperados; retries têm backoff exponencial limitado.
+- O orquestrador valida e renova o lease na mesma transação que confirma cada página de snapshots. Um worker com fencing token antigo não pode confirmar páginas.
+- Cada retry cria uma tentativa separada no ledger `inventory_source_syncs`; os snapshots já persistidos são reutilizados por idempotência.
+- O worker é um serviço Docker Compose separado, sem dependência de uma ligação HTTP persistente.
+
+Configuração:
+- `INVENTORY_ERP_ADAPTER_FACTORY=package.module:factory`
+- `INVENTORY_WMS_ADAPTER_FACTORY=package.module:factory`
+- As factories são código confiável do deployment, nunca input HTTP. Segredos têm de ser injectados pelo mecanismo seguro do ambiente de execução. Esta versão ainda não integra Vault/Secrets Manager nem contém adapters reais.
+- Sem factory real configurada, o worker falha de forma fechada e aplica retries limitados.
+
+A fila não altera stock ERP/WMS, movimentos contabilísticos ou decisões humanas.
