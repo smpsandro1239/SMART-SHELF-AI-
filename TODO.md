@@ -1834,3 +1834,16 @@ A implementação de produção já verificava lease_lost nos caminhos de sucess
 - [ ] Executar suite de tarefas/inventário e validar PostgreSQL/CI no HEAD final.
 
 - [x] Acrescentar regressão para política personalizada por loja e origem (snapshot com 20 minutos, limite configurado de 10 minutos).
+
+
+## Operações — distribuição automática de tarefas (2026-11-24)
+
+- [x] Criar um planeador determinístico que distribui tarefas pendentes pelo funcionário com menor carga activa.
+- [x] Ordenar tarefas por prioridade (URGENT, HIGH, NORMAL, LOW), com desempate estável pelo ID.
+- [x] Preferir continuidade na mesma zona quando a carga é equivalente.
+- [x] Expor `POST /api/v1/replenishment/auto-assign?store_id=...`, restrito a ADMIN/SUPERVISOR e ao âmbito da loja.
+- [x] Bloquear as tarefas seleccionadas durante a distribuição e registar cada atribuição no histórico de eventos.
+- [x] Acrescentar testes unitários do planeador e teste HTTP de integração para distribuição e auditoria.
+- [ ] Executar a suite API e validar o fluxo em PostgreSQL 16/CI antes de considerar a funcionalidade validada em produção.
+
+Limites conhecidos: a distribuição usa a carga activa registada e a zona das tarefas; ainda não modela turnos, competências, pausas, capacidade horária ou disponibilidade em tempo real. A funcionalidade não altera prioridades nem cria tarefas.
