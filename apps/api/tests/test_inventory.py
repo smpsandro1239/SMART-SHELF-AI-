@@ -796,10 +796,43 @@ def test_inventory_reconciliation_separates_shelf_observation_from_backroom_stoc
         assert item["display_delta"] == -8
         assert item["display_status"] == "BELOW_TARGET"
         assert item["observation_age_minutes"] == 90
+        assert item["observation_timestamp_in_future"] is False
         assert item["backroom_on_hand_quantity"] == 30
         assert item["backroom_reserved_quantity"] == 5
         assert item["backroom_available_quantity"] == 25
         assert item["backroom_snapshot_id"] == snapshot.json()["id"]
+
+
+def test_inventory_reconciliation_flags_future_dated_observation(monkeypatch):
+    with TestClient(app) as client:
+        store_id, product_id = create_store_and_product(client)
+        zone = client.post("/api/v1/zones", json={
+            "store_id": store_id, "name": "Zona com relógio divergente",
+        }).json()
+        shelf = client.post("/api/v1/shelves", json={
+            "zone_id": zone["id"], "code": "FUTURE-OBS",
+        }).json()
+        observation_time = datetime(2026, 1, 1, 12, 5, tzinfo=timezone.utc)
+        created = client.post("/api/v1/observations", json={
+            "shelf_id": shelf["id"], "product_id": product_id,
+            "status": "LOW_STOCK", "source": "mobile",
+            "confidence": 0.95, "observed_quantity": 2,
+            "observed_at": observation_time.isoformat(),
+        })
+        assert created.status_code == 201, created.text
+
+        reference_time = datetime(2026, 1, 1, 12, 0, tzinfo=timezone.utc)
+        actor = _supervisor_actor(store_id)
+        monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: actor)
+        monkeypatch.setattr(main_module.models, "utc_now", lambda: reference_time)
+        response = client.get(
+            "/api/v1/inventory/reconciliation",
+            params={"store_id": store_id},
+        )
+        assert response.status_code == 200, response.text
+        item = response.json()["items"][0]
+        assert item["observation_age_minutes"] == 0
+        assert item["observation_timestamp_in_future"] is True
 
 
 def test_inventory_reconciliation_rejects_employee_and_foreign_store(monkeypatch):
