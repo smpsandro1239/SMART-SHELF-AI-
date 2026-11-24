@@ -1142,3 +1142,51 @@ def test_task_exception_reason_is_trimmed_before_persistence_and_audit():
         assert response.json()["exception_reason"] == "Produto descontinuado"
         event = client.get(f"/api/v1/tasks/{task_id}/events").json()[-1]
         assert event["reason"] == "Produto descontinuado"
+
+
+@pytest.mark.parametrize(
+    ("snapshot_offset", "expected_status"),
+    [
+        (timedelta(days=-2), "STALE_INVENTORY"),
+        (timedelta(minutes=5), "INVALID_INVENTORY_TIMESTAMP"),
+    ],
+)
+def test_replenishment_rejects_stale_or_future_inventory_snapshot(
+    snapshot_offset, expected_status
+):
+    with TestClient(app) as client:
+        store_id, shelf_id, product_id = create_task_context(client)
+        observation = client.post("/api/v1/observations", json={
+            "shelf_id": shelf_id,
+            "source": "simulation",
+            "status": "LOW_STOCK",
+            "confidence": 0.99,
+        })
+        assert observation.status_code == 201, observation.text
+
+        snapshot = client.post("/api/v1/inventory/snapshots", json={
+            "store_id": store_id,
+            "product_id": product_id,
+            "on_hand_quantity": 20,
+            "reserved_quantity": 0,
+            "source": "WMS",
+            "captured_at": (datetime.now(timezone.utc) + snapshot_offset).isoformat(),
+        })
+        assert snapshot.status_code == 201, snapshot.text
+
+        recommendations = client.get(
+            "/api/v1/replenishment/recommendations",
+            params={"store_id": store_id, "product_id": product_id},
+        )
+        assert recommendations.status_code == 200, recommendations.text
+        recommendation = recommendations.json()[0]
+        assert recommendation["recommendation_status"] == expected_status
+        assert recommendation["suggested_quantity"] is None
+
+        task = client.post("/api/v1/tasks/from-recommendation", json={
+            "store_id": store_id,
+            "shelf_id": shelf_id,
+            "product_id": product_id,
+            "requested_quantity": 2,
+        })
+        assert task.status_code == 409, task.text
