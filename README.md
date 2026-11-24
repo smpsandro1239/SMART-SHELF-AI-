@@ -1,3 +1,7 @@
+
+## Histórico de sincronizações ERP/WMS
+
+O backend inclui um ledger auditável para tentativas ERP/WMS, com ciclo de vida STARTED/SUCCESS/PARTIAL/FAILED, contagens, erros, duração e indicadores de atualidade. Este registo não equivale a conectores reais nem executa sincronizações. Consulte [docs/INVENTORY-SOURCE-SYNC.md](docs/INVENTORY-SOURCE-SYNC.md) para os contratos, endpoints, alertas calculados e limites de segurança.
 ## Segurança multi-loja — isolamento de artefactos externos
 
 O smoke PostgreSQL de consumo de artefactos verifica combinações cruzadas de `image_id`, `artifact_id` e `store_id`, incluindo duas imagens na mesma loja e recursos de outra loja. Os casos inválidos têm de falhar antes de contactar o provider. O controlo positivo confirma que a integração activa da loja proprietária é seleccionada mesmo quando outra loja tem uma integração revogada com o mesmo identificador de sistema externo. A FK composta impede ainda que um artefacto filho referencie um pai de outra imagem.
