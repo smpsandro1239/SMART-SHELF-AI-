@@ -1,3 +1,12 @@
+## Inventário — histórico de sincronizações ERP/WMS (2026-11-24; implementação publicada, CI pendente)
+
+- [x] Persistir tentativas ERP/WMS com início, conclusão, fornecedor, referência externa, contagens, duração e erros.
+- [x] Restringir o ciclo de vida a STARTED → SUCCESS/PARTIAL/FAILED, uma única vez, com eventos append-only e proteção na base de dados.
+- [x] Expor histórico e estado de saúde por loja, com alertas calculados para fonte nunca sincronizada ou desatualizada.
+- [x] Apresentar histórico e estado das fontes no painel React.
+- [ ] Validar API CI/PostgreSQL 16, migração 0077, Quality Gates, Security Scans e Docker Compose no HEAD final.
+- [ ] Desenvolver adapters reais após obter contratos, credenciais e ambiente de homologação do fornecedor.
+
 ## Reposição — bloquear evidência com timestamp futuro (2026-11-24; implementação/teste publicados, CI pendente)
 
 - [x] Introduzir o estado `INVALID_OBSERVATION_TIMESTAMP` nas recomendações de reposição.
