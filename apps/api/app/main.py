@@ -7462,10 +7462,6 @@ def create_inventory_external_product_mapping(
     ).first()
     if integration is None:
         raise HTTPException(status_code=409, detail="An active integration for this source is required")
-    if db.query(models.StoreExternalIntegration.id).filter_by(
-        store_id=store_id, external_system=payload.source, provider=integration.provider, status="ACTIVE"
-    ).first() is None:
-        raise HTTPException(status_code=409, detail="The source integration is not available")
     product = db.query(models.Product).filter_by(id=payload.product_id, is_active=True).first()
     if product is None:
         raise HTTPException(status_code=404, detail="Active internal product not found")
