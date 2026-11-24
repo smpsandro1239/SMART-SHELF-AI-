@@ -1351,3 +1351,92 @@ def test_auto_assign_balances_workload_and_prioritizes_urgent_tasks(monkeypatch)
         assert events.status_code == 200
         assert events.json()[-1]["to_status"] == "ASSIGNED"
         assert events.json()[-1]["reason"].startswith("Planeamento automático")
+
+def test_auto_assign_respects_persisted_shift_capacity_and_required_skill(monkeypatch):
+    with TestClient(app) as client:
+        store_id, shelf_id, first_product_id = create_task_context(client)
+        db = TestingSession()
+        try:
+            supervisor = models.User(
+                email=f"planner-supervisor-{uuid4().hex}@example.test",
+                store_id=store_id, full_name="Supervisor",
+                password_hash="test-only-not-used", role="SUPERVISOR", is_active=True,
+            )
+            skilled = models.User(
+                email=f"planner-skilled-{uuid4().hex}@example.test",
+                store_id=store_id, full_name="Ana",
+                password_hash="test-only-not-used", role="EMPLOYEE", is_active=True,
+            )
+            unskilled = models.User(
+                email=f"planner-unskilled-{uuid4().hex}@example.test",
+                store_id=store_id, full_name="Bruno",
+                password_hash="test-only-not-used", role="EMPLOYEE", is_active=True,
+            )
+            db.add_all([supervisor, skilled, unskilled])
+            db.commit()
+            db.refresh(supervisor)
+            db.refresh(skilled)
+            db.refresh(unskilled)
+            supervisor_id, skilled_id, unskilled_id = supervisor.id, skilled.id, unskilled.id
+            shift_start = datetime.now(timezone.utc) - timedelta(minutes=1)
+            db.add_all([
+                models.EmployeeShift(
+                    store_id=store_id, employee_id=skilled_id,
+                    starts_at=shift_start, ends_at=shift_start + timedelta(minutes=31),
+                    break_minutes=0, status="SCHEDULED", created_by_user_id=supervisor_id,
+                ),
+                models.EmployeeShift(
+                    store_id=store_id, employee_id=unskilled_id,
+                    starts_at=shift_start, ends_at=shift_start + timedelta(minutes=91),
+                    break_minutes=0, status="SCHEDULED", created_by_user_id=supervisor_id,
+                ),
+                models.EmployeeSkill(
+                    store_id=store_id, employee_id=skilled_id,
+                    skill_code="FORKLIFT", level=3, created_by_user_id=supervisor_id,
+                ),
+            ])
+            db.commit()
+        finally:
+            db.close()
+
+        monkeypatch.setattr(
+            main_module, "_request_user",
+            lambda _db, _request: models.User(
+                id=supervisor_id, store_id=store_id, role="SUPERVISOR", is_active=True,
+            ),
+        )
+
+        second_product = client.post("/api/v1/products", json={
+            "sku": f"PLANNER-{uuid4().hex[:8]}", "name": "Produto planeador",
+        })
+        assert second_product.status_code == 201, second_product.text
+        linked = client.post("/api/v1/shelf-products", json={
+            "shelf_id": shelf_id, "product_id": second_product.json()["id"],
+            "target_quantity": 10, "min_display_quantity": 2,
+        })
+        assert linked.status_code == 201, linked.text
+
+        urgent = client.post("/api/v1/tasks", json={
+            "store_id": store_id, "shelf_id": shelf_id, "product_id": first_product_id,
+            "priority": "URGENT", "estimated_duration_minutes": 45,
+            "required_skill_code": "forklift",
+        })
+        normal = client.post("/api/v1/tasks", json={
+            "store_id": store_id, "shelf_id": shelf_id, "product_id": second_product.json()["id"],
+            "priority": "NORMAL", "estimated_duration_minutes": 20,
+            "required_skill_code": "FORKLIFT",
+        })
+        assert urgent.status_code == 201, urgent.text
+        assert normal.status_code == 201, normal.text
+
+        response = client.post(
+            "/api/v1/replenishment/auto-assign", params={"store_id": store_id},
+        )
+        assert response.status_code == 200, response.text
+        result = response.json()
+        assert result["assigned_count"] == 1
+        assert result["unassigned_count"] == 1
+        assert result["assignments"][0]["task_id"] == normal.json()["id"]
+        assert result["assignments"][0]["assigned_user_id"] == skilled_id
+        assert result["assignments"][0]["assigned_user_id"] != unskilled_id
+
