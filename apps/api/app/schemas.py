@@ -1276,6 +1276,8 @@ class EmployeeShiftCreate(BaseModel):
 
     @model_validator(mode="after")
     def validate_shift_window(self):
+        if self.starts_at.tzinfo is None or self.starts_at.utcoffset() is None or self.ends_at.tzinfo is None or self.ends_at.utcoffset() is None:
+            raise ValueError("Os horários do turno têm de incluir fuso horário.")
         if self.ends_at <= self.starts_at:
             raise ValueError("ends_at tem de ser posterior a starts_at")
         if (self.ends_at - self.starts_at).total_seconds() < self.break_minutes * 60:
@@ -1325,6 +1327,8 @@ class EmployeeAvailabilityCreate(BaseModel):
 
     @model_validator(mode="after")
     def validate_availability_window(self):
+        if self.starts_at.tzinfo is None or self.starts_at.utcoffset() is None or self.ends_at.tzinfo is None or self.ends_at.utcoffset() is None:
+            raise ValueError("Os horários de disponibilidade têm de incluir fuso horário.")
         if self.ends_at <= self.starts_at:
             raise ValueError("ends_at tem de ser posterior a starts_at")
         return self
