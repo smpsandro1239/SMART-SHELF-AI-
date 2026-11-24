@@ -534,6 +534,25 @@ class InventoryExternalProductMapping(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False)
 
 
+class InventoryExternalProductMappingEvent(Base):
+    """Append-only audit trail for external product mapping administration."""
+    __tablename__ = "inventory_external_product_mapping_events"
+    __table_args__ = (
+        CheckConstraint("event_type IN ('CREATED', 'UPDATED', 'DEACTIVATED', 'REACTIVATED')",
+                        name="ck_inventory_external_mapping_event_type"),
+        Index("ix_inventory_external_mapping_events_mapping_created", "mapping_id", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    mapping_id: Mapped[int] = mapped_column(ForeignKey("inventory_external_product_mappings.id", ondelete="RESTRICT"), nullable=False)
+    actor_user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
+    event_type: Mapped[str] = mapped_column(String(12), nullable=False)
+    before_state: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    after_state: Mapped[dict] = mapped_column(JSON, nullable=False)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+
 class InventorySnapshot(Base):
     """Immutable observation of backroom stock from an authoritative source."""
     __tablename__ = "inventory_snapshots"
