@@ -6964,10 +6964,12 @@ def get_inventory_reconciliation(
             display_status = "AT_TARGET"
 
         observation_age_minutes = None
+        observation_timestamp_in_future = False
         if observation is not None:
             observed_at = observation.observed_at
             if observed_at.tzinfo is None:
                 observed_at = observed_at.replace(tzinfo=timezone.utc)
+            observation_timestamp_in_future = observed_at > now
             observation_age_minutes = max(
                 0.0, (now - observed_at).total_seconds() / 60
             )
@@ -7001,6 +7003,7 @@ def get_inventory_reconciliation(
                 round(observation_age_minutes, 2)
                 if observation_age_minutes is not None else None
             ),
+            "observation_timestamp_in_future": observation_timestamp_in_future,
             "backroom_snapshot_id": snapshot.id if snapshot else None,
             "backroom_on_hand_quantity": float(snapshot.on_hand_quantity) if snapshot else None,
             "backroom_reserved_quantity": float(snapshot.reserved_quantity) if snapshot else None,
