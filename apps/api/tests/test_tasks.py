@@ -1313,7 +1313,7 @@ def test_auto_assign_balances_workload_and_prioritizes_urgent_tasks(monkeypatch)
 
         baseline = client.post("/api/v1/tasks", json={
             "store_id": store_id, "shelf_id": shelf_id, "product_id": product_ids[0],
-            "priority": "LOW", "assigned_user_id": employee_one_id,
+            "priority": "LOW",
         })
         assert baseline.status_code == 201, baseline.text
         baseline_assigned = client.patch(
