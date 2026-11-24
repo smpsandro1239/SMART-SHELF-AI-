@@ -8775,7 +8775,6 @@ def dashboard_operations(
             })
         return result
 
-    overall = grouped([]) if False else None
     totals = (
         base.with_entities(
             func.count(models.ReplenishmentTask.id),
