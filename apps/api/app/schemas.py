@@ -267,6 +267,8 @@ class ReplenishmentTaskCreate(BaseModel):
     assigned_to: str | None = Field(default=None, min_length=1, max_length=120)
     assigned_user_id: int | None = None
     requested_quantity: float | None = Field(default=None, gt=0, allow_inf_nan=False)
+    estimated_duration_minutes: int = Field(default=15, ge=1, le=480)
+    required_skill_code: str | None = Field(default=None, min_length=2, max_length=60, pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:-]*$")
     notes: str | None = Field(default=None, max_length=2000)
 
 
@@ -288,6 +290,8 @@ class ReplenishmentTaskRead(BaseModel):
     assigned_to: str | None
     assigned_user_id: int | None
     requested_quantity: float | None
+    estimated_duration_minutes: int
+    required_skill_code: str | None
     notes: str | None
     created_at: datetime
     updated_at: datetime
