@@ -212,6 +212,7 @@ async def run_inventory_source_sync(
                         raise InventorySyncOrchestrationError(
                             "An external reference was replayed with different snapshot content"
                         )
+                    page_processed += 1
                     continue
                 db.add(models.InventorySnapshot(
                     store_id=store_id,
