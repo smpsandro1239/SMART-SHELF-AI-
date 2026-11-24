@@ -1,3 +1,12 @@
+## 2026-11-24 — Histórico e saúde das sincronizações ERP/WMS
+
+- Criadas as tabelas inventory_source_syncs e inventory_source_sync_events, com eventos append-only e transição única STARTED → estado terminal.
+- Disponibilizados endpoints para iniciar/registar uma tentativa, concluir, consultar histórico e obter saúde ERP/WMS por loja.
+- A saúde calcula SOURCE_NEVER_SYNCHRONIZED e SOURCE_SYNC_STALE a partir da última execução SUCCESS e da política de frescura; PARTIAL não é tratado como sucesso integral.
+- Criado InventorySourceSyncPanel.tsx para apresentar saúde, tentativas recentes, contagens, duração e erros.
+- A documentação clarifica que não existe ainda connector real: os endpoints registam o resultado reportado por um processo externo e não alteram snapshots ou saldos.
+- Migration 0077 e testes de lifecycle/migração adicionados. API CI e restantes workflows do HEAD final ainda por validar.
+
 ## 2026-11-23 — Histórico de movimentos de inventário
 
 - Implementado `GET /api/v1/inventory/movements`, endpoint read-only para consultar transferências BACKROOM_TO_SHELF já reconciliadas.
