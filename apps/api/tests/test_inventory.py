@@ -811,3 +811,48 @@ def test_inventory_reconciliation_rejects_employee_and_foreign_store(monkeypatch
         foreign = client.get(f"/api/v1/inventory/reconciliation?store_id={store_id + 999}")
         assert foreign.status_code == 403
 
+def test_inventory_reconciliation_keeps_missing_evidence_unknown_and_read_only(monkeypatch):
+    with TestClient(app) as client:
+        store_id, product_id = create_store_and_product(client)
+        zone = client.post(
+            "/api/v1/zones",
+            json={"store_id": store_id, "name": "Zona sem evidência"},
+        ).json()
+        shelf = client.post(
+            "/api/v1/shelves",
+            json={"zone_id": zone["id"], "code": "SEM-EVIDENCIA"},
+        ).json()
+        link = client.post("/api/v1/shelf-products", json={
+            "shelf_id": shelf["id"],
+            "product_id": product_id,
+            "target_quantity": 8,
+            "min_display_quantity": 2,
+        })
+        assert link.status_code == 201, link.text
+
+        actor = _supervisor_actor(store_id)
+        monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: actor)
+        response = client.get(
+            "/api/v1/inventory/reconciliation",
+            params={"store_id": store_id},
+        )
+        assert response.status_code == 200, response.text
+        payload = response.json()
+        assert payload["count"] == 1
+        item = payload["items"][0]
+
+        /* Missing evidence is not evidence of zero stock. */
+        assert item["display_status"] == "NO_OBSERVATION"
+        assert item["observed_shelf_quantity"] is None
+        assert item["display_delta"] is None
+        assert item["backroom_snapshot_id"] is None
+        assert item["backroom_on_hand_quantity"] is None
+        assert item["backroom_reserved_quantity"] is None
+        assert item["backroom_available_quantity"] is None
+        assert item["backroom_snapshot_age_minutes"] is None
+
+        /* A read-only reconciliation must not create accounting movements or snapshots. */
+        with TestingSession() as db:
+            assert db.query(models.InventoryMovement).count() == 0
+            assert db.query(models.InventorySnapshot).count() == 0
+
