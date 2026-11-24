@@ -8726,8 +8726,13 @@ def dashboard_operations(
         .join(models.Shelf, models.ReplenishmentTask.shelf_id == models.Shelf.id)
         .join(models.Zone, models.Shelf.zone_id == models.Zone.id)
         .join(models.Product, models.ReplenishmentTask.product_id == models.Product.id)
-        .outerjoin(models.User, models.ReplenishmentTask.assigned_user_id == models.User.id)
+        .outerjoin(
+            models.User,
+            (models.ReplenishmentTask.assigned_user_id == models.User.id)
+            & (models.ReplenishmentTask.store_id == models.User.store_id),
+        )
         .filter(
+            models.Zone.store_id == models.ReplenishmentTask.store_id,
             models.ReplenishmentTask.created_at >= datetime.combine(
                 effective_from, datetime.min.time(), tzinfo=timezone.utc
             ),
