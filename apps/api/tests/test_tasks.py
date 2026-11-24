@@ -1268,6 +1268,21 @@ def test_auto_assign_balances_workload_and_prioritizes_urgent_tasks(monkeypatch)
             supervisor_id = supervisor.id
             employee_one_id = employee_one.id
             employee_two_id = employee_two.id
+            shift_start = datetime.now(timezone.utc) - timedelta(hours=1)
+            shift_end = shift_start + timedelta(hours=10)
+            db.add_all([
+                models.EmployeeShift(
+                    store_id=store_id, employee_id=employee_one_id,
+                    starts_at=shift_start, ends_at=shift_end, break_minutes=0,
+                    status="SCHEDULED", created_by_user_id=supervisor.id,
+                ),
+                models.EmployeeShift(
+                    store_id=store_id, employee_id=employee_two_id,
+                    starts_at=shift_start, ends_at=shift_end, break_minutes=0,
+                    status="SCHEDULED", created_by_user_id=supervisor.id,
+                ),
+            ])
+            db.commit()
         finally:
             db.close()
 
@@ -1332,4 +1347,4 @@ def test_auto_assign_balances_workload_and_prioritizes_urgent_tasks(monkeypatch)
         events = client.get(f"/api/v1/tasks/{urgent.json()['id']}/events")
         assert events.status_code == 200
         assert events.json()[-1]["to_status"] == "ASSIGNED"
-        assert events.json()[-1]["reason"].startswith("Distribuição automática")
+        assert events.json()[-1]["reason"].startswith("Planeamento automático")
