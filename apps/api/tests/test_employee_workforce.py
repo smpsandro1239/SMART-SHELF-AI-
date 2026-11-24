@@ -119,6 +119,7 @@ def test_workforce_records_cannot_be_created_for_an_employee_in_another_store(db
     store_id, admin_id, _ = workforce(db_session)
     other_store = models.Store(code="WORKFORCE-2", name="Other store")
     db_session.add(other_store)
+    db_session.flush()
     foreign_employee = models.User(
         email="foreign-employee@example.test", full_name="Foreign",
         password_hash="test", role="EMPLOYEE", store_id=other_store.id, is_active=True,
