@@ -7285,8 +7285,15 @@ def list_replenishment_recommendations(
             observed_at = observation.observed_at
             if observed_at.tzinfo is None:
                 observed_at = observed_at.replace(tzinfo=timezone.utc)
-            observation_age_minutes = max(0.0, (now - observed_at).total_seconds() / 60)
-            if observation_age_minutes > stale_after_minutes:
+            if observed_at > now:
+                observation_age_minutes = 0.0
+                status = "INVALID_OBSERVATION_TIMESTAMP"
+                explanation = "O timestamp da observação está no futuro; confirmar a sincronização do relógio antes de criar uma tarefa."
+            else:
+                observation_age_minutes = (now - observed_at).total_seconds() / 60
+            if status == "INVALID_OBSERVATION_TIMESTAMP":
+                pass
+            elif observation_age_minutes > stale_after_minutes:
                 status = "STALE_OBSERVATION"
                 explanation = "A observação é demasiado antiga para suportar uma tarefa de reposição."
             elif observation.status in ("LOW_STOCK", "EMPTY"):
