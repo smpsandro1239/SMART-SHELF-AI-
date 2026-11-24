@@ -552,6 +552,58 @@ class InventoryFreshnessPolicy(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False)
 
 
+class InventoryReconciliation(Base):
+    """Immutable evidence snapshot with a separately governed human review state."""
+    __tablename__ = "inventory_reconciliations"
+    __table_args__ = (
+        CheckConstraint("review_status IN ('PENDING', 'APPROVED', 'REJECTED', 'NEEDS_INVESTIGATION')", name="ck_inventory_reconciliation_review_status"),
+        CheckConstraint("display_quantity IS NULL OR display_quantity >= 0", name="ck_inventory_reconciliation_display_quantity"),
+        CheckConstraint("wms_available_quantity IS NULL OR wms_available_quantity >= 0", name="ck_inventory_reconciliation_wms_quantity"),
+        CheckConstraint("erp_available_quantity IS NULL OR erp_available_quantity >= 0", name="ck_inventory_reconciliation_erp_quantity"),
+        Index("ix_inventory_reconciliation_store_status_created", "store_id", "review_status", "created_at"),
+        Index("ix_inventory_reconciliation_product_created", "store_id", "product_id", "created_at"),
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    store_id: Mapped[int] = mapped_column(ForeignKey("stores.id", ondelete="RESTRICT"), nullable=False, index=True)
+    shelf_id: Mapped[int] = mapped_column(ForeignKey("shelves.id", ondelete="RESTRICT"), nullable=False, index=True)
+    product_id: Mapped[int] = mapped_column(ForeignKey("products.id", ondelete="RESTRICT"), nullable=False, index=True)
+    observation_id: Mapped[int | None] = mapped_column(ForeignKey("observations.id", ondelete="SET NULL"), nullable=True)
+    backroom_snapshot_id: Mapped[int | None] = mapped_column(ForeignKey("inventory_snapshots.id", ondelete="SET NULL"), nullable=True)
+    erp_snapshot_id: Mapped[int | None] = mapped_column(ForeignKey("inventory_snapshots.id", ondelete="SET NULL"), nullable=True)
+    wms_snapshot_id: Mapped[int | None] = mapped_column(ForeignKey("inventory_snapshots.id", ondelete="SET NULL"), nullable=True)
+    display_target_quantity: Mapped[float] = mapped_column(Numeric(12, 3), nullable=False)
+    display_quantity: Mapped[float | None] = mapped_column(Numeric(12, 3), nullable=True)
+    wms_available_quantity: Mapped[float | None] = mapped_column(Numeric(12, 3), nullable=True)
+    erp_available_quantity: Mapped[float | None] = mapped_column(Numeric(12, 3), nullable=True)
+    display_delta: Mapped[float | None] = mapped_column(Numeric(12, 3), nullable=True)
+    display_vs_wms_delta: Mapped[float | None] = mapped_column(Numeric(12, 3), nullable=True)
+    display_vs_erp_delta: Mapped[float | None] = mapped_column(Numeric(12, 3), nullable=True)
+    wms_erp_delta: Mapped[float | None] = mapped_column(Numeric(12, 3), nullable=True)
+    comparison_status: Mapped[str] = mapped_column(String(32), nullable=False)
+    evidence: Mapped[dict] = mapped_column(JSON, nullable=False)
+    review_status: Mapped[str] = mapped_column(String(24), default="PENDING", nullable=False, index=True)
+    created_by_user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
+    reviewed_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=True)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    review_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+
+class InventoryReconciliationEvent(Base):
+    """Append-only audit trail for reconciliation creation and human decisions."""
+    __tablename__ = "inventory_reconciliation_events"
+    __table_args__ = (
+        CheckConstraint("event_type IN ('CREATED', 'APPROVED', 'REJECTED', 'NEEDS_INVESTIGATION')", name="ck_inventory_reconciliation_event_type"),
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    reconciliation_id: Mapped[int] = mapped_column(ForeignKey("inventory_reconciliations.id", ondelete="RESTRICT"), nullable=False, index=True)
+    event_type: Mapped[str] = mapped_column(String(24), nullable=False)
+    actor_user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False, index=True)
+    reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    evidence: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+
 class InventoryMovement(Base):
     """Immutable, approved transfer from backroom stock to shelf."""
     __tablename__ = "inventory_movements"
