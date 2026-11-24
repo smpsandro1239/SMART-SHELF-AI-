@@ -841,3 +841,16 @@ Commit de teste: `3f5c0b012fd4104edc1cf55c24d308668a99a1d1`. A documentação de
 
 - Teste adicional `test_replenishment_uses_store_and_source_inventory_freshness_policy` confirma que a política configurada por loja/origem prevalece sobre o limite predefinido. Commit: `92e166a7`.
 - Durante a revisão do diff foi corrigido um bloco duplicado introduzido na primeira edição do motor; o fluxo final foi relido no GitHub. Ainda sem execução local dos testes.
+
+
+## Operações — distribuição automática de tarefas (2026-11-24)
+
+- [x] Criar um planeador determinístico que distribui tarefas pendentes pelo funcionário com menor carga activa.
+- [x] Ordenar tarefas por prioridade (URGENT, HIGH, NORMAL, LOW), com desempate estável pelo ID.
+- [x] Preferir continuidade na mesma zona quando a carga é equivalente.
+- [x] Expor `POST /api/v1/replenishment/auto-assign?store_id=...`, restrito a ADMIN/SUPERVISOR e ao âmbito da loja.
+- [x] Bloquear as tarefas seleccionadas durante a distribuição e registar cada atribuição no histórico de eventos.
+- [x] Acrescentar testes unitários do planeador e teste HTTP de integração para distribuição e auditoria.
+- [ ] Executar a suite API e validar o fluxo em PostgreSQL 16/CI antes de considerar a funcionalidade validada em produção.
+
+Limites conhecidos: a distribuição usa a carga activa registada e a zona das tarefas; ainda não modela turnos, competências, pausas, capacidade horária ou disponibilidade em tempo real. A funcionalidade não altera prioridades nem cria tarefas.
