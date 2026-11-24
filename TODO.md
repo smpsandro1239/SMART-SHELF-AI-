@@ -1847,3 +1847,15 @@ A implementação de produção já verificava lease_lost nos caminhos de sucess
 - [ ] Executar a suite API e validar o fluxo em PostgreSQL 16/CI antes de considerar a funcionalidade validada em produção.
 
 Limites conhecidos: a distribuição usa a carga activa registada e a zona das tarefas; ainda não modela turnos, competências, pausas, capacidade horária ou disponibilidade em tempo real. A funcionalidade não altera prioridades nem cria tarefas.
+
+
+## Dashboard operacional — análise por dimensão e período (2026-11-24)
+
+- [x] Adicionar `GET /api/v1/dashboard/operations` com filtros `store_id`, `from_date` e `to_date`.
+- [x] Agregar tarefas por funcionário, zona e produto, incluindo estado, urgências, quantidades efectivamente repostas e taxa de conclusão.
+- [x] Aplicar isolamento multi-tenant: ADMIN global/por loja, SUPERVISOR apenas na própria loja e EMPLOYEE apenas nas tarefas que lhe estão atribuídas.
+- [x] Validar intervalo temporal invertido e limitar a consulta a 366 dias.
+- [x] Acrescentar regressões para agregações, período e fronteiras de autorização.
+- [ ] Executar API CI/PostgreSQL 16 e validar o consumo destas métricas pela interface Web.
+
+Nota: o dashboard agrega tarefas registadas, não constitui um feed em tempo real; as datas do filtro são interpretadas em UTC. A análise de produtividade não deve ser usada isoladamente para avaliação individual, pois não ajusta ainda por horas de turno, complexidade ou dificuldade das tarefas.
