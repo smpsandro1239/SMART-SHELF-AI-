@@ -517,6 +517,7 @@ class InventoryExternalProductMapping(Base):
     __table_args__ = (
         UniqueConstraint("store_id", "source", "external_product_id", name="uq_inventory_external_mapping_external_id"),
         UniqueConstraint("store_id", "source", "external_sku", name="uq_inventory_external_mapping_sku"),
+        UniqueConstraint("store_id", "source", "product_id", name="uq_inventory_external_mapping_product"),
         CheckConstraint("source IN ('ERP', 'WMS')", name="ck_inventory_external_mapping_source"),
         Index("ix_inventory_external_mapping_product", "store_id", "product_id"),
     )
