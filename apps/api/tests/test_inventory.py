@@ -841,7 +841,7 @@ def test_inventory_reconciliation_keeps_missing_evidence_unknown_and_read_only(m
         assert payload["count"] == 1
         item = payload["items"][0]
 
-        /* Missing evidence is not evidence of zero stock. */
+        # Missing evidence is not evidence of zero stock.
         assert item["display_status"] == "NO_OBSERVATION"
         assert item["observed_shelf_quantity"] is None
         assert item["display_delta"] is None
@@ -851,7 +851,7 @@ def test_inventory_reconciliation_keeps_missing_evidence_unknown_and_read_only(m
         assert item["backroom_available_quantity"] is None
         assert item["backroom_snapshot_age_minutes"] is None
 
-        /* A read-only reconciliation must not create accounting movements or snapshots. */
+        # A read-only reconciliation must not create accounting movements or snapshots.
         with TestingSession() as db:
             assert db.query(models.InventoryMovement).count() == 0
             assert db.query(models.InventorySnapshot).count() == 0
