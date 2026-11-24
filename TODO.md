@@ -1832,3 +1832,5 @@ A implementação de produção já verificava lease_lost nos caminhos de sucess
 - [x] Não produzir quantidades sugeridas nem permitir criação de tarefas com inventário temporalmente inválido.
 - [x] Adicionar testes parametrizados para snapshot antigo e futuro, incluindo tentativa de criação de tarefa.
 - [ ] Executar suite de tarefas/inventário e validar PostgreSQL/CI no HEAD final.
+
+- [x] Acrescentar regressão para política personalizada por loja e origem (snapshot com 20 minutos, limite configurado de 10 minutos).
