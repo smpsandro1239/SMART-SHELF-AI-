@@ -768,10 +768,12 @@ def test_inventory_reconciliation_separates_shelf_observation_from_backroom_stoc
             "target_quantity": 12, "min_display_quantity": 3,
         })
         assert link.status_code == 201, link.text
+        reference_time = datetime(2026, 1, 1, 12, 0, tzinfo=timezone.utc)
         observation = client.post("/api/v1/observations", json={
             "shelf_id": shelf["id"], "product_id": product_id,
             "status": "LOW_STOCK", "source": "mobile",
             "confidence": 0.96, "observed_quantity": 4,
+            "observed_at": (reference_time - timedelta(minutes=90)).isoformat(),
         })
         assert observation.status_code == 201, observation.text
         snapshot = client.post("/api/v1/inventory/snapshots", json={
@@ -783,6 +785,7 @@ def test_inventory_reconciliation_separates_shelf_observation_from_backroom_stoc
 
         actor = _supervisor_actor(store_id)
         monkeypatch.setattr(main_module, "_request_user", lambda db, request: actor)
+        monkeypatch.setattr(main_module.models, "utc_now", lambda: reference_time)
         response = client.get(f"/api/v1/inventory/reconciliation?store_id={store_id}")
         assert response.status_code == 200, response.text
         payload = response.json()
@@ -792,6 +795,7 @@ def test_inventory_reconciliation_separates_shelf_observation_from_backroom_stoc
         assert item["observed_shelf_quantity"] == 4
         assert item["display_delta"] == -8
         assert item["display_status"] == "BELOW_TARGET"
+        assert item["observation_age_minutes"] == 90
         assert item["backroom_on_hand_quantity"] == 30
         assert item["backroom_reserved_quantity"] == 5
         assert item["backroom_available_quantity"] == 25
@@ -845,6 +849,7 @@ def test_inventory_reconciliation_keeps_missing_evidence_unknown_and_read_only(m
         assert item["display_status"] == "NO_OBSERVATION"
         assert item["observed_shelf_quantity"] is None
         assert item["display_delta"] is None
+        assert item["observation_age_minutes"] is None
         assert item["backroom_snapshot_id"] is None
         assert item["backroom_on_hand_quantity"] is None
         assert item["backroom_reserved_quantity"] is None
