@@ -95,3 +95,15 @@ Endpoints autenticados:
 ADMIN pode gerir todas as lojas; SUPERVISOR apenas a loja associada à sua conta. EMPLOYEE não tem acesso. A criação exige integração activa para ERP/WMS e produto interno activo. O mapping não pode ser eliminado; a desactivação preserva o histórico. A identidade (loja, fonte, ID externo e SKU externo) é imutável ao nível da base de dados. Migrações 0080 e 0081 criam auditoria append-only e triggers de protecção.
 
 O endpoint não cria snapshots, movimentos, reconciliações ou aprovações. A gestão do mapping é uma operação administrativa separada da sincronização.
+
+
+## Integridade adicional dos mapeamentos
+
+A regra de unicidade cobre agora também o produto interno: numa mesma loja e fonte (ERP ou WMS), um produto interno só pode ter um mapeamento externo activo/histórico. Isto evita que duas identidades externas concorrentes alimentem o mesmo produto e tornem ambígua a proveniência dos snapshots.
+
+- A migração histórica `0078_inventory_external_product_mapping` inclui a regra para instalações novas.
+- A migração aditiva `0082_inventory_external_mapping_product_unique` aplica a mesma protecção em bases de dados onde a migração 0078 já tinha sido executada.
+- Antes de criar o índice, a migração 0082 verifica duplicados existentes e falha explicitamente para revisão manual; não elimina nem reescreve mapeamentos.
+- A constraint é também declarada no modelo SQLAlchemy para manter alinhados ORM, SQLite e PostgreSQL.
+
+A instalação de testes inclui `pytest-asyncio`, necessário para executar os testes assíncronos do contrato do adapter e dos retries do orquestrador.
