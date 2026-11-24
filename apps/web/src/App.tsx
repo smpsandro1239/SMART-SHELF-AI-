@@ -3,6 +3,7 @@ import PlanogramComparison from "./PlanogramComparison";
 import InventoryMovementHistory from "./InventoryMovementHistory";
 import InventoryReconciliationPanel from "./InventoryReconciliationPanel";
 import InventoryReconciliationDashboard from "./InventoryReconciliationDashboard";
+import InventorySourceSyncPanel from "./InventorySourceSyncPanel";
 import {
   Activity, AlertTriangle, ArrowDownToLine, ArrowUpRight, Boxes, CheckCircle2,
   CircleUserRound, Clock3, LogOut, PackageSearch, RefreshCw, ShieldCheck,
@@ -900,6 +901,7 @@ export default function App() {
           </section>}
           {(user?.role === "ADMIN" || user?.role === "SUPERVISOR") && <InventoryMovementHistory token={token} storeId={user.role === "ADMIN" ? (Number(storeFilter || selectedStoreId || 0) || null) : user.store_id} />}
           {(user?.role === "ADMIN" || user?.role === "SUPERVISOR") && <InventoryReconciliationDashboard token={token} storeId={user.role === "ADMIN" ? (Number(storeFilter || selectedStoreId || 0) || null) : user.store_id} />}
+          {(user?.role === "ADMIN" || user?.role === "SUPERVISOR") && <InventorySourceSyncPanel token={token} storeId={user.role === "ADMIN" ? (Number(storeFilter || selectedStoreId || 0) || null) : user.store_id} />}
           {(user?.role === "ADMIN" || user?.role === "SUPERVISOR") && <InventoryReconciliationPanel token={token} storeId={user.role === "ADMIN" ? (Number(storeFilter || selectedStoreId || 0) || null) : user.store_id} />}
           <section id="capture-workspace" className="capture-grid">
             <article className="panel capture-panel">
