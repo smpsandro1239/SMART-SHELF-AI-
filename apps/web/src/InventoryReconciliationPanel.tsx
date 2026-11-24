@@ -11,6 +11,14 @@ type ReconciliationItem = {
   backroom_on_hand_quantity: number | null; backroom_reserved_quantity: number | null;
   backroom_available_quantity: number | null; backroom_source: string | null;
   backroom_captured_at: string | null; backroom_snapshot_age_minutes: number | null;
+  erp_snapshot_id: number | null; erp_on_hand_quantity: number | null; erp_reserved_quantity: number | null;
+  erp_available_quantity: number | null; erp_source: string | null; erp_captured_at: string | null;
+  erp_snapshot_age_minutes: number | null; erp_freshness_status: "MISSING" | "CURRENT" | "STALE" | "FUTURE";
+  wms_snapshot_id: number | null; wms_on_hand_quantity: number | null; wms_reserved_quantity: number | null;
+  wms_available_quantity: number | null; wms_source: string | null; wms_captured_at: string | null;
+  wms_snapshot_age_minutes: number | null; wms_freshness_status: "MISSING" | "CURRENT" | "STALE" | "FUTURE";
+  wms_erp_available_delta: number | null;
+  wms_erp_comparison_status: "MISSING_ERP" | "MISSING_WMS" | "INVALID_TIMESTAMP" | "STALE_SOURCE" | "IN_SYNC" | "DIVERGENCE";
 };
 type Props = { token: string; storeId: number | null };
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
@@ -78,7 +86,7 @@ export default function InventoryReconciliationPanel({ token, storeId }: Props) 
       <div>
         <p className="eyebrow">VISÃO OPERACIONAL · STOCK</p>
         <h2>Reconciliação da exposição e retaguarda</h2>
-        <p className="muted">Compara a quantidade observada na prateleira com o objetivo de exposição e apresenta o stock da retaguarda separadamente.</p>
+        <p className="muted">Compara a contagem física da prateleira, os snapshots WMS e o registo ERP. Só calcula diferenças ERP/WMS quando ambas as fontes estão presentes e dentro da política de frescura.</p>
       </div>
       <button type="button" className="row-action" onClick={() => void load()} disabled={loading || !storeId}>
         {loading ? "A atualizar…" : "Atualizar"} <RefreshCw size={14} className={loading ? "spin" : ""} />
@@ -128,16 +136,30 @@ export default function InventoryReconciliationPanel({ token, storeId }: Props) 
               <small>Observação: {dateTime(item.observed_at)}{item.observation_confidence !== null ? " · Confiança " + Math.round(item.observation_confidence * 100) + "%" : ""}</small>
             </div>
             <div className="inventory-domain backroom-domain">
-              <span className="inventory-domain-title">Retaguarda · snapshot autoritativo</span>
+              <span className="inventory-domain-title">Retaguarda · último snapshot</span>
               <div><span>Stock físico registado</span><strong>{quantity(item.backroom_on_hand_quantity)}</strong></div>
               <div><span>Reservado</span><strong>{quantity(item.backroom_reserved_quantity)}</strong></div>
               <div><span>Disponível</span><strong>{quantity(item.backroom_available_quantity)}</strong></div>
               <small>{item.backroom_source || "Sem fonte"} · {dateTime(item.backroom_captured_at)}{item.backroom_snapshot_age_minutes !== null ? " · " + Math.floor(item.backroom_snapshot_age_minutes) + " min" : ""}</small>
             </div>
+            <div className="inventory-domain source-domain">
+              <span className="inventory-domain-title">ERP · sistema central</span>
+              <div><span>Stock registado</span><strong>{quantity(item.erp_on_hand_quantity)}</strong></div>
+              <div><span>Reservado</span><strong>{quantity(item.erp_reserved_quantity)}</strong></div>
+              <div><span>Disponível</span><strong>{quantity(item.erp_available_quantity)}</strong></div>
+              <small>{item.erp_source || "Sem snapshot ERP"} · {dateTime(item.erp_captured_at)} · {item.erp_freshness_status}</small>
+            </div>
+            <div className="inventory-domain source-domain">
+              <span className="inventory-domain-title">WMS · retaguarda</span>
+              <div><span>Stock registado</span><strong>{quantity(item.wms_on_hand_quantity)}</strong></div>
+              <div><span>Reservado</span><strong>{quantity(item.wms_reserved_quantity)}</strong></div>
+              <div><span>Disponível</span><strong>{quantity(item.wms_available_quantity)}</strong></div>
+              <small>{item.wms_source || "Sem snapshot WMS"} · {dateTime(item.wms_captured_at)} · {item.wms_freshness_status}</small>
+            </div>
           </div>
           <div className="inventory-reconciliation-footnote">
             <span>Observação #{item.observation_id ?? "—"} · Snapshot #{item.backroom_snapshot_id ?? "—"}</span>
-            <span>Sem ajustes automáticos ao inventário contabilístico.</span>
+            <span>{item.wms_erp_comparison_status === "IN_SYNC" ? "ERP e WMS coincidem." : item.wms_erp_comparison_status === "DIVERGENCE" ? "Divergência WMS − ERP: " + quantity(item.wms_erp_available_delta) : "Comparação ERP/WMS indisponível: " + item.wms_erp_comparison_status} · Sem ajustes automáticos ao inventário contabilístico.</span>
           </div>
         </article>;
       })}
