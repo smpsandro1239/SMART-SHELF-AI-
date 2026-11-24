@@ -801,3 +801,11 @@ Foi adicionada uma regressão em `apps/api/tests/test_inventory.py` para uma ass
 
 Commit de teste: `3f5c0b012fd4104edc1cf55c24d308668a99a1d1`. A documentação de acompanhamento foi actualizada no commit `e629bd65952b976d4546e6f55325151590561ada`. A validação automatizada do novo HEAD continua pendente; não considerar o teste aprovado até a execução CI terminar.
 
+
+## 2026-11-24 — Frescura da evidência visual na reconciliação
+
+- `GET /api/v1/inventory/reconciliation` passa a devolver `observation_age_minutes`, calculado a partir de `observed_at` e do relógio UTC da aplicação.
+- O campo permite ao supervisor distinguir uma contagem recente de uma observação antiga sem impor um limiar de obsolescência não configurado pelo negócio.
+- Sem observação, o campo permanece `null`; a ausência de evidência não é convertida em idade zero.
+- Testes actualizados para validar uma observação com 90 minutos e o caso sem observação.
+- Commits: API `e0978a5b`; testes `c8b182a1`. CI pendente; não foi executado pytest localmente nesta sessão.
