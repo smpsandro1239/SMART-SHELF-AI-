@@ -1266,4 +1266,79 @@ class ShelfPlanogramComparisonRead(BaseModel):
     calibration_image_sha256: str | None
     cells: list[ShelfPlanogramCellComparisonRead]
 
+class EmployeeShiftCreate(BaseModel):
+    store_id: int
+    employee_id: int
+    starts_at: datetime
+    ends_at: datetime
+    break_minutes: int = Field(default=0, ge=0, le=720)
+    notes: str | None = Field(default=None, max_length=500)
+
+    @model_validator(mode="after")
+    def validate_shift_window(self):
+        if self.ends_at <= self.starts_at:
+            raise ValueError("ends_at tem de ser posterior a starts_at")
+        if (self.ends_at - self.starts_at).total_seconds() < self.break_minutes * 60:
+            raise ValueError("A pausa não pode exceder a duração do turno")
+        return self
+
+
+class EmployeeShiftRead(BaseModel):
+    id: int
+    store_id: int
+    employee_id: int
+    starts_at: datetime
+    ends_at: datetime
+    break_minutes: int
+    status: Literal["SCHEDULED", "CANCELLED"]
+    notes: str | None
+    created_by_user_id: int
+    created_at: datetime
+    model_config = ConfigDict(from_attributes=True)
+
+
+class EmployeeSkillCreate(BaseModel):
+    store_id: int
+    employee_id: int
+    skill_code: str = Field(min_length=2, max_length=60, pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:-]*$")
+    level: int = Field(default=1, ge=1, le=5)
+
+
+class EmployeeSkillRead(BaseModel):
+    id: int
+    store_id: int
+    employee_id: int
+    skill_code: str
+    level: int
+    created_by_user_id: int
+    created_at: datetime
+    model_config = ConfigDict(from_attributes=True)
+
+
+class EmployeeAvailabilityCreate(BaseModel):
+    store_id: int
+    employee_id: int
+    starts_at: datetime
+    ends_at: datetime
+    status: Literal["AVAILABLE", "UNAVAILABLE"]
+    reason: str | None = Field(default=None, max_length=500)
+
+    @model_validator(mode="after")
+    def validate_availability_window(self):
+        if self.ends_at <= self.starts_at:
+            raise ValueError("ends_at tem de ser posterior a starts_at")
+        return self
+
+
+class EmployeeAvailabilityRead(BaseModel):
+    id: int
+    store_id: int
+    employee_id: int
+    starts_at: datetime
+    ends_at: datetime
+    status: Literal["AVAILABLE", "UNAVAILABLE"]
+    reason: str | None
+    created_by_user_id: int
+    created_at: datetime
+    model_config = ConfigDict(from_attributes=True)
 
