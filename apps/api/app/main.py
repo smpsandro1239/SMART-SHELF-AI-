@@ -8225,6 +8225,7 @@ def auto_assign_replenishment_tasks(
             models.ReplenishmentTask.store_id == store_id,
             models.ReplenishmentTask.status.in_(("PENDING", "ASSIGNED", "IN_PROGRESS")),
         )
+        .with_for_update(of=models.ReplenishmentTask)
         .all()
     )
     pending_rows = [
