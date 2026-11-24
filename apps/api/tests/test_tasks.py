@@ -1273,7 +1273,9 @@ def test_auto_assign_balances_workload_and_prioritizes_urgent_tasks(monkeypatch)
 
         monkeypatch.setattr(
             main_module, "_request_user",
-            lambda _db, _request: TestingSession().get(models.User, supervisor_id),
+            lambda _db, _request: models.User(
+                id=supervisor_id, store_id=store_id, role="SUPERVISOR", is_active=True,
+            ),
         )
 
         product_ids = []
