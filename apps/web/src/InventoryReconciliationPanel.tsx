@@ -20,6 +20,12 @@ type ReconciliationItem = {
   wms_erp_available_delta: number | null;
   wms_erp_comparison_status: "MISSING_ERP" | "MISSING_WMS" | "INVALID_TIMESTAMP" | "STALE_SOURCE" | "IN_SYNC" | "DIVERGENCE";
 };
+type LedgerRecord = {
+  id: number; shelf_id: number; product_id: number; review_status: "PENDING" | "APPROVED" | "REJECTED" | "NEEDS_INVESTIGATION";
+  comparison_status: string; display_quantity: number | null; wms_available_quantity: number | null;
+  erp_available_quantity: number | null; wms_erp_delta: number | null; created_at: string;
+  created_by_name: string | null; reviewed_by_name: string | null; review_reason: string | null;
+};
 type Props = { token: string; storeId: number | null };
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
 const STATUS: Record<ReconciliationItem["display_status"], { label: string; tone: string }> = {
@@ -42,6 +48,8 @@ function dateTime(value: string | null): string {
 
 export default function InventoryReconciliationPanel({ token, storeId }: Props) {
   const [items, setItems] = useState<ReconciliationItem[]>([]);
+  const [ledger, setLedger] = useState<LedgerRecord[]>([]);
+  const [ledgerBusy, setLedgerBusy] = useState<number | null>(null);
   const [productFilter, setProductFilter] = useState("");
   const [shelfFilter, setShelfFilter] = useState("");
   const [loading, setLoading] = useState(false);
@@ -68,10 +76,48 @@ export default function InventoryReconciliationPanel({ token, storeId }: Props) 
       setItems(payload.items as ReconciliationItem[]);
       setGeneratedAt(payload.generated_at || null);
       setNote(payload.note || "");
+      const historyResponse = await fetch(API_BASE + "/api/v1/inventory/reconciliations?" + new URLSearchParams({
+        store_id: String(storeId), limit: "100",
+      }).toString(), { headers: { Authorization: "Bearer " + token } });
+      const historyPayload = await historyResponse.json().catch(() => ({}));
+      if (!historyResponse.ok) throw new Error(typeof historyPayload.detail === "string" ? historyPayload.detail : "Não foi possível carregar o histórico.");
+      setLedger(Array.isArray(historyPayload.items) ? historyPayload.items as LedgerRecord[] : []);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Não foi possível carregar a reconciliação.");
     } finally { setLoading(false); }
   }, [storeId, token, productFilter, shelfFilter]);
+
+  const createLedgerRecord = useCallback(async (item: ReconciliationItem) => {
+    const reason = window.prompt("Motivo para registar esta reconciliação:", "Divergência identificada no painel operacional");
+    if (!reason || reason.trim().length < 3) return;
+    setLedgerBusy(item.product_id);
+    try {
+      const response = await fetch(API_BASE + "/api/v1/inventory/reconciliations", {
+        method: "POST", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
+        body: JSON.stringify({ store_id: item.store_id, shelf_id: item.shelf_id, product_id: item.product_id, reason }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(typeof payload.detail === "string" ? payload.detail : "Não foi possível registar a reconciliação.");
+      await load();
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Falha ao registar reconciliação."); }
+    finally { setLedgerBusy(null); }
+  }, [token, load]);
+
+  const reviewLedgerRecord = useCallback(async (recordId: number, decision: "APPROVED" | "REJECTED") => {
+    const reason = window.prompt(decision === "APPROVED" ? "Justificação da aprovação:" : "Motivo da rejeição:");
+    if (!reason || reason.trim().length < 3) return;
+    setLedgerBusy(recordId);
+    try {
+      const response = await fetch(API_BASE + "/api/v1/inventory/reconciliations/" + recordId + "/review", {
+        method: "POST", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
+        body: JSON.stringify({ decision, reason }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(typeof payload.detail === "string" ? payload.detail : "Não foi possível rever a reconciliação.");
+      await load();
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Falha ao rever reconciliação."); }
+    finally { setLedgerBusy(null); }
+  }, [token, load]);
 
   useEffect(() => { void load(); }, [load]);
   const counts = useMemo(() => ({
@@ -161,9 +207,37 @@ export default function InventoryReconciliationPanel({ token, storeId }: Props) 
             <span>Observação #{item.observation_id ?? "—"} · Snapshot #{item.backroom_snapshot_id ?? "—"}</span>
             <span>{item.wms_erp_comparison_status === "IN_SYNC" ? "ERP e WMS coincidem." : item.wms_erp_comparison_status === "DIVERGENCE" ? "Divergência WMS − ERP: " + quantity(item.wms_erp_available_delta) : "Comparação ERP/WMS indisponível: " + item.wms_erp_comparison_status} · Sem ajustes automáticos ao inventário contabilístico.</span>
           </div>
+          <div className="inventory-reconciliation-ledger-action">
+            <span>Guardar evidência imutável e enviar para revisão humana.</span>
+            <button type="button" className="row-action secondary-action"
+              onClick={() => void createLedgerRecord(item)} disabled={ledgerBusy === item.product_id}>
+              {ledgerBusy === item.product_id ? "A registar…" : "Registar reconciliação"}
+            </button>
+          </div>
         </article>;
       })}
     </div>
+    <section className="inventory-reconciliation-ledger" aria-labelledby="inventory-reconciliation-ledger-title">
+      <div className="panel-heading"><div><p className="eyebrow">AUDITORIA · DECISÕES HUMANAS</p><h3 id="inventory-reconciliation-ledger-title">Histórico de reconciliações</h3>
+        <p className="muted">Cada registo conserva os valores e timestamps usados no momento da análise. A revisão não altera os saldos contabilísticos.</p></div></div>
+      {ledger.length === 0 ? <p className="inventory-history-hint">Ainda não existem reconciliações persistidas para esta loja.</p> :
+        <div className="inventory-reconciliation-ledger-list">
+          {ledger.map(record => <article className="inventory-reconciliation-ledger-row" key={record.id}>
+            <div><strong>Reconciliação #{record.id} · Produto #{record.product_id} · Prateleira #{record.shelf_id}</strong>
+              <span>{dateTime(record.created_at)} · Criada por {record.created_by_name || "utilizador indisponível"}</span></div>
+            <div className="inventory-ledger-values">
+              <span>Prateleira: {quantity(record.display_quantity)}</span><span>WMS: {quantity(record.wms_available_quantity)}</span>
+              <span>ERP: {quantity(record.erp_available_quantity)}</span><span>WMS − ERP: {quantity(record.wms_erp_delta)}</span>
+              <strong>{record.review_status}</strong>
+            </div>
+            {record.reviewed_by_name && <small>Revista por {record.reviewed_by_name} · {record.review_reason}</small>}
+            {record.review_status === "PENDING" && <div className="inventory-ledger-review-actions">
+              <button type="button" className="row-action" disabled={ledgerBusy === record.id} onClick={() => void reviewLedgerRecord(record.id, "APPROVED")}>Aprovar</button>
+              <button type="button" className="row-action secondary-action" disabled={ledgerBusy === record.id} onClick={() => void reviewLedgerRecord(record.id, "REJECTED")}>Rejeitar</button>
+            </div>}
+          </article>)}
+        </div>}
+    </section>
     {note && <p className="inventory-reconciliation-note">{note}</p>}
     {generatedAt && <p className="inventory-history-updated">Calculado em {dateTime(generatedAt)}.</p>}
   </section>;
