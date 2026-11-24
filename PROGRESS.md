@@ -829,3 +829,12 @@ Commit de teste: `3f5c0b012fd4104edc1cf55c24d308668a99a1d1`. A documentação de
 - A recomendação passou a ser recalculada depois de `_lock_store_for_task_creation`, mantendo a verificação de duplicados e a persistência no mesmo âmbito transaccional.
 - Commit: `edc77be9`.
 - CI/PostgreSQL 16 e teste concorrente específico ainda não confirmados; esta alteração reduz a janela TOCTOU, mas não substitui validação de todos os escritores de inventário.
+
+
+## 2026-11-24 — Validade temporal do inventário nas recomendações
+
+- Corrigida uma lacuna funcional: o motor de recomendações verificava a idade da observação visual, mas aceitava snapshots de retaguarda antigos ou com timestamp futuro.
+- As recomendações passam agora a aplicar `InventoryFreshnessPolicy` por loja/origem (predefinição de 240 minutos), com estados `STALE_INVENTORY` e `INVALID_INVENTORY_TIMESTAMP`.
+- Para ambos os estados, a quantidade sugerida permanece `null`; a rota de criação a partir de recomendação rejeita a operação porque o estado não é `NEEDS_REPLENISHMENT`.
+- Adicionado teste parametrizado para snapshot com dois dias e snapshot cinco minutos no futuro, verificando também a rejeição da tarefa.
+- Commits: `56a7d676` (motor), `9cc700d1` (schema), `8bd5a880` (testes). Execução local e CI ainda não confirmadas.
