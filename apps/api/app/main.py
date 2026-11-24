@@ -7248,6 +7248,105 @@ def review_inventory_reconciliation(reconciliation_id: int, payload: InventoryRe
     return _inventory_reconciliation_record_payload(record, db)
 
 
+
+
+@app.get("/api/v1/inventory/reconciliations/dashboard", tags=["inventory"])
+def get_inventory_reconciliation_dashboard(store_id: int, request: Request = None, db: Session = Depends(get_db)):
+    """Aggregate persisted reconciliation evidence without mutating source inventory."""
+    actor = _request_user(db, request)
+    if actor is None or actor.role not in {"ADMIN", "SUPERVISOR"}:
+        raise HTTPException(status_code=403, detail="Supervisor role required")
+    _enforce_store_scope(actor, store_id)
+    store = db.get(models.Store, store_id)
+    if store is None:
+        raise HTTPException(status_code=404, detail="Store not found")
+    now = models.utc_now()
+    rows = (
+        db.query(models.InventoryReconciliation, models.Product.sku, models.Product.name)
+        .join(models.Product, models.Product.id == models.InventoryReconciliation.product_id)
+        .filter(models.InventoryReconciliation.store_id == store_id,
+                models.InventoryReconciliation.created_at >= now - timedelta(days=90))
+        .order_by(models.InventoryReconciliation.created_at.desc(), models.InventoryReconciliation.id.desc())
+        .limit(5001).all()
+    )
+    truncated = len(rows) > 5000
+    rows = rows[:5000]
+    status_counts = {status: 0 for status in ("PENDING", "APPROVED", "REJECTED", "NEEDS_INVESTIGATION")}
+    products, latest_by_product = {}, {}
+    divergence_count = 0
+    recurrence_start = now - timedelta(days=30)
+    for record, sku, name in rows:
+        status_counts[record.review_status] = status_counts.get(record.review_status, 0) + 1
+        divergence_count += int(record.comparison_status == "DIVERGENCE")
+        group = products.setdefault(record.product_id, {
+            "product_id": record.product_id, "product_sku": sku, "product_name": name,
+            "reconciliation_count": 0, "recurring_count_30d": 0, "divergence_count": 0,
+            "absolute_delta_total": 0.0, "latest_created_at": record.created_at,
+        })
+        group["reconciliation_count"] += 1
+        group["recurring_count_30d"] += int(record.created_at >= recurrence_start)
+        group["divergence_count"] += int(record.comparison_status == "DIVERGENCE")
+        if record.wms_erp_delta is not None:
+            group["absolute_delta_total"] += abs(float(record.wms_erp_delta))
+        if record.product_id not in latest_by_product:
+            latest_by_product[record.product_id] = record
+    ranking = sorted(products.values(), key=lambda x: (
+        x["recurring_count_30d"] >= 2, x["divergence_count"],
+        x["absolute_delta_total"], x["reconciliation_count"]), reverse=True)
+    for item in ranking:
+        item["absolute_delta_total"] = round(item["absolute_delta_total"], 3)
+        item["is_recurring"] = item["recurring_count_30d"] >= 2
+    policies = {p.source: p.max_age_minutes for p in db.query(models.InventoryFreshnessPolicy).filter(
+        models.InventoryFreshnessPolicy.store_id == store_id,
+        models.InventoryFreshnessPolicy.source.in_(["ERP", "WMS"])).all()}
+    def parse_time(value):
+        if not value: return None
+        try:
+            parsed = datetime.fromisoformat(value.replace("Z", "+00:00")) if isinstance(value, str) else value
+            if parsed.tzinfo is None: parsed = parsed.replace(tzinfo=timezone.utc)
+            return parsed.astimezone(timezone.utc)
+        except (TypeError, ValueError):
+            return None
+    freshness = {}
+    for source, section, key, max_age in (
+        ("SHELF", "observation", "observed_at", 240),
+        ("WMS", "wms", "captured_at", policies.get("WMS", 240)),
+        ("ERP", "erp", "captured_at", policies.get("ERP", 240)),
+    ):
+        counts = {"CURRENT": 0, "STALE": 0, "MISSING": 0, "FUTURE": 0}
+        for record in latest_by_product.values():
+            stamp = parse_time(((record.evidence or {}).get(section) or {}).get(key))
+            if stamp is None:
+                counts["MISSING"] += 1
+            else:
+                age = (now - stamp).total_seconds() / 60
+                counts["FUTURE" if age < -5 else "STALE" if age > max_age else "CURRENT"] += 1
+        available = counts["CURRENT"] + counts["STALE"] + counts["FUTURE"]
+        total = len(latest_by_product)
+        freshness[source] = {
+            "current": counts["CURRENT"], "stale": counts["STALE"], "missing": counts["MISSING"],
+            "future": counts["FUTURE"],
+            "coverage_percent": round(available / total * 100, 1) if total else None,
+            "freshness_percent": round(counts["CURRENT"] / available * 100, 1) if available else None,
+            "max_age_minutes": max_age,
+        }
+    recent = [{
+        "id": r.id, "product_id": r.product_id, "product_sku": sku, "product_name": name,
+        "comparison_status": r.comparison_status, "review_status": r.review_status,
+        "wms_erp_delta": float(r.wms_erp_delta) if r.wms_erp_delta is not None else None,
+        "created_at": r.created_at,
+    } for r, sku, name in rows[:10]]
+    return {
+        "store_id": store_id, "store_name": store.name, "generated_at": now,
+        "window_days": 90, "truncated": truncated, "total_reconciliations": len(rows),
+        "unique_products": len(products), "divergences": divergence_count,
+        "recurring_products_30d": sum(1 for x in ranking if x["is_recurring"]),
+        "review_status_counts": status_counts, "product_ranking": ranking[:10],
+        "source_freshness": freshness, "recent_reconciliations": recent,
+        "note": "Indicadores calculados a partir do ledger persistido. A atualidade mede a idade das evidências disponíveis, não a precisão real da fonte. Sem alterações a saldos ou movimentos contabilísticos.",
+    }
+
+
 @app.post(
     "/api/v1/tasks/{task_id}/reconcile-inventory",
     response_model=InventoryMovementRead,
