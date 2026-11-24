@@ -10,7 +10,7 @@ def test_planner_respects_shift_capacity_and_existing_workload():
     pending = [
         {"id": 10, "priority": "URGENT", "estimated_duration_minutes": 40},
         {"id": 11, "priority": "NORMAL", "estimated_duration_minutes": 20},
-        {"id": 12, "priority": "LOW", "estimated_duration_minutes": 10},
+        {"id": 12, "priority": "LOW", "estimated_duration_minutes": 15},
     ]
 
     plan = build_capacity_aware_assignment_plan(employees, existing, pending)
