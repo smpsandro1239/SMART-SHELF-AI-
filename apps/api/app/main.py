@@ -108,6 +108,7 @@ from app.schemas import (
     PalletRotationPolicyCreate, PalletRotationPolicyRead, PalletRotationPolicyUpdate, PalletRotationEventRead, PalletLifecycleUpdate, PalletRotationSimulationRequest,
     ShelfPlanogramCreate, ShelfPlanogramCellsReplace, ShelfPlanogramLifecycleRequest, ShelfPlanogramRead,
     ShelfPlanogramComparisonRead,
+    InventorySourceSyncCreate, InventorySourceSyncComplete,
 )
 from app.schemas import (
     EmployeeShiftCreate, EmployeeShiftRead,
@@ -7350,6 +7351,158 @@ def get_inventory_reconciliation_dashboard(store_id: int, request: Request = Non
         "source_freshness": freshness, "recent_reconciliations": recent,
         "note": "Indicadores calculados a partir do ledger persistido. A atualidade mede a idade das evidências disponíveis, não a precisão real da fonte. Sem alterações a saldos ou movimentos contabilísticos.",
     }
+
+
+
+
+def _inventory_source_sync_payload(record: models.InventorySourceSync, db: Session) -> dict:
+    events = db.query(models.InventorySourceSyncEvent).filter(
+        models.InventorySourceSyncEvent.sync_id == record.id
+    ).order_by(models.InventorySourceSyncEvent.created_at.asc(), models.InventorySourceSyncEvent.id.asc()).all()
+    duration_ms = None
+    if record.finished_at is not None:
+        started = record.started_at
+        finished = record.finished_at
+        if started.tzinfo is None: started = started.replace(tzinfo=timezone.utc)
+        if finished.tzinfo is None: finished = finished.replace(tzinfo=timezone.utc)
+        duration_ms = max(0, int((finished - started).total_seconds() * 1000))
+    return {
+        "id": record.id, "store_id": record.store_id, "source": record.source,
+        "provider": record.provider, "external_run_id": record.external_run_id,
+        "status": record.status, "started_at": record.started_at, "finished_at": record.finished_at,
+        "duration_ms": duration_ms, "received_records": record.received_records,
+        "processed_records": record.processed_records, "error_code": record.error_code,
+        "error_message": record.error_message, "created_by_user_id": record.created_by_user_id,
+        "created_at": record.created_at,
+        "events": [{"id": e.id, "event_type": e.event_type, "actor_user_id": e.actor_user_id,
+                    "details": e.details, "created_at": e.created_at} for e in events],
+    }
+
+
+@app.post("/api/v1/inventory/source-syncs", status_code=201, tags=["inventory"])
+def start_inventory_source_sync(payload: InventorySourceSyncCreate, request: Request, db: Session = Depends(get_db)):
+    actor = _request_user(db, request)
+    if actor is None:
+        raise HTTPException(status_code=401, detail="Authentication is required")
+    if actor.role not in {"ADMIN", "SUPERVISOR"}:
+        raise HTTPException(status_code=403, detail="Supervisor role required")
+    _enforce_store_scope(actor, payload.store_id)
+    if db.get(models.Store, payload.store_id) is None:
+        raise HTTPException(status_code=404, detail="Store not found")
+    now = models.utc_now()
+    record = models.InventorySourceSync(
+        store_id=payload.store_id, source=payload.source, provider=payload.provider.strip(),
+        external_run_id=payload.external_run_id.strip() if payload.external_run_id else None,
+        status="STARTED", started_at=now, created_by_user_id=actor.id, created_at=now,
+    )
+    db.add(record)
+    db.flush()
+    db.add(models.InventorySourceSyncEvent(
+        sync_id=record.id, event_type="STARTED", actor_user_id=actor.id,
+        details={"source": record.source, "provider": record.provider, "external_run_id": record.external_run_id},
+        created_at=now,
+    ))
+    db.commit()
+    db.refresh(record)
+    return _inventory_source_sync_payload(record, db)
+
+
+@app.post("/api/v1/inventory/source-syncs/{sync_id}/complete", tags=["inventory"])
+def complete_inventory_source_sync(sync_id: int, payload: InventorySourceSyncComplete, request: Request, db: Session = Depends(get_db)):
+    actor = _request_user(db, request)
+    if actor is None:
+        raise HTTPException(status_code=401, detail="Authentication is required")
+    if actor.role not in {"ADMIN", "SUPERVISOR"}:
+        raise HTTPException(status_code=403, detail="Supervisor role required")
+    record = _lock_store_scoped_record(
+        db, models.InventorySourceSync, sync_id, actor,
+        "Synchronization record not found", hide_foreign=True,
+    )
+    if record.status != "STARTED":
+        raise HTTPException(status_code=409, detail="A synchronization attempt can only be completed once")
+    now = models.utc_now()
+    record.status = payload.status
+    record.finished_at = now
+    record.received_records = payload.received_records
+    record.processed_records = payload.processed_records
+    record.error_code = payload.error_code.strip() if payload.error_code else None
+    record.error_message = payload.error_message.strip() if payload.error_message else None
+    db.add(models.InventorySourceSyncEvent(
+        sync_id=record.id, event_type="COMPLETED", actor_user_id=actor.id,
+        details={
+            "status": payload.status, "received_records": payload.received_records,
+            "processed_records": payload.processed_records, "error_code": record.error_code,
+            "error_message": record.error_message,
+        }, created_at=now,
+    ))
+    db.commit()
+    db.refresh(record)
+    return _inventory_source_sync_payload(record, db)
+
+
+@app.get("/api/v1/inventory/source-syncs", tags=["inventory"])
+def list_inventory_source_syncs(
+    store_id: int, source: str | None = None, status: str | None = None,
+    limit: int = 100, request: Request = None, db: Session = Depends(get_db),
+):
+    actor = _request_user(db, request)
+    if actor is None or actor.role not in {"ADMIN", "SUPERVISOR"}:
+        raise HTTPException(status_code=403, detail="Supervisor role required")
+    _enforce_store_scope(actor, store_id)
+    if db.get(models.Store, store_id) is None:
+        raise HTTPException(status_code=404, detail="Store not found")
+    if source is not None and source not in {"ERP", "WMS"}:
+        raise HTTPException(status_code=422, detail="source must be ERP or WMS")
+    if status is not None and status not in {"STARTED", "SUCCESS", "PARTIAL", "FAILED"}:
+        raise HTTPException(status_code=422, detail="Invalid synchronization status")
+    if limit < 1 or limit > 200:
+        raise HTTPException(status_code=422, detail="limit must be between 1 and 200")
+    query = db.query(models.InventorySourceSync).filter(models.InventorySourceSync.store_id == store_id)
+    if source: query = query.filter(models.InventorySourceSync.source == source)
+    if status: query = query.filter(models.InventorySourceSync.status == status)
+    records = query.order_by(models.InventorySourceSync.started_at.desc(), models.InventorySourceSync.id.desc()).limit(limit).all()
+    return {"store_id": store_id, "items": [_inventory_source_sync_payload(item, db) for item in records]}
+
+
+@app.get("/api/v1/inventory/source-syncs/health", tags=["inventory"])
+def get_inventory_source_sync_health(store_id: int, request: Request = None, db: Session = Depends(get_db)):
+    actor = _request_user(db, request)
+    if actor is None or actor.role not in {"ADMIN", "SUPERVISOR"}:
+        raise HTTPException(status_code=403, detail="Supervisor role required")
+    _enforce_store_scope(actor, store_id)
+    if db.get(models.Store, store_id) is None:
+        raise HTTPException(status_code=404, detail="Store not found")
+    policies = {item.source: item.max_age_minutes for item in db.query(models.InventoryFreshnessPolicy).filter(
+        models.InventoryFreshnessPolicy.store_id == store_id,
+        models.InventoryFreshnessPolicy.source.in_(["ERP", "WMS"]),
+    ).all()}
+    now = models.utc_now()
+    health = {}
+    for source in ("ERP", "WMS"):
+        latest = db.query(models.InventorySourceSync).filter_by(store_id=store_id, source=source).order_by(
+            models.InventorySourceSync.started_at.desc(), models.InventorySourceSync.id.desc()
+        ).first()
+        last_success = db.query(models.InventorySourceSync).filter_by(
+            store_id=store_id, source=source, status="SUCCESS"
+        ).order_by(models.InventorySourceSync.finished_at.desc(), models.InventorySourceSync.id.desc()).first()
+        max_age = policies.get(source, 240)
+        age_minutes = None
+        if last_success and last_success.finished_at:
+            finished = last_success.finished_at
+            if finished.tzinfo is None: finished = finished.replace(tzinfo=timezone.utc)
+            age_minutes = max(0, round((now - finished.astimezone(timezone.utc)).total_seconds() / 60, 1))
+        stale = age_minutes is None or age_minutes > max_age
+        health[source] = {
+            "last_attempt": _inventory_source_sync_payload(latest, db) if latest else None,
+            "last_success": _inventory_source_sync_payload(last_success, db) if last_success else None,
+            "minutes_since_success": age_minutes, "max_age_minutes": max_age,
+            "stale": stale,
+            "alert_code": "SOURCE_NEVER_SYNCHRONIZED" if last_success is None else "SOURCE_SYNC_STALE" if stale else None,
+            "alert_message": "Ainda não existe uma sincronização bem-sucedida." if last_success is None else "A última sincronização bem-sucedida excede o limite de atualidade." if stale else None,
+            "latest_attempt_failed": bool(latest and latest.status == "FAILED"),
+        }
+    return {"store_id": store_id, "generated_at": now, "sources": health,
+            "note": "Estado operacional baseado no histórico de tentativas registadas; não confirma a conectividade em tempo real nem executa sincronizações."}
 
 
 @app.post(
