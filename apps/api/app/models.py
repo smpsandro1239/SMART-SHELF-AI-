@@ -511,6 +511,29 @@ class PalletRotationEvent(Base):
     occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False, index=True)
 
 
+class InventoryExternalProductMapping(Base):
+    """Explicit store/source-scoped mapping from a provider SKU to an internal product."""
+    __tablename__ = "inventory_external_product_mappings"
+    __table_args__ = (
+        UniqueConstraint("store_id", "source", "external_product_id", name="uq_inventory_external_mapping_external_id"),
+        UniqueConstraint("store_id", "source", "external_sku", name="uq_inventory_external_mapping_sku"),
+        CheckConstraint("source IN ('ERP', 'WMS')", name="ck_inventory_external_mapping_source"),
+        Index("ix_inventory_external_mapping_product", "store_id", "product_id"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    store_id: Mapped[int] = mapped_column(ForeignKey("stores.id", ondelete="RESTRICT"), nullable=False)
+    source: Mapped[str] = mapped_column(String(8), nullable=False)
+    external_product_id: Mapped[str] = mapped_column(String(120), nullable=False)
+    external_sku: Mapped[str] = mapped_column(String(120), nullable=False)
+    product_id: Mapped[int] = mapped_column(ForeignKey("products.id", ondelete="RESTRICT"), nullable=False)
+    active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_by_user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
+    updated_by_user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False)
+
+
 class InventorySnapshot(Base):
     """Immutable observation of backroom stock from an authoritative source."""
     __tablename__ = "inventory_snapshots"
