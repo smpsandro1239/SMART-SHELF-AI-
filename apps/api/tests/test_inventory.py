@@ -990,3 +990,87 @@ def test_inventory_reconciliation_keeps_missing_evidence_unknown_and_read_only(m
             assert db.query(models.InventoryMovement).count() == 0
             assert db.query(models.InventorySnapshot).count() == 0
 
+
+
+def test_inventory_reconciliation_ledger_persists_evidence_and_requires_independent_review(monkeypatch):
+    with TestClient(app) as client:
+        store_id, product_id = create_store_and_product(client)
+        zone = client.post("/api/v1/zones", json={"store_id": store_id, "name": "Ledger auditável"}).json()
+        shelf = client.post("/api/v1/shelves", json={"zone_id": zone["id"], "code": "LEDGER-01"}).json()
+        linked = client.post("/api/v1/shelf-products", json={
+            "shelf_id": shelf["id"], "product_id": product_id,
+            "target_quantity": 12, "min_display_quantity": 2,
+        })
+        assert linked.status_code == 201, linked.text
+        erp = client.post("/api/v1/inventory/snapshots", json={
+            "store_id": store_id, "product_id": product_id, "on_hand_quantity": 40,
+            "reserved_quantity": 5, "source": "ERP", "external_reference": "LEDGER-ERP-01",
+        })
+        wms = client.post("/api/v1/inventory/snapshots", json={
+            "store_id": store_id, "product_id": product_id, "on_hand_quantity": 35,
+            "reserved_quantity": 3, "source": "WMS", "external_reference": "LEDGER-WMS-01",
+        })
+        assert erp.status_code == 201, erp.text
+        assert wms.status_code == 201, wms.text
+
+        creator = _supervisor_actor(store_id)
+        monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: creator)
+        created = client.post("/api/v1/inventory/reconciliations", json={
+            "store_id": store_id, "shelf_id": shelf["id"],
+            "product_id": product_id, "reason": "Controlo periódico da loja",
+        })
+        assert created.status_code == 201, created.text
+        record = created.json()
+        assert record["review_status"] == "PENDING"
+        assert record["created_by_user_id"] == creator.id
+        assert record["erp_snapshot_id"] == erp.json()["id"]
+        assert record["wms_snapshot_id"] == wms.json()["id"]
+        assert record["erp_available_quantity"] == 35
+        assert record["wms_available_quantity"] == 32
+        assert record["wms_erp_delta"] == -3
+        assert record["evidence"]["erp"]["captured_at"]
+        assert [event["event_type"] for event in record["events"]] == ["CREATED"]
+
+        self_review = client.post(
+            f"/api/v1/inventory/reconciliations/{record['id']}/review",
+            json={"decision": "APPROVED", "reason": "Validação própria"},
+        )
+        assert self_review.status_code == 409
+
+        reviewer = _supervisor_actor(store_id)
+        monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: reviewer)
+        approved = client.post(
+            f"/api/v1/inventory/reconciliations/{record['id']}/review",
+            json={"decision": "APPROVED", "reason": "Divergência confirmada por contagem manual"},
+        )
+        assert approved.status_code == 200, approved.text
+        assert approved.json()["review_status"] == "APPROVED"
+        assert approved.json()["reviewed_by_user_id"] == reviewer.id
+        assert [event["event_type"] for event in approved.json()["events"]] == ["CREATED", "APPROVED"]
+
+        history = client.get("/api/v1/inventory/reconciliations", params={
+            "store_id": store_id, "review_status": "APPROVED",
+        })
+        assert history.status_code == 200
+        assert history.json()["count"] == 1
+        with TestingSession() as db:
+            assert db.query(models.InventoryMovement).count() == 0
+            assert db.query(models.InventorySnapshot).count() == 2
+
+
+def test_inventory_reconciliation_ledger_rejects_employee(monkeypatch):
+    with TestClient(app) as client:
+        store_id, product_id = create_store_and_product(client)
+        zone = client.post("/api/v1/zones", json={"store_id": store_id, "name": "Zona restrita"}).json()
+        shelf = client.post("/api/v1/shelves", json={"zone_id": zone["id"], "code": "LEDGER-SEC"}).json()
+        client.post("/api/v1/shelf-products", json={
+            "shelf_id": shelf["id"], "product_id": product_id,
+            "target_quantity": 5, "min_display_quantity": 1,
+        })
+        employee = _supervisor_actor(store_id, role="EMPLOYEE")
+        monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: employee)
+        denied = client.post("/api/v1/inventory/reconciliations", json={
+            "store_id": store_id, "shelf_id": shelf["id"],
+            "product_id": product_id, "reason": "Pedido não autorizado",
+        })
+        assert denied.status_code == 403
