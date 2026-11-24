@@ -1229,3 +1229,96 @@ def test_replenishment_uses_store_and_source_inventory_freshness_policy():
         recommendation = response.json()[0]
         assert recommendation["recommendation_status"] == "STALE_INVENTORY"
         assert recommendation["suggested_quantity"] is None
+
+
+def test_auto_assign_balances_workload_and_prioritizes_urgent_tasks(monkeypatch):
+    with TestClient(app) as client:
+        store_id, shelf_id, _ = create_task_context(client)
+        db = TestingSession()
+        try:
+            supervisor = models.User(
+                email=f"supervisor-{uuid4().hex}@example.test",
+                store_id=store_id,
+                full_name="Supervisor",
+                password_hash="test-only-not-used",
+                role="SUPERVISOR",
+                is_active=True,
+            )
+            employee_one = models.User(
+                email=f"employee-one-{uuid4().hex}@example.test",
+                store_id=store_id,
+                full_name="Ana",
+                password_hash="test-only-not-used",
+                role="EMPLOYEE",
+                is_active=True,
+            )
+            employee_two = models.User(
+                email=f"employee-two-{uuid4().hex}@example.test",
+                store_id=store_id,
+                full_name="Bruno",
+                password_hash="test-only-not-used",
+                role="EMPLOYEE",
+                is_active=True,
+            )
+            db.add_all([supervisor, employee_one, employee_two])
+            db.commit()
+            db.refresh(supervisor)
+            db.refresh(employee_one)
+            db.refresh(employee_two)
+            supervisor_id = supervisor.id
+            employee_one_id = employee_one.id
+            employee_two_id = employee_two.id
+        finally:
+            db.close()
+
+        monkeypatch.setattr(
+            main_module, "_request_user",
+            lambda _db, _request: TestingSession().get(models.User, supervisor_id),
+        )
+
+        product_ids = []
+        for index in range(3):
+            product = client.post("/api/v1/products", json={
+                "sku": f"AUTO-{index}-{uuid4().hex[:6]}",
+                "name": f"Produto automático {index}",
+            })
+            assert product.status_code == 201, product.text
+            product_id = product.json()["id"]
+            product_ids.append(product_id)
+            linked = client.post("/api/v1/shelf-products", json={
+                "shelf_id": shelf_id, "product_id": product_id,
+                "target_quantity": 10, "min_display_quantity": 2,
+            })
+            assert linked.status_code == 201, linked.text
+
+        baseline = client.post("/api/v1/tasks", json={
+            "store_id": store_id, "shelf_id": shelf_id, "product_id": product_ids[0],
+            "priority": "LOW", "assigned_user_id": employee_one_id,
+        })
+        assert baseline.status_code == 201, baseline.text
+        urgent = client.post("/api/v1/tasks", json={
+            "store_id": store_id, "shelf_id": shelf_id, "product_id": product_ids[1],
+            "priority": "URGENT",
+        })
+        normal = client.post("/api/v1/tasks", json={
+            "store_id": store_id, "shelf_id": shelf_id, "product_id": product_ids[2],
+            "priority": "NORMAL",
+        })
+        assert urgent.status_code == 201, urgent.text
+        assert normal.status_code == 201, normal.text
+
+        response = client.post(
+            "/api/v1/replenishment/auto-assign",
+            params={"store_id": store_id},
+        )
+        assert response.status_code == 200, response.text
+        result = response.json()
+        assert result["assigned_count"] == 2
+        by_task = {item["task_id"]: item["assigned_user_id"] for item in result["assignments"]}
+        assert by_task[urgent.json()["id"]] == employee_two_id
+        assert by_task[normal.json()["id"]] == employee_one_id
+
+        events = client.get(f"/api/v1/tasks/{urgent.json()['id']}/events")
+        assert events.status_code == 200
+        assert events.json()[-1]["to_status"] == "ASSIGNED"
+        assert events.json()[-1]["reason"].startswith("Distribuição automática")
