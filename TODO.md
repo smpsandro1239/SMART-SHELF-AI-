@@ -1,3 +1,10 @@
+## Inventário — frescura das observações de prateleira (2026-11-24; implementação/testes publicados, CI pendente)
+
+- [x] Expor `observation_age_minutes` na reconciliação para distinguir evidência recente de evidência antiga.
+- [x] Calcular a idade em UTC, arredondada a duas casas decimais, sem transformar observações ausentes em idade zero.
+- [x] Cobrir observação com 90 minutos e ausência de observação com `null`.
+- [ ] Validar teste focado, API CI/PostgreSQL 16, Quality Gates e Security Scans no HEAD final.
+
 ## Inventário — ausência de evidência na reconciliação (2026-11-24; teste publicado, CI pendente)
 
 - [x] Acrescentar regressão para associação produto/prateleira sem observação e sem snapshot de retaguarda.
