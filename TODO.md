@@ -1821,3 +1821,5 @@ A implementação de produção já verificava lease_lost nos caminhos de sucess
 - [x] Mostrar estados sem observação/medição e ausência de snapshot, sem inferir quantidades em falta.
 - [x] Explicitar que diferenças são informativas e nunca ajustam automaticamente o inventário contabilístico.
 - [ ] Validar build Web CI e Quality Gates no SHA final desta integração.
+
+- [ ] Validar por CI/PostgreSQL 16 a reavaliação da recomendação sob lock na criação de tarefas; ampliar testes concorrentes de alterações de stock/evidência.
