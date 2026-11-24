@@ -83,3 +83,15 @@ Foi adicionada a tabela `inventory_external_product_mappings`, com unicidade por
 - `run_inventory_source_sync`: serviço de worker com integração ACTIVE, fornecedor exacto, mapping exacto, paginação limitada, timeout/retries, transacção por página e replay idempotente.
 
 A contagem `processed_records` inclui snapshots novos e replays idênticos já persistidos. Se houver falha após páginas confirmadas, o ledger termina em PARTIAL; os snapshots dessas páginas permanecem como evidência. A API de gestão dos mappings, worker durável, secret manager e adapter real continuam pendentes.
+
+
+## Administração de mappings externos
+Endpoints autenticados:
+- `GET /api/v1/stores/{store_id}/inventory/external-mappings` — filtra por fonte/estado e limita resultados.
+- `POST /api/v1/stores/{store_id}/inventory/external-mappings` — cria mapping com motivo obrigatório.
+- `PATCH /api/v1/stores/{store_id}/inventory/external-mappings/{mapping_id}` — altera produto de destino ou estado activo, sempre com motivo.
+- `GET /api/v1/stores/{store_id}/inventory/external-mappings/{mapping_id}/events` — consulta histórico de auditoria.
+
+ADMIN pode gerir todas as lojas; SUPERVISOR apenas a loja associada à sua conta. EMPLOYEE não tem acesso. A criação exige integração activa para ERP/WMS e produto interno activo. O mapping não pode ser eliminado; a desactivação preserva o histórico. A identidade (loja, fonte, ID externo e SKU externo) é imutável ao nível da base de dados. Migrações 0080 e 0081 criam auditoria append-only e triggers de protecção.
+
+O endpoint não cria snapshots, movimentos, reconciliações ou aprovações. A gestão do mapping é uma operação administrativa separada da sincronização.
