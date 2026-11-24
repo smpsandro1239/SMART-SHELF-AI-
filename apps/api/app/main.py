@@ -7518,7 +7518,7 @@ def update_inventory_external_product_mapping(
     ).with_for_update().first()
     if record is None:
         raise HTTPException(status_code=404, detail="Mapping not found")
-    changes = payload.model_dump(exclude={"reason"}, exclude_unset=True)
+    changes = payload.model_dump(exclude={"reason"}, exclude_unset=True, exclude_none=True)
     if "product_id" in changes:
         product = db.query(models.Product).filter_by(id=changes["product_id"], is_active=True).first()
         if product is None:
