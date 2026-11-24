@@ -32,6 +32,7 @@ API_ROUTE_POLICIES = (
     ("GET", "/api/v1/inventory/movements", "SUPERVISOR_OR_ADMIN"),
     ("GET", "/api/v1/inventory/reconciliation", "SUPERVISOR_OR_ADMIN"),
     ("GET", "/api/v1/inventory/reconciliations", "SUPERVISOR_OR_ADMIN"),
+    ("GET", "/api/v1/inventory/reconciliations/dashboard", "SUPERVISOR_OR_ADMIN"),
     ("POST", "/api/v1/inventory/reconciliations", "SUPERVISOR_OR_ADMIN"),
     ("POST", "/api/v1/inventory/reconciliations/{reconciliation_id}/review", "SUPERVISOR_OR_ADMIN"),
     ("GET", "/api/v1/inventory/snapshots", "SUPERVISOR_OR_ADMIN"),
