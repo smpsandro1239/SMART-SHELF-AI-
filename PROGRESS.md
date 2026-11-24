@@ -821,3 +821,11 @@ Commit de teste: `3f5c0b012fd4104edc1cf55c24d308668a99a1d1`. A documentação de
 - Sem observação, o campo permanece `null`; a ausência de evidência não é convertida em idade zero.
 - Testes actualizados para validar uma observação com 90 minutos e o caso sem observação.
 - Commits: API `e0978a5b`; testes `c8b182a1`. CI pendente; não foi executado pytest localmente nesta sessão.
+
+
+### 2026-11-24 — Reavaliação da recomendação dentro da secção crítica
+
+- A rota `POST /api/v1/tasks/from-recommendation` calculava a recomendação antes de adquirir o lock da loja. Um snapshot de stock ou evidência visual podia mudar entre a validação e a criação da tarefa.
+- A recomendação passou a ser recalculada depois de `_lock_store_for_task_creation`, mantendo a verificação de duplicados e a persistência no mesmo âmbito transaccional.
+- Commit: `edc77be9`.
+- CI/PostgreSQL 16 e teste concorrente específico ainda não confirmados; esta alteração reduz a janela TOCTOU, mas não substitui validação de todos os escritores de inventário.
