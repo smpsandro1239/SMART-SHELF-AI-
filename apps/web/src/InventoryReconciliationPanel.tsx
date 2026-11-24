@@ -103,8 +103,8 @@ export default function InventoryReconciliationPanel({ token, storeId }: Props) 
     finally { setLedgerBusy(null); }
   }, [token, load]);
 
-  const reviewLedgerRecord = useCallback(async (recordId: number, decision: "APPROVED" | "REJECTED") => {
-    const reason = window.prompt(decision === "APPROVED" ? "Justificação da aprovação:" : "Motivo da rejeição:");
+  const reviewLedgerRecord = useCallback(async (recordId: number, decision: "APPROVED" | "REJECTED" | "NEEDS_INVESTIGATION") => {
+    const reason = window.prompt(decision === "APPROVED" ? "Justificação da aprovação:" : decision === "REJECTED" ? "Motivo da rejeição:" : "O que deve ser investigado?");
     if (!reason || reason.trim().length < 3) return;
     setLedgerBusy(recordId);
     try {
@@ -234,6 +234,7 @@ export default function InventoryReconciliationPanel({ token, storeId }: Props) 
             {record.review_status === "PENDING" && <div className="inventory-ledger-review-actions">
               <button type="button" className="row-action" disabled={ledgerBusy === record.id} onClick={() => void reviewLedgerRecord(record.id, "APPROVED")}>Aprovar</button>
               <button type="button" className="row-action secondary-action" disabled={ledgerBusy === record.id} onClick={() => void reviewLedgerRecord(record.id, "REJECTED")}>Rejeitar</button>
+              <button type="button" className="row-action secondary-action" disabled={ledgerBusy === record.id} onClick={() => void reviewLedgerRecord(record.id, "NEEDS_INVESTIGATION")}>Investigar</button>
             </div>}
           </article>)}
         </div>}
