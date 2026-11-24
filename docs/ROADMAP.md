@@ -1522,3 +1522,9 @@ Capacity is calculated conservatively from the current time to the end of the ac
 - Interface React para criar registos e rever pendentes.
 - Separação explícita face a `inventory_movements` e aos saldos contabilísticos.
 - Próximos passos: dashboard agregado, adapters reais ERP/WMS e histórico de sincronizações.
+
+
+### ERP/WMS — orquestração inicial
+A camada de serviço já liga adapters configurados no deployment ao ledger e aos snapshots. A migração 0078 cria mappings explícitos por loja/fonte; a 0079 permite registar o external_run_id na única transição STARTED → SUCCESS/PARTIAL/FAILED, sem reabrir ou alterar execuções concluídas. O orquestrador executa páginas em transacções independentes e deixa evidência das páginas confirmadas se uma página posterior falhar.
+
+Continua pendente: API de gestão de mappings, worker durável/scheduler, secret manager e adapter real homologado. O serviço não cria reconciliações nem aprova divergências.
