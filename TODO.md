@@ -2074,3 +2074,11 @@ Capacity is calculated conservatively from the current time to the end of the ac
 - [x] Preservar proveniência histórica desconhecida como NULL; não inventar localização nem destino.
 - [x] Exigir UUID, localização WMS de origem e prateleira de destino da mesma loja nos novos movimentos, ao nível dos triggers PostgreSQL/SQLite.
 - [ ] Confirmar a migration 0086 e os testes API no API CI PostgreSQL 16 e nos restantes workflows.
+
+
+## 2026-11-25 — Correcção do backfill da migration 0086
+
+- [x] Corrigir o parâmetro SQL em falta no backfill histórico de `destination_shelf_id`, atribuindo explicitamente NULL sem inferir destinos antigos.
+- [ ] Reexecutar API CI em PostgreSQL 16 e confirmar a suite completa após a correcção.
+- [ ] Confirmar Quality Gates, Security Scans e Docker Compose no novo HEAD.
+- [ ] Só depois iniciar o ledger de eventos do ciclo de vida de InventoryMovement.
