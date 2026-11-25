@@ -6922,7 +6922,6 @@ def get_inventory_reconciliation(
         models.InventorySnapshot.store_id == store_id,
         models.InventorySnapshot.product_id == models.ShelfProduct.product_id,
         models.InventorySnapshot.source == "WMS",
-        models.InventorySnapshot.availability_status == "AVAILABLE",
     )
     if backroom_location_code is not None:
         backroom_snapshot_query = backroom_snapshot_query.filter(
@@ -7064,7 +7063,10 @@ def get_inventory_reconciliation(
                 "snapshot_id": source_snapshot.id,
                 "on_hand_quantity": float(source_snapshot.on_hand_quantity),
                 "reserved_quantity": float(source_snapshot.reserved_quantity),
-                "available_quantity": float(source_snapshot.available_quantity),
+                "available_quantity": (
+                    float(source_snapshot.available_quantity)
+                    if source_snapshot.availability_status == "AVAILABLE" else None
+                ),
                 "source": source_snapshot.source,
                 "location_code": source_snapshot.location_code,
                 "availability_status": source_snapshot.availability_status,
@@ -7076,7 +7078,9 @@ def get_inventory_reconciliation(
         erp = source_evidence(erp_snapshot)
         wms = source_evidence(wms_snapshot)
         source_delta = None
-        if erp["freshness_status"] == "CURRENT" and wms["freshness_status"] == "CURRENT":
+        if wms_snapshot is not None and wms_snapshot.availability_status != "AVAILABLE":
+            source_comparison_status = "WMS_BACKROOM_UNAVAILABLE"
+        elif erp["freshness_status"] == "CURRENT" and wms["freshness_status"] == "CURRENT":
             source_delta = round(wms["available_quantity"] - erp["available_quantity"], 3)
             source_comparison_status = "IN_SYNC" if source_delta == 0 else "DIVERGENCE"
         elif erp["freshness_status"] == "MISSING":
@@ -7117,7 +7121,10 @@ def get_inventory_reconciliation(
             "backroom_snapshot_id": snapshot.id if snapshot else None,
             "backroom_on_hand_quantity": float(snapshot.on_hand_quantity) if snapshot else None,
             "backroom_reserved_quantity": float(snapshot.reserved_quantity) if snapshot else None,
-            "backroom_available_quantity": float(snapshot.available_quantity) if snapshot else None,
+            "backroom_available_quantity": (
+                float(snapshot.available_quantity)
+                if snapshot is not None and snapshot.availability_status == "AVAILABLE" else None
+            ),
             "backroom_source": snapshot.source if snapshot else None,
             "backroom_location_code": snapshot.location_code if snapshot else None,
             "backroom_availability_status": snapshot.availability_status if snapshot else None,
@@ -7136,6 +7143,8 @@ def get_inventory_reconciliation(
             "wms_reserved_quantity": wms["reserved_quantity"],
             "wms_available_quantity": wms["available_quantity"],
             "wms_source": wms["source"],
+            "wms_location_code": wms["location_code"],
+            "wms_availability_status": wms["availability_status"],
             "wms_captured_at": wms["captured_at"],
             "wms_snapshot_age_minutes": wms["age_minutes"],
             "wms_freshness_status": wms["freshness_status"],
