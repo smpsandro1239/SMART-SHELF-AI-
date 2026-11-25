@@ -1569,26 +1569,52 @@ def test_inventory_movement_freezes_product_base_unit_and_exact_decimal_quantity
             assert persisted.unit_code == "kg"
 
 
-def test_inventory_reconciliation_rejects_precision_beyond_numeric_scale(monkeypatch):
+def test_task_completion_rejects_actual_quantity_beyond_numeric_scale():
     with TestClient(app) as client:
-        store_id, _, task_id, _ = _completed_replenishment(
-            client, unit="kg", actual_quantity=1.2345,
+        store_id, product_id = create_store_and_product(client, unit="kg")
+        zone = client.post(
+            "/api/v1/zones",
+            json={"store_id": store_id, "name": "Precisão decimal"},
         )
-        actor = _supervisor_actor(store_id)
-        monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: actor)
+        shelf = client.post(
+            "/api/v1/shelves",
+            json={"zone_id": zone.json()["id"], "code": f"PREC-{uuid4().hex[:6]}"},
+        )
+        assignment = client.post("/api/v1/shelf-products", json={
+            "shelf_id": shelf.json()["id"],
+            "product_id": product_id,
+            "target_quantity": 10,
+            "min_display_quantity": 1,
+        })
+        assert assignment.status_code == 201, assignment.text
+        created = client.post("/api/v1/tasks", json={
+            "store_id": store_id,
+            "shelf_id": shelf.json()["id"],
+            "product_id": product_id,
+            "requested_quantity": 5,
+        })
+        assert created.status_code == 201, created.text
+        task_id = created.json()["id"]
+        assert client.patch(
+            f"/api/v1/tasks/{task_id}/status",
+            json={"status": "ASSIGNED", "assigned_to": "operador"},
+        ).status_code == 200
+        assert client.patch(
+            f"/api/v1/tasks/{task_id}/status",
+            json={"status": "IN_PROGRESS"},
+        ).status_code == 200
 
-        response = client.post(
-            f"/api/v1/tasks/{task_id}/reconcile-inventory",
-            json={"reason": "Precisão acima da escala suportada."},
+        completed = client.patch(
+            f"/api/v1/tasks/{task_id}/status",
+            json={"status": "COMPLETED", "actual_quantity": 1.2345},
         )
-        assert response.status_code == 409, response.text
-        assert response.json()["detail"]["code"] == "MOVEMENT_QUANTITY_PRECISION_UNSUPPORTED"
+        assert completed.status_code == 422, completed.text
         with TestingSession() as db:
+            task = db.get(models.ReplenishmentTask, task_id)
+            assert task is not None
+            assert task.status == "IN_PROGRESS"
+            assert task.actual_quantity is None
             assert db.query(models.InventoryMovement).filter_by(task_id=task_id).count() == 0
-            assert db.query(models.InventorySnapshot).filter_by(
-                source="MANUAL",
-                external_reference=f"TASK-RECONCILIATION-{task_id}",
-            ).count() == 0
 
 
 def test_product_base_unit_rejects_blank_values():
