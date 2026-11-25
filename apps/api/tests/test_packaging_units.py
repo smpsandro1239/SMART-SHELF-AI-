@@ -99,3 +99,20 @@ def test_invalid_quantities_are_rejected(quantity):
 def test_invalid_package_size_is_rejected(pack_size):
     with pytest.raises(ValueError):
         convert_to_base_units(1, pack_size)
+
+
+@pytest.mark.parametrize(
+    ("required", "pack_size"),
+    [("1.0001", "12.000"), ("1.000", "12.0001")],
+)
+def test_pack_calculation_rejects_precision_beyond_inventory_numeric_scale(required, pack_size):
+    with pytest.raises(ValueError, match="at most three decimal places"):
+        calculate_replenishment_packs(
+            required_base_units=required,
+            base_units_per_package=pack_size,
+        )
+
+
+def test_pack_conversion_rejects_factor_that_cannot_be_stored_exactly():
+    with pytest.raises(ValueError, match="at most three decimal places"):
+        convert_to_base_units("2", "12.0001")

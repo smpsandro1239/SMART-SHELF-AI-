@@ -15,11 +15,23 @@ def _positive_decimal(value: Any, field: str) -> Decimal:
     return result
 
 
+def _require_three_decimal_places(value: Decimal, field: str) -> None:
+    try:
+        quantized = value.quantize(Decimal("0.001"))
+    except InvalidOperation as exc:
+        raise ValueError(f"{field} exceeds supported decimal precision") from exc
+    if value != quantized:
+        raise ValueError(f"{field} supports at most three decimal places")
+
+
 def convert_to_base_units(package_quantity: Any, base_units_per_package: Any) -> Decimal:
     """Convert a pack count (e.g. 2 cases) to the product's base unit count."""
     quantity = _positive_decimal(package_quantity, "package_quantity")
     factor = _positive_decimal(base_units_per_package, "base_units_per_package")
-    return quantity * factor
+    _require_three_decimal_places(factor, "base_units_per_package")
+    result = quantity * factor
+    _require_three_decimal_places(result, "converted_base_units")
+    return result
 
 
 def calculate_replenishment_packs(
@@ -32,6 +44,8 @@ def calculate_replenishment_packs(
     try:
         required = _positive_decimal(required_base_units, "required_base_units")
         pack_size = _positive_decimal(base_units_per_package, "base_units_per_package")
+        _require_three_decimal_places(required, "required_base_units")
+        _require_three_decimal_places(pack_size, "base_units_per_package")
     except ValueError:
         raise
 
