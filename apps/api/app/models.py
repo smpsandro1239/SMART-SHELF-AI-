@@ -563,6 +563,8 @@ class InventorySnapshot(Base):
         CheckConstraint("on_hand_quantity >= 0", name="ck_inventory_on_hand_nonnegative"),
         CheckConstraint("reserved_quantity >= 0", name="ck_inventory_reserved_nonnegative"),
         CheckConstraint("reserved_quantity <= on_hand_quantity", name="ck_inventory_reserved_lte_on_hand"),
+        CheckConstraint("availability_status IN ('AVAILABLE', 'UNAVAILABLE', 'UNKNOWN')", name="ck_inventory_snapshot_availability_status"),
+        CheckConstraint("location_code IS NULL OR length(trim(location_code)) > 0", name="ck_inventory_snapshot_location_nonblank"),
     )
     id: Mapped[int] = mapped_column(primary_key=True)
     store_id: Mapped[int] = mapped_column(ForeignKey("stores.id", ondelete="CASCADE"), index=True)
@@ -590,6 +592,7 @@ class InventoryFreshnessPolicy(Base):
         UniqueConstraint("store_id", "source", name="uq_inventory_freshness_store_source"),
         CheckConstraint("source IN ('ERP', 'WMS', 'POS', 'MANUAL', 'IMPORT')", name="ck_inventory_freshness_source"),
         CheckConstraint("max_age_minutes >= 1 AND max_age_minutes <= 10080", name="ck_inventory_freshness_max_age"),
+        CheckConstraint("backroom_location_code IS NULL OR (source = 'WMS' AND length(trim(backroom_location_code)) > 0)", name="ck_inventory_freshness_backroom_wms_location"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
