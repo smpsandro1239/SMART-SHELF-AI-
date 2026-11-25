@@ -612,6 +612,33 @@ class InventoryFreshnessPolicy(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False)
 
 
+class InventoryFreshnessPolicyEvent(Base):
+    """Append-only audit trail for changes to per-store inventory authority."""
+    __tablename__ = "inventory_freshness_policy_events"
+    __table_args__ = (
+        CheckConstraint(
+            "previous_backroom_location_code IS NULL OR length(trim(previous_backroom_location_code)) > 0",
+            name="ck_inventory_freshness_event_previous_location",
+        ),
+        CheckConstraint(
+            "new_backroom_location_code IS NULL OR length(trim(new_backroom_location_code)) > 0",
+            name="ck_inventory_freshness_event_new_location",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    policy_id: Mapped[int] = mapped_column(
+        ForeignKey("inventory_freshness_policies.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    actor_user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    previous_backroom_location_code: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    new_backroom_location_code: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+
 class InventoryReconciliation(Base):
     """Immutable evidence snapshot with a separately governed human review state."""
     __tablename__ = "inventory_reconciliations"
