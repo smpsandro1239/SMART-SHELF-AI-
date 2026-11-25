@@ -246,22 +246,21 @@ def main() -> None:
             )
 
         with ThreadPoolExecutor(max_workers=2) as executor:
-            terminal_responses = list(executor.map(
+            completion_response, cancellation_response = list(executor.map(
                 lambda fn: fn(),
                 (complete_terminal_task, cancel_terminal_task),
             ))
-        terminal_successes = [
-            response for response in terminal_responses if response.status_code == 200
+        assert sorted((
+            completion_response.status_code, cancellation_response.status_code,
+        )) == [200, 409], [
+            completion_response.text, cancellation_response.text,
         ]
-        terminal_conflicts = [
-            response for response in terminal_responses if response.status_code == 409
-        ]
-        assert len(terminal_successes) == 1, [
-            response.text for response in terminal_responses
-        ]
-        assert len(terminal_conflicts) == 1, [
-            response.text for response in terminal_responses
-        ]
+        winning_status = (
+            "COMPLETED" if completion_response.status_code == 200 else "CANCELLED"
+        )
+        losing_status = (
+            "CANCELLED" if winning_status == "COMPLETED" else "COMPLETED"
+        )
 
         terminal_history = client.get(
             f"/api/v1/tasks/{terminal_task_id}/events"
@@ -278,10 +277,10 @@ def main() -> None:
             (None, "PENDING"),
             ("PENDING", "ASSIGNED"),
             ("ASSIGNED", "IN_PROGRESS"),
-            ("IN_PROGRESS", terminal_successes[0].json()["status"]),
+            ("IN_PROGRESS", winning_status),
         ]
         assert terminal_events[-1]["to_status"] in {"COMPLETED", "CANCELLED"}
-        assert terminal_events[-1]["to_status"] != terminal_conflicts[0].json().get("status")
+        assert terminal_events[-1]["to_status"] != losing_status
         if terminal_events[-1]["to_status"] == "COMPLETED":
             assert terminal_events[-1]["actual_quantity"] == 2
             assert terminal_events[-1]["reason"] is None
