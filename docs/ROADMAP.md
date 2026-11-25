@@ -1548,3 +1548,12 @@ Limite da evidência: este smoke não mata o processo depois de confirmar uma p�
 O smoke PostgreSQL 16 passa a executar o orquestrador de sincronização com um adapter determinístico. O worker confirma a primeira página, bloqueia na obtenção da segunda e é terminado com SIGKILL. Um novo worker recupera o lease, confirma o ledger anterior como PARTIAL e repete a primeira página. A prova verifica que o snapshot mantém o mesmo ID e conteúdo e que não é duplicado, enquanto uma referência da página seguinte é persistida normalmente.
 
 A validação depende do resultado verde do API CI no SHA final; a existência do passo no workflow não constitui, por si só, evidência de execução bem-sucedida.
+
+
+## 2026-11-25 — Regressão multi-loja da reconciliação com SKU global partilhado
+
+- Adicionado teste HTTP em apps/api/tests/test_inventory.py para o mesmo produto global associado a prateleiras em duas lojas.
+- Snapshots ERP/WMS com quantidades e IDs diferentes são criados por loja; o teste verifica que a reconciliação e o ledger da loja A só devolvem evidência da loja A.
+- A revisão directa de uma reconciliação da loja B por SUPERVISOR da loja A tem de devolver 404 sem alterar o estado PENDING.
+- Commit de teste: 07b141b91d2d76a6ff6e1cefe0e721cf42978e8b. API CI, Quality Gates, Security Scans e Docker Compose ainda pendentes neste SHA.
+- Em aberto: definir a semântica de fonte/localização para o snapshot genérico apresentado como retaguarda. A enumeração actual ERP/WMS/POS/MANUAL/IMPORT não prova, por si só, que uma fonte represente stock físico de retaguarda; não assumir equivalências.
