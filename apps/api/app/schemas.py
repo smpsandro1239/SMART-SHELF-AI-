@@ -181,6 +181,18 @@ class InventorySnapshotCreate(BaseModel):
     availability_status: Literal["AVAILABLE", "UNAVAILABLE", "UNKNOWN"] = "UNKNOWN"
     captured_at: datetime | None = None
 
+    @field_validator("on_hand_quantity", "reserved_quantity")
+    @classmethod
+    def validate_inventory_quantity_precision(cls, value: float) -> float:
+        decimal_value = Decimal(str(value))
+        if not decimal_value.is_finite():
+            raise ValueError("Inventory quantities must be finite")
+        if decimal_value.adjusted() >= 9:
+            raise ValueError("Inventory quantity exceeds NUMERIC(12, 3) capacity")
+        if decimal_value != decimal_value.quantize(Decimal("0.001")):
+            raise ValueError("Inventory quantities support at most three decimal places")
+        return value
+
     @field_validator("location_code")
     @classmethod
     def validate_location_code(cls, value: str | None) -> str | None:
