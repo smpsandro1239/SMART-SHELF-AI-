@@ -41,6 +41,15 @@ def main() -> None:
         assert store_response.status_code == 201, store_response.text
         store_id = store_response.json()["id"]
 
+        with SessionLocal() as db:
+            db.add(models.InventoryFreshnessPolicy(
+                store_id=store_id,
+                source="WMS",
+                max_age_minutes=240,
+                backroom_location_code="BACKROOM-CI",
+            ))
+            db.commit()
+
         zone_response = client.post(
             "/api/v1/zones", json={"store_id": store_id, "name": "CI zone"},
         )
@@ -279,6 +288,8 @@ def main() -> None:
                 "on_hand_quantity": 20,
                 "reserved_quantity": 0,
                 "source": "WMS",
+                "location_code": "BACKROOM-CI",
+                "availability_status": "AVAILABLE",
             },
         )
         assert inventory.status_code == 201, inventory.text
@@ -430,6 +441,8 @@ def main() -> None:
                 "reserved_quantity": 1,
                 "source": "WMS",
                 "external_reference": f"CI-RECON-SOURCE-{suffix}",
+                "location_code": "BACKROOM-CI",
+                "availability_status": "AVAILABLE",
             },
         )
         assert source_snapshot.status_code == 201, source_snapshot.text
@@ -759,6 +772,8 @@ def main() -> None:
                 "reserved_quantity": 0,
                 "source": "WMS",
                 "external_reference": f"CI-CONT-SOURCE-{suffix}",
+                "location_code": "BACKROOM-CI",
+                "availability_status": "AVAILABLE",
             },
         )
         assert contention_source.status_code == 201, contention_source.text
