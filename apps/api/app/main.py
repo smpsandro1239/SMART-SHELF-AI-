@@ -7998,6 +7998,18 @@ def reconcile_completed_replenishment(
     product = db.query(models.Product).filter(models.Product.id == task.product_id).with_for_update().first()
     if product is None:
         raise HTTPException(status_code=404, detail="Product not found")
+    destination_shelf = (
+        db.query(models.Shelf)
+        .join(models.Zone, models.Zone.id == models.Shelf.zone_id)
+        .filter(
+            models.Shelf.id == task.shelf_id,
+            models.Zone.store_id == task.store_id,
+        )
+        .with_for_update()
+        .first()
+    )
+    if destination_shelf is None:
+        raise HTTPException(status_code=409, detail={"code": "DESTINATION_SHELF_UNAVAILABLE"})
 
     existing = db.query(models.InventoryMovement).filter_by(task_id=task.id).first()
     if existing is not None:
@@ -8154,7 +8166,8 @@ def reconcile_completed_replenishment(
         unit_code=product.unit,
         source_snapshot_id=source_snapshot.id,
         source_location_code=source_snapshot.location_code,
-        destination_shelf_id=task.shelf_id,
+        destination_shelf_id=destination_shelf.id,
+        destination_shelf_code=destination_shelf.code,
         actor_user_id=actor.id,
         reason=payload.reason.strip(),
         created_at=now,
@@ -8176,7 +8189,8 @@ def reconcile_completed_replenishment(
                 "unit_code": product.unit,
                 "source_snapshot_id": source_snapshot.id,
                 "source_location_code": source_snapshot.location_code,
-                "destination_shelf_id": task.shelf_id,
+                "destination_shelf_id": destination_shelf.id,
+                "destination_shelf_code": destination_shelf.code,
                 "result_snapshot_id": result_snapshot.id,
             },
             created_at=now,
