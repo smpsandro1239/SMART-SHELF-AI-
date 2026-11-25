@@ -264,10 +264,12 @@ def test_replenishment_does_not_recommend_when_backroom_is_empty():
         client.post("/api/v1/observations", json={
             "shelf_id": shelf_id, "status": "EMPTY", "confidence": 0.95,
         })
+        _configure_backroom_location(store_id)
         client.post("/api/v1/inventory/snapshots", json={
             "store_id": store_id, "product_id": product_id,
             "on_hand_quantity": 0, "reserved_quantity": 0,
-            "source": "WMS",
+            "source": "WMS", "location_code": "BACKROOM-A",
+            "availability_status": "AVAILABLE",
         })
 
         response = client.get(
@@ -295,9 +297,11 @@ def test_measured_shelf_quantity_produces_capped_refill_recommendation():
         assert observation.status_code == 201
         assert observation.json()["observed_quantity"] == 2
 
+        _configure_backroom_location(store_id)
         client.post("/api/v1/inventory/snapshots", json={
             "store_id": store_id, "product_id": product_id,
-            "on_hand_quantity": 25, "reserved_quantity": 5, "source": "ERP",
+            "on_hand_quantity": 25, "reserved_quantity": 5, "source": "WMS",
+            "location_code": "BACKROOM-A", "availability_status": "AVAILABLE",
         })
         response = client.get("/api/v1/replenishment/recommendations", params={"store_id": store_id})
         recommendation = response.json()[0]
@@ -320,9 +324,11 @@ def test_measured_shelf_refill_is_capped_by_backroom_availability():
             "shelf_id": shelf_id, "status": "EMPTY", "confidence": 0.98,
             "observed_quantity": 0,
         })
+        _configure_backroom_location(store_id)
         client.post("/api/v1/inventory/snapshots", json={
             "store_id": store_id, "product_id": product_id,
             "on_hand_quantity": 4, "reserved_quantity": 0, "source": "WMS",
+            "location_code": "BACKROOM-A", "availability_status": "AVAILABLE",
         })
 
         response = client.get("/api/v1/replenishment/recommendations", params={"store_id": store_id})
@@ -363,6 +369,25 @@ def _supervisor_actor(store_id: int, role: str = "SUPERVISOR"):
         db.close()
 
 
+def _configure_backroom_location(store_id: int, location_code: str = "BACKROOM-A", max_age_minutes: int = 240):
+    with TestingSession() as db:
+        policy = db.query(models.InventoryFreshnessPolicy).filter_by(
+            store_id=store_id, source="WMS",
+        ).first()
+        if policy is None:
+            policy = models.InventoryFreshnessPolicy(
+                store_id=store_id,
+                source="WMS",
+                max_age_minutes=max_age_minutes,
+                backroom_location_code=location_code,
+            )
+            db.add(policy)
+        else:
+            policy.max_age_minutes = max_age_minutes
+            policy.backroom_location_code = location_code
+        db.commit()
+
+
 def _completed_replenishment(client, *, snapshot_age_minutes: int = 5, on_hand: float = 20, reserved: float = 2):
     store_id, product_id = create_store_and_product(client)
     zone = client.post("/api/v1/zones", json={"store_id": store_id, "name": "Reposição"})
@@ -372,11 +397,13 @@ def _completed_replenishment(client, *, snapshot_age_minutes: int = 5, on_hand: 
         "shelf_id": shelf_id, "product_id": product_id,
         "target_quantity": 12, "min_display_quantity": 2,
     })
+    _configure_backroom_location(store_id)
     snapshot_time = datetime.now(timezone.utc) - timedelta(minutes=snapshot_age_minutes)
     snapshot = client.post("/api/v1/inventory/snapshots", json={
         "store_id": store_id, "product_id": product_id,
         "on_hand_quantity": on_hand, "reserved_quantity": reserved,
         "source": "WMS", "external_reference": f"REC-SRC-{uuid4().hex[:8]}",
+        "location_code": "BACKROOM-A", "availability_status": "AVAILABLE",
         "captured_at": snapshot_time.isoformat(),
     })
     assert snapshot.status_code == 201, snapshot.text
