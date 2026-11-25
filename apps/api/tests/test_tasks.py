@@ -1470,3 +1470,67 @@ def test_auto_assign_respects_persisted_shift_capacity_and_required_skill(monkey
         assert result["assignments"][0]["assigned_user_id"] == skilled_id
         assert result["assignments"][0]["assigned_user_id"] != unskilled_id
 
+
+
+
+def test_employee_can_only_read_events_for_tasks_assigned_to_them(monkeypatch):
+    with TestClient(app) as client:
+        store_id, shelf_id, product_id = create_task_context(client)
+        second_shelf = client.post("/api/v1/shelves", json={
+            "zone_id": client.get("/api/v1/zones", params={"store_id": store_id}).json()[0]["id"],
+            "code": "TASK-EMPLOYEE-OTHER",
+        })
+        assert second_shelf.status_code == 201, second_shelf.text
+        second_product = client.post("/api/v1/products", json={
+            "sku": "TASK-EMPLOYEE-OTHER", "name": "Produto de outro operador",
+        })
+        assert second_product.status_code == 201, second_product.text
+        assert client.post("/api/v1/shelf-products", json={
+            "shelf_id": second_shelf.json()["id"], "product_id": second_product.json()["id"],
+            "target_quantity": 10, "min_display_quantity": 2,
+        }).status_code == 201
+
+        with TestingSession() as db:
+            employee = models.User(
+                email="task-events-owner@example.test", full_name="Operador titular",
+                password_hash="test-only-not-used", role="EMPLOYEE", store_id=store_id,
+                is_active=True,
+            )
+            coworker = models.User(
+                email="task-events-coworker@example.test", full_name="Outro operador",
+                password_hash="test-only-not-used", role="EMPLOYEE", store_id=store_id,
+                is_active=True,
+            )
+            db.add_all([employee, coworker])
+            db.commit()
+            db.refresh(employee)
+            db.refresh(coworker)
+            employee_id, coworker_id = employee.id, coworker.id
+
+        own_task = client.post("/api/v1/tasks", json={
+            "store_id": store_id, "shelf_id": shelf_id, "product_id": product_id,
+            "assigned_user_id": employee_id,
+        })
+        coworker_task = client.post("/api/v1/tasks", json={
+            "store_id": store_id, "shelf_id": second_shelf.json()["id"],
+            "product_id": second_product.json()["id"], "assigned_user_id": coworker_id,
+        })
+        unassigned_task = client.post("/api/v1/tasks", json={
+            "store_id": store_id, "shelf_id": second_shelf.json()["id"],
+            "product_id": product_id,
+        })
+        assert own_task.status_code == coworker_task.status_code == unassigned_task.status_code == 201
+
+        with TestingSession() as db:
+            employee = db.get(models.User, employee_id)
+            monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: employee)
+            own_events = client.get(f"/api/v1/tasks/{own_task.json()['id']}/events")
+            coworker_events = client.get(f"/api/v1/tasks/{coworker_task.json()['id']}/events")
+            unassigned_events = client.get(f"/api/v1/tasks/{unassigned_task.json()['id']}/events")
+            missing_events = client.get("/api/v1/tasks/2147483000/events")
+            assert own_events.status_code == 200, own_events.text
+            assert len(own_events.json()) == 1
+            assert coworker_events.status_code == 404
+            assert unassigned_events.status_code == 404
+            assert missing_events.status_code == 404
+            assert coworker_events.json() == unassigned_events.json() == missing_events.json()
