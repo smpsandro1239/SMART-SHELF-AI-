@@ -1556,3 +1556,13 @@ O commit `50fc1fcd9dac4c88dfb800aaa1f690ff1c0b6304` introduz o endpoint transacc
 - SHA de código/testes: `d36af7332544204fc14b6764a3faf99c24aa4741`.
 - API CI `45719344000`: **1729 passed, 1 skipped**; Quality Gates `45719344142`, Security Scans `45719343998` e Docker Compose `45719344004`: sucesso.
 - Próxima prioridade: continuar a auditoria de handlers com escrita e papel `SUPERVISOR_OR_ADMIN`, começando por OCR/evidence fusion e operações de warehouse.
+
+
+## 2026-11-25 — RBAC explícito na evidência OCR e fusão multimodal
+
+- Reforçada a autorização ADMIN/SUPERVISOR nos handlers de criação de OCR run, matching OCR→catálogo e fusão de evidência visual/textual.
+- A validação acontece antes do lock/leitura da captura e antes de qualquer persistência.
+- Teste regressivo com EMPLOYEE confirma 403 nos três endpoints e ausência de OCR runs, matches ou fused evidence.
+- SHA de código/testes: `a9271dd595c7d913a93cd969cf73d58b5e49438d`.
+- API CI `45720266566`: **1730 passed, 1 skipped**; Quality Gates `45720266628`, Security Scans `45720266508` e Docker Compose `45720266578`: sucesso.
+- Próxima prioridade: continuar a auditoria de handlers de escrita de warehouse, localizações, colocações, registo de paletes e políticas de rotação, alinhando a autorização interna com a política central.
