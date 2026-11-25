@@ -441,6 +441,9 @@ def test_reconciliation_creates_immutable_movement_and_result_snapshot(monkeypat
         assert response.status_code == 201, response.text
         movement = response.json()
         assert movement["task_id"] == task_id
+        assert movement["operation_id"]
+        assert movement["source_location_code"] == "BACKROOM-A"
+        assert movement["destination_shelf_id"] is not None
         assert movement["quantity"] == 4
         assert movement["source_snapshot_id"] == source_snapshot_id
         assert movement["movement_type"] == "BACKROOM_TO_SHELF"
