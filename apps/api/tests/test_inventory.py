@@ -1662,9 +1662,11 @@ def test_replenishment_plan_includes_read_only_packaging_options_for_unit_case_a
             assert db.query(models.InventoryMovement).filter_by(store_id=store_id).count() == 0
 
 
-def test_inventory_snapshot_persists_exact_decimal_physical_and_reserved_quantities():
+def test_inventory_snapshot_persists_exact_decimal_physical_and_reserved_quantities(monkeypatch):
     with TestClient(app) as client:
         store_id, product_id = create_store_and_product(client, unit="kg")
+        actor = _supervisor_actor(store_id)
+        monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: actor)
         response = client.post(
             "/api/v1/inventory/snapshots",
             json={
