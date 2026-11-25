@@ -1379,3 +1379,136 @@ def test_inventory_source_sync_rejects_employee_and_invalid_completion(monkeypat
         })
         assert invalid.status_code == 422
 
+
+
+def test_erp_stock_never_substitutes_for_unconfigured_wms_backroom(monkeypatch):
+    with TestClient(app) as client:
+        store_id, product_id = create_store_and_product(client)
+        zone = client.post("/api/v1/zones", json={
+            "store_id": store_id, "name": "Sem localização WMS",
+        }).json()
+        shelf = client.post("/api/v1/shelves", json={
+            "zone_id": zone["id"], "code": "ERP-NO-FALLBACK",
+        }).json()
+        client.post("/api/v1/shelf-products", json={
+            "shelf_id": shelf["id"], "product_id": product_id,
+            "target_quantity": 12, "min_display_quantity": 2,
+        })
+        client.post("/api/v1/observations", json={
+            "shelf_id": shelf["id"], "product_id": product_id,
+            "status": "EMPTY", "confidence": 0.99, "observed_quantity": 0,
+        })
+        erp = client.post("/api/v1/inventory/snapshots", json={
+            "store_id": store_id, "product_id": product_id,
+            "on_hand_quantity": 80, "reserved_quantity": 0,
+            "source": "ERP", "external_reference": "ERP-NO-BACKROOM",
+        })
+        assert erp.status_code == 201, erp.text
+
+        actor = _supervisor_actor(store_id)
+        monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: actor)
+        reconciliation = client.get(
+            "/api/v1/inventory/reconciliation", params={"store_id": store_id},
+        )
+        assert reconciliation.status_code == 200, reconciliation.text
+        item = reconciliation.json()["items"][0]
+        assert item["erp_available_quantity"] == 80
+        assert item["backroom_snapshot_id"] is None
+        assert item["backroom_available_quantity"] is None
+        assert item["wms_erp_comparison_status"] == "WMS_BACKROOM_LOCATION_NOT_CONFIGURED"
+
+        recommendation = client.get(
+            "/api/v1/replenishment/recommendations", params={"store_id": store_id},
+        )
+        assert recommendation.status_code == 200, recommendation.text
+        assert recommendation.json()[0]["recommendation_status"] == "INVENTORY_UNKNOWN"
+        assert recommendation.json()[0]["suggested_quantity"] is None
+        assert "ERP não é substituto" in recommendation.json()[0]["explanation"]
+
+
+def test_latest_unavailable_wms_record_shadows_older_available_stock(monkeypatch):
+    with TestClient(app) as client:
+        store_id, product_id = create_store_and_product(client)
+        zone = client.post("/api/v1/zones", json={
+            "store_id": store_id, "name": "Disponibilidade WMS",
+        }).json()
+        shelf = client.post("/api/v1/shelves", json={
+            "zone_id": zone["id"], "code": "WMS-UNAVAILABLE",
+        }).json()
+        client.post("/api/v1/shelf-products", json={
+            "shelf_id": shelf["id"], "product_id": product_id,
+            "target_quantity": 12, "min_display_quantity": 2,
+        })
+        client.post("/api/v1/observations", json={
+            "shelf_id": shelf["id"], "product_id": product_id,
+            "status": "EMPTY", "confidence": 0.99, "observed_quantity": 0,
+        })
+        _configure_backroom_location(store_id)
+        base = datetime.now(timezone.utc)
+        older = client.post("/api/v1/inventory/snapshots", json={
+            "store_id": store_id, "product_id": product_id,
+            "on_hand_quantity": 50, "reserved_quantity": 0,
+            "source": "WMS", "external_reference": "WMS-AVAILABLE-OLD",
+            "location_code": "BACKROOM-A", "availability_status": "AVAILABLE",
+            "captured_at": (base - timedelta(minutes=10)).isoformat(),
+        })
+        wrong_location = client.post("/api/v1/inventory/snapshots", json={
+            "store_id": store_id, "product_id": product_id,
+            "on_hand_quantity": 900, "reserved_quantity": 0,
+            "source": "WMS", "external_reference": "WMS-WRONG-LOCATION",
+            "location_code": "SALES-FLOOR", "availability_status": "AVAILABLE",
+            "captured_at": (base + timedelta(seconds=1)).isoformat(),
+        })
+        latest = client.post("/api/v1/inventory/snapshots", json={
+            "store_id": store_id, "product_id": product_id,
+            "on_hand_quantity": 50, "reserved_quantity": 0,
+            "source": "WMS", "external_reference": "WMS-UNAVAILABLE-NEW",
+            "location_code": "BACKROOM-A", "availability_status": "UNAVAILABLE",
+            "captured_at": base.isoformat(),
+        })
+        assert older.status_code == wrong_location.status_code == latest.status_code == 201
+
+        actor = _supervisor_actor(store_id)
+        monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: actor)
+        reconciliation = client.get(
+            "/api/v1/inventory/reconciliation", params={"store_id": store_id},
+        )
+        assert reconciliation.status_code == 200, reconciliation.text
+        item = reconciliation.json()["items"][0]
+        assert item["backroom_snapshot_id"] == latest.json()["id"]
+        assert item["backroom_available_quantity"] is None
+        assert item["wms_availability_status"] == "UNAVAILABLE"
+
+        recommendation = client.get(
+            "/api/v1/replenishment/recommendations", params={"store_id": store_id},
+        )
+        assert recommendation.status_code == 200, recommendation.text
+        assert recommendation.json()[0]["recommendation_status"] == "INVENTORY_UNKNOWN"
+        assert recommendation.json()[0]["suggested_quantity"] is None
+
+
+def test_wms_backroom_location_is_configurable_per_store_through_policy_api(monkeypatch):
+    with TestClient(app) as client:
+        store_id, _ = create_store_and_product(client)
+        actor = _supervisor_actor(store_id)
+        monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: actor)
+
+        configured = client.post("/api/v1/inventory/freshness-policies", json={
+            "store_id": store_id, "source": "WMS", "max_age_minutes": 180,
+            "backroom_location_code": "WH-BR-01",
+        })
+        assert configured.status_code == 200, configured.text
+        assert configured.json()["backroom_location_code"] == "WH-BR-01"
+
+        listed = client.get(
+            "/api/v1/inventory/freshness-policies", params={"store_id": store_id},
+        )
+        assert listed.status_code == 200, listed.text
+        wms = next(item for item in listed.json() if item["source"] == "WMS")
+        assert wms["backroom_location_code"] == "WH-BR-01"
+
+        invalid = client.post("/api/v1/inventory/freshness-policies", json={
+            "store_id": store_id, "source": "ERP", "max_age_minutes": 180,
+            "backroom_location_code": "WH-BR-01",
+        })
+        assert invalid.status_code == 422
