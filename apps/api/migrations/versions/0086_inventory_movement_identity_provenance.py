@@ -58,6 +58,8 @@ def upgrade() -> None:
             {
                 "operation_id": str(uuid4()),
                 "source_location_code": row["location_code"],
+                # Historical destinations are intentionally unknown; never infer them.
+                "destination_shelf_id": None,
                 "movement_id": row["id"],
             },
         )
