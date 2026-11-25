@@ -6699,13 +6699,19 @@ def get_store_stockout_risk_portfolio(
 
 @app.post("/api/v1/inventory/snapshots", response_model=InventorySnapshotRead, status_code=201, tags=["inventory"])
 def create_inventory_snapshot(payload: InventorySnapshotCreate, request: Request, db: Session = Depends(get_db)):
-    _enforce_store_scope(_request_user(db, request), payload.store_id)
+    actor = _request_user(db, request)
+    if payload.source == "MANUAL":
+        if actor is None or not actor.is_active:
+            raise HTTPException(status_code=401, detail="Authentication is required for manual inventory counts")
+        if actor.role not in {"ADMIN", "SUPERVISOR"}:
+            raise HTTPException(status_code=403, detail="Supervisor approval is required for manual inventory counts")
+    _enforce_store_scope(actor, payload.store_id)
     if not db.get(models.Store, payload.store_id):
         raise HTTPException(status_code=404, detail="Store not found")
     product = db.query(models.Product).filter(models.Product.id == payload.product_id).with_for_update().first()
     if product is None:
         raise HTTPException(status_code=404, detail="Product not found")
-    data = payload.model_dump()
+    data = payload.model_dump(exclude={"reason"})
     data["on_hand_quantity"] = Decimal(str(payload.on_hand_quantity))
     data["reserved_quantity"] = Decimal(str(payload.reserved_quantity))
     if data["captured_at"] is None:
@@ -6715,9 +6721,14 @@ def create_inventory_snapshot(payload: InventorySnapshotCreate, request: Request
     item = models.InventorySnapshot(**data)
     db.add(item)
     try:
+        db.flush()
+        if payload.source == "MANUAL":
+            db.add(models.InventoryManualCountEvent(snapshot_id=item.id, store_id=item.store_id, product_id=item.product_id, actor_user_id=actor.id, reason=payload.reason, created_at=models.utc_now()))
         db.commit()
     except IntegrityError as exc:
         db.rollback()
+        if payload.source == "MANUAL":
+            raise HTTPException(status_code=409, detail="Manual inventory count could not be recorded atomically") from exc
         raise HTTPException(status_code=409, detail="Inventory source reference already exists") from exc
     db.refresh(item)
     return item

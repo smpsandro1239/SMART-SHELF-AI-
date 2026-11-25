@@ -562,6 +562,7 @@ class InventorySnapshot(Base):
     __table_args__ = (
         UniqueConstraint("store_id", "product_id", "source", "external_reference",
                          name="uq_inventory_snapshot_source_reference"),
+        UniqueConstraint("id", "store_id", "product_id", name="uq_inventory_snapshot_identity"),
         CheckConstraint("on_hand_quantity >= 0", name="ck_inventory_on_hand_nonnegative"),
         CheckConstraint("reserved_quantity >= 0", name="ck_inventory_reserved_nonnegative"),
         CheckConstraint("reserved_quantity <= on_hand_quantity", name="ck_inventory_reserved_lte_on_hand"),
@@ -598,6 +599,25 @@ class InventorySnapshot(Base):
         if self.source == "WMS" and self.availability_status != "AVAILABLE":
             return None
         return float(self.on_hand_quantity - self.reserved_quantity)
+
+
+class InventoryManualCountEvent(Base):
+    """Append-only provenance for a manually recorded inventory count."""
+    __tablename__ = "inventory_manual_count_events"
+    __table_args__ = (
+        ForeignKeyConstraint(["snapshot_id", "store_id", "product_id"], ["inventory_snapshots.id", "inventory_snapshots.store_id", "inventory_snapshots.product_id"], ondelete="RESTRICT", name="fk_inventory_manual_count_snapshot_identity"),
+        CheckConstraint("length(trim(reason)) >= 5", name="ck_inventory_manual_count_reason_nonblank"),
+        UniqueConstraint("snapshot_id", name="uq_inventory_manual_count_snapshot"),
+        Index("ix_inventory_manual_count_store_created", "store_id", "created_at", "id"),
+        Index("ix_inventory_manual_count_actor_created", "actor_user_id", "created_at"),
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    snapshot_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    store_id: Mapped[int] = mapped_column(ForeignKey("stores.id", ondelete="RESTRICT"), nullable=False)
+    product_id: Mapped[int] = mapped_column(ForeignKey("products.id", ondelete="RESTRICT"), nullable=False)
+    actor_user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
 
 
 class InventoryFreshnessPolicy(Base):

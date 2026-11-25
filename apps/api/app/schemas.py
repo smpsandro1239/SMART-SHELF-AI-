@@ -176,6 +176,7 @@ class InventorySnapshotCreate(BaseModel):
         default=0, ge=0, le=999_999_999.999, allow_inf_nan=False
     )
     source: InventorySource
+    reason: str | None = Field(default=None, max_length=1000)
     external_reference: str | None = Field(default=None, max_length=120)
     location_code: str | None = Field(default=None, min_length=1, max_length=120)
     availability_status: Literal["AVAILABLE", "UNAVAILABLE", "UNKNOWN"] = "UNKNOWN"
@@ -203,6 +204,16 @@ class InventorySnapshotCreate(BaseModel):
             raise ValueError("location_code must be non-empty and contain no control characters")
         return normalized
 
+    @field_validator("reason")
+    @classmethod
+    def validate_manual_count_reason(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        if len(normalized) < 5 or any(ord(ch) < 32 and ch not in "\\t" for ch in normalized) or any(127 <= ord(ch) <= 159 for ch in normalized):
+            raise ValueError("Manual inventory count reason must contain at least five valid characters")
+        return normalized
+
     @field_validator("external_reference")
     @classmethod
     def validate_external_reference(cls, value: str | None) -> str | None:
@@ -219,6 +230,10 @@ class InventorySnapshotCreate(BaseModel):
     def reserved_must_not_exceed_on_hand(self):
         if self.reserved_quantity > self.on_hand_quantity:
             raise ValueError("reserved_quantity cannot exceed on_hand_quantity")
+        if self.source == "MANUAL" and self.reason is None:
+            raise ValueError("MANUAL inventory snapshots require a reason")
+        if self.source != "MANUAL" and self.reason is not None:
+            raise ValueError("reason is only valid for MANUAL inventory snapshots")
         if self.source == "WMS" and (
             self.location_code is None or self.availability_status == "UNKNOWN"
         ):
