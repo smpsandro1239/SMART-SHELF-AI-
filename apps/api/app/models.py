@@ -588,7 +588,9 @@ class InventorySnapshot(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
     @property
-    def available_quantity(self) -> float:
+    def available_quantity(self) -> float | None:
+        if self.source == "WMS" and self.availability_status != "AVAILABLE":
+            return None
         return float(self.on_hand_quantity - self.reserved_quantity)
 
 
