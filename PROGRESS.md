@@ -1426,6 +1426,11 @@ O commit `50fc1fcd9dac4c88dfb800aaa1f690ff1c0b6304` introduz o endpoint transacc
 - Alterações auditadas na mesma transacção, com actor, valores anterior/novo, motivo e timestamp.
 - Migration 0093 acrescenta constraints PostgreSQL e triggers SQLite para restringir a tolerância à política ERP e ao intervalo 0–10080.
 - Testes adicionados para estado não configurado, limite zero, dentro do limite, validação de origem/motivo, auditoria e migration SQLite.
-- Commits de implementação/testes/documentação publicados; CI e PostgreSQL 16 pendentes. Não foram executados testes localmente.
+- SHA de código validado: `b54b2d4c927aee606f23fef35018b701c17aaf5f`.
+- API CI `45677287479`: PostgreSQL 16/migrations/smokes e suite API — **1717 passed, 1 skipped**.
+- Quality Gates `45677287381`: sucesso (Python/API, TypeScript e build Web).
+- Security Scans `45677287568`: sucesso (auditorias Python/Web, Gitleaks e ZAP passive baseline).
+- Docker Compose `45677287570`: sucesso.
+- Os quatro workflows passaram no mesmo SHA. Não foram executados testes localmente; a validação foi feita por GitHub Actions.
 - Próxima prioridade: auditar monotonicidade temporal e snapshots WMS consecutivos, reservas agregadas e mudanças de localização; não criar ledger de reservas individuais sem contrato do fornecedor.
 
