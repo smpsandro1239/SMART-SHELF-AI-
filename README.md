@@ -2079,3 +2079,10 @@ A migration `0088_inventory_movement_available_source_guard` reforça a fronteir
 Os movimentos novos congelam `Product.unit` em `inventory_movements.unit_code`. A base de dados exige que a unidade registada corresponda à unidade base do SKU no momento da operação. A quantidade continua persistida em `NUMERIC(12,3)`, tipada como Decimal e exposta também em `quantity_exact`; valores com mais de três casas decimais são rejeitados na conclusão da tarefa, antes de persistir, e protegidos novamente na reconciliação; não são arredondados silenciosamente.
 
 Os movimentos históricos mantêm `unit_code=NULL`, porque não existe evidência suficiente para reconstruir com segurança a unidade usada no momento. A interface apresenta a unidade de cada movimento e não agrega quantidades de produtos com unidades diferentes. Não há conversão implícita unidade/caixa/palete.
+
+
+## Quantidades exactas no planeamento de embalagens
+
+O endpoint `GET /api/v1/warehouse/replenishment-units` mantém os campos numéricos existentes e acrescenta `required_base_units_exact`, `base_units_per_package_exact`, `loose_base_units_exact`, `planned_base_units_exact` e `excess_base_units_exact`. O parâmetro `required_base_units` é agora recebido como Decimal. Os cálculos continuam a não autorizar movimentos automáticos.
+
+A validação cobre níveis UNIT, CASE e PALLET, embalagem fechada, embalagem aberta e quantidades fraccionárias. A unidade base é a unidade do produto; o factor de embalagem é expresso nessa unidade, sem conversões implícitas entre SKUs.
