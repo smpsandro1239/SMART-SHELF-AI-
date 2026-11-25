@@ -100,6 +100,46 @@ def enqueue_inventory_sync_job(db: Session, *, store_id: int, source: str, provi
         raise InventorySyncJobConflict("idempotency_key was concurrently reused")
 
 
+def _finalize_expired_inventory_sync(db: Session, job: models.InventorySyncJob, now) -> None:
+    """Close the previous attempt when its worker disappeared or lost its lease.
+
+    A page may already have been committed before the worker stopped. Since
+    snapshots are intentionally not linked to a transient attempt, PARTIAL is
+    the conservative terminal state and record counts remain unknown (NULL).
+    This update and its append-only event share the queue-claim transaction.
+    """
+    if job.latest_sync_id is None:
+        return
+    sync = (
+        db.query(models.InventorySourceSync)
+        .filter_by(id=job.latest_sync_id)
+        .with_for_update()
+        .first()
+    )
+    if sync is None or sync.status != "STARTED":
+        return
+    sync.status = "PARTIAL"
+    sync.finished_at = now
+    sync.error_code = "WORKER_LEASE_EXPIRED"
+    sync.error_message = (
+        "The worker lease expired before the synchronization attempt could finish; "
+        "committed page counts are unknown."
+    )
+    db.add(models.InventorySourceSyncEvent(
+        sync_id=sync.id,
+        event_type="COMPLETED",
+        actor_user_id=sync.created_by_user_id,
+        details={
+            "status": "PARTIAL",
+            "error_code": "WORKER_LEASE_EXPIRED",
+            "reason": "durable worker lease expired",
+            "record_counts_known": False,
+        },
+        created_at=now,
+    ))
+    db.flush()
+
+
 def claim_next_inventory_sync_job(db: Session, *, worker_id: str, lease_seconds: int = 300):
     owner, duration = _worker(worker_id), _lease_seconds(lease_seconds)
     while True:
@@ -116,8 +156,10 @@ def claim_next_inventory_sync_job(db: Session, *, worker_id: str, lease_seconds:
             return None
         expired = job.status == "RUNNING"
         if expired:
+            _finalize_expired_inventory_sync(db, job, now)
             _event(db, job, "LEASE_EXPIRED", owner, {
                 "previous_worker": job.lease_owner, "previous_fencing_token": job.fencing_token,
+                "abandoned_sync_id": job.latest_sync_id,
             })
             if job.attempt_count >= job.max_attempts:
                 sync = db.get(models.InventorySourceSync, job.latest_sync_id) if job.latest_sync_id else None
