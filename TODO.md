@@ -2146,7 +2146,7 @@ A validação de frescura temporal continua no serviço, com política por loja.
 - [x] Preservar movimentos históricos com `unit_code=NULL`; não inferir retroactivamente a unidade.
 - [x] Tipar a quantidade persistida como Decimal e expor `quantity_exact` sem remover o campo numérico legado.
 - [x] Incluir unidade e quantidade exacta na evidência do evento `MOVEMENT_RECORDED`.
-- [x] Rejeitar reconciliações com mais de três casas decimais, correspondentes à escala actual `NUMERIC(12,3)`, em vez de arredondar silenciosamente.
+- [x] Rejeitar na conclusão da tarefa quantidades com mais de três casas decimais, correspondentes à escala `NUMERIC(12,3)`, antes de persistir; manter guard de reconciliação para dados legados.
 - [x] Actualizar histórico React para apresentar a unidade do produto e deixar de somar quantidades de unidades incompatíveis.
 - [x] Adicionar testes SQLite, API e smoke PostgreSQL para unidade incompatível, origem WMS indisponível e escala decimal.
 - [ ] Validar migration 0089, testes, PostgreSQL 16, TypeScript/build e quatro workflows no SHA final.
