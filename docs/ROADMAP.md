@@ -1695,3 +1695,10 @@ Os handlers GET e POST do histórico/ciclo de vida de paletes agora repetem a au
 Os handlers de criação de snapshots, listagem e consulta do snapshot mais recente agora exigem ADMIN/SUPERVISOR independentemente da origem do snapshot. A criação não permite que um perfil EMPLOYEE injete dados WMS/ERP/POS/IMPORT só porque a regra anterior de perfil estava condicionada a MANUAL. O GET `/api/v1/stores` também reforça no handler a política de leitura ADMIN/SUPERVISOR. A regressão inicial da listagem foi identificada pelo Quality Gates, corrigida e validada na execução seguinte.
 
 **Evidência:** SHA `19bf8dd2bf2b6990faff261effc0752523f59a5b`; API CI **1728 passed, 1 skipped**; Quality Gates, Security Scans e Docker Compose — sucesso.
+
+
+## 2026-11-25 — RBAC explícito nos writes POS de vendas e tráfego
+
+Os endpoints de registo horário, batch e importação CSV de vendas/tráfego passaram a repetir no handler a exigência ADMIN/SUPERVISOR da política central. A verificação dos imports é feita antes da leitura do ficheiro. O teste usa actor EMPLOYEE e prova que os seis endpoints respondem 403 sem persistir linhas.
+
+**Evidência:** SHA `d36af7332544204fc14b6764a3faf99c24aa4741`; API CI **1729 passed, 1 skipped**; Quality Gates, Security Scans e Docker Compose — sucesso.
