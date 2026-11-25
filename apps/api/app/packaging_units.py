@@ -51,11 +51,15 @@ def calculate_replenishment_packs(
     excess = moved_base_units - required
     return {
         "required_base_units": float(required),
+        "required_base_units_exact": format(required, "f"),
         "package_count": whole_packs,
         "opened_package_count": opened_pack_count,
         "loose_base_units": float(loose_units),
+        "loose_base_units_exact": format(loose_units, "f"),
         "planned_base_units": float(moved_base_units),
+        "planned_base_units_exact": format(moved_base_units, "f"),
         "excess_base_units": float(excess),
+        "excess_base_units_exact": format(excess, "f"),
         "opened_package_required": bool(loose_units > 0),
         "exact_quantity_possible": excess == 0,
         "automatic_stock_movement_allowed": False,
