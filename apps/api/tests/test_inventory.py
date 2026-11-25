@@ -70,6 +70,7 @@ def test_inventory_snapshot_records_available_quantity_and_history():
             "store_id": store_id, "product_id": product_id,
             "on_hand_quantity": 18, "reserved_quantity": 3,
             "source": "WMS", "external_reference": "WMS-0002",
+            "location_code": "BACKROOM-A", "availability_status": "AVAILABLE",
         })
         assert second.status_code == 201
         history = client.get("/api/v1/inventory/snapshots", params={
@@ -564,6 +565,7 @@ def test_inventory_history_and_latest_enforce_store_scope_for_supervisor(monkeyp
         foreign_snapshot = client.post("/api/v1/inventory/snapshots", json={
             "store_id": foreign_store_id, "product_id": foreign_product_id,
             "on_hand_quantity": 30, "reserved_quantity": 5, "source": "WMS",
+            "location_code": "BACKROOM-A", "availability_status": "AVAILABLE",
         })
         assert own_snapshot.status_code == 201
         assert foreign_snapshot.status_code == 201
@@ -1224,7 +1226,7 @@ def test_inventory_reconciliation_dashboard_aggregates_ledger_and_freshness(monk
         assert client.post("/api/v1/shelf-products", json={"shelf_id": shelf["id"], "product_id": product_id, "target_quantity": 10, "min_display_quantity": 2}).status_code == 201
         observation = client.post("/api/v1/observations", json={"shelf_id": shelf["id"], "product_id": product_id, "observed_quantity": 7, "source": "mobile"})
         erp = client.post("/api/v1/inventory/snapshots", json={"store_id": store_id, "product_id": product_id, "on_hand_quantity": 30, "reserved_quantity": 0, "source": "ERP", "external_reference": "DASH-ERP-01"})
-        wms = client.post("/api/v1/inventory/snapshots", json={"store_id": store_id, "product_id": product_id, "on_hand_quantity": 25, "reserved_quantity": 0, "source": "WMS", "external_reference": "DASH-WMS-01"})
+        wms = client.post("/api/v1/inventory/snapshots", json={"store_id": store_id, "product_id": product_id, "on_hand_quantity": 25, "reserved_quantity": 0, "source": "WMS", "external_reference": "DASH-WMS-01", "location_code": "BACKROOM-A", "availability_status": "AVAILABLE"})
         assert observation.status_code == 201, observation.text
         assert erp.status_code == 201, erp.text
         assert wms.status_code == 201, wms.text
