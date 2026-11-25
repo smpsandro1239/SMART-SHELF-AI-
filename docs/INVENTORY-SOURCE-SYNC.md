@@ -300,3 +300,10 @@ A validação no branch `f63543c` terminou com API CI **1715 passed, 1 skipped**
 ### Limitação em avaliação — skew temporal ERP/WMS
 
 A comparação actual pode classificar `DIVERGENCE` quando ambos os snapshots estão dentro das respectivas janelas de freshness, mesmo que tenham instantes de captura significativamente diferentes. A diferença de captura deve ser explicitada e sujeita a uma política de skew configurável antes de classificar a divergência. Não foi introduzido um limite arbitrário.
+
+
+### Confirmação dos workflows na main — 25/11/2026
+
+Após o merge da migration 0092, os workflows da branch `main` terminaram com sucesso: API CI `45654043683` (**1715 passed, 1 skipped**), Quality Gates `45654278572`, Security Scans `45654278738` e Docker Compose `45654043988`. O check Vercel continua com `build-rate-limit`, uma limitação de quota externa, separada da validação GitHub.
+
+A próxima análise é o skew temporal ERP/WMS. O sistema expõe os timestamps de cada origem, mas ainda não existe uma política operacional de tolerância entre capturas; nenhum limite deve ser inventado pelo código.
