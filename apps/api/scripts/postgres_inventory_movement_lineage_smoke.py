@@ -480,9 +480,41 @@ def main() -> None:
         ).scalar_one()
         assert unavailable_movement_count == 0, unavailable_movement_count
 
+    with SessionLocal() as db:
+        renamed_shelf_code = f"RENAMED-{suffix}"
+        renamed_zone_name = f"Renamed zone {suffix}"
+        db.execute(
+            text("UPDATE shelves SET code = :code WHERE id = :shelf_id"),
+            {"code": renamed_shelf_code, "shelf_id": shelf.json()["id"]},
+        )
+        db.execute(
+            text("UPDATE zones SET name = :name WHERE id = :zone_id"),
+            {"name": renamed_zone_name, "zone_id": zone.json()["id"]},
+        )
+        db.commit()
+        frozen = db.execute(text("""
+            SELECT destination_shelf_code, destination_zone_id,
+                   destination_zone_name, destination_location_backfilled
+            FROM inventory_movements WHERE id = :movement_id
+        """), {"movement_id": movement["id"]}).one()
+        assert frozen == (
+            shelf.json()["code"], zone.json()["id"], zone.json()["name"], False,
+        ), frozen
+        for statement, parameters in (
+            ("DELETE FROM shelves WHERE id = :id", {"id": shelf.json()["id"]}),
+            ("DELETE FROM zones WHERE id = :id", {"id": zone.json()["id"]}),
+        ):
+            try:
+                db.execute(text(statement), parameters)
+                db.commit()
+            except DBAPIError:
+                db.rollback()
+            else:
+                raise AssertionError("PostgreSQL allowed deletion of a shelf/zone referenced by an immutable movement")
+
     print(
-        "PostgreSQL inventory movement smoke passed: immutable movement/event lineage, "
-        "same-store provenance, append-only guards and rejection of UNAVAILABLE WMS sources."
+        "PostgreSQL inventory movement smoke passed: immutable movement/event and shelf/zone provenance, "
+        "retention after hierarchy rename, append-only guards and rejection of UNAVAILABLE WMS sources."
     )
 
 
