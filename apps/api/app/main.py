@@ -6759,10 +6759,13 @@ def upsert_inventory_freshness_policy(
             store_id=payload.store_id,
             source=payload.source,
             max_age_minutes=payload.max_age_minutes,
+            backroom_location_code=payload.backroom_location_code,
         )
         db.add(policy)
     else:
         policy.max_age_minutes = payload.max_age_minutes
+        if "backroom_location_code" in payload.model_fields_set:
+            policy.backroom_location_code = payload.backroom_location_code
 
     try:
         db.commit()
@@ -6781,6 +6784,8 @@ def upsert_inventory_freshness_policy(
                 detail="Inventory freshness policy changed concurrently; retry the request",
             ) from exc
         policy.max_age_minutes = payload.max_age_minutes
+        if "backroom_location_code" in payload.model_fields_set:
+            policy.backroom_location_code = payload.backroom_location_code
         try:
             db.commit()
         except IntegrityError as retry_exc:
