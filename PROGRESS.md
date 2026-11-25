@@ -1099,7 +1099,7 @@ Ponto semântico ainda aberto: InventorySnapshot.source aceita ERP, WMS, POS, MA
 
 - Criada a migration 0086_inventory_movement_identity_provenance: UUID individual por movimento, localização WMS de origem e ID da prateleira de destino.
 - Os movimentos existentes recebem UUIDs individuais. A localização de origem e o destino só são copiados quando constam explicitamente do snapshot/tarefa relacionados; valores desconhecidos permanecem NULL.
-- Adicionados triggers de INSERT PostgreSQL e SQLite para exigir proveniência completa em novos movimentos e validar que a prateleira pertence à mesma loja. Os triggers append-only de UPDATE/DELETE existentes são preservados.
+- Adicionados triggers de INSERT PostgreSQL e SQLite para exigir proveniência completa em novos movimentos e validar que a prateleira pertence à mesma loja. Para o backfill histórico, a migration suspende temporariamente os triggers 0053 conhecidos e recria-os exactamente antes de terminar; o teste de migração usa os nomes reais desses triggers e verifica que UPDATE/DELETE continuam bloqueados.
 - O modelo SQLAlchemy, o endpoint de reconciliação e o contrato InventoryMovementRead foram actualizados.
 - O teste HTTP de reconciliação verifica UUID e proveniência congelada; foi criado teste dedicado à migration e ao backfill histórico, incluindo preservação de trigger UPDATE preexistente.
 - Commits de implementação: 1129295 (modelo), 72c78b0 (schema), 84f85bc (endpoint), ded06a2 (teste HTTP), 6a9e629 (migration), 5e92563 (teste migration), 9ed6683 (alinhamento do índice ORM).
