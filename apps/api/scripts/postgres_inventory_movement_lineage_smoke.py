@@ -317,10 +317,13 @@ def main() -> None:
             {"status": "IN_PROGRESS"},
             {"status": "COMPLETED", "actual_quantity": 4},
         ):
-            response = unavailable_client.patch(f"/api/v1/tasks/{unavailable_task_id}/status", json=payload)
+            response = unavailable_client.patch(
+                f"/api/v1/tasks/{unavailable_task_id}/status",
+                json=payload,
+            )
             assert response.status_code == 200, response.text
-    
-        with SessionLocal() as db:
+
+    with SessionLocal() as db:
         now = models.utc_now()
         result = models.InventorySnapshot(
             store_id=store_id,
