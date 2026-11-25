@@ -45,3 +45,8 @@ A regra não reinterpreta snapshots históricos nem altera o ledger existente. A
 A unidade base já existe no catálogo como `Product.unit` e é usada pelos níveis logísticos através de `base_units_per_package`. A migration `0089_inventory_movement_base_unit_snapshot` acrescenta `InventoryMovement.unit_code`: novos movimentos têm de guardar exactamente a unidade do produto no momento da inserção. O trigger PostgreSQL/SQLite rejeita unidade ausente, vazia ou diferente da unidade base do SKU.
 
 A coluna é nullable apenas para preservar movimentos históricos sem inferir a unidade retroactivamente. A quantidade é Decimal sobre `NUMERIC(12,3)`; a API mantém `quantity` numérico para compatibilidade e acrescenta `quantity_exact` textual para transporte sem perda. A API de conclusão da tarefa rejeita escalas superiores a três casas decimais antes de persistir `actual_quantity`; a reconciliação mantém uma segunda validação defensiva para dados legados. Não existe conversão implícita entre unidades ou embalagens.
+
+
+## Quantidades exactas no planeamento logístico
+
+O cálculo de embalagens já opera internamente com Decimal. A API mantém os campos numéricos legados e acrescenta representações textuais exactas para quantidade necessária, factor por embalagem, quantidade solta, quantidade planeada e excesso. O parâmetro de entrada é interpretado como Decimal desde a query string. A regra é apenas de planeamento: `automatic_stock_movement_allowed=false` permanece obrigatório; o cálculo nunca cria movimentos.
