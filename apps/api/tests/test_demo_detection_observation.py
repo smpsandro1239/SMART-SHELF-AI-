@@ -61,6 +61,12 @@ def test_demo_detection_requires_human_review_and_is_idempotent(monkeypatch):
         db.add_all([shelf, regression_shelf, forged_shelf, product, other_product, reviewer, employee])
         db.flush()
         db.add_all([
+            models.InventoryFreshnessPolicy(
+                store_id=store.id,
+                source="WMS",
+                max_age_minutes=240,
+                backroom_location_code="BACKROOM-A",
+            ),
             models.ShelfProduct(shelf_id=shelf.id, product_id=product.id, target_quantity=8, min_display_quantity=2),
             models.ShelfProduct(shelf_id=shelf.id, product_id=other_product.id, target_quantity=8, min_display_quantity=2),
             models.ShelfProduct(shelf_id=regression_shelf.id, product_id=product.id, target_quantity=8, min_display_quantity=2),
@@ -71,8 +77,10 @@ def test_demo_detection_requires_human_review_and_is_idempotent(monkeypatch):
                 product_id=product.id,
                 on_hand_quantity=12,
                 reserved_quantity=0,
-                source="MANUAL",
+                source="WMS",
                 external_reference="demo-observation-test-v1",
+                location_code="BACKROOM-A",
+                availability_status="AVAILABLE",
                 captured_at=models.utc_now(),
             ),
         ])
