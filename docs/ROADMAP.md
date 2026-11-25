@@ -1688,3 +1688,10 @@ A política central classifica `GET /api/v1/tasks/{task_id}/events` como `SUPERV
 Os handlers GET e POST do histórico/ciclo de vida de paletes agora repetem a autorização `SUPERVISOR_OR_ADMIN` já declarada na política central. Funcionários recebem 403 antes da leitura ou mutação. O teste confirma que a tentativa de escrita não altera o estado nem acrescenta evento e que um supervisor autorizado consegue ler e registar uma transição válida.
 
 **Evidência:** SHA `50df52e59eca47aa2dfc868fc16621cf2f636586`; API CI `45716912538`, Quality Gates `45716912911`, Security Scans `45716912543` e Docker Compose `45716912421` — todos com sucesso.
+
+
+## 2026-11-25 — RBAC explícito em snapshots de inventário e catálogo de lojas
+
+Os handlers de criação de snapshots, listagem e consulta do snapshot mais recente agora exigem ADMIN/SUPERVISOR independentemente da origem do snapshot. A criação não permite que um perfil EMPLOYEE injete dados WMS/ERP/POS/IMPORT só porque a regra anterior de perfil estava condicionada a MANUAL. O GET `/api/v1/stores` também reforça no handler a política de leitura ADMIN/SUPERVISOR. A regressão inicial da listagem foi identificada pelo Quality Gates, corrigida e validada na execução seguinte.
+
+**Evidência:** SHA `19bf8dd2bf2b6990faff261effc0752523f59a5b`; API CI **1728 passed, 1 skipped**; Quality Gates, Security Scans e Docker Compose — sucesso.
