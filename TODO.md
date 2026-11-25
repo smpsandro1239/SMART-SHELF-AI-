@@ -2304,6 +2304,8 @@ As duas caixas pendentes da secção de validação 0091 foram fechadas com a ev
 - [x] Suspender a comparação quantitativa quando o skew excede a tolerância; zero exige timestamps coincidentes.
 - [x] Auditar alterações com actor, valor anterior/novo, motivo e timestamp.
 - [x] Rejeitar configuração na política WMS e valores fora de 0–10080 minutos.
-- [ ] Validar migration SQLite/PostgreSQL 16, testes API, Quality Gates, Security Scans e Docker Compose no SHA final.
+- [x] Validar migration SQLite/PostgreSQL 16, testes API, Quality Gates, Security Scans e Docker Compose no SHA `b54b2d4c927aee606f23fef35018b701c17aaf5f`.
 - [ ] Homologar tolerâncias por loja com cadência real e documentação do fornecedor ERP/WMS.
+
+Evidência: API CI `45677287479` (**1717 passed, 1 skipped**); Quality Gates `45677287381`; Security Scans `45677287568`; Docker Compose `45677287570` — os quatro workflows concluídos com sucesso no mesmo SHA. A primeira execução revelou uma fixture de ledger que ainda assumia comparação sem tolerância; a fixture foi corrigida para configurar explicitamente a política ERP e a suite voltou a passar.
 
