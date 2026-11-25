@@ -209,6 +209,17 @@ class InventoryFreshnessPolicyUpsert(BaseModel):
     source: InventorySource
     max_age_minutes: int = Field(ge=1, le=10080)
     backroom_location_code: str | None = Field(default=None, min_length=1, max_length=120)
+    reason: str | None = Field(default=None, max_length=1000)
+
+    @field_validator("reason")
+    @classmethod
+    def validate_backroom_policy_reason(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        if len(normalized) < 5 or any(ord(ch) < 32 and ch not in "\t\n\r" for ch in normalized):
+            raise ValueError("A backroom authority change requires an audit reason of at least 5 characters")
+        return normalized
 
     @field_validator("backroom_location_code")
     @classmethod
@@ -224,6 +235,8 @@ class InventoryFreshnessPolicyUpsert(BaseModel):
     def backroom_location_is_wms_only(self):
         if self.backroom_location_code is not None and self.source != "WMS":
             raise ValueError("backroom_location_code can only be configured for WMS")
+        if "backroom_location_code" in self.model_fields_set and self.reason is None:
+            raise ValueError("A reason is required when changing backroom location authority")
         return self
 
 
