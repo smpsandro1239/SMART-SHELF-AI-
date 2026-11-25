@@ -4282,7 +4282,9 @@ def create_product(payload: ProductCreate, request: Request, db: Session = Depen
 
 @app.get("/api/v1/products", response_model=list[ProductRead], tags=["products"])
 def list_products(request: Request, active_only: bool = True, limit: int = 100, db: Session = Depends(get_db)):
-    _request_user(db, request)
+    actor = _request_user(db, request)
+    if actor is not None and actor.role not in {"ADMIN", "SUPERVISOR"}:
+        raise HTTPException(status_code=403, detail="Supervisor role required")
     limit = max(1, min(limit, 500))
     query = db.query(models.Product)
     if active_only:
@@ -9782,7 +9784,9 @@ def create_user(payload: UserCreate, request: Request, db: Session = Depends(get
 
 @app.get("/api/v1/auth/users", response_model=list[UserRead], tags=["authentication"])
 def list_users(request: Request, limit: int = 100, db: Session = Depends(get_db)):
-    _request_user(db, request)
+    actor = _request_user(db, request)
+    if actor is not None and actor.role != "ADMIN":
+        raise HTTPException(status_code=403, detail="Administrator role required")
     return db.query(models.User).order_by(models.User.id).limit(max(1, min(limit, 500))).all()
 
 
