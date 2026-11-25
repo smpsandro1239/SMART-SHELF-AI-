@@ -8127,7 +8127,6 @@ def list_replenishment_recommendations(
                     models.InventorySnapshot.product_id == link.product_id,
                     models.InventorySnapshot.source == "WMS",
                     models.InventorySnapshot.location_code == backroom_location_code,
-                    models.InventorySnapshot.availability_status == "AVAILABLE",
                 )
                 .order_by(models.InventorySnapshot.captured_at.desc(), models.InventorySnapshot.id.desc())
                 .first()
