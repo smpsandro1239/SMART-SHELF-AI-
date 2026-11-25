@@ -1884,7 +1884,7 @@ def test_manual_inventory_snapshot_requires_actor_supervisor_and_reason(monkeypa
         assert client.post("/api/v1/inventory/snapshots", json=payload).status_code == 403
         supervisor = _supervisor_actor(store_id)
         monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: supervisor)
-        for reason in ("", "   ", "abc", "linha\\nquebrada"):
+        for reason in ("", "   ", "abc", "linha" + chr(10) + "quebrada"):
             response = client.post("/api/v1/inventory/snapshots", json={**payload, "reason": reason})
             assert response.status_code == 422, response.text
         assert client.post("/api/v1/inventory/snapshots", json={**payload, "reason": None}).status_code == 422
@@ -1943,7 +1943,7 @@ def test_manual_inventory_event_sql_immutability_and_store_product_binding(monke
                           AND s.product_id=NEW.product_id AND s.source='MANUAL'
                     ) OR NOT EXISTS (
                         SELECT 1 FROM users u WHERE u.id=NEW.actor_user_id
-                          AND (u.role='ADMIN' OR u.store_id=NEW.store_id)
+                          AND (u.is_active AND (u.role='ADMIN' OR (u.role='SUPERVISOR' AND u.store_id=NEW.store_id)))
                     ) THEN RAISE(ABORT, 'manual count provenance mismatch') END;
                 END
             """)
