@@ -130,6 +130,7 @@ def main() -> None:
         finally:
             main_module.settings = original_settings
         assert movement["source_snapshot_id"] == source_snapshot_id
+        assert movement["destination_shelf_code"] == shelf.json()["code"]
         assert movement["quantity"] == 4
         assert event_response.status_code == 200, event_response.text
         assert len(event_response.json()) == 1
@@ -138,6 +139,7 @@ def main() -> None:
         assert recorded_event["operation_id"] == movement["operation_id"]
         assert recorded_event["actor_user_id"] == supervisor_id
         assert recorded_event["evidence"]["source_snapshot_id"] == source_snapshot_id
+        assert recorded_event["evidence"]["destination_shelf_code"] == shelf.json()["code"]
 
     with SessionLocal() as db:
         external_actor = models.User(
@@ -220,6 +222,8 @@ def main() -> None:
                 "quantity": 4,
                 "unit_code": "un",
                 "result_snapshot_id": movement["result_snapshot_id"],
+                "destination_shelf_id": shelf.json()["id"] + 100000,
+                "destination_shelf_code": shelf.json()["code"],
             },
             {
                 "store_id": store_id,
@@ -227,6 +231,8 @@ def main() -> None:
                 "quantity": 4,
                 "unit_code": "un",
                 "result_snapshot_id": movement["result_snapshot_id"],
+                "destination_shelf_id": shelf.json()["id"],
+                "destination_shelf_code": "FORGED-SHELF-CODE",
             },
         )
         for values in invalid_inserts:
@@ -236,11 +242,12 @@ def main() -> None:
                         """
                         INSERT INTO inventory_movements
                             (task_id, store_id, product_id, movement_type, quantity,
-                             unit_code, source_snapshot_id, result_snapshot_id, actor_user_id,
-                             reason, created_at)
+                             unit_code, source_snapshot_id, destination_shelf_id,
+                             destination_shelf_code, result_snapshot_id, actor_user_id, reason, created_at)
                         VALUES
                             (:task_id, :store_id, :product_id, 'BACKROOM_TO_SHELF',
-                             :quantity, :unit_code, :source_id, :result_id, :actor_id,
+                             :quantity, :unit_code, :source_id, :destination_shelf_id,
+                             :destination_shelf_code, :result_id, :actor_id,
                              'invalid lineage smoke', CURRENT_TIMESTAMP)
                         """
                     ),
@@ -251,6 +258,8 @@ def main() -> None:
                         "quantity": values["quantity"],
                         "unit_code": values["unit_code"],
                         "source_id": source_snapshot_id,
+                        "destination_shelf_id": values["destination_shelf_id"],
+                        "destination_shelf_code": values["destination_shelf_code"],
                         "result_id": values["result_snapshot_id"],
                         "actor_id": supervisor_id,
                     },
