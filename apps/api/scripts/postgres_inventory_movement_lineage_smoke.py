@@ -294,6 +294,8 @@ def main() -> None:
 
         for statement in (
             "UPDATE inventory_movements SET quantity = 99 WHERE task_id = :task_id",
+            "UPDATE inventory_movements SET destination_zone_name = 'Zona adulterada' WHERE task_id = :task_id",
+            "UPDATE inventory_movements SET destination_zone_id = destination_zone_id + 100000 WHERE task_id = :task_id",
             "DELETE FROM inventory_movements WHERE task_id = :task_id",
         ):
             try:
