@@ -707,7 +707,7 @@ class InventoryMovement(Base):
     __table_args__ = (
         UniqueConstraint("task_id", name="uq_inventory_movement_task"),
         UniqueConstraint("result_snapshot_id", name="uq_inventory_movement_result_snapshot"),
-        UniqueConstraint("operation_id", name="uq_inventory_movement_operation_id"),
+        Index("uq_inventory_movement_operation_id", "operation_id", unique=True),
         CheckConstraint("movement_type = 'BACKROOM_TO_SHELF'", name="ck_inventory_movement_type"),
         CheckConstraint("quantity > 0", name="ck_inventory_movement_quantity_positive"),
         CheckConstraint("source_snapshot_id <> result_snapshot_id", name="ck_inventory_movement_distinct_snapshots"),
