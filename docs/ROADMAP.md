@@ -1665,3 +1665,12 @@ A migration 0093 e os testes SQLite/API foram preparados; validação PostgreSQL
 - [x] API CI **1725 passed, 1 skipped**, Quality Gates, Security Scans e Docker Compose aprovados no SHA `7bf95468320fc1dd4ab992b520e855d463b6e1f6`.
 
 Arquivamento/soft-delete continua condicionado a requisito operacional; a eliminação física não é alternativa à retenção.
+
+
+## 2026-11-25 — Transições concorrentes do ciclo de vida das tarefas validadas
+
+O endpoint de transição usa lock pessimista da linha da tarefa e revalida o estado após o lock. O smoke PostgreSQL 16 prova que duas atribuições concorrentes produzem apenas um evento; uma conclusão concorrente com cancelamento produz exactamente um vencedor e um HTTP 409; a auditoria reflecte o estado vencedor e não existe segunda transição terminal. A falha forçada após flush do evento reverte tanto a alteração do estado como o evento. A repetição de cancelamento é rejeitada e a tarefa terminal não pode ser reaberta.
+
+**Evidência:** SHA `cfeeab3f4e092709de9eccb0dfc54397f72f12af`; API CI `45689904464` — **1725 passed, 1 skipped**; Quality Gates `45689904362`, Security Scans `45689904247` e Docker Compose `45689904380` — sucesso.
+
+**Próxima revisão:** consistência temporal de `started_at`/`completed_at` e política de atribuição/reafectação. Não introduzir regras de negócio sem requisito operacional aprovado.
