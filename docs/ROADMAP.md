@@ -1653,3 +1653,15 @@ O contrato actual usa a escala persistida `NUMERIC(12,3)`. A conversão de embal
 A reconciliação mede e expõe o skew absoluto de captura. A política ERP por loja pode definir tolerância opcional de 0–10080 minutos; NULL significa não configurada. Sem tolerância, timestamps diferentes não produzem delta nem DIVERGENCE. Acima do limite configurado, a comparação quantitativa também é suspensa. Só dentro do limite se comparam quantidades. A configuração exige motivo e fica auditada no ledger append-only. Não existe valor operacional por defeito.
 
 A migration 0093 e os testes SQLite/API foram preparados; validação PostgreSQL 16 e workflows GitHub no SHA final ainda pendentes.
+
+
+## 2026-11-25 — Retenção da hierarquia e imutabilidade da auditoria de tarefas (0096–0098)
+
+- [x] Bloquear eliminação de prateleiras/zonas com histórico de tarefas.
+- [x] Proteger eventos de tarefa contra UPDATE/DELETE e congelar a identidade da tarefa após o primeiro evento.
+- [x] Bloquear cascades sobre imagens, sessões, observações, alertas, associações, planogramas, reconciliações e inbox Edge.
+- [x] Validar retenção de imagem ACTIVE com legal hold sem tarefa associada em PostgreSQL 16.
+- [x] Expor a proveniência física do destino no histórico Web de movimentos.
+- [x] API CI **1725 passed, 1 skipped**, Quality Gates, Security Scans e Docker Compose aprovados no SHA `7bf95468320fc1dd4ab992b520e855d463b6e1f6`.
+
+Arquivamento/soft-delete continua condicionado a requisito operacional; a eliminação física não é alternativa à retenção.
