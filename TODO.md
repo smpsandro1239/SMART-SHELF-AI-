@@ -2269,7 +2269,7 @@ Próxima prioridade P1: auditar snapshots WMS consecutivos, semântica de reserv
 - [x] Smoke PostgreSQL 16: página commitada antes de SIGKILL ligada à execução PARTIAL, replay sem duplicação, segunda página ligada à nova execução SUCCESS e escrita tardia contra execução terminal rejeitada.
 - [x] API CI: **1715 passed, 1 skipped** no SHA de branch validado `f63543caabe6df1a2e660f5801c35f53fc3422a1`.
 - [x] Quality Gates, Security Scans e Docker Compose: sucesso no mesmo SHA.
-- [ ] Confirmar novamente os quatro workflows no commit de merge `76fb62dfef9280fd8e6b291024be46a9e392e848` da branch `main`.
+- [x] Confirmar novamente os quatro workflows no commit de merge `76fb62dfef9280fd8e6b291024be46a9e392e848` da branch `main`: API CI, Quality Gates, Security Scans e Docker Compose passaram.
 
 Próxima prioridade P1: análise temporal ERP/WMS. Actualmente a comparação pode classificar DIVERGENCE quando ambas as fontes estão dentro da janela de freshness, mesmo com instantes de captura bastante diferentes. Definir um contrato de skew temporal (configuração e estado de comparação) antes de aplicar um limite; não inventar um valor operacional.
 
