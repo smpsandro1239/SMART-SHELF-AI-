@@ -1502,3 +1502,15 @@ O commit `50fc1fcd9dac4c88dfb800aaa1f690ff1c0b6304` introduz o endpoint transacc
 - Quality Gates `45688691013`, Security Scans `45688691043` e Docker Compose `45688691103`: sucesso.
 - Limitação: não existe ainda arquivamento/soft-delete de zonas/prateleiras. A eliminação física fica bloqueada quando há evidência; não foi criada uma operação comercial de descontinuação sem requisito explícito.
 - Próxima prioridade: auditar a consistência dos estados de tarefa e transições concorrentes, sem alterar a semântica operacional aprovada.
+
+
+## 2026-11-25 — Concorrência das transições de estado das tarefas
+
+- Revisão confirmou que o endpoint de transição bloqueia a tarefa com `FOR UPDATE`, re-carrega os valores sob lock e volta a validar a transição permitida.
+- O smoke PostgreSQL de tarefas foi ampliado para competir duas atribuições e, separadamente, `COMPLETED` contra `CANCELLED`; apenas uma transição concorrente pode vencer e o evento terminal tem de corresponder ao vencedor.
+- O smoke também confirma cancelamento idempotente (repetição recebe 409), histórico append-only exacto e rollback integral do estado quando a escrita do evento falha após flush.
+- Commit final de teste: `cfeeab3f4e092709de9eccb0dfc54397f72f12af`.
+- API CI `45689904464`: PostgreSQL 16 e suite API — **1725 passed, 1 skipped**.
+- Quality Gates `45689904362`, Security Scans `45689904247` e Docker Compose `45689904380`: sucesso no mesmo SHA.
+- Sem alterações ao código de produção nesta ronda: o mecanismo de lock já existia; a lacuna era a prova explícita da corrida entre estados terminais e a documentação operacional.
+- Próxima prioridade: rever consistência temporal dos campos `started_at`/`completed_at` e a política de atribuição/reafectação, sem inventar regras comerciais nem reabrir estados terminais.
