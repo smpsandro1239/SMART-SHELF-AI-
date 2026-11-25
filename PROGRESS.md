@@ -1258,3 +1258,11 @@ Auditar `packaging_units.py` e o endpoint `/api/v1/warehouse/replenishment-units
 - Implementados modelo SQLAlchemy Decimal/Numeric(12,3), schema Pydantic Decimal com limite de precisão, migration 0090 e downgrade que recusa truncar valores fraccionários.
 - Regressão API agora valida alvo 20.125 e mínimo 0.375; teste de migration cobre conversão, preservação decimal e bloqueio de downgrade destrutivo.
 - Validação da migration 0090 e suite completa ainda pendente nos workflows do HEAD final. Não declarar a correcção concluída até API CI/PostgreSQL 16 e Quality Gates passarem.
+
+
+## 2026-11-25 — Compatibilidade JSON das quantidades de exposição
+
+- A primeira execução da suite após a migration 0090 encontrou três regressões de contrato: o schema Pydantic serializava Decimal como string (`"12.000"`) em vez de número JSON e a validação de `target_quantity=0` tentava serializar um Decimal dentro do detalhe de erro.
+- Corrigido o contrato HTTP para continuar a aceitar/devolver números JSON; o endpoint converte explicitamente os valores validados para Decimal antes da persistência. O modelo SQL mantém Numeric(12,3), sem perder a precisão armazenada.
+- O validador rejeita NaN/Inf, mais de três casas decimais e valores acima da capacidade Numeric(12,3), evitando quantização ou truncagem.
+- A primeira suite API reportou 3 falhas e 1694 testes aprovados; estas falhas foram analisadas e corrigidas nos commits `dc242cf`, `76a6fb9` e `e2eca8f`. A validação do novo HEAD está pendente; não marcar como concluído até nova CI verde.
