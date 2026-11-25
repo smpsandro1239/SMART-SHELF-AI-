@@ -1525,3 +1525,13 @@ O commit `50fc1fcd9dac4c88dfb800aaa1f690ff1c0b6304` introduz o endpoint transacc
 - Commits: teste inicial `2fca1052d4e37dac4e0d2cce92b1e5953b494562`; primeira implementação `e36d8708bb5a054c229144cce466eb074f69812f`; alinhamento final `355af238824f5094faa71a95cbf8e746c372c89b` e teste `f925b875f871964ce80805c4927af15616f58774`.
 - API CI `45716057516`, Quality Gates `45716057563`, Security Scans `45716057667` e Docker Compose `45716057580`: sucesso no SHA de código `f925b875f871964ce80805c4927af15616f58774`.
 - Próxima prioridade: auditar endpoints de leitura de eventos/auditoria de operações adjacentes quanto a privilégios por função e isolamento de loja; manter retenção e estados terminais.
+
+
+## 2026-11-25 — P0: defesa em profundidade no ciclo de vida de paletes
+
+- A auditoria da rota `/api/v1/warehouse/pallets/{pallet_id}/events` encontrou que a política central já exigia `SUPERVISOR_OR_ADMIN`, mas os handlers não repetiam a verificação de função.
+- Os handlers GET e POST passaram a rejeitar explicitamente EMPLOYEE com HTTP 403 antes da leitura/lock e antes de qualquer alteração.
+- Teste API cria palete/evento, confirma negação de leitura e escrita para EMPLOYEE sem mutação, e valida leitura/transição válida por SUPERVISOR.
+- SHA de código: `50df52e59eca47aa2dfc868fc16621cf2f636586`.
+- API CI `45716912538`, Quality Gates `45716912911`, Security Scans `45716912543` e Docker Compose `45716912421`: todos concluídos com sucesso.
+- Próxima prioridade: continuar a auditoria de handlers de escrita protegidos pela política central, começando por operações de inventário e integrações, para identificar rotas em que o handler não repete o requisito de função.
