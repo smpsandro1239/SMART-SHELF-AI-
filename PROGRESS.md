@@ -989,3 +989,13 @@ Pendente: worker durável, gestão de secrets, recuperação de STARTED abandona
 - Verifica takeover após expiração, incremento do fencing token e rejeição de renovação pelo worker antigo.
 - Inicia um processo worker separado, confirma a tentativa STARTED na base de dados, termina-o com SIGKILL e verifica que o worker de recuperação fecha o ledger como PARTIAL com `WORKER_LEASE_EXPIRED`, evento COMPLETED e contagens NULL.
 - O smoke **não** simula ainda a morte após confirmação de uma página real nem o replay dos snapshots; essa validação permanece explicitamente pendente. O script e o novo passo de CI foram publicados, mas a execução do workflow deste HEAD ainda não foi observada nesta ronda.
+
+
+## 2026-11-25 — SIGKILL após commit de página e replay idempotente ERP/WMS
+
+- O smoke PostgreSQL foi aprofundado para executar o próprio `run_inventory_source_sync`, não apenas criar manualmente um ledger STARTED.
+- O processo filho reclama o job e executa um adapter de teste. A primeira página é confirmada pelo orquestrador; só quando o adapter é chamado para obter a segunda página o processo sinaliza o processo pai. O pai verifica que o snapshot já existe e termina o worker com SIGKILL.
+- O teste força a expiração do lease após a morte, reclama o job com outro worker e verifica a transição do ledger abandonado para PARTIAL/WORKER_LEASE_EXPIRED.
+- O novo worker volta a executar o orquestrador com o mesmo external_reference e o mesmo conteúdo para a primeira página, seguido de uma segunda referência. O teste verifica que o snapshot original mantém o mesmo ID e quantidade e que existem exactamente dois snapshots, sem duplicação.
+- Corrigida também a utilização de leases inválidos de 1 segundo no smoke anterior: a API de leases exige 30–3600 segundos. O teste usa 30 segundos e expira explicitamente a lease na base de dados, evitando esperas frágeis.
+- O API CI já invoca este script no serviço PostgreSQL 16. O código e a integração foram publicados; a execução do workflow no novo HEAD ainda tem de ser confirmada. Não declarar a validação aprovada antes desse resultado.
