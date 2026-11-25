@@ -2103,3 +2103,8 @@ Validação no SHA `b54b2d4c927aee606f23fef35018b701c17aaf5f`: API CI **1717 pas
 ## Reservas WMS e movimentos
 
 As reservas WMS são tratadas como quantidade agregada: disponibilidade = `on_hand_quantity - reserved_quantity`. Os movimentos já reconciliados sobre o mesmo snapshot de origem são deduzidos adicionalmente, sem mutar o snapshot WMS. O snapshot resultante MANUAL é uma projecção interna e não representa confirmação de escrita no WMS. A confirmação externa exige uma correlação explícita do fornecedor.
+
+
+## Proveniência do destino dos movimentos
+
+Cada movimento conserva o ID e o código da prateleira de destino no instante da operação. O código é uma evidência histórica imutável: renomeações posteriores não reescrevem movimentos antigos. A API, o evento de auditoria e as guardas de base de dados validam que o destino pertence à loja e à tarefa.
