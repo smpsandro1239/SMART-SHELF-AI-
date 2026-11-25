@@ -448,6 +448,9 @@ def test_reconciliation_creates_immutable_movement_and_result_snapshot(monkeypat
         assert movement["source_location_code"] == "BACKROOM-A"
         assert movement["destination_shelf_id"] is not None
         assert movement["destination_shelf_code"].startswith("REC-")
+        assert movement["destination_zone_id"] is not None
+        assert movement["destination_zone_name"]
+        assert movement["destination_location_backfilled"] is False
         assert movement["quantity"] == 4
         assert movement["source_snapshot_id"] == source_snapshot_id
         assert movement["movement_type"] == "BACKROOM_TO_SHELF"
