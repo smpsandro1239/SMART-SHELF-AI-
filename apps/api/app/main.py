@@ -7094,7 +7094,10 @@ def get_inventory_reconciliation(
                 "reserved_quantity": float(source_snapshot.reserved_quantity),
                 "available_quantity": (
                     float(source_snapshot.available_quantity)
-                    if source_snapshot.availability_status == "AVAILABLE" else None
+                    if (
+                        source_snapshot.source != "WMS"
+                        or source_snapshot.availability_status == "AVAILABLE"
+                    ) else None
                 ),
                 "source": source_snapshot.source,
                 "location_code": source_snapshot.location_code,
