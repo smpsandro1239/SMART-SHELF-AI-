@@ -155,7 +155,19 @@ class InventorySnapshotCreate(BaseModel):
     )
     source: InventorySource
     external_reference: str | None = Field(default=None, max_length=120)
+    location_code: str | None = Field(default=None, min_length=1, max_length=120)
+    availability_status: Literal["AVAILABLE", "UNAVAILABLE", "UNKNOWN"] = "UNKNOWN"
     captured_at: datetime | None = None
+
+    @field_validator("location_code")
+    @classmethod
+    def validate_location_code(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        if not normalized or any(ord(ch) < 32 or 127 <= ord(ch) <= 159 for ch in normalized):
+            raise ValueError("location_code must be non-empty and contain no control characters")
+        return normalized
 
     @field_validator("external_reference")
     @classmethod
@@ -185,6 +197,8 @@ class InventorySnapshotRead(BaseModel):
     available_quantity: float
     source: str
     external_reference: str | None
+    location_code: str | None
+    availability_status: Literal["AVAILABLE", "UNAVAILABLE", "UNKNOWN"]
     captured_at: datetime
     created_at: datetime
     model_config = ConfigDict(from_attributes=True)
@@ -194,6 +208,23 @@ class InventoryFreshnessPolicyUpsert(BaseModel):
     store_id: int
     source: InventorySource
     max_age_minutes: int = Field(ge=1, le=10080)
+    backroom_location_code: str | None = Field(default=None, min_length=1, max_length=120)
+
+    @field_validator("backroom_location_code")
+    @classmethod
+    def validate_backroom_location_code(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        if not normalized or any(ord(ch) < 32 or 127 <= ord(ch) <= 159 for ch in normalized):
+            raise ValueError("backroom_location_code must be non-empty and contain no control characters")
+        return normalized
+
+    @model_validator(mode="after")
+    def backroom_location_is_wms_only(self):
+        if self.backroom_location_code is not None and self.source != "WMS":
+            raise ValueError("backroom_location_code can only be configured for WMS")
+        return self
 
 
 class InventoryFreshnessPolicyRead(BaseModel):
@@ -201,6 +232,7 @@ class InventoryFreshnessPolicyRead(BaseModel):
     store_id: int
     source: InventorySource
     max_age_minutes: int
+    backroom_location_code: str | None
     updated_at: datetime
     model_config = ConfigDict(from_attributes=True)
 
