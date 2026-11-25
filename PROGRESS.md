@@ -1459,3 +1459,18 @@ O commit `50fc1fcd9dac4c88dfb800aaa1f690ff1c0b6304` introduz o endpoint transacc
 - Quality Gates `45680479177`, Security Scans `45680479240` e Docker Compose `45680479172`: sucesso no mesmo SHA.
 - Próxima prioridade: especificar a correlação de confirmações WMS e snapshots posteriores com base num contrato real do fornecedor; não tratar qualquer alteração de stock como confirmação automática.
 
+
+
+## 2026-11-25 — Snapshot imutável do destino físico de movimentos (migration 0094)
+
+- Novo campo `InventoryMovement.destination_shelf_code`, capturado sob lock juntamente com a identidade da prateleira de destino.
+- O movimento e o evento `MOVEMENT_RECORDED` incluem o código físico do destino; a API devolve-o em `InventoryMovementRead`.
+- Migration 0094 faz backfill a partir da tarefa e da prateleira; aborta perante linhagem ausente/inconsistente e instala guardas PostgreSQL/SQLite para impedir destino nulo, código forjado, prateleira de outra tarefa ou loja.
+- A alteração do código da prateleira no futuro não altera o valor histórico gravado no movimento.
+- Teste de migration SQLite cobre backfill, consistência, alteração posterior do código e rejeição de inserts inválidos.
+- Smoke PostgreSQL de movimento foi ampliado para verificar o código e evidência do destino, e para tentar inserir códigos/IDs forjados.
+- SHA validado: `3f4c9740ce70e932c5cb35745e96edd1163bf864`.
+- API CI `45683385203`: migration PostgreSQL 16, smoke de linhagem e concorrência, suite API — **1720 passed, 1 skipped**.
+- Quality Gates `45683385692`, Security Scans `45683385335` e Docker Compose `45683385339`: sucesso no mesmo SHA.
+- Próxima prioridade: avaliar identidade histórica e retenção de prateleiras/zonas quando há reestruturações, sem depender de códigos actuais mutáveis.
+
