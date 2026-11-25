@@ -212,6 +212,8 @@ def main() -> None:
             reserved_quantity=0,
             source="WMS",
             external_reference=f"PG-AUTH-TASK-STOCK-{suffix}",
+            location_code="BACKROOM-A",
+            availability_status="AVAILABLE",
             captured_at=completed_at - timedelta(minutes=1),
         ))
         # Forecast positive controls require an explicit record for every
@@ -236,6 +238,8 @@ def main() -> None:
             reserved_quantity=0,
             source="WMS",
             external_reference=f"PG-AUTH-OWN-STOCK-{suffix}",
+            location_code="BACKROOM-A",
+            availability_status="AVAILABLE",
             captured_at=completed_at,
         ))
         db.commit()
