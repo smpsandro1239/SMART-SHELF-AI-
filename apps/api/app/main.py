@@ -6910,12 +6910,31 @@ def get_inventory_reconciliation(
         .correlate(models.ShelfProduct)
         .scalar_subquery()
     )
-    latest_snapshot_id = (
-        db.query(models.InventorySnapshot.id)
-        .filter(
-            models.InventorySnapshot.store_id == store_id,
-            models.InventorySnapshot.product_id == models.ShelfProduct.product_id,
+    wms_policy = (
+        db.query(models.InventoryFreshnessPolicy)
+        .filter_by(store_id=store_id, source="WMS")
+        .first()
+    )
+    backroom_location_code = (
+        wms_policy.backroom_location_code if wms_policy is not None else None
+    )
+    backroom_snapshot_query = db.query(models.InventorySnapshot.id).filter(
+        models.InventorySnapshot.store_id == store_id,
+        models.InventorySnapshot.product_id == models.ShelfProduct.product_id,
+        models.InventorySnapshot.source == "WMS",
+        models.InventorySnapshot.availability_status == "AVAILABLE",
+    )
+    if backroom_location_code is not None:
+        backroom_snapshot_query = backroom_snapshot_query.filter(
+            models.InventorySnapshot.location_code == backroom_location_code
         )
+    else:
+        # No store-specific physical location is configured: fail closed.
+        backroom_snapshot_query = backroom_snapshot_query.filter(
+            models.InventorySnapshot.id == -1
+        )
+    latest_snapshot_id = (
+        backroom_snapshot_query
         .order_by(models.InventorySnapshot.captured_at.desc(), models.InventorySnapshot.id.desc())
         .limit(1)
         .correlate(models.ShelfProduct)
@@ -6933,18 +6952,7 @@ def get_inventory_reconciliation(
         .correlate(models.ShelfProduct)
         .scalar_subquery()
     )
-    latest_wms_snapshot_id = (
-        db.query(models.InventorySnapshot.id)
-        .filter(
-            models.InventorySnapshot.store_id == store_id,
-            models.InventorySnapshot.product_id == models.ShelfProduct.product_id,
-            models.InventorySnapshot.source == "WMS",
-        )
-        .order_by(models.InventorySnapshot.captured_at.desc(), models.InventorySnapshot.id.desc())
-        .limit(1)
-        .correlate(models.ShelfProduct)
-        .scalar_subquery()
-    )
+    latest_wms_snapshot_id = latest_snapshot_id
     query = (
         db.query(
             models.ShelfProduct,
@@ -7058,6 +7066,8 @@ def get_inventory_reconciliation(
                 "reserved_quantity": float(source_snapshot.reserved_quantity),
                 "available_quantity": float(source_snapshot.available_quantity),
                 "source": source_snapshot.source,
+                "location_code": source_snapshot.location_code,
+                "availability_status": source_snapshot.availability_status,
                 "captured_at": source_snapshot.captured_at,
                 "age_minutes": round(max(0.0, age), 2),
                 "freshness_status": freshness,
@@ -7072,7 +7082,10 @@ def get_inventory_reconciliation(
         elif erp["freshness_status"] == "MISSING":
             source_comparison_status = "MISSING_ERP"
         elif wms["freshness_status"] == "MISSING":
-            source_comparison_status = "MISSING_WMS"
+            source_comparison_status = (
+                "WMS_BACKROOM_LOCATION_NOT_CONFIGURED"
+                if backroom_location_code is None else "MISSING_WMS_BACKROOM_STOCK"
+            )
         elif "FUTURE" in {erp["freshness_status"], wms["freshness_status"]}:
             source_comparison_status = "INVALID_TIMESTAMP"
         else:
@@ -7106,6 +7119,8 @@ def get_inventory_reconciliation(
             "backroom_reserved_quantity": float(snapshot.reserved_quantity) if snapshot else None,
             "backroom_available_quantity": float(snapshot.available_quantity) if snapshot else None,
             "backroom_source": snapshot.source if snapshot else None,
+            "backroom_location_code": snapshot.location_code if snapshot else None,
+            "backroom_availability_status": snapshot.availability_status if snapshot else None,
             "backroom_captured_at": snapshot.captured_at if snapshot else None,
             "backroom_snapshot_age_minutes": round(snapshot_age_minutes, 2) if snapshot_age_minutes is not None else None,
             "erp_snapshot_id": erp["snapshot_id"],
