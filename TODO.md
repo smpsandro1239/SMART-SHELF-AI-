@@ -2235,7 +2235,7 @@ Decisão: `reserved_quantity` continua a ser o total reservado reportado pelo WM
 - [ ] Confirmar execução do teste SQLite 0091 na suite API CI do HEAD actual.
 - [ ] Confirmar API CI, Quality Gates, Security Scans e Docker Compose no mesmo HEAD; não marcar a prioridade global como concluída antes disso.
 
-Evidência parcial: PostgreSQL 16 `alembic upgrade head` passou no API CI SHA `3b9520d`; o smoke PostgreSQL específico passou no SHA `7a20c95`. O run desse SHA falhou depois num smoke preexistente de autorização, por falta de `reason` no payload MANUAL; corrigido em `c6b2d33`. A validação final tem de ser feita no HEAD posterior.
+Evidência final: migration 0091 validada em SQLite e PostgreSQL 16; API CI no SHA `c4f839b` passou com 1707 testes, 1 skipped; workflows principais posteriormente confirmados na main no SHA de código `76fb62d`, com 1715 passed, 1 skipped, Quality Gates, Security Scans e Docker Compose concluídos com sucesso.
 
 
 ### Validação final — migration 0091 e ledger MANUAL (25/11/2026)
@@ -2282,3 +2282,8 @@ Próxima prioridade P1: análise temporal ERP/WMS. Actualmente a comparação po
 - Security Scans run `45654278738`: sucesso (dependências Python/web, secret scan e ZAP passive baseline).
 - Docker Compose smoke run `45654043988`: sucesso.
 - Os quatro workflows de validação da integração estão confirmados. O check Vercel continua a reportar `build-rate-limit`, que é uma limitação de quota do serviço e não uma falha dos testes/CI GitHub.
+
+
+### Correcção de estado documental — migration 0091
+
+As duas caixas pendentes da secção de validação 0091 foram fechadas com a evidência posterior. A nota de evidência parcial foi substituída pelo resultado final: SQLite e PostgreSQL 16 validados; API CI 1715 passed/1 skipped na integração final; Quality Gates, Security Scans e Docker Compose verdes na main.
