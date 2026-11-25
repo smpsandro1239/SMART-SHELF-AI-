@@ -119,7 +119,7 @@ def test_manual_count_audit_migration_enforces_provenance_and_append_only(tmp_pa
 
         assert connection.exec_driver_sql(
             "SELECT COUNT(*) FROM inventory_snapshots"
-        ).scalar_one() == 2
+        ).scalar_one() == 3
         tables = {
             row[0]
             for row in connection.exec_driver_sql(
