@@ -565,6 +565,11 @@ class InventorySnapshot(Base):
         CheckConstraint("reserved_quantity <= on_hand_quantity", name="ck_inventory_reserved_lte_on_hand"),
         CheckConstraint("availability_status IN ('AVAILABLE', 'UNAVAILABLE', 'UNKNOWN')", name="ck_inventory_snapshot_availability_status"),
         CheckConstraint("location_code IS NULL OR length(trim(location_code)) > 0", name="ck_inventory_snapshot_location_nonblank"),
+        Index(
+            "ix_inventory_snapshot_backroom_lookup",
+            "store_id", "product_id", "source", "location_code",
+            "availability_status", "captured_at",
+        ),
     )
     id: Mapped[int] = mapped_column(primary_key=True)
     store_id: Mapped[int] = mapped_column(ForeignKey("stores.id", ondelete="CASCADE"), index=True)
@@ -576,7 +581,9 @@ class InventorySnapshot(Base):
     # WMS evidence must identify its physical location and availability state
     # before it can be considered authoritative backroom stock.
     location_code: Mapped[str | None] = mapped_column(String(120), nullable=True)
-    availability_status: Mapped[str] = mapped_column(String(16), nullable=False, default="UNKNOWN")
+    availability_status: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="UNKNOWN", server_default="UNKNOWN"
+    )
     captured_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
