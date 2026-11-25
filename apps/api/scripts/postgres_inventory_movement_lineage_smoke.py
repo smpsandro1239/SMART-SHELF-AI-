@@ -286,9 +286,91 @@ def main() -> None:
         ).scalar_one()
         assert count == 1, count
 
+    unavailable_snapshot = client.post(
+        "/api/v1/inventory/snapshots",
+        json={
+            "store_id": store_id,
+            "product_id": product_id,
+            "on_hand_quantity": 20,
+            "reserved_quantity": 2,
+            "source": "WMS",
+            "external_reference": f"PG-MOVE-UNAVAILABLE-{suffix}",
+            "location_code": "BACKROOM-CI",
+            "availability_status": "UNAVAILABLE",
+        },
+    )
+    assert unavailable_snapshot.status_code == 201, unavailable_snapshot.text
+    unavailable_task = client.post(
+        "/api/v1/tasks",
+        json={
+            "store_id": store_id,
+            "shelf_id": shelf.json()["id"],
+            "product_id": product_id,
+            "requested_quantity": 4,
+        },
+    )
+    assert unavailable_task.status_code == 201, unavailable_task.text
+    unavailable_task_id = unavailable_task.json()["id"]
+    for payload in (
+        {"status": "ASSIGNED", "assigned_to": "CI operator"},
+        {"status": "IN_PROGRESS"},
+        {"status": "COMPLETED", "actual_quantity": 4},
+    ):
+        response = client.patch(f"/api/v1/tasks/{unavailable_task_id}/status", json=payload)
+        assert response.status_code == 200, response.text
+
+    with SessionLocal() as db:
+        now = models.utc_now()
+        result = models.InventorySnapshot(
+            store_id=store_id,
+            product_id=product_id,
+            on_hand_quantity=16,
+            reserved_quantity=2,
+            source="MANUAL",
+            external_reference=f"TASK-RECONCILIATION-{unavailable_task_id}",
+            captured_at=now,
+            created_at=now,
+        )
+        db.add(result)
+        db.commit()
+        result_snapshot_id = result.id
+
+        try:
+            db.execute(text("""
+                INSERT INTO inventory_movements
+                    (task_id, store_id, product_id, movement_type, quantity,
+                     source_snapshot_id, source_location_code, destination_shelf_id,
+                     result_snapshot_id, actor_user_id, reason, operation_id, created_at)
+                VALUES
+                    (:task_id, :store_id, :product_id, 'BACKROOM_TO_SHELF', 4,
+                     :source_snapshot_id, 'BACKROOM-CI', :destination_shelf_id,
+                     :result_snapshot_id, :actor_id, 'unavailable source guard smoke',
+                     :operation_id, CURRENT_TIMESTAMP)
+            """), {
+                "task_id": unavailable_task_id,
+                "store_id": store_id,
+                "product_id": product_id,
+                "source_snapshot_id": unavailable_snapshot.json()["id"],
+                "destination_shelf_id": shelf.json()["id"],
+                "result_snapshot_id": result_snapshot_id,
+                "actor_id": supervisor_id,
+                "operation_id": str(uuid4()),
+            })
+            db.commit()
+        except DBAPIError:
+            db.rollback()
+        else:
+            raise AssertionError("PostgreSQL accepted a movement from an UNAVAILABLE WMS snapshot")
+
+        unavailable_movement_count = db.execute(
+            text("SELECT COUNT(*) FROM inventory_movements WHERE task_id = :task_id"),
+            {"task_id": unavailable_task_id},
+        ).scalar_one()
+        assert unavailable_movement_count == 0, unavailable_movement_count
+
     print(
-        "PostgreSQL inventory movement smoke passed: movement and lifecycle event were "
-        "persisted; mismatched event identity, invalid movement lineage, UPDATE and DELETE were rejected."
+        "PostgreSQL inventory movement smoke passed: immutable movement/event lineage, "
+        "same-store provenance, append-only guards and rejection of UNAVAILABLE WMS sources."
     )
 
 
