@@ -189,10 +189,12 @@ def test_replenishment_recommendation_uses_observation_and_backroom_stock():
         })
         assert observation.status_code == 201
 
+        _configure_backroom_location(store_id)
         inventory = client.post("/api/v1/inventory/snapshots", json={
             "store_id": store_id, "product_id": product_id,
             "on_hand_quantity": 25, "reserved_quantity": 5,
-            "source": "ERP",
+            "source": "WMS", "location_code": "BACKROOM-A",
+            "availability_status": "AVAILABLE",
         })
         assert inventory.status_code == 201
 
