@@ -1249,3 +1249,12 @@ Auditar `packaging_units.py` e o endpoint `/api/v1/warehouse/replenishment-units
 - Docker Compose smoke run `45617926384`: sucesso.
 - Security Scans run `45617926360`: sucesso; dependency audits, secret scan e ZAP passive baseline aprovados.
 - Próxima prioridade: integrar as quantidades de embalagem nas recomendações/tarefas de reposição, preservando o princípio de que o planeamento não reserva nem movimenta stock sem autorização e confirmação explícitas.
+
+
+## 2026-11-25 — Correcção CI: quantidades fraccionárias na exposição (migration 0090)
+
+- O CI no SHA `62ad03d28f0157bdba2919e9f736d92e677768ac` revelou 1 falha em 1694 testes: `test_replenishment_plan_includes_read_only_packaging_options_for_unit_case_and_pallet` enviava `target_quantity=20.125` para um schema INTEGER e recebia HTTP 422. O mesmo erro surgiu no API CI e nos Quality Gates; o workflow de segurança e Docker Compose passaram.
+- A causa era uma inconsistência de domínio: produtos em kg podiam ter movimentos/snapshots decimais, mas o alvo e o mínimo de exposição permaneciam INTEGER.
+- Implementados modelo SQLAlchemy Decimal/Numeric(12,3), schema Pydantic Decimal com limite de precisão, migration 0090 e downgrade que recusa truncar valores fraccionários.
+- Regressão API agora valida alvo 20.125 e mínimo 0.375; teste de migration cobre conversão, preservação decimal e bloqueio de downgrade destrutivo.
+- Validação da migration 0090 e suite completa ainda pendente nos workflows do HEAD final. Não declarar a correcção concluída até API CI/PostgreSQL 16 e Quality Gates passarem.
