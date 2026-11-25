@@ -1416,3 +1416,16 @@ O commit `50fc1fcd9dac4c88dfb800aaa1f690ff1c0b6304` introduz o endpoint transacc
 - API CI `45655823242`: sucesso, **1715 passed, 1 skipped**.
 - Quality Gates `45655823075`, Security Scans `45655823227` e Docker Compose `45655823263`: sucesso.
 - A migration 0092 fica validada também para referência inexistente; a linha temporal do replay continua preservada.
+
+
+## 2026-11-25 — Política conservadora de skew temporal ERP/WMS (migration 0093)
+
+- Tolerância opcional `comparison_skew_tolerance_minutes` na política ERP por loja; NULL significa não configurada, sem limite inventado.
+- A reconciliação expõe `erp_wms_capture_skew_seconds`. Sem tolerância, timestamps diferentes produzem `TEMPORAL_SKEW_UNCONFIGURED`; acima do limite produzem `TEMPORAL_SKEW`. Ambos mantêm o delta quantitativo NULL.
+- Só capturas dentro da tolerância permitem IN_SYNC/DIVERGENCE. Zero exige timestamps coincidentes.
+- Alterações auditadas na mesma transacção, com actor, valores anterior/novo, motivo e timestamp.
+- Migration 0093 acrescenta constraints PostgreSQL e triggers SQLite para restringir a tolerância à política ERP e ao intervalo 0–10080.
+- Testes adicionados para estado não configurado, limite zero, dentro do limite, validação de origem/motivo, auditoria e migration SQLite.
+- Commits de implementação/testes/documentação publicados; CI e PostgreSQL 16 pendentes. Não foram executados testes localmente.
+- Próxima prioridade: auditar monotonicidade temporal e snapshots WMS consecutivos, reservas agregadas e mudanças de localização; não criar ledger de reservas individuais sem contrato do fornecedor.
+
