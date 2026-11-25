@@ -197,3 +197,16 @@ Se não existir `backroom_location_code` configurado, o stock de retaguarda é d
 ### Limites ainda existentes
 
 Não há adapter real de fornecedor nem integração WMS homologada. A configuração da localização é explícita, mas a sua exactidão depende do contrato e dos dados fornecidos pelo WMS. A normalização de unidades logísticas (unidade/caixa/palete), reservas multi-localização e regras de transferência entre localizações continuam a exigir contratos próprios. Não converter nem somar unidades incompatíveis. A validação CI da implementação desta fase tem de ser confirmada no SHA final antes de a considerar concluída.
+
+
+## Autoridade física WMS por loja/localização (2026-11-25)
+
+O contrato operacional define WMS como autoridade da retaguarda apenas para uma localização física exacta configurada em `InventoryFreshnessPolicy.backroom_location_code` na loja correspondente. O snapshot mais recente dessa localização prevalece mesmo quando está UNAVAILABLE ou UNKNOWN; nesses estados não se reutiliza evidência anterior nem se recorre a ERP, outra localização ou MANUAL. AVAILABLE expõe `on_hand_quantity - reserved_quantity`; reservas e quantidades indisponíveis nunca entram na proposta de reposição.
+
+ERP continua a ser fonte administrativa independente. A quantidade ERP é calculada para comparação mesmo quando `availability_status=UNKNOWN`, porque esse campo só determina disponibilidade física WMS. POS fornece evidência de vendas/procura. MANUAL mantém origem, actor, motivo e auditoria; não ganha autoridade de retaguarda por omissão. IMPORT requer classificação explícita antes de qualquer uso operacional.
+
+Novos snapshots WMS têm de incluir `location_code` não vazio e `availability_status` AVAILABLE ou UNAVAILABLE. A API e o ORM validam o contrato; triggers de INSERT PostgreSQL e SQLite reforçam-no na base de dados. A validação é aplicada a novas linhas para preservar snapshots históricos: os registos anteriores sem localização ficam com UNKNOWN e não são elegíveis para reposição. A migration 0084 mantém os guards append-only de snapshots SQLite; a migration 0085 cria o ledger append-only das alterações de localização autorizada, com actor, localização anterior/nova, motivo e timestamp.
+
+A regressão `test_inventory_backroom_authority_migration.py` cobre a preservação de snapshots legados, rejeição de novas linhas WMS sem proveniência, estados inválidos e imutabilidade dos snapshots/eventos. A suite completa passou com 1679 testes e 1 ignorado no SHA `c8efb82b64d4aed9fcc81fdb4a0571695fdd23cf`; os quatro workflows GitHub (API CI, Quality Gates, Security Scans e Docker Compose) terminaram com sucesso.
+
+**Limite:** não existe adapter WMS real homologado. O código não confirma que o código de localização configurado corresponde fisicamente à retaguarda no fornecedor. Não apresentar a CI como homologação de integração externa. Normalização unidade/caixa/palete e reservas multi-localização continuam por especificar.
