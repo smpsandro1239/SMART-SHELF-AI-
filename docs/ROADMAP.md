@@ -1674,3 +1674,10 @@ O endpoint de transição usa lock pessimista da linha da tarefa e revalida o es
 **Evidência:** SHA `cfeeab3f4e092709de9eccb0dfc54397f72f12af`; API CI `45689904464` — **1725 passed, 1 skipped**; Quality Gates `45689904362`, Security Scans `45689904247` e Docker Compose `45689904380` — sucesso.
 
 **Próxima revisão:** consistência temporal de `started_at`/`completed_at` e política de atribuição/reafectação. Não introduzir regras de negócio sem requisito operacional aprovado.
+
+
+## 2026-11-25 — Isolamento do histórico de tarefas por funcionário
+
+O endpoint de eventos de tarefas aplica agora o âmbito de loja e, para o perfil EMPLOYEE, exige também que a tarefa esteja atribuída ao utilizador autenticado. A condição é aplicada na query SQL antes da leitura do registo. A API responde uniformemente 404 para IDs inexistentes, de outra loja, sem atribuição ou atribuídos a outro funcionário. SUPERVISOR mantém leitura dentro da loja e ADMIN mantém acesso global.
+
+**Evidência:** SHA `e36d8708bb5a054c229144cce466eb074f69812f`; API CI `45714946906`, Quality Gates `45714946958`, Security Scans `45714946858` e Docker Compose `45714946956` — todos com sucesso.
