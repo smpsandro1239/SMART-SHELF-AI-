@@ -80,7 +80,8 @@ def test_manual_count_audit_migration_enforces_provenance_and_append_only(tmp_pa
         )
         connection.exec_driver_sql(
             "INSERT INTO inventory_snapshots (id, store_id, product_id, source) "
-            "VALUES (1, 10, 30, 'MANUAL'), (2, 10, 30, 'WMS')"
+            "VALUES (1, 10, 30, 'MANUAL'), (2, 10, 30, 'WMS'), "
+            "(3, 10, 30, 'MANUAL')"
         )
 
         with Operations.context(MigrationContext.configure(connection)):
@@ -88,7 +89,7 @@ def test_manual_count_audit_migration_enforces_provenance_and_append_only(tmp_pa
 
         # A valid same-store supervisor and a global administrator are accepted.
         _insert_event(connection)
-        _insert_event(connection, snapshot_id=1, actor_id=24)
+        _insert_event(connection, snapshot_id=3, actor_id=24)
 
         # Provenance guards reject inactive, wrong-role and cross-store actors.
         for actor_id in (21, 22, 23):
