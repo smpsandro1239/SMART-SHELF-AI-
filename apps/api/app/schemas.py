@@ -78,6 +78,14 @@ class ProductCreate(BaseModel):
     unit: str = Field(default="un", min_length=1, max_length=30)
     is_active: bool = True
 
+    @field_validator("unit")
+    @classmethod
+    def normalize_base_unit(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("Product base unit cannot be blank")
+        return normalized
+
 
 class ProductRead(ProductCreate):
     id: int
@@ -297,6 +305,8 @@ class InventoryMovementRead(BaseModel):
     product_id: int
     movement_type: Literal["BACKROOM_TO_SHELF"]
     quantity: float
+    quantity_exact: str
+    unit_code: str | None
     source_snapshot_id: int
     source_location_code: str | None
     destination_shelf_id: int | None
