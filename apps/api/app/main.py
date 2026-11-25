@@ -6026,6 +6026,8 @@ def list_pallet_lifecycle_events(
     db: Session = Depends(get_db),
 ):
     actor = _request_user(db, request)
+    if actor is not None and actor.role not in {"ADMIN", "SUPERVISOR"}:
+        raise HTTPException(status_code=403, detail="Supervisor role required")
     _enforce_store_scope(actor, store_id)
     pallet = db.query(models.StorePallet).filter_by(id=pallet_id, store_id=store_id).first()
     if pallet is None:
@@ -6044,6 +6046,8 @@ def record_pallet_lifecycle_update(
 ):
     """Record a supervised, optimistic-concurrency-protected pallet state update."""
     actor = _request_user(db, request)
+    if actor is not None and actor.role not in {"ADMIN", "SUPERVISOR"}:
+        raise HTTPException(status_code=403, detail="Supervisor role required")
     pallet = _lock_store_scoped_record(
         db,
         models.StorePallet,
