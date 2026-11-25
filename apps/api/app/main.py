@@ -6706,6 +6706,8 @@ def create_inventory_snapshot(payload: InventorySnapshotCreate, request: Request
     if product is None:
         raise HTTPException(status_code=404, detail="Product not found")
     data = payload.model_dump()
+    data["on_hand_quantity"] = Decimal(str(payload.on_hand_quantity))
+    data["reserved_quantity"] = Decimal(str(payload.reserved_quantity))
     if data["captured_at"] is None:
         data["captured_at"] = models.utc_now()
     elif data["captured_at"].tzinfo is None:
