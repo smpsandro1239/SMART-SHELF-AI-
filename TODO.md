@@ -2212,3 +2212,13 @@ Decisão: `reserved_quantity` continua a ser o total reservado reportado pelo WM
 
 
 - [ ] Executar CI/PostgreSQL 16 e corrigir eventuais falhas do ledger de contagens manuais (revision 0091) antes de fechar a prioridade.
+
+
+## 2026-11-25 — Hardening do ledger de contagens manuais (0091)
+
+- [x] Exigir actor autenticado, activo e ADMIN/SUPERVISOR na rota MANUAL; exigir motivo válido.
+- [x] Persistir snapshot e evento append-only na mesma transacção, com rollback integral se o evento falhar.
+- [x] Reforçar o trigger SQLite para exigir actor activo e papel ADMIN ou SUPERVISOR da mesma loja, alinhando-o com PostgreSQL.
+- [x] Acrescentar regressão HTTP para supervisor inactivo.
+- [ ] Validar migration 0091 e triggers reais em SQLite/PostgreSQL 16; os testes actuais de API usam Base.metadata.create_all e não substituem a execução da migration.
+- [ ] Confirmar API CI, Quality Gates, Security Scans e Docker Compose no HEAD após esta correcção.
