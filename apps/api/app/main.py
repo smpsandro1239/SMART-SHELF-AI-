@@ -8066,6 +8066,14 @@ def list_replenishment_recommendations(
         links = links.filter(models.ShelfProduct.product_id == product_id)
 
     now = models.utc_now()
+    wms_policy = (
+        db.query(models.InventoryFreshnessPolicy)
+        .filter_by(store_id=store_id, source="WMS")
+        .first()
+    )
+    backroom_location_code = (
+        wms_policy.backroom_location_code if wms_policy is not None else None
+    )
     recommendations = []
     for link in links.order_by(models.ShelfProduct.shelf_id, models.ShelfProduct.product_id).all():
         shelf = db.get(models.Shelf, link.shelf_id)
@@ -8076,15 +8084,20 @@ def list_replenishment_recommendations(
             .order_by(models.Observation.observed_at.desc(), models.Observation.id.desc())
             .first()
         )
-        inventory = (
-            db.query(models.InventorySnapshot)
-            .filter(
-                models.InventorySnapshot.store_id == store_id,
-                models.InventorySnapshot.product_id == link.product_id,
+        inventory = None
+        if backroom_location_code is not None:
+            inventory = (
+                db.query(models.InventorySnapshot)
+                .filter(
+                    models.InventorySnapshot.store_id == store_id,
+                    models.InventorySnapshot.product_id == link.product_id,
+                    models.InventorySnapshot.source == "WMS",
+                    models.InventorySnapshot.location_code == backroom_location_code,
+                    models.InventorySnapshot.availability_status == "AVAILABLE",
+                )
+                .order_by(models.InventorySnapshot.captured_at.desc(), models.InventorySnapshot.id.desc())
+                .first()
             )
-            .order_by(models.InventorySnapshot.captured_at.desc(), models.InventorySnapshot.id.desc())
-            .first()
-        )
 
         status = "NO_ACTION"
         explanation = "A observação mais recente não indica baixa disponibilidade."
@@ -8120,7 +8133,12 @@ def list_replenishment_recommendations(
                     explanation = "A deteção não tem confiança suficiente (mínimo 0,60); requer confirmação humana."
                 elif inventory is None:
                     status = "INVENTORY_UNKNOWN"
-                    explanation = "Não existe snapshot de inventário; verificar stock antes de repor."
+                    explanation = (
+                        "A localização física de retaguarda WMS não está configurada para esta loja; "
+                        "o stock ERP não é substituto. Configurar a localização e confirmar a disponibilidade WMS."
+                        if backroom_location_code is None
+                        else "Não existe stock WMS disponível e confirmado na localização configurada da retaguarda."
+                    )
                 else:
                     inventory_at = inventory.captured_at
                     if inventory_at.tzinfo is None:
@@ -8128,11 +8146,7 @@ def list_replenishment_recommendations(
                     else:
                         inventory_at = inventory_at.astimezone(timezone.utc)
                     inventory_age_minutes = (now - inventory_at).total_seconds() / 60
-                    freshness_policy = (
-                        db.query(models.InventoryFreshnessPolicy)
-                        .filter_by(store_id=store_id, source=inventory.source)
-                        .first()
-                    )
+                    freshness_policy = wms_policy
                     max_inventory_age_minutes = (
                         freshness_policy.max_age_minutes if freshness_policy else 240
                     )
