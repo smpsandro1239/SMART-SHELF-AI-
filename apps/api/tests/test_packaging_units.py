@@ -37,6 +37,30 @@ def test_open_case_uses_case_plus_loose_base_units_when_allowed():
     assert result["opened_package_required"] is True
 
 
+def test_fractional_pack_calculations_expose_exact_decimal_quantities():
+    result = calculate_replenishment_packs(
+        required_base_units="20.125",
+        base_units_per_package="12.000",
+        allow_open_package=True,
+    )
+
+    assert result["package_count"] == 1
+    assert result["opened_package_count"] == 1
+    assert result["required_base_units_exact"] == "20.125"
+    assert result["loose_base_units_exact"] == "8.125"
+    assert result["planned_base_units_exact"] == "20.125"
+    assert result["excess_base_units_exact"] == "0.000"
+
+    sealed = calculate_replenishment_packs(
+        required_base_units="20.125",
+        base_units_per_package="12.000",
+        allow_open_package=False,
+    )
+    assert sealed["package_count"] == 2
+    assert sealed["planned_base_units_exact"] == "24.000"
+    assert sealed["excess_base_units_exact"] == "3.875"
+
+
 def test_exact_multiple_does_not_create_loose_units():
     result = calculate_replenishment_packs(
         required_base_units=24,
