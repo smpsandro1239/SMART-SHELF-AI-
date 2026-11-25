@@ -1146,3 +1146,8 @@ Ponto semântico ainda aberto: InventorySnapshot.source aceita ERP, WMS, POS, MA
 - A validação inicial não exercitava directamente os triggers de eventos em PostgreSQL. Foi iniciado um reforço do smoke `postgres_inventory_movement_lineage_smoke.py` para validar leitura do evento, operação/tenant, evento posterior com actor/motivo próprios, rejeição de operação divergente e protecção append-only.
 - A migration 0087 foi ajustada para validar actor/motivo contra o movimento apenas no evento inicial MOVEMENT_RECORDED; eventos posteriores mantêm a identidade da operação/loja, mas podem registar actor e motivo próprios.
 - **Estado deste reforço:** código e teste actualizados; CI do novo SHA pendente.
+
+
+### Correcção do smoke PostgreSQL — autenticação de produção
+
+A primeira execução do novo smoke (API CI run 45611398632) falhou porque a leitura dos eventos foi executada depois de restaurar `APP_ENV=test`. Nesse modo, o middleware de autenticação é intencionalmente ignorado e o contexto `request.state.user_id` não é preenchido. O smoke já executava a reconciliação em modo production, mas a leitura não estava dentro do mesmo contexto. A leitura foi movida para dentro do bloco production, mantendo a restauração da configuração em `finally`. A falha era do harness de teste, não de uma autorização permissiva no endpoint. Novo API CI pendente.

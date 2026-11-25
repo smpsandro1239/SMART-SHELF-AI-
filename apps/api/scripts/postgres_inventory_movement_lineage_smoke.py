@@ -121,16 +121,16 @@ def main() -> None:
                 json={"reason": "PostgreSQL movement lineage guard smoke"},
                 headers=headers,
             )
+            assert reconciled.status_code == 201, reconciled.text
+            movement = reconciled.json()
+            event_response = client.get(
+                f"/api/v1/inventory/movements/{movement['id']}/events",
+                headers=headers,
+            )
         finally:
             main_module.settings = original_settings
-        assert reconciled.status_code == 201, reconciled.text
-        movement = reconciled.json()
         assert movement["source_snapshot_id"] == source_snapshot_id
         assert movement["quantity"] == 4
-        event_response = client.get(
-            f"/api/v1/inventory/movements/{movement['id']}/events",
-            headers=headers,
-        )
         assert event_response.status_code == 200, event_response.text
         assert len(event_response.json()) == 1
         recorded_event = event_response.json()[0]
