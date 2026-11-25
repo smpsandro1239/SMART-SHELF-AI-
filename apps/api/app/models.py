@@ -624,6 +624,9 @@ class InventoryFreshnessPolicyEvent(Base):
             "new_backroom_location_code IS NULL OR length(trim(new_backroom_location_code)) > 0",
             name="ck_inventory_freshness_event_new_location",
         ),
+        CheckConstraint("length(trim(reason)) >= 5", name="ck_inventory_freshness_event_reason_nonblank"),
+        Index("ix_inventory_freshness_policy_events_policy", "policy_id", "created_at", "id"),
+        Index("ix_inventory_freshness_policy_events_actor", "actor_user_id", "created_at"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
