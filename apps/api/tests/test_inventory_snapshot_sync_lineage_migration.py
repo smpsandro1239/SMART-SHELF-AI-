@@ -48,6 +48,7 @@ def test_snapshot_sync_lineage_requires_matching_active_run_and_preserves_legacy
             (11, "WMS", 1, "foreign-store-run"),
             (10, "ERP", 1, "wrong-source-run"),
             (10, "WMS", 4, "terminal-run"),
+            (10, "WMS", 999, "missing-run"),
         ):
             with pytest.raises(IntegrityError, match="inventory snapshot source_sync_id provenance mismatch"):
                 _insert_snapshot(connection, store_id=store_id, source=source, source_sync_id=sync_id, reference=reference)
