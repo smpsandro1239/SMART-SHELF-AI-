@@ -122,18 +122,22 @@ def main() -> None:
         admin_token = create_access_token(
             user_id=actor_ids["admin"], role="ADMIN"
         )[0]
-        admin_manual = client.post(
-            "/api/v1/inventory/snapshots",
-            json={
-                "store_id": store_a_id,
-                "product_id": product_id,
-                "on_hand_quantity": 11,
-                "reserved_quantity": 0,
-                "source": "MANUAL",
-                "reason": "PostgreSQL audit smoke ADMIN count",
-            },
-            headers={"Authorization": f"Bearer {admin_token}"},
-        )
+        main_module.settings = original_settings.model_copy(update={"app_env": "production"})
+        try:
+            admin_manual = client.post(
+                "/api/v1/inventory/snapshots",
+                json={
+                    "store_id": store_a_id,
+                    "product_id": product_id,
+                    "on_hand_quantity": 11,
+                    "reserved_quantity": 0,
+                    "source": "MANUAL",
+                    "reason": "PostgreSQL audit smoke ADMIN count",
+                },
+                headers={"Authorization": f"Bearer {admin_token}"},
+            )
+        finally:
+            main_module.settings = original_settings
         assert admin_manual.status_code == 201, admin_manual.text
 
         wms = client.post(
