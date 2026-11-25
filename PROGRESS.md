@@ -1113,3 +1113,11 @@ Ponto semântico ainda aberto: InventorySnapshot.source aceita ERP, WMS, POS, MA
 - Corrigido em `ee68ab2bf41b7571833018d3928e7b32cd5a76b1`: o backfill passa explicitamente `destination_shelf_id = NULL`, preservando a decisão de não inferir destinos históricos.
 - A execução anterior confirma que a migration PostgreSQL sobe; ainda não confirma a suite completa nem os triggers de proveniência da migration 0086 em PostgreSQL. A validação integral permanece pendente até nova CI.
 - O ledger de eventos ainda não foi iniciado; fica bloqueado até a suite corrigida passar.
+
+
+## 2026-11-25 — Correcção do fixture SQLite da migration 0086
+
+- A nova execução de Quality Gates terminou com 1 falha, 1679 testes aprovados e 1 ignorado. A falha não ocorreu no backfill nem no PostgreSQL: o teste isolado SQLite criava `inventory_movements` sem a coluna `product_id`, embora o modelo real e a tabela de produção a contenham.
+- O trigger 0086 consulta `NEW.product_id` para confirmar a coerência entre movimento, tarefa e snapshot. SQLite devolveu `no such column: NEW.product_id` antes de avaliar a rejeição esperada do movimento inválido.
+- Corrigido o fixture para reproduzir o esquema real: `product_id` passa a existir e é preenchido nos movimentos históricos e nas inserções de teste. A regra de produção mantém-se inalterada.
+- Esta correcção é exclusivamente de teste. A validação PostgreSQL 16 continua pendente na execução API CI; não declarar a migration integralmente validada até a suite completa e os workflows relevantes passarem.
