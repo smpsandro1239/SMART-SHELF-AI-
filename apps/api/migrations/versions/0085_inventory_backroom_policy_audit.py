@@ -36,6 +36,10 @@ def upgrade() -> None:
             "new_backroom_location_code IS NULL OR length(trim(new_backroom_location_code)) > 0",
             name="ck_inventory_freshness_event_new_location",
         ),
+        sa.CheckConstraint(
+            "length(trim(reason)) >= 5",
+            name="ck_inventory_freshness_event_reason_nonblank",
+        ),
     )
     op.create_index(
         "ix_inventory_freshness_policy_events_policy",
