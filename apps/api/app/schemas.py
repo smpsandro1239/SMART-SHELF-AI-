@@ -1,5 +1,6 @@
 from datetime import date, datetime
 from typing import Literal
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -290,12 +291,15 @@ class InventoryReconciliationReview(BaseModel):
 
 class InventoryMovementRead(BaseModel):
     id: int
+    operation_id: UUID | None
     task_id: int
     store_id: int
     product_id: int
     movement_type: Literal["BACKROOM_TO_SHELF"]
     quantity: float
     source_snapshot_id: int
+    source_location_code: str | None
+    destination_shelf_id: int | None
     result_snapshot_id: int
     actor_user_id: int
     reason: str
