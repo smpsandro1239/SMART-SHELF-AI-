@@ -291,7 +291,7 @@ class InventoryReconciliationReview(BaseModel):
 
 class InventoryMovementRead(BaseModel):
     id: int
-    operation_id: UUID | None
+    operation_id: UUID
     task_id: int
     store_id: int
     product_id: int
