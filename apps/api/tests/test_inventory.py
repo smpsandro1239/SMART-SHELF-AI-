@@ -506,7 +506,8 @@ def test_reconciliation_rejects_inventory_snapshot_newer_than_task_completion(mo
         newer = client.post("/api/v1/inventory/snapshots", json={
             "store_id": store_id, "product_id": product_id,
             "on_hand_quantity": 15, "reserved_quantity": 0,
-            "source": "ERP", "external_reference": f"AFTER-{uuid4().hex[:8]}",
+            "source": "WMS", "external_reference": f"AFTER-{uuid4().hex[:8]}",
+            "location_code": "BACKROOM-A", "availability_status": "AVAILABLE",
             "captured_at": (datetime.now(timezone.utc) + timedelta(seconds=5)).isoformat(),
         })
         assert newer.status_code == 201, newer.text
@@ -844,10 +845,12 @@ def test_inventory_reconciliation_separates_shelf_observation_from_backroom_stoc
             "observed_at": (reference_time - timedelta(minutes=90)).isoformat(),
         })
         assert observation.status_code == 201, observation.text
+        _configure_backroom_location(store_id)
         snapshot = client.post("/api/v1/inventory/snapshots", json={
             "store_id": store_id, "product_id": product_id,
             "on_hand_quantity": 30, "reserved_quantity": 5,
-            "source": "ERP", "external_reference": f"RECON-{uuid4().hex[:8]}",
+            "source": "WMS", "external_reference": f"RECON-{uuid4().hex[:8]}",
+            "location_code": "BACKROOM-A", "availability_status": "AVAILABLE",
         })
         assert snapshot.status_code == 201, snapshot.text
 
@@ -932,9 +935,11 @@ def test_inventory_reconciliation_compares_fresh_erp_and_wms_snapshots(monkeypat
             "store_id": store_id, "product_id": product_id,
             "on_hand_quantity": 26, "reserved_quantity": 3,
             "source": "WMS", "external_reference": "WMS-CHECK-01",
+            "location_code": "BACKROOM-A", "availability_status": "AVAILABLE",
         })
         assert erp.status_code == 201, erp.text
         assert wms.status_code == 201, wms.text
+        _configure_backroom_location(store_id)
 
         actor = _supervisor_actor(store_id)
         monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: actor)
@@ -988,6 +993,7 @@ def test_inventory_reconciliation_isolates_shared_product_snapshots_and_ledger_a
 
         snapshot_ids = {}
         for store_id, marker in ((store_a_id, "A"), (store_b_id, "B")):
+            _configure_backroom_location(store_id)
             erp = client.post("/api/v1/inventory/snapshots", json={
                 "store_id": store_id, "product_id": product_id,
                 "on_hand_quantity": 100 if marker == "A" else 900,
@@ -999,6 +1005,7 @@ def test_inventory_reconciliation_isolates_shared_product_snapshots_and_ledger_a
                 "on_hand_quantity": 80 if marker == "A" else 800,
                 "reserved_quantity": 5, "source": "WMS",
                 "external_reference": f"SHARED-WMS-{marker}",
+                "location_code": "BACKROOM-A", "availability_status": "AVAILABLE",
             })
             assert erp.status_code == 201, erp.text
             assert wms.status_code == 201, wms.text
@@ -1140,9 +1147,11 @@ def test_inventory_reconciliation_ledger_persists_evidence_and_requires_independ
         wms = client.post("/api/v1/inventory/snapshots", json={
             "store_id": store_id, "product_id": product_id, "on_hand_quantity": 35,
             "reserved_quantity": 3, "source": "WMS", "external_reference": "LEDGER-WMS-01",
+            "location_code": "BACKROOM-A", "availability_status": "AVAILABLE",
         })
         assert erp.status_code == 201, erp.text
         assert wms.status_code == 201, wms.text
+        _configure_backroom_location(store_id)
 
         creator = _supervisor_actor(store_id)
         monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: creator)
