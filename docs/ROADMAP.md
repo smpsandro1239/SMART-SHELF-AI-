@@ -1702,3 +1702,10 @@ Os handlers de criação de snapshots, listagem e consulta do snapshot mais rece
 Os endpoints de registo horário, batch e importação CSV de vendas/tráfego passaram a repetir no handler a exigência ADMIN/SUPERVISOR da política central. A verificação dos imports é feita antes da leitura do ficheiro. O teste usa actor EMPLOYEE e prova que os seis endpoints respondem 403 sem persistir linhas.
 
 **Evidência:** SHA `d36af7332544204fc14b6764a3faf99c24aa4741`; API CI **1729 passed, 1 skipped**; Quality Gates, Security Scans e Docker Compose — sucesso.
+
+
+## 2026-11-25 — Autorização da persistência OCR e fusão de evidência
+
+Os handlers que persistem OCR runs, matches OCR→catálogo e fusão visual/textual repetem a política ADMIN/SUPERVISOR. A negação de EMPLOYEE ocorre antes do lock da imagem e antes de qualquer escrita; os testes confirmam ausência de registos após HTTP 403.
+
+**Evidência:** SHA `a9271dd595c7d913a93cd969cf73d58b5e49438d`; API CI **1730 passed, 1 skipped**; Quality Gates, Security Scans e Docker Compose — sucesso.
