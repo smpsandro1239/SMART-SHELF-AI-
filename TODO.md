@@ -2345,3 +2345,16 @@ Evidência: API CI `45677287479` (**1717 passed, 1 skipped**); Quality Gates `45
 - [ ] Definir política de retenção/identidade para prateleiras eliminadas ou reestruturadas; preservar o snapshot do destino sem depender do nome actual.
 
 Evidência no SHA `3f4c9740ce70e932c5cb35745e96edd1163bf864`: API CI **1720 passed, 1 skipped**; smoke PostgreSQL de linhagem e concorrência passou; restantes workflows passaram.
+
+
+## P1 — Identidade física completa e retenção do destino (migration 0095)
+
+- [x] Persistir `destination_zone_id` e `destination_zone_name` juntamente com o ID/código da prateleira.
+- [x] Distinguir evidência capturada no movimento (`destination_location_backfilled=false`) de valores históricos reconstruídos pela hierarquia actual na migration (`true`).
+- [x] Validar tarefa, prateleira, zona, loja, códigos e nomes nas guardas PostgreSQL/SQLite.
+- [x] Preservar os valores históricos quando prateleira e zona são renomeadas.
+- [x] Confirmar que a eliminação da prateleira/zona referenciada por um movimento é bloqueada pela cadeia de retenção task → movement.
+- [x] API CI PostgreSQL 16, smoke de linhagem/retention, migration SQLite, Quality Gates, Security Scans e Docker Compose.
+- [ ] Se existir necessidade de apagar fisicamente entidades de catálogo, desenhar soft-delete/arquivamento explícito e compatível com histórico; não enfraquecer FKs nem apagar movimentos.
+
+Evidência no SHA `48fdf8310d1b17179ba6520d7a559b3bcc822c7f`: API CI **1722 passed, 1 skipped**; smoke PostgreSQL confirmou renomeação e bloqueio de eliminação; restantes workflows passaram. Limitação: a hierarquia histórica anterior à migration não é recuperável quando não existia auditoria de renomeações; os registos antigos ficam marcados como backfill.
