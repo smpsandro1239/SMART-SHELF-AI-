@@ -2042,3 +2042,35 @@ def test_fused_evidence_status_pagination_crosses_keyset_batch_boundary():
 
     assert response.status_code == 200, response.text
     assert [item["id"] for item in response.json()] == expected_page
+
+
+
+def test_employee_cannot_create_or_recompute_ocr_product_evidence(monkeypatch):
+    image_id, _ = create_image_with_detection()
+    with TestingSession() as db:
+        image = db.get(models.ShelfImage, image_id)
+        shelf = db.get(models.Shelf, image.shelf_id)
+        zone = db.get(models.Zone, shelf.zone_id)
+        employee = models.User(
+            email="ocr-evidence-employee@example.test", full_name="Operador OCR",
+            password_hash="test-only-not-used", role="EMPLOYEE", store_id=zone.store_id,
+            is_active=True,
+        )
+        db.add(employee)
+        db.commit()
+        db.refresh(employee)
+
+    monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: employee)
+    with TestClient(app) as client:
+        created_run = client.post(
+            f"/api/v1/shelf-images/{image_id}/ocr-runs",
+            json={"provider": "paddleocr", "model_version": "PP-OCRv5-pt", "regions": []},
+        )
+        matched = client.post(f"/api/v1/shelf-images/{image_id}/ocr-matches")
+        fused = client.post(f"/api/v1/shelf-images/{image_id}/evidence-fusion")
+        assert [created_run.status_code, matched.status_code, fused.status_code] == [403, 403, 403]
+
+    with TestingSession() as db:
+        assert db.query(models.ShelfImageOCRRun).filter_by(shelf_image_id=image_id).count() == 0
+        assert db.query(models.ShelfImageOCRMatch).count() == 0
+        assert db.query(models.ShelfImageFusedEvidence).count() == 0
