@@ -1489,6 +1489,10 @@ def test_employee_can_only_read_events_for_tasks_assigned_to_them(monkeypatch):
             "shelf_id": second_shelf.json()["id"], "product_id": second_product.json()["id"],
             "target_quantity": 10, "min_display_quantity": 2,
         }).status_code == 201
+        assert client.post("/api/v1/shelf-products", json={
+            "shelf_id": second_shelf.json()["id"], "product_id": product_id,
+            "target_quantity": 10, "min_display_quantity": 2,
+        }).status_code == 201
 
         with TestingSession() as db:
             employee = models.User(
