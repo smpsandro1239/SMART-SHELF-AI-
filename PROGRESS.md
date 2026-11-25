@@ -1093,3 +1093,14 @@ Ponto semântico ainda aberto: InventorySnapshot.source aceita ERP, WMS, POS, MA
 - Corrigidos `docs/INVENTORY-SOURCE-SYNC.md` e `TODO.md` para preservar as implementações existentes e separar claramente o que falta.
 - Commits: `df2f377555255bb9eca11e4f52a429bdf852aa86` (documentação técnica) e `7ca759af4ebaa3ca2eb6f907e28291dd30078d4d` (TODO).
 - **Limite:** esta passagem foi de verificação e correcção documental. Não foram alterados modelos, migrations, endpoints ou testes; não foram executados testes nem CI.
+
+
+## 2026-11-25 — UUID e proveniência congelada em InventoryMovement
+
+- Criada a migration 0086_inventory_movement_identity_provenance: UUID individual por movimento, localização WMS de origem e ID da prateleira de destino.
+- Os movimentos existentes recebem UUIDs individuais. A localização de origem e o destino só são copiados quando constam explicitamente do snapshot/tarefa relacionados; valores desconhecidos permanecem NULL.
+- Adicionados triggers de INSERT PostgreSQL e SQLite para exigir proveniência completa em novos movimentos e validar que a prateleira pertence à mesma loja. Os triggers append-only de UPDATE/DELETE existentes são preservados.
+- O modelo SQLAlchemy, o endpoint de reconciliação e o contrato InventoryMovementRead foram actualizados.
+- O teste HTTP de reconciliação verifica UUID e proveniência congelada; foi criado teste dedicado à migration e ao backfill histórico, incluindo preservação de trigger UPDATE preexistente.
+- Commits de implementação: 1129295 (modelo), 72c78b0 (schema), 84f85bc (endpoint), ded06a2 (teste HTTP), 6a9e629 (migration), 5e92563 (teste migration), 9ed6683 (alinhamento do índice ORM).
+- Validação pendente: não foram executados testes localmente nesta sessão. A execução GitHub Actions para o HEAD resultante tem de ser consultada antes de declarar a alteração aprovada.
