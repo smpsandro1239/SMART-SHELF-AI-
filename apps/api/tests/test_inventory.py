@@ -2207,3 +2207,30 @@ def test_reserved_wms_quantity_is_subtracted_once_across_multiple_movements(monk
             ).all()
             assert len(stored_movements) == 2
             assert sum(item.quantity for item in stored_movements) == 12
+
+
+
+def test_inventory_snapshot_read_and_ingestion_handlers_require_supervisor(monkeypatch):
+    with TestClient(app) as client:
+        store_id, product_id = create_store_and_product(client)
+        employee = _supervisor_actor(store_id, role="EMPLOYEE")
+        monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: employee)
+
+        payload = {
+            "store_id": store_id, "product_id": product_id,
+            "on_hand_quantity": 12, "reserved_quantity": 2,
+            "source": "WMS", "external_reference": "EMPLOYEE-MUST-NOT-INGEST",
+            "location_code": "BACKROOM-A", "availability_status": "AVAILABLE",
+        }
+        created = client.post("/api/v1/inventory/snapshots", json=payload)
+        listed = client.get("/api/v1/inventory/snapshots", params={"store_id": store_id})
+        latest = client.get("/api/v1/inventory/latest", params={
+            "store_id": store_id, "product_id": product_id,
+        })
+        assert created.status_code == 403
+        assert listed.status_code == 403
+        assert latest.status_code == 403
+        with TestingSession() as db:
+            assert db.query(models.InventorySnapshot).filter_by(
+                store_id=store_id, product_id=product_id,
+            ).count() == 0
