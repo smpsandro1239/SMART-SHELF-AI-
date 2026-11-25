@@ -11,7 +11,8 @@
 - [x] Acrescentar regressões para ERP sem fallback, estado WMS indisponível, localização errada, configuração por loja e auditoria da política.
 - [x] Confirmar migrations 0084/0085, suite API (1679 passed, 1 skipped), PostgreSQL 16, Quality Gates, Security Scans e Docker Compose no SHA `c8efb82b64d4aed9fcc81fdb4a0571695fdd23cf`.
 - [ ] Homologar adapter WMS real e validar mapeamento de localizações com o fornecedor.
-- [ ] Definir normalização de unidade/caixa/palete e conversões autorizadas sem misturar unidades incompatíveis.
+- [x] Implementar normalização logística interna por SKU: Product.unit como unidade base e níveis UNIT/CASE/PALLET com factores Decimal, cálculo read-only e sem movimentos automáticos.
+- [ ] Mapear códigos/unidades e factores externos do WMS para a unidade base interna, com vigência/versionamento e homologação do fornecedor.
 - [ ] Expandir a auditoria de movimentos manuais e reconciliação de reservas multi-localização.
 
 Limite: o código suporta o contrato e a configuração, mas ainda não existe adapter WMS real homologado. Não apresentar o ledger de sincronização como prova de conectividade externa.

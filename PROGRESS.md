@@ -1315,3 +1315,18 @@ Auditar a reconciliação de reservas WMS. O modelo actual recebe `reserved_quan
 - O endpoint directo de snapshots agora rejeita precisão superior a três casas decimais em stock físico ou reservado. A persistência recebe Decimal explícito e preserva valores como 10.125 e 2.375 sem arredondamento silencioso.
 - O teste API valida a persistência exacta e confirma que quantidades inválidas não criam snapshots.
 - Reservas: o WMS continua a ser a fonte do total reservado por snapshot/localização; o sistema calcula disponível como físico menos reservado. Não existe detalhe de reserva individual fornecido pelo contrato actual, pelo que não é criado ledger local fictício nem se considera uma tarefa como reserva.
+
+
+## 2026-11-25 — Conversões logísticas: precisão sem arredondamento silencioso
+
+- A auditoria encontrou uma lacuna real: ProductPackagingLevelCreate recebia base_units_per_package como float, enquanto a coluna é NUMERIC(14,3). Factores com mais de três casas podiam ser arredondados pela base de dados sem rejeição explícita.
+- O contrato passa a receber Decimal, rejeita factores com escala superior a três casas e o modelo ORM declara o campo como Decimal.
+- O cálculo de embalagens valida também a escala da quantidade necessária, do factor e do resultado convertido, alinhando o domínio com a precisão NUMERIC(12,3) das quantidades de inventário.
+- Testes adicionados: factor 12.125 aceite e preservado; factor 12.1254 rejeitado com HTTP 422 e sem registo; funções puras rejeitam quantidade/factor/resultados com precisão não suportada.
+- Não foi necessária migration: a coluna já era NUMERIC(14,3); a falha estava na validação de entrada e na tipagem do contrato.
+- API CI 45637232222: sucesso, PostgreSQL 16 e smokes; suite **1702 passed, 1 skipped** em 108.37s.
+- Quality Gates 45637232143: sucesso, TypeScript/build Web e suite **1702 passed, 1 skipped**.
+- Security Scans 45637232196: sucesso; auditorias de dependências, Gitleaks e OWASP ZAP passive baseline.
+- Docker Compose 45637232943: sucesso.
+- Commits de implementação/testes: 55e29d6, b13d1a6, 2b2b232.
+- Limite: isto fecha a conversão logística interna. O mapeamento das unidades/códigos externos WMS continua dependente do contrato do fornecedor. A reconciliação multi-localização não deve somar snapshots até serem definidas a elegibilidade das localizações e a semântica das reservas.

@@ -257,3 +257,10 @@ Os snapshots físicos persistem `on_hand_quantity` e `reserved_quantity` em `NUM
 A reserva é um agregado reportado pela fonte WMS para a localização configurada. O SMART SHELF AI calcula `available_quantity = on_hand_quantity - reserved_quantity`; não cria, liberta ou altera reservas externas. A criação/atribuição de uma tarefa de reposição não reserva stock e o plano de embalagens mantém `stock_reserved=false`.
 
 Não existe ainda detalhe de reserva por identificador externo, documento, estado ou linha de encomenda. Sem esse contrato do fornecedor, não é seguro inventar um ledger interno nem reconciliar reservas individuais. A reconciliação actual é ao nível do snapshot, loja, SKU e localização WMS autorizada.
+
+
+## Unidade base e embalagens logísticas internas
+
+O catálogo define Product.unit como unidade base do SKU. ProductPackagingLevel.base_units_per_package expressa cada nível UNIT/CASE/PALLET nessa unidade base, com factor decimal persistido em NUMERIC(14,3). O planeamento converte quantidades com Decimal, expõe campos exactos textuais e não cria reservas nem movimentos de stock. A API rejeita factores com mais de três casas decimais para impedir que a persistência arredonde silenciosamente o factor.
+
+**Fronteira ainda não implementada:** o adapter WMS ainda não normaliza os códigos de unidade do fornecedor para Product.unit, nem homologa factores de conversão externos. Não assumir que EA, CS, BOX, PAL, kg, litros ou outras unidades são equivalentes sem catálogo/mapeamento aprovado por fornecedor e SKU. A configuração actual de embalagens internas não constitui prova de correspondência com a unidade externa.

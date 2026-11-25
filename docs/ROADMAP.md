@@ -9,7 +9,7 @@ Novos snapshots WMS exigem localização e disponibilidade explícitas ao nível
 
 **Evidência:** API CI `45574197186` — 1679 testes aprovados, 1 ignorado e 47 smokes PostgreSQL concluídos; Quality Gates `45574197259` — sucesso; Security Scans `45574197237` — sucesso; Docker Compose `45574197037` — sucesso.
 
-**Ainda não homologado:** adapter WMS real, códigos/estados de localização do fornecedor, conversões unidade/caixa/palete e reservas multi-localização. O sucesso da CI não prova conectividade externa.
+**Ainda não homologado:** adapter WMS real, códigos/estados e mapeamento de unidades do fornecedor, factores logísticos externos e reservas multi-localização. A conversão interna por SKU entre unidade base, caixa e palete está implementada; não prova que os códigos/factores do fornecedor estejam correctos. O sucesso da CI não prova conectividade externa.
 
 ---
 

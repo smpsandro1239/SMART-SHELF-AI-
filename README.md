@@ -8,7 +8,7 @@ A configuração da localização é feita através de `POST /api/v1/inventory/f
 
 O contrato dos adapters WMS exige localização e disponibilidade explícitas. O orquestrador persiste estes campos e inclui-os na comparação de replay idempotente. A reconciliação de movimentos consome apenas snapshots WMS da localização configurada e preserva actor, motivo e referências de origem/resultante.
 
-**Limite:** ainda não existe adapter WMS real homologado. O contrato e a lógica de selecção não provam conectividade ou exactidão de um fornecedor. A normalização de unidade/caixa/palete permanece uma fase separada. Detalhes: [docs/INVENTORY-SOURCE-SYNC.md](docs/INVENTORY-SOURCE-SYNC.md).
+**Limite:** ainda não existe adapter WMS real homologado. O contrato e a lógica de selecção não provam conectividade ou exactidão de um fornecedor. A conversão logística interna por SKU (Product.unit → UNIT/CASE/PALLET) já está implementada com factores Decimal e cálculo read-only; continua pendente o mapeamento das unidades/códigos externos do WMS e a homologação dos factores com o fornecedor. Detalhes: [docs/INVENTORY-SOURCE-SYNC.md](docs/INVENTORY-SOURCE-SYNC.md).
 
 ---
 
