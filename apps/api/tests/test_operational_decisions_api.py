@@ -53,6 +53,12 @@ def create_context(client):
         "shelf_id": shelf.json()["id"], "product_id": product.json()["id"],
         "target_quantity": 12, "min_display_quantity": 3,
     })
+    with TestingSession() as db:
+        db.add(models.InventoryFreshnessPolicy(
+            store_id=store_id, source="WMS", max_age_minutes=240,
+            backroom_location_code="BACKROOM-A",
+        ))
+        db.commit()
     return store_id, shelf.json()["id"], product.json()["id"]
 
 
@@ -177,7 +183,8 @@ def test_backroom_snapshot_is_not_misused_as_shelf_inventory_or_coverage():
         snapshot = client.post("/api/v1/inventory/snapshots", json={
             "store_id": store_id, "product_id": product_id,
             "on_hand_quantity": 20, "reserved_quantity": 5,
-            "source": "MANUAL", "external_reference": "BACKROOM-TEST-01",
+            "source": "WMS", "external_reference": "BACKROOM-TEST-01",
+            "location_code": "BACKROOM-A", "availability_status": "AVAILABLE",
         })
         assert snapshot.status_code == 201
 
@@ -206,7 +213,8 @@ def test_operational_decision_proposes_partial_refill_only_from_fresh_measured_e
         snapshot = client.post("/api/v1/inventory/snapshots", json={
             "store_id": store_id, "product_id": product_id,
             "on_hand_quantity": 8, "reserved_quantity": 3,
-            "source": "MANUAL", "external_reference": "REFILL-PARTIAL-01",
+            "source": "WMS", "external_reference": "REFILL-PARTIAL-01",
+            "location_code": "BACKROOM-A", "availability_status": "AVAILABLE",
         })
         assert snapshot.status_code == 201
 
@@ -234,7 +242,8 @@ def test_operational_decision_never_uses_stale_backroom_stock_for_refill_quantit
         snapshot = client.post("/api/v1/inventory/snapshots", json={
             "store_id": store_id, "product_id": product_id,
             "on_hand_quantity": 30, "reserved_quantity": 0,
-            "source": "MANUAL", "external_reference": "REFILL-STALE-01",
+            "source": "WMS", "external_reference": "REFILL-STALE-01",
+            "location_code": "BACKROOM-A", "availability_status": "AVAILABLE",
             "captured_at": "2020-01-01T00:00:00Z",
         })
         assert snapshot.status_code == 201
@@ -262,7 +271,8 @@ def test_future_observation_and_future_inventory_are_not_accepted_for_refill():
         snapshot = client.post("/api/v1/inventory/snapshots", json={
             "store_id": store_id, "product_id": product_id,
             "on_hand_quantity": 30, "reserved_quantity": 0,
-            "source": "MANUAL", "external_reference": "REFILL-FUTURE-01",
+            "source": "WMS", "external_reference": "REFILL-FUTURE-01",
+            "location_code": "BACKROOM-A", "availability_status": "AVAILABLE",
             "captured_at": "2099-01-01T00:00:00Z",
         })
         assert snapshot.status_code == 201
@@ -287,7 +297,8 @@ def test_operational_decision_task_requires_explicit_approval_and_revalidates_ev
         snapshot = client.post("/api/v1/inventory/snapshots", json={
             "store_id": store_id, "product_id": product_id,
             "on_hand_quantity": 8, "reserved_quantity": 3,
-            "source": "MANUAL", "external_reference": "APPROVAL-01",
+            "source": "WMS", "external_reference": "APPROVAL-01",
+            "location_code": "BACKROOM-A", "availability_status": "AVAILABLE",
         })
         assert snapshot.status_code == 201
 
@@ -333,7 +344,8 @@ def test_operational_decision_task_cannot_exceed_validated_refill_quantity():
         client.post("/api/v1/inventory/snapshots", json={
             "store_id": store_id, "product_id": product_id,
             "on_hand_quantity": 8, "reserved_quantity": 3,
-            "source": "MANUAL", "external_reference": "APPROVAL-02",
+            "source": "WMS", "external_reference": "APPROVAL-02",
+            "location_code": "BACKROOM-A", "availability_status": "AVAILABLE",
         })
         response = client.post(
             "/api/v1/tasks/from-operational-decision?approved=true",
@@ -358,13 +370,15 @@ def test_task_approval_rechecks_latest_stock_and_refuses_when_backroom_is_empty(
         first = client.post("/api/v1/inventory/snapshots", json={
             "store_id": store_id, "product_id": product_id,
             "on_hand_quantity": 12, "reserved_quantity": 0,
-            "source": "MANUAL", "external_reference": "APPROVAL-STOCK-01",
+            "source": "WMS", "external_reference": "APPROVAL-STOCK-01",
+            "location_code": "BACKROOM-A", "availability_status": "AVAILABLE",
         })
         assert first.status_code == 201
         changed = client.post("/api/v1/inventory/snapshots", json={
             "store_id": store_id, "product_id": product_id,
             "on_hand_quantity": 0, "reserved_quantity": 0,
-            "source": "MANUAL", "external_reference": "APPROVAL-STOCK-02",
+            "source": "WMS", "external_reference": "APPROVAL-STOCK-02",
+            "location_code": "BACKROOM-A", "availability_status": "AVAILABLE",
         })
         assert changed.status_code == 201
 
