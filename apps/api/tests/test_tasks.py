@@ -1473,7 +1473,7 @@ def test_auto_assign_respects_persisted_shift_capacity_and_required_skill(monkey
 
 
 
-def test_employee_can_only_read_events_for_tasks_assigned_to_them(monkeypatch):
+def test_employee_cannot_read_task_event_history(monkeypatch):
     with TestClient(app) as client:
         store_id, shelf_id, product_id = create_task_context(client)
         second_shelf = client.post("/api/v1/shelves", json={
@@ -1532,9 +1532,8 @@ def test_employee_can_only_read_events_for_tasks_assigned_to_them(monkeypatch):
             coworker_events = client.get(f"/api/v1/tasks/{coworker_task.json()['id']}/events")
             unassigned_events = client.get(f"/api/v1/tasks/{unassigned_task.json()['id']}/events")
             missing_events = client.get("/api/v1/tasks/2147483000/events")
-            assert own_events.status_code == 200, own_events.text
-            assert len(own_events.json()) == 1
-            assert coworker_events.status_code == 404
-            assert unassigned_events.status_code == 404
-            assert missing_events.status_code == 404
-            assert coworker_events.json() == unassigned_events.json() == missing_events.json()
+            assert own_events.status_code == 403
+            assert coworker_events.status_code == 403
+            assert unassigned_events.status_code == 403
+            assert missing_events.status_code == 403
+            assert own_events.json() == coworker_events.json() == unassigned_events.json() == missing_events.json()
