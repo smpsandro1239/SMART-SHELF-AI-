@@ -2162,3 +2162,16 @@ Não são feitas conversões automáticas entre unidade, caixa e palete. Os fact
 - [x] Testar UNIT, CASE e PALLET na API, incluindo arredondamento para embalagens fechadas e excesso calculado.
 - [x] Confirmar que o endpoint continua a devolver `automatic_stock_movement_allowed=false`.
 - [x] Validar suite API, TypeScript/build, PostgreSQL smokes, Docker Compose e Security Scans.
+
+
+## 2026-11-25 — Quantidades fraccionárias de exposição por unidade base (migration 0090)
+
+- [x] Corrigir o contrato `ShelfProduct`: `target_quantity` e `min_display_quantity` passam a aceitar quantidades decimais.
+- [x] Persistir ambos os campos em `NUMERIC(12,3)`, coerente com a unidade base do SKU e com os movimentos de inventário.
+- [x] Criar migration 0090 com conversão conservadora dos valores inteiros existentes.
+- [x] Proteger downgrade: recusar conversão para INTEGER enquanto existirem quantidades fraccionárias, sem truncar dados.
+- [x] Acrescentar teste SQLite da migration e regressão API com produto em kg, alvo 20.125 e mínimo 0.375.
+- [x] Rejeitar precisão superior a três casas decimais no contrato da API.
+- [ ] Validar suite API completa, migração PostgreSQL 16, Quality Gates, Security Scans e Docker Compose no SHA final.
+
+Motivo: o teste de embalagem já representava um SKU medido em kg com alvo 20.125, mas o schema/API e a coluna SQL ainda eram INTEGER. Corrigida a inconsistência estrutural; não se deve arredondar quantidades físicas nem tratar kg como contagem inteira.
