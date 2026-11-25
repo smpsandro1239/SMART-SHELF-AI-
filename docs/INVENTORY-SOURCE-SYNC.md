@@ -132,3 +132,10 @@ Configuração:
 - Sem factory real configurada, o worker falha de forma fechada e aplica retries limitados.
 
 A fila não altera stock ERP/WMS, movimentos contabilísticos ou decisões humanas.
+
+
+## Validação de concorrência e recuperação do worker
+
+O script `apps/api/scripts/postgres_inventory_sync_job_smoke.py` está integrado no workflow API CI, que provisiona PostgreSQL 16. Exercita dois claims concorrentes, takeover com fencing, rejeição do worker antigo e SIGKILL de um processo após confirmar uma tentativa STARTED. A recuperação fecha o ledger como PARTIAL, com evento COMPLETED e contagens NULL.
+
+Este smoke não demonstra ainda a interrupção após commit de uma página real nem o replay idempotente dos snapshots. Não confundir a recuperação do ledger com a validação integral da semântica de páginas.
