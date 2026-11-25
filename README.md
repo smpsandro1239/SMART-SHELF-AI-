@@ -2067,3 +2067,8 @@ Arquitectura: [docs/architecture/inventory-movement-event-ledger.md](docs/archit
 ## Concorrência da reconciliação de movimentos — validação PostgreSQL 16
 
 O API CI inclui agora `apps/api/scripts/postgres_inventory_movement_concurrency_smoke.py`. Duas reconciliações simultâneas do mesmo SKU competem pelo mesmo snapshot WMS, com stock reservado; a prova exige que apenas uma operação seja confirmada, que a reserva seja preservada, que não exista sobreconsumo e que um retry do pedido vencedor não crie outro movimento. O script está integrado no workflow; a validação depende do resultado verde no SHA exacto.
+
+
+## Integridade da origem dos movimentos — migration 0088
+
+A migration `0088_inventory_movement_available_source_guard` reforça a fronteira da base de dados: um novo `InventoryMovement` só pode referenciar um snapshot WMS da mesma loja/produto/localização cujo estado seja explicitamente `AVAILABLE`. Snapshots `UNAVAILABLE`, `UNKNOWN` ou sem estado não suportam novos movimentos. O histórico é preservado; não são alterados movimentos antigos. A suite SQLite e o smoke PostgreSQL 16 cobrem a regra, mas a validação só fica concluída após CI verde no SHA final.
