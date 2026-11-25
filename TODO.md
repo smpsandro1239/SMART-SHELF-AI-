@@ -2358,3 +2358,18 @@ Evidência no SHA `3f4c9740ce70e932c5cb35745e96edd1163bf864`: API CI **1720 pass
 - [ ] Se existir necessidade de apagar fisicamente entidades de catálogo, desenhar soft-delete/arquivamento explícito e compatível com histórico; não enfraquecer FKs nem apagar movimentos.
 
 Evidência no SHA `48fdf8310d1b17179ba6520d7a559b3bcc822c7f`: API CI **1722 passed, 1 skipped**; smoke PostgreSQL confirmou renomeação e bloqueio de eliminação; restantes workflows passaram. Limitação: a hierarquia histórica anterior à migration não é recuperável quando não existia auditoria de renomeações; os registos antigos ficam marcados como backfill.
+
+
+## P0/P1 — Retenção de evidência operacional da hierarquia de prateleiras (migrations 0096–0098)
+
+- [x] Migration 0096 impede eliminar prateleiras/zonas com histórico de tarefas.
+- [x] Migration 0097 torna os eventos de tarefa append-only, bloqueia a eliminação de tarefas auditadas e congela loja/prateleira/produto depois do primeiro evento.
+- [x] Migration 0098 impede cascades sobre observações, alertas, associações SKU-prateleira, planogramas, reconciliações, tarefas, sessões de captura, imagens e inbox de eventos Edge.
+- [x] Testes SQLite cobrem cada tabela com referência direta à prateleira e a possibilidade de eliminar apenas quando não existe evidência.
+- [x] Smoke PostgreSQL confirma que uma imagem ACTIVE com legal hold, mesmo sem tarefa de reposição, impede eliminar a prateleira e a zona.
+- [x] API CI PostgreSQL 16, suite API, Quality Gates, Security Scans e Docker Compose aprovados.
+- [x] Histórico de movimentos na Web expõe prateleira/zona de destino e distingue captura contemporânea de backfill histórico.
+
+Evidência no SHA `7bf95468320fc1dd4ab992b520e855d463b6e1f6`: API CI **1725 passed, 1 skipped**; Quality Gates, Security Scans e Docker Compose concluídos com sucesso. A validação PostgreSQL exercitou as guardas de retenção, auditoria e imutabilidade.
+
+- [ ] Se a operação necessitar de ocultar zonas/prateleiras descontinuadas, desenhar arquivamento/soft-delete com autorização, auditoria e preservação de histórico. Não disponibilizar eliminação física como substituto.
