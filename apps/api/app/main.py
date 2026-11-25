@@ -8316,8 +8316,8 @@ def list_replenishment_recommendations(
                     else:
                         decision = suggest_shelf_refill(ShelfRefillInput(
                             shelf_quantity=observed_shelf_quantity,
-                            target_quantity=link.target_quantity,
-                            min_display_quantity=link.min_display_quantity,
+                            target_quantity=float(link.target_quantity),
+                            min_display_quantity=float(link.min_display_quantity),
                             backroom_available_quantity=available,
                             observation_confidence=observation.confidence,
                             observation_age_minutes=observation_age_minutes,
