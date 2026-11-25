@@ -1934,6 +1934,21 @@ def test_manual_inventory_event_sql_immutability_and_store_product_binding(monke
         })
         assert response.status_code == 201, response.text
         with TestingSession() as db:
+            db.connection().exec_driver_sql("""
+                CREATE TRIGGER test_manual_count_event_provenance BEFORE INSERT ON inventory_manual_count_events
+                BEGIN
+                    SELECT CASE WHEN NOT EXISTS (
+                        SELECT 1 FROM inventory_snapshots s
+                        WHERE s.id=NEW.snapshot_id AND s.store_id=NEW.store_id
+                          AND s.product_id=NEW.product_id AND s.source='MANUAL'
+                    ) OR NOT EXISTS (
+                        SELECT 1 FROM users u WHERE u.id=NEW.actor_user_id
+                          AND (u.role='ADMIN' OR u.store_id=NEW.store_id)
+                    ) THEN RAISE(ABORT, 'manual count provenance mismatch') END;
+                END
+            """)
+            db.connection().exec_driver_sql("CREATE TRIGGER test_manual_count_event_no_update BEFORE UPDATE ON inventory_manual_count_events BEGIN SELECT RAISE(ABORT, 'append-only'); END")
+            db.connection().exec_driver_sql("CREATE TRIGGER test_manual_count_event_no_delete BEFORE DELETE ON inventory_manual_count_events BEGIN SELECT RAISE(ABORT, 'append-only'); END")
             event = db.query(models.InventoryManualCountEvent).one()
             with pytest.raises(Exception):
                 db.connection().exec_driver_sql("UPDATE inventory_manual_count_events SET reason='alterado' WHERE id=?", (event.id,))

@@ -562,7 +562,7 @@ class InventorySnapshot(Base):
     __table_args__ = (
         UniqueConstraint("store_id", "product_id", "source", "external_reference",
                          name="uq_inventory_snapshot_source_reference"),
-        UniqueConstraint("id", "store_id", "product_id", name="uq_inventory_snapshot_identity"),
+        Index("uq_inventory_snapshot_identity", "id", "store_id", "product_id", unique=True),
         CheckConstraint("on_hand_quantity >= 0", name="ck_inventory_on_hand_nonnegative"),
         CheckConstraint("reserved_quantity >= 0", name="ck_inventory_reserved_nonnegative"),
         CheckConstraint("reserved_quantity <= on_hand_quantity", name="ck_inventory_reserved_lte_on_hand"),

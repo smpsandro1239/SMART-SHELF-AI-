@@ -210,7 +210,7 @@ class InventorySnapshotCreate(BaseModel):
         if value is None:
             return None
         normalized = value.strip()
-        if len(normalized) < 5 or any(ord(ch) < 32 and ch not in "\\t" for ch in normalized) or any(127 <= ord(ch) <= 159 for ch in normalized):
+        if len(normalized) < 5 or any(ord(ch) < 32 for ch in normalized) or any(127 <= ord(ch) <= 159 for ch in normalized):
             raise ValueError("Manual inventory count reason must contain at least five valid characters")
         return normalized
 
