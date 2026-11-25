@@ -286,40 +286,41 @@ def main() -> None:
         ).scalar_one()
         assert count == 1, count
 
-    unavailable_snapshot = client.post(
-        "/api/v1/inventory/snapshots",
-        json={
-            "store_id": store_id,
-            "product_id": product_id,
-            "on_hand_quantity": 20,
-            "reserved_quantity": 2,
-            "source": "WMS",
-            "external_reference": f"PG-MOVE-UNAVAILABLE-{suffix}",
-            "location_code": "BACKROOM-CI",
-            "availability_status": "UNAVAILABLE",
-        },
-    )
-    assert unavailable_snapshot.status_code == 201, unavailable_snapshot.text
-    unavailable_task = client.post(
-        "/api/v1/tasks",
-        json={
-            "store_id": store_id,
-            "shelf_id": shelf.json()["id"],
-            "product_id": product_id,
-            "requested_quantity": 4,
-        },
-    )
-    assert unavailable_task.status_code == 201, unavailable_task.text
-    unavailable_task_id = unavailable_task.json()["id"]
-    for payload in (
-        {"status": "ASSIGNED", "assigned_to": "CI operator"},
-        {"status": "IN_PROGRESS"},
-        {"status": "COMPLETED", "actual_quantity": 4},
-    ):
-        response = client.patch(f"/api/v1/tasks/{unavailable_task_id}/status", json=payload)
-        assert response.status_code == 200, response.text
-
-    with SessionLocal() as db:
+    with TestClient(app) as unavailable_client:
+        unavailable_snapshot = unavailable_client.post(
+            "/api/v1/inventory/snapshots",
+            json={
+                "store_id": store_id,
+                "product_id": product_id,
+                "on_hand_quantity": 20,
+                "reserved_quantity": 2,
+                "source": "WMS",
+                "external_reference": f"PG-MOVE-UNAVAILABLE-{suffix}",
+                "location_code": "BACKROOM-CI",
+                "availability_status": "UNAVAILABLE",
+            },
+        )
+        assert unavailable_snapshot.status_code == 201, unavailable_snapshot.text
+        unavailable_task = unavailable_client.post(
+            "/api/v1/tasks",
+            json={
+                "store_id": store_id,
+                "shelf_id": shelf.json()["id"],
+                "product_id": product_id,
+                "requested_quantity": 4,
+            },
+        )
+        assert unavailable_task.status_code == 201, unavailable_task.text
+        unavailable_task_id = unavailable_task.json()["id"]
+        for payload in (
+            {"status": "ASSIGNED", "assigned_to": "CI operator"},
+            {"status": "IN_PROGRESS"},
+            {"status": "COMPLETED", "actual_quantity": 4},
+        ):
+            response = unavailable_client.patch(f"/api/v1/tasks/{unavailable_task_id}/status", json=payload)
+            assert response.status_code == 200, response.text
+    
+        with SessionLocal() as db:
         now = models.utc_now()
         result = models.InventorySnapshot(
             store_id=store_id,
