@@ -6126,7 +6126,7 @@ def record_pallet_lifecycle_update(
 def calculate_replenishment_units(
     store_id: int,
     product_id: int,
-    required_base_units: float,
+    required_base_units: Decimal,
     packaging_code: str,
     allow_open_package: bool = False,
     request: Request = None,
@@ -6161,6 +6161,7 @@ def calculate_replenishment_units(
         "packaging_name": level.name,
         "package_type": level.package_type,
         "base_units_per_package": float(level.base_units_per_package),
+        "base_units_per_package_exact": format(Decimal(str(level.base_units_per_package)), "f"),
         "allow_open_package": allow_open_package,
         **result,
     }
