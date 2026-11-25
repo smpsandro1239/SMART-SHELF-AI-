@@ -2294,3 +2294,16 @@ As duas caixas pendentes da secção de validação 0091 foram fechadas com a ev
 - [x] Confirmar que o trigger SQLite rejeita também `source_sync_id` inexistente, além de loja/origem divergentes e execução terminal.
 - [x] API CI no HEAD `f7430342a9e52f9d269dd567c23719790fe638a0`: **1715 passed, 1 skipped**.
 - [x] API CI, Quality Gates, Security Scans e Docker Compose no mesmo SHA: sucesso.
+
+
+## P1 — Comparação temporal ERP/WMS (migration 0093)
+
+- [x] Expor o skew absoluto de captura ERP/WMS em segundos.
+- [x] Introduzir tolerância opcional por loja na política ERP, sem valor por defeito (NULL = não configurada).
+- [x] Suspender a comparação quantitativa quando a tolerância não está configurada e os timestamps diferem.
+- [x] Suspender a comparação quantitativa quando o skew excede a tolerância; zero exige timestamps coincidentes.
+- [x] Auditar alterações com actor, valor anterior/novo, motivo e timestamp.
+- [x] Rejeitar configuração na política WMS e valores fora de 0–10080 minutos.
+- [ ] Validar migration SQLite/PostgreSQL 16, testes API, Quality Gates, Security Scans e Docker Compose no SHA final.
+- [ ] Homologar tolerâncias por loja com cadência real e documentação do fornecedor ERP/WMS.
+
