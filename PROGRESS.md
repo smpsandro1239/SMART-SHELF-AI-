@@ -1291,3 +1291,15 @@ Auditar a reconciliação de reservas WMS. O modelo actual recebe `reserved_quan
 - Teste API acrescentado: snapshot com 10.125 kg físico e 2.375 kg reservado é persistido exactamente; escala 4 em qualquer campo recebe HTTP 422 e não cria snapshot.
 - Semântica: o reservado continua agregado e autoritativo pelo WMS na localização configurada. O sistema não cria reservas externas e uma tarefa não reserva stock. Não existe ainda identificador externo por reserva/documento/linha; a reconciliação individual fica dependente do contrato real do fornecedor.
 - Validação CI do novo SHA pendente. Não declarar esta tarefa concluída antes de API CI/PostgreSQL 16, Quality Gates, Security Scans e Docker Compose.
+
+
+## Validação final — snapshots físicos e reservas WMS (25/11/2026)
+
+- SHA de código validado: `900c24f19f47e6720da64775d6904692e104c35f`; documentação operacional posterior no SHA `bc37246a298f3cfe2ae142ea9051cb70beac1e22`. A alteração posterior à validação de código foi apenas documental.
+- API CI run `45626116643`: sucesso; PostgreSQL 16, migrations e 48 smokes, suite **1698 passed, 1 skipped** em 168.66s.
+- Quality Gates run `45626178152`: sucesso; TypeScript/build Web e suite **1698 passed, 1 skipped** em 111.98s.
+- Docker Compose smoke run `45626116401`: sucesso.
+- Security Scans run `45626178472`: sucesso; dependency audits, secret scan e OWASP ZAP passive baseline.
+- Teste novo confirma persistência Decimal exacta de 10.125 kg físico e 2.375 kg reservado, e HTTP 422 para escala superior a três casas decimais em qualquer campo.
+- O endpoint directo de snapshots e o adapter normalizado aplicam agora o mesmo contrato Numeric(12,3). O cálculo disponível continua a ser físico menos reservado.
+- Não existe ledger de reservas individuais nem contrato WMS de reserva por ID/documento/linha. A plataforma não simula reservas: uma tarefa de reposição não reserva stock. A próxima auditoria deve manter a reconciliação agregada por loja/SKU/localização e só evoluir para detalhe quando o fornecedor o disponibilizar.
