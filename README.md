@@ -2062,3 +2062,8 @@ No SHA `c8efb82b64d4aed9fcc81fdb4a0571695fdd23cf`, a suite API terminou com **16
 A migration `0087_inventory_movement_event_ledger` cria um ledger append-only ligado a cada movimento aprovado. A reconciliação regista `MOVEMENT_RECORDED` na mesma transacção que o movimento, o snapshot resultante e o evento da tarefa; uma falha de auditoria reverte toda a operação. `GET /api/v1/inventory/movements/{movement_id}/events` expõe o histórico a ADMIN/SUPERVISOR, com isolamento multi-loja. A tabela reserva tipos para futura confirmação WMS, compensações e divergências, mas esses fluxos ainda não estão implementados. Não são inventados eventos históricos e o snapshot MANUAL não equivale a confirmação WMS.
 
 Arquitectura: [docs/architecture/inventory-movement-event-ledger.md](docs/architecture/inventory-movement-event-ledger.md).
+
+
+## Concorrência da reconciliação de movimentos — validação PostgreSQL 16
+
+O API CI inclui agora `apps/api/scripts/postgres_inventory_movement_concurrency_smoke.py`. Duas reconciliações simultâneas do mesmo SKU competem pelo mesmo snapshot WMS, com stock reservado; a prova exige que apenas uma operação seja confirmada, que a reserva seja preservada, que não exista sobreconsumo e que um retry do pedido vencedor não crie outro movimento. O script está integrado no workflow; a validação depende do resultado verde no SHA exacto.
