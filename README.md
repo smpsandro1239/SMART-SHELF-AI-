@@ -2026,3 +2026,8 @@ O dashboard apresenta os dois domínios em separado e evidencia divergências se
 A API disponibiliza um ledger operacional separado dos movimentos de inventário. `POST /api/v1/inventory/reconciliations` congela a evidência de prateleira, WMS e ERP, incluindo quantidades, diferenças, IDs dos snapshots e timestamps. `GET /api/v1/inventory/reconciliations` consulta o histórico. `POST /api/v1/inventory/reconciliations/{id}/review` permite a ADMIN/SUPERVISOR aprovar, rejeitar ou encaminhar para investigação com justificação.
 
 A evidência é imutável na base de dados e os eventos são append-only. A revisão exige um utilizador diferente do autor (maker-checker). Consultar a reconciliação não cria registos automaticamente. O ledger não cria `InventoryMovement`, não altera snapshots e não actualiza saldos contabilísticos. Migração: `0076_inventory_reconciliation_ledger`.
+
+
+## Validação PostgreSQL 16 — fila ERP/WMS
+
+O API CI inclui `apps/api/scripts/postgres_inventory_sync_job_smoke.py`: concorrência real de claims, fencing do worker antigo e recuperação do ledger STARTED após SIGKILL. O smoke não cobre ainda a morte após commit de uma página nem o replay de snapshots; esses cenários permanecem pendentes e não são apresentados como validados.
