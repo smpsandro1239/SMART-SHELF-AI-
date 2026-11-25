@@ -577,6 +577,7 @@ class InventorySnapshot(Base):
             "store_id", "product_id", "source", "location_code",
             "availability_status", "captured_at",
         ),
+        Index("ix_inventory_snapshots_source_sync_id", "source_sync_id"),
     )
     id: Mapped[int] = mapped_column(primary_key=True)
     store_id: Mapped[int] = mapped_column(ForeignKey("stores.id", ondelete="CASCADE"), index=True)
@@ -585,6 +586,9 @@ class InventorySnapshot(Base):
     reserved_quantity: Mapped[Decimal] = mapped_column(Numeric(12, 3), default=Decimal("0.000"), nullable=False)
     source: Mapped[str] = mapped_column(String(20), nullable=False)
     external_reference: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    source_sync_id: Mapped[int | None] = mapped_column(
+        ForeignKey("inventory_source_syncs.id", ondelete="RESTRICT"), nullable=True
+    )
     # WMS evidence must identify its physical location and availability state
     # before it can be considered authoritative backroom stock.
     location_code: Mapped[str | None] = mapped_column(String(120), nullable=True)
