@@ -355,6 +355,7 @@ class InventoryMovementRead(BaseModel):
     source_snapshot_id: int
     source_location_code: str | None
     destination_shelf_id: int | None
+    destination_shelf_code: str
     result_snapshot_id: int
     actor_user_id: int
     reason: str
