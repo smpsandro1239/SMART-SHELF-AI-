@@ -1595,3 +1595,10 @@ A validação depende do resultado verde do API CI no SHA final; a existência d
 - A revisão directa de uma reconciliação da loja B por SUPERVISOR da loja A tem de devolver 404 sem alterar o estado PENDING.
 - Commit de teste: 07b141b91d2d76a6ff6e1cefe0e721cf42978e8b. API CI, Quality Gates, Security Scans e Docker Compose ainda pendentes neste SHA.
 - Em aberto: definir a semântica de fonte/localização para o snapshot genérico apresentado como retaguarda. A enumeração actual ERP/WMS/POS/MANUAL/IMPORT não prova, por si só, que uma fonte represente stock físico de retaguarda; não assumir equivalências.
+
+
+## 2026-11-25 — Ledger de eventos dos movimentos: fase 1 implementada, CI pendente
+
+A migration 0087 cria um ledger append-only com identidade de operação, movimento, loja, actor, motivo, timestamp e evidência. A reconciliação regista MOVEMENT_RECORDED na mesma transacção que o movimento e o snapshot resultante. A leitura é read-only e limitada por RBAC/tenant. Os testes cobrem rollback se o evento falhar, isolamento cross-store e imutabilidade SQLite. A validação dos quatro workflows no novo SHA é obrigatória antes de declarar a fase concluída.
+
+A confirmação WMS, compensações e divergências permanecem pendentes; não há adapter WMS homologado nem evidência externa. A unidade base e as conversões unidade/caixa/palete continuam por definir.
