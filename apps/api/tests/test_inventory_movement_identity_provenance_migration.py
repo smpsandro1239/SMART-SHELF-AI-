@@ -30,8 +30,8 @@ def test_migration_backfills_identity_and_preserves_unknown_historical_provenanc
     with engine.begin() as connection:
         connection.exec_driver_sql("CREATE TABLE zones (id INTEGER PRIMARY KEY, store_id INTEGER NOT NULL)")
         connection.exec_driver_sql("CREATE TABLE shelves (id INTEGER PRIMARY KEY, zone_id INTEGER NOT NULL, code TEXT NOT NULL)")
-        connection.exec_driver_sql("CREATE TABLE replenishment_tasks (id INTEGER PRIMARY KEY, shelf_id INTEGER)")
-        connection.exec_driver_sql("CREATE TABLE inventory_snapshots (id INTEGER PRIMARY KEY, location_code TEXT)")
+        connection.exec_driver_sql("CREATE TABLE replenishment_tasks (id INTEGER PRIMARY KEY, store_id INTEGER NOT NULL, product_id INTEGER NOT NULL, shelf_id INTEGER)")
+        connection.exec_driver_sql("CREATE TABLE inventory_snapshots (id INTEGER PRIMARY KEY, store_id INTEGER NOT NULL, product_id INTEGER NOT NULL, source TEXT NOT NULL, location_code TEXT)")
         connection.exec_driver_sql("""
             CREATE TABLE inventory_movements (
                 id INTEGER PRIMARY KEY, task_id INTEGER NOT NULL, store_id INTEGER NOT NULL,
@@ -50,8 +50,8 @@ def test_migration_backfills_identity_and_preserves_unknown_historical_provenanc
         """)
         connection.exec_driver_sql("INSERT INTO zones (id, store_id) VALUES (1, 10)")
         connection.exec_driver_sql("INSERT INTO shelves (id, zone_id, code) VALUES (20, 1, 'A-01')")
-        connection.exec_driver_sql("INSERT INTO replenishment_tasks (id, shelf_id) VALUES (30, 20), (31, NULL)")
-        connection.exec_driver_sql("INSERT INTO inventory_snapshots (id, location_code) VALUES (40, 'BACKROOM-A'), (41, NULL)")
+        connection.exec_driver_sql("INSERT INTO replenishment_tasks (id, store_id, product_id, shelf_id) VALUES (30, 10, 100, 20), (31, 10, 100, NULL)")
+        connection.exec_driver_sql("INSERT INTO inventory_snapshots (id, store_id, product_id, source, location_code) VALUES (40, 10, 100, 'WMS', 'BACKROOM-A'), (41, 10, 100, 'WMS', NULL)")
         connection.exec_driver_sql("""
             INSERT INTO inventory_movements (id, task_id, store_id, source_snapshot_id)
             VALUES (1, 30, 10, 40), (2, 31, 10, 41)
