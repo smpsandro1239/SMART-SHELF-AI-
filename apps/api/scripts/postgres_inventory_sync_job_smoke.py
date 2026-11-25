@@ -1,56 +1,111 @@
-"""PostgreSQL 16 smoke for durable ERP/WMS job concurrency and crash recovery.
+"""PostgreSQL 16 integration smoke for durable ERP/WMS worker safety.
 
-This deliberately exercises real PostgreSQL sessions and process termination.
-It does not claim to simulate a provider page commit; snapshot replay remains
-covered by the orchestrator's idempotency tests.
+Exercises independent PostgreSQL sessions/processes, a real orchestrator page
+commit, SIGKILL between pages, lease takeover and idempotent page replay.
 """
 from multiprocessing import get_context
 from time import sleep
 from uuid import uuid4
+from datetime import datetime, timezone
+from decimal import Decimal
 
 from sqlalchemy import update
 
 from app import models
 from app.database import SessionLocal
+from app.inventory_connectors.contracts import InventorySyncBatch, NormalizedInventoryRecord
+from app.inventory_connectors.orchestrator import run_inventory_source_sync
 from app.inventory_sync_jobs import (
     InventorySyncJobLeaseLost,
     assert_and_renew_inventory_sync_job_lease,
     claim_next_inventory_sync_job,
+    complete_inventory_sync_job,
     enqueue_inventory_sync_job,
 )
 
+LEASE_SECONDS = 30
+PROVIDER = "ERP-PG-Smoke"
 
-def _crashing_worker(ready, store_id, user_id, job_id):
-    """Claim a job, commit STARTED, then wait to be SIGKILLed by the parent."""
-    with SessionLocal() as db:
-        job = db.get(models.InventorySyncJob, job_id)
-        claim = claim_next_inventory_sync_job(
-            db, worker_id="crash-worker", lease_seconds=1
-        )
-        assert claim is not None and claim.id == job.id
-        now = models.utc_now()
-        sync = models.InventorySourceSync(
-            store_id=store_id,
-            source="ERP",
-            provider="ERP-PG-Smoke",
-            status="STARTED",
-            started_at=now,
-            created_by_user_id=user_id,
-            created_at=now,
-        )
-        db.add(sync)
-        db.flush()
-        job.latest_sync_id = sync.id
-        db.add(models.InventorySourceSyncEvent(
-            sync_id=sync.id,
-            event_type="STARTED",
-            actor_user_id=user_id,
-            details={"source": "ERP", "provider": "ERP-PG-Smoke", "execution": "crash-smoke"},
-            created_at=now,
-        ))
-        db.commit()
-        ready.set()
+
+def _record(reference, quantity):
+    return NormalizedInventoryRecord(
+        external_product_id="external-product-1",
+        sku="SKU-PG-SMOKE",
+        on_hand_quantity=Decimal(quantity),
+        reserved_quantity=Decimal("1.000"),
+        captured_at=datetime(2026, 11, 25, 10, 0, tzinfo=timezone.utc),
+        external_reference=reference,
+    )
+
+
+def _guard(job_id, worker_id, lease_token, fencing_token):
+    return lambda session: assert_and_renew_inventory_sync_job_lease(
+        session,
+        job_id=job_id,
+        worker_id=worker_id,
+        lease_token=lease_token,
+        fencing_token=fencing_token,
+        lease_seconds=LEASE_SECONDS,
+    )
+
+
+class _CrashAfterFirstPageAdapter:
+    source = "ERP"
+    provider = PROVIDER
+
+    def __init__(self, page_committed):
+        self.page_committed = page_committed
+
+    async def fetch_inventory(self, store_code, cursor=None):
+        if cursor is None:
+            return InventorySyncBatch(
+                source="ERP", provider=PROVIDER, external_run_id="run-crash-replay",
+                records=(_record("external-row-1", "12.000"),), next_cursor="page-2",
+            )
+        # The orchestrator commits page one before requesting page two.
+        self.page_committed.set()
         sleep(60)
+        raise AssertionError("parent should SIGKILL this worker before page two returns")
+
+
+class _ReplayAdapter:
+    source = "ERP"
+    provider = PROVIDER
+
+    async def fetch_inventory(self, store_code, cursor=None):
+        if cursor is None:
+            return InventorySyncBatch(
+                source="ERP", provider=PROVIDER, external_run_id="run-crash-replay",
+                records=(_record("external-row-1", "12.000"),), next_cursor="page-2",
+            )
+        return InventorySyncBatch(
+            source="ERP", provider=PROVIDER, external_run_id="run-crash-replay",
+            records=(_record("external-row-2", "8.000"),), next_cursor=None,
+        )
+
+
+def _crashing_orchestrator_worker(page_committed, store_id, actor_id, job_id):
+    worker_id = "page-crash-worker"
+    with SessionLocal() as db:
+        claim = claim_next_inventory_sync_job(
+            db, worker_id=worker_id, lease_seconds=LEASE_SECONDS
+        )
+        assert claim is not None and claim.id == job_id
+        job_id, lease_token, fencing_token = claim.id, claim.lease_token, claim.fencing_token
+
+    async def execute():
+        with SessionLocal() as db:
+            return await run_inventory_source_sync(
+                db,
+                store_id=store_id,
+                source="ERP",
+                adapter=_CrashAfterFirstPageAdapter(page_committed),
+                actor_user_id=actor_id,
+                lease_guard=_guard(job_id, worker_id, lease_token, fencing_token),
+            )
+
+    import asyncio
+    asyncio.run(execute())
 
 
 def _new_job(suffix):
@@ -66,13 +121,27 @@ def _new_job(suffix):
             store_id=None,
             is_active=True,
         )
-        db.add(user)
+        product = models.Product(
+            sku=f"SKU-PG-{suffix}", name="PostgreSQL inventory smoke product",
+            unit="un", is_active=True,
+        )
+        db.add_all([user, product])
         db.flush()
         db.add(models.StoreExternalIntegration(
             store_id=store.id,
             external_system="ERP",
-            provider="ERP-PG-Smoke",
+            provider=PROVIDER,
             status="ACTIVE",
+            created_by_user_id=user.id,
+            updated_by_user_id=user.id,
+        ))
+        db.add(models.InventoryExternalProductMapping(
+            store_id=store.id,
+            source="ERP",
+            external_product_id="external-product-1",
+            external_sku="SKU-PG-SMOKE",
+            product_id=product.id,
+            active=True,
             created_by_user_id=user.id,
             updated_by_user_id=user.id,
         ))
@@ -81,25 +150,25 @@ def _new_job(suffix):
             db,
             store_id=store.id,
             source="ERP",
-            provider="ERP-PG-Smoke",
+            provider=PROVIDER,
             idempotency_key=f"pg-inventory-sync-{suffix}",
             requested_by_user_id=user.id,
         )
-        return store.id, user.id, job.id
+        return store.id, user.id, product.id, job.id
 
 
 def _verify_concurrent_single_claim():
-    suffix = uuid4().hex[:10]
-    store_id, user_id, job_id = _new_job(suffix)
     from concurrent.futures import ThreadPoolExecutor
     from threading import Barrier
 
+    suffix = uuid4().hex[:10]
+    _, _, _, job_id = _new_job(suffix)
     barrier = Barrier(2)
 
     def claim(worker):
         with SessionLocal() as db:
             barrier.wait(timeout=10)
-            job = claim_next_inventory_sync_job(db, worker_id=worker, lease_seconds=60)
+            job = claim_next_inventory_sync_job(db, worker_id=worker, lease_seconds=LEASE_SECONDS)
             return None if job is None else (job.id, job.fencing_token, job.lease_token)
 
     with ThreadPoolExecutor(max_workers=2) as pool:
@@ -107,29 +176,28 @@ def _verify_concurrent_single_claim():
     winners = [result for result in results if result is not None]
     assert len(winners) == 1, f"expected one PostgreSQL claimant, got {results}"
     assert winners[0][0] == job_id
-    return job_id, winners[0]
 
 
 def _verify_stale_worker_fencing():
     suffix = uuid4().hex[:10]
-    store_id, user_id, job_id = _new_job(suffix)
+    _, _, _, job_id = _new_job(suffix)
     with SessionLocal() as db:
-        old = claim_next_inventory_sync_job(db, worker_id="worker-a", lease_seconds=1)
+        old = claim_next_inventory_sync_job(db, worker_id="worker-a", lease_seconds=LEASE_SECONDS)
         assert old is not None and old.id == job_id
         db.execute(update(models.InventorySyncJob).where(
             models.InventorySyncJob.id == job_id
         ).values(lease_expires_at=models.utc_now()))
         db.commit()
-    sleep(0.05)
     with SessionLocal() as db:
         replacement = claim_next_inventory_sync_job(
-            db, worker_id="worker-b", lease_seconds=60
+            db, worker_id="worker-b", lease_seconds=LEASE_SECONDS
         )
         assert replacement is not None and replacement.fencing_token == old.fencing_token + 1
         try:
             assert_and_renew_inventory_sync_job_lease(
                 db, job_id=job_id, worker_id="worker-a",
                 lease_token=old.lease_token, fencing_token=old.fencing_token,
+                lease_seconds=LEASE_SECONDS,
             )
         except InventorySyncJobLeaseLost:
             pass
@@ -137,52 +205,103 @@ def _verify_stale_worker_fencing():
             raise AssertionError("stale worker renewed a lease after PostgreSQL takeover")
 
 
-def _verify_sigkill_recovery():
+def _verify_sigkill_after_page_commit_and_idempotent_replay():
     suffix = uuid4().hex[:10]
-    store_id, user_id, job_id = _new_job(suffix)
-    context = get_context("fork")
-    ready = context.Event()
+    store_id, actor_id, product_id, job_id = _new_job(suffix)
+    context = get_context("spawn")
+    page_committed = context.Event()
     process = context.Process(
-        target=_crashing_worker, args=(ready, store_id, user_id, job_id)
+        target=_crashing_orchestrator_worker,
+        args=(page_committed, store_id, actor_id, job_id),
     )
     process.start()
     try:
-        assert ready.wait(timeout=15), "worker did not commit STARTED before timeout"
-        sleep(1.1)
+        assert page_committed.wait(timeout=30), "worker did not reach page-two fetch after page-one commit"
+        with SessionLocal() as db:
+            first_page = db.query(models.InventorySnapshot).filter_by(
+                store_id=store_id, product_id=product_id, source="ERP",
+                external_reference="external-row-1",
+            ).one_or_none()
+            assert first_page is not None, "page one was not committed before SIGKILL"
+            first_snapshot_id = first_page.id
+            first_snapshot_quantity = Decimal(str(first_page.on_hand_quantity))
         process.kill()
-        process.join(timeout=10)
+        process.join(timeout=15)
         assert process.exitcode == -9, f"expected SIGKILL exit -9, got {process.exitcode}"
     finally:
         if process.is_alive():
             process.kill()
-            process.join(timeout=10)
+            process.join(timeout=15)
 
     with SessionLocal() as db:
+        db.execute(update(models.InventorySyncJob).where(
+            models.InventorySyncJob.id == job_id
+        ).values(lease_expires_at=models.utc_now()))
+        db.commit()
         replacement = claim_next_inventory_sync_job(
-            db, worker_id="recovery-worker", lease_seconds=60
+            db, worker_id="recovery-worker", lease_seconds=LEASE_SECONDS
         )
         assert replacement is not None and replacement.id == job_id
-        sync = db.get(models.InventorySourceSync, replacement.latest_sync_id)
-        assert sync is not None
-        assert sync.status == "PARTIAL"
-        assert sync.error_code == "WORKER_LEASE_EXPIRED"
-        assert sync.finished_at is not None
-        assert sync.received_records is None and sync.processed_records is None
+        abandoned = db.get(models.InventorySourceSync, replacement.latest_sync_id)
+        assert abandoned is not None and abandoned.status == "PARTIAL"
+        assert abandoned.error_code == "WORKER_LEASE_EXPIRED"
+        assert abandoned.finished_at is not None
+        assert abandoned.received_records is None and abandoned.processed_records is None
         events = db.query(models.InventorySourceSyncEvent).filter_by(
-            sync_id=sync.id
+            sync_id=abandoned.id
         ).order_by(models.InventorySourceSyncEvent.id).all()
         assert [event.event_type for event in events] == ["STARTED", "COMPLETED"]
         assert events[-1].details["record_counts_known"] is False
+        replacement_token = replacement.lease_token
+        replacement_fencing = replacement.fencing_token
+
+    async def replay():
+        with SessionLocal() as db:
+            return await run_inventory_source_sync(
+                db,
+                store_id=store_id,
+                source="ERP",
+                adapter=_ReplayAdapter(),
+                actor_user_id=actor_id,
+                lease_guard=_guard(
+                    job_id, "recovery-worker", replacement_token, replacement_fencing
+                ),
+            )
+
+    import asyncio
+    result = asyncio.run(replay())
+    assert result["status"] == "SUCCESS"
+    with SessionLocal() as db:
+        snapshots = db.query(models.InventorySnapshot).filter_by(
+            store_id=store_id, product_id=product_id, source="ERP"
+        ).order_by(models.InventorySnapshot.external_reference).all()
+        assert len(snapshots) == 2, f"expected exactly two unique snapshots, got {len(snapshots)}"
+        replayed = next(row for row in snapshots if row.external_reference == "external-row-1")
+        assert replayed.id == first_snapshot_id, "replay inserted a duplicate snapshot"
+        assert Decimal(str(replayed.on_hand_quantity)) == first_snapshot_quantity
+        assert Decimal(str(replayed.on_hand_quantity)) == Decimal("12.000")
+        assert {row.external_reference for row in snapshots} == {
+            "external-row-1", "external-row-2"
+        }
+        sync = db.query(models.InventorySourceSync).filter_by(
+            store_id=store_id, source="ERP"
+        ).order_by(models.InventorySourceSync.id.desc()).first()
+        assert sync is not None and sync.status == "SUCCESS"
+        complete_inventory_sync_job(
+            db, job_id=job_id, worker_id="recovery-worker",
+            lease_token=replacement_token, fencing_token=replacement_fencing,
+            status="SUCCEEDED", sync_id=sync.id,
+        )
 
 
 def main():
     _verify_concurrent_single_claim()
     _verify_stale_worker_fencing()
-    _verify_sigkill_recovery()
+    _verify_sigkill_after_page_commit_and_idempotent_replay()
     print(
         "PostgreSQL 16 inventory sync smoke passed: concurrent single claim, "
-        "stale-worker fencing and SIGKILL recovery of an abandoned STARTED ledger. "
-        "Provider-page replay/idempotency is not exercised by this smoke."
+        "stale-worker fencing, SIGKILL after a committed page, PARTIAL ledger "
+        "recovery and idempotent snapshot replay."
     )
 
 
