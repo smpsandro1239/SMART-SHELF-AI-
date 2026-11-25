@@ -2120,10 +2120,10 @@ Só `MOVEMENT_RECORDED` é emitido nesta fase. Tipos futuros estão reservados n
 - [x] Verificar que o snapshot resultante preserva uma unidade reservada e regista três unidades on-hand.
 - [x] Verificar unicidade do movimento/evento e retry idempotente da tarefa vencedora.
 - [x] Integrar o smoke no workflow API CI.
-- [ ] Executar e confirmar o smoke no PostgreSQL 16 e os quatro workflows no SHA final.
-- [x] Acrescentar cenário PostgreSQL de rollback integral perante falha na inserção do evento de movimento (execução CI pendente).
+- [x] Executar e confirmar o smoke no PostgreSQL 16 e os quatro workflows no SHA `dda035f509a34f4d893f52d2d3cf4aa2c440f0e6`.
+- [x] Acrescentar cenário PostgreSQL de rollback integral perante falha na inserção do evento de movimento; smoke confirmado no API CI.
 
-A tarefa de concorrência está parcialmente concluída até o workflow executar o novo script com sucesso. O teste não define unidade base nem conversões de embalagem.
+A tarefa de concorrência está concluída para o cenário WMS de uma localização configurada. Não define conversões entre unidade base e embalagens.
 
 
 ## 2026-11-25 — Guard de disponibilidade da origem WMS nos movimentos (0088)
@@ -2173,6 +2173,19 @@ Não são feitas conversões automáticas entre unidade, caixa e palete. Os fact
 - [x] Acrescentar teste SQLite da migration e regressão API com produto em kg, alvo 20.125 e mínimo 0.375.
 - [x] Rejeitar precisão superior a três casas decimais no contrato da API.
 - [x] Preservar a resposta JSON numérica legada; converter para Decimal apenas na fronteira de persistência e no cálculo interno.
-- [ ] Validar suite API completa, migração PostgreSQL 16, Quality Gates, Security Scans e Docker Compose no SHA final.
+- [x] Validar suite API completa, migração PostgreSQL 16, Quality Gates, Security Scans e Docker Compose no SHA `dda035f509a34f4d893f52d2d3cf4aa2c440f0e6`.
 
 Motivo: o teste de embalagem já representava um SKU medido em kg com alvo 20.125, mas o schema/API e a coluna SQL ainda eram INTEGER. Corrigida a inconsistência estrutural; não se deve arredondar quantidades físicas nem tratar kg como contagem inteira.
+
+
+## Validação final — migration 0090 e contrato de quantidades decimais (25/11/2026)
+
+- [x] API CI [45625120737](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45625120737): sucesso; migrations PostgreSQL 16, 48 smokes PostgreSQL e suite **1697 passed, 1 skipped**.
+- [x] Quality Gates [45625120955](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45625120955): sucesso; TypeScript/build Web e suite **1697 passed, 1 skipped**.
+- [x] Docker Compose [45625120891](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45625120891): sucesso.
+- [x] Security Scans [45625120718](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45625120718): sucesso; auditorias de dependências, secret scan e ZAP passive baseline.
+- [x] Migration 0090 validada em PostgreSQL 16 e teste SQLite; downgrade recusa truncar valores fraccionários.
+- [x] Resposta HTTP de ShelfProduct mantém números JSON; persistência continua Decimal/Numeric(12,3).
+- [x] Plano de reposição para SKU em kg com target 20.125 e mínimo 0.375; conversões UNIT/CASE/PALLET mantêm exactidão Decimal e não movimentam nem reservam stock.
+
+SHA validado: `dda035f509a34f4d893f52d2d3cf4aa2c440f0e6`. O commit seguinte desta secção altera apenas documentação.
