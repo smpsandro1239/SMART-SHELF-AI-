@@ -119,6 +119,23 @@ def main() -> None:
         assert manual.status_code == 201, manual.text
         manual_snapshot_id = manual.json()["id"]
 
+        admin_token = create_access_token(
+            user_id=actor_ids["admin"], role="ADMIN"
+        )[0]
+        admin_manual = client.post(
+            "/api/v1/inventory/snapshots",
+            json={
+                "store_id": store_a_id,
+                "product_id": product_id,
+                "on_hand_quantity": 11,
+                "reserved_quantity": 0,
+                "source": "MANUAL",
+                "reason": "PostgreSQL audit smoke ADMIN count",
+            },
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+        assert admin_manual.status_code == 201, admin_manual.text
+
         wms = client.post(
             "/api/v1/inventory/snapshots",
             json={
@@ -149,13 +166,6 @@ def main() -> None:
     }
 
     with SessionLocal() as db:
-        # A global active ADMIN is valid at the database boundary.
-        db.execute(
-            text(insert_event),
-            {**base, "actor_id": actor_ids["admin"]},
-        )
-        db.commit()
-
         for key, description in (
             ("other_store", "cross-store supervisor"),
             ("inactive", "inactive supervisor"),
