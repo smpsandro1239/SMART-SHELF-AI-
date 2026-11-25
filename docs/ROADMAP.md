@@ -1541,3 +1541,10 @@ Próximo marco operacional: worker durável com leases/fencing e recuperação s
 O API CI passa a executar um smoke dedicado em PostgreSQL 16 com dois claims concorrentes, takeover de lease, rejeição do worker antigo e interrupção real de um processo com SIGKILL após a confirmação da tentativa STARTED. A recuperação deve finalizar o ledger como PARTIAL, com evento COMPLETED e contagens desconhecidas.
 
 Limite da evidência: este smoke não mata o processo depois de confirmar uma página de inventário nem verifica o replay idempotente dos snapshots. Esse cenário continua como próximo teste de integração do orquestrador.
+
+
+## 2026-11-25 — Prova de crash após commit de página ERP/WMS
+
+O smoke PostgreSQL 16 passa a executar o orquestrador de sincronização com um adapter determinístico. O worker confirma a primeira página, bloqueia na obtenção da segunda e é terminado com SIGKILL. Um novo worker recupera o lease, confirma o ledger anterior como PARTIAL e repete a primeira página. A prova verifica que o snapshot mantém o mesmo ID e conteúdo e que não é duplicado, enquanto uma referência da página seguinte é persistida normalmente.
+
+A validação depende do resultado verde do API CI no SHA final; a existência do passo no workflow não constitui, por si só, evidência de execução bem-sucedida.
