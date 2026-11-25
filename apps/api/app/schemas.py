@@ -200,7 +200,7 @@ class InventorySnapshotRead(BaseModel):
     product_id: int
     on_hand_quantity: float
     reserved_quantity: float
-    available_quantity: float
+    available_quantity: float | None
     source: str
     external_reference: str | None
     location_code: str | None
