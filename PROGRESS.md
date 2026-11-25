@@ -1359,3 +1359,16 @@ O commit `50fc1fcd9dac4c88dfb800aaa1f690ff1c0b6304` introduz o endpoint transacc
 - A execução seguinte chegou a falhar num smoke preexistente de autorização multi-loja: o pedido MANUAL estrangeiro não continha `reason`, pelo que o schema devolvia 422 antes de testar a autorização esperada (403). Corrigido o payload com motivo válido em `c6b2d33`.
 - Teste SQLite da migration e suite completa ainda não foram confirmados no HEAD final. O run após a correcção está pendente.
 - Próxima acção: verificar API CI do HEAD, corrigir falhas com evidência; confirmar Quality Gates, Security Scans e Docker Compose. Só depois fechar 0091 e avançar para a auditoria P1 de snapshots/reservas WMS.
+
+
+## 2026-11-25 — Migration 0091 homologada em SQLite e PostgreSQL 16
+
+- HEAD validado: `c4f839bcfd076c2b5575eccfd314fae96983b3ed` na branch `main`.
+- O teste `test_inventory_manual_count_audit_migration.py` executou a revisão 0091 directamente em SQLite, incluindo upgrade/downgrade, provenance guard, actor activo, papéis, isolamento multi-loja, origem MANUAL e append-only.
+- O smoke `postgres_inventory_manual_count_audit_smoke.py` passou em PostgreSQL 16. O endpoint autenticado aceitou SUPERVISOR activo da loja e ADMIN global; INSERTs directos rejeitaram actor inactivo, EMPLOYEE, supervisor de outra loja e snapshot WMS; UPDATE/DELETE foram bloqueados.
+- API CI run `45650155916`: sucesso; migration PostgreSQL 16, smokes de autorização/proveniência e suite **1707 passed, 1 skipped**.
+- Quality Gates run `45650155829`: sucesso.
+- Security Scans run `45650155800`: sucesso.
+- Docker Compose smoke run `45650155946`: sucesso.
+- Corrigidos os fixtures de regressão que ficaram desactualizados quando o motivo e o actor passaram a ser obrigatórios para source=MANUAL. A suite completa confirmou **1707 passed, 1 skipped**.
+- Prioridade P0 da migration 0091 concluída. Próxima prioridade: rever semântica temporal de snapshots WMS, reservado agregado e mudanças de localização sem inventar detalhe de reservas que o adapter não fornece.

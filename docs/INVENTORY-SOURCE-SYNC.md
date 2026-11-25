@@ -278,3 +278,12 @@ A migration 0091 e a regressão de actor inactivo foram corrigidas no commit `94
 A migration 0091 possui agora cobertura específica da migration SQLite, não apenas testes sobre tabelas criadas por ORM: a suite aplica directamente `upgrade()` e `downgrade()`, valida a aceitação de SUPERVISOR activo da mesma loja e ADMIN global, e rejeita actor de outra loja, actor inactivo, EMPLOYEE e snapshots com origem diferente de MANUAL. O mesmo teste verifica UPDATE/DELETE bloqueados e preservação dos snapshots no downgrade.
 
 O API CI inclui também `postgres_inventory_manual_count_audit_smoke.py`, que exercita PostgreSQL 16 após `alembic upgrade head`, através do endpoint autenticado e de INSERTs directos para provar os triggers da base de dados. O smoke específico passou no SHA `7a20c95`. A suite do HEAD posterior ainda tem de confirmar o teste SQLite, os restantes smokes, e os workflows globais antes de a revisão ser considerada homologada.
+
+
+### Homologação da migration 0091 (25/11/2026)
+
+A revisão 0091 foi validada no SHA `c4f839bcfd076c2b5575eccfd314fae96983b3ed`. O API CI executou `alembic upgrade head` em PostgreSQL 16 e o smoke dedicado confirmou os triggers de proveniência e append-only. A suite executou o teste de migration SQLite (upgrade/downgrade e rejeições de provenance) e terminou com **1707 passed, 1 skipped**. Quality Gates, Security Scans e Docker Compose terminaram com sucesso.
+
+Runs: API CI `45650155916`; Quality Gates `45650155829`; Security Scans `45650155800`; Docker Compose `45650155946`.
+
+A migration 0091 está homologada para os cenários cobertos. A próxima revisão centra-se na semântica de snapshots WMS consecutivos e reservas agregadas, sem criar um ledger de reservas individuais sem identificadores/documentos disponibilizados pelo fornecedor.
