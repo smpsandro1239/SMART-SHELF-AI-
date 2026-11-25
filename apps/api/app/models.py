@@ -632,6 +632,7 @@ class InventoryFreshnessPolicy(Base):
         CheckConstraint("source IN ('ERP', 'WMS', 'POS', 'MANUAL', 'IMPORT')", name="ck_inventory_freshness_source"),
         CheckConstraint("max_age_minutes >= 1 AND max_age_minutes <= 10080", name="ck_inventory_freshness_max_age"),
         CheckConstraint("backroom_location_code IS NULL OR (source = 'WMS' AND length(trim(backroom_location_code)) > 0)", name="ck_inventory_freshness_backroom_wms_location"),
+        CheckConstraint("comparison_skew_tolerance_minutes IS NULL OR (source = 'ERP' AND comparison_skew_tolerance_minutes BETWEEN 0 AND 10080)", name="ck_inventory_freshness_comparison_skew_erp_only"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -641,6 +642,7 @@ class InventoryFreshnessPolicy(Base):
     # Only the WMS policy may designate one exact physical backroom location.
     # NULL deliberately disables WMS authority for replenishment in that store.
     backroom_location_code: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    comparison_skew_tolerance_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False)
 
 
@@ -657,6 +659,9 @@ class InventoryFreshnessPolicyEvent(Base):
             name="ck_inventory_freshness_event_new_location",
         ),
         CheckConstraint("length(trim(reason)) >= 5", name="ck_inventory_freshness_event_reason_nonblank"),
+        CheckConstraint("previous_comparison_skew_tolerance_minutes IS NULL OR previous_comparison_skew_tolerance_minutes BETWEEN 0 AND 10080", name="ck_inventory_freshness_event_previous_skew_range"),
+        CheckConstraint("new_comparison_skew_tolerance_minutes IS NULL OR new_comparison_skew_tolerance_minutes BETWEEN 0 AND 10080", name="ck_inventory_freshness_event_new_skew_range"),
+        CheckConstraint("previous_backroom_location_code IS NOT NULL OR new_backroom_location_code IS NOT NULL OR previous_comparison_skew_tolerance_minutes IS NOT NULL OR new_comparison_skew_tolerance_minutes IS NOT NULL", name="ck_inventory_freshness_event_has_change"),
         Index("ix_inventory_freshness_policy_events_policy", "policy_id", "created_at", "id"),
         Index("ix_inventory_freshness_policy_events_actor", "actor_user_id", "created_at"),
     )
@@ -670,6 +675,8 @@ class InventoryFreshnessPolicyEvent(Base):
     )
     previous_backroom_location_code: Mapped[str | None] = mapped_column(String(120), nullable=True)
     new_backroom_location_code: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    previous_comparison_skew_tolerance_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    new_comparison_skew_tolerance_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
     reason: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
 
