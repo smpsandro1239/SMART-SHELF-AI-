@@ -1236,3 +1236,16 @@ A primeira execução do novo smoke (API CI run 45611398632) falhou porque a lei
 
 ### Próxima acção obrigatória
 Auditar `packaging_units.py` e o endpoint `/api/v1/warehouse/replenishment-units`: manter os campos numéricos existentes por compatibilidade, acrescentar representações Decimal exactas para quantidades e factores de embalagem, e testar UNIT/CASE/PALLET, embalagem aberta, excesso e quantidades fraccionárias.
+
+
+## 2026-11-25 — Planeamento UNIT/CASE/PALLET com Decimal exacto
+
+- O módulo `app.packaging_units` já calculava internamente com Decimal, mas convertia os resultados para float na fronteira da API. Acrescentados campos textuais exactos para quantidade necessária, factor de embalagem, unidades soltas, quantidade planeada e excesso; os campos numéricos existentes mantêm-se para compatibilidade.
+- O endpoint `/api/v1/warehouse/replenishment-units` recebe agora `required_base_units` como Decimal e devolve `base_units_per_package_exact`.
+- Testes de serviço cobrem 20.125 unidades base em embalagem CASE de 12.000: caixa aberta (1 caixa + 8.125 soltas) e caixa fechada (2 caixas, 24.000 planeadas, 3.875 de excesso).
+- Teste API cobre UNIT, CASE e PALLET e confirma que `automatic_stock_movement_allowed=false`.
+- API CI run `45617926240`: sucesso; PostgreSQL migrations e smokes concluídos; `1691 passed, 1 skipped` em 156.30s.
+- Quality Gates run `45617926218`: sucesso; Web TypeScript/production build e suite API; `1691 passed, 1 skipped` em 125.53s.
+- Docker Compose smoke run `45617926384`: sucesso.
+- Security Scans run `45617926360`: sucesso; dependency audits, secret scan e ZAP passive baseline aprovados.
+- Próxima prioridade: integrar as quantidades de embalagem nas recomendações/tarefas de reposição, preservando o princípio de que o planeamento não reserva nem movimenta stock sem autorização e confirmação explícitas.
