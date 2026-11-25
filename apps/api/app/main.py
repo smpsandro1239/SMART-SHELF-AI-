@@ -8710,15 +8710,27 @@ def operational_decisions(
                     .order_by(models.Observation.observed_at.desc(), models.Observation.id.desc())
                     .first()
                 )
-        snapshot = (
-            db.query(models.InventorySnapshot)
-            .filter(
-                models.InventorySnapshot.store_id == zone.store_id,
-                models.InventorySnapshot.product_id == product.id,
-            )
-            .order_by(models.InventorySnapshot.captured_at.desc(), models.InventorySnapshot.id.desc())
+        wms_policy = (
+            db.query(models.InventoryFreshnessPolicy)
+            .filter_by(store_id=zone.store_id, source="WMS")
             .first()
         )
+        backroom_location_code = (
+            wms_policy.backroom_location_code if wms_policy is not None else None
+        )
+        snapshot = None
+        if backroom_location_code is not None:
+            snapshot = (
+                db.query(models.InventorySnapshot)
+                .filter(
+                    models.InventorySnapshot.store_id == zone.store_id,
+                    models.InventorySnapshot.product_id == product.id,
+                    models.InventorySnapshot.source == "WMS",
+                    models.InventorySnapshot.location_code == backroom_location_code,
+                )
+                .order_by(models.InventorySnapshot.captured_at.desc(), models.InventorySnapshot.id.desc())
+                .first()
+            )
         sales_rows = (
             db.query(models.DailySalesRecord)
             .filter(
@@ -8762,21 +8774,22 @@ def operational_decisions(
         if snapshot is not None:
             snapshot_at = aware(snapshot.captured_at)
             snapshot_age_minutes = max(0.0, (aware(now) - snapshot_at).total_seconds() / 60)
-            freshness_policy = (
-                db.query(models.InventoryFreshnessPolicy)
-                .filter_by(store_id=zone.store_id, source=snapshot.source)
-                .first()
-            )
-            max_inventory_age_minutes = freshness_policy.max_age_minutes if freshness_policy else 240
+            max_inventory_age_minutes = wms_policy.max_age_minutes if wms_policy else 240
             snapshot_is_fresh = (
                 snapshot_at <= aware(now)
                 and snapshot_age_minutes <= max_inventory_age_minutes
+                and snapshot.availability_status == "AVAILABLE"
             )
             backroom_inventory = {
                 "on_hand_quantity": float(snapshot.on_hand_quantity),
                 "reserved_quantity": float(snapshot.reserved_quantity),
-                "available_quantity": float(snapshot.available_quantity),
+                "available_quantity": (
+                    float(snapshot.available_quantity)
+                    if snapshot.availability_status == "AVAILABLE" else None
+                ),
                 "source": snapshot.source,
+                "location_code": snapshot.location_code,
+                "availability_status": snapshot.availability_status,
                 "captured_at": snapshot_at.isoformat(),
                 "age_minutes": round(snapshot_age_minutes, 1),
                 "max_age_minutes": max_inventory_age_minutes,
