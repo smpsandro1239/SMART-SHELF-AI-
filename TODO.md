@@ -2373,3 +2373,16 @@ Evidência no SHA `48fdf8310d1b17179ba6520d7a559b3bcc822c7f`: API CI **1722 pass
 Evidência no SHA `7bf95468320fc1dd4ab992b520e855d463b6e1f6`: API CI **1725 passed, 1 skipped**; Quality Gates, Security Scans e Docker Compose concluídos com sucesso. A validação PostgreSQL exercitou as guardas de retenção, auditoria e imutabilidade.
 
 - [ ] Se a operação necessitar de ocultar zonas/prateleiras descontinuadas, desenhar arquivamento/soft-delete com autorização, auditoria e preservação de histórico. Não disponibilizar eliminação física como substituto.
+
+
+## P0 — Concorrência e auditoria das transições de estado das tarefas
+
+- [x] Confirmar bloqueio da linha da tarefa com autorização por loja antes e depois do lock (`SELECT ... FOR UPDATE` em PostgreSQL).
+- [x] Cobrir duas atribuições concorrentes: exactamente uma transição e um evento `STATUS_CHANGED`.
+- [x] Cobrir concorrência entre `COMPLETED` e `CANCELLED`: exactamente um pedido vence; o outro recebe HTTP 409; o ledger contém apenas a transição terminal vencedora.
+- [x] Verificar que a transição terminal preserva quantidade/motivo correctos e que uma tarefa terminal não pode ser reaberta.
+- [x] Injectar falha depois do flush do evento e confirmar rollback atómico do estado e da auditoria.
+- [x] API CI PostgreSQL 16: **1725 passed, 1 skipped** no SHA `cfeeab3f4e092709de9eccb0dfc54397f72f12af`; Quality Gates, Security Scans e Docker Compose aprovados no mesmo SHA.
+- [ ] Manter pendente o arquivamento/soft-delete de prateleiras e zonas até existir requisito operacional; não enfraquecer as guardas de retenção.
+
+A transição usa lock pessimista da tarefa e valida o estado já actualizado após adquirir o lock. A prova concorrente é executada com pedidos HTTP concorrentes em PostgreSQL e não é inferida dos testes SQLite.
