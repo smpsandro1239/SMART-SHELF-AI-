@@ -2272,3 +2272,13 @@ Próxima prioridade P1: auditar snapshots WMS consecutivos, semântica de reserv
 - [ ] Confirmar novamente os quatro workflows no commit de merge `76fb62dfef9280fd8e6b291024be46a9e392e848` da branch `main`.
 
 Próxima prioridade P1: análise temporal ERP/WMS. Actualmente a comparação pode classificar DIVERGENCE quando ambas as fontes estão dentro da janela de freshness, mesmo com instantes de captura bastante diferentes. Definir um contrato de skew temporal (configuração e estado de comparação) antes de aplicar um limite; não inventar um valor operacional.
+
+
+### Confirmação final na branch main — 25/11/2026
+
+- HEAD de documentação: `5259f125500c46ff3e89fad1d8842128fc892db3`; código integrado em `76fb62dfef9280fd8e6b291024be46a9e392e848`.
+- API CI run `45654043683`: sucesso — **1715 passed, 1 skipped**.
+- Quality Gates run `45654278572`: sucesso (API tests/Python compilation e Web TypeScript/build).
+- Security Scans run `45654278738`: sucesso (dependências Python/web, secret scan e ZAP passive baseline).
+- Docker Compose smoke run `45654043988`: sucesso.
+- Os quatro workflows de validação da integração estão confirmados. O check Vercel continua a reportar `build-rate-limit`, que é uma limitação de quota do serviço e não uma falha dos testes/CI GitHub.

@@ -1385,3 +1385,14 @@ O commit `50fc1fcd9dac4c88dfb800aaa1f690ff1c0b6304` introduz o endpoint transacc
 - Evidência no branch SHA `f63543caabe6df1a2e660f5801c35f53fc3422a1`: API CI **1715 passed, 1 skipped**, Quality Gates sucesso, Security Scans sucesso, Docker Compose sucesso.
 - Workflows do commit de merge `76fb62d` na `main` estavam queued no momento desta actualização; confirmar conclusão antes de declarar a integração final totalmente validada.
 - Próxima prioridade: comparar timestamps ERP/WMS. A classificação actual permite DIVERGENCE se ambas as fontes forem CURRENT, sem um limite explícito de skew entre capturas. Definir política de skew por loja/fonte e estado TEMPORAL_SKEW sem assumir um limite comercial.
+
+
+## 2026-11-25 — Estado final confirmado na main
+
+- Código integrado: `76fb62dfef9280fd8e6b291024be46a9e392e848`.
+- API CI `45654043683`: sucesso, **1715 passed, 1 skipped**.
+- Quality Gates `45654278572`: sucesso.
+- Security Scans `45654278738`: sucesso.
+- Docker Compose `45654043988`: sucesso.
+- O check Vercel mantém `build-rate-limit`; não afecta a validade dos workflows GitHub acima.
+- Próxima análise: skew temporal ERP/WMS. Não aplicar limite arbitrário; a tolerância deve ser configurada por política operacional antes de alterar a classificação de divergência.
