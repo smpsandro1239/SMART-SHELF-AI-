@@ -571,6 +571,10 @@ class InventorySnapshot(Base):
     reserved_quantity: Mapped[float] = mapped_column(Numeric(12, 3), default=0, nullable=False)
     source: Mapped[str] = mapped_column(String(20), nullable=False)
     external_reference: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    # WMS evidence must identify its physical location and availability state
+    # before it can be considered authoritative backroom stock.
+    location_code: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    availability_status: Mapped[str] = mapped_column(String(16), nullable=False, default="UNKNOWN")
     captured_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
@@ -592,6 +596,9 @@ class InventoryFreshnessPolicy(Base):
     store_id: Mapped[int] = mapped_column(ForeignKey("stores.id", ondelete="CASCADE"), nullable=False, index=True)
     source: Mapped[str] = mapped_column(String(20), nullable=False)
     max_age_minutes: Mapped[int] = mapped_column(Integer, nullable=False, default=240)
+    # Only the WMS policy may designate one exact physical backroom location.
+    # NULL deliberately disables WMS authority for replenishment in that store.
+    backroom_location_code: Mapped[str | None] = mapped_column(String(120), nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False)
 
 
