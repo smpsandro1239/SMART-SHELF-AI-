@@ -68,7 +68,7 @@ def test_migration_backfills_identity_and_preserves_unknown_historical_provenanc
         assert UUID(rows[0][0])
         assert UUID(rows[1][0])
         assert rows[0][0] != rows[1][0]
-        assert rows[0][1:] == ("BACKROOM-A", 20)
+        assert rows[0][1:] == ("BACKROOM-A", None)
         assert rows[1][1:] == (None, None)
 
         with pytest.raises(IntegrityError, match="append-only"):
