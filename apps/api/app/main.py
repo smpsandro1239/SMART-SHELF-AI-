@@ -6871,6 +6871,8 @@ def list_inventory_snapshots(
     limit = max(1, min(limit, 500))
     query = db.query(models.InventorySnapshot)
     actor = _request_user(db, request)
+    if actor is not None and actor.role not in {"ADMIN", "SUPERVISOR"}:
+        raise HTTPException(status_code=403, detail="Supervisor role required")
     if actor is not None and actor.role != "ADMIN":
         _enforce_store_scope(actor, store_id if store_id is not None else actor.store_id)
         query = query.filter(models.InventorySnapshot.store_id == actor.store_id)
