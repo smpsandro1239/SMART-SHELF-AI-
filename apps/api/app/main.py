@@ -8195,6 +8195,7 @@ def reconcile_completed_replenishment(
                 "destination_shelf_code": destination_shelf.code,
                 "destination_zone_id": destination_shelf.zone.id,
                 "destination_zone_name": destination_shelf.zone.name,
+                "destination_location_backfilled": False,
                 "result_snapshot_id": result_snapshot.id,
             },
             created_at=now,
