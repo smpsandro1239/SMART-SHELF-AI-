@@ -980,3 +980,12 @@ Pendente: worker durável, gestão de secrets, recuperação de STARTED abandona
 - As contagens permanecem `NULL`, porque os snapshots não têm associação à tentativa transitória e não é seguro inferir quantas páginas foram confirmadas antes da interrupção.
 - Adicionado teste de regressão SQLite que verifica a finalização do ledger, o incremento do fencing token e a rejeição de heartbeat do worker antigo.
 - Documentação e TODO actualizados. **Os testes não foram executados nesta sessão** e ainda faltam os testes reais de concorrência/interrupção em PostgreSQL 16; não declarar a fase validada até à CI.
+
+
+## 2026-11-25 — Smoke PostgreSQL 16 para concorrência e SIGKILL ERP/WMS
+
+- Adicionado `apps/api/scripts/postgres_inventory_sync_job_smoke.py`, executado contra PostgreSQL 16 real no API CI.
+- O smoke usa sessões independentes e uma barreira concorrente para provar que apenas um dos dois workers reclama o mesmo job.
+- Verifica takeover após expiração, incremento do fencing token e rejeição de renovação pelo worker antigo.
+- Inicia um processo worker separado, confirma a tentativa STARTED na base de dados, termina-o com SIGKILL e verifica que o worker de recuperação fecha o ledger como PARTIAL com `WORKER_LEASE_EXPIRED`, evento COMPLETED e contagens NULL.
+- O smoke **não** simula ainda a morte após confirmação de uma página real nem o replay dos snapshots; essa validação permanece explicitamente pendente. O script e o novo passo de CI foram publicados, mas a execução do workflow deste HEAD ainda não foi observada nesta ronda.
