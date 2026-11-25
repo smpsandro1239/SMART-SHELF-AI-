@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 
 from sqlalchemy import update
+from sqlalchemy.exc import IntegrityError
 
 from app import models
 from app.database import SessionLocal
@@ -349,7 +350,7 @@ def _verify_sigkill_after_page_commit_and_idempotent_replay():
         ))
         try:
             db.flush()
-        except Exception as exc:
+        except IntegrityError as exc:
             db.rollback()
             if "inventory snapshot source_sync_id provenance mismatch" not in str(exc):
                 raise
