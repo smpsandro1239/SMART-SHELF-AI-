@@ -2129,3 +2129,10 @@ Validação no SHA `7bf95468320fc1dd4ab992b520e855d463b6e1f6`: API CI PostgreSQL
 As transições de estado de tarefas são serializadas através do lock da linha da tarefa em PostgreSQL e validadas sobre o estado actualizado. O smoke concorrente confirma que atribuições simultâneas não duplicam eventos e que, numa corrida entre conclusão e cancelamento, apenas uma transição terminal é aceite (a perdedora recebe HTTP 409). O ledger append-only reflecte exactamente o vencedor. Falhas de auditoria depois do flush revertem atomicamente o estado e o evento; tarefas terminais não podem ser reabertas.
 
 Validação no SHA `cfeeab3f4e092709de9eccb0dfc54397f72f12af`: API CI PostgreSQL 16 **1725 passed, 1 skipped**, Quality Gates, Security Scans e Docker Compose concluídos com sucesso.
+
+
+### Privacidade do histórico operacional das tarefas
+
+Funcionários (`EMPLOYEE`) só podem consultar o histórico de eventos das tarefas atribuídas à sua própria conta. Supervisores consultam apenas tarefas da sua loja e administradores mantêm acesso global. A API aplica estes filtros na consulta à base de dados e usa 404 uniforme para IDs inexistentes ou fora do âmbito autorizado.
+
+Validação no SHA `e36d8708bb5a054c229144cce466eb074f69812f`: API CI, Quality Gates, Security Scans e Docker Compose concluídos com sucesso.
