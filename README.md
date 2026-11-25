@@ -2098,3 +2098,8 @@ Os níveis alvo e mínimo de exposição (`shelf_products.target_quantity` e `mi
 A reconciliação expõe a diferença absoluta entre os timestamps de captura ERP/WMS. A tolerância é opcional e configurada na política ERP por loja através de `comparison_skew_tolerance_minutes`, com motivo obrigatório e auditoria append-only. Sem tolerância configurada, timestamps diferentes produzem `TEMPORAL_SKEW_UNCONFIGURED`; acima da tolerância produzem `TEMPORAL_SKEW`. Em ambos os estados o delta quantitativo fica NULL. Só capturas dentro da tolerância permitem classificar IN_SYNC/DIVERGENCE. Não existe valor operacional por defeito: a tolerância tem de ser homologada pela operação com base na cadência real dos adapters.
 
 Validação no SHA `b54b2d4c927aee606f23fef35018b701c17aaf5f`: API CI **1717 passed, 1 skipped**, Quality Gates, Security Scans e Docker Compose concluídos com sucesso.
+
+
+## Reservas WMS e movimentos
+
+As reservas WMS são tratadas como quantidade agregada: disponibilidade = `on_hand_quantity - reserved_quantity`. Os movimentos já reconciliados sobre o mesmo snapshot de origem são deduzidos adicionalmente, sem mutar o snapshot WMS. O snapshot resultante MANUAL é uma projecção interna e não representa confirmação de escrita no WMS. A confirmação externa exige uma correlação explícita do fornecedor.
