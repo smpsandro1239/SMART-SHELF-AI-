@@ -289,6 +289,7 @@ def main() -> None:
                         "on_hand_quantity": 24,
                         "reserved_quantity": 2,
                         "source": "MANUAL",
+                        "reason": "Cross-store authorization regression",
                         "external_reference": f"PG-AUTH-SNAPSHOT-{suffix}",
                     },
                     headers=supervisor_headers,
