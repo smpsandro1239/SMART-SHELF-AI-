@@ -2136,3 +2136,10 @@ Validação no SHA `cfeeab3f4e092709de9eccb0dfc54397f72f12af`: API CI PostgreSQL
 A leitura detalhada dos eventos de tarefas é reservada a supervisores e administradores. Funcionários (`EMPLOYEE`) recebem HTTP 403, mesmo para tarefas atribuídas à sua própria conta. Supervisores consultam apenas tarefas da sua loja e administradores mantêm acesso global. A regra está declarada na política central de rotas e é novamente imposta no handler.
 
 Validação no SHA `f925b875f871964ce80805c4927af15616f58774`: API CI, Quality Gates, Security Scans e Docker Compose concluídos com sucesso.
+
+
+### Autorização das operações de paletes
+
+A leitura do histórico e o registo de alterações do ciclo de vida de paletes exigem perfil SUPERVISOR ou ADMIN. Os handlers repetem a autorização da política central antes de ler ou bloquear o registo; funcionários recebem 403 e não conseguem criar eventos nem alterar o estado.
+
+Validação no SHA `50df52e59eca47aa2dfc868fc16621cf2f636586`: API CI, Quality Gates, Security Scans e Docker Compose concluídos com sucesso.
