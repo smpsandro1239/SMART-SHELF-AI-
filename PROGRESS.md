@@ -1206,3 +1206,33 @@ A primeira execução do novo smoke (API CI run 45611398632) falhou porque a lei
 - Teste actualizado para provar que a tarefa permanece IN_PROGRESS e sem `actual_quantity` após a tentativa inválida.
 - Commits: `390364547a881faba586515dd3c59a037439fbac`, `d603bf6b2bd012fa9175751162d947c25100dca6`.
 - O run Quality Gates do SHA anterior encontrou 1 falha neste cenário (1688 passed, 1 skipped); o novo SHA com a validação antecipada aguarda nova execução.
+
+
+## Validação final — 25/11/2026
+
+### Estado GitHub
+- Branch: `main`.
+- SHA de código validado: `d603bf6b2bd012fa9175751162d947c25100dca6`.
+- SHA de documentação/estado operacional: `3a9d2ea1e5a1036b30ab03b6debc4a420d1d0ddd` (antes desta actualização final).
+- As alterações posteriores ao SHA de código foram apenas documentação/estado operacional; não alteraram código ou migrations.
+
+### Resultados confirmados
+- API CI — run `45616138752`, sucesso: migration PostgreSQL, smoke de proveniência, smoke concorrente com reservas/retry/rollback e suite API.
+- Suite API — `1689 passed, 1 skipped` em 156.89s no API CI.
+- PostgreSQL 16 — migration 0089 aplicada; smoke de movimentos validou rejeição de origem WMS UNAVAILABLE, unidade incompatível, concorrência, reserva preservada, retry idempotente e rollback atómico.
+- Docker Compose smoke — run `45616138577`, sucesso.
+- Quality Gates — run `45616228212`, sucesso no SHA `3a9d2ea1e5a1036b30ab03b6debc4a420d1d0ddd`; TypeScript/build e suite API aprovados.
+- Suite API nos Quality Gates — `1689 passed, 1 skipped` em 161.98s.
+- Security Scans — run `45616228147`, sucesso no SHA `3a9d2ea1e5a1036b30ab03b6debc4a420d1d0ddd`; auditorias de dependências, secret scan e ZAP passive baseline aprovados.
+- A primeira execução do teste de precisão encontrou uma falha real de desenho: a coluna da tarefa arredondava antes da reconciliação. A validação foi antecipada para o schema de conclusão da tarefa; o teste passou no SHA validado.
+
+### Estado das tarefas
+- Migration 0086/0087: identidade/proveniência e ledger confirmados.
+- Smoke concorrente: concluído e validado.
+- Migration 0088: origem WMS tem de estar explicitamente AVAILABLE; validada.
+- Migration 0089: unidade base congelada por movimento e quantidade Decimal exacta; validada.
+- Histórico: movimentos antigos mantêm `unit_code=NULL`; não foi inventada unidade retroactiva.
+- Não há conversões automáticas entre unidade, caixa e palete.
+
+### Próxima acção obrigatória
+Auditar `packaging_units.py` e o endpoint `/api/v1/warehouse/replenishment-units`: manter os campos numéricos existentes por compatibilidade, acrescentar representações Decimal exactas para quantidades e factores de embalagem, e testar UNIT/CASE/PALLET, embalagem aberta, excesso e quantidades fraccionárias.
