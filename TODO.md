@@ -1,3 +1,21 @@
+## P0 — Autoridade física WMS por loja/localização (2026-11-25)
+
+- [x] Definir WMS como fonte de referência da retaguarda e ERP como fonte administrativa independente.
+- [x] Acrescentar `location_code` e `availability_status` aos snapshots; registos legados ficam UNKNOWN e não são elegíveis.
+- [x] Configurar a localização de retaguarda WMS exacta por loja através da política de frescura existente.
+- [x] Exigir motivo e guardar alterações à autoridade num ledger append-only com actor e valores anterior/novo.
+- [x] Exigir localização e disponibilidade explícitas em lotes de adapters WMS; ERP não ganha autoridade física.
+- [x] Persistir proveniência no orquestrador e incluí-la na comparação de replay idempotente.
+- [x] Restringir reconciliação de retaguarda, recomendações e movimentos à localização WMS configurada.
+- [x] Impedir fallback para ERP, outra localização ou snapshot WMS antigo quando o registo mais recente está UNAVAILABLE/UNKNOWN.
+- [x] Acrescentar regressões para ERP sem fallback, estado WMS indisponível, localização errada, configuração por loja e auditoria da política.
+- [ ] Confirmar migration 0084/0085, suite API, PostgreSQL 16, Quality Gates, Security Scans e Docker Compose no SHA final.
+- [ ] Homologar adapter WMS real e validar mapeamento de localizações com o fornecedor.
+- [ ] Definir normalização de unidade/caixa/palete e conversões autorizadas sem misturar unidades incompatíveis.
+- [ ] Expandir a auditoria de movimentos manuais e reconciliação de reservas multi-localização.
+
+Limite: o código suporta o contrato e a configuração, mas ainda não existe adapter WMS real homologado. Não apresentar o ledger de sincronização como prova de conectividade externa.
+
 ## Inventário — validação integral do worker durável ERP/WMS (2026-11-25; quatro workflows aprovados)
 
 - [x] Smoke PostgreSQL 16: claims concorrentes, takeover, fencing monotónico e rejeição de worker obsoleto no limite de escrita.
