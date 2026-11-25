@@ -1173,6 +1173,12 @@ def test_inventory_reconciliation_ledger_persists_evidence_and_requires_independ
 
         creator = _supervisor_actor(store_id)
         monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: creator)
+        configured_skew = client.post("/api/v1/inventory/freshness-policies", json={
+            "store_id": store_id, "source": "ERP", "max_age_minutes": 240,
+            "comparison_skew_tolerance_minutes": 5,
+            "reason": "Tolerância temporal aprovada para evidência de reconciliação",
+        })
+        assert configured_skew.status_code == 200, configured_skew.text
         created = client.post("/api/v1/inventory/reconciliations", json={
             "store_id": store_id, "shelf_id": shelf["id"],
             "product_id": product_id, "reason": "Controlo periódico da loja",
