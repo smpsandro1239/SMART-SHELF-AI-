@@ -8058,6 +8058,8 @@ def reconcile_completed_replenishment(
         movement_type="BACKROOM_TO_SHELF",
         quantity=quantity,
         source_snapshot_id=source_snapshot.id,
+        source_location_code=source_snapshot.location_code,
+        destination_shelf_id=task.shelf_id,
         actor_user_id=actor.id,
         reason=payload.reason.strip(),
         created_at=now,
