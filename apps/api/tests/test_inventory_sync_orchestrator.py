@@ -14,7 +14,8 @@ def _record():
         external_product_id="ext-1", sku="SKU-1",
         on_hand_quantity=Decimal("10.000"), reserved_quantity=Decimal("2.000"),
         captured_at=datetime(2026, 11, 24, 12, 0, tzinfo=timezone.utc),
-        external_reference="row-1",
+        external_reference="row-1", location_code="BACKROOM-A",
+        availability_status="AVAILABLE",
     )
 
 
@@ -22,6 +23,8 @@ def test_idempotent_snapshot_comparison_normalizes_sqlite_naive_timestamps():
     existing = SimpleNamespace(
         on_hand_quantity=Decimal("10.000"),
         reserved_quantity=Decimal("2.000"),
+        location_code="BACKROOM-A",
+        availability_status="AVAILABLE",
         captured_at=datetime(2026, 11, 24, 12, 0),
     )
     assert _same_snapshot(existing, _record())
