@@ -139,3 +139,10 @@ A fila não altera stock ERP/WMS, movimentos contabilísticos ou decisões human
 O script `apps/api/scripts/postgres_inventory_sync_job_smoke.py` está integrado no workflow API CI, que provisiona PostgreSQL 16. Exercita dois claims concorrentes, takeover com fencing, rejeição do worker antigo e SIGKILL de um processo após confirmar uma tentativa STARTED. A recuperação fecha o ledger como PARTIAL, com evento COMPLETED e contagens NULL.
 
 Este smoke não demonstra ainda a interrupção após commit de uma página real nem o replay idempotente dos snapshots. Não confundir a recuperação do ledger com a validação integral da semântica de páginas.
+
+
+## Interrupção depois de uma página confirmada
+
+O smoke `apps/api/scripts/postgres_inventory_sync_job_smoke.py` executa o orquestrador real com um adapter determinístico. O processo é terminado com SIGKILL apenas depois de a primeira página ter sido confirmada e antes de a segunda resposta ser devolvida. Após takeover, a sincronização abandonada fica PARTIAL; a repetição da primeira página tem de reutilizar o snapshot existente (mesmo ID e conteúdo), e a página seguinte pode acrescentar uma nova referência.
+
+O teste corre no API CI contra PostgreSQL 16. A integração no workflow não equivale a aprovação: consultar o resultado do run correspondente ao SHA antes de declarar a garantia validada.
