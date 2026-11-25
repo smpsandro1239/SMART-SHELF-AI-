@@ -1151,3 +1151,18 @@ Ponto semântico ainda aberto: InventorySnapshot.source aceita ERP, WMS, POS, MA
 ### Correcção do smoke PostgreSQL — autenticação de produção
 
 A primeira execução do novo smoke (API CI run 45611398632) falhou porque a leitura dos eventos foi executada depois de restaurar `APP_ENV=test`. Nesse modo, o middleware de autenticação é intencionalmente ignorado e o contexto `request.state.user_id` não é preenchido. O smoke já executava a reconciliação em modo production, mas a leitura não estava dentro do mesmo contexto. A leitura foi movida para dentro do bloco production, mantendo a restauração da configuração em `finally`. A falha era do harness de teste, não de uma autorização permissiva no endpoint. Novo API CI pendente.
+
+
+## 2026-11-25 — Smoke concorrente da reconciliação de movimentos
+
+- SHA inicial desta retoma: `0a7ef9edf8ddc2f2174ed19927d86a0b6899e93c` (main).
+- Confirmei que a main já contém migration 0086, ledger 0087, endpoint de leitura de eventos e smoke PostgreSQL de proveniência. A validação anterior do ledger (1684 passed, 1 skipped) pertence ao SHA `5bacdf429de11f97d619c775bcdfaba9b5154154`; não foi atribuída ao HEAD actual.
+- O API CI do SHA inicial executou migrations PostgreSQL 16 e o smoke de proveniência com sucesso; a suite API e Quality Gates/Security Scans ainda estavam em execução durante esta ronda. Docker Compose terminou com sucesso.
+- Detectada lacuna de prova: a reconciliação usa lock do produto e do snapshot WMS, mas não existia smoke dedicado que disputasse o mesmo saldo através de dois pedidos HTTP concorrentes.
+- Criado `apps/api/scripts/postgres_inventory_movement_concurrency_smoke.py`: duas tarefas do mesmo SKU disputam seis unidades disponíveis (7 on-hand menos 1 reservada), cada uma pede quatro; apenas uma pode gerar movimento. Verifica snapshot resultante, reserva preservada, ledger e retry idempotente.
+- Integrado o script em `.github/workflows/api-ci.yml`.
+- Actualizados README, TODO, ROADMAP e `docs/architecture/inventory-movement-event-ledger.md`.
+- Commits publicados directamente em main: `041737d1e473da5281e42911275b3d5cf29cf39d`, `4d5e686235adcc82632f6cd702ec2044b218feec`, `8b6b8d41880eba4caf5967cbeaff7d91cd40b536`, `7dafdde7c3b3cb565178a85d87d9f1916822f4b6`, `d60c4c1a9cde3a552d5abb9f3dc0680ddf5dc82d`, `bfe189481d571135566f73d344def49a12a0ea36`.
+- Testes locais: não executados; o conector GitHub não disponibiliza shell/ambiente local nesta sessão.
+- Validação do novo SHA: pendente. Os workflows anteriores ao smoke não validam este novo script.
+- Próxima acção: acompanhar API CI PostgreSQL 16; corrigir imediatamente qualquer falha. Depois acrescentar rollback real PostgreSQL para falha de inserção do evento, antes de avançar para unidades logísticas ou confirmação WMS.
