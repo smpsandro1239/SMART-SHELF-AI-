@@ -184,6 +184,11 @@ def _verify_stale_worker_fencing():
     with SessionLocal() as db:
         old = claim_next_inventory_sync_job(db, worker_id="worker-a", lease_seconds=LEASE_SECONDS)
         assert old is not None and old.id == job_id
+        # Capture lease credentials while the ORM instance is attached. The
+        # claim commits internally; the session expires ORM attributes on
+        # commit, and the instance becomes detached when this context closes.
+        old_lease_token = old.lease_token
+        old_fencing_token = old.fencing_token
         db.execute(update(models.InventorySyncJob).where(
             models.InventorySyncJob.id == job_id
         ).values(lease_expires_at=models.utc_now()))
@@ -192,11 +197,13 @@ def _verify_stale_worker_fencing():
         replacement = claim_next_inventory_sync_job(
             db, worker_id="worker-b", lease_seconds=LEASE_SECONDS
         )
-        assert replacement is not None and replacement.fencing_token == old.fencing_token + 1
+        assert replacement is not None
+        replacement_fencing_token = replacement.fencing_token
+        assert replacement_fencing_token == old_fencing_token + 1
         try:
             assert_and_renew_inventory_sync_job_lease(
                 db, job_id=job_id, worker_id="worker-a",
-                lease_token=old.lease_token, fencing_token=old.fencing_token,
+                lease_token=old_lease_token, fencing_token=old_fencing_token,
                 lease_seconds=LEASE_SECONDS,
             )
         except InventorySyncJobLeaseLost:
@@ -216,7 +223,7 @@ def _verify_stale_worker_fencing():
                 adapter=_ReplayAdapter(),
                 actor_user_id=actor_id,
                 lease_guard=_guard(
-                    job_id, "worker-a", old.lease_token, old.fencing_token
+                    job_id, "worker-a", old_lease_token, old_fencing_token
                 ),
             )
 
