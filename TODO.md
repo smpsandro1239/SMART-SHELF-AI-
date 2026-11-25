@@ -1988,8 +1988,7 @@ Capacity is calculated conservatively from the current time to the end of the ac
 - [x] Implementar e ligar ao API CI o smoke PostgreSQL 16 para claim concorrente, fencing e recuperação SIGKILL do ledger STARTED.
 - [ ] Executar o smoke no PostgreSQL 16 do API CI e confirmar o resultado verde.
 - [x] Interrupção após commit real de página e replay idempotente dos snapshots cobertos no smoke PostgreSQL.
+- [x] Rejeitar tentativa de escrita do worker obsoleto no limite do orquestrador, sem criar ledger nem snapshot.
 - [ ] Adapter real ERP/WMS e homologação do fornecedor.
 - [ ] Integração com Vault/Secrets Manager ou gestor de segredos escolhido no deployment.
-- [x] Smoke PostgreSQL 16: claim concorrente único, rejeição de worker obsoleto e recuperação do ledger STARTED após SIGKILL do processo.
-- [ ] Teste de interrupção após commit real de página e replay idempotente dos snapshots com o adapter/orquestrador.
 - [ ] Agendamento recorrente por loja/fonte e janelas operacionais.
