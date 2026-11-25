@@ -46,10 +46,10 @@ def isolated_database():
     Base.metadata.drop_all(bind=TEST_ENGINE)
 
 
-def create_store_and_product(client):
+def create_store_and_product(client, *, unit: str = "un"):
     suffix = uuid4().hex[:8].upper()
     store = client.post("/api/v1/stores", json={"code": f"INV-{suffix}", "name": "Loja inventário"})
-    product = client.post("/api/v1/products", json={"sku": f"INV-SKU-{suffix}", "name": "Arroz 1 kg"})
+    product = client.post("/api/v1/products", json={"sku": f"INV-SKU-{suffix}", "name": "Arroz 1 kg", "unit": unit})
     assert store.status_code == 201, store.text
     assert product.status_code == 201, product.text
     return store.json()["id"], product.json()["id"]
@@ -391,8 +391,11 @@ def _configure_backroom_location(store_id: int, location_code: str = "BACKROOM-A
         db.commit()
 
 
-def _completed_replenishment(client, *, snapshot_age_minutes: int = 5, on_hand: float = 20, reserved: float = 2):
-    store_id, product_id = create_store_and_product(client)
+def _completed_replenishment(
+    client, *, snapshot_age_minutes: int = 5, on_hand: float = 20,
+    reserved: float = 2, unit: str = "un", actual_quantity: float = 4,
+):
+    store_id, product_id = create_store_and_product(client, unit=unit)
     zone = client.post("/api/v1/zones", json={"store_id": store_id, "name": "Reposição"})
     shelf = client.post("/api/v1/shelves", json={"zone_id": zone.json()["id"], "code": f"REC-{uuid4().hex[:6]}"})
     shelf_id = shelf.json()["id"]
@@ -422,7 +425,7 @@ def _completed_replenishment(client, *, snapshot_age_minutes: int = 5, on_hand: 
     assert client.patch(f"/api/v1/tasks/{task_id}/status", json={"status": "IN_PROGRESS"}).status_code == 200
     completed = client.patch(f"/api/v1/tasks/{task_id}/status", json={
         "status": "COMPLETED",
-        "actual_quantity": 4,
+        "actual_quantity": actual_quantity,
         "exception_reason": "Reposição parcial confirmada para o teste.",
     })
     assert completed.status_code == 200, completed.text
@@ -1532,6 +1535,49 @@ def test_wms_backroom_location_is_configurable_per_store_through_policy_api(monk
         assert invalid.status_code == 422
 
 
+def test_inventory_movement_freezes_product_base_unit_and_exact_decimal_quantity(monkeypatch):
+    with TestClient(app) as client:
+        store_id, product_id, task_id, source_snapshot_id = _completed_replenishment(
+            client, unit="kg", actual_quantity=2.375,
+        )
+        actor = _supervisor_actor(store_id)
+        monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: actor)
+
+        response = client.post(
+            f"/api/v1/tasks/{task_id}/reconcile-inventory",
+            json={"reason": "Reposição pesada com quantidade decimal exacta."},
+        )
+        assert response.status_code == 201, response.text
+        movement = response.json()
+        assert movement["quantity"] == 2.375
+        assert movement["quantity_exact"] == "2.375"
+        assert movement["unit_code"] == "kg"
+        assert movement["source_snapshot_id"] == source_snapshot_id
+
+        history = client.get(
+            f"/api/v1/inventory/movements/{movement['id']}/events",
+        )
+        assert history.status_code == 200, history.text
+        evidence = history.json()[0]["evidence"]
+        assert evidence["quantity_exact"] == "2.375"
+        assert evidence["unit_code"] == "kg"
+
+        with TestingSession() as db:
+            persisted = db.get(models.InventoryMovement, movement["id"])
+            assert persisted is not None
+            assert str(persisted.quantity) == "2.375"
+            assert persisted.unit_code == "kg"
+
+
+def test_product_base_unit_rejects_blank_values():
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/v1/products",
+            json={"sku": "INVALID-UNIT", "name": "Invalid unit product", "unit": "   "},
+        )
+        assert response.status_code == 422
+
+
 def test_inventory_movement_event_is_recorded_atomically_and_readable(monkeypatch):
     with TestClient(app) as client:
         store_id, _, task_id, _ = _completed_replenishment(client)
@@ -1550,7 +1596,11 @@ def test_inventory_movement_event_is_recorded_atomically_and_readable(monkeypatc
         assert event["event_type"] == "MOVEMENT_RECORDED"
         assert event["actor_user_id"] == actor.id
         assert event["reason"] == movement["reason"]
+        assert movement["unit_code"] == "un"
+        assert movement["quantity_exact"] == "4.000"
         assert event["evidence"]["source_location_code"] == "BACKROOM-A"
+        assert event["evidence"]["unit_code"] == "un"
+        assert event["evidence"]["quantity_exact"] == "4.000"
         assert event["evidence"]["destination_shelf_id"] == movement["destination_shelf_id"]
         with TestingSession() as db:
             assert db.query(models.InventoryMovement).count() == 1
