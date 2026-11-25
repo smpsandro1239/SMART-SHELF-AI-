@@ -1602,3 +1602,15 @@ A validação depende do resultado verde do API CI no SHA final; a existência d
 A migration 0087 cria um ledger append-only com identidade de operação, movimento, loja, actor, motivo, timestamp e evidência. A reconciliação regista MOVEMENT_RECORDED na mesma transacção que o movimento e o snapshot resultante. A leitura é read-only e limitada por RBAC/tenant. Os testes cobrem rollback se o evento falhar, isolamento cross-store e imutabilidade SQLite. A validação dos quatro workflows no novo SHA é obrigatória antes de declarar a fase concluída.
 
 A confirmação WMS, compensações e divergências permanecem pendentes; não há adapter WMS homologado nem evidência externa. A unidade base e as conversões unidade/caixa/palete continuam por definir.
+
+
+## 2026-11-25 — Concorrência da reconciliação de movimentos
+
+- [x] Adicionar smoke PostgreSQL 16 com duas tarefas do mesmo SKU a disputar simultaneamente o mesmo snapshot WMS.
+- [x] Incluir uma unidade reservada e confirmar que a disponibilidade efectiva é seis, não sete.
+- [x] Exigir exactamente uma reconciliação aprovada, um movimento, um snapshot resultante e um evento de auditoria; a segunda operação deve falhar por stock insuficiente.
+- [x] Verificar retry idempotente da tarefa vencedora, sem criar novo movimento.
+- [ ] Confirmar execução do novo smoke e os quatro workflows no SHA final.
+- [ ] Acrescentar prova PostgreSQL de rollback integral quando a inserção do evento de movimento falha.
+
+A serialização depende dos locks de produto e snapshot no endpoint de reconciliação. O smoke exercita pedidos HTTP concorrentes com sessões de base de dados independentes; testes SQLite não substituem esta prova PostgreSQL.
