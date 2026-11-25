@@ -2082,3 +2082,11 @@ Capacity is calculated conservatively from the current time to the end of the ac
 - [ ] Reexecutar API CI em PostgreSQL 16 e confirmar a suite completa após a correcção.
 - [ ] Confirmar Quality Gates, Security Scans e Docker Compose no novo HEAD.
 - [ ] Só depois iniciar o ledger de eventos do ciclo de vida de InventoryMovement.
+
+
+## 2026-11-25 — Correcção do fixture SQLite da migration 0086
+
+- A nova execução de Quality Gates terminou com 1 falha, 1679 testes aprovados e 1 ignorado. A falha não ocorreu no backfill nem no PostgreSQL: o teste isolado SQLite criava `inventory_movements` sem a coluna `product_id`, embora o modelo real e a tabela de produção a contenham.
+- O trigger 0086 consulta `NEW.product_id` para confirmar a coerência entre movimento, tarefa e snapshot. SQLite devolveu `no such column: NEW.product_id` antes de avaliar a rejeição esperada do movimento inválido.
+- Corrigido o fixture para reproduzir o esquema real: `product_id` passa a existir e é preenchido nos movimentos históricos e nas inserções de teste. A regra de produção mantém-se inalterada.
+- Esta correcção é exclusivamente de teste. A validação PostgreSQL 16 continua pendente na execução API CI; não declarar a migration integralmente validada até a suite completa e os workflows relevantes passarem.
