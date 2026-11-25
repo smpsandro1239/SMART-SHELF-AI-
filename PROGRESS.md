@@ -1516,12 +1516,12 @@ O commit `50fc1fcd9dac4c88dfb800aaa1f690ff1c0b6304` introduz o endpoint transacc
 - Próxima prioridade: rever consistência temporal dos campos `started_at`/`completed_at` e a política de atribuição/reafectação, sem inventar regras comerciais nem reabrir estados terminais.
 
 
-## 2026-11-25 — P0: isolamento do histórico de tarefas para funcionários
+## 2026-11-25 — P0: autorização do histórico de eventos de tarefas
 
-- Corrigida a autorização de `GET /api/v1/tasks/{task_id}/events`: EMPLOYEE só consulta tarefas atribuídas ao próprio `assigned_user_id`; a filtragem é executada na query SQL antes de materializar a tarefa.
-- SUPERVISOR continua limitado à loja; ADMIN mantém acesso global.
-- Respostas 404 uniformes para tarefa de colega, não atribuída, inexistente ou de outra loja evitam exposição de existência e eventos.
-- Teste regressivo cobre tarefa própria, tarefa atribuída a colega, tarefa sem atribuição e ID inexistente.
-- Commits: teste `2fca1052d4e37dac4e0d2cce92b1e5953b494562`; implementação `e36d8708bb5a054c229144cce466eb074f69812f`.
-- API CI `45714946906`, Quality Gates `45714946958`, Security Scans `45714946858` e Docker Compose `45714946956`: sucesso no SHA final.
-- Próxima prioridade: auditar endpoints de leitura de eventos/auditoria de tarefas e operações adjacentes quanto a privilégios por função e isolamento de loja; manter as regras de retenção e os estados terminais.
+- A revisão da política central confirmou que `GET /api/v1/tasks/{task_id}/events` é `SUPERVISOR_OR_ADMIN`, não uma rota para funcionários.
+- O handler passou a impor também essa regra, para defesa em profundidade e para que testes/direct calls não dependam exclusivamente do middleware.
+- EMPLOYEE recebe HTTP 403 para qualquer ID, mesmo tarefa atribuída a si próprio; SUPERVISOR continua limitado à loja e ADMIN mantém acesso global.
+- Teste regressivo cobre tarefa própria, tarefa de colega, tarefa sem atribuição e ID inexistente para o perfil EMPLOYEE.
+- Commits: teste inicial `2fca1052d4e37dac4e0d2cce92b1e5953b494562`; primeira implementação `e36d8708bb5a054c229144cce466eb074f69812f`; alinhamento final `355af238824f5094faa71a95cbf8e746c372c89b` e teste `f925b875f871964ce80805c4927af15616f58774`.
+- API CI `45716057516`, Quality Gates `45716057563`, Security Scans `45716057667` e Docker Compose `45716057580`: sucesso no SHA de código `f925b875f871964ce80805c4927af15616f58774`.
+- Próxima prioridade: auditar endpoints de leitura de eventos/auditoria de operações adjacentes quanto a privilégios por função e isolamento de loja; manter retenção e estados terminais.
