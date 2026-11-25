@@ -2047,3 +2047,77 @@ def test_inventory_reconciliation_requires_configured_capture_skew_tolerance(mon
             assert events[1].previous_comparison_skew_tolerance_minutes == 0
             assert events[1].new_comparison_skew_tolerance_minutes == 2
             assert all(event.actor_user_id == actor.id for event in events)
+
+
+def test_wms_backroom_location_change_and_late_snapshot_never_restore_old_stock(monkeypatch):
+    with TestClient(app) as client:
+        store_id, product_id = create_store_and_product(client)
+        zone = client.post("/api/v1/zones", json={"store_id": store_id, "name": "Zona mudança de retaguarda"}).json()
+        shelf = client.post("/api/v1/shelves", json={"zone_id": zone["id"], "code": "WMS-LOCATION-CHANGE"}).json()
+        linked = client.post("/api/v1/shelf-products", json={
+            "shelf_id": shelf["id"], "product_id": product_id,
+            "target_quantity": 12, "min_display_quantity": 2,
+        })
+        assert linked.status_code == 201, linked.text
+        now = datetime.now(timezone.utc)
+        _configure_backroom_location(store_id, location_code="BACKROOM-OLD")
+        old_location = client.post("/api/v1/inventory/snapshots", json={
+            "store_id": store_id, "product_id": product_id, "on_hand_quantity": 100,
+            "reserved_quantity": 0, "source": "WMS", "external_reference": "WMS-OLD-LOCATION",
+            "location_code": "BACKROOM-OLD", "availability_status": "AVAILABLE",
+            "captured_at": (now - timedelta(minutes=1)).isoformat(),
+        })
+        assert old_location.status_code == 201, old_location.text
+
+        actor = _supervisor_actor(store_id)
+        monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: actor)
+        changed = client.post("/api/v1/inventory/freshness-policies", json={
+            "store_id": store_id, "source": "WMS", "max_age_minutes": 240,
+            "backroom_location_code": "BACKROOM-NEW",
+            "reason": "Mudança da localização física de retaguarda",
+        })
+        assert changed.status_code == 200, changed.text
+
+        before_new_snapshot = client.get("/api/v1/inventory/reconciliation", params={"store_id": store_id})
+        assert before_new_snapshot.status_code == 200, before_new_snapshot.text
+        empty_item = before_new_snapshot.json()["items"][0]
+        assert empty_item["backroom_snapshot_id"] is None
+        assert empty_item["backroom_available_quantity"] is None
+        assert empty_item["wms_erp_comparison_status"] == "MISSING_WMS_BACKROOM_STOCK"
+
+        current = client.post("/api/v1/inventory/snapshots", json={
+            "store_id": store_id, "product_id": product_id, "on_hand_quantity": 20,
+            "reserved_quantity": 5, "source": "WMS", "external_reference": "WMS-NEW-LOCATION-CURRENT",
+            "location_code": "BACKROOM-NEW", "availability_status": "AVAILABLE",
+            "captured_at": (now - timedelta(minutes=10)).isoformat(),
+        })
+        delayed = client.post("/api/v1/inventory/snapshots", json={
+            "store_id": store_id, "product_id": product_id, "on_hand_quantity": 999,
+            "reserved_quantity": 0, "source": "WMS", "external_reference": "WMS-NEW-LOCATION-LATE",
+            "location_code": "BACKROOM-NEW", "availability_status": "AVAILABLE",
+            "captured_at": (now - timedelta(minutes=20)).isoformat(),
+        })
+        assert current.status_code == 201, current.text
+        assert delayed.status_code == 201, delayed.text
+
+        reconciled = client.get("/api/v1/inventory/reconciliation", params={"store_id": store_id})
+        assert reconciled.status_code == 200, reconciled.text
+        item = reconciled.json()["items"][0]
+        assert item["backroom_snapshot_id"] == current.json()["id"]
+        assert item["backroom_location_code"] == "BACKROOM-NEW"
+        assert item["backroom_on_hand_quantity"] == 20
+        assert item["backroom_reserved_quantity"] == 5
+        assert item["backroom_available_quantity"] == 15
+        with TestingSession() as db:
+            events = db.query(models.InventoryFreshnessPolicyEvent).join(
+                models.InventoryFreshnessPolicy,
+                models.InventoryFreshnessPolicy.id == models.InventoryFreshnessPolicyEvent.policy_id,
+            ).filter(
+                models.InventoryFreshnessPolicy.store_id == store_id,
+                models.InventoryFreshnessPolicy.source == "WMS",
+            ).all()
+            assert len(events) == 1
+            assert events[0].previous_backroom_location_code == "BACKROOM-OLD"
+            assert events[0].new_backroom_location_code == "BACKROOM-NEW"
+            assert events[0].actor_user_id == actor.id
+            assert db.query(models.InventorySnapshot).filter_by(store_id=store_id, source="WMS").count() == 3
