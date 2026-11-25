@@ -1537,3 +1537,78 @@ def test_employee_cannot_read_task_event_history(monkeypatch):
             assert unassigned_events.status_code == 403
             assert missing_events.status_code == 403
             assert own_events.json() == coworker_events.json() == unassigned_events.json() == missing_events.json()
+
+
+
+def test_pallet_lifecycle_events_require_supervisor_or_admin(monkeypatch):
+    with TestClient(app) as client:
+        store_id, _, product_id = create_task_context(client)
+        with TestingSession() as db:
+            level = models.ProductPackagingLevel(
+                product_id=product_id, code="PALLET-AUTH", name="Palete de autorização",
+                package_type="PALLET", base_units_per_package=720, is_active=True,
+            )
+            employee = models.User(
+                email="pallet-auth-employee@example.test", full_name="Operador",
+                password_hash="test-only-not-used", role="EMPLOYEE", store_id=store_id,
+                is_active=True,
+            )
+            supervisor = models.User(
+                email="pallet-auth-supervisor@example.test", full_name="Supervisor",
+                password_hash="test-only-not-used", role="SUPERVISOR", store_id=store_id,
+                is_active=True,
+            )
+            db.add_all([level, employee, supervisor])
+            db.commit()
+            db.refresh(level)
+            db.refresh(employee)
+            db.refresh(supervisor)
+            pallet = models.StorePallet(
+                store_id=store_id, product_id=product_id, packaging_level_id=level.id,
+                pallet_code="PALLET-AUTH-001", base_quantity=720, status="READY",
+                location_type="WAREHOUSE", location_code="ARZ-A-01",
+            )
+            db.add(pallet)
+            db.flush()
+            db.add(models.PalletRotationEvent(
+                pallet_id=pallet.id, event_type="REGISTERED", quantity_before=0,
+                quantity_after=720, reason="Registo inicial de teste", occurred_at=models.utc_now(),
+            ))
+            db.commit()
+            db.refresh(pallet)
+            pallet_id, employee_id, supervisor_id = pallet.id, employee.id, supervisor.id
+
+        with TestingSession() as db:
+            employee = db.get(models.User, employee_id)
+            monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: employee)
+            employee_read = client.get(
+                f"/api/v1/warehouse/pallets/{pallet_id}/events", params={"store_id": store_id},
+            )
+            employee_write = client.post(
+                f"/api/v1/warehouse/pallets/{pallet_id}/events", json={
+                    "expected_status": "READY", "expected_base_quantity": 720,
+                    "status": "QUARANTINED", "reason": "Operador sem autorização de supervisor",
+                },
+            )
+            assert employee_read.status_code == 403
+            assert employee_write.status_code == 403
+
+        with TestingSession() as db:
+            pallet = db.get(models.StorePallet, pallet_id)
+            assert pallet.status == "READY"
+            assert db.query(models.PalletRotationEvent).filter_by(pallet_id=pallet_id).count() == 1
+            supervisor = db.get(models.User, supervisor_id)
+            monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: supervisor)
+            supervisor_read = client.get(
+                f"/api/v1/warehouse/pallets/{pallet_id}/events", params={"store_id": store_id},
+            )
+            assert supervisor_read.status_code == 200, supervisor_read.text
+            assert len(supervisor_read.json()) == 1
+            supervisor_write = client.post(
+                f"/api/v1/warehouse/pallets/{pallet_id}/events", json={
+                    "expected_status": "READY", "expected_base_quantity": 720,
+                    "status": "QUARANTINED", "reason": "Quarentena aprovada pelo supervisor",
+                },
+            )
+            assert supervisor_write.status_code == 201, supervisor_write.text
+            assert supervisor_write.json()["event_type"] == "STATUS_REVIEWED"
