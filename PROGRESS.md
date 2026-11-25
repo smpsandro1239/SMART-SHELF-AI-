@@ -1407,3 +1407,12 @@ O commit `50fc1fcd9dac4c88dfb800aaa1f690ff1c0b6304` introduz o endpoint transacc
 - Security Scans run `45654278738`: success.
 - Docker Compose smoke run `45654043988`: success.
 - Vercel check: one project check is success; the other still reports `build-rate-limit`. This is external build quota, not a GitHub CI failure.
+
+
+## 2026-11-25 — Fecho da regressão de referência inexistente (0092)
+
+- Acrescentado caso SQLite que tenta inserir snapshot com `source_sync_id` inexistente; o trigger rejeita-o com erro de proveniência, mesmo sem FK SQLite física.
+- HEAD de código validado: `f7430342a9e52f9d269dd567c23719790fe638a0`.
+- API CI `45655823242`: sucesso, **1715 passed, 1 skipped**.
+- Quality Gates `45655823075`, Security Scans `45655823227` e Docker Compose `45655823263`: sucesso.
+- A migration 0092 fica validada também para referência inexistente; a linha temporal do replay continua preservada.

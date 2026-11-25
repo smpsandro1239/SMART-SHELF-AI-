@@ -2287,3 +2287,10 @@ Próxima prioridade P1: análise temporal ERP/WMS. Actualmente a comparação po
 ### Correcção de estado documental — migration 0091
 
 As duas caixas pendentes da secção de validação 0091 foram fechadas com a evidência posterior. A nota de evidência parcial foi substituída pelo resultado final: SQLite e PostgreSQL 16 validados; API CI 1715 passed/1 skipped na integração final; Quality Gates, Security Scans e Docker Compose verdes na main.
+
+
+### Regressão adicional da migration 0092 — 25/11/2026
+
+- [x] Confirmar que o trigger SQLite rejeita também `source_sync_id` inexistente, além de loja/origem divergentes e execução terminal.
+- [x] API CI no HEAD `f7430342a9e52f9d269dd567c23719790fe638a0`: **1715 passed, 1 skipped**.
+- [x] API CI, Quality Gates, Security Scans e Docker Compose no mesmo SHA: sucesso.
