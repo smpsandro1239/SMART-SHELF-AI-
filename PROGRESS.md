@@ -1027,3 +1027,18 @@ Pendente: worker durável, gestão de secrets, recuperação de STARTED abandona
 - Docker Compose [45522939260](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45522939260): sucesso.
 - Os quatro workflows estão concluídos com `success` no mesmo SHA. A falha anterior de `DetachedInstanceError` foi corrigida no teste, capturando os tokens antes do fecho da sessão SQLAlchemy; a lógica de produção não foi alterada nesta correcção.
 - Próxima frente: auditoria técnica da reconciliação shelf/backroom/ERP, começando por proveniência, normalização de unidades, divergências, idempotência, isolamento multi-loja e trilho de auditoria. Adaptadores concretos continuam dependentes de especificações e homologação do fornecedor.
+
+
+## 2026-11-25 — Isolamento multi-loja na reconciliação (teste publicado; CI pendente)
+
+O HEAD anterior fb70ac8e98aa396cee3651a8341105333a343858 foi confirmado na branch main. Os quatro workflows GitHub Actions desse SHA passaram: API CI [45525868093](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45525868093), Quality Gates [45525868140](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45525868140), Security Scans [45525868155](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45525868155) e Docker Compose [45525868509](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45525868509).
+
+Foi publicado no commit 07b141b91d2d76a6ff6e1cefe0e721cf42978e8b um teste HTTP que reutiliza o mesmo produto global em duas lojas, cria snapshots ERP/WMS distintos, persiste uma reconciliação em cada loja e verifica:
+- os snapshots e quantidades devolvidos correspondem exclusivamente à loja consultada;
+- o ledger filtrado por loja não devolve reconciliações da outra loja;
+- a revisão por ID de uma reconciliação estrangeira devolve 404;
+- a tentativa negada não altera o estado PENDING nem cria movimentos.
+
+A alteração é apenas de teste; não modifica a lógica de produção. A execução dos workflows no novo SHA ainda tem de ser confirmada. A auditoria não considera esta prova isolada equivalente a uma matriz completa de endpoints, papéis e relações indirectas.
+
+Ponto semântico ainda aberto: InventorySnapshot.source aceita ERP, WMS, POS, MANUAL e IMPORT, mas o campo genérico da reconciliação é apresentado como stock de retaguarda. Não foi feita alteração à seleção desse snapshot porque o contrato actual não define quais dessas fontes representam inequivocamente stock físico de retaguarda. Não converter esta incerteza numa regra inventada.
