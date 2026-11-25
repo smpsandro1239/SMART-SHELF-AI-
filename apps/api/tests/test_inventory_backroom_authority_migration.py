@@ -52,6 +52,12 @@ def test_sqlite_wms_authority_migrations_preserve_snapshot_guards_and_audit_poli
             BEGIN SELECT RAISE(ABORT, 'inventory_snapshots is append-only'); END
         """)
         connection.exec_driver_sql("INSERT INTO users (id) VALUES (7)")
+        connection.exec_driver_sql("""
+            INSERT INTO inventory_snapshots
+                (id, store_id, product_id, on_hand_quantity, reserved_quantity,
+                 source, captured_at, created_at)
+            VALUES (90, 1, 10, 12, 0, 'WMS', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        """)
 
         with Operations.context(MigrationContext.configure(connection)):
             migration_0084.upgrade()
@@ -70,6 +76,31 @@ def test_sqlite_wms_authority_migrations_preserve_snapshot_guards_and_audit_poli
             "SELECT availability_status FROM inventory_snapshots WHERE id = 1"
         ).scalar_one()
         assert status == "AVAILABLE"
+        legacy = connection.exec_driver_sql(
+            "SELECT location_code, availability_status FROM inventory_snapshots WHERE id = 90"
+        ).one()
+        assert legacy.location_code is None
+        assert legacy.availability_status == "UNKNOWN"
+
+        with pytest.raises(IntegrityError, match="new WMS snapshots require physical location"):
+            connection.exec_driver_sql("""
+                INSERT INTO inventory_snapshots
+                    (id, store_id, product_id, on_hand_quantity, reserved_quantity,
+                     source, availability_status, captured_at, created_at)
+                VALUES
+                    (4, 1, 10, 10, 0, 'WMS', 'AVAILABLE',
+                     CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            """)
+
+        with pytest.raises(IntegrityError, match="new WMS snapshots require physical location"):
+            connection.exec_driver_sql("""
+                INSERT INTO inventory_snapshots
+                    (id, store_id, product_id, on_hand_quantity, reserved_quantity,
+                     source, location_code, availability_status, captured_at, created_at)
+                VALUES
+                    (5, 1, 10, 10, 0, 'WMS', 'BACKROOM-01', 'UNKNOWN',
+                     CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            """)
 
         with pytest.raises(IntegrityError, match="location code cannot be blank"):
             connection.exec_driver_sql("""
