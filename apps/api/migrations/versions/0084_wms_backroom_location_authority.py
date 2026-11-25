@@ -39,6 +39,26 @@ def upgrade() -> None:
     )
 
     if dialect == "postgresql":
+        op.execute("""
+            CREATE FUNCTION guard_inventory_snapshot_wms_provenance_0084()
+            RETURNS trigger AS $
+            BEGIN
+                IF NEW.source = 'WMS' AND (
+                    NEW.location_code IS NULL
+                    OR length(trim(NEW.location_code)) = 0
+                    OR NEW.availability_status NOT IN ('AVAILABLE', 'UNAVAILABLE')
+                ) THEN
+                    RAISE EXCEPTION 'new WMS snapshots require physical location and explicit availability';
+                END IF;
+                RETURN NEW;
+            END;
+            $ LANGUAGE plpgsql
+        """)
+        op.execute("""
+            CREATE TRIGGER trg_inventory_snapshot_wms_provenance_0084
+            BEFORE INSERT ON inventory_snapshots
+            FOR EACH ROW EXECUTE FUNCTION guard_inventory_snapshot_wms_provenance_0084()
+        """)
         op.create_check_constraint(
             "ck_inventory_snapshot_availability_status",
             "inventory_snapshots",
@@ -63,6 +83,11 @@ def upgrade() -> None:
                     THEN RAISE(ABORT, 'invalid inventory snapshot availability status') END;
                 SELECT CASE WHEN NEW.location_code IS NOT NULL AND length(trim(NEW.location_code)) = 0
                     THEN RAISE(ABORT, 'inventory snapshot location code cannot be blank') END;
+                SELECT CASE WHEN NEW.source = 'WMS' AND (
+                    NEW.location_code IS NULL
+                    OR length(trim(NEW.location_code)) = 0
+                    OR NEW.availability_status NOT IN ('AVAILABLE', 'UNAVAILABLE')
+                ) THEN RAISE(ABORT, 'new WMS snapshots require physical location and explicit availability') END;
             END
         """)
         op.execute("""
@@ -89,6 +114,8 @@ def downgrade() -> None:
     bind = op.get_bind()
     dialect = bind.dialect.name
     if dialect == "postgresql":
+        op.execute("DROP TRIGGER IF EXISTS trg_inventory_snapshot_wms_provenance_0084 ON inventory_snapshots")
+        op.execute("DROP FUNCTION IF EXISTS guard_inventory_snapshot_wms_provenance_0084()")
         op.drop_constraint(
             "ck_inventory_freshness_backroom_wms_location",
             "inventory_freshness_policies",
