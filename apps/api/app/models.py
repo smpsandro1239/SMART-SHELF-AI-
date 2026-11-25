@@ -1,4 +1,5 @@
 from datetime import date, datetime, timezone
+from decimal import Decimal
 from uuid import UUID, uuid4
 
 from sqlalchemy import JSON, Date, DateTime, ForeignKey, String, Text, Float, Integer, Boolean, Numeric, UniqueConstraint, CheckConstraint, ForeignKeyConstraint, Index, BigInteger, Uuid, text
@@ -719,7 +720,8 @@ class InventoryMovement(Base):
     store_id: Mapped[int] = mapped_column(ForeignKey("stores.id", ondelete="RESTRICT"), nullable=False, index=True)
     product_id: Mapped[int] = mapped_column(ForeignKey("products.id", ondelete="RESTRICT"), nullable=False, index=True)
     movement_type: Mapped[str] = mapped_column(String(30), nullable=False, default="BACKROOM_TO_SHELF")
-    quantity: Mapped[float] = mapped_column(Numeric(12, 3), nullable=False)
+    quantity: Mapped[Decimal] = mapped_column(Numeric(12, 3), nullable=False)
+    unit_code: Mapped[str | None] = mapped_column(String(30), nullable=True)
     source_snapshot_id: Mapped[int] = mapped_column(ForeignKey("inventory_snapshots.id", ondelete="RESTRICT"), nullable=False, index=True)
     source_location_code: Mapped[str | None] = mapped_column(String(120), nullable=True)
     destination_shelf_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -727,6 +729,10 @@ class InventoryMovement(Base):
     actor_user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False, index=True)
     reason: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False, index=True)
+
+    @property
+    def quantity_exact(self) -> str:
+        return format(Decimal(str(self.quantity)), "f")
 
 
 class InventoryMovementEvent(Base):
