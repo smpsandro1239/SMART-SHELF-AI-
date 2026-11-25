@@ -1,3 +1,13 @@
+## Inventário — correcção do smoke de fencing PostgreSQL (2026-11-25; correcção publicada, CI pendente)
+
+- [x] Consultar a execução real do API CI e identificar a primeira excepção: `DetachedInstanceError` no teste de fencing, ao ler `old.fencing_token` depois de a sessão SQLAlchemy fechar.
+- [x] Capturar lease token e fencing token enquanto a instância ORM ainda está ligada à sessão; reutilizar apenas valores escalares após o fecho.
+- [x] Manter inalterados o lease guard, a lógica de claim, o incremento monotónico do fencing token e o percurso real do orquestrador.
+- [ ] Confirmar no novo API CI o smoke PostgreSQL 16 e a suite completa `pytest -q`.
+- [ ] Confirmar Quality Gates, Security Scans e Docker Compose no HEAD final.
+
+A falha observada era do próprio teste (acesso a atributos expirados de uma instância ORM detached), não evidência de falha do mecanismo de fencing. Esta conclusão limita-se à excepção observada; a garantia funcional só fica validada após o smoke e a suite passarem.
+
 ## Integrações ERP/WMS — contrato de adapters (2026-11-24; contrato publicado, sem conectores reais)
 
 - [x] Definir protocolo assíncrono read-only para adapters ERP/WMS.
