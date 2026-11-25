@@ -1474,3 +1474,17 @@ O commit `50fc1fcd9dac4c88dfb800aaa1f690ff1c0b6304` introduz o endpoint transacc
 - Quality Gates `45683385692`, Security Scans `45683385335` e Docker Compose `45683385339`: sucesso no mesmo SHA.
 - Próxima prioridade: avaliar identidade histórica e retenção de prateleiras/zonas quando há reestruturações, sem depender de códigos actuais mutáveis.
 
+
+
+## 2026-11-25 — Identidade de zona e retenção da localização de destino (migration 0095)
+
+- Cada movimento conserva `destination_shelf_id/code` e `destination_zone_id/name`; o contrato de leitura e o evento `MOVEMENT_RECORDED` incluem os quatro valores.
+- `destination_location_backfilled=false` identifica dados capturados no instante do movimento. A migration 0095 marca `true` nos movimentos históricos, cuja zona/código foram reconstruídos a partir da hierarquia actual disponível.
+- Guardas PostgreSQL/SQLite rejeitam zona, nome, código, loja ou tarefa inconsistentes e impedem que novos movimentos sejam marcados como backfilled.
+- O smoke PostgreSQL renomeia prateleira e zona e confirma que os valores do movimento permanecem inalterados; tenta eliminar prateleira e zona e confirma que a cadeia de FKs impede apagar o histórico.
+- SHA validado: `48fdf8310d1b17179ba6520d7a559b3bcc822c7f`.
+- API CI `45686230839`: migration PostgreSQL 16, smoke de movimento/retention e suite API — **1722 passed, 1 skipped**.
+- Quality Gates `45686230835`, Security Scans `45686230811` e Docker Compose `45686230752`: sucesso no mesmo SHA.
+- Limitação histórica: não é possível reconstruir renomeações anteriores à migration sem eventos históricos; o campo de backfill torna essa incerteza explícita.
+- Próxima prioridade: definir arquivamento/soft-delete de catálogo se operações comerciais exigirem remoção visual de zonas/prateleiras, preservando IDs e evidência imutável.
+
