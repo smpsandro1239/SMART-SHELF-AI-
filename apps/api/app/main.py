@@ -584,7 +584,9 @@ def readiness(db: Session = Depends(get_db)):
 
 @app.post("/api/v1/stores", response_model=StoreRead, status_code=201, tags=["stores"])
 def create_store(payload: StoreCreate, request: Request, db: Session = Depends(get_db)):
-    _request_user(db, request)
+    actor = _request_user(db, request)
+    if actor is not None and actor.role != "ADMIN":
+        raise HTTPException(status_code=403, detail="Administrator role required")
     if db.query(models.Store).filter_by(code=payload.code).first():
         raise HTTPException(status_code=409, detail="Store code already exists")
     item = models.Store(**payload.model_dump())
@@ -622,7 +624,9 @@ def list_zones(request: Request, store_id: int | None = None, db: Session = Depe
 
 @app.post("/api/v1/zones", response_model=ZoneRead, status_code=201, tags=["zones"])
 def create_zone(payload: ZoneCreate, request: Request, db: Session = Depends(get_db)):
-    _request_user(db, request)
+    actor = _request_user(db, request)
+    if actor is not None and actor.role != "ADMIN":
+        raise HTTPException(status_code=403, detail="Administrator role required")
     if not db.get(models.Store, payload.store_id):
         raise HTTPException(status_code=404, detail="Store not found")
     item = models.Zone(**payload.model_dump())
@@ -4264,7 +4268,9 @@ def list_detection_sku_reviews(
 
 @app.post("/api/v1/products", response_model=ProductRead, status_code=201, tags=["products"])
 def create_product(payload: ProductCreate, request: Request, db: Session = Depends(get_db)):
-    _request_user(db, request)
+    actor = _request_user(db, request)
+    if actor is not None and actor.role != "ADMIN":
+        raise HTTPException(status_code=403, detail="Administrator role required")
     if db.query(models.Product).filter_by(sku=payload.sku).first():
         raise HTTPException(status_code=409, detail="Product SKU already exists")
     item = models.Product(**payload.model_dump())
@@ -5305,7 +5311,9 @@ def create_warehouse_product_profile(
     request: Request,
     db: Session = Depends(get_db),
 ):
-    _request_user(db, request)
+    actor = _request_user(db, request)
+    if actor is not None and actor.role != "ADMIN":
+        raise HTTPException(status_code=403, detail="Administrator role required")
     product = db.get(models.Product, payload.product_id)
     if product is None:
         raise HTTPException(status_code=404, detail="Product not found")
@@ -5359,7 +5367,9 @@ def create_product_packaging_level(
     request: Request,
     db: Session = Depends(get_db),
 ):
-    _request_user(db, request)
+    actor = _request_user(db, request)
+    if actor is not None and actor.role != "ADMIN":
+        raise HTTPException(status_code=403, detail="Administrator role required")
     product = db.get(models.Product, payload.product_id)
     if product is None:
         raise HTTPException(status_code=404, detail="Product not found")
@@ -9744,7 +9754,9 @@ def current_user(request: Request, db: Session = Depends(get_db)):
 
 @app.post("/api/v1/auth/users", response_model=UserRead, status_code=201, tags=["authentication"])
 def create_user(payload: UserCreate, request: Request, db: Session = Depends(get_db)):
-    _request_user(db, request)
+    actor = _request_user(db, request)
+    if actor is not None and actor.role != "ADMIN":
+        raise HTTPException(status_code=403, detail="Administrator role required")
     email = payload.email.strip().lower()
     if "@" not in email:
         raise HTTPException(status_code=422, detail="A valid email address is required")
