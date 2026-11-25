@@ -325,3 +325,12 @@ A reconciliação selecciona o snapshot WMS mais recente pela combinação `stor
 Snapshots recebidos tardiamente com `captured_at` anterior são preservados como histórico imutável, mas não substituem evidência mais recente da mesma localização. O desempate de timestamps iguais é determinístico pelo ID do snapshot. A disponibilidade operacional continua a ser `on_hand_quantity - reserved_quantity`; a reserva é um agregado reportado pelo WMS, não uma lista de reservas individuais.
 
 A regressão `test_wms_backroom_location_change_and_late_snapshot_never_restore_old_stock` cobre a mudança auditada de localização, ausência de fallback, chegada tardia e cálculo de disponibilidade. API CI PostgreSQL 16 terminou com **1718 passed, 1 skipped** no SHA `fb1470185126dfe295a15b1f69f635aed05b3da3`; os quatro workflows GitHub passaram.
+
+
+## Reservas agregadas e movimentos internos
+
+O campo WMS `reserved_quantity` é tratado como agregado por SKU/localização, não como lista de reservas identificáveis. A disponibilidade do snapshot é `on_hand_quantity - reserved_quantity`. Ao reconciliar um movimento, o serviço deduz adicionalmente a soma dos movimentos já registados sobre o mesmo `source_snapshot_id`; não altera o snapshot WMS original. O snapshot interno resultante preserva o agregado reservado e reduz o on-hand pela quantidade movimentada, sendo uma projecção interna e não uma confirmação WMS.
+
+A regressão `test_reserved_wms_quantity_is_subtracted_once_across_multiple_movements` valida dois movimentos sucessivos de 6 unidades sobre um snapshot com on-hand 20 e reserva agregada 5: disponibilidades resultantes 9 e 3, mantendo a reserva 5 e o snapshot WMS original imutável. API CI PostgreSQL 16: **1719 passed, 1 skipped** no SHA `043c15f4980b45c4d50d2cd47fb921c5504eccac`.
+
+A confirmação externa WMS permanece separada. Não se deve inferir que um snapshot posterior confirma um movimento apenas porque a quantidade mudou; é necessária correlação inequívoca fornecida pelo adapter/ERP/WMS e uma decisão de contrato explícita.
