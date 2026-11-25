@@ -9,6 +9,11 @@ depends_on = None
 
 
 def upgrade() -> None:
+    bind = op.get_bind()
+    dialect = bind.dialect.name
+
+    # Add columns without rebuilding inventory_snapshots: older SQLite databases
+    # protect this append-only table with triggers that a batch rebuild could drop.
     op.add_column(
         "inventory_snapshots",
         sa.Column("location_code", sa.String(length=120), nullable=True),
@@ -22,15 +27,6 @@ def upgrade() -> None:
             server_default="UNKNOWN",
         ),
     )
-    with op.batch_alter_table("inventory_snapshots") as batch_op:
-        batch_op.create_check_constraint(
-            "ck_inventory_snapshot_availability_status",
-            "availability_status IN ('AVAILABLE', 'UNAVAILABLE', 'UNKNOWN')",
-        )
-        batch_op.create_check_constraint(
-            "ck_inventory_snapshot_location_nonblank",
-            "location_code IS NULL OR length(trim(location_code)) > 0",
-        )
     op.create_index(
         "ix_inventory_snapshot_backroom_lookup",
         "inventory_snapshots",
@@ -41,23 +37,79 @@ def upgrade() -> None:
         "inventory_freshness_policies",
         sa.Column("backroom_location_code", sa.String(length=120), nullable=True),
     )
-    with op.batch_alter_table("inventory_freshness_policies") as batch_op:
-        batch_op.create_check_constraint(
+
+    if dialect == "postgresql":
+        op.create_check_constraint(
+            "ck_inventory_snapshot_availability_status",
+            "inventory_snapshots",
+            "availability_status IN ('AVAILABLE', 'UNAVAILABLE', 'UNKNOWN')",
+        )
+        op.create_check_constraint(
+            "ck_inventory_snapshot_location_nonblank",
+            "inventory_snapshots",
+            "location_code IS NULL OR length(trim(location_code)) > 0",
+        )
+        op.create_check_constraint(
             "ck_inventory_freshness_backroom_wms_location",
+            "inventory_freshness_policies",
             "backroom_location_code IS NULL OR (source = 'WMS' AND length(trim(backroom_location_code)) > 0)",
         )
+    elif dialect == "sqlite":
+        op.execute("""
+            CREATE TRIGGER trg_inventory_snapshot_provenance_insert_0084
+            BEFORE INSERT ON inventory_snapshots
+            BEGIN
+                SELECT CASE WHEN NEW.availability_status NOT IN ('AVAILABLE', 'UNAVAILABLE', 'UNKNOWN')
+                    THEN RAISE(ABORT, 'invalid inventory snapshot availability status') END;
+                SELECT CASE WHEN NEW.location_code IS NOT NULL AND length(trim(NEW.location_code)) = 0
+                    THEN RAISE(ABORT, 'inventory snapshot location code cannot be blank') END;
+            END
+        """)
+        op.execute("""
+            CREATE TRIGGER trg_inventory_freshness_backroom_policy_insert_0084
+            BEFORE INSERT ON inventory_freshness_policies
+            BEGIN
+                SELECT CASE WHEN NEW.backroom_location_code IS NOT NULL
+                    AND (NEW.source <> 'WMS' OR length(trim(NEW.backroom_location_code)) = 0)
+                    THEN RAISE(ABORT, 'backroom location is only valid for WMS and cannot be blank') END;
+            END
+        """)
+        op.execute("""
+            CREATE TRIGGER trg_inventory_freshness_backroom_policy_update_0084
+            BEFORE UPDATE OF source, backroom_location_code ON inventory_freshness_policies
+            BEGIN
+                SELECT CASE WHEN NEW.backroom_location_code IS NOT NULL
+                    AND (NEW.source <> 'WMS' OR length(trim(NEW.backroom_location_code)) = 0)
+                    THEN RAISE(ABORT, 'backroom location is only valid for WMS and cannot be blank') END;
+            END
+        """)
 
 
 def downgrade() -> None:
-    with op.batch_alter_table("inventory_freshness_policies") as batch_op:
-        batch_op.drop_constraint(
+    bind = op.get_bind()
+    dialect = bind.dialect.name
+    if dialect == "postgresql":
+        op.drop_constraint(
             "ck_inventory_freshness_backroom_wms_location",
+            "inventory_freshness_policies",
             type_="check",
         )
-        batch_op.drop_column("backroom_location_code")
+        op.drop_constraint(
+            "ck_inventory_snapshot_location_nonblank",
+            "inventory_snapshots",
+            type_="check",
+        )
+        op.drop_constraint(
+            "ck_inventory_snapshot_availability_status",
+            "inventory_snapshots",
+            type_="check",
+        )
+    elif dialect == "sqlite":
+        op.execute("DROP TRIGGER IF EXISTS trg_inventory_snapshot_provenance_insert_0084")
+        op.execute("DROP TRIGGER IF EXISTS trg_inventory_freshness_backroom_policy_insert_0084")
+        op.execute("DROP TRIGGER IF EXISTS trg_inventory_freshness_backroom_policy_update_0084")
+
+    op.drop_column("inventory_freshness_policies", "backroom_location_code")
     op.drop_index("ix_inventory_snapshot_backroom_lookup", table_name="inventory_snapshots")
-    with op.batch_alter_table("inventory_snapshots") as batch_op:
-        batch_op.drop_constraint("ck_inventory_snapshot_location_nonblank", type_="check")
-        batch_op.drop_constraint("ck_inventory_snapshot_availability_status", type_="check")
-        batch_op.drop_column("availability_status")
-        batch_op.drop_column("location_code")
+    op.drop_column("inventory_snapshots", "availability_status")
+    op.drop_column("inventory_snapshots", "location_code")
