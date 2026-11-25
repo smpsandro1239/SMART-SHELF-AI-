@@ -1282,3 +1282,12 @@ Auditar `packaging_units.py` e o endpoint `/api/v1/warehouse/replenishment-units
 
 ### Próxima prioridade técnica
 Auditar a reconciliação de reservas WMS. O modelo actual recebe `reserved_quantity` agregado por snapshot WMS e calcula disponível como físico menos reservado; não existe ainda um ledger interno de reservas com identificador externo por reserva. Não criar reservas locais fictícias nem assumir que uma tarefa de reposição reserva stock no WMS. Determinar primeiro quais os dados que o contrato do adapter pode fornecer; avançar com validações de consistência e alertas baseados em snapshots enquanto não existir contrato de detalhe de reservas.
+
+
+## 2026-11-25 — Precisão exacta do físico e reservado nos snapshots
+
+- A auditoria do fluxo de reservas confirmou que adapters ERP/WMS já validam físico e reservado como Decimal com escala Numeric(12,3), mas o endpoint directo `POST /api/v1/inventory/snapshots` aceitava float sem validar escala. Isso podia arredondar silenciosamente uma reserva ou saldo físico no Numeric.
+- O schema agora rejeita mais de três casas decimais e valores não finitos; o modelo declara ambos os campos como Decimal e a rota converte explicitamente os números HTTP com `Decimal(str(...))`.
+- Teste API acrescentado: snapshot com 10.125 kg físico e 2.375 kg reservado é persistido exactamente; escala 4 em qualquer campo recebe HTTP 422 e não cria snapshot.
+- Semântica: o reservado continua agregado e autoritativo pelo WMS na localização configurada. O sistema não cria reservas externas e uma tarefa não reserva stock. Não existe ainda identificador externo por reserva/documento/linha; a reconciliação individual fica dependente do contrato real do fornecedor.
+- Validação CI do novo SHA pendente. Não declarar esta tarefa concluída antes de API CI/PostgreSQL 16, Quality Gates, Security Scans e Docker Compose.
