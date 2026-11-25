@@ -743,6 +743,7 @@ class InventoryMovement(Base):
         CheckConstraint("movement_type = 'BACKROOM_TO_SHELF'", name="ck_inventory_movement_type"),
         CheckConstraint("quantity > 0", name="ck_inventory_movement_quantity_positive"),
         CheckConstraint("source_snapshot_id <> result_snapshot_id", name="ck_inventory_movement_distinct_snapshots"),
+        CheckConstraint("destination_shelf_id IS NOT NULL AND destination_shelf_code IS NOT NULL AND length(trim(destination_shelf_code)) BETWEEN 1 AND 80", name="ck_inventory_movement_destination_snapshot_required"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -756,6 +757,7 @@ class InventoryMovement(Base):
     source_snapshot_id: Mapped[int] = mapped_column(ForeignKey("inventory_snapshots.id", ondelete="RESTRICT"), nullable=False, index=True)
     source_location_code: Mapped[str | None] = mapped_column(String(120), nullable=True)
     destination_shelf_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    destination_shelf_code: Mapped[str] = mapped_column(String(80), nullable=False)
     result_snapshot_id: Mapped[int] = mapped_column(ForeignKey("inventory_snapshots.id", ondelete="RESTRICT"), nullable=False)
     actor_user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False, index=True)
     reason: Mapped[str] = mapped_column(Text, nullable=False)
