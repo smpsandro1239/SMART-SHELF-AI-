@@ -1546,3 +1546,13 @@ O commit `50fc1fcd9dac4c88dfb800aaa1f690ff1c0b6304` introduz o endpoint transacc
 - SHA final de código/testes: `19bf8dd2bf2b6990faff261effc0752523f59a5b`.
 - API CI `45718367981`: **1728 passed, 1 skipped**. Quality Gates `45718367943`, Security Scans `45718367972` e Docker Compose `45718367912`: sucesso.
 - Próxima prioridade: continuar a auditoria dos handlers que delegam RBAC no middleware, priorizando endpoints de escrita que alteram estado operacional ou criam evidência auditável.
+
+
+## 2026-11-25 — RBAC explícito nos endpoints de ingestão POS
+
+- Os seis handlers de escrita de vendas e tráfego (registo horário, batch e CSV) agora verificam ADMIN/SUPERVISOR no próprio handler, além da política central.
+- Nos imports CSV, a verificação ocorre antes de ler o conteúdo do upload.
+- Teste regressivo com actor EMPLOYEE chama os seis endpoints e confirma HTTP 403 e zero linhas persistidas em `hourly_sales_records`/`hourly_store_traffic_records`.
+- SHA de código/testes: `d36af7332544204fc14b6764a3faf99c24aa4741`.
+- API CI `45719344000`: **1729 passed, 1 skipped**; Quality Gates `45719344142`, Security Scans `45719343998` e Docker Compose `45719344004`: sucesso.
+- Próxima prioridade: continuar a auditoria de handlers com escrita e papel `SUPERVISOR_OR_ADMIN`, começando por OCR/evidence fusion e operações de warehouse.
