@@ -12,6 +12,11 @@ type InventoryMovement = {
   unit_code?: string | null;
   source_snapshot_id: number;
   result_snapshot_id: number;
+  destination_shelf_id: number;
+  destination_shelf_code: string;
+  destination_zone_id: number;
+  destination_zone_name: string;
+  destination_location_backfilled: boolean;
   actor_user_id: number;
   reason: string;
   created_at: string;
@@ -139,7 +144,15 @@ export default function InventoryMovementHistory({ token, storeId }: Props) {
             <div><span>Responsável</span><strong>Utilizador #{movement.actor_user_id}</strong></div>
             <div><span>Snapshot de origem</span><strong>#{movement.source_snapshot_id}</strong></div>
             <div><span>Snapshot resultante</span><strong>#{movement.result_snapshot_id}</strong></div>
+            <div><span>Prateleira de destino</span><strong>#{movement.destination_shelf_id} · {movement.destination_shelf_code}</strong></div>
+            <div><span>Zona de destino</span><strong>#{movement.destination_zone_id} · {movement.destination_zone_name}</strong></div>
+            <div><span>Proveniência da localização</span><strong>{movement.destination_location_backfilled
+              ? "Reconstruída na migration 0095 a partir da hierarquia disponível"
+              : "Capturada e validada no momento do movimento"}</strong></div>
             <p><strong>Justificação:</strong> {movement.reason}</p>
+            {movement.destination_location_backfilled && <small>
+              A localização histórica foi reconstruída; renomeações anteriores à migration não podem ser recuperadas sem registos históricos.
+            </small>}
             <small>Tipo: {movement.movement_type} · Registo imutável</small>
           </div>}
         </article>;
