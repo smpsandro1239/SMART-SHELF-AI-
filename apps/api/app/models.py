@@ -392,7 +392,7 @@ class ProductPackagingLevel(Base):
     code: Mapped[str] = mapped_column(String(40), nullable=False)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     package_type: Mapped[str] = mapped_column(String(12), nullable=False)
-    base_units_per_package: Mapped[float] = mapped_column(Numeric(14, 3), nullable=False)
+    base_units_per_package: Mapped[Decimal] = mapped_column(Numeric(14, 3), nullable=False)
     barcode: Mapped[str | None] = mapped_column(String(80), nullable=True)
     gross_weight_kg: Mapped[float | None] = mapped_column(Numeric(12, 3), nullable=True)
     package_volume_cm3: Mapped[float | None] = mapped_column(Numeric(14, 2), nullable=True)

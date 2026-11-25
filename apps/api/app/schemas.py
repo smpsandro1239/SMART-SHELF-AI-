@@ -1178,12 +1178,19 @@ class ProductPackagingLevelCreate(BaseModel):
     code: str = Field(min_length=1, max_length=40)
     name: str = Field(min_length=1, max_length=100)
     package_type: PackagingType
-    base_units_per_package: float = Field(gt=0, le=1_000_000_000, allow_inf_nan=False)
+    base_units_per_package: Decimal = Field(gt=Decimal("0"), le=Decimal("1000000000"), allow_inf_nan=False)
     barcode: str | None = Field(default=None, max_length=80)
     gross_weight_kg: float | None = Field(default=None, gt=0, le=1_000_000, allow_inf_nan=False)
     package_volume_cm3: float | None = Field(default=None, gt=0, le=1_000_000_000, allow_inf_nan=False)
     is_ordering_unit: bool = False
     is_replenishment_unit: bool = False
+
+    @field_validator("base_units_per_package")
+    @classmethod
+    def validate_packaging_factor_precision(cls, value: Decimal) -> Decimal:
+        if value != value.quantize(Decimal("0.001")):
+            raise ValueError("Packaging conversion factors support at most three decimal places")
+        return value
 
 
 class ReplenishmentPackCalculationRequest(BaseModel):
