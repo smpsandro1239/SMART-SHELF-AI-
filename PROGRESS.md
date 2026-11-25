@@ -1069,3 +1069,15 @@ Foi publicado no commit 07b141b91d2d76a6ff6e1cefe0e721cf42978e8b um teste HTTP q
 A alteração é apenas de teste; não modifica a lógica de produção. A execução dos workflows no novo SHA ainda tem de ser confirmada. A auditoria não considera esta prova isolada equivalente a uma matriz completa de endpoints, papéis e relações indirectas.
 
 Ponto semântico ainda aberto: InventorySnapshot.source aceita ERP, WMS, POS, MANUAL e IMPORT, mas o campo genérico da reconciliação é apresentado como stock de retaguarda. Não foi feita alteração à seleção desse snapshot porque o contrato actual não define quais dessas fontes representam inequivocamente stock físico de retaguarda. Não converter esta incerteza numa regra inventada.
+
+
+## 2026-11-25 — Auditoria de proveniência dos movimentos de inventário
+
+- Inspeccionados `InventoryMovement`, `InventoryMovementRead` e `POST /api/v1/tasks/{task_id}/reconcile-inventory` na branch `main`.
+- Confirmados os controlos já existentes: movimento único por tarefa/snapshot resultante, actor e motivo obrigatórios, origem WMS na localização configurada, estado AVAILABLE, política de frescura, dedução de reservas e de movimentos anteriores, e transacção conjunta para snapshot resultante, movimento e evento da tarefa.
+- Identificada uma lacuna de proveniência: o destino físico não está congelado directamente no movimento; é inferido através da tarefa e da prateleira relacionada. A localização de origem é recuperável pelo snapshot, mas deve ficar explícita na leitura/auditoria.
+- Clarificada uma distinção crítica: o snapshot `MANUAL` criado após reconciliação é uma projecção interna do movimento aprovado, não uma confirmação de actualização do WMS. A confirmação externa exige evidência WMS posterior correlacionada e reconciliação sem dupla contagem.
+- Documentada a necessidade de movimentos compensatórios em vez de edição/eliminação de movimentos aprovados, unidade base explícita e teste PostgreSQL com transacções concorrentes reais.
+- Actualizado `docs/INVENTORY-SOURCE-SYNC.md` no commit `b5f819e43b17dcc88ec1505cf462dfdfdb6ac392` e acrescentados os itens pendentes a `TODO.md`.
+- **Limite desta passagem:** auditoria e documentação apenas. Não foram alterados modelos, migrations, endpoints ou testes; não foram executados testes nem CI para esta passagem.
+
