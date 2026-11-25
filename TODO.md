@@ -2109,3 +2109,18 @@ Capacity is calculated conservatively from the current time to the end of the ac
 - [ ] Implementar registo e revisão de divergências associadas ao movimento.
 
 Só `MOVEMENT_RECORDED` é emitido nesta fase. Tipos futuros estão reservados no contrato e não são funcionalidades operacionais concluídas.
+
+
+## 2026-11-25 — Concorrência da reconciliação de movimentos (smoke integrado; CI pendente)
+
+- [x] Criar `apps/api/scripts/postgres_inventory_movement_concurrency_smoke.py` com duas tarefas concluídas do mesmo SKU/loja.
+- [x] Disputar simultaneamente o mesmo snapshot WMS através de pedidos HTTP concorrentes em PostgreSQL.
+- [x] Modelar stock on-hand 7 e reservado 1; apenas seis unidades ficam disponíveis.
+- [x] Exigir uma única reposição aprovada de quatro unidades e rejeitar a segunda por stock insuficiente.
+- [x] Verificar que o snapshot resultante preserva uma unidade reservada e regista três unidades on-hand.
+- [x] Verificar unicidade do movimento/evento e retry idempotente da tarefa vencedora.
+- [x] Integrar o smoke no workflow API CI.
+- [ ] Executar e confirmar o smoke no PostgreSQL 16 e os quatro workflows no SHA final.
+- [ ] Acrescentar cenário PostgreSQL de rollback integral perante falha na inserção do evento de movimento.
+
+A tarefa de concorrência está parcialmente concluída até o workflow executar o novo script com sucesso. O teste não define unidade base nem conversões de embalagem.
