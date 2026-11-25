@@ -39,22 +39,22 @@ def upgrade() -> None:
     )
 
     if dialect == "postgresql":
-        op.execute("""
+        bind.exec_driver_sql("""
             CREATE FUNCTION guard_inventory_snapshot_wms_provenance_0084()
-            RETURNS trigger AS $
-            BEGIN
-                IF NEW.source = 'WMS' AND (
+            RETURNS trigger
+            LANGUAGE plpgsql
+            AS 'BEGIN
+                IF NEW.source = ''WMS'' AND (
                     NEW.location_code IS NULL
                     OR length(trim(NEW.location_code)) = 0
-                    OR NEW.availability_status NOT IN ('AVAILABLE', 'UNAVAILABLE')
+                    OR NEW.availability_status NOT IN (''AVAILABLE'', ''UNAVAILABLE'')
                 ) THEN
-                    RAISE EXCEPTION 'new WMS snapshots require physical location and explicit availability';
+                    RAISE EXCEPTION ''new WMS snapshots require physical location and explicit availability'';
                 END IF;
                 RETURN NEW;
-            END;
-            $ LANGUAGE plpgsql
+            END;'
         """)
-        op.execute("""
+        bind.exec_driver_sql("""
             CREATE TRIGGER trg_inventory_snapshot_wms_provenance_0084
             BEFORE INSERT ON inventory_snapshots
             FOR EACH ROW EXECUTE FUNCTION guard_inventory_snapshot_wms_provenance_0084()
