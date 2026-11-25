@@ -1,3 +1,26 @@
+## 2026-11-25 — Autoridade WMS de stock físico por loja/localização
+
+**Contrato aprovado:** WMS é a fonte de referência do stock físico da retaguarda. ERP permanece independente para reconciliação administrativa. POS é fonte de vendas/procura. MANUAL e IMPORT não são autoridades de stock físico por omissão.
+
+**Implementado na main (validação CI pendente no HEAD final):**
+- Snapshots passam a transportar localização WMS e estado de disponibilidade (AVAILABLE/UNAVAILABLE/UNKNOWN).
+- A política de frescura WMS por loja pode declarar a localização exacta da retaguarda; configuração ausente significa stock físico desconhecido.
+- Alterações da localização exigem motivo e criam evento append-only com actor e valores anterior/novo.
+- Lotes WMS exigem localização e disponibilidade explícitas; replay idempotente compara também estes campos.
+- Reconciliação e recomendações usam apenas o snapshot WMS mais recente da localização configurada. Um estado mais recente UNAVAILABLE/UNKNOWN bloqueia snapshots disponíveis antigos.
+- Reservas são subtraídas ao stock físico. ERP não é fallback.
+- Movimentos de reposição exigem WMS e localização configurada, preservando actor, motivo e snapshots de origem/resultante.
+
+**Migrações:** `0084_wms_backroom_location_authority` e `0085_inventory_backroom_policy_audit`.
+
+**Validação pendente:** migrations em SQLite/PostgreSQL 16, testes API, Quality Gates, Security Scans e Docker Compose no SHA final.
+
+**Próximas lacunas:** homologar adapter WMS real; validar os códigos de localização com o fornecedor; normalizar unidade/caixa/palete; modelar reservas e disponibilidade em múltiplas localizações sem somar domínios incompatíveis.
+
+**Limite de produto:** o contrato e os testes não demonstram conectividade real com ERP/WMS. Não apresentar o histórico de sincronização como integração homologada.
+
+---
+
 ## 2026-11-24 — Contrato técnico para adapters ERP/WMS
 
 - Protocolo assíncrono e read-only para fornecedores ERP/WMS.
