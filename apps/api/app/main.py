@@ -7902,12 +7902,27 @@ def reconcile_completed_replenishment(
     else:
         completed_at = completed_at.astimezone(timezone.utc)
     now = models.utc_now()
+    wms_policy = (
+        db.query(models.InventoryFreshnessPolicy)
+        .filter_by(store_id=task.store_id, source="WMS")
+        .first()
+    )
+    backroom_location_code = (
+        wms_policy.backroom_location_code if wms_policy is not None else None
+    )
+    if backroom_location_code is None:
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "BACKROOM_LOCATION_NOT_CONFIGURED"},
+        )
 
     later_snapshot = (
         db.query(models.InventorySnapshot)
         .filter(
             models.InventorySnapshot.store_id == task.store_id,
             models.InventorySnapshot.product_id == task.product_id,
+            models.InventorySnapshot.source == "WMS",
+            models.InventorySnapshot.location_code == backroom_location_code,
             models.InventorySnapshot.captured_at > completed_at,
         )
         .order_by(models.InventorySnapshot.captured_at.desc(), models.InventorySnapshot.id.desc())
@@ -7928,6 +7943,8 @@ def reconcile_completed_replenishment(
         .filter(
             models.InventorySnapshot.store_id == task.store_id,
             models.InventorySnapshot.product_id == task.product_id,
+            models.InventorySnapshot.source == "WMS",
+            models.InventorySnapshot.location_code == backroom_location_code,
             models.InventorySnapshot.captured_at <= completed_at,
         )
         .order_by(models.InventorySnapshot.captured_at.desc(), models.InventorySnapshot.id.desc())
@@ -7936,6 +7953,14 @@ def reconcile_completed_replenishment(
     )
     if source_snapshot is None:
         raise HTTPException(status_code=409, detail={"code": "INVENTORY_SNAPSHOT_MISSING"})
+    if source_snapshot.availability_status != "AVAILABLE":
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "BACKROOM_STOCK_UNAVAILABLE",
+                "availability_status": source_snapshot.availability_status,
+            },
+        )
     captured_at = source_snapshot.captured_at
     if captured_at.tzinfo is None:
         captured_at = captured_at.replace(tzinfo=timezone.utc)
@@ -8110,7 +8135,11 @@ def list_replenishment_recommendations(
 
         status = "NO_ACTION"
         explanation = "A observação mais recente não indica baixa disponibilidade."
-        available = float(inventory.available_quantity) if inventory is not None else None
+        available = (
+            float(inventory.available_quantity)
+            if inventory is not None and inventory.availability_status == "AVAILABLE"
+            else None
+        )
         suggested_quantity = None
         observed_shelf_quantity = (
             float(observation.observed_quantity)
@@ -8146,7 +8175,13 @@ def list_replenishment_recommendations(
                         "A localização física de retaguarda WMS não está configurada para esta loja; "
                         "o stock ERP não é substituto. Configurar a localização e confirmar a disponibilidade WMS."
                         if backroom_location_code is None
-                        else "Não existe stock WMS disponível e confirmado na localização configurada da retaguarda."
+                        else "Não existe evidência WMS na localização configurada da retaguarda."
+                    )
+                elif inventory.availability_status != "AVAILABLE":
+                    status = "INVENTORY_UNKNOWN"
+                    explanation = (
+                        "O WMS não confirma disponibilidade física na retaguarda "
+                        f"(estado {inventory.availability_status}); não será criada uma sugestão quantitativa."
                     )
                 else:
                     inventory_at = inventory.captured_at
