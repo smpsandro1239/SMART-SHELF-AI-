@@ -2222,3 +2222,17 @@ Decisão: `reserved_quantity` continua a ser o total reservado reportado pelo WM
 - [x] Acrescentar regressão HTTP para supervisor inactivo.
 - [ ] Validar migration 0091 e triggers reais em SQLite/PostgreSQL 16; os testes actuais de API usam Base.metadata.create_all e não substituem a execução da migration.
 - [ ] Confirmar API CI, Quality Gates, Security Scans e Docker Compose no HEAD após esta correcção.
+
+
+## 2026-11-25 — Validação efectiva da migration 0091 e auditoria MANUAL
+
+- [x] Criar teste de migration SQLite que executa efectivamente `upgrade()`/`downgrade()` da revisão 0091.
+- [x] Cobrir trigger de proveniência: supervisor activo da loja e ADMIN global aceites; supervisor de outra loja, supervisor inactivo, EMPLOYEE e snapshot não-MANUAL rejeitados.
+- [x] Cobrir UPDATE/DELETE bloqueados no ledger e preservação dos snapshots no downgrade.
+- [x] Criar smoke PostgreSQL 16 com pedidos autenticados e INSERTs directos para validar os triggers reais, incluindo append-only.
+- [x] Integrar smoke PostgreSQL no API CI.
+- [x] Corrigir o smoke de autorização multi-loja que passou a falhar por omitir o motivo obrigatório num pedido MANUAL inválido; manter o teste a alcançar a camada de autorização.
+- [ ] Confirmar execução do teste SQLite 0091 na suite API CI do HEAD actual.
+- [ ] Confirmar API CI, Quality Gates, Security Scans e Docker Compose no mesmo HEAD; não marcar a prioridade global como concluída antes disso.
+
+Evidência parcial: PostgreSQL 16 `alembic upgrade head` passou no API CI SHA `3b9520d`; o smoke PostgreSQL específico passou no SHA `7a20c95`. O run desse SHA falhou depois num smoke preexistente de autorização, por falta de `reason` no payload MANUAL; corrigido em `c6b2d33`. A validação final tem de ser feita no HEAD posterior.

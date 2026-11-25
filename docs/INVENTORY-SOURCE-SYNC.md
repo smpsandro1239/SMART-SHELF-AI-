@@ -271,3 +271,10 @@ O catálogo define Product.unit como unidade base do SKU. ProductPackagingLevel.
 As contagens `source=MANUAL` exigem utilizador autenticado e activo com papel ADMIN ou SUPERVISOR autorizado para a loja, além de motivo explícito. O snapshot e o evento `inventory_manual_count_events` são inseridos na mesma transacção; uma falha de auditoria reverte também o snapshot. O evento é append-only, liga snapshot/loja/produto através de FK composta e preserva actor, motivo e timestamp. Os triggers PostgreSQL e SQLite validam a proveniência; o trigger SQLite exige igualmente actor activo e papel ADMIN ou SUPERVISOR da mesma loja. Esta operação regista uma contagem manual auditável, não constitui confirmação WMS nem altera o stock externo.
 
 A migration 0091 e a regressão de actor inactivo foram corrigidas no commit `94fe027` e `ecc751c`. A validação efectiva da migration em SQLite/PostgreSQL 16 e os workflows CI do HEAD continuam pendentes; não considerar a migration integralmente homologada até essa evidência existir.
+
+
+## Validação de proveniência da contagem MANUAL — revisão 0091
+
+A migration 0091 possui agora cobertura específica da migration SQLite, não apenas testes sobre tabelas criadas por ORM: a suite aplica directamente `upgrade()` e `downgrade()`, valida a aceitação de SUPERVISOR activo da mesma loja e ADMIN global, e rejeita actor de outra loja, actor inactivo, EMPLOYEE e snapshots com origem diferente de MANUAL. O mesmo teste verifica UPDATE/DELETE bloqueados e preservação dos snapshots no downgrade.
+
+O API CI inclui também `postgres_inventory_manual_count_audit_smoke.py`, que exercita PostgreSQL 16 após `alembic upgrade head`, através do endpoint autenticado e de INSERTs directos para provar os triggers da base de dados. O smoke específico passou no SHA `7a20c95`. A suite do HEAD posterior ainda tem de confirmar o teste SQLite, os restantes smokes, e os workflows globais antes de a revisão ser considerada homologada.

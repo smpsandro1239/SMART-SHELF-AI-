@@ -1347,3 +1347,15 @@ O commit `50fc1fcd9dac4c88dfb800aaa1f690ff1c0b6304` introduz o endpoint transacc
 - Testes locais: não executados neste ambiente. A suite API usa `Base.metadata.create_all`; por isso não prova, por si só, a execução dos triggers da migration 0091.
 - CI: ainda não confirmada para os commits desta ronda. Os estados Vercel anteriores são `build-rate-limit` e não representam os workflows GitHub.
 - Próxima acção obrigatória: localizar/acrescentar teste de migration que execute efectivamente 0091 em SQLite, validar upgrade/downgrade e trigger de actor inactivo; depois confirmar API CI PostgreSQL 16 e os restantes workflows. Só então fechar a prioridade e avançar para a revisão seguinte do ledger de movimentos.
+
+
+## 2026-11-25 — Testes reais da migration 0091
+
+- HEAD actual registado durante a actualização: `c6b2d3369e44276cbb9b5fcc91d204b4b9ff807b` (branch `main`).
+- Acrescentado `apps/api/tests/test_inventory_manual_count_audit_migration.py`: aplica a migration 0091 num SQLite isolado e testa proveniência, actor activo, papel, isolamento por loja, origem MANUAL, append-only e downgrade sem perda dos snapshots.
+- Acrescentado `apps/api/scripts/postgres_inventory_manual_count_audit_smoke.py` e integrado no workflow API CI.
+- Evidência: o PostgreSQL 16 executou `alembic upgrade head` com sucesso no run API CI do SHA `3b9520d`. O smoke PostgreSQL específico passou no run do SHA `7a20c95`, confirmando SUPERVISOR activo da loja e ADMIN global, rejeição de actor inactivo/EMPLOYEE/outra loja/origem não-MANUAL e imutabilidade do evento.
+- A primeira execução do smoke revelou dois erros do próprio teste de integração (auth middleware em APP_ENV=test e expectativa duplicada de evento); ambos foram corrigidos e a execução posterior do smoke passou.
+- A execução seguinte chegou a falhar num smoke preexistente de autorização multi-loja: o pedido MANUAL estrangeiro não continha `reason`, pelo que o schema devolvia 422 antes de testar a autorização esperada (403). Corrigido o payload com motivo válido em `c6b2d33`.
+- Teste SQLite da migration e suite completa ainda não foram confirmados no HEAD final. O run após a correcção está pendente.
+- Próxima acção: verificar API CI do HEAD, corrigir falhas com evidência; confirmar Quality Gates, Security Scans e Docker Compose. Só depois fechar 0091 e avançar para a auditoria P1 de snapshots/reservas WMS.
