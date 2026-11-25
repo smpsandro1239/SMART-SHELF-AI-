@@ -1108,6 +1108,52 @@ def test_inventory_reconciliation_dashboard_aggregates_ledger_and_freshness(monk
             assert db.query(models.InventoryMovement).count() == 0
 
 
+def test_inventory_reconciliation_dashboard_counts_each_shelf_and_flags_any_future_observation(monkeypatch):
+    with TestClient(app) as client:
+        store_id, product_id = create_store_and_product(client)
+        zone = client.post("/api/v1/zones", json={"store_id": store_id, "name": "Duas exposições"}).json()
+        shelves = [
+            client.post("/api/v1/shelves", json={"zone_id": zone["id"], "code": "FRESH-01"}).json(),
+            client.post("/api/v1/shelves", json={"zone_id": zone["id"], "code": "FRESH-02"}).json(),
+        ]
+        reference_time = datetime(2026, 1, 1, 12, 0, tzinfo=timezone.utc)
+        for index, shelf in enumerate(shelves):
+            linked = client.post("/api/v1/shelf-products", json={
+                "shelf_id": shelf["id"], "product_id": product_id,
+                "target_quantity": 10, "min_display_quantity": 2,
+            })
+            assert linked.status_code == 201, linked.text
+            observed_at = reference_time - timedelta(minutes=10) if index == 0 else reference_time + timedelta(minutes=2)
+            observation = client.post("/api/v1/observations", json={
+                "shelf_id": shelf["id"], "product_id": product_id,
+                "source": "mobile", "status": "LOW_STOCK",
+                "confidence": 0.95, "observed_quantity": 2,
+                "observed_at": observed_at.isoformat(),
+            })
+            assert observation.status_code == 201, observation.text
+
+        actor = _supervisor_actor(store_id)
+        monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: actor)
+        monkeypatch.setattr(main_module.models, "utc_now", lambda: reference_time)
+        for shelf in shelves:
+            created = client.post("/api/v1/inventory/reconciliations", json={
+                "store_id": store_id, "shelf_id": shelf["id"],
+                "product_id": product_id, "reason": "Verificação de exposição",
+            })
+            assert created.status_code == 201, created.text
+
+        response = client.get(
+            "/api/v1/inventory/reconciliations/dashboard",
+            params={"store_id": store_id},
+        )
+        assert response.status_code == 200, response.text
+        shelf_freshness = response.json()["source_freshness"]["SHELF"]
+        assert shelf_freshness["current"] == 1
+        assert shelf_freshness["future"] == 1
+        assert shelf_freshness["coverage_percent"] == 100.0
+        assert shelf_freshness["freshness_percent"] == 50.0
+
+
 def test_inventory_reconciliation_dashboard_rejects_employee(monkeypatch):
     with TestClient(app) as client:
         store_id, _ = create_store_and_product(client)
