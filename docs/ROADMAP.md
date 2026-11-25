@@ -1,3 +1,18 @@
+
+## 2026-11-25 — Autoridade WMS por localização: validada
+
+**SHA:** `c8efb82b64d4aed9fcc81fdb4a0571695fdd23cf`.
+
+A autoridade do stock físico de retaguarda está formalizada e implementada por loja/localização. O WMS só é elegível quando a localização exacta está configurada e o snapshot mais recente dessa localização indica AVAILABLE. UNAVAILABLE/UNKNOWN bloqueia snapshots disponíveis anteriores. Reservas são descontadas; ERP nunca é fallback. ERP mantém-se como fonte administrativa independente para reconciliação.
+
+Novos snapshots WMS exigem localização e disponibilidade explícitas ao nível da API e da base de dados (triggers PostgreSQL/SQLite). Os dados legados são preservados como UNKNOWN. A migration SQLite foi testada sem remover os guards append-only existentes. A reconciliação mantém quantidades ERP administrativas mesmo com disponibilidade WMS desconhecida.
+
+**Evidência:** API CI `45574197186` — 1679 testes aprovados, 1 ignorado e 47 smokes PostgreSQL concluídos; Quality Gates `45574197259` — sucesso; Security Scans `45574197237` — sucesso; Docker Compose `45574197037` — sucesso.
+
+**Ainda não homologado:** adapter WMS real, códigos/estados de localização do fornecedor, conversões unidade/caixa/palete e reservas multi-localização. O sucesso da CI não prova conectividade externa.
+
+---
+
 ## 2026-11-25 — Autoridade WMS de stock físico por loja/localização
 
 **Contrato aprovado:** WMS é a fonte de referência do stock físico da retaguarda. ERP permanece independente para reconciliação administrativa. POS é fonte de vendas/procura. MANUAL e IMPORT não são autoridades de stock físico por omissão.
