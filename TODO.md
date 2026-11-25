@@ -1,12 +1,21 @@
-## Inventário — correcção do smoke de fencing PostgreSQL (2026-11-25; correcção publicada, CI pendente)
+## Inventário — validação integral do worker durável ERP/WMS (2026-11-25; quatro workflows aprovados)
 
-- [x] Consultar a execução real do API CI e identificar a primeira excepção: `DetachedInstanceError` no teste de fencing, ao ler `old.fencing_token` depois de a sessão SQLAlchemy fechar.
-- [x] Capturar lease token e fencing token enquanto a instância ORM ainda está ligada à sessão; reutilizar apenas valores escalares após o fecho.
-- [x] Manter inalterados o lease guard, a lógica de claim, o incremento monotónico do fencing token e o percurso real do orquestrador.
-- [ ] Confirmar no novo API CI o smoke PostgreSQL 16 e a suite completa `pytest -q`.
-- [ ] Confirmar Quality Gates, Security Scans e Docker Compose no HEAD final.
+- [x] Smoke PostgreSQL 16: claims concorrentes, takeover, fencing monotónico e rejeição de worker obsoleto no limite de escrita.
+- [x] Interrupção SIGKILL depois do commit de uma página real; recuperação do ledger abandonado como PARTIAL/WORKER_LEASE_EXPIRED.
+- [x] Replay idempotente: reutilização do snapshot da primeira página (mesmo ID/conteúdo) e persistência da página seguinte sem duplicação.
+- [x] API CI: migrações e smoke PostgreSQL, seguidos da suite completa da API — sucesso.
+- [x] Quality Gates: compilação Python, testes API, TypeScript/build Web e verificações de qualidade — sucesso.
+- [x] Security Scans: OWASP ZAP passive baseline e importação OpenAPI com baseline em modo seguro, auditorias de dependências Web/Python e Gitleaks — sucesso.
+- [x] Docker Compose demo smoke — sucesso.
+- [x] Confirmar os quatro workflows no mesmo SHA: `ffe76015e82d9d1ae608dc61a1bb5c9a9d8c710e`.
 
-A falha observada era do próprio teste (acesso a atributos expirados de uma instância ORM detached), não evidência de falha do mecanismo de fencing. Esta conclusão limita-se à excepção observada; a garantia funcional só fica validada após o smoke e a suite passarem.
+Execuções:
+- API CI: [45522939384](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45522939384)
+- Quality Gates: [45522939251](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45522939251)
+- Security Scans: [45522939233](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45522939233)
+- Docker Compose: [45522939260](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45522939260)
+
+A correcção de `DetachedInstanceError` e a captura dos tokens escalares no teste de fencing não alteraram a lógica de produção. O ZAP terminou com sucesso, incluindo a importação OpenAPI e a análise em modo seguro. Esta validação comprova os cenários cobertos pelos workflows; não equivale a homologação de um ERP/WMS real nem a uma auditoria de segurança externa independente.
 
 ## Integrações ERP/WMS — contrato de adapters (2026-11-24; contrato publicado, sem conectores reais)
 
