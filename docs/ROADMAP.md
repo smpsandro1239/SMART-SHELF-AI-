@@ -1625,3 +1625,16 @@ A serialização depende dos locks de produto e snapshot no endpoint de reconcil
 - [ ] Validar migration 0088, smoke e workflows no SHA final.
 
 A frescura continua dependente da política por loja e é validada pelo serviço; a migration não introduz um limite temporal global.
+
+
+## 2026-11-25 — Unidade base congelada nos movimentos (0089)
+
+- [x] Persistir `unit_code` copiado de `Product.unit` em movimentos novos.
+- [x] Rejeitar INSERT directo com unidade vazia ou diferente da unidade base do SKU em PostgreSQL/SQLite.
+- [x] Não preencher unidade nos movimentos históricos sem prova temporal.
+- [x] Expor `quantity_exact` e unidade na API e evidência de auditoria.
+- [x] Rejeitar precisão superior a três casas decimais em vez de arredondar silenciosamente.
+- [x] Corrigir a interface para não somar quantidades de unidades incompatíveis.
+- [ ] Validar migration 0089, suite API, PostgreSQL smoke e workflows no SHA final.
+
+O contrato actual usa a escala persistida `NUMERIC(12,3)`. A conversão de embalagens continua explícita através dos níveis de embalagem do produto.
