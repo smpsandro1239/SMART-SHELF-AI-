@@ -73,14 +73,16 @@ def test_claim_and_completion_use_fencing_and_random_lease_token(db):
 def test_expired_lease_takeover_fences_out_old_worker(db):
     job = enqueue(db)
     old = claim_next_inventory_sync_job(db, worker_id="worker-old", lease_seconds=30)
+    old_lease_token = old.lease_token
+    old_fencing_token = old.fencing_token
     db.execute(update(models.InventorySyncJob).where(models.InventorySyncJob.id == job.id)
         .values(lease_expires_at=models.utc_now() - timedelta(seconds=1)))
     db.commit()
     new = claim_next_inventory_sync_job(db, worker_id="worker-new", lease_seconds=30)
-    assert new.fencing_token == old.fencing_token + 1 and new.lease_token != old.lease_token
+    assert new.fencing_token == old_fencing_token + 1 and new.lease_token != old_lease_token
     with pytest.raises(InventorySyncJobLeaseLost):
         assert_and_renew_inventory_sync_job_lease(db, job_id=job.id, worker_id="worker-old",
-            lease_token=old.lease_token, fencing_token=old.fencing_token)
+            lease_token=old_lease_token, fencing_token=old_fencing_token)
     done = complete_inventory_sync_job(db, job_id=job.id, worker_id="worker-new",
         lease_token=new.lease_token, fencing_token=new.fencing_token, status="SUCCEEDED")
     assert done.status == "SUCCEEDED"
@@ -89,6 +91,8 @@ def test_expired_lease_takeover_fences_out_old_worker(db):
 def test_expired_lease_closes_abandoned_source_sync_before_takeover(db):
     job = enqueue(db)
     old = claim_next_inventory_sync_job(db, worker_id="worker-crashed", lease_seconds=30)
+    old_lease_token = old.lease_token
+    old_fencing_token = old.fencing_token
     now = models.utc_now()
     sync = models.InventorySourceSync(
         store_id=job.store_id,
@@ -108,7 +112,7 @@ def test_expired_lease_closes_abandoned_source_sync_before_takeover(db):
     replacement = claim_next_inventory_sync_job(db, worker_id="worker-recovery", lease_seconds=30)
 
     db.refresh(sync)
-    assert replacement.fencing_token == old.fencing_token + 1
+    assert replacement.fencing_token == old_fencing_token + 1
     assert sync.status == "PARTIAL"
     assert sync.finished_at is not None
     assert sync.error_code == "WORKER_LEASE_EXPIRED"
@@ -120,7 +124,7 @@ def test_expired_lease_closes_abandoned_source_sync_before_takeover(db):
     with pytest.raises(InventorySyncJobLeaseLost):
         assert_and_renew_inventory_sync_job_lease(
             db, job_id=job.id, worker_id="worker-crashed",
-            lease_token=old.lease_token, fencing_token=old.fencing_token,
+            lease_token=old_lease_token, fencing_token=old_fencing_token,
         )
 
 
