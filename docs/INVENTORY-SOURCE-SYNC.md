@@ -119,6 +119,8 @@ A migração `0083_inventory_sync_jobs` cria `inventory_sync_jobs` e `inventory_
 - PostgreSQL usa `SELECT ... FOR UPDATE SKIP LOCKED` para claims concorrentes.
 - Cada claim cria lease token aleatório e incrementa fencing token monotónico.
 - Leases expirados podem ser recuperados; retries têm backoff exponencial limitado.
+- Quando um lease expira, a recuperação fecha atomicamente a tentativa anterior que ainda esteja em `STARTED`: regista `PARTIAL`, `WORKER_LEASE_EXPIRED` e um evento `COMPLETED` append-only antes de atribuir o novo fencing token.
+- Como os snapshots não estão ligados a uma tentativa transitória, a recuperação mantém as contagens como desconhecidas (`NULL`) e classifica conservadoramente a execução como parcial; não inventa contagens nem elimina evidência já persistida.
 - O orquestrador valida e renova o lease na mesma transação que confirma cada página de snapshots. Um worker com fencing token antigo não pode confirmar páginas.
 - Cada retry cria uma tentativa separada no ledger `inventory_source_syncs`; os snapshots já persistidos são reutilizados por idempotência.
 - O worker é um serviço Docker Compose separado, sem dependência de uma ligação HTTP persistente.
