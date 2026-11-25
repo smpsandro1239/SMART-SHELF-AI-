@@ -1,0 +1,192 @@
+# Reconhecimento de SKU por embeddings
+
+## Objetivo
+
+A camada `app.product_matching` compara um embedding fornecido por um
+`VisionProvider` com exemplares de produtos previamente revistos. Não carrega
+modelos, não descarrega pesos e não assume que uma deteção genérica corresponde
+a um SKU do catálogo.
+
+## Fluxo
+
+1. Um provider de visão produz uma deteção e um embedding com uma versão de
+   modelo identificada.
+2. O registo contém exemplares associados a um `product_id`, com hash da
+   imagem de referência, revisor, data de revisão e licença declarada.
+3. A comparação usa similaridade do cosseno e conserva apenas a melhor
+   pontuação de cada SKU.
+4. O resultado é `MATCHED`, `AMBIGUOUS` ou `UNKNOWN`.
+5. Apenas `MATCHED`, depois de validação operacional, poderá ser considerado
+   para associação ao catálogo. Os outros estados exigem revisão humana.
+
+## Guardrails
+
+- Embeddings vazios, nulos, infinitos, com dimensão errada ou vetor zero são
+  rejeitados.
+- Os exemplares têm de usar a mesma versão do modelo.
+- O mesmo SKU não pode ocupar várias posições no ranking por ter várias fotos.
+- Um score abaixo do limiar produz `UNKNOWN`.
+- Uma margem pequena entre os dois melhores SKUs produz `AMBIGUOUS`.
+- A ausência de deteções nunca significa, por si só, prateleira vazia.
+- Os exemplares têm persistência relacional em `product_embedding_exemplars`; o vetor é guardado como JSON e não existe ainda um índice vetorial dedicado.
+- A criação começa sempre em `PENDING`; só supervisores/administradores podem registar e rever exemplares em ambiente autenticado.
+- A revisão regista o utilizador e o instante da decisão; a mesma entrada só pode ser revista uma vez.
+- Quando a captura de origem é indicada, o hash SHA-256 tem de coincidir com o ficheiro registado.
+- A API não devolve os vetores nos endpoints de leitura.
+
+## Calibração antes de produção
+
+Os valores por omissão (`PRODUCT_MATCHING_MIN_SIMILARITY=0.90` e
+`PRODUCT_MATCHING_MIN_MARGIN=0.05`) são configuráveis no ambiente do worker.
+O primeiro define a semelhança mínima do melhor candidato; o segundo define a
+diferença mínima entre os dois melhores SKUs. Valores mais exigentes reduzem
+matches automáticos e aumentam a abstenção. São apenas valores conservadores para testes de
+contrato. Não são métricas de precisão nem thresholds certificados. Devem ser
+calibrados com imagens reais autorizadas, separadas por loja, produto, sessão
+de captura e condições de iluminação. As variáveis são lidas pelo worker no
+arranque; alterar o `.env` exige reiniciar o worker. A avaliação deve incluir falsos matches,
+taxa de abstention, top-1 accuracy e cobertura por SKU.
+
+## API de persistência e revisão
+
+- `POST /api/v1/product-embedding-exemplars`: regista um vetor em estado `PENDING`.
+- `GET /api/v1/product-embedding-exemplars`: filtra por produto, estado e versão do modelo.
+- `PATCH /api/v1/product-embedding-exemplars/{id}/review`: aprova ou rejeita um exemplar pendente.
+
+O corpo de criação exige `product_id`, `embedding`, `model_version`, `image_sha256` e `licence`; `shelf_image_id` é opcional. Exemplo ilustrativo:
+
+```json
+{
+  "product_id": 12,
+  "shelf_image_id": 31,
+  "embedding": [0.12, 0.34, 0.56],
+  "model_version": "embedding-model-v1",
+  "image_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "licence": "store-owned-reference-image"
+}
+```
+
+A resposta não inclui o vetor. A aprovação é feita separadamente com `review_status` igual a `APPROVED` ou `REJECTED` e notas opcionais. Em ambiente autenticado, apenas `ADMIN` e `SUPERVISOR` podem aceder a estes endpoints; os supervisores ficam limitados aos exemplares associados à sua loja ou criados por si quando não existe captura associada.
+
+## Revisão humana das deteções
+
+O worker já usa `app.product_embedding_service.build_approved_product_registry` para carregar apenas exemplares `APPROVED`, com identidade de revisor ainda disponível e versão exata do modelo. O registo é reutilizado durante o processamento de cada imagem.
+
+Endpoints:
+- `POST /api/v1/shelf-image-detections/{detection_id}/reviews`
+- `GET /api/v1/shelf-image-detections/{detection_id}/reviews`
+
+Decisões suportadas:
+- `CONFIRMED`: confirma o SKU proposto; `selected_product_id` é opcional e, por omissão, usa o SKU da deteção.
+- `CORRECTED`: exige `selected_product_id` para selecionar outro SKU.
+- `REJECTED`: rejeita a associação e não aceita `selected_product_id`.
+
+Nas confirmações e correções, o produto tem de estar ativo e atribuído à prateleira da imagem. Os endpoints são restritos a administradores e supervisores, com validação do âmbito da loja.
+
+Cada decisão cria um registo em `detection_sku_reviews`, incluindo SKU original, SKU selecionado, revisor, data e notas. As decisões anteriores não são alteradas e a deteção original do modelo não é sobrescrita. A chave estrangeira do SKU selecionado impede a eliminação de produtos ainda referenciados no histórico.
+
+Esta revisão manual ainda não alimenta `Observation.observed_quantity`, não conta unidades automaticamente e não substitui uma avaliação de visão com imagens reais anotadas.
+## Avaliação offline
+
+Antes de selecionar thresholds para o worker, usar o avaliador offline e a grelha de calibração documentados em [Avaliação offline do matching de SKU](sku-matching-evaluation.md). A avaliação deve incluir produtos ausentes da galeria e manter o conjunto final separado.
+
+
+## Filas, frentes visíveis e OCR auxiliar
+
+A localização geométrica das deteções e o contrato de OCR auxiliar estão documentados em [Filas, frentes visíveis e OCR](shelf-layout-and-product-text.md). Estes módulos ainda não estão ligados ao worker de produção.
+
+
+## Concorrência com retenção da imagem de origem
+
+Ao construir o registo de matching, o worker identifica os exemplares aprovados
+que apontam para imagens capturadas na plataforma e bloqueia, numa única
+operação ordenada por ID, a imagem alvo e todas as imagens de origem relevantes
+com `SELECT ... FOR UPDATE`. O serviço de registo volta a validar
+`retention_status = ACTIVE` depois de adquirir os bloqueios. O bloqueio mantém-se até ao commit/rollback da
+transação do worker. Como a operação de restrição também bloqueia a linha da
+imagem, a restrição e o uso do exemplar ficam serializados: se a restrição
+ganhar primeiro, o exemplar não entra no registo; se o matching adquirir o
+bloqueio primeiro, a restrição aguarda a conclusão dessa transação.
+
+Exemplares sem `shelf_image_id` continuam permitidos para referências externas
+com licença declarada. A retenção de uma captura não pode ser inferida para
+essas referências desligadas; a sua elegibilidade depende da licença e da
+governação da fonte. A validação sequencial de regressão usa SQLite, que não
+implementa bloqueios de linha equivalentes aos do PostgreSQL. A garantia de
+serialização concorrente deve ser confirmada em PostgreSQL antes de produção.
+
+
+## Prova de concorrência em PostgreSQL
+
+O script `apps/api/scripts/postgres_embedding_retention_smoke.py` executa duas
+transações em sessões independentes: o worker adquire os bloqueios da imagem
+alvo e das referências aprovadas; em paralelo, a operação de retenção tenta
+bloquear a imagem de referência. O teste consulta `pg_stat_activity` e
+`pg_blocking_pids` para confirmar que a segunda transação está efetivamente à
+espera da primeira, liberta o matching e confirma que a restrição termina depois
+do commit. Por fim, constrói um novo registo e confirma que o exemplar restrito
+já não produz correspondência. O script corre no API CI após as migrações
+PostgreSQL 16.
+
+
+## Validação CI
+
+O smoke concorrente PostgreSQL foi executado com sucesso no API CI `43589628653`; a suite terminou com 753 testes aprovados e 1 ignorado. O Quality Gates `43589628597` também passou, incluindo compilação Python e build web.
+
+
+## Concorrência na revisão humana de exemplares
+
+A revisão bloqueia a linha do exemplar com SELECT FOR UPDATE e, quando existe
+imagem de origem, bloqueia também a linha dessa imagem antes de validar o estado
+de retenção. Duas decisões concorrentes deixam de poder sobrescrever-se: a
+primeira transação confirma a decisão; a segunda lê o estado já revisto e recebe
+HTTP 409. O bloqueio da imagem também serializa a aprovação com restrições e
+restauros de retenção.
+
+O script apps/api/scripts/postgres_embedding_review_smoke.py usa dois revisores
+ADMIN e pedidos HTTP concorrentes para o mesmo exemplar. Exige exatamente um
+HTTP 200 e um HTTP 409 e confirma o estado persistido e o revisor vencedor. A
+validação é executada no API CI PostgreSQL 16.
+
+
+## Produtos desativados e elegibilidade de exemplares
+
+O catálogo é a autoridade sobre a elegibilidade operacional do SKU. A criação
+de exemplares e a aprovação humana bloqueiam a linha do produto e revalidam
+`is_active`; uma referência pendente de produto desativado pode ser rejeitada,
+mas não aprovada. A construção do registo de matching faz INNER JOIN ao
+catálogo, inclui apenas produtos ativos e mantém o bloqueio das linhas de
+produto durante a transação de matching. Assim, exemplares historicamente
+aprovados deixam de gerar previsões quando o respetivo SKU é desativado. A
+desativação não apaga o histórico de revisão nem os exemplares.
+
+
+## Consistência entre catálogo, revisão e fusão
+
+As decisões humanas sobre deteções bloqueiam o SKU selecionado antes da imagem
+de origem e revalidam ambos os estados antes de gravar a decisão. A criação e
+revisão de exemplares segue a mesma ordem de locks do matching
+(imagem → catálogo → exemplar), reduzindo o risco de deadlocks com o worker e
+com a retenção. A fusão recém-gerada volta a validar os IDs visuais e OCR contra
+o catálogo ativo sob bloqueio; sugestões de produtos entretanto desativados
+são convertidas em evidência `UNKNOWN`, sem apagar os registos OCR ou visuais
+originais. A avaliação histórica mantém os IDs e as decisões humanas originais:
+desativar um produto não reescreve a verdade operacional registada no passado.
+
+
+## Proteção contra perda da proveniência por eliminação da imagem
+
+Embora `shelf_image_id` continue opcional para referências externas
+licenciadas, a eliminação direta de uma imagem interna já não pode transformar
+um exemplar associado numa referência sem captura. A migração
+`0028_embedding_source_image_restrict` instala um trigger de integridade na
+base de dados que rejeita a eliminação da imagem enquanto existirem exemplares
+associados. O bloqueio preserva a relação de proveniência e não executa
+eliminação dos vetores nem define prazos de retenção. A validação concorrente
+e funcional é executada pelo smoke PostgreSQL
+`postgres_embedding_retention_smoke.py`.
+
+
+## Revalidação do hash da imagem de origem no carregamento
+
+A construção do registry volta a comparar, sob lock da imagem e depois de refrescar o estado ORM, o image_sha256 imutável do exemplar com o SHA-256 atual registado em shelf_images. Um exemplar associado a uma captura é excluído se a imagem estiver ausente, não estiver ACTIVE ou se o hash tiver mudado. O histórico e a decisão humana permanecem intactos; apenas deixam de contribuir para o matching. Referências sem shelf_image_id continuam a representar fontes externas e dependem da validação de licença/proveniência externa definida no respetivo processo de ingestão.

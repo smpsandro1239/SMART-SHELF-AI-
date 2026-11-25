@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="760" viewBox="0 0 1200 760" role="img" aria-labelledby="title desc">
+<title id="title">Arquitetura implementada do SMART SHELF AI</title>
+<desc id="desc">Diagrama dos componentes existentes: frontend React, API FastAPI, autenticação, PostgreSQL, armazenamento de imagens, worker com provider configurável e ferramentas de dataset.</desc>
+<defs>
+ <style>
+  .bg{fill:#f7f9fc}.panel{fill:#fff;stroke:#cbd5e1;stroke-width:2}.blue{fill:#eaf2ff;stroke:#4f83cc}.green{fill:#eaf8f0;stroke:#39966a}.amber{fill:#fff5df;stroke:#c58a24}.purple{fill:#f3edff;stroke:#8964c5}.title{font:700 25px Arial;fill:#172033}.head{font:700 18px Arial;fill:#172033}.body{font:14px Arial;fill:#344256}.small{font:12px Arial;fill:#526176}.line{stroke:#64748b;stroke-width:2.5;fill:none;marker-end:url(#arrow)}.dashed{stroke-dasharray:7 6}
+ </style>
+ <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0 0 L0 6 L9 3 z" fill="#64748b"/></marker>
+</defs>
+<rect class="bg" width="1200" height="760" rx="18"/>
+<text class="title" x="42" y="48">SMART SHELF AI — arquitetura as-built</text>
+<text class="small" x="42" y="72">Componentes identificados no repositório · não representa uma implantação de produção</text>
+
+<rect class="panel blue" x="40" y="130" width="250" height="145" rx="14"/>
+<text class="head" x="62" y="164">Frontend web</text>
+<text class="body" x="62" y="194">React 18 + TypeScript</text>
+<text class="body" x="62" y="218">Vite · lucide-react</text>
+<text class="small" x="62" y="250">Login · dashboard · tarefas</text>
+<text class="small" x="62" y="267">capturas · deteções</text>
+
+<rect class="panel green" x="390" y="112" width="390" height="185" rx="14"/>
+<text class="head" x="416" y="148">API REST</text>
+<text class="body" x="416" y="179">FastAPI · SQLAlchemy · Pydantic</text>
+<text class="body" x="416" y="205">Catálogo · inventário · observações</text>
+<text class="body" x="416" y="231">Recomendações · tarefas · imagens</text>
+<text class="small" x="416" y="267">Autenticação JWT · Argon2 · perfis e âmbito por loja</text>
+
+<rect class="panel purple" x="880" y="115" width="270" height="155" rx="14"/>
+<text class="head" x="904" y="150">PostgreSQL</text>
+<text class="body" x="904" y="181">SQLAlchemy ORM</text>
+<text class="body" x="904" y="207">Migrações Alembic 0001–0009</text>
+<text class="small" x="904" y="242">Domínio operacional e deteções</text>
+
+<path class="line" d="M290 200 H390"/>
+<path class="line" d="M780 200 H880"/>
+
+<rect class="panel amber" x="390" y="370" width="270" height="140" rx="14"/>
+<text class="head" x="414" y="405">Armazenamento</text>
+<text class="body" x="414" y="435">Fotografias de prateleiras</text>
+<text class="body" x="414" y="461">Volume persistente Docker</text>
+<text class="small" x="414" y="490">SHA-256 · limite de upload</text>
+
+<rect class="panel blue" x="735" y="350" width="415" height="180" rx="14"/>
+<text class="head" x="759" y="385">Worker de visão (separado)</text>
+<text class="body" x="759" y="416">Fila PENDING → PROCESSING</text>
+<text class="body" x="759" y="442">VisionProvider via factory Python</text>
+<text class="body" x="759" y="468">Deteções → COMPLETED / FAILED</text>
+<text class="small" x="759" y="504">Sem provider configurado, não há inferência</text>
+
+<path class="line" d="M660 440 H735"/>
+<path class="line" d="M520 370 V297"/>
+<path class="line dashed" d="M930 350 V270"/>
+
+<rect class="panel green" x="40" y="390" width="280" height="180" rx="14"/>
+<text class="head" x="64" y="426">Ferramentas de dataset</text>
+<text class="body" x="64" y="457">COCO · manifesto SHA-256</text>
+<text class="body" x="64" y="483">Integridade · leakage · qualidade</text>
+<text class="body" x="64" y="509">Revisão visual · release gate</text>
+<text class="small" x="64" y="544">Executadas offline pela equipa</text>
+
+<rect class="panel" x="390" y="590" width="760" height="110" rx="14"/>
+<text class="head" x="416" y="625">Integrações ainda não comprovadas</text>
+<text class="body" x="416" y="654">POS / ERP / WMS · dispositivos Edge / câmaras · robô · modelo treinado</text>
+<text class="small" x="416" y="680">Dependem de contratos, autorização, hardware, dataset e testes de aceitação.</text>
+<path class="line dashed" d="M180 570 V645 H390"/>
+<path class="line dashed" d="M945 530 V590"/>
+</svg>

@@ -1,0 +1,22 @@
+name: Demo Preflight CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/demo-preflight.sh'
+      - '.github/workflows/demo-preflight-ci.yml'
+  pull_request:
+    paths:
+      - 'scripts/demo-preflight.sh'
+      - '.github/workflows/demo-preflight-ci.yml'
+  workflow_dispatch:
+
+jobs:
+  shell-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Validate preflight script syntax
+        run: bash -n scripts/demo-preflight.sh

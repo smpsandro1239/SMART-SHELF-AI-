@@ -1,0 +1,219 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-smart_shelf}
+      POSTGRES_USER: ${POSTGRES_USER:-smart_shelf}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local_only_change_me}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-smart_shelf} -d ${POSTGRES_DB:-smart_shelf}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  provision-runtime-role:
+    image: postgres:16-alpine
+    restart: "no"
+    command: ["bash", "/scripts/10-create-runtime-role.sh"]
+    environment:
+      APP_ENV: ${APP_ENV:-development}
+      POSTGRES_DB: ${POSTGRES_DB:-smart_shelf}
+      POSTGRES_USER: ${POSTGRES_USER:-smart_shelf}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local_only_change_me}
+      APP_DB_USER: ${APP_DB_USER:-smart_shelf_runtime}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:-local_runtime_change_me}
+      PGHOST: db
+      PGPORT: 5432
+    volumes:
+      - ./infra/postgres/10-create-runtime-role.sh:/scripts/10-create-runtime-role.sh:ro
+    depends_on:
+      db:
+        condition: service_healthy
+
+  migrate:
+    build:
+      context: ./apps/api
+    restart: "no"
+    command: ["alembic", "upgrade", "head"]
+    environment:
+      APP_ENV: ${APP_ENV:-development}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-INSECURE-DEVELOPMENT-KEY-CHANGE-ME}
+      BOOTSTRAP_ADMIN_KEY: ${BOOTSTRAP_ADMIN_KEY:-}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:5173}
+      APP_DB_USER: ${APP_DB_USER:-smart_shelf_runtime}
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-smart_shelf}:${POSTGRES_PASSWORD:-local_only_change_me}@db:5432/${POSTGRES_DB:-smart_shelf}
+    depends_on:
+      db:
+        condition: service_healthy
+      provision-runtime-role:
+        condition: service_completed_successfully
+
+  register-model-release:
+    profiles: ["model-release"]
+    build:
+      context: ./apps/api
+    restart: "no"
+    command: ["python", "scripts/register_vision_model_release.py"]
+    environment:
+      APP_ENV: ${APP_ENV:-development}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-INSECURE-DEVELOPMENT-KEY-CHANGE-ME}
+      BOOTSTRAP_ADMIN_KEY: ${BOOTSTRAP_ADMIN_KEY:-}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:5173}
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-smart_shelf}:${POSTGRES_PASSWORD:-local_only_change_me}@db:5432/${POSTGRES_DB:-smart_shelf}
+      VISION_MODEL_MANIFEST_PATH: ${VISION_MODEL_MANIFEST_PATH:-/models/manifest.json}
+      VISION_MODEL_TRUSTED_KEYS_JSON: ${VISION_MODEL_TRUSTED_KEYS_JSON:-}
+      VISION_MODEL_REVOKED_KEY_IDS_JSON: ${VISION_MODEL_REVOKED_KEY_IDS_JSON:-[]}
+      VISION_MODEL_DEPLOYMENT_ID: ${VISION_MODEL_DEPLOYMENT_ID:-}
+      VISION_DETECTOR_MODEL_PATH: ${VISION_DETECTOR_MODEL_PATH:-/models/shelf-detector.onnx}
+      VISION_EMBEDDING_MODEL_PATH: ${VISION_EMBEDDING_MODEL_PATH:-}
+      VISION_DETECTOR_MODEL_SHA256: ${VISION_DETECTOR_MODEL_SHA256:-}
+      VISION_EMBEDDING_MODEL_SHA256: ${VISION_EMBEDDING_MODEL_SHA256:-}
+    volumes:
+      - ${VISION_MODELS_DIR:-./models}:/models:ro
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  api:
+    build:
+      context: ./apps/api
+    restart: unless-stopped
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    environment:
+      APP_ENV: ${APP_ENV:-development}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-INSECURE-DEVELOPMENT-KEY-CHANGE-ME}
+      BOOTSTRAP_ADMIN_KEY: ${BOOTSTRAP_ADMIN_KEY:-}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:5173}
+      DATABASE_URL: postgresql+psycopg://${APP_DB_USER:-smart_shelf_runtime}:${APP_DB_PASSWORD:-local_runtime_change_me}@db:5432/${POSTGRES_DB:-smart_shelf}
+      IMAGE_STORAGE_PATH: /app/storage/shelf-images
+      DATASET_OUTPUT_STORAGE_PATH: /app/storage/dataset-outputs
+      MAX_IMAGE_UPLOAD_BYTES: ${MAX_IMAGE_UPLOAD_BYTES:-10485760}
+      VISION_PROVIDER_MODE: ${VISION_PROVIDER_MODE:-mock}
+      VISION_PROVIDER_FACTORY: ${VISION_PROVIDER_FACTORY:-app.demo.vision:create_provider}
+      VISION_CLASS_LABELS_JSON: ${VISION_CLASS_LABELS_JSON:-}
+      VISION_SKU_MATCH_LABELS: ${VISION_SKU_MATCH_LABELS:-product}
+      MOCK_VISION_DETECTION_LABEL: ${MOCK_VISION_DETECTION_LABEL:-empty_facing}
+      VISION_DETECTOR_MODEL_PATH: ${VISION_DETECTOR_MODEL_PATH:-/models/shelf-detector.onnx}
+      VISION_EMBEDDING_MODEL_PATH: ${VISION_EMBEDDING_MODEL_PATH:-}
+      VISION_DETECTOR_MODEL_SHA256: ${VISION_DETECTOR_MODEL_SHA256:-}
+      VISION_EMBEDDING_MODEL_SHA256: ${VISION_EMBEDDING_MODEL_SHA256:-}
+      VISION_MODEL_MANIFEST_PATH: ${VISION_MODEL_MANIFEST_PATH:-/models/manifest.json}
+      VISION_MODEL_TRUSTED_KEYS_JSON: ${VISION_MODEL_TRUSTED_KEYS_JSON:-}
+      VISION_MODEL_REVOKED_KEY_IDS_JSON: ${VISION_MODEL_REVOKED_KEY_IDS_JSON:-[]}
+      VISION_MODEL_DEPLOYMENT_ID: ${VISION_MODEL_DEPLOYMENT_ID:-}
+      VISION_MODEL_VERSION: ${VISION_MODEL_VERSION:-shelf-onnx-v1}
+      VISION_EMBEDDING_MODEL_VERSION: ${VISION_EMBEDDING_MODEL_VERSION:-shelf-embedding-v1}
+      VISION_INPUT_SIZE: ${VISION_INPUT_SIZE:-640}
+      VISION_CONFIDENCE_THRESHOLD: ${VISION_CONFIDENCE_THRESHOLD:-0.25}
+      VISION_MAX_DETECTIONS: ${VISION_MAX_DETECTIONS:-300}
+    ports:
+      - "${API_PORT:-8000}:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+    volumes:
+      - shelf_images:/app/storage
+      - dataset_outputs:/app/storage/dataset-outputs
+      - ./apps/api/demo/assets:/app/demo/assets
+      - ${VISION_MODELS_DIR:-./models}:/models:ro
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  vision-worker:
+    build:
+      context: ./apps/api
+    restart: unless-stopped
+    user: "65532:65532"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=64m,mode=1777,uid=65532,gid=65532
+    command: ["python", "-m", "app.vision_worker", "--poll-interval", "5"]
+    environment:
+      APP_ENV: ${APP_ENV:-development}
+      HOME: /tmp
+      XDG_CACHE_HOME: /tmp/.cache
+      TMPDIR: /tmp
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-INSECURE-DEVELOPMENT-KEY-CHANGE-ME}
+      BOOTSTRAP_ADMIN_KEY: ${BOOTSTRAP_ADMIN_KEY:-}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:5173}
+      DATABASE_URL: postgresql+psycopg://${APP_DB_USER:-smart_shelf_runtime}:${APP_DB_PASSWORD:-local_runtime_change_me}@db:5432/${POSTGRES_DB:-smart_shelf}
+      IMAGE_STORAGE_PATH: /app/storage/shelf-images
+      VISION_PROCESSING_TIMEOUT_SECONDS: ${VISION_PROCESSING_TIMEOUT_SECONDS:-86400}
+      VISION_PROVIDER_MODE: ${VISION_PROVIDER_MODE:-mock}
+      VISION_PROVIDER_FACTORY: ${VISION_PROVIDER_FACTORY:-app.demo.vision:create_provider}
+      VISION_CLASS_LABELS_JSON: ${VISION_CLASS_LABELS_JSON:-}
+      VISION_SKU_MATCH_LABELS: ${VISION_SKU_MATCH_LABELS:-product}
+      MOCK_VISION_DETECTION_LABEL: ${MOCK_VISION_DETECTION_LABEL:-empty_facing}
+      VISION_DETECTOR_MODEL_PATH: ${VISION_DETECTOR_MODEL_PATH:-/models/shelf-detector.onnx}
+      VISION_EMBEDDING_MODEL_PATH: ${VISION_EMBEDDING_MODEL_PATH:-}
+      VISION_DETECTOR_MODEL_SHA256: ${VISION_DETECTOR_MODEL_SHA256:-}
+      VISION_EMBEDDING_MODEL_SHA256: ${VISION_EMBEDDING_MODEL_SHA256:-}
+      VISION_MODEL_MANIFEST_PATH: ${VISION_MODEL_MANIFEST_PATH:-/models/manifest.json}
+      VISION_MODEL_TRUSTED_KEYS_JSON: ${VISION_MODEL_TRUSTED_KEYS_JSON:-}
+      VISION_MODEL_REVOKED_KEY_IDS_JSON: ${VISION_MODEL_REVOKED_KEY_IDS_JSON:-[]}
+      VISION_MODEL_DEPLOYMENT_ID: ${VISION_MODEL_DEPLOYMENT_ID:-}
+      VISION_MODEL_VERSION: ${VISION_MODEL_VERSION:-shelf-onnx-v1}
+      VISION_EMBEDDING_MODEL_VERSION: ${VISION_EMBEDDING_MODEL_VERSION:-shelf-embedding-v1}
+      VISION_INPUT_SIZE: ${VISION_INPUT_SIZE:-640}
+      VISION_CONFIDENCE_THRESHOLD: ${VISION_CONFIDENCE_THRESHOLD:-0.25}
+      VISION_MAX_DETECTIONS: ${VISION_MAX_DETECTIONS:-300}
+      PRODUCT_MATCHING_MIN_SIMILARITY: ${PRODUCT_MATCHING_MIN_SIMILARITY:-0.90}
+      PRODUCT_MATCHING_MIN_MARGIN: ${PRODUCT_MATCHING_MIN_MARGIN:-0.05}
+    volumes:
+      - shelf_images:/app/storage:ro
+      - ${VISION_MODELS_DIR:-./models}:/models:ro
+    depends_on:
+      db:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+
+
+
+  inventory-sync-worker:
+    build:
+      context: ./apps/api
+    restart: unless-stopped
+    user: "65532:65532"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=32m,mode=1777,uid=65532,gid=65532
+    command: ["python", "-m", "app.inventory_sync_worker", "--poll-interval", "${INVENTORY_SYNC_POLL_INTERVAL:-5}"]
+    environment:
+      APP_ENV: ${APP_ENV:-development}
+      HOME: /tmp
+      TMPDIR: /tmp
+      DATABASE_URL: postgresql+psycopg://${APP_DB_USER:-smart_shelf_runtime}:${APP_DB_PASSWORD:-local_runtime_change_me}@db:5432/${POSTGRES_DB:-smart_shelf}
+      INVENTORY_ERP_ADAPTER_FACTORY: ${INVENTORY_ERP_ADAPTER_FACTORY:-}
+      INVENTORY_WMS_ADAPTER_FACTORY: ${INVENTORY_WMS_ADAPTER_FACTORY:-}
+      INVENTORY_SYNC_WORKER_ID: ${INVENTORY_SYNC_WORKER_ID:-inventory-sync-worker-1}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+volumes:
+  shelf_images:
+  dataset_outputs:
+  postgres_data:

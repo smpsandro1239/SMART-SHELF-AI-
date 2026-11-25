@@ -1,0 +1,193 @@
+"""Fail-closed byte consumption for published dataset job outputs.
+
+The publication row is locked before its governance history and source lineage.
+The complete file is materialized and verified before the transaction is released;
+streaming/deferred reads are intentionally unsupported.
+"""
+from __future__ import annotations
+
+import hashlib
+import os
+import re
+import stat
+from pathlib import Path
+from typing import Callable
+
+from sqlalchemy.orm import Session
+
+from app import models
+from app.config import settings
+from app.dataset_job_output_publications import _open_dirs
+from app.dataset_operational_eligibility import validate_internal_image_eligibility
+from app.dataset_output_governance import get_output_governance_state
+from app.dataset_output_lineage import lock_dataset_output_lineage
+
+_REFERENCE = re.compile(r"^published/[1-9][0-9]*/[1-9][0-9]*-[0-9a-f]{64}\.artifact$")
+
+
+class DatasetJobOutputAccessDenied(PermissionError):
+    """Authorization, governance or source eligibility denied output access."""
+
+
+class DatasetJobOutputReadIntegrityError(RuntimeError):
+    """Published output bytes do not match their immutable publication record."""
+
+
+def _read_verified_file(
+    *, root: Path, reference: str, expected_sha256: str, expected_size: int,
+) -> bytes:
+    if not isinstance(reference, str) or not _REFERENCE.fullmatch(reference):
+        raise DatasetJobOutputReadIntegrityError("published output reference is not canonical")
+    parts = tuple(reference.split("/"))
+    directory_fd = None
+    file_fd = None
+    try:
+        directory_fd = _open_dirs(root, parts[:-1], create=False)
+        flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+        file_fd = os.open(parts[-1], flags, dir_fd=directory_fd)
+        info = os.fstat(file_fd)
+        if not stat.S_ISREG(info.st_mode):
+            raise DatasetJobOutputReadIntegrityError("published output is not a regular file")
+        if info.st_size <= 0 or info.st_size != expected_size or info.st_size > settings.max_dataset_output_bytes:
+            raise DatasetJobOutputReadIntegrityError("published output size differs from immutable audit")
+        digest = hashlib.sha256()
+        chunks: list[bytes] = []
+        total = 0
+        while True:
+            chunk = os.read(file_fd, 1024 * 1024)
+            if not chunk:
+                break
+            total += len(chunk)
+            if total > settings.max_dataset_output_bytes:
+                raise DatasetJobOutputReadIntegrityError("published output exceeds configured size limit")
+            digest.update(chunk)
+            chunks.append(chunk)
+        after = os.fstat(file_fd)
+        if (
+            total != info.st_size
+            or info.st_dev != after.st_dev
+            or info.st_ino != after.st_ino
+            or info.st_size != after.st_size
+            or info.st_mtime_ns != after.st_mtime_ns
+            or digest.hexdigest() != expected_sha256
+        ):
+            raise DatasetJobOutputReadIntegrityError("published output changed or failed SHA-256 verification")
+        return b"".join(chunks)
+    except DatasetJobOutputReadIntegrityError:
+        raise
+    except OSError as exc:
+        raise DatasetJobOutputReadIntegrityError("published output is missing or cannot be safely opened") from exc
+    finally:
+        if file_fd is not None:
+            os.close(file_fd)
+        if directory_fd is not None:
+            os.close(directory_fd)
+
+
+def _output_sources_query(db: Session, job_ids: list[int]):
+    """Build the deterministically ordered row-locking query for source lineage."""
+    return (
+        db.query(models.DatasetExecutionJobSource)
+        .filter(models.DatasetExecutionJobSource.job_id.in_(job_ids))
+        .order_by(
+            models.DatasetExecutionJobSource.shelf_image_id.asc(),
+            models.DatasetExecutionJobSource.job_id.asc(),
+            models.DatasetExecutionJobSource.id.asc(),
+        )
+        .with_for_update()
+        .populate_existing()
+    )
+
+
+def _lock_output_sources(db: Session, job_ids: list[int]):
+    """Lock immutable source-lineage rows until the output read transaction ends."""
+    return _output_sources_query(db, job_ids).all()
+
+
+def consume_dataset_job_output_bytes(
+    db: Session,
+    *,
+    publication_id: int,
+    authorize: Callable[[models.DatasetExecutionJobOutputPublication, models.DatasetExecutionJob], bool],
+) -> bytes:
+    """Authorize and return one fully verified, currently eligible output.
+
+    The caller owns commit/rollback and must keep this transaction open until it
+    has finished handling the returned bytes. Authorization must return exactly
+    True. No route, role policy, streaming response or external copy is implied.
+    """
+    if isinstance(publication_id, bool) or not isinstance(publication_id, int) or publication_id <= 0:
+        raise ValueError("publication_id must be a positive integer")
+
+    lineage = lock_dataset_output_lineage(db, publication_id=publication_id)
+    publications_by_id = {item.id: item for item in lineage}
+    publication = publications_by_id.get(publication_id)
+    if publication is None:
+        raise LookupError("dataset output publication was not found")
+
+    job_ids = sorted({item.job_id for item in lineage})
+    jobs = (
+        db.query(models.DatasetExecutionJob)
+        .filter(models.DatasetExecutionJob.id.in_(job_ids))
+        .order_by(models.DatasetExecutionJob.id.asc())
+        .with_for_update()
+        .populate_existing()
+        .all()
+    )
+    jobs_by_id = {item.id: item for item in jobs}
+    if set(jobs_by_id) != set(job_ids):
+        raise DatasetJobOutputAccessDenied("output lineage references a missing execution job")
+
+    for lineage_publication in lineage:
+        lineage_job = jobs_by_id[lineage_publication.job_id]
+        if lineage_job.status != "SUCCEEDED":
+            raise DatasetJobOutputAccessDenied("an output in the derived lineage is not SUCCEEDED")
+        if not callable(authorize) or authorize(lineage_publication, lineage_job) is not True:
+            raise DatasetJobOutputAccessDenied("consumer is not authorized for every output in the lineage")
+        governance = get_output_governance_state(db, publication_id=lineage_publication.id)
+        if governance.blocked:
+            reasons = []
+            if governance.restricted:
+                reasons.append("restriction_active")
+            if governance.legal_hold:
+                reasons.append("legal_hold_active")
+            raise DatasetJobOutputAccessDenied(
+                "published output lineage is blocked: " + ", ".join(reasons)
+            )
+
+    sources = _lock_output_sources(db, job_ids)
+    source_counts = {job_id: 0 for job_id in job_ids}
+    for source in sources:
+        source_counts[source.job_id] += 1
+    if any(count == 0 for count in source_counts.values()):
+        raise DatasetJobOutputAccessDenied("an output in the derived lineage has no immutable source lineage")
+    errors, report = validate_internal_image_eligibility(db, [{
+        "source_type": "internal",
+        "shelf_image_id": source.shelf_image_id,
+        "store_id": source.store_id,
+        "source_image_sha256": source.source_image_sha256,
+    } for source in sources])
+    if errors or report.get("status") != "APPROVED":
+        raise DatasetJobOutputAccessDenied("one or more derived output source images are no longer eligible")
+
+    job = jobs_by_id[publication.job_id]
+    expected_reference = (
+        f"published/{job.id}/{publication.fencing_token}-{publication.output_sha256}.artifact"
+    )
+    if (
+        publication.published_output_reference != expected_reference
+        or publication.fencing_token != job.fencing_token
+        or publication.output_sha256 != job.output_sha256
+        or publication.bytes_published <= 0
+    ):
+        raise DatasetJobOutputReadIntegrityError("publication no longer matches its immutable job identity")
+
+    root = Path(settings.dataset_output_storage_path)
+    if not root.is_absolute():
+        root = Path.cwd() / root
+    return _read_verified_file(
+        root=root,
+        reference=publication.published_output_reference,
+        expected_sha256=publication.output_sha256,
+        expected_size=publication.bytes_published,
+    )

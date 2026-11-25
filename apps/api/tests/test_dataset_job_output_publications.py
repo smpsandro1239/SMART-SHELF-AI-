@@ -1,0 +1,1472 @@
+from concurrent.futures import ThreadPoolExecutor
+import hashlib
+
+import pytest
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
+
+from app import models
+from app.config import settings
+from app.database import Base
+from app.dataset_job_leases import claim_next_dataset_job, complete_dataset_job, enqueue_dataset_job
+from app.dataset_job_output_publications import (
+    DatasetJobOutputIntegrityError,
+    DatasetJobOutputUnavailable,
+    DatasetJobSourceIneligible,
+    promote_dataset_job_output,
+)
+from app.dataset_worker_credentials import (
+    DatasetWorkerAuthorizationError,
+    authenticate_dataset_worker,
+    issue_dataset_worker_credential,
+    revoke_dataset_worker_credential,
+)
+
+
+@pytest.fixture
+def publication_setup(tmp_path, monkeypatch):
+    root = tmp_path / "dataset-outputs"
+    monkeypatch.setattr(settings, "dataset_output_storage_path", str(root))
+    monkeypatch.setattr(settings, "max_dataset_output_bytes", 1024 * 1024)
+    engine = create_engine(
+        "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
+    )
+    Base.metadata.create_all(engine)
+    factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+    db = factory()
+    store = models.Store(code="OUTPUT-PUBLISH-STORE", name="Output publish store")
+    db.add(store)
+    db.flush()
+    zone = models.Zone(store_id=store.id, name="Output publish zone")
+    db.add(zone)
+    db.flush()
+    shelf = models.Shelf(zone_id=zone.id, code="OUTPUT-PUBLISH-SHELF")
+    db.add(shelf)
+    db.flush()
+    payload = b"trained model output fixture"
+    image = models.ShelfImage(
+        shelf_id=shelf.id, original_filename="source.bin",
+        storage_path="/not-read-by-this-test/source.bin",
+        mime_type="application/octet-stream", file_size_bytes=10,
+        sha256=hashlib.sha256(b"0123456789").hexdigest(),
+        analysis_status="COMPLETED", retention_status="ACTIVE", legal_hold=False,
+    )
+    db.add(image)
+    db.commit()
+    worker_id = "output-publisher"
+    token, credential = issue_dataset_worker_credential(
+        db, worker_id=worker_id,
+        scopes=["jobs:claim", "jobs:complete", "outputs:publish"],
+        expires_in_seconds=3600,
+    )
+    job = enqueue_dataset_job(
+        db, idempotency_key="output-publish-job", release_fingerprint="d" * 64,
+        approval_evidence={
+            "status": "APPROVED", "mode": "training",
+            "record_sha256": "b" * 64, "gate_report_sha256": "c" * 64,
+        },
+        sources=[{
+            "shelf_image_id": image.id, "store_id": store.id,
+            "source_image_sha256": image.sha256,
+        }],
+    )
+    claim = claim_next_dataset_job(db, worker_id=worker_id, lease_seconds=300)
+    assert claim is not None and claim.id == job.id
+    stage_dir = root / "staging" / str(job.id) / str(claim.fencing_token)
+    stage_dir.mkdir(parents=True)
+    stage_path = stage_dir / "model.bin"
+    stage_path.write_bytes(payload)
+    digest = hashlib.sha256(payload).hexdigest()
+    complete_dataset_job(
+        db, job_id=job.id, worker_id=worker_id, fencing_token=claim.fencing_token,
+        output_sha256=digest, staged_output_reference=f"staging/{job.id}/{claim.fencing_token}/model.bin",
+    )
+    principal = authenticate_dataset_worker(db, bearer_token=token)
+    state = {
+        "db": db, "factory": factory, "engine": engine, "root": root,
+        "worker_id": worker_id, "token": token, "credential": credential,
+        "job": job, "claim": claim, "principal": principal,
+        "payload": payload, "digest": digest, "stage_path": stage_path,
+    }
+    yield state
+    db.close()
+    Base.metadata.drop_all(engine)
+    engine.dispose()
+
+
+def test_promote_completed_output_and_record_immutable_publication(publication_setup):
+    state = publication_setup
+    publication = promote_dataset_job_output(
+        state["db"], principal=state["principal"], job_id=state["job"].id,
+        fencing_token=state["claim"].fencing_token,
+    )
+    assert publication.output_sha256 == state["digest"]
+    assert publication.worker_id == state["worker_id"]
+    assert publication.bytes_published == len(state["payload"])
+    assert publication.published_output_reference == (
+        f"published/{state['job'].id}/{state['claim'].fencing_token}-{state['digest']}.artifact"
+    )
+    published_path = state["root"] / publication.published_output_reference
+    assert published_path.read_bytes() == state["payload"]
+    assert not state["stage_path"].exists()
+    assert state["db"].query(models.DatasetExecutionJobOutputPublication).count() == 1
+
+
+def test_publication_is_idempotent_after_success(publication_setup):
+    state = publication_setup
+    first = promote_dataset_job_output(
+        state["db"], principal=state["principal"], job_id=state["job"].id,
+        fencing_token=state["claim"].fencing_token,
+    )
+    second = promote_dataset_job_output(
+        state["db"], principal=state["principal"], job_id=state["job"].id,
+        fencing_token=state["claim"].fencing_token,
+    )
+    assert first.id == second.id
+    assert state["db"].query(models.DatasetExecutionJobOutputPublication).count() == 1
+
+
+def test_filesystem_promotion_is_reconciled_after_lost_database_commit(publication_setup):
+    state = publication_setup
+    publication_ref = (
+        f"published/{state['job'].id}/{state['claim'].fencing_token}-{state['digest']}.artifact"
+    )
+    published = state["root"] / publication_ref
+    published.parent.mkdir(parents=True)
+    published.write_bytes(state["payload"])
+    state["stage_path"].unlink()
+    publication = promote_dataset_job_output(
+        state["db"], principal=state["principal"], job_id=state["job"].id,
+        fencing_token=state["claim"].fencing_token,
+    )
+    assert publication.published_output_reference == publication_ref
+    assert publication.bytes_published == len(state["payload"])
+
+
+def test_tampered_staging_output_is_never_published(publication_setup):
+    state = publication_setup
+    state["stage_path"].write_bytes(b"tampered output")
+    with pytest.raises(DatasetJobOutputIntegrityError):
+        promote_dataset_job_output(
+            state["db"], principal=state["principal"], job_id=state["job"].id,
+            fencing_token=state["claim"].fencing_token,
+        )
+    assert state["db"].query(models.DatasetExecutionJobOutputPublication).count() == 0
+    published_root = state["root"] / "published"
+    assert not list(published_root.rglob("*.artifact"))
+
+
+def test_missing_staged_output_without_recoverable_destination_is_rejected(publication_setup):
+    state = publication_setup
+    state["stage_path"].unlink()
+    with pytest.raises(DatasetJobOutputUnavailable):
+        promote_dataset_job_output(
+            state["db"], principal=state["principal"], job_id=state["job"].id,
+            fencing_token=state["claim"].fencing_token,
+        )
+
+
+def test_promotion_rechecks_persisted_scope_and_credential_revocation(publication_setup):
+    state = publication_setup
+    state["db"].commit()
+    credential = state["db"].query(models.DatasetWorkerCredential).filter_by(
+        credential_id=state["principal"].credential_id
+    ).one()
+    credential.scopes = ["jobs:claim", "jobs:complete"]
+    state["db"].commit()
+    with pytest.raises(DatasetWorkerAuthorizationError):
+        promote_dataset_job_output(
+            state["db"], principal=state["principal"], job_id=state["job"].id,
+            fencing_token=state["claim"].fencing_token,
+        )
+    credential.scopes = ["jobs:claim", "jobs:complete", "outputs:publish"]
+    state["db"].commit()
+    with state["factory"]() as revoker:
+        assert revoke_dataset_worker_credential(
+            revoker, credential_id=state["principal"].credential_id
+        )
+    with pytest.raises(DatasetWorkerAuthorizationError):
+        promote_dataset_job_output(
+            state["db"], principal=state["principal"], job_id=state["job"].id,
+            fencing_token=state["claim"].fencing_token,
+        )
+    assert state["db"].query(models.DatasetExecutionJobOutputPublication).count() == 0
+
+
+def test_wrong_worker_or_fencing_token_cannot_promote(publication_setup):
+    state = publication_setup
+    from app.dataset_worker_credentials import DatasetWorkerPrincipal
+    wrong_worker = DatasetWorkerPrincipal(
+        worker_id="another-worker",
+        credential_id=state["principal"].credential_id,
+        scopes=frozenset({"outputs:publish"}),
+    )
+    from app.dataset_job_leases import DatasetJobLeaseLost
+    with pytest.raises(DatasetJobLeaseLost):
+        promote_dataset_job_output(
+            state["db"], principal=wrong_worker, job_id=state["job"].id,
+            fencing_token=state["claim"].fencing_token,
+        )
+    with pytest.raises(DatasetJobLeaseLost):
+        promote_dataset_job_output(
+            state["db"], principal=state["principal"], job_id=state["job"].id,
+            fencing_token=state["claim"].fencing_token + 1,
+        )
+
+def test_large_output_preparation_releases_db_transaction_and_rechecks_revocation(
+    publication_setup, monkeypatch
+):
+    from app import dataset_job_output_publications as publications
+
+    state = publication_setup
+    original_prepare = publications._prepare_verified_bytes
+
+    def prepare_then_revoke(**kwargs):
+        # The file copy/hash phase must not retain even a read transaction.
+        assert not state["db"].in_transaction()
+        result = original_prepare(**kwargs)
+        credential = state["db"].query(models.DatasetWorkerCredential).filter_by(
+            credential_id=state["principal"].credential_id
+        ).one()
+        credential.revoked_at = models.utc_now()
+        state["db"].commit()
+        return result
+
+    monkeypatch.setattr(publications, "_prepare_verified_bytes", prepare_then_revoke)
+    with pytest.raises(DatasetWorkerAuthorizationError):
+        promote_dataset_job_output(
+            state["db"], principal=state["principal"], job_id=state["job"].id,
+            fencing_token=state["claim"].fencing_token,
+        )
+
+    assert state["db"].query(models.DatasetExecutionJobOutputPublication).count() == 0
+    assert state["stage_path"].exists()
+    published_root = state["root"] / "published"
+    assert not list(published_root.rglob("*.artifact"))
+    assert not list(published_root.rglob("*.tmp"))
+
+def test_output_reconciler_dry_run_then_removes_only_verified_old_files(publication_setup):
+    import os
+    from datetime import timedelta
+
+    from app.dataset_job_output_reconciliation import reconcile_dataset_job_output_files
+
+    state = publication_setup
+    publication = promote_dataset_job_output(
+        state["db"], principal=state["principal"], job_id=state["job"].id,
+        fencing_token=state["claim"].fencing_token,
+    )
+    state["stage_path"].parent.mkdir(parents=True, exist_ok=True)
+    state["stage_path"].write_bytes(state["payload"])
+    old_timestamp = (models.utc_now() - timedelta(days=8)).timestamp()
+    os.utime(state["stage_path"], (old_timestamp, old_timestamp))
+
+    temporary_dir = state["root"] / "published" / str(state["job"].id)
+    temporary_dir.mkdir(parents=True, exist_ok=True)
+    old_temp = temporary_dir / (".promotion-" + "a" * 32 + ".tmp")
+    old_temp.write_bytes(b"abandoned temp")
+    os.utime(old_temp, (old_timestamp, old_timestamp))
+    recent_temp = temporary_dir / (".promotion-" + "b" * 32 + ".tmp")
+    recent_temp.write_bytes(b"still recent")
+
+    dry_run = reconcile_dataset_job_output_files(state["db"], grace_seconds=7 * 86400)
+    assert dry_run["mode"] == "dry-run"
+    assert dry_run["candidate_count"] == 2
+    assert state["stage_path"].exists() and old_temp.exists() and recent_temp.exists()
+
+    applied = reconcile_dataset_job_output_files(
+        state["db"], apply=True, grace_seconds=7 * 86400
+    )
+    assert applied["removed_count"] == 2
+    assert not state["stage_path"].exists()
+    assert not old_temp.exists()
+    assert recent_temp.exists()
+    assert (state["root"] / publication.published_output_reference).read_bytes() == state["payload"]
+
+
+def test_output_reconciler_reports_orphan_staging_but_never_deletes_it(
+    publication_setup,
+):
+    import os
+    from datetime import timedelta
+
+    from app.dataset_job_output_reconciliation import reconcile_dataset_job_output_files
+
+    state = publication_setup
+    old_timestamp = (models.utc_now() - timedelta(days=8)).timestamp()
+    os.utime(state["stage_path"], (old_timestamp, old_timestamp))
+
+    # The completed job has no publication yet and may still be promoted.
+    # A failed job and an unknown job are also reported, never auto-cleaned:
+    # a database fencing token alone does not prove that an old process stopped
+    # writing to the shared filesystem.
+    state["db"].query(models.DatasetExecutionJob).filter_by(
+        id=state["job"].id
+    ).update({"status": "FAILED"})
+    state["db"].commit()
+
+    unknown_path = state["root"] / "staging" / "999999" / "7" / "orphan.bin"
+    unknown_path.parent.mkdir(parents=True)
+    unknown_path.write_bytes(b"unknown job staging")
+    os.utime(unknown_path, (old_timestamp, old_timestamp))
+
+    report = reconcile_dataset_job_output_files(
+        state["db"], apply=True, grace_seconds=7 * 86400
+    )
+
+    assert report["removed_count"] == 0
+    assert report["orphan_staging_count"] == 2
+    reasons = {item["reason"] for item in report["orphan_staging"]}
+    assert reasons == {"terminal_job_worker_quiescence_unproven", "unknown_job"}
+    assert state["stage_path"].read_bytes() == state["payload"]
+    assert unknown_path.read_bytes() == b"unknown job staging"
+    assert all(
+        item["cleanup"] == "blocked_until_filesystem_quiescence_is_proven"
+        for item in report["orphan_staging"]
+    )
+
+
+def test_output_reconciler_preserves_staging_without_publication_or_with_wrong_digest(
+    publication_setup
+):
+    import os
+    from datetime import timedelta
+
+    from app.dataset_job_output_reconciliation import reconcile_dataset_job_output_files
+
+    state = publication_setup
+    old_timestamp = (models.utc_now() - timedelta(days=8)).timestamp()
+    os.utime(state["stage_path"], (old_timestamp, old_timestamp))
+    no_publication = reconcile_dataset_job_output_files(
+        state["db"], apply=True, grace_seconds=7 * 86400
+    )
+    assert no_publication["removed_count"] == 0
+    assert state["stage_path"].exists()
+
+    publication = promote_dataset_job_output(
+        state["db"], principal=state["principal"], job_id=state["job"].id,
+        fencing_token=state["claim"].fencing_token,
+    )
+    state["stage_path"].parent.mkdir(parents=True, exist_ok=True)
+    state["stage_path"].write_bytes(b"tampered staging bytes")
+    os.utime(state["stage_path"], (old_timestamp, old_timestamp))
+    mismatch = reconcile_dataset_job_output_files(
+        state["db"], apply=True, grace_seconds=7 * 86400
+    )
+    assert mismatch["removed_count"] == 0
+    assert state["stage_path"].exists()
+    assert (state["root"] / publication.published_output_reference).read_bytes() == state["payload"]
+
+
+
+def test_output_reconciler_preserves_staging_when_published_destination_is_corrupted(
+    publication_setup,
+):
+    import os
+    from datetime import timedelta
+
+    from app.dataset_job_output_reconciliation import reconcile_dataset_job_output_files
+
+    state = publication_setup
+    publication = promote_dataset_job_output(
+        state["db"],
+        principal=state["principal"],
+        job_id=state["job"].id,
+        fencing_token=state["claim"].fencing_token,
+    )
+
+    state["stage_path"].parent.mkdir(parents=True, exist_ok=True)
+    state["stage_path"].write_bytes(state["payload"])
+    old_timestamp = (models.utc_now() - timedelta(days=8)).timestamp()
+    os.utime(state["stage_path"], (old_timestamp, old_timestamp))
+
+    published_path = state["root"] / publication.published_output_reference
+    published_path.write_bytes(b"corrupted published bytes")
+
+    report = reconcile_dataset_job_output_files(
+        state["db"], apply=True, grace_seconds=7 * 86400
+    )
+
+    assert report["removed_count"] == 0
+    assert state["stage_path"].exists()
+    assert state["stage_path"].read_bytes() == state["payload"]
+    assert published_path.read_bytes() == b"corrupted published bytes"
+    assert any(
+        item["reason"] == "published bytes do not match the immutable audit row"
+        for item in report["skipped"]
+    )
+
+
+
+def test_output_reconciler_never_follows_or_removes_temporary_symlinks(
+    publication_setup,
+):
+    import os
+    from datetime import timedelta
+
+    from app.dataset_job_output_reconciliation import reconcile_dataset_job_output_files
+
+    state = publication_setup
+    temporary_dir = state["root"] / "published" / str(state["job"].id)
+    temporary_dir.mkdir(parents=True, exist_ok=True)
+
+    external_target = state["root"] / "outside-target.bin"
+    external_target.write_bytes(b"must remain untouched")
+
+    link = temporary_dir / (".promotion-" + "c" * 32 + ".tmp")
+    link.symlink_to(external_target)
+
+    old_timestamp = (models.utc_now() - timedelta(days=8)).timestamp()
+    os.utime(link, (old_timestamp, old_timestamp), follow_symlinks=False)
+
+    report = reconcile_dataset_job_output_files(
+        state["db"],
+        apply=True,
+        grace_seconds=7 * 86400,
+    )
+
+    assert report["removed_count"] == 0
+    assert link.is_symlink()
+    assert external_target.read_bytes() == b"must remain untouched"
+    assert not any(
+        item["reference"] == f"published/{state['job'].id}/{link.name}"
+        for item in report["temporary_candidates"]
+    )
+
+
+@pytest.mark.parametrize(("retention_status", "legal_hold"), [("RESTRICTED", False), ("ACTIVE", True)])
+def test_promotion_revalidates_sources_after_output_preparation(publication_setup, monkeypatch, retention_status, legal_hold):
+    from app import dataset_job_output_publications as publications
+    state = publication_setup
+    original_prepare = publications._prepare_verified_bytes
+
+    def prepare_then_restrict_source(**kwargs):
+        result = original_prepare(**kwargs)
+        source = state["db"].query(models.DatasetExecutionJobSource).filter_by(job_id=state["job"].id).one()
+        image = state["db"].query(models.ShelfImage).filter_by(id=source.shelf_image_id).one()
+        image.retention_status = retention_status
+        image.legal_hold = legal_hold
+        state["db"].commit()
+        return result
+
+    monkeypatch.setattr(publications, "_prepare_verified_bytes", prepare_then_restrict_source)
+    with pytest.raises(DatasetJobSourceIneligible):
+        promote_dataset_job_output(state["db"], principal=state["principal"], job_id=state["job"].id,
+                                   fencing_token=state["claim"].fencing_token)
+    assert state["db"].query(models.DatasetExecutionJobOutputPublication).count() == 0
+    assert state["stage_path"].exists()
+    published_root = state["root"] / "published"
+    assert not list(published_root.rglob("*.artifact"))
+    assert not list(published_root.rglob("*.tmp"))
+
+
+
+@pytest.mark.parametrize(("retention_status", "legal_hold"), [("RESTRICTED", False), ("ACTIVE", True)])
+def test_promotion_revalidates_every_source_not_only_first_source(
+    publication_setup, monkeypatch, retention_status, legal_hold
+):
+    from app import dataset_job_output_publications as publications
+
+    state = publication_setup
+    db = state["db"]
+    original_source = db.query(models.DatasetExecutionJobSource).filter_by(
+        job_id=state["job"].id
+    ).one()
+    original_image = db.query(models.ShelfImage).filter_by(id=original_source.shelf_image_id).one()
+    second_digest = hashlib.sha256(b"second immutable source").hexdigest()
+    second_image = models.ShelfImage(
+        shelf_id=original_image.shelf_id,
+        original_filename="second-source.bin",
+        storage_path="/not-read-by-this-test/second-source.bin",
+        mime_type="application/octet-stream",
+        file_size_bytes=22,
+        sha256=second_digest,
+        analysis_status="COMPLETED",
+        retention_status="ACTIVE",
+        legal_hold=False,
+    )
+    db.add(second_image)
+    db.flush()
+    second_image_id = second_image.id
+
+    payload = b"multi-source model output fixture"
+    digest = hashlib.sha256(payload).hexdigest()
+    job = enqueue_dataset_job(
+        db,
+        idempotency_key=f"multi-source-output-{retention_status}-{legal_hold}",
+        release_fingerprint="e" * 64,
+        approval_evidence={
+            "status": "APPROVED", "mode": "training",
+            "record_sha256": "b" * 64, "gate_report_sha256": "c" * 64,
+        },
+        # Deliberately submit sources in reverse ID order. The eligibility
+        # helper must lock and validate the complete set in stable ID order.
+        sources=[
+            {
+                "shelf_image_id": second_image_id,
+                "store_id": original_source.store_id,
+                "source_image_sha256": second_digest,
+            },
+            {
+                "shelf_image_id": original_source.shelf_image_id,
+                "store_id": original_source.store_id,
+                "source_image_sha256": original_source.source_image_sha256,
+            },
+        ],
+    )
+    claim = claim_next_dataset_job(db, worker_id=state["worker_id"], lease_seconds=300)
+    assert claim is not None and claim.id == job.id
+    stage_dir = state["root"] / "staging" / str(job.id) / str(claim.fencing_token)
+    stage_dir.mkdir(parents=True)
+    stage_path = stage_dir / "model.bin"
+    stage_path.write_bytes(payload)
+    complete_dataset_job(
+        db,
+        job_id=job.id,
+        worker_id=state["worker_id"],
+        fencing_token=claim.fencing_token,
+        output_sha256=digest,
+        staged_output_reference=f"staging/{job.id}/{claim.fencing_token}/model.bin",
+    )
+    original_prepare = publications._prepare_verified_bytes
+
+    def prepare_then_restrict_second_source(**kwargs):
+        result = original_prepare(**kwargs)
+        image = db.query(models.ShelfImage).filter_by(id=second_image_id).one()
+        image.retention_status = retention_status
+        image.legal_hold = legal_hold
+        db.commit()
+        return result
+
+    monkeypatch.setattr(
+        publications, "_prepare_verified_bytes", prepare_then_restrict_second_source
+    )
+    with pytest.raises(DatasetJobSourceIneligible):
+        promote_dataset_job_output(
+            db,
+            principal=state["principal"],
+            job_id=job.id,
+            fencing_token=claim.fencing_token,
+        )
+
+    assert db.query(models.DatasetExecutionJobOutputPublication).filter_by(
+        job_id=job.id
+    ).count() == 0
+    assert stage_path.read_bytes() == payload
+    assert not list((state["root"] / "published").rglob("*.artifact"))
+
+
+def test_output_governance_events_are_ordered_and_state_is_derived(publication_setup):
+    from app.dataset_output_governance import append_output_governance_event, get_output_governance_state
+
+    state = publication_setup
+    db = state["db"]
+    publication = promote_dataset_job_output(
+        db, principal=state["principal"], job_id=state["job"].id,
+        fencing_token=state["claim"].fencing_token,
+    )
+    actor = models.User(
+        email="output-governance-admin@example.test", store_id=None,
+        full_name="Output Governance Admin",
+        password_hash="test-only-not-a-real-password-hash", role="ADMIN", is_active=True,
+    )
+    db.add(actor)
+    db.commit()
+
+    def authorize(user, current_publication, event_type):
+        return user.role == "ADMIN" and current_publication.id == publication.id and event_type in {
+            "RESTRICTION_APPLIED", "RESTRICTION_RELEASED",
+            "LEGAL_HOLD_APPLIED", "LEGAL_HOLD_RELEASED",
+        }
+
+    transitions = [
+        ("RESTRICTION_APPLIED", True, False),
+        ("LEGAL_HOLD_APPLIED", True, True),
+        ("RESTRICTION_RELEASED", False, True),
+        ("LEGAL_HOLD_RELEASED", False, False),
+    ]
+    for sequence, (event_type, restricted, legal_hold) in enumerate(transitions, start=1):
+        event = append_output_governance_event(
+            db, publication_id=publication.id, event_type=event_type,
+            actor_user_id=actor.id, reason=f"Reviewed transition {sequence}",
+            authorize=authorize, details={"case": f"TEST-{sequence}"},
+        )
+        assert event.sequence_number == sequence
+        db.commit()
+        projection = get_output_governance_state(db, publication_id=publication.id)
+        assert projection.sequence_number == sequence
+        assert projection.restricted is restricted
+        assert projection.legal_hold is legal_hold
+        assert projection.blocked is (restricted or legal_hold)
+
+
+def test_output_governance_requires_explicit_authorization_and_valid_evidence(publication_setup):
+    from app.dataset_output_governance import (
+        DatasetOutputGovernanceAuthorizationError,
+        DatasetOutputGovernanceError,
+        append_output_governance_event,
+    )
+
+    state = publication_setup
+    db = state["db"]
+    publication = promote_dataset_job_output(
+        db, principal=state["principal"], job_id=state["job"].id,
+        fencing_token=state["claim"].fencing_token,
+    )
+    actor = models.User(
+        email="output-governance-denied@example.test", store_id=None,
+        full_name="Output Governance User",
+        password_hash="test-only-not-a-real-password-hash", role="EMPLOYEE", is_active=True,
+    )
+    db.add(actor)
+    db.commit()
+
+    with pytest.raises(DatasetOutputGovernanceAuthorizationError):
+        append_output_governance_event(
+            db, publication_id=publication.id, event_type="RESTRICTION_APPLIED",
+            actor_user_id=actor.id, reason="Request denied",
+            authorize=lambda _actor, _publication, _action: False,
+        )
+    with pytest.raises(DatasetOutputGovernanceError, match="supplied together"):
+        append_output_governance_event(
+            db, publication_id=publication.id, event_type="RESTRICTION_APPLIED",
+            actor_user_id=actor.id, reason="Evidence pair validation",
+            authorize=lambda _actor, _publication, _action: True,
+            evidence_reference="ticket://CASE-1",
+        )
+    with pytest.raises(DatasetOutputGovernanceError, match="non-whitespace"):
+        append_output_governance_event(
+            db, publication_id=publication.id, event_type="RESTRICTION_APPLIED",
+            actor_user_id=actor.id, reason="   ",
+            authorize=lambda _actor, _publication, _action: True,
+        )
+    assert db.query(models.DatasetExecutionJobOutputGovernanceEvent).count() == 0
+
+
+def test_published_output_consumer_returns_verified_bytes(publication_setup):
+    from app.dataset_job_output_consumption import consume_dataset_job_output_bytes
+
+    state = publication_setup
+    publication = promote_dataset_job_output(
+        state["db"], principal=state["principal"], job_id=state["job"].id,
+        fencing_token=state["claim"].fencing_token,
+    )
+    payload = consume_dataset_job_output_bytes(
+        state["db"], publication_id=publication.id,
+        authorize=lambda _publication, _job: True,
+    )
+    assert payload == state["payload"]
+
+
+def test_published_output_consumer_fails_closed_without_explicit_authorization(publication_setup):
+    from app.dataset_job_output_consumption import (
+        DatasetJobOutputAccessDenied, consume_dataset_job_output_bytes,
+    )
+
+    state = publication_setup
+    publication = promote_dataset_job_output(
+        state["db"], principal=state["principal"], job_id=state["job"].id,
+        fencing_token=state["claim"].fencing_token,
+    )
+    with pytest.raises(DatasetJobOutputAccessDenied):
+        consume_dataset_job_output_bytes(
+            state["db"], publication_id=publication.id, authorize=lambda _p, _j: None,
+        )
+
+
+@pytest.mark.parametrize("event_type", ["RESTRICTION_APPLIED", "LEGAL_HOLD_APPLIED"])
+def test_published_output_consumer_blocks_governance_events(publication_setup, event_type):
+    from app.dataset_job_output_consumption import (
+        DatasetJobOutputAccessDenied, consume_dataset_job_output_bytes,
+    )
+    from app.dataset_output_governance import append_output_governance_event
+
+    state = publication_setup
+    publication = promote_dataset_job_output(
+        state["db"], principal=state["principal"], job_id=state["job"].id,
+        fencing_token=state["claim"].fencing_token,
+    )
+    actor = models.User(
+        email=f"governance-{event_type.lower()}@example.test",
+        full_name="Governance Test Actor", password_hash="test-only-hash",
+        role="ADMIN", is_active=True,
+    )
+    state["db"].add(actor)
+    state["db"].flush()
+    append_output_governance_event(
+        state["db"], publication_id=publication.id, event_type=event_type,
+        actor_user_id=actor.id, reason="Automated regression test",
+        authorize=lambda _actor, _publication, _event: True,
+    )
+    state["db"].commit()
+    with pytest.raises(DatasetJobOutputAccessDenied):
+        consume_dataset_job_output_bytes(
+            state["db"], publication_id=publication.id,
+            authorize=lambda _publication, _job: True,
+        )
+
+
+@pytest.mark.parametrize(("retention_status", "legal_hold"), [("RESTRICTED", False), ("ACTIVE", True)])
+def test_published_output_consumer_inherits_source_restrictions(
+    publication_setup, retention_status, legal_hold,
+):
+    from app.dataset_job_output_consumption import (
+        DatasetJobOutputAccessDenied, consume_dataset_job_output_bytes,
+    )
+
+    state = publication_setup
+    publication = promote_dataset_job_output(
+        state["db"], principal=state["principal"], job_id=state["job"].id,
+        fencing_token=state["claim"].fencing_token,
+    )
+    source = state["db"].query(models.DatasetExecutionJobSource).filter_by(
+        job_id=state["job"].id
+    ).one()
+    image = state["db"].query(models.ShelfImage).filter_by(id=source.shelf_image_id).one()
+    image.retention_status = retention_status
+    image.legal_hold = legal_hold
+    state["db"].commit()
+    with pytest.raises(DatasetJobOutputAccessDenied):
+        consume_dataset_job_output_bytes(
+            state["db"], publication_id=publication.id,
+            authorize=lambda _publication, _job: True,
+        )
+
+
+def test_published_output_consumer_rejects_tampered_bytes(publication_setup):
+    from app.dataset_job_output_consumption import (
+        DatasetJobOutputReadIntegrityError, consume_dataset_job_output_bytes,
+    )
+
+    state = publication_setup
+    publication = promote_dataset_job_output(
+        state["db"], principal=state["principal"], job_id=state["job"].id,
+        fencing_token=state["claim"].fencing_token,
+    )
+    path = state["root"] / publication.published_output_reference
+    path.write_bytes(b"tampered output bytes")
+    with pytest.raises(DatasetJobOutputReadIntegrityError):
+        consume_dataset_job_output_bytes(
+            state["db"], publication_id=publication.id,
+            authorize=lambda _publication, _job: True,
+        )
+
+
+def test_published_output_consumer_rejects_symlink(publication_setup):
+    from app.dataset_job_output_consumption import (
+        DatasetJobOutputReadIntegrityError, consume_dataset_job_output_bytes,
+    )
+
+    state = publication_setup
+    publication = promote_dataset_job_output(
+        state["db"], principal=state["principal"], job_id=state["job"].id,
+        fencing_token=state["claim"].fencing_token,
+    )
+    target = state["root"] / "outside-target.bin"
+    target.write_bytes(state["payload"])
+    published = state["root"] / publication.published_output_reference
+    published.unlink()
+    published.symlink_to(target)
+    with pytest.raises(DatasetJobOutputReadIntegrityError):
+        consume_dataset_job_output_bytes(
+            state["db"], publication_id=publication.id,
+            authorize=lambda _publication, _job: True,
+        )
+    assert target.read_bytes() == state["payload"]
+
+
+def test_derived_output_authorization_failure_rolls_back_publication_and_preserves_staging(publication_setup):
+    from app.dataset_output_lineage import DatasetOutputLineageAuthorizationError
+
+    state = publication_setup
+    db = state["db"]
+    parent = promote_dataset_job_output(
+        db, principal=state["principal"], job_id=state["job"].id,
+        fencing_token=state["claim"].fencing_token,
+    )
+    actor = models.User(
+        email="output-lineage-denied@example.test", store_id=None,
+        full_name="Output Lineage Denied",
+        password_hash="test-only-hash", role="ADMIN", is_active=True,
+    )
+    db.add(actor)
+    db.commit()
+
+    source = db.query(models.DatasetExecutionJobSource).filter_by(job_id=state["job"].id).one()
+    payload = b"derived output must remain private after denied lineage"
+    digest = hashlib.sha256(payload).hexdigest()
+    job = enqueue_dataset_job(
+        db, idempotency_key="output-lineage-denied",
+        release_fingerprint="e" * 64,
+        approval_evidence={
+            "status": "APPROVED", "mode": "training",
+            "record_sha256": "b" * 64, "gate_report_sha256": "c" * 64,
+        },
+        sources=[{
+            "shelf_image_id": source.shelf_image_id,
+            "store_id": source.store_id,
+            "source_image_sha256": source.source_image_sha256,
+        }],
+    )
+    claim = claim_next_dataset_job(db, worker_id=state["worker_id"], lease_seconds=300)
+    assert claim is not None and claim.id == job.id
+    stage_dir = state["root"] / "staging" / str(job.id) / str(claim.fencing_token)
+    stage_dir.mkdir(parents=True)
+    stage_path = stage_dir / "denied.bin"
+    stage_path.write_bytes(payload)
+    complete_dataset_job(
+        db, job_id=job.id, worker_id=state["worker_id"],
+        fencing_token=claim.fencing_token, output_sha256=digest,
+        staged_output_reference=f"staging/{job.id}/{claim.fencing_token}/denied.bin",
+    )
+
+    with pytest.raises(DatasetOutputLineageAuthorizationError):
+        promote_dataset_job_output(
+            db, principal=state["principal"], job_id=job.id,
+            fencing_token=claim.fencing_token,
+            derived_from_publication_id=parent.id,
+            derivation_actor_user_id=actor.id,
+            derivation_reason="Authorization must be denied",
+            authorize_derivation=lambda *_args: False,
+        )
+
+    assert db.query(models.DatasetExecutionJobOutputPublication).filter_by(
+        job_id=job.id
+    ).count() == 0
+    assert db.query(models.DatasetExecutionJobOutputLineage).filter_by(
+        parent_publication_id=parent.id
+    ).count() == 0
+    assert stage_path.read_bytes() == payload
+    published_path = (
+        state["root"] / "published" / str(job.id)
+        / f"{claim.fencing_token}-{digest}.artifact"
+    )
+    assert not published_path.exists()
+
+
+def _create_second_published_output(
+    state, *, suffix="derived", derived_from_publication_id=None,
+    derivation_actor_user_id=None, derivation_reason=None, authorize_derivation=None,
+):
+    db = state["db"]
+    source = db.query(models.DatasetExecutionJobSource).filter_by(job_id=state["job"].id).one()
+    payload = f"derived output fixture {suffix}".encode()
+    digest = hashlib.sha256(payload).hexdigest()
+    job = enqueue_dataset_job(
+        db, idempotency_key=f"output-lineage-{suffix}", release_fingerprint=("f" if suffix == "derived" else "a") * 64,
+        approval_evidence={
+            "status": "APPROVED", "mode": "training",
+            "record_sha256": "b" * 64, "gate_report_sha256": "c" * 64,
+        },
+        sources=[{
+            "shelf_image_id": source.shelf_image_id,
+            "store_id": source.store_id,
+            "source_image_sha256": source.source_image_sha256,
+        }],
+    )
+    claim = claim_next_dataset_job(db, worker_id=state["worker_id"], lease_seconds=300)
+    assert claim is not None and claim.id == job.id
+    stage_dir = state["root"] / "staging" / str(job.id) / str(claim.fencing_token)
+    stage_dir.mkdir(parents=True)
+    stage_path = stage_dir / "derived.bin"
+    stage_path.write_bytes(payload)
+    complete_dataset_job(
+        db, job_id=job.id, worker_id=state["worker_id"],
+        fencing_token=claim.fencing_token, output_sha256=digest,
+        staged_output_reference=f"staging/{job.id}/{claim.fencing_token}/derived.bin",
+    )
+    publication = promote_dataset_job_output(
+        db, principal=state["principal"], job_id=job.id,
+        fencing_token=claim.fencing_token,
+        derived_from_publication_id=derived_from_publication_id,
+        derivation_actor_user_id=derivation_actor_user_id,
+        derivation_reason=derivation_reason,
+        authorize_derivation=authorize_derivation,
+    )
+    return publication, payload
+
+
+def test_derived_output_inherits_parent_legal_hold_and_authorization(publication_setup):
+    from app.dataset_job_output_consumption import (
+        DatasetJobOutputAccessDenied, consume_dataset_job_output_bytes,
+    )
+    from app.dataset_output_governance import append_output_governance_event
+    from app.dataset_output_lineage import (
+        DatasetOutputLineageConflict, register_dataset_output_derivation,
+    )
+
+    state = publication_setup
+    db = state["db"]
+    parent = promote_dataset_job_output(
+        db, principal=state["principal"], job_id=state["job"].id,
+        fencing_token=state["claim"].fencing_token,
+    )
+    actor = models.User(
+        email="output-lineage-admin@example.test", store_id=None,
+        full_name="Output Lineage Admin",
+        password_hash="test-only-hash", role="ADMIN", is_active=True,
+    )
+    db.add(actor)
+    db.commit()
+
+    derivation_reason = "Child output was produced from parent output"
+    authorize_derivation = lambda user, parent_row, child_row: (
+        user.role == "ADMIN" and parent_row.id == parent.id
+        and child_row.job_id != parent.job_id
+    )
+    child, child_payload = _create_second_published_output(
+        state,
+        derived_from_publication_id=parent.id,
+        derivation_actor_user_id=actor.id,
+        derivation_reason=derivation_reason,
+        authorize_derivation=authorize_derivation,
+    )
+    edge = db.query(models.DatasetExecutionJobOutputLineage).filter_by(
+        parent_publication_id=parent.id, child_publication_id=child.id,
+    ).one()
+    assert edge.actor_user_id == actor.id and edge.reason == derivation_reason
+    retried = promote_dataset_job_output(
+        db, principal=state["principal"], job_id=child.job_id,
+        fencing_token=child.fencing_token,
+        derived_from_publication_id=parent.id,
+        derivation_actor_user_id=actor.id,
+        derivation_reason=derivation_reason,
+        authorize_derivation=authorize_derivation,
+    )
+    assert retried.id == child.id
+
+    with pytest.raises(DatasetOutputLineageConflict, match="cycle"):
+        register_dataset_output_derivation(
+            db, parent_publication_id=child.id, child_publication_id=parent.id,
+            actor_user_id=actor.id, reason="Attempted reverse edge",
+            authorize=lambda *_args: True,
+        )
+    db.rollback()
+
+    append_output_governance_event(
+        db, publication_id=parent.id, event_type="LEGAL_HOLD_APPLIED",
+        actor_user_id=actor.id, reason="Preserve the parent and every derived output",
+        authorize=lambda *_args: True,
+    )
+    db.commit()
+
+    authorized_publications = []
+    def authorize(publication, job):
+        authorized_publications.append(publication.id)
+        return True
+
+    with pytest.raises(DatasetJobOutputAccessDenied, match="lineage is blocked"):
+        consume_dataset_job_output_bytes(
+            db, publication_id=child.id, authorize=authorize,
+        )
+    # The consumer fails immediately at the first blocked ancestor; it must
+    # not continue authorizing or reading deeper nodes after a denial.
+    assert parent.id in authorized_publications
+
+    append_output_governance_event(
+        db, publication_id=parent.id, event_type="LEGAL_HOLD_RELEASED",
+        actor_user_id=actor.id, reason="Test fixture releases the hold after assertion",
+        authorize=lambda *_args: True,
+    )
+    db.commit()
+    authorized_publications.clear()
+    assert consume_dataset_job_output_bytes(
+        db, publication_id=child.id, authorize=authorize,
+    ) == child_payload
+    assert set(authorized_publications) == {parent.id, child.id}
+
+
+def test_commit_failure_after_filesystem_publish_is_recoverable_on_retry(publication_setup, monkeypatch):
+    state = publication_setup
+    db = state["db"]
+    original_commit = db.commit
+    commit_attempts = {"count": 0}
+
+    def fail_first_commit():
+        commit_attempts["count"] += 1
+        if commit_attempts["count"] == 1:
+            raise RuntimeError("simulated database commit interruption")
+        return original_commit()
+
+    monkeypatch.setattr(db, "commit", fail_first_commit)
+
+    published_ref = (
+        f"published/{state['job'].id}/"
+        f"{state['claim'].fencing_token}-{state['digest']}.artifact"
+    )
+    published_path = state["root"] / published_ref
+
+    with pytest.raises(RuntimeError, match="simulated database commit interruption"):
+        promote_dataset_job_output(
+            db,
+            principal=state["principal"],
+            job_id=state["job"].id,
+            fencing_token=state["claim"].fencing_token,
+        )
+
+    # The filesystem link precedes the SQL commit. A failed commit must leave
+    # no audit row, while preserving both the verified destination and staging
+    # so that a retry can reconstruct the publication safely.
+    assert db.query(models.DatasetExecutionJobOutputPublication).filter_by(
+        job_id=state["job"].id
+    ).count() == 0
+    assert published_path.read_bytes() == state["payload"]
+    assert state["stage_path"].read_bytes() == state["payload"]
+    assert not list((state["root"] / "published").rglob("*.tmp"))
+
+    publication = promote_dataset_job_output(
+        db,
+        principal=state["principal"],
+        job_id=state["job"].id,
+        fencing_token=state["claim"].fencing_token,
+    )
+
+    assert publication.published_output_reference == published_ref
+    assert publication.output_sha256 == state["digest"]
+    assert db.query(models.DatasetExecutionJobOutputPublication).filter_by(
+        job_id=state["job"].id
+    ).count() == 1
+    assert published_path.read_bytes() == state["payload"]
+    assert not state["stage_path"].exists()
+    assert commit_attempts["count"] == 2
+
+def test_directory_fsync_failure_after_link_is_recoverable_on_retry(publication_setup, monkeypatch):
+    import app.dataset_job_output_publications as publication_service
+
+    state = publication_setup
+    db = state["db"]
+    original_publish = publication_service._publish_prepared_temp
+
+    def fail_directory_fsync_once(*, root, published, temp_name):
+        original_fsync = publication_service.os.fsync
+
+        def fail_fsync(_fd):
+            raise OSError("simulated directory fsync failure")
+
+        monkeypatch.setattr(publication_service.os, "fsync", fail_fsync)
+        try:
+            original_publish(root=root, published=published, temp_name=temp_name)
+        finally:
+            monkeypatch.setattr(publication_service.os, "fsync", original_fsync)
+
+    monkeypatch.setattr(
+        publication_service, "_publish_prepared_temp", fail_directory_fsync_once,
+    )
+    published_ref = (
+        f"published/{state['job'].id}/"
+        f"{state['claim'].fencing_token}-{state['digest']}.artifact"
+    )
+    published_path = state["root"] / published_ref
+
+    with pytest.raises(
+        publication_service.DatasetJobOutputUnavailable,
+        match="prepared output could not be atomically published",
+    ):
+        promote_dataset_job_output(
+            db,
+            principal=state["principal"],
+            job_id=state["job"].id,
+            fencing_token=state["claim"].fencing_token,
+        )
+
+    # The hard link may exist even though directory durability could not be
+    # confirmed. Keep staging and retry only after re-verifying destination bytes.
+    assert published_path.read_bytes() == state["payload"]
+    assert state["stage_path"].read_bytes() == state["payload"]
+    assert db.query(models.DatasetExecutionJobOutputPublication).filter_by(
+        job_id=state["job"].id
+    ).count() == 0
+
+    import os
+    import stat
+
+    destination_info = published_path.parent.stat()
+    file_info = published_path.stat()
+    original_fsync = publication_service.os.fsync
+    synced_destination_directory = []
+    synced_destination_file = []
+
+    def track_retry_fsync(fd):
+        info = os.fstat(fd)
+        if stat.S_ISDIR(info.st_mode) and (
+            info.st_dev, info.st_ino
+        ) == (destination_info.st_dev, destination_info.st_ino):
+            synced_destination_directory.append(True)
+        if stat.S_ISREG(info.st_mode) and (
+            info.st_dev, info.st_ino
+        ) == (file_info.st_dev, file_info.st_ino):
+            synced_destination_file.append(True)
+        return original_fsync(fd)
+
+    monkeypatch.setattr(publication_service.os, "fsync", track_retry_fsync)
+    publication = promote_dataset_job_output(
+        db,
+        principal=state["principal"],
+        job_id=state["job"].id,
+        fencing_token=state["claim"].fencing_token,
+    )
+    monkeypatch.setattr(publication_service.os, "fsync", original_fsync)
+
+    assert publication.published_output_reference == published_ref
+    assert publication.output_sha256 == state["digest"]
+    assert db.query(models.DatasetExecutionJobOutputPublication).filter_by(
+        job_id=state["job"].id
+    ).count() == 1
+    assert not state["stage_path"].exists()
+    assert synced_destination_directory, "retry must fsync the recovered destination directory"
+    assert synced_destination_file, "retry must fsync the recovered destination file"
+
+
+def test_staging_cleanup_failure_after_commit_is_recovered_by_reconciliation(publication_setup, monkeypatch):
+    import os
+    from datetime import timedelta
+
+    import app.dataset_job_output_publications as publication_service
+    from app.dataset_job_output_reconciliation import reconcile_dataset_job_output_files
+
+    state = publication_setup
+    original_unlink = publication_service.os.unlink
+
+    def fail_staging_unlink(name, *args, **kwargs):
+        if name == state["stage_path"].name:
+            raise PermissionError("simulated staging cleanup permission failure")
+        return original_unlink(name, *args, **kwargs)
+
+    monkeypatch.setattr(publication_service.os, "unlink", fail_staging_unlink)
+    publication = promote_dataset_job_output(
+        state["db"],
+        principal=state["principal"],
+        job_id=state["job"].id,
+        fencing_token=state["claim"].fencing_token,
+    )
+
+    # Publication is already committed. A cleanup permission failure must not
+    # roll it back or make the caller believe the durable output was lost.
+    assert state["db"].query(models.DatasetExecutionJobOutputPublication).filter_by(
+        job_id=state["job"].id
+    ).count() == 1
+    assert (state["root"] / publication.published_output_reference).read_bytes() == state["payload"]
+    assert state["stage_path"].read_bytes() == state["payload"]
+
+    monkeypatch.setattr(publication_service.os, "unlink", original_unlink)
+    stale_time = models.utc_now() - timedelta(days=8)
+    os.utime(state["stage_path"], (stale_time.timestamp(), stale_time.timestamp()))
+
+    report = reconcile_dataset_job_output_files(
+        state["db"],
+        apply=True,
+        grace_seconds=3600,
+        now=models.utc_now(),
+    )
+
+    assert state["stage_path"].as_posix().replace(str(state["root"]) + "/", "") in report["removed"]
+    assert not state["stage_path"].exists()
+    assert state["db"].query(models.DatasetExecutionJobOutputPublication).filter_by(
+        job_id=state["job"].id
+    ).count() == 1
+
+
+
+def test_output_reconciler_reports_orphan_published_output_without_deleting_even_apply(publication_setup):
+    import os
+    from datetime import timedelta
+
+    from app.dataset_job_output_reconciliation import reconcile_dataset_job_output_files
+
+    state = publication_setup
+    published_dir = state["root"] / "published" / str(state["job"].id)
+    published_dir.mkdir(parents=True)
+    reference = (
+        f"published/{state['job'].id}/"
+        f"{state['claim'].fencing_token}-{state['digest']}.artifact"
+    )
+    orphan_path = state["root"] / reference
+    orphan_path.write_bytes(state["payload"])
+    stale_time = models.utc_now() - timedelta(days=8)
+    os.utime(orphan_path, (stale_time.timestamp(), stale_time.timestamp()))
+
+    report = reconcile_dataset_job_output_files(
+        state["db"],
+        apply=True,
+        grace_seconds=3600,
+        now=models.utc_now(),
+    )
+
+    orphan = next(
+        item for item in report["orphan_published"]
+        if item["reference"] == reference
+    )
+    assert orphan["bytes"] == len(state["payload"])
+    assert orphan["reason"] == "missing_publication_audit_row"
+    assert orphan["cleanup"] == "report_only"
+    assert orphan_path.read_bytes() == state["payload"]
+    assert reference not in report["removed"]
+
+def test_published_output_consumer_returns_only_fully_verified_bytes(publication_setup):
+    from app.dataset_job_output_consumption import consume_dataset_job_output_bytes
+
+    state = publication_setup
+    publication = promote_dataset_job_output(
+        state["db"], principal=state["principal"], job_id=state["job"].id,
+        fencing_token=state["claim"].fencing_token,
+    )
+
+    consumed = consume_dataset_job_output_bytes(
+        state["db"], publication_id=publication.id,
+        authorize=lambda candidate, job: candidate.id == publication.id and job.id == state["job"].id,
+    )
+
+    assert consumed == state["payload"]
+
+
+def test_published_output_consumer_fails_closed_without_explicit_authorization(publication_setup):
+    from app.dataset_job_output_consumption import (
+        DatasetJobOutputAccessDenied,
+        consume_dataset_job_output_bytes,
+    )
+
+    state = publication_setup
+    publication = promote_dataset_job_output(
+        state["db"], principal=state["principal"], job_id=state["job"].id,
+        fencing_token=state["claim"].fencing_token,
+    )
+
+    with pytest.raises(DatasetJobOutputAccessDenied):
+        consume_dataset_job_output_bytes(
+            state["db"], publication_id=publication.id,
+            authorize=lambda _publication, _job: 1,
+        )
+
+
+def test_published_output_consumer_rejects_tampered_published_bytes(publication_setup):
+    from app.dataset_job_output_consumption import (
+        DatasetJobOutputReadIntegrityError,
+        consume_dataset_job_output_bytes,
+    )
+
+    state = publication_setup
+    publication = promote_dataset_job_output(
+        state["db"], principal=state["principal"], job_id=state["job"].id,
+        fencing_token=state["claim"].fencing_token,
+    )
+    published_path = state["root"] / publication.published_output_reference
+    published_path.write_bytes(b"tampered published output")
+
+    with pytest.raises(DatasetJobOutputReadIntegrityError):
+        consume_dataset_job_output_bytes(
+            state["db"], publication_id=publication.id,
+            authorize=lambda _publication, _job: True,
+        )
+
+def test_output_consumer_locks_source_lineage_rows_in_stable_order():
+    from sqlalchemy.dialects import postgresql
+
+    from app.dataset_job_output_consumption import _output_sources_query
+
+    engine = create_engine("sqlite://")
+    db = sessionmaker(bind=engine)()
+    try:
+        # Compile the query against PostgreSQL without executing it on SQLite.
+        query = _output_sources_query(db, [9, 2])
+        sql = str(query.statement.compile(
+            dialect=postgresql.dialect(),
+            compile_kwargs={"literal_binds": True},
+        ))
+        assert "FOR UPDATE" in sql
+        assert (
+            "ORDER BY dataset_execution_job_sources.shelf_image_id ASC, "
+            "dataset_execution_job_sources.job_id ASC, "
+            "dataset_execution_job_sources.id ASC"
+        ) in sql
+        assert "dataset_execution_job_sources.job_id IN (9, 2)" in sql
+    finally:
+        db.close()
+        engine.dispose()
+
+def test_temporary_file_fsync_failure_preserves_staging_and_allows_retry(publication_setup, monkeypatch):
+    import os
+    import stat
+
+    import app.dataset_job_output_publications as publication_service
+
+    state = publication_setup
+    original_fsync = publication_service.os.fsync
+
+    def fail_regular_file_fsync(fd):
+        if stat.S_ISREG(os.fstat(fd).st_mode):
+            raise OSError("simulated temporary file fsync failure")
+        return original_fsync(fd)
+
+    monkeypatch.setattr(publication_service.os, "fsync", fail_regular_file_fsync)
+    with pytest.raises(
+        DatasetJobOutputUnavailable,
+        match="staged output could not be safely prepared",
+    ):
+        promote_dataset_job_output(
+            state["db"],
+            principal=state["principal"],
+            job_id=state["job"].id,
+            fencing_token=state["claim"].fencing_token,
+        )
+
+    assert state["stage_path"].read_bytes() == state["payload"]
+    assert state["db"].query(models.DatasetExecutionJobOutputPublication).filter_by(
+        job_id=state["job"].id
+    ).count() == 0
+    assert not list((state["root"] / "published").rglob("*.artifact"))
+    assert not list((state["root"] / "published").rglob("*.tmp"))
+
+    monkeypatch.setattr(publication_service.os, "fsync", original_fsync)
+    publication = promote_dataset_job_output(
+        state["db"],
+        principal=state["principal"],
+        job_id=state["job"].id,
+        fencing_token=state["claim"].fencing_token,
+    )
+    assert publication.output_sha256 == state["digest"]
+    assert not state["stage_path"].exists()
+
+
+def test_output_directory_creation_fsyncs_each_parent(tmp_path, monkeypatch):
+    import os
+    import stat
+
+    from app.dataset_job_output_publications import _open_dirs
+
+    root = tmp_path / "new-root" / "nested" / "outputs"
+    expected_parents = [
+        tmp_path,
+        tmp_path / "new-root",
+        tmp_path / "new-root" / "nested",
+        root,
+        root / "published",
+    ]
+    original_fsync = os.fsync
+    synced_directories = set()
+
+    def track_directory_fsync(fd):
+        info = os.fstat(fd)
+        if stat.S_ISDIR(info.st_mode):
+            synced_directories.add((info.st_dev, info.st_ino))
+        return original_fsync(fd)
+
+    monkeypatch.setattr(os, "fsync", track_directory_fsync)
+    directory_fd = _open_dirs(root, ("published", "42"), create=True)
+    os.close(directory_fd)
+
+    for directory in expected_parents:
+        info = directory.stat()
+        assert (info.st_dev, info.st_ino) in synced_directories, (
+            f"parent directory entry was not fsynced: {directory.name}"
+        )
+
+
+def test_output_directory_creation_retries_parent_fsync_after_failure(tmp_path, monkeypatch):
+    import os
+
+    from app.dataset_job_output_publications import _open_dirs
+
+    root = tmp_path / "dataset-outputs"
+    parent_info = tmp_path.stat()
+    original_fsync = os.fsync
+
+    def fail_parent_fsync(fd):
+        info = os.fstat(fd)
+        if (info.st_dev, info.st_ino) == (parent_info.st_dev, parent_info.st_ino):
+            raise OSError("simulated parent directory fsync failure")
+        return original_fsync(fd)
+
+    monkeypatch.setattr(os, "fsync", fail_parent_fsync)
+    with pytest.raises(OSError, match="simulated parent directory fsync failure"):
+        _open_dirs(root, (), create=True)
+    assert root.is_dir()
+
+    monkeypatch.setattr(os, "fsync", original_fsync)
+    retried_parent_fsync = []
+
+    def track_parent_fsync(fd):
+        info = os.fstat(fd)
+        if (info.st_dev, info.st_ino) == (parent_info.st_dev, parent_info.st_ino):
+            retried_parent_fsync.append(True)
+        return original_fsync(fd)
+
+    monkeypatch.setattr(os, "fsync", track_parent_fsync)
+    directory_fd = _open_dirs(root, (), create=True)
+    os.close(directory_fd)
+    assert retried_parent_fsync, "retry must re-fsync an existing directory entry after prior failure"
+
+def test_staging_directory_fsync_failure_after_commit_is_nonfatal_and_logged(
+    publication_setup, monkeypatch, caplog,
+):
+    import logging
+    import os
+    import stat
+
+    import app.dataset_job_output_publications as publication_service
+
+    state = publication_setup
+    staging_directory = state["stage_path"].parent.stat()
+    original_fsync = publication_service.os.fsync
+
+    def fail_staging_directory_fsync(fd):
+        info = os.fstat(fd)
+        if stat.S_ISDIR(info.st_mode) and (
+            info.st_dev, info.st_ino
+        ) == (staging_directory.st_dev, staging_directory.st_ino):
+            raise OSError("simulated staging directory fsync failure")
+        return original_fsync(fd)
+
+    monkeypatch.setattr(publication_service.os, "fsync", fail_staging_directory_fsync)
+    with caplog.at_level(logging.WARNING, logger=publication_service.__name__):
+        publication = promote_dataset_job_output(
+            state["db"],
+            principal=state["principal"],
+            job_id=state["job"].id,
+            fencing_token=state["claim"].fencing_token,
+        )
+
+    published_path = state["root"] / publication.published_output_reference
+    assert published_path.read_bytes() == state["payload"]
+    assert not state["stage_path"].exists()
+    assert state["db"].query(models.DatasetExecutionJobOutputPublication).filter_by(
+        job_id=state["job"].id
+    ).count() == 1
+    assert any(
+        "staging cleanup" in record.getMessage().lower()
+        and str(state["job"].id) in record.getMessage()
+        for record in caplog.records
+    )
+
+def test_output_directory_fsync_failure_closes_open_child_descriptor(tmp_path, monkeypatch):
+    import os
+
+    from app.dataset_job_output_publications import _open_dirs
+
+    root = tmp_path / "existing-output"
+    root.mkdir()
+    parent_info = tmp_path.stat()
+    original_open = os.open
+    original_fsync = os.fsync
+    opened_child_descriptors = []
+
+    def track_open(path, flags, *args, **kwargs):
+        fd = original_open(path, flags, *args, **kwargs)
+        if path == "existing-output":
+            opened_child_descriptors.append(fd)
+        return fd
+
+    def fail_parent_fsync(fd):
+        info = os.fstat(fd)
+        if (info.st_dev, info.st_ino) == (parent_info.st_dev, parent_info.st_ino):
+            raise OSError("simulated existing parent directory fsync failure")
+        return original_fsync(fd)
+
+    monkeypatch.setattr(os, "open", track_open)
+    monkeypatch.setattr(os, "fsync", fail_parent_fsync)
+    with pytest.raises(OSError, match="simulated existing parent directory fsync failure"):
+        _open_dirs(root, (), create=True)
+
+    assert len(opened_child_descriptors) == 1
+    with pytest.raises(OSError, match="Bad file descriptor"):
+        os.fstat(opened_child_descriptors[0])
