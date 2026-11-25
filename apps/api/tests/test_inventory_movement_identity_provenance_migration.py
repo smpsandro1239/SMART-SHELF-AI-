@@ -39,8 +39,13 @@ def test_migration_backfills_identity_and_preserves_unknown_historical_provenanc
             )
         """)
         connection.exec_driver_sql("""
-            CREATE TRIGGER existing_movement_update_guard
+            CREATE TRIGGER trg_inventory_movements_no_update
             BEFORE UPDATE ON inventory_movements
+            BEGIN SELECT RAISE(ABORT, 'inventory_movements is append-only'); END
+        """)
+        connection.exec_driver_sql("""
+            CREATE TRIGGER trg_inventory_movements_no_delete
+            BEFORE DELETE ON inventory_movements
             BEGIN SELECT RAISE(ABORT, 'inventory_movements is append-only'); END
         """)
         connection.exec_driver_sql("INSERT INTO zones (id, store_id) VALUES (1, 10)")
@@ -70,6 +75,9 @@ def test_migration_backfills_identity_and_preserves_unknown_historical_provenanc
             connection.exec_driver_sql(
                 "UPDATE inventory_movements SET source_location_code = 'CHANGED' WHERE id = 1"
             )
+
+        with pytest.raises(IntegrityError, match="append-only"):
+            connection.exec_driver_sql("DELETE FROM inventory_movements WHERE id = 1")
 
         with pytest.raises(IntegrityError, match="require operation identity"):
             connection.exec_driver_sql("""
