@@ -1,3 +1,17 @@
+# Autoridade de stock físico — WMS por loja (2026-11-25)
+
+O WMS é a fonte de referência do stock físico da retaguarda. O ERP mantém-se independente para reconciliação administrativa; POS fornece evidência de vendas/procura; MANUAL representa operações/contagens auditáveis; IMPORT não recebe autoridade implícita.
+
+A retaguarda só é considerada conhecida quando a loja tem uma localização WMS exacta configurada em `InventoryFreshnessPolicy.backroom_location_code` e o snapshot mais recente dessa localização contém `availability_status=AVAILABLE`. A quantidade utilizável é sempre `on_hand_quantity - reserved_quantity`. Um snapshot posterior `UNAVAILABLE` ou `UNKNOWN` bloqueia a reutilização de um snapshot mais antigo disponível. Não há fallback para ERP, outra localização ou outra origem.
+
+A configuração da localização é feita através de `POST /api/v1/inventory/freshness-policies`, com `source=WMS`, `backroom_location_code` e motivo obrigatório. Cada alteração é registada num ledger append-only com actor, localização anterior/nova e timestamp. Snapshots guardam localização e estado de disponibilidade; registos legados sem estes dados ficam `UNKNOWN` e não são elegíveis para reposição.
+
+O contrato dos adapters WMS exige localização e disponibilidade explícitas. O orquestrador persiste estes campos e inclui-os na comparação de replay idempotente. A reconciliação de movimentos consome apenas snapshots WMS da localização configurada e preserva actor, motivo e referências de origem/resultante.
+
+**Limite:** ainda não existe adapter WMS real homologado. O contrato e a lógica de selecção não provam conectividade ou exactidão de um fornecedor. A normalização de unidade/caixa/palete permanece uma fase separada. Detalhes: [docs/INVENTORY-SOURCE-SYNC.md](docs/INVENTORY-SOURCE-SYNC.md).
+
+---
+
 
 ## Histórico de sincronizações ERP/WMS
 
