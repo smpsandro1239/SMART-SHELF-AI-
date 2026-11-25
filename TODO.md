@@ -2433,3 +2433,12 @@ A transição usa lock pessimista da tarefa e valida o estado já actualizado ap
 - [x] Exigir ADMIN/SUPERVISOR para persistir fusão de evidência visual + OCR.
 - [x] Testar actor EMPLOYEE nos três endpoints: todos devolvem 403 antes de bloquear/alterar a captura e nenhuma execução, correspondência ou fusão é persistida.
 - [x] API CI `45720266566`: **1730 passed, 1 skipped**; Quality Gates `45720266628`, Security Scans `45720266508` e Docker Compose `45720266578` — sucesso no SHA `a9271dd595c7d913a93cd969cf73d58b5e49438d`.
+
+
+## P0/P1 — RBAC explícito nas mutações de warehouse e rotação de paletes
+
+- [x] Exigir ADMIN/SUPERVISOR para criar localizações de armazém e colocações de produto.
+- [x] Exigir ADMIN/SUPERVISOR para registar paletes físicas.
+- [x] Exigir ADMIN/SUPERVISOR para criar/alterar políticas de rotação e executar simulações.
+- [x] Testar seis operações com actor EMPLOYEE: todas devolvem 403 antes da leitura/mutação e não criam localizações, colocações, paletes ou políticas.
+- [x] API CI `45721215742`: **1731 passed, 1 skipped**; Quality Gates `45721215822`, Security Scans `45721215637` e Docker Compose `45721215724` — sucesso no SHA `3f63efd0da73070cc1654e76ea58ecfe0e79ca93`.
