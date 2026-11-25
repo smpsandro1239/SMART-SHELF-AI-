@@ -1611,6 +1611,6 @@ A confirmação WMS, compensações e divergências permanecem pendentes; não h
 - [x] Exigir exactamente uma reconciliação aprovada, um movimento, um snapshot resultante e um evento de auditoria; a segunda operação deve falhar por stock insuficiente.
 - [x] Verificar retry idempotente da tarefa vencedora, sem criar novo movimento.
 - [ ] Confirmar execução do novo smoke e os quatro workflows no SHA final.
-- [ ] Acrescentar prova PostgreSQL de rollback integral quando a inserção do evento de movimento falha.
+- [x] Acrescentar prova PostgreSQL de rollback integral quando a inserção do evento de movimento falha (execução CI pendente).
 
 A serialização depende dos locks de produto e snapshot no endpoint de reconciliação. O smoke exercita pedidos HTTP concorrentes com sessões de base de dados independentes; testes SQLite não substituem esta prova PostgreSQL.
