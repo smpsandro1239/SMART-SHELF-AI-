@@ -8,19 +8,6 @@ branch_labels = None
 depends_on = None
 
 
-_SHELF_EVIDENCE_TABLES = (
-    "observations",
-    "observation_alerts",
-    "shelf_products",
-    "shelf_planograms",
-    "inventory_reconciliations",
-    "replenishment_tasks",
-    "capture_sessions",
-    "shelf_images",
-    "edge_device_event_inbox",
-)
-
-
 def upgrade() -> None:
     bind = op.get_bind()
     if bind.dialect.name == "postgresql":
