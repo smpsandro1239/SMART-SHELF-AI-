@@ -1303,3 +1303,15 @@ Auditar a reconciliação de reservas WMS. O modelo actual recebe `reserved_quan
 - Teste novo confirma persistência Decimal exacta de 10.125 kg físico e 2.375 kg reservado, e HTTP 422 para escala superior a três casas decimais em qualquer campo.
 - O endpoint directo de snapshots e o adapter normalizado aplicam agora o mesmo contrato Numeric(12,3). O cálculo disponível continua a ser físico menos reservado.
 - Não existe ledger de reservas individuais nem contrato WMS de reserva por ID/documento/linha. A plataforma não simula reservas: uma tarefa de reposição não reserva stock. A próxima auditoria deve manter a reconciliação agregada por loja/SKU/localização e só evoluir para detalhe quando o fornecedor o disponibilizar.
+
+
+## Validação final — precisão física e reservas agregadas WMS (25/11/2026)
+
+- SHA de código validado: `900c24f19f47e6720da64775d6904692e104c35f`; documentação operacional posterior: `bc37246a298f3cfe2ae142ea9051cb70beac1e22`. Os commits posteriores ao SHA de código são exclusivamente documentais.
+- API CI run `45626116643`: sucesso; migrations PostgreSQL 16, 48 smokes e **1698 passed, 1 skipped** em 168.66s.
+- Quality Gates run `45626178152`: sucesso; TypeScript/build Web e **1698 passed, 1 skipped** em 111.98s.
+- Docker Compose smoke run `45626116401`: sucesso.
+- Security Scans run `45626178472`: sucesso; auditorias Python/Web, secret scan e OWASP ZAP passive baseline.
+- O endpoint directo de snapshots agora rejeita precisão superior a três casas decimais em stock físico ou reservado. A persistência recebe Decimal explícito e preserva valores como 10.125 e 2.375 sem arredondamento silencioso.
+- O teste API valida a persistência exacta e confirma que quantidades inválidas não criam snapshots.
+- Reservas: o WMS continua a ser a fonte do total reservado por snapshot/localização; o sistema calcula disponível como físico menos reservado. Não existe detalhe de reserva individual fornecido pelo contrato actual, pelo que não é criado ledger local fictício nem se considera uma tarefa como reserva.
