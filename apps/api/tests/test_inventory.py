@@ -2319,3 +2319,48 @@ def test_employee_cannot_mutate_warehouse_locations_placements_or_pallet_policy(
             assert db.query(models.WarehouseProductPlacement).filter_by(product_id=product_id).count() == 0
             assert db.query(models.StorePallet).filter_by(store_id=store_id).count() == 0
             assert db.query(models.PalletRotationPolicy).filter_by(store_id=store_id).count() == 0
+
+
+
+def test_employee_cannot_manage_admin_catalogue_or_read_user_directory(monkeypatch):
+    with TestClient(app) as client:
+        store_id, product_id = create_store_and_product(client)
+        employee = _supervisor_actor(store_id, role="EMPLOYEE")
+        monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: employee)
+        with TestingSession() as db:
+            baseline = {
+                "stores": db.query(models.Store).count(),
+                "zones": db.query(models.Zone).count(),
+                "products": db.query(models.Product).count(),
+                "profiles": db.query(models.WarehouseProductProfile).count(),
+                "packaging": db.query(models.ProductPackagingLevel).count(),
+                "users": db.query(models.User).count(),
+            }
+
+        responses = [
+            client.post("/api/v1/stores", json={"code": "EMP-ADMIN-STORE", "name": "Não autorizado"}),
+            client.post("/api/v1/zones", json={"store_id": store_id, "name": "Zona não autorizada"}),
+            client.post("/api/v1/products", json={"sku": "EMP-ADMIN-SKU", "name": "Produto não autorizado"}),
+            client.post("/api/v1/warehouse/product-profiles", json={
+                "product_id": product_id, "unit_volume_cm3": 100,
+                "unit_weight_kg": 1, "temperature_requirement": "AMBIENT",
+            }),
+            client.post("/api/v1/warehouse/product-packaging", json={
+                "product_id": product_id, "code": "EMP-CASE", "name": "Caixa não autorizada",
+                "package_type": "CASE", "base_units_per_package": 6,
+            }),
+            client.post("/api/v1/auth/users", json={
+                "email": "employee-created-user@example.test", "full_name": "Conta não autorizada",
+                "password": "Long-test-password-123", "role": "EMPLOYEE", "store_id": store_id,
+            }),
+            client.get("/api/v1/auth/users"),
+            client.get("/api/v1/products"),
+        ]
+        assert [response.status_code for response in responses] == [403] * 8
+        with TestingSession() as db:
+            assert db.query(models.Store).count() == baseline["stores"]
+            assert db.query(models.Zone).count() == baseline["zones"]
+            assert db.query(models.Product).count() == baseline["products"]
+            assert db.query(models.WarehouseProductProfile).count() == baseline["profiles"]
+            assert db.query(models.ProductPackagingLevel).count() == baseline["packaging"]
+            assert db.query(models.User).count() == baseline["users"]
