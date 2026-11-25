@@ -1081,3 +1081,15 @@ Ponto semântico ainda aberto: InventorySnapshot.source aceita ERP, WMS, POS, MA
 - Actualizado `docs/INVENTORY-SOURCE-SYNC.md` no commit `b5f819e43b17dcc88ec1505cf462dfdfdb6ac392` e acrescentados os itens pendentes a `TODO.md`.
 - **Limite desta passagem:** auditoria e documentação apenas. Não foram alterados modelos, migrations, endpoints ou testes; não foram executados testes nem CI para esta passagem.
 
+
+
+## 2026-11-25 — Verificação das protecções existentes do Inventory Movement Ledger
+
+- Revisão adicional das migrations `0052_inventory_movement_lineage_guard`, `0053_inventory_movement_append_only` e `0076_inventory_reconciliation_ledger` revelou protecções já implementadas que não estavam suficientemente distinguidas na auditoria anterior.
+- `0052` valida na base de dados a relação entre tarefa, loja, produto, snapshots e conservação da quantidade do movimento.
+- `0053` impede `UPDATE` e `DELETE` em `inventory_movements` na base de dados (PostgreSQL/SQLite). A imutabilidade do movimento aprovado não é, portanto, uma funcionalidade por começar.
+- `0076` cria `inventory_reconciliation_events` append-only para decisões de revisão de divergências. Existe também `replenishment_task_events` para o ciclo da tarefa. Estes ledgers não representam ainda o ciclo de vida específico do movimento nem a confirmação externa WMS.
+- O endpoint de reconciliação bloqueia a linha do produto e o snapshot WMS com `with_for_update()`. O bloqueio do produto serializa conservadoramente operações sobre o mesmo SKU. Continua em falta um smoke PostgreSQL que dispute o mesmo saldo com duas operações simultâneas.
+- Corrigidos `docs/INVENTORY-SOURCE-SYNC.md` e `TODO.md` para preservar as implementações existentes e separar claramente o que falta.
+- Commits: `df2f377555255bb9eca11e4f52a429bdf852aa86` (documentação técnica) e `7ca759af4ebaa3ca2eb6f907e28291dd30078d4d` (TODO).
+- **Limite:** esta passagem foi de verificação e correcção documental. Não foram alterados modelos, migrations, endpoints ou testes; não foram executados testes nem CI.
