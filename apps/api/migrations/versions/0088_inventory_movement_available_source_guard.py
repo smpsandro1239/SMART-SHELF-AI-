@@ -68,7 +68,11 @@ def _install_guard(*, require_available: bool) -> None:
         op.execute(f"""
             CREATE TRIGGER trg_inventory_movement_provenance_0086
             BEFORE INSERT ON inventory_movements
-            WHEN NOT EXISTS (
+            WHEN NEW.operation_id IS NULL
+              OR NEW.source_location_code IS NULL
+              OR length(trim(NEW.source_location_code)) = 0
+              OR NEW.destination_shelf_id IS NULL
+              OR NOT EXISTS (
                 SELECT 1
                 FROM replenishment_tasks task
                 JOIN shelves sh ON sh.id = task.shelf_id

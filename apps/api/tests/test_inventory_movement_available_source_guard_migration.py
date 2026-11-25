@@ -89,6 +89,29 @@ def test_new_movements_require_available_wms_snapshot_and_downgrade_restores_pri
         with pytest.raises(IntegrityError, match="same-store physical provenance"):
             _insert_movement(connection, movement_id=3, task_id=32, snapshot_id=42)
 
+        # SQLite must enforce the same required provenance fields as PostgreSQL.
+        with pytest.raises(IntegrityError, match="same-store physical provenance"):
+            connection.exec_driver_sql("""
+                INSERT INTO inventory_movements
+                    (id, task_id, store_id, product_id, source_snapshot_id,
+                     operation_id, source_location_code, destination_shelf_id)
+                VALUES (4, 31, 10, 100, 40, NULL, 'BACKROOM-A', 20)
+            """)
+        with pytest.raises(IntegrityError, match="same-store physical provenance"):
+            connection.exec_driver_sql("""
+                INSERT INTO inventory_movements
+                    (id, task_id, store_id, product_id, source_snapshot_id,
+                     operation_id, source_location_code, destination_shelf_id)
+                VALUES (5, 31, 10, 100, 40, ?, '   ', 20)
+            """, (str(uuid4()),))
+        with pytest.raises(IntegrityError, match="same-store physical provenance"):
+            connection.exec_driver_sql("""
+                INSERT INTO inventory_movements
+                    (id, task_id, store_id, product_id, source_snapshot_id,
+                     operation_id, source_location_code, destination_shelf_id)
+                VALUES (6, 31, 10, 100, 40, ?, 'BACKROOM-A', NULL)
+            """, (str(uuid4()),))
+
         with Operations.context(MigrationContext.configure(connection)):
             migration.downgrade()
 
