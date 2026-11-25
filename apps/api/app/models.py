@@ -565,6 +565,10 @@ class InventorySnapshot(Base):
         CheckConstraint("reserved_quantity <= on_hand_quantity", name="ck_inventory_reserved_lte_on_hand"),
         CheckConstraint("availability_status IN ('AVAILABLE', 'UNAVAILABLE', 'UNKNOWN')", name="ck_inventory_snapshot_availability_status"),
         CheckConstraint("location_code IS NULL OR length(trim(location_code)) > 0", name="ck_inventory_snapshot_location_nonblank"),
+        CheckConstraint(
+            "source <> 'WMS' OR (location_code IS NOT NULL AND availability_status IN ('AVAILABLE', 'UNAVAILABLE'))",
+            name="ck_inventory_snapshot_wms_provenance",
+        ),
         Index(
             "ix_inventory_snapshot_backroom_lookup",
             "store_id", "product_id", "source", "location_code",
