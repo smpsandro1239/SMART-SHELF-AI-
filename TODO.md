@@ -9,7 +9,7 @@
 - [x] Restringir reconciliação de retaguarda, recomendações e movimentos à localização WMS configurada.
 - [x] Impedir fallback para ERP, outra localização ou snapshot WMS antigo quando o registo mais recente está UNAVAILABLE/UNKNOWN.
 - [x] Acrescentar regressões para ERP sem fallback, estado WMS indisponível, localização errada, configuração por loja e auditoria da política.
-- [ ] Confirmar migration 0084/0085, suite API, PostgreSQL 16, Quality Gates, Security Scans e Docker Compose no SHA final.
+- [x] Confirmar migrations 0084/0085, suite API (1679 passed, 1 skipped), PostgreSQL 16, Quality Gates, Security Scans e Docker Compose no SHA `c8efb82b64d4aed9fcc81fdb4a0571695fdd23cf`.
 - [ ] Homologar adapter WMS real e validar mapeamento de localizações com o fornecedor.
 - [ ] Definir normalização de unidade/caixa/palete e conversões autorizadas sem misturar unidades incompatíveis.
 - [ ] Expandir a auditoria de movimentos manuais e reconciliação de reservas multi-localização.
@@ -2037,5 +2037,15 @@ Capacity is calculated conservatively from the current time to the end of the ac
 - [x] Criar snapshots ERP/WMS com quantidades distintas por loja e confirmar que cada reconciliação congela apenas os IDs e quantidades da própria loja.
 - [x] Confirmar que a consulta corrente e o ledger da loja A não expõem o registo da loja B.
 - [x] Confirmar que a tentativa de rever directamente uma reconciliação estrangeira devolve 404 e mantém o estado PENDING.
-- [ ] Confirmar API CI, Quality Gates, Security Scans e Docker Compose no commit de teste.
-- [ ] Definir, com evidência do contrato operacional, quais as fontes que representam stock físico de retaguarda. Não inferir que ERP, WMS, POS, MANUAL ou IMPORT são intercambiáveis nem alterar a selecção do snapshot genérico sem essa decisão.
+- [x] Confirmar API CI (45574197186), Quality Gates (45574197259), Security Scans (45574197237) e Docker Compose (45574197037) no SHA `c8efb82b64d4aed9fcc81fdb4a0571695fdd23cf`.
+- [x] Formalizar a autoridade: WMS + localização física configurada por loja para retaguarda; ERP independente para reconciliação administrativa; POS para vendas/procura; MANUAL auditável; IMPORT sem autoridade implícita. A decisão operacional foi confirmada e implementada com fail-closed.
+
+
+## WMS — fecho de validação técnica (2026-11-25)
+
+- [x] Corrigir a reconciliação para continuar a calcular stock administrativo ERP mesmo quando o campo `availability_status` (específico da semântica física WMS) está UNKNOWN.
+- [x] Rejeitar novos snapshots WMS sem localização ou sem estado AVAILABLE/UNAVAILABLE ao nível da API e da base de dados; preservar snapshots legados como UNKNOWN.
+- [x] Preservar os guards append-only SQLite durante a migration 0084 e testar a compatibilidade de snapshots históricos.
+- [x] Corrigir fixtures de recomendação, tarefas, decisões operacionais e picking para usar WMS configurado quando o cenário depende de stock físico de retaguarda.
+- [x] Validar 1679 testes aprovados, 1 ignorado; os quatro workflows estão verdes no SHA acima.
+- [ ] Homologar adapter WMS real e confirmar códigos de localização/estados com o fornecedor.
