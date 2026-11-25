@@ -138,7 +138,7 @@ A fila não altera stock ERP/WMS, movimentos contabilísticos ou decisões human
 
 O script `apps/api/scripts/postgres_inventory_sync_job_smoke.py` está integrado no workflow API CI, que provisiona PostgreSQL 16. Exercita dois claims concorrentes, takeover com fencing, rejeição do worker antigo e SIGKILL de um processo após confirmar uma tentativa STARTED. A recuperação fecha o ledger como PARTIAL, com evento COMPLETED e contagens NULL.
 
-Este smoke não demonstra ainda a interrupção após commit de uma página real nem o replay idempotente dos snapshots. Não confundir a recuperação do ledger com a validação integral da semântica de páginas.
+O smoke foi expandido para demonstrar também a interrupção após commit de uma página real e o replay idempotente dos snapshots. A primeira execução do API CI dessa versão detectou uma falha no próprio teste: `DetachedInstanceError` ao aceder a atributos ORM expirados depois do fecho da sessão. A correcção captura os tokens de lease/fencing enquanto a instância está associada à sessão; não altera a lógica de produção. A garantia só deve ser considerada validada depois de o novo API CI executar com sucesso o smoke e a suite completa.
 
 
 ## Interrupção depois de uma página confirmada
