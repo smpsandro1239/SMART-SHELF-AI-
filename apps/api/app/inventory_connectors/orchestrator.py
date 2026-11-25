@@ -233,6 +233,7 @@ async def run_inventory_source_sync(
                     location_code=item.location_code,
                     availability_status=item.availability_status,
                     captured_at=item.captured_at,
+                    source_sync_id=sync.id,
                     created_at=models.utc_now(),
                 ))
                 page_processed += 1
