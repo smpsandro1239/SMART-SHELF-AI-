@@ -1638,3 +1638,11 @@ A frescura continua dependente da política por loja e é validada pelo serviço
 - [ ] Validar migration 0089, suite API, PostgreSQL smoke e workflows no SHA final.
 
 O contrato actual usa a escala persistida `NUMERIC(12,3)`. A conversão de embalagens continua explícita através dos níveis de embalagem do produto.
+
+
+## 2026-11-25 — Planeamento de embalagens com Decimal exacto
+
+- [x] Preservar valores Decimal exactos no resultado do cálculo UNIT/CASE/PALLET.
+- [x] Manter compatibilidade dos campos numéricos e acrescentar campos `*_exact` textuais.
+- [x] Validar quantidades fraccionárias, caixa aberta/fechada, unidade e palete.
+- [x] Garantir que o cálculo não executa movimentos de stock.
