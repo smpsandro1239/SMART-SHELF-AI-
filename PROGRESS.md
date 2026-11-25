@@ -1488,3 +1488,17 @@ O commit `50fc1fcd9dac4c88dfb800aaa1f690ff1c0b6304` introduz o endpoint transacc
 - Limitação histórica: não é possível reconstruir renomeações anteriores à migration sem eventos históricos; o campo de backfill torna essa incerteza explícita.
 - Próxima prioridade: definir arquivamento/soft-delete de catálogo se operações comerciais exigirem remoção visual de zonas/prateleiras, preservando IDs e evidência imutável.
 
+
+
+## 2026-11-25 — Retenção de evidência operacional e imutabilidade da auditoria de tarefas (0096–0098)
+
+- Migration 0096 bloqueia a eliminação de prateleiras/zonas com histórico de tarefas.
+- Migration 0097 protege `replenishment_task_events` contra UPDATE/DELETE, impede apagar tarefas auditadas e congela `store_id`, `shelf_id` e `product_id` depois de começar a auditoria; alterações normais de estado continuam permitidas.
+- Auditoria encontrou uma lacuna adicional: apagar uma prateleira sem tarefas podia propagar CASCADE a imagens, sessões de captura, observações, alertas e associações. A migration 0098 bloqueia a eliminação de prateleiras/zonas enquanto existir qualquer evidência/associação nas tabelas shelf-scoped relevantes.
+- Testes SQLite verificam os nove tipos de referência directa; smoke PostgreSQL verifica a retenção de imagem ACTIVE com legal hold mesmo sem tarefa.
+- O histórico Web de movimentos passa a apresentar ID/código da prateleira, ID/nome da zona e a proveniência: captura contemporânea ou reconstrução histórica da migration 0095.
+- SHA validado: `7bf95468320fc1dd4ab992b520e855d463b6e1f6`.
+- API CI `45688691089`: **1725 passed, 1 skipped**, incluindo PostgreSQL 16 e smoke de movimentos, retenção e auditoria.
+- Quality Gates `45688691013`, Security Scans `45688691043` e Docker Compose `45688691103`: sucesso.
+- Limitação: não existe ainda arquivamento/soft-delete de zonas/prateleiras. A eliminação física fica bloqueada quando há evidência; não foi criada uma operação comercial de descontinuação sem requisito explícito.
+- Próxima prioridade: auditar a consistência dos estados de tarefa e transições concorrentes, sem alterar a semântica operacional aprovada.
