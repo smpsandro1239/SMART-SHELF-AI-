@@ -1985,8 +1985,10 @@ Capacity is calculated conservatively from the current time to the end of the ac
 - [x] API de enqueue, consulta de jobs e histórico com autorização multi-loja.
 - [x] Fechar tentativas STARTED abandonadas na mesma transacção de recuperação do lease, sem inventar contagens de páginas.
 - [x] Teste de regressão SQLite para finalização da tentativa abandonada e rejeição do worker antigo.
-- [ ] Testes concorrentes multi-worker em PostgreSQL 16 e recuperação após kill -9 durante uma página.
+- [x] Smoke PostgreSQL 16: claim concorrente único, rejeição de worker obsoleto e recuperação do ledger STARTED após SIGKILL do processo.
+- [ ] Teste de interrupção após commit real de página e replay idempotente dos snapshots com o adapter/orquestrador.
 - [ ] Adapter real ERP/WMS e homologação do fornecedor.
 - [ ] Integração com Vault/Secrets Manager ou gestor de segredos escolhido no deployment.
-- [ ] Testes concorrentes multi-worker em PostgreSQL 16 e recuperação após kill -9 durante uma página.
+- [x] Smoke PostgreSQL 16: claim concorrente único, rejeição de worker obsoleto e recuperação do ledger STARTED após SIGKILL do processo.
+- [ ] Teste de interrupção após commit real de página e replay idempotente dos snapshots com o adapter/orquestrador.
 - [ ] Agendamento recorrente por loja/fonte e janelas operacionais.
