@@ -971,3 +971,12 @@ Pendente: worker durável, gestão de secrets, recuperação de STARTED abandona
 - Adicionado serviço Docker Compose isolado para o worker.
 - Corrigido teste da migração 0078: a expectativa anterior rejeitava indevidamente uma segunda associação com identificador/SKU/produto distintos. O teste passa agora a validar separadamente as três regras de unicidade.
 - Ainda não existem adapters reais nem integração com gestor externo de segredos. CI e testes PostgreSQL desta fase aguardam validação.
+
+
+## 2026-11-25 — Recuperação consistente de tentativas ERP/WMS abandonadas
+
+- A auditoria identificou que a recuperação do lease já substituía o fencing token e protegia a fila, mas podia deixar a tentativa associada em `inventory_source_syncs` no estado `STARTED` após um encerramento abrupto.
+- A função de claim agora finaliza essa tentativa na mesma transacção que regista a expiração e atribui o novo lease: estado `PARTIAL`, código `WORKER_LEASE_EXPIRED` e evento `COMPLETED` append-only.
+- As contagens permanecem `NULL`, porque os snapshots não têm associação à tentativa transitória e não é seguro inferir quantas páginas foram confirmadas antes da interrupção.
+- Adicionado teste de regressão SQLite que verifica a finalização do ledger, o incremento do fencing token e a rejeição de heartbeat do worker antigo.
+- Documentação e TODO actualizados. **Os testes não foram executados nesta sessão** e ainda faltam os testes reais de concorrência/interrupção em PostgreSQL 16; não declarar a fase validada até à CI.
