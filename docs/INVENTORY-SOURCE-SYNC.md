@@ -307,3 +307,12 @@ A comparação actual pode classificar `DIVERGENCE` quando ambos os snapshots es
 Após o merge da migration 0092, os workflows da branch `main` terminaram com sucesso: API CI `45654043683` (**1715 passed, 1 skipped**), Quality Gates `45654278572`, Security Scans `45654278738` e Docker Compose `45654043988`. O check Vercel continua com `build-rate-limit`, uma limitação de quota externa, separada da validação GitHub.
 
 A próxima análise é o skew temporal ERP/WMS. O sistema expõe os timestamps de cada origem, mas ainda não existe uma política operacional de tolerância entre capturas; nenhum limite deve ser inventado pelo código.
+
+
+## Política de skew temporal ERP/WMS — migration 0093
+
+A diferença absoluta entre os timestamps de captura ERP e WMS é exposta em `erp_wms_capture_skew_seconds`. A tolerância é configurada na política ERP da loja, através de `comparison_skew_tolerance_minutes`; o campo é opcional, aceita 0–10080 minutos e exige motivo auditável. A política WMS não pode definir esta tolerância. NULL significa explicitamente que a tolerância operacional ainda não foi configurada.
+
+Quando ambas as fontes estão CURRENT e a tolerância está NULL, timestamps diferentes produzem `TEMPORAL_SKEW_UNCONFIGURED`; o delta quantitativo fica NULL. Com tolerância configurada, um skew superior ao limite produz `TEMPORAL_SKEW`, também sem delta. Apenas capturas dentro da tolerância permitem comparar quantidades e produzir IN_SYNC/DIVERGENCE. Um valor zero exige timestamps coincidentes.
+
+Cada alteração é registada na mesma transacção da política, com actor, valor anterior/novo, motivo e timestamp no ledger append-only existente. A migration 0093 preserva políticas e eventos históricos com tolerância NULL; não introduz limite operacional por defeito. A configuração efectiva deve ser aprovada pelo responsável da operação e validada com a cadência real dos adapters.
