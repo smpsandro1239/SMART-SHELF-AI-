@@ -180,7 +180,7 @@ def _verify_concurrent_single_claim():
 
 def _verify_stale_worker_fencing():
     suffix = uuid4().hex[:10]
-    _, _, _, job_id = _new_job(suffix)
+    store_id, actor_id, product_id, job_id = _new_job(suffix)
     with SessionLocal() as db:
         old = claim_next_inventory_sync_job(db, worker_id="worker-a", lease_seconds=LEASE_SECONDS)
         assert old is not None and old.id == job_id
@@ -203,6 +203,39 @@ def _verify_stale_worker_fencing():
             pass
         else:
             raise AssertionError("stale worker renewed a lease after PostgreSQL takeover")
+
+    # Exercise the actual orchestrator write path with worker A's stale fencing
+    # credentials. The lease guard must reject it before a sync ledger or page
+    # snapshot can be committed.
+    async def stale_page_attempt():
+        with SessionLocal() as db:
+            return await run_inventory_source_sync(
+                db,
+                store_id=store_id,
+                source="ERP",
+                adapter=_ReplayAdapter(),
+                actor_user_id=actor_id,
+                lease_guard=_guard(
+                    job_id, "worker-a", old.lease_token, old.fencing_token
+                ),
+            )
+
+    import asyncio
+    try:
+        asyncio.run(stale_page_attempt())
+    except InventorySyncJobLeaseLost:
+        pass
+    else:
+        raise AssertionError("stale worker orchestrator unexpectedly accepted a page")
+    with SessionLocal() as db:
+        snapshot_count = db.query(models.InventorySnapshot).filter_by(
+            store_id=store_id, product_id=product_id, source="ERP"
+        ).count()
+        sync_count = db.query(models.InventorySourceSync).filter_by(
+            store_id=store_id, source="ERP"
+        ).count()
+        assert snapshot_count == 0, "stale worker persisted an inventory snapshot"
+        assert sync_count == 0, "stale worker created a source-sync ledger"
 
 
 def _verify_sigkill_after_page_commit_and_idempotent_replay():
