@@ -2055,10 +2055,14 @@ Capacity is calculated conservatively from the current time to the end of the ac
 
 - [x] Inspeccionar o modelo `InventoryMovement`, o contrato de leitura e o endpoint de reconciliação de tarefas concluídas.
 - [x] Confirmar os controlos existentes: actor/motivo, snapshot WMS de origem, snapshot resultante, unicidade por tarefa, disponibilidade, frescura, reservas e dedução de movimentos anteriores.
+- [x] Preservar a imutabilidade de `inventory_movements` já aplicada pela migration `0053` (UPDATE/DELETE bloqueados na base de dados).
+- [x] Preservar o guard de lineage e conservação de quantidade já aplicado pela migration `0052`.
+- [x] Distinguir `inventory_reconciliation_events` (revisão de divergências) e `replenishment_task_events` (ciclo da tarefa) de um futuro ledger de eventos do movimento.
 - [x] Documentar que o snapshot MANUAL criado pela reconciliação é uma projecção interna do movimento, não uma confirmação de escrita no WMS.
 - [ ] Persistir no movimento a identidade congelada da localização/prateleira de destino, sem depender apenas da tarefa associada.
 - [ ] Expor e validar a localização física de origem no contrato de auditoria, ligada ao snapshot WMS e à política da loja.
 - [ ] Definir unidade base e quantidade Decimal para cada movimento; bloquear conversões implícitas.
+- [ ] Criar ledger append-only de eventos do movimento para confirmação WMS, compensações e divergências; reutilizar as protecções de imutabilidade já existentes em `inventory_movements`.
 - [ ] Implementar correcções exclusivamente por movimentos compensatórios, mantendo movimentos aprovados imutáveis.
 - [ ] Implementar correlação idempotente entre movimento interno e confirmação posterior do WMS.
 - [ ] Criar smoke PostgreSQL com duas sessões concorrentes sobre o mesmo snapshot, reservas, rollback e retry.
