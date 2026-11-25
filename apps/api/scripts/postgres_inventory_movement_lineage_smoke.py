@@ -370,11 +370,11 @@ def main() -> None:
                 INSERT INTO inventory_movements
                     (task_id, store_id, product_id, movement_type, quantity, unit_code,
                      source_snapshot_id, source_location_code, destination_shelf_id,
-                     result_snapshot_id, actor_user_id, reason, operation_id, created_at)
+                     destination_shelf_code, result_snapshot_id, actor_user_id, reason, operation_id, created_at)
                 VALUES
                     (:task_id, :store_id, :product_id, 'BACKROOM_TO_SHELF', 4, 'un',
                      :source_snapshot_id, 'BACKROOM-CI', :destination_shelf_id,
-                     :result_snapshot_id, :actor_id, 'unavailable source guard smoke',
+                     :destination_shelf_code, :result_snapshot_id, :actor_id, 'unavailable source guard smoke',
                      :operation_id, CURRENT_TIMESTAMP)
             """), {
                 "task_id": unavailable_task_id,
@@ -382,6 +382,7 @@ def main() -> None:
                 "product_id": product_id,
                 "source_snapshot_id": unavailable_snapshot.json()["id"],
                 "destination_shelf_id": shelf.json()["id"],
+                "destination_shelf_code": shelf.json()["code"],
                 "result_snapshot_id": result_snapshot_id,
                 "actor_id": supervisor_id,
                 "operation_id": str(uuid4()),
@@ -398,11 +399,11 @@ def main() -> None:
                 INSERT INTO inventory_movements
                     (task_id, store_id, product_id, movement_type, quantity, unit_code,
                      source_snapshot_id, source_location_code, destination_shelf_id,
-                     result_snapshot_id, actor_user_id, reason, operation_id, created_at)
+                     destination_shelf_code, result_snapshot_id, actor_user_id, reason, operation_id, created_at)
                 VALUES
                     (:task_id, :store_id, :product_id, 'BACKROOM_TO_SHELF', 4, 'kg',
                      :source_snapshot_id, 'BACKROOM-CI', :destination_shelf_id,
-                     :result_snapshot_id, :actor_id, 'wrong base unit smoke',
+                     :destination_shelf_code, :result_snapshot_id, :actor_id, 'wrong base unit smoke',
                      :operation_id, CURRENT_TIMESTAMP)
             """), {
                 "task_id": unavailable_task_id,
@@ -410,6 +411,7 @@ def main() -> None:
                 "product_id": product_id,
                 "source_snapshot_id": available_snapshot.json()["id"],
                 "destination_shelf_id": shelf.json()["id"],
+                "destination_shelf_code": shelf.json()["code"],
                 "result_snapshot_id": result_snapshot_id,
                 "actor_id": supervisor_id,
                 "operation_id": str(uuid4()),
