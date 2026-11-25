@@ -1681,3 +1681,10 @@ O endpoint de transição usa lock pessimista da linha da tarefa e revalida o es
 A política central classifica `GET /api/v1/tasks/{task_id}/events` como `SUPERVISOR_OR_ADMIN`. O handler reforça explicitamente esta fronteira: EMPLOYEE recebe HTTP 403 para qualquer tarefa, incluindo as que lhe estão atribuídas. SUPERVISOR consulta apenas a sua loja; ADMIN mantém acesso global. O teste exercita tarefa própria, tarefa de colega, tarefa não atribuída e ID inexistente para provar a negação consistente.
 
 **Evidência:** SHA `f925b875f871964ce80805c4927af15616f58774`; API CI `45716057516`, Quality Gates `45716057563`, Security Scans `45716057667` e Docker Compose `45716057580` — todos com sucesso.
+
+
+## 2026-11-25 — Defesa em profundidade do RBAC de eventos de paletes
+
+Os handlers GET e POST do histórico/ciclo de vida de paletes agora repetem a autorização `SUPERVISOR_OR_ADMIN` já declarada na política central. Funcionários recebem 403 antes da leitura ou mutação. O teste confirma que a tentativa de escrita não altera o estado nem acrescenta evento e que um supervisor autorizado consegue ler e registar uma transição válida.
+
+**Evidência:** SHA `50df52e59eca47aa2dfc868fc16621cf2f636586`; API CI `45716912538`, Quality Gates `45716912911`, Security Scans `45716912543` e Docker Compose `45716912421` — todos com sucesso.
