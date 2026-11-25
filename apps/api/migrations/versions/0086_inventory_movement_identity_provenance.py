@@ -110,10 +110,19 @@ def upgrade() -> None:
                    OR NEW.destination_shelf_id IS NULL
                    OR NOT EXISTS (
                        SELECT 1
-                       FROM shelves sh
+                       FROM replenishment_tasks task
+                       JOIN shelves sh ON sh.id = task.shelf_id
                        JOIN zones z ON z.id = sh.zone_id
-                       WHERE sh.id = NEW.destination_shelf_id
+                       JOIN inventory_snapshots source ON source.id = NEW.source_snapshot_id
+                       WHERE task.id = NEW.task_id
+                         AND task.shelf_id = NEW.destination_shelf_id
+                         AND task.store_id = NEW.store_id
+                         AND task.product_id = NEW.product_id
                          AND z.store_id = NEW.store_id
+                         AND source.store_id = NEW.store_id
+                         AND source.product_id = NEW.product_id
+                         AND source.source = 'WMS'
+                         AND source.location_code = NEW.source_location_code
                    )
                 THEN
                     RAISE EXCEPTION 'new inventory movements require operation identity and same-store physical provenance'
@@ -138,10 +147,20 @@ def upgrade() -> None:
                     OR length(trim(NEW.source_location_code)) = 0
                     OR NEW.destination_shelf_id IS NULL
                     OR NOT EXISTS (
-                        SELECT 1 FROM shelves sh
+                        SELECT 1
+                        FROM replenishment_tasks task
+                        JOIN shelves sh ON sh.id = task.shelf_id
                         JOIN zones z ON z.id = sh.zone_id
-                        WHERE sh.id = NEW.destination_shelf_id
+                        JOIN inventory_snapshots source ON source.id = NEW.source_snapshot_id
+                        WHERE task.id = NEW.task_id
+                          AND task.shelf_id = NEW.destination_shelf_id
+                          AND task.store_id = NEW.store_id
+                          AND task.product_id = NEW.product_id
                           AND z.store_id = NEW.store_id
+                          AND source.store_id = NEW.store_id
+                          AND source.product_id = NEW.product_id
+                          AND source.source = 'WMS'
+                          AND source.location_code = NEW.source_location_code
                     )
                     THEN RAISE(ABORT, 'new inventory movements require operation identity and same-store physical provenance')
                 END;
