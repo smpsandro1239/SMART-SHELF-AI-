@@ -316,3 +316,12 @@ A diferença absoluta entre os timestamps de captura ERP e WMS é exposta em `er
 Quando ambas as fontes estão CURRENT e a tolerância está NULL, timestamps diferentes produzem `TEMPORAL_SKEW_UNCONFIGURED`; o delta quantitativo fica NULL. Com tolerância configurada, um skew superior ao limite produz `TEMPORAL_SKEW`, também sem delta. Apenas capturas dentro da tolerância permitem comparar quantidades e produzir IN_SYNC/DIVERGENCE. Um valor zero exige timestamps coincidentes.
 
 Cada alteração é registada na mesma transacção da política, com actor, valor anterior/novo, motivo e timestamp no ledger append-only existente. A migration 0093 preserva políticas e eventos históricos com tolerância NULL; não introduz limite operacional por defeito. A configuração efectiva deve ser aprovada pelo responsável da operação e validada com a cadência real dos adapters.
+
+
+## Snapshots WMS fora de ordem e mudança da localização autorizada
+
+A reconciliação selecciona o snapshot WMS mais recente pela combinação `store_id + product_id + source=WMS + backroom_location_code`, ordenando por `captured_at DESC, id DESC`. Uma alteração da localização autorizada não reutiliza snapshots da localização anterior. Se ainda não existir evidência na nova localização, o stock de retaguarda permanece desconhecido; não há fallback para a localização antiga.
+
+Snapshots recebidos tardiamente com `captured_at` anterior são preservados como histórico imutável, mas não substituem evidência mais recente da mesma localização. O desempate de timestamps iguais é determinístico pelo ID do snapshot. A disponibilidade operacional continua a ser `on_hand_quantity - reserved_quantity`; a reserva é um agregado reportado pelo WMS, não uma lista de reservas individuais.
+
+A regressão `test_wms_backroom_location_change_and_late_snapshot_never_restore_old_stock` cobre a mudança auditada de localização, ausência de fallback, chegada tardia e cálculo de disponibilidade. API CI PostgreSQL 16 terminou com **1718 passed, 1 skipped** no SHA `fb1470185126dfe295a15b1f69f635aed05b3da3`; os quatro workflows GitHub passaram.
