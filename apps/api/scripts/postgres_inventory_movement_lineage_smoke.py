@@ -218,6 +218,7 @@ def main() -> None:
                 "store_id": store_id + 100000,
                 "product_id": product_id,
                 "quantity": 4,
+                "unit_code": "un",
                 "result_snapshot_id": movement["result_snapshot_id"],
             },
             {
@@ -234,11 +235,11 @@ def main() -> None:
                         """
                         INSERT INTO inventory_movements
                             (task_id, store_id, product_id, movement_type, quantity,
-                             source_snapshot_id, result_snapshot_id, actor_user_id,
+                             unit_code, source_snapshot_id, result_snapshot_id, actor_user_id,
                              reason, created_at)
                         VALUES
                             (:task_id, :store_id, :product_id, 'BACKROOM_TO_SHELF',
-                             :quantity, :source_id, :result_id, :actor_id,
+                             :quantity, :unit_code, :source_id, :result_id, :actor_id,
                              'invalid lineage smoke', CURRENT_TIMESTAMP)
                         """
                     ),
@@ -247,6 +248,7 @@ def main() -> None:
                         "store_id": values["store_id"],
                         "product_id": values["product_id"],
                         "quantity": values["quantity"],
+                        "unit_code": values["unit_code"],
                         "source_id": source_snapshot_id,
                         "result_id": values["result_snapshot_id"],
                         "actor_id": supervisor_id,
@@ -342,11 +344,11 @@ def main() -> None:
         try:
             db.execute(text("""
                 INSERT INTO inventory_movements
-                    (task_id, store_id, product_id, movement_type, quantity,
+                    (task_id, store_id, product_id, movement_type, quantity, unit_code,
                      source_snapshot_id, source_location_code, destination_shelf_id,
                      result_snapshot_id, actor_user_id, reason, operation_id, created_at)
                 VALUES
-                    (:task_id, :store_id, :product_id, 'BACKROOM_TO_SHELF', 4,
+                    (:task_id, :store_id, :product_id, 'BACKROOM_TO_SHELF', 4, 'un',
                      :source_snapshot_id, 'BACKROOM-CI', :destination_shelf_id,
                      :result_snapshot_id, :actor_id, 'unavailable source guard smoke',
                      :operation_id, CURRENT_TIMESTAMP)
