@@ -1396,3 +1396,14 @@ O commit `50fc1fcd9dac4c88dfb800aaa1f690ff1c0b6304` introduz o endpoint transacc
 - Docker Compose `45654043988`: sucesso.
 - O check Vercel mantém `build-rate-limit`; não afecta a validade dos workflows GitHub acima.
 - Próxima análise: skew temporal ERP/WMS. Não aplicar limite arbitrário; a tolerância deve ser configurada por política operacional antes de alterar a classificação de divergência.
+
+
+## 2026-11-25 — Confirmação final pós-merge
+
+- Main code commit: `76fb62dfef9280fd8e6b291024be46a9e392e848`.
+- Main documentation head at this update: `d634f85dd7cb7bb6bb5c09120edefe52efaf2ce2`.
+- API CI run `45654043683`: success, **1715 passed, 1 skipped**.
+- Quality Gates run `45654278572`: success.
+- Security Scans run `45654278738`: success.
+- Docker Compose smoke run `45654043988`: success.
+- Vercel check: one project check is success; the other still reports `build-rate-limit`. This is external build quota, not a GitHub CI failure.
