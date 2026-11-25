@@ -232,6 +232,7 @@ def main() -> None:
                 "destination_shelf_code": shelf.json()["code"],
                 "destination_zone_id": zone.json()["id"],
                 "destination_zone_name": zone.json()["name"],
+                "destination_location_backfilled": False,
             },
             {
                 "store_id": store_id,
@@ -243,6 +244,31 @@ def main() -> None:
                 "destination_shelf_code": "FORGED-SHELF-CODE",
                 "destination_zone_id": zone.json()["id"],
                 "destination_zone_name": zone.json()["name"],
+                "destination_location_backfilled": False,
+            },
+            {
+                "store_id": store_id,
+                "product_id": product_id,
+                "quantity": 4,
+                "unit_code": "un",
+                "result_snapshot_id": movement["result_snapshot_id"],
+                "destination_shelf_id": shelf.json()["id"],
+                "destination_shelf_code": shelf.json()["code"],
+                "destination_zone_id": zone.json()["id"],
+                "destination_zone_name": "Forged zone name",
+                "destination_location_backfilled": False,
+            },
+            {
+                "store_id": store_id,
+                "product_id": product_id,
+                "quantity": 4,
+                "unit_code": "un",
+                "result_snapshot_id": movement["result_snapshot_id"],
+                "destination_shelf_id": shelf.json()["id"],
+                "destination_shelf_code": shelf.json()["code"],
+                "destination_zone_id": zone.json()["id"],
+                "destination_zone_name": zone.json()["name"],
+                "destination_location_backfilled": True,
             },
         )
         for values in invalid_inserts:
@@ -254,12 +280,12 @@ def main() -> None:
                             (task_id, store_id, product_id, movement_type, quantity,
                              unit_code, source_snapshot_id, destination_shelf_id,
                              destination_shelf_code, destination_zone_id, destination_zone_name,
-                             result_snapshot_id, actor_user_id, reason, created_at)
+                             destination_location_backfilled, result_snapshot_id, actor_user_id, reason, created_at)
                         VALUES
                             (:task_id, :store_id, :product_id, 'BACKROOM_TO_SHELF',
                              :quantity, :unit_code, :source_id, :destination_shelf_id,
                              :destination_shelf_code, :destination_zone_id, :destination_zone_name,
-                             :result_id, :actor_id,
+                             :destination_location_backfilled, :result_id, :actor_id,
                              'invalid lineage smoke', CURRENT_TIMESTAMP)
                         """
                     ),
@@ -274,6 +300,7 @@ def main() -> None:
                         "destination_shelf_code": values["destination_shelf_code"],
                         "destination_zone_id": values["destination_zone_id"],
                         "destination_zone_name": values["destination_zone_name"],
+                        "destination_location_backfilled": values["destination_location_backfilled"],
                         "result_id": values["result_snapshot_id"],
                         "actor_id": supervisor_id,
                     },
