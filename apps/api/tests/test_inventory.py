@@ -2083,7 +2083,7 @@ def test_wms_backroom_location_change_and_late_snapshot_never_restore_old_stock(
         empty_item = before_new_snapshot.json()["items"][0]
         assert empty_item["backroom_snapshot_id"] is None
         assert empty_item["backroom_available_quantity"] is None
-        assert empty_item["wms_erp_comparison_status"] == "MISSING_WMS_BACKROOM_STOCK"
+        assert empty_item["wms_erp_comparison_status"] == "MISSING_ERP"
 
         current = client.post("/api/v1/inventory/snapshots", json={
             "store_id": store_id, "product_id": product_id, "on_hand_quantity": 20,
