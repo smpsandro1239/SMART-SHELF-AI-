@@ -931,6 +931,110 @@ def test_inventory_reconciliation_compares_fresh_erp_and_wms_snapshots(monkeypat
             assert db.query(models.InventorySnapshot).count() == 2
 
 
+
+def test_inventory_reconciliation_isolates_shared_product_snapshots_and_ledger_across_stores(monkeypatch):
+    with TestClient(app) as client:
+        store_a_id, product_id = create_store_and_product(client)
+        store_b_response = client.post("/api/v1/stores", json={
+            "code": f"INV-B-{uuid4().hex[:8].upper()}",
+            "name": "Loja inventário B",
+        })
+        assert store_b_response.status_code == 201, store_b_response.text
+        store_b_id = store_b_response.json()["id"]
+
+        shelves = {}
+        for store_id, suffix in ((store_a_id, "A"), (store_b_id, "B")):
+            zone = client.post("/api/v1/zones", json={
+                "store_id": store_id, "name": f"Zona {suffix}",
+            })
+            assert zone.status_code == 201, zone.text
+            shelf = client.post("/api/v1/shelves", json={
+                "zone_id": zone.json()["id"], "code": f"SHARED-{suffix}",
+            })
+            assert shelf.status_code == 201, shelf.text
+            link = client.post("/api/v1/shelf-products", json={
+                "shelf_id": shelf.json()["id"], "product_id": product_id,
+                "target_quantity": 10, "min_display_quantity": 2,
+            })
+            assert link.status_code == 201, link.text
+            shelves[store_id] = shelf.json()["id"]
+
+        snapshot_ids = {}
+        for store_id, marker in ((store_a_id, "A"), (store_b_id, "B")):
+            erp = client.post("/api/v1/inventory/snapshots", json={
+                "store_id": store_id, "product_id": product_id,
+                "on_hand_quantity": 100 if marker == "A" else 900,
+                "reserved_quantity": 10, "source": "ERP",
+                "external_reference": f"SHARED-ERP-{marker}",
+            })
+            wms = client.post("/api/v1/inventory/snapshots", json={
+                "store_id": store_id, "product_id": product_id,
+                "on_hand_quantity": 80 if marker == "A" else 800,
+                "reserved_quantity": 5, "source": "WMS",
+                "external_reference": f"SHARED-WMS-{marker}",
+            })
+            assert erp.status_code == 201, erp.text
+            assert wms.status_code == 201, wms.text
+            snapshot_ids[store_id] = (erp.json()["id"], wms.json()["id"])
+
+        actors = {
+            store_a_id: _supervisor_actor(store_a_id),
+            store_b_id: _supervisor_actor(store_b_id),
+        }
+        reconciliation_ids = {}
+        for store_id in (store_a_id, store_b_id):
+            monkeypatch.setattr(
+                main_module, "_request_user",
+                lambda _db, _request, actor=actors[store_id]: actor,
+            )
+            created = client.post("/api/v1/inventory/reconciliations", json={
+                "store_id": store_id, "shelf_id": shelves[store_id],
+                "product_id": product_id,
+                "reason": "Verificação de isolamento entre lojas",
+            })
+            assert created.status_code == 201, created.text
+            record = created.json()
+            reconciliation_ids[store_id] = record["id"]
+            assert (record["erp_snapshot_id"], record["wms_snapshot_id"]) == snapshot_ids[store_id]
+            expected_erp = 90 if store_id == store_a_id else 890
+            expected_wms = 75 if store_id == store_a_id else 795
+            assert record["erp_available_quantity"] == expected_erp
+            assert record["wms_available_quantity"] == expected_wms
+
+        actor_a = actors[store_a_id]
+        monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: actor_a)
+        current = client.get(
+            "/api/v1/inventory/reconciliation",
+            params={"store_id": store_a_id},
+        )
+        assert current.status_code == 200, current.text
+        assert current.json()["count"] == 1
+        assert current.json()["items"][0]["store_id"] == store_a_id
+        assert current.json()["items"][0]["erp_snapshot_id"] == snapshot_ids[store_a_id][0]
+
+        own_ledger = client.get(
+            "/api/v1/inventory/reconciliations",
+            params={"store_id": store_a_id},
+        )
+        assert own_ledger.status_code == 200, own_ledger.text
+        assert own_ledger.json()["count"] == 1
+        assert own_ledger.json()["items"][0]["id"] == reconciliation_ids[store_a_id]
+
+        foreign_review = client.post(
+            f"/api/v1/inventory/reconciliations/{reconciliation_ids[store_b_id]}/review",
+            json={"decision": "APPROVED", "reason": "Tentativa cross-store"},
+        )
+        assert foreign_review.status_code == 404, foreign_review.text
+
+        with TestingSession() as db:
+            foreign_record = db.get(
+                models.InventoryReconciliation, reconciliation_ids[store_b_id]
+            )
+            assert foreign_record is not None
+            assert foreign_record.review_status == "PENDING"
+            assert db.query(models.InventoryMovement).count() == 0
+
+
 def test_inventory_reconciliation_rejects_employee_and_foreign_store(monkeypatch):
     with TestClient(app) as client:
         store_id, _ = create_store_and_product(client)
