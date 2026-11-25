@@ -1016,3 +1016,14 @@ Pendente: worker durável, gestão de secrets, recuperação de STARTED abandona
 - A tentativa é rejeitada pelo lease guard antes da criação de um novo ledger e antes de qualquer snapshot.
 - O teste confirma em PostgreSQL que o número de snapshots e de ledgers para essa loja permanece zero. Assim, a prova já não se limita a testar heartbeat/renovação: cobre o limite de escrita usado pelo orquestrador.
 - Esta alteração foi publicada no commit `c7b90ee`; continua pendente observar a execução verde do API CI.
+
+
+## 2026-11-25 — Validação integral do worker durável ERP/WMS
+
+- Confirmado o commit validado: `ffe76015e82d9d1ae608dc61a1bb5c9a9d8c710e`.
+- API CI [45522939384](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45522939384): sucesso. O job executou as migrações e o smoke PostgreSQL 16 de concorrência, fencing, SIGKILL após commit de página e replay idempotente, seguido da suite da API.
+- Quality Gates [45522939251](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45522939251): sucesso.
+- Security Scans [45522939233](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45522939233): sucesso. O job OWASP ZAP concluiu o passive baseline e a importação OpenAPI com análise em modo seguro; Gitleaks e auditorias de dependências Web/Python também passaram.
+- Docker Compose [45522939260](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45522939260): sucesso.
+- Os quatro workflows estão concluídos com `success` no mesmo SHA. A falha anterior de `DetachedInstanceError` foi corrigida no teste, capturando os tokens antes do fecho da sessão SQLAlchemy; a lógica de produção não foi alterada nesta correcção.
+- Próxima frente: auditoria técnica da reconciliação shelf/backroom/ERP, começando por proveniência, normalização de unidades, divergências, idempotência, isolamento multi-loja e trilho de auditoria. Adaptadores concretos continuam dependentes de especificações e homologação do fornecedor.
