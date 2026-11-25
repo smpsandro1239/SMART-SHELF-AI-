@@ -31,3 +31,10 @@ A reconciliação serializa operações do mesmo produto através do lock da lin
 O smoke `apps/api/scripts/postgres_inventory_movement_concurrency_smoke.py` cria duas tarefas concluídas para o mesmo SKU/loja e disputa simultaneamente a mesma evidência WMS em PostgreSQL 16. O cenário reserva uma unidade e disponibiliza seis: duas reposições de quatro unidades não podem ambas ser aprovadas. O resultado esperado é exactamente um movimento de quatro unidades, saldo resultante de três unidades on-hand com uma reservada, um evento de movimento e rejeição da segunda operação por stock insuficiente. O smoke repete ainda o pedido vencedor e exige conflito idempotente com referência ao movimento já existente.
 
 A existência do script e do passo CI não equivale a validação; só um workflow verde no SHA exacto confirma o cenário. O smoke inclui ainda uma falha injectada com SQLSTATE de violação de integridade durante a inserção do evento; exige rollback de movimento, snapshot resultante e evento da tarefa. O smoke não homologa adapters WMS nem define conversões entre unidade, caixa e palete.
+
+
+## Disponibilidade obrigatória da origem WMS
+
+A migration `0088_inventory_movement_available_source_guard` reforça o trigger de proveniência da migration 0086. Para movimentos novos, a relação tarefa → prateleira → loja e snapshot → loja/produto/WMS/localização tem também de provar `availability_status=AVAILABLE`. `UNAVAILABLE`, `UNKNOWN` e NULL falham fechados ao nível da base de dados, mesmo em INSERT directo fora da API.
+
+A regra não reinterpreta snapshots históricos nem altera o ledger existente. A política de frescura continua a ser avaliada pelo serviço porque depende da configuração `InventoryFreshnessPolicy` da loja.
