@@ -2388,11 +2388,11 @@ Evidência no SHA `7bf95468320fc1dd4ab992b520e855d463b6e1f6`: API CI **1725 pass
 A transição usa lock pessimista da tarefa e valida o estado já actualizado após adquirir o lock. A prova concorrente é executada com pedidos HTTP concorrentes em PostgreSQL e não é inferida dos testes SQLite.
 
 
-## P0 — Isolamento da leitura do histórico de tarefas por funcionário
+## P0 — Autorização explícita do histórico de eventos de tarefas
 
-- [x] Aplicar filtro SQL por `assigned_user_id` quando o actor é EMPLOYEE, além do filtro de loja.
+- [x] Confirmar política de rota `SUPERVISOR_OR_ADMIN` para `GET /api/v1/tasks/{task_id}/events`.
+- [x] Reforçar a autorização no handler: EMPLOYEE recebe HTTP 403, incluindo quando consulta tarefa atribuída a si próprio; a auditoria detalhada fica reservada a supervisores e administradores.
 - [x] Manter SUPERVISOR limitado à loja e ADMIN com leitura global.
-- [x] Devolver o mesmo HTTP 404 para tarefa inexistente, de outro tenant, não atribuída ao funcionário ou atribuída a colega, evitando enumeração e fuga de informação operacional.
-- [x] Testar leitura própria, tarefa de colega, tarefa não atribuída e ID inexistente.
-- [x] API CI `45714946906`, Quality Gates `45714946958`, Security Scans `45714946858` e Docker Compose `45714946956`: todos concluídos com sucesso no SHA `e36d8708bb5a054c229144cce466eb074f69812f`.
+- [x] Testar negação uniforme para tarefa própria, tarefa de colega, tarefa não atribuída e ID inexistente quando o actor é EMPLOYEE.
+- [x] API CI `45716057516`, Quality Gates `45716057563`, Security Scans `45716057667` e Docker Compose `45716057580`: todos concluídos com sucesso no SHA `f925b875f871964ce80805c4927af15616f58774`.
 
