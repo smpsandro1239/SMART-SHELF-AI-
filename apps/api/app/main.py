@@ -7076,8 +7076,9 @@ def get_inventory_reconciliation(
                 return {
                     "snapshot_id": None, "on_hand_quantity": None,
                     "reserved_quantity": None, "available_quantity": None,
-                    "source": None, "captured_at": None, "age_minutes": None,
-                    "freshness_status": "MISSING",
+                    "source": None, "location_code": None,
+                    "availability_status": None, "captured_at": None,
+                    "age_minutes": None, "freshness_status": "MISSING",
                 }
             captured = source_snapshot.captured_at
             if captured.tzinfo is None:
