@@ -2059,8 +2059,8 @@ Capacity is calculated conservatively from the current time to the end of the ac
 - [x] Preservar o guard de lineage e conservação de quantidade já aplicado pela migration `0052`.
 - [x] Distinguir `inventory_reconciliation_events` (revisão de divergências) e `replenishment_task_events` (ciclo da tarefa) de um futuro ledger de eventos do movimento.
 - [x] Documentar que o snapshot MANUAL criado pela reconciliação é uma projecção interna do movimento, não uma confirmação de escrita no WMS.
-- [ ] Persistir no movimento a identidade congelada da localização/prateleira de destino, sem depender apenas da tarefa associada.
-- [ ] Expor e validar a localização física de origem no contrato de auditoria, ligada ao snapshot WMS e à política da loja.
+- [x] Persistir no movimento a identidade congelada da prateleira de destino (destination_shelf_id), sem depender apenas da tarefa associada.
+- [x] Expor e persistir a localização física de origem (source_location_code) a partir do snapshot WMS aprovado; o trigger de INSERT exige proveniência não vazia para novos movimentos.
 - [ ] Definir unidade base e quantidade Decimal para cada movimento; bloquear conversões implícitas.
 - [ ] Criar ledger append-only de eventos do movimento para confirmação WMS, compensações e divergências; reutilizar as protecções de imutabilidade já existentes em `inventory_movements`.
 - [ ] Implementar correcções exclusivamente por movimentos compensatórios, mantendo movimentos aprovados imutáveis.
@@ -2068,3 +2068,9 @@ Capacity is calculated conservatively from the current time to the end of the ac
 - [ ] Criar smoke PostgreSQL com duas sessões concorrentes sobre o mesmo snapshot, reservas, rollback e retry.
 - [ ] Testar reconciliação de divergências com maker-checker e isolamento multi-loja.
 
+
+
+- [x] Adicionar operation_id UUID único por movimento, com backfill individual dos registos históricos na migration 0086.
+- [x] Preservar proveniência histórica desconhecida como NULL; não inventar localização nem destino.
+- [x] Exigir UUID, localização WMS de origem e prateleira de destino da mesma loja nos novos movimentos, ao nível dos triggers PostgreSQL/SQLite.
+- [ ] Confirmar a migration 0086 e os testes API no API CI PostgreSQL 16 e nos restantes workflows.
