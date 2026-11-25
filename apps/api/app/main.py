@@ -6912,7 +6912,9 @@ def list_inventory_movements(
     tags=["inventory"],
 )
 def list_inventory_movement_events(
-    movement_id: int, limit: int = 100, request: Request = None,
+    movement_id: int,
+    request: Request,
+    limit: int = 100,
     db: Session = Depends(get_db),
 ):
     """List immutable lifecycle events for a movement within the actor's store scope."""
