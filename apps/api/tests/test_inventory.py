@@ -1569,6 +1569,28 @@ def test_inventory_movement_freezes_product_base_unit_and_exact_decimal_quantity
             assert persisted.unit_code == "kg"
 
 
+def test_inventory_reconciliation_rejects_precision_beyond_numeric_scale(monkeypatch):
+    with TestClient(app) as client:
+        store_id, _, task_id, _ = _completed_replenishment(
+            client, unit="kg", actual_quantity=1.2345,
+        )
+        actor = _supervisor_actor(store_id)
+        monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: actor)
+
+        response = client.post(
+            f"/api/v1/tasks/{task_id}/reconcile-inventory",
+            json={"reason": "Precisão acima da escala suportada."},
+        )
+        assert response.status_code == 409, response.text
+        assert response.json()["detail"]["code"] == "MOVEMENT_QUANTITY_PRECISION_UNSUPPORTED"
+        with TestingSession() as db:
+            assert db.query(models.InventoryMovement).filter_by(task_id=task_id).count() == 0
+            assert db.query(models.InventorySnapshot).filter_by(
+                source="MANUAL",
+                external_reference=f"TASK-RECONCILIATION-{task_id}",
+            ).count() == 0
+
+
 def test_product_base_unit_rejects_blank_values():
     with TestClient(app) as client:
         response = client.post(
