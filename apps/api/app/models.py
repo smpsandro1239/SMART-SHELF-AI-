@@ -580,8 +580,8 @@ class InventorySnapshot(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     store_id: Mapped[int] = mapped_column(ForeignKey("stores.id", ondelete="CASCADE"), index=True)
     product_id: Mapped[int] = mapped_column(ForeignKey("products.id", ondelete="CASCADE"), index=True)
-    on_hand_quantity: Mapped[float] = mapped_column(Numeric(12, 3), nullable=False)
-    reserved_quantity: Mapped[float] = mapped_column(Numeric(12, 3), default=0, nullable=False)
+    on_hand_quantity: Mapped[Decimal] = mapped_column(Numeric(12, 3), nullable=False)
+    reserved_quantity: Mapped[Decimal] = mapped_column(Numeric(12, 3), default=Decimal("0.000"), nullable=False)
     source: Mapped[str] = mapped_column(String(20), nullable=False)
     external_reference: Mapped[str | None] = mapped_column(String(120), nullable=True)
     # WMS evidence must identify its physical location and availability state
