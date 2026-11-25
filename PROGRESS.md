@@ -1,3 +1,18 @@
+## 2026-11-25 — Autoridade física WMS por loja e localização
+
+- Decisão operacional confirmada: WMS é a fonte de referência do stock físico de retaguarda; ERP continua como fonte administrativa independente; POS é evidência de vendas/procura; MANUAL e IMPORT não recebem autoridade física implícita.
+- A migration 0084 acrescenta `location_code` e `availability_status` aos snapshots e `backroom_location_code` à política por loja/fonte. Snapshots históricos ficam sem localização e com estado UNKNOWN; não existe backfill permissivo.
+- A migration 0085 cria o ledger append-only de alterações à localização autorizada, com utilizador, valor anterior/novo, motivo e timestamp.
+- A API permite configurar a localização exacta em `POST /api/v1/inventory/freshness-policies`; uma alteração exige motivo e é persistida na mesma transacção que a política.
+- O contrato WMS exige localização e estado de disponibilidade explícitos. O orquestrador persiste ambos e rejeita replay da mesma referência com conteúdo/proveniência diferente.
+- A reconciliação de prateleiras, recomendações e decisões operacionais passaram a seleccionar apenas a localização WMS configurada. O snapshot mais recente é considerado mesmo quando UNAVAILABLE/UNKNOWN, impedindo fallback para evidência antiga. A quantidade utilizável só existe no estado AVAILABLE e desconta reservas.
+- A reconciliação de movimentos exige configuração WMS, usa apenas o snapshot da localização autorizada e rejeita estados indisponíveis; ERP e snapshots MANUAL resultantes não são tratados como stock físico de retaguarda.
+- Regressões acrescentadas para ERP sem fallback, localização incorrecta, WMS indisponível mais recente, configuração por loja e auditoria append-only. Fixtures de reconciliação/recomendação actualizados para WMS explícito.
+- Commits de implementação e testes publicados directamente na `main`: `d08889f`, `62375ab`, `246df54`, `5ae428a`, `2c9c4c6`, `0a5c2c7`, `c7e7e30`, `2d44eb8`, `3fdeb41`, `9ced69c`, `3ff13e9`, `2e44077`, `c17ac8a`, `badced8`, `59c00e6`, `d9ba7af`, `7757a86`, `e96f4c0`, `8afd9c4`, `1fd57a2`, `d5fadb5`, `d02bf8e`, `7ff171e`, `ebee1ba`, `9e18fc3`.
+- Documentação actualizada em README, TODO, ROADMAP e INVENTORY-SOURCE-SYNC.
+- Validação CI desta implementação ainda pendente. Não foram executados testes localmente nesta sessão; a confirmação depende dos workflows no SHA final.
+- Limites: não existe adapter WMS real homologado; a localização configurada tem de corresponder ao contrato do fornecedor. Normalização de unidades logísticas e reservas multi-localização continuam pendentes.
+
 ## 2026-11-25 — Diagnóstico e correcção do smoke de fencing PostgreSQL
 
 - Consultado o log integral do API CI no commit `c7b90ee4ae8603ad1648abeb7f7b81608a91b73c`. PostgreSQL 16, migrações, provisionamento do runtime role e os 40 smokes anteriores terminaram com sucesso.
