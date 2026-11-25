@@ -1469,6 +1469,7 @@ def test_latest_unavailable_wms_record_shadows_older_available_stock(monkeypatch
             "captured_at": base.isoformat(),
         })
         assert older.status_code == wrong_location.status_code == latest.status_code == 201
+        assert latest.json()["available_quantity"] is None
 
         actor = _supervisor_actor(store_id)
         monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: actor)
