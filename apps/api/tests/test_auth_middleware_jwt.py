@@ -1844,6 +1844,7 @@ def test_supervisor_jwt_cannot_read_or_write_foreign_inventory_and_placement_res
                 "on_hand_quantity": 24,
                 "reserved_quantity": 2,
                 "source": "MANUAL",
+                "reason": "Cross-store inventory authorization regression",
                 "external_reference": "AUTH-FOREIGN-SNAPSHOT",
             },
             headers=headers,
