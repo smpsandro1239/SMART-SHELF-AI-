@@ -2316,6 +2316,6 @@ def test_employee_cannot_mutate_warehouse_locations_placements_or_pallet_policy(
         assert [response.status_code for response in responses] == [403] * 6
         with TestingSession() as db:
             assert db.query(models.WarehouseLocation).filter_by(store_id=store_id).count() == 0
-            assert db.query(models.WarehousePlacement).filter_by(product_id=product_id).count() == 0
+            assert db.query(models.WarehouseProductPlacement).filter_by(product_id=product_id).count() == 0
             assert db.query(models.StorePallet).filter_by(store_id=store_id).count() == 0
             assert db.query(models.PalletRotationPolicy).filter_by(store_id=store_id).count() == 0
