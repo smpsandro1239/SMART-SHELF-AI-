@@ -51,6 +51,7 @@ from app.replenishment_policy import ShelfRefillInput, suggest_shelf_refill
 from app.demand_forecasting import DemandForecastInput, forecast_demand
 from app.stockout_risk import StockoutRiskInput, assess_stockout_risk
 from app.replenishment_planning import build_replenishment_plan
+from app.replenishment_packaging import build_replenishment_packaging_plan
 from app.replenishment_risk_bridge import enrich_replenishment_with_stockout_risk
 from app.replenishment_workload import summarize_workload
 from app.replenishment_assignment import build_balanced_assignment_plan
@@ -8477,6 +8478,43 @@ def get_replenishment_plan(
     ).all()
     active_keys = {(task.shelf_id, task.product_id) for task in active_tasks}
     plan = build_replenishment_plan(recommendations, active_keys=active_keys, limit=limit)
+    plan_items = [item for group in plan.groups for item in group.items]
+    plan_product_ids = sorted({
+        item["product_id"] for item in plan_items
+        if isinstance(item.get("product_id"), int)
+        and not isinstance(item.get("product_id"), bool)
+    })
+    product_unit_rows = db.query(
+        models.Product.id, models.Product.unit,
+    ).filter(models.Product.id.in_(plan_product_ids)).all() if plan_product_ids else []
+    product_units = {product_id: unit for product_id, unit in product_unit_rows}
+    packaging_rows = db.query(models.ProductPackagingLevel).filter(
+        models.ProductPackagingLevel.product_id.in_(plan_product_ids),
+        models.ProductPackagingLevel.is_active.is_(True),
+    ).order_by(
+        models.ProductPackagingLevel.product_id,
+        models.ProductPackagingLevel.base_units_per_package,
+        models.ProductPackagingLevel.code,
+    ).all() if plan_product_ids else []
+    packaging_by_product: dict[int, list[dict[str, Any]]] = {}
+    for level in packaging_rows:
+        packaging_by_product.setdefault(level.product_id, []).append({
+            "code": level.code,
+            "name": level.name,
+            "package_type": level.package_type,
+            "base_units_per_package": level.base_units_per_package,
+            "is_replenishment_unit": level.is_replenishment_unit,
+        })
+    for item in plan_items:
+        product_id = item["product_id"]
+        base_unit = product_units.get(product_id)
+        item["base_unit"] = base_unit
+        item["packaging_plan"] = build_replenishment_packaging_plan(
+            task_creation_allowed=item.get("task_creation_allowed") is True,
+            suggested_quantity=item.get("suggested_quantity"),
+            base_unit=base_unit,
+            packaging_levels=packaging_by_product.get(product_id, []),
+        )
 
     warehouse_pick_plan = {
         "enabled": include_warehouse_pick_plan,
@@ -8486,7 +8524,7 @@ def get_replenishment_plan(
         "stock_movement_allowed": False,
     }
     if include_warehouse_pick_plan:
-        planned_items = [dict(item) for group in plan.groups for item in group.items]
+        planned_items = [dict(item) for item in plan_items]
         planned_product_ids = sorted({
             item["product_id"] for item in planned_items
             if isinstance(item.get("product_id"), int)
