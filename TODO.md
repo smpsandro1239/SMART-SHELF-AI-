@@ -2121,6 +2121,6 @@ Só `MOVEMENT_RECORDED` é emitido nesta fase. Tipos futuros estão reservados n
 - [x] Verificar unicidade do movimento/evento e retry idempotente da tarefa vencedora.
 - [x] Integrar o smoke no workflow API CI.
 - [ ] Executar e confirmar o smoke no PostgreSQL 16 e os quatro workflows no SHA final.
-- [ ] Acrescentar cenário PostgreSQL de rollback integral perante falha na inserção do evento de movimento.
+- [x] Acrescentar cenário PostgreSQL de rollback integral perante falha na inserção do evento de movimento (execução CI pendente).
 
 A tarefa de concorrência está parcialmente concluída até o workflow executar o novo script com sucesso. O teste não define unidade base nem conversões de embalagem.
