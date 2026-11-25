@@ -1987,7 +1987,7 @@ Capacity is calculated conservatively from the current time to the end of the ac
 - [x] Teste de regressão SQLite para finalização da tentativa abandonada e rejeição do worker antigo.
 - [x] Implementar e ligar ao API CI o smoke PostgreSQL 16 para claim concorrente, fencing e recuperação SIGKILL do ledger STARTED.
 - [ ] Executar o smoke no PostgreSQL 16 do API CI e confirmar o resultado verde.
-- [ ] Teste de interrupção após commit real de página e replay idempotente dos snapshots com o adapter/orquestrador.
+- [x] Interrupção após commit real de página e replay idempotente dos snapshots cobertos no smoke PostgreSQL.
 - [ ] Adapter real ERP/WMS e homologação do fornecedor.
 - [ ] Integração com Vault/Secrets Manager ou gestor de segredos escolhido no deployment.
 - [x] Smoke PostgreSQL 16: claim concorrente único, rejeição de worker obsoleto e recuperação do ledger STARTED após SIGKILL do processo.
