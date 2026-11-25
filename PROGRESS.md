@@ -1121,3 +1121,15 @@ Ponto semântico ainda aberto: InventorySnapshot.source aceita ERP, WMS, POS, MA
 - O trigger 0086 consulta `NEW.product_id` para confirmar a coerência entre movimento, tarefa e snapshot. SQLite devolveu `no such column: NEW.product_id` antes de avaliar a rejeição esperada do movimento inválido.
 - Corrigido o fixture para reproduzir o esquema real: `product_id` passa a existir e é preenchido nos movimentos históricos e nas inserções de teste. A regra de produção mantém-se inalterada.
 - Esta correcção é exclusivamente de teste. A validação PostgreSQL 16 continua pendente na execução API CI; não declarar a migration integralmente validada até a suite completa e os workflows relevantes passarem.
+
+
+## 2026-11-25 — Ledger de eventos de movimentos: fase 1
+
+- Estado inicial: `main`, HEAD `1eb4125368a89e428256be0c62d8cf76cf48d9f1`.
+- Migration 0086: API CI/PostgreSQL 16 passou no SHA de código `1a1648c0528e15b9ffc8d180aa4c00248f915963` (run 45607172994). Quality Gates e Security Scans passaram no HEAD documental `1eb4125368a89e428256be0c62d8cf76cf48d9f1` (runs 45607186390 e 45607186450). Docker Compose passou no SHA `1a1648c0528e15b9ffc8d180aa4c00248f915963` (run 45607173121). Vercel permanece com `build-rate-limit`.
+- Implementada migration 0087 e tabela append-only `inventory_movement_events`, com validação DB da identidade de operação, loja, actor e motivo.
+- Reconciliação grava `MOVEMENT_RECORDED` na mesma transacção do movimento, snapshot resultante e evento da tarefa.
+- Adicionado endpoint read-only com RBAC ADMIN/SUPERVISOR e ocultação de IDs cross-store.
+- Testes acrescentados para leitura, autorização, isolamento multi-loja, rollback e guards SQLite.
+- **Validação desta implementação pendente:** CI no novo SHA. Não foram executados testes localmente pelo conector.
+- Próxima acção: verificar API CI, Quality Gates, Security Scans e Docker Compose; corrigir qualquer falha antes da confirmação WMS. Unidade/caixa/palete permanece por definir e depende do contrato operacional.

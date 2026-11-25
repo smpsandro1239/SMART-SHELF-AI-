@@ -307,6 +307,19 @@ class InventoryMovementRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class InventoryMovementEventRead(BaseModel):
+    id: int
+    movement_id: int
+    operation_id: UUID
+    store_id: int
+    event_type: Literal["MOVEMENT_RECORDED", "WMS_CONFIRMATION_RECORDED", "COMPENSATION_RECORDED", "DISCREPANCY_RECORDED"]
+    actor_user_id: int
+    reason: str
+    evidence: dict
+    created_at: datetime
+    model_config = ConfigDict(from_attributes=True)
+
+
 ReplenishmentStatus = Literal[
     "NEEDS_REPLENISHMENT",
     "BACKROOM_OUT_OF_STOCK",

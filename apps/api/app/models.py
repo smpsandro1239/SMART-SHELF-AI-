@@ -729,6 +729,26 @@ class InventoryMovement(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False, index=True)
 
 
+class InventoryMovementEvent(Base):
+    """Append-only lifecycle evidence for an approved inventory movement."""
+    __tablename__ = "inventory_movement_events"
+    __table_args__ = (
+        CheckConstraint("event_type IN ('MOVEMENT_RECORDED', 'WMS_CONFIRMATION_RECORDED', 'COMPENSATION_RECORDED', 'DISCREPANCY_RECORDED')", name="ck_inventory_movement_event_type"),
+        UniqueConstraint("movement_id", "event_type", name="uq_inventory_movement_event_type"),
+        Index("ix_inventory_movement_events_store_created", "store_id", "created_at", "id"),
+        Index("ix_inventory_movement_events_operation", "operation_id"),
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    movement_id: Mapped[int] = mapped_column(ForeignKey("inventory_movements.id", ondelete="RESTRICT"), nullable=False)
+    operation_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    store_id: Mapped[int] = mapped_column(ForeignKey("stores.id", ondelete="RESTRICT"), nullable=False)
+    event_type: Mapped[str] = mapped_column(String(40), nullable=False)
+    actor_user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    evidence: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+
 class ReplenishmentTask(Base):
     """Operational task for replenishing one product on one shelf."""
     __tablename__ = "replenishment_tasks"

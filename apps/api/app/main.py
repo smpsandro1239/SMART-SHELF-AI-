@@ -89,7 +89,7 @@ from app.schemas import (
     ObservationCreate, ObservationRead, ObservationAlertRead, ObservationAlertUpdate, ObservationAlertEventRead, ShelfCreate, ShelfRead,
     StoreCreate, StoreRead, ZoneCreate, ZoneRead,
     ProductCreate, ProductRead, ShelfProductCreate, ShelfProductRead,
-    InventorySnapshotCreate, InventorySnapshotRead, InventoryReconciliationCreate, InventoryReconciliationRecordCreate, InventoryReconciliationReview, InventoryMovementRead, InventoryFreshnessPolicyUpsert, InventoryFreshnessPolicyRead, ReplenishmentRecommendationRead,
+    InventorySnapshotCreate, InventorySnapshotRead, InventoryReconciliationCreate, InventoryReconciliationRecordCreate, InventoryReconciliationReview, InventoryMovementRead, InventoryMovementEventRead, InventoryFreshnessPolicyUpsert, InventoryFreshnessPolicyRead, ReplenishmentRecommendationRead,
     DailySalesRecordCreate, DailySalesRecordRead, SalesSource,
     HourlySalesRecordCreate, HourlySalesRecordRead, HourlyStoreTrafficRecordCreate, HourlyStoreTrafficRecordRead,
     HourlySalesBatchCreate, HourlyStoreTrafficBatchCreate,
@@ -6906,6 +6906,45 @@ def list_inventory_movements(
 
 
 
+@app.get(
+    "/api/v1/inventory/movements/{movement_id}/events",
+    response_model=list[InventoryMovementEventRead],
+    tags=["inventory"],
+)
+def list_inventory_movement_events(
+    movement_id: int, limit: int = 100, request: Request = None,
+    db: Session = Depends(get_db),
+):
+    """List immutable lifecycle events for a movement within the actor's store scope."""
+    actor = _request_user(db, request)
+    if actor is None:
+        raise HTTPException(status_code=401, detail="Authentication is required")
+    if actor.role not in {"ADMIN", "SUPERVISOR"}:
+        raise HTTPException(status_code=403, detail="Supervisor role required")
+    if limit < 1 or limit > 200:
+        raise HTTPException(status_code=422, detail="limit must be between 1 and 200")
+    movement_query = db.query(models.InventoryMovement).filter(
+        models.InventoryMovement.id == movement_id
+    )
+    if actor.role != "ADMIN":
+        if actor.store_id is None:
+            raise HTTPException(status_code=404, detail="Inventory movement not found")
+        movement_query = movement_query.filter(models.InventoryMovement.store_id == actor.store_id)
+    movement = movement_query.first()
+    if movement is None:
+        raise HTTPException(status_code=404, detail="Inventory movement not found")
+    return (
+        db.query(models.InventoryMovementEvent)
+        .filter(
+            models.InventoryMovementEvent.movement_id == movement.id,
+            models.InventoryMovementEvent.store_id == movement.store_id,
+        )
+        .order_by(models.InventoryMovementEvent.created_at.asc(), models.InventoryMovementEvent.id.asc())
+        .limit(limit)
+        .all()
+    )
+
+
 @app.get("/api/v1/inventory/reconciliation", tags=["inventory"])
 def get_inventory_reconciliation(
     store_id: int,
@@ -8069,6 +8108,20 @@ def reconcile_completed_replenishment(
         db.flush()
         movement.result_snapshot_id = result_snapshot.id
         db.add(movement)
+        db.flush()
+        db.add(models.InventoryMovementEvent(
+            movement_id=movement.id, operation_id=movement.operation_id,
+            store_id=movement.store_id, event_type="MOVEMENT_RECORDED",
+            actor_user_id=actor.id, reason=movement.reason,
+            evidence={
+                "movement_type": movement.movement_type, "quantity": float(quantity),
+                "source_snapshot_id": source_snapshot.id,
+                "source_location_code": source_snapshot.location_code,
+                "destination_shelf_id": task.shelf_id,
+                "result_snapshot_id": result_snapshot.id,
+            },
+            created_at=now,
+        ))
         db.flush()
         _record_task_event(
             db,

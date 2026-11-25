@@ -2090,3 +2090,18 @@ Capacity is calculated conservatively from the current time to the end of the ac
 - O trigger 0086 consulta `NEW.product_id` para confirmar a coerência entre movimento, tarefa e snapshot. SQLite devolveu `no such column: NEW.product_id` antes de avaliar a rejeição esperada do movimento inválido.
 - Corrigido o fixture para reproduzir o esquema real: `product_id` passa a existir e é preenchido nos movimentos históricos e nas inserções de teste. A regra de produção mantém-se inalterada.
 - Esta correcção é exclusivamente de teste. A validação PostgreSQL 16 continua pendente na execução API CI; não declarar a migration integralmente validada até a suite completa e os workflows relevantes passarem.
+
+
+## 2026-11-25 — Ledger append-only de eventos dos movimentos (fase 1)
+
+- [x] Criar `inventory_movement_events` com ligação ao movimento, `operation_id`, loja, actor, motivo, timestamp e evidência.
+- [x] Impor coerência de proveniência e bloquear UPDATE/DELETE em PostgreSQL/SQLite.
+- [x] Registar `MOVEMENT_RECORDED` na mesma transacção da reconciliação, com rollback integral se a auditoria falhar.
+- [x] Expor histórico read-only com RBAC ADMIN/SUPERVISOR e ocultação de IDs cross-store.
+- [x] Acrescentar testes API de leitura, autorização, isolamento, atomicidade e migration SQLite.
+- [ ] Confirmar migration 0087, suite API/PostgreSQL 16, Quality Gates, Security Scans e Docker Compose no SHA final.
+- [ ] Implementar confirmação WMS correlacionada/idempotente após homologação do adapter.
+- [ ] Implementar movimentos compensatórios sem alterar movimentos aprovados.
+- [ ] Implementar registo e revisão de divergências associadas ao movimento.
+
+Só `MOVEMENT_RECORDED` é emitido nesta fase. Tipos futuros estão reservados no contrato e não são funcionalidades operacionais concluídas.

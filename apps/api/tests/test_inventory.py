@@ -1530,3 +1530,71 @@ def test_wms_backroom_location_is_configurable_per_store_through_policy_api(monk
             "backroom_location_code": "WH-BR-01",
         })
         assert invalid.status_code == 422
+
+
+def test_inventory_movement_event_is_recorded_atomically_and_readable(monkeypatch):
+    with TestClient(app) as client:
+        store_id, _, task_id, _ = _completed_replenishment(client)
+        actor = _supervisor_actor(store_id)
+        monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: actor)
+        response = client.post(f"/api/v1/tasks/{task_id}/reconcile-inventory", json={"reason": "Reposição física confirmada e auditada."})
+        assert response.status_code == 201, response.text
+        movement = response.json()
+        history = client.get(f"/api/v1/inventory/movements/{movement['id']}/events")
+        assert history.status_code == 200, history.text
+        assert len(history.json()) == 1
+        event = history.json()[0]
+        assert event["movement_id"] == movement["id"]
+        assert event["operation_id"] == movement["operation_id"]
+        assert event["store_id"] == store_id
+        assert event["event_type"] == "MOVEMENT_RECORDED"
+        assert event["actor_user_id"] == actor.id
+        assert event["reason"] == movement["reason"]
+        assert event["evidence"]["source_location_code"] == "BACKROOM-A"
+        assert event["evidence"]["destination_shelf_id"] == movement["destination_shelf_id"]
+        with TestingSession() as db:
+            assert db.query(models.InventoryMovement).count() == 1
+            assert db.query(models.InventoryMovementEvent).count() == 1
+
+
+def test_inventory_movement_event_history_hides_foreign_movements_and_rejects_employees(monkeypatch):
+    with TestClient(app) as client:
+        store_a, _, task_a, _ = _completed_replenishment(client)
+        store_b, _, task_b, _ = _completed_replenishment(client)
+        actor_a, actor_b = _supervisor_actor(store_a), _supervisor_actor(store_b)
+        monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: actor_a)
+        own = client.post(f"/api/v1/tasks/{task_a}/reconcile-inventory", json={"reason": "Movimento loja A."})
+        assert own.status_code == 201, own.text
+        monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: actor_b)
+        foreign_movement = client.post(f"/api/v1/tasks/{task_b}/reconcile-inventory", json={"reason": "Movimento loja B."})
+        assert foreign_movement.status_code == 201, foreign_movement.text
+        monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: actor_a)
+        foreign = client.get(f"/api/v1/inventory/movements/{foreign_movement.json()['id']}/events")
+        missing = client.get("/api/v1/inventory/movements/2147483000/events")
+        assert foreign.status_code == missing.status_code == 404
+        assert foreign.json() == missing.json()
+        employee = _supervisor_actor(store_a, role="EMPLOYEE")
+        monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: employee)
+        denied = client.get(f"/api/v1/inventory/movements/{own.json()['id']}/events")
+        assert denied.status_code == 403
+
+
+def test_movement_event_insert_failure_rolls_back_movement_snapshot_and_task_audit(monkeypatch):
+    with TestClient(app) as client:
+        store_id, _, task_id, _ = _completed_replenishment(client)
+        actor = _supervisor_actor(store_id)
+        monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: actor)
+        with TestingSession() as db:
+            db.connection().exec_driver_sql("""
+                CREATE TRIGGER fail_inventory_movement_event_insert
+                BEFORE INSERT ON inventory_movement_events
+                BEGIN SELECT RAISE(ABORT, 'forced movement event failure'); END
+            """)
+        response = client.post(f"/api/v1/tasks/{task_id}/reconcile-inventory", json={"reason": "Teste de atomicidade do ledger."})
+        assert response.status_code == 409, response.text
+        with TestingSession() as db:
+            assert db.query(models.InventoryMovement).count() == 0
+            assert db.query(models.InventoryMovementEvent).count() == 0
+            assert db.query(models.InventorySnapshot).count() == 1
+            assert db.query(models.ReplenishmentTaskEvent).filter_by(task_id=task_id, event_type="INVENTORY_RECONCILED").count() == 0
+
