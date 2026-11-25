@@ -598,6 +598,8 @@ def create_store(payload: StoreCreate, request: Request, db: Session = Depends(g
 def list_stores(request: Request, db: Session = Depends(get_db)):
     query = db.query(models.Store)
     actor = _request_user(db, request)
+    if actor is not None and actor.role not in {"ADMIN", "SUPERVISOR"}:
+        raise HTTPException(status_code=403, detail="Supervisor role required")
     if actor is not None and actor.role != "ADMIN":
         query = query.filter(models.Store.id == actor.store_id)
     return query.order_by(models.Store.id).all()
@@ -6704,6 +6706,8 @@ def get_store_stockout_risk_portfolio(
 @app.post("/api/v1/inventory/snapshots", response_model=InventorySnapshotRead, status_code=201, tags=["inventory"])
 def create_inventory_snapshot(payload: InventorySnapshotCreate, request: Request, db: Session = Depends(get_db)):
     actor = _request_user(db, request)
+    if actor is not None and actor.role not in {"ADMIN", "SUPERVISOR"}:
+        raise HTTPException(status_code=403, detail="Supervisor approval is required for inventory snapshots")
     if payload.source == "MANUAL":
         if actor is None or not actor.is_active:
             raise HTTPException(status_code=401, detail="Authentication is required for manual inventory counts")
@@ -6884,7 +6888,10 @@ def get_latest_inventory_snapshot(
     request: Request,
     db: Session = Depends(get_db),
 ):
-    _enforce_store_scope(_request_user(db, request), store_id)
+    actor = _request_user(db, request)
+    if actor is not None and actor.role not in {"ADMIN", "SUPERVISOR"}:
+        raise HTTPException(status_code=403, detail="Supervisor role required")
+    _enforce_store_scope(actor, store_id)
     item = db.query(models.InventorySnapshot).filter(
         models.InventorySnapshot.store_id == store_id,
         models.InventorySnapshot.product_id == product_id,
