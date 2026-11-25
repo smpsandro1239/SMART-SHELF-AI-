@@ -2222,11 +2222,13 @@ def test_inventory_snapshot_read_and_ingestion_handlers_require_supervisor(monke
             "source": "WMS", "external_reference": "EMPLOYEE-MUST-NOT-INGEST",
             "location_code": "BACKROOM-A", "availability_status": "AVAILABLE",
         }
+        stores = client.get("/api/v1/stores")
         created = client.post("/api/v1/inventory/snapshots", json=payload)
         listed = client.get("/api/v1/inventory/snapshots", params={"store_id": store_id})
         latest = client.get("/api/v1/inventory/latest", params={
             "store_id": store_id, "product_id": product_id,
         })
+        assert stores.status_code == 403
         assert created.status_code == 403
         assert listed.status_code == 403
         assert latest.status_code == 403
