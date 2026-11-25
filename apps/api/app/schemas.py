@@ -252,6 +252,7 @@ class InventorySnapshotRead(BaseModel):
     available_quantity: float | None
     source: str
     external_reference: str | None
+    source_sync_id: int | None
     location_code: str | None
     availability_status: Literal["AVAILABLE", "UNAVAILABLE", "UNKNOWN"]
     captured_at: datetime
