@@ -1,3 +1,15 @@
+
+## 2026-11-25 — Validação final da autoridade WMS por localização
+
+- SHA validado: `c8efb82b64d4aed9fcc81fdb4a0571695fdd23cf`.
+- Contrato operacional aplicado: WMS/localização exacta é autoridade do stock físico da retaguarda; ERP continua independente para reconciliação administrativa; POS é evidência de vendas/procura; MANUAL é auditável e IMPORT não recebe autoridade implícita.
+- Novos snapshots WMS exigem `location_code` e `availability_status` explícitos (AVAILABLE ou UNAVAILABLE). A API, o ORM e triggers de inserção PostgreSQL/SQLite impedem proveniência incompleta. Snapshots legados permanecem UNKNOWN e não são elegíveis.
+- Corrigida a serialização da evidência de reconciliação: o stock ERP administrativo continua disponível para comparação mesmo quando o estado WMS é desconhecido; quantidades WMS só são disponibilizadas quando AVAILABLE.
+- Corrigidas regressões nos fixtures de recomendações, decisões operacionais, tarefas, picking e deteção demo para representar a localização WMS configurada. A regressão de migração SQLite confirma que os guards append-only existentes sobrevivem à migration 0084.
+- Suite API/PostgreSQL: **1679 passed, 1 skipped** (API CI, run 45574197186). Quality Gates: sucesso (45574197259; TypeScript/build Web e suite API). Security Scans: sucesso (45574197237). Docker Compose: sucesso (45574197037).
+- Os 47 passos anteriores de smoke PostgreSQL, incluindo o smoke do worker durável ERP/WMS com fencing, SIGKILL e replay idempotente, também terminaram com sucesso no API CI.
+- Limites: não existe adapter WMS real homologado; o contrato de localização tem de ser validado com o fornecedor. Normalização unidade/caixa/palete e reservas multi-localização continuam pendentes. Os indicadores Vercel continuam a falhar por `build-rate-limit` da conta, independente dos quatro workflows GitHub.
+
 ## 2026-11-25 — Autoridade física WMS por loja e localização
 
 - Decisão operacional confirmada: WMS é a fonte de referência do stock físico de retaguarda; ERP continua como fonte administrativa independente; POS é evidência de vendas/procura; MANUAL e IMPORT não recebem autoridade física implícita.
