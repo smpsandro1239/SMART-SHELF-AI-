@@ -999,3 +999,11 @@ Pendente: worker durável, gestão de secrets, recuperação de STARTED abandona
 - O novo worker volta a executar o orquestrador com o mesmo external_reference e o mesmo conteúdo para a primeira página, seguido de uma segunda referência. O teste verifica que o snapshot original mantém o mesmo ID e quantidade e que existem exactamente dois snapshots, sem duplicação.
 - Corrigida também a utilização de leases inválidos de 1 segundo no smoke anterior: a API de leases exige 30–3600 segundos. O teste usa 30 segundos e expira explicitamente a lease na base de dados, evitando esperas frágeis.
 - O API CI já invoca este script no serviço PostgreSQL 16. O código e a integração foram publicados; a execução do workflow no novo HEAD ainda tem de ser confirmada. Não declarar a validação aprovada antes desse resultado.
+
+
+### Reforço do cenário de fencing — tentativa de escrita pelo orquestrador
+
+- O smoke passou a executar `run_inventory_source_sync` com as credenciais antigas do worker A depois de o worker B assumir o job.
+- A tentativa é rejeitada pelo lease guard antes da criação de um novo ledger e antes de qualquer snapshot.
+- O teste confirma em PostgreSQL que o número de snapshots e de ledgers para essa loja permanece zero. Assim, a prova já não se limita a testar heartbeat/renovação: cobre o limite de escrita usado pelo orquestrador.
+- Esta alteração foi publicada no commit `c7b90ee`; continua pendente observar a execução verde do API CI.
