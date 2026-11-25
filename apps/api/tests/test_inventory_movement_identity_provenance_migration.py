@@ -35,7 +35,7 @@ def test_migration_backfills_identity_and_preserves_unknown_historical_provenanc
         connection.exec_driver_sql("""
             CREATE TABLE inventory_movements (
                 id INTEGER PRIMARY KEY, task_id INTEGER NOT NULL, store_id INTEGER NOT NULL,
-                source_snapshot_id INTEGER NOT NULL
+                product_id INTEGER NOT NULL, source_snapshot_id INTEGER NOT NULL
             )
         """)
         connection.exec_driver_sql("""
@@ -53,8 +53,8 @@ def test_migration_backfills_identity_and_preserves_unknown_historical_provenanc
         connection.exec_driver_sql("INSERT INTO replenishment_tasks (id, store_id, product_id, shelf_id) VALUES (30, 10, 100, 20), (31, 10, 100, NULL)")
         connection.exec_driver_sql("INSERT INTO inventory_snapshots (id, store_id, product_id, source, location_code) VALUES (40, 10, 100, 'WMS', 'BACKROOM-A'), (41, 10, 100, 'WMS', NULL)")
         connection.exec_driver_sql("""
-            INSERT INTO inventory_movements (id, task_id, store_id, source_snapshot_id)
-            VALUES (1, 30, 10, 40), (2, 31, 10, 41)
+            INSERT INTO inventory_movements (id, task_id, store_id, product_id, source_snapshot_id)
+            VALUES (1, 30, 10, 100, 40), (2, 31, 10, 100, 41)
         """)
 
         with Operations.context(MigrationContext.configure(connection)):
@@ -82,17 +82,17 @@ def test_migration_backfills_identity_and_preserves_unknown_historical_provenanc
         with pytest.raises(IntegrityError, match="require operation identity"):
             connection.exec_driver_sql("""
                 INSERT INTO inventory_movements
-                    (id, task_id, store_id, source_snapshot_id, operation_id,
+                    (id, task_id, store_id, product_id, source_snapshot_id, operation_id,
                      source_location_code, destination_shelf_id)
-                VALUES (3, 30, 10, 40, NULL, 'BACKROOM-A', 20)
+                VALUES (3, 30, 10, 100, 40, NULL, 'BACKROOM-A', 20)
             """)
 
         with pytest.raises(IntegrityError, match="require operation identity"):
             connection.exec_driver_sql("""
                 INSERT INTO inventory_movements
-                    (id, task_id, store_id, source_snapshot_id, operation_id,
+                    (id, task_id, store_id, product_id, source_snapshot_id, operation_id,
                      source_location_code, destination_shelf_id)
-                VALUES (4, 30, 10, 40, '12345678123456781234567812345678',
+                VALUES (4, 30, 10, 100, 40, '12345678123456781234567812345678',
                         'BACKROOM-A', 999)
             """)
 
