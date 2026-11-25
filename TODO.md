@@ -2220,8 +2220,8 @@ Decisão: `reserved_quantity` continua a ser o total reservado reportado pelo WM
 - [x] Persistir snapshot e evento append-only na mesma transacção, com rollback integral se o evento falhar.
 - [x] Reforçar o trigger SQLite para exigir actor activo e papel ADMIN ou SUPERVISOR da mesma loja, alinhando-o com PostgreSQL.
 - [x] Acrescentar regressão HTTP para supervisor inactivo.
-- [ ] Validar migration 0091 e triggers reais em SQLite/PostgreSQL 16; os testes actuais de API usam Base.metadata.create_all e não substituem a execução da migration.
-- [ ] Confirmar API CI, Quality Gates, Security Scans e Docker Compose no HEAD após esta correcção.
+- [x] Validar migration 0091 e triggers reais em SQLite/PostgreSQL 16; teste de migration SQLite e smoke PostgreSQL 16 executados.
+- [x] Confirmar API CI, Quality Gates, Security Scans e Docker Compose no HEAD após esta correcção.
 
 
 ## 2026-11-25 — Validação efectiva da migration 0091 e auditoria MANUAL
@@ -2236,3 +2236,21 @@ Decisão: `reserved_quantity` continua a ser o total reservado reportado pelo WM
 - [ ] Confirmar API CI, Quality Gates, Security Scans e Docker Compose no mesmo HEAD; não marcar a prioridade global como concluída antes disso.
 
 Evidência parcial: PostgreSQL 16 `alembic upgrade head` passou no API CI SHA `3b9520d`; o smoke PostgreSQL específico passou no SHA `7a20c95`. O run desse SHA falhou depois num smoke preexistente de autorização, por falta de `reason` no payload MANUAL; corrigido em `c6b2d33`. A validação final tem de ser feita no HEAD posterior.
+
+
+### Validação final — migration 0091 e ledger MANUAL (25/11/2026)
+
+- [x] Teste SQLite executou efectivamente upgrade/downgrade da migration 0091, verificando proveniência, actor activo, papel, isolamento multi-loja, origem MANUAL e append-only.
+- [x] PostgreSQL 16 `alembic upgrade head` executado com sucesso.
+- [x] Smoke PostgreSQL confirmou SUPERVISOR activo da mesma loja e ADMIN global; rejeitou supervisor inactivo, EMPLOYEE, supervisor de outra loja e snapshot WMS; UPDATE/DELETE rejeitados.
+- [x] Suite API: **1707 passed, 1 skipped**.
+- [x] API CI [45650155916](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45650155916): sucesso.
+- [x] Quality Gates [45650155829](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45650155829): sucesso.
+- [x] Security Scans [45650155800](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45650155800): sucesso.
+- [x] Docker Compose [45650155946](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45650155946): sucesso.
+- [x] Smoke PostgreSQL 16 de proveniência e imutabilidade incluído no workflow API CI.
+- [x] Corrigidos fixtures MANUAL legados que não forneciam motivo nem actor, preservando o objectivo dos testes de autorização e precisão Decimal.
+
+SHA de código e workflows validados: `c4f839bcfd076c2b5575eccfd314fae96983b3ed`.
+
+Próxima prioridade P1: auditar snapshots WMS consecutivos, semântica de reservado agregado, monotonicidade temporal e mudanças de localização; não criar ledger de reservas individuais sem contrato real do WMS.
