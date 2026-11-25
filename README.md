@@ -2,7 +2,7 @@
 
 O WMS é a fonte de referência do stock físico da retaguarda. O ERP mantém-se independente para reconciliação administrativa; POS fornece evidência de vendas/procura; MANUAL representa operações/contagens auditáveis; IMPORT não recebe autoridade implícita.
 
-A retaguarda só é considerada conhecida quando a loja tem uma localização WMS exacta configurada em `InventoryFreshnessPolicy.backroom_location_code` e o snapshot mais recente dessa localização contém `availability_status=AVAILABLE`. A quantidade utilizável é sempre `on_hand_quantity - reserved_quantity`. Um snapshot posterior `UNAVAILABLE` ou `UNKNOWN` bloqueia a reutilização de um snapshot mais antigo disponível. Não há fallback para ERP, outra localização ou outra origem.
+A retaguarda só é considerada conhecida quando a loja tem uma localização WMS exacta configurada em `InventoryFreshnessPolicy.backroom_location_code` e o snapshot mais recente dessa localização contém `availability_status=AVAILABLE`. A quantidade utilizável é sempre `on_hand_quantity - reserved_quantity`. Um snapshot posterior `UNAVAILABLE` ou `UNKNOWN` bloqueia a reutilização de um snapshot mais antigo disponível. Não há fallback para ERP, outra localização ou outra origem. Novos snapshots WMS têm de indicar localização e disponibilidade explícitas; a API, o ORM e triggers de inserção PostgreSQL/SQLite rejeitam proveniência incompleta. Registos históricos são preservados como `UNKNOWN`, sem backfill permissivo.
 
 A configuração da localização é feita através de `POST /api/v1/inventory/freshness-policies`, com `source=WMS`, `backroom_location_code` e motivo obrigatório. Cada alteração é registada num ledger append-only com actor, localização anterior/nova e timestamp. Snapshots guardam localização e estado de disponibilidade; registos legados sem estes dados ficam `UNKNOWN` e não são elegíveis para reposição.
 
@@ -2050,3 +2050,8 @@ O API CI inclui `apps/api/scripts/postgres_inventory_sync_job_smoke.py`: concorr
 ### ERP/WMS — recuperação após commit de página
 
 O smoke PostgreSQL do worker executa o orquestrador real, termina o processo com SIGKILL após confirmar a primeira página e repete essa página no worker de recuperação. A asserção exige que o snapshot confirmado preserve o ID e conteúdo e não seja duplicado. A execução está integrada no API CI; a garantia só deve ser considerada validada após um run verde no SHA correspondente.
+
+
+## Validação da autoridade WMS — 25-11-2026
+
+No SHA `c8efb82b64d4aed9fcc81fdb4a0571695fdd23cf`, a suite API terminou com **1679 testes aprovados e 1 ignorado**. API CI, Quality Gates, Security Scans e Docker Compose concluíram com sucesso. Esta validação cobre o contrato de software e as migrações, não certifica um adapter WMS real nem a exactidão dos códigos de localização do fornecedor.
