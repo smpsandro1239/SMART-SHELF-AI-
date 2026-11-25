@@ -285,9 +285,13 @@ def main() -> None:
     assert rollback_response.json().get("detail", {}).get("code") == "INVENTORY_RECONCILIATION_CONFLICT"
     with SessionLocal() as db:
         assert db.query(models.InventoryMovement).filter_by(task_id=rollback_task_id).count() == 0
-        assert db.query(models.InventoryMovementEvent).filter_by(
+        preserved_event_count = db.query(models.InventoryMovementEvent).filter_by(
             movement_id=movement["id"],
-        ).count() == 1
+        ).count()
+        assert preserved_event_count == 1, {
+            "movement_id": movement["id"],
+            "preserved_event_count": preserved_event_count,
+        }
         assert db.query(models.InventorySnapshot).filter_by(
             external_reference=f"TASK-RECONCILIATION-{rollback_task_id}",
         ).count() == 0
