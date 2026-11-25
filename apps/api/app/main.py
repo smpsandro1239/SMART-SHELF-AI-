@@ -7319,6 +7319,14 @@ def get_inventory_reconciliation_dashboard(store_id: int, request: Request = Non
             return parsed.astimezone(timezone.utc)
         except (TypeError, ValueError):
             return None
+    # Shelf evidence is scoped to a product placement: the same SKU can be
+    # displayed on multiple shelves and each placement has its own observation.
+    # ERP/WMS stock evidence is product/store scoped, so count only the latest
+    # reconciliation per product for those two sources.
+    latest_by_shelf_assignment = {}
+    for record, _sku, _name in rows:
+        latest_by_shelf_assignment.setdefault((record.product_id, record.shelf_id), record)
+
     freshness = {}
     for source, section, key, max_age in (
         ("SHELF", "observation", "observed_at", 240),
@@ -7326,15 +7334,20 @@ def get_inventory_reconciliation_dashboard(store_id: int, request: Request = Non
         ("ERP", "erp", "captured_at", policies.get("ERP", 240)),
     ):
         counts = {"CURRENT": 0, "STALE": 0, "MISSING": 0, "FUTURE": 0}
-        for record in latest_by_product.values():
+        evidence_records = (
+            latest_by_shelf_assignment.values()
+            if source == "SHELF"
+            else latest_by_product.values()
+        )
+        for record in evidence_records:
             stamp = parse_time(((record.evidence or {}).get(section) or {}).get(key))
             if stamp is None:
                 counts["MISSING"] += 1
             else:
                 age = (now - stamp).total_seconds() / 60
-                counts["FUTURE" if age < -5 else "STALE" if age > max_age else "CURRENT"] += 1
+                counts["FUTURE" if age < 0 else "STALE" if age > max_age else "CURRENT"] += 1
         available = counts["CURRENT"] + counts["STALE"] + counts["FUTURE"]
-        total = len(latest_by_product)
+        total = sum(counts.values())
         freshness[source] = {
             "current": counts["CURRENT"], "stale": counts["STALE"], "missing": counts["MISSING"],
             "future": counts["FUTURE"],
