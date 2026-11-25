@@ -9613,16 +9613,17 @@ def list_replenishment_task_events(task_id: int, request: Request, db: Session =
             .first()
         )
     else:
-        # Apply tenant scope in SQL so a foreign task is never materialized
-        # before the read authorization decision.
-        task = (
-            db.query(models.ReplenishmentTask)
-            .filter(
-                models.ReplenishmentTask.id == task_id,
-                models.ReplenishmentTask.store_id == actor.store_id,
-            )
-            .first()
+        # Apply tenant and role scope in SQL so foreign or unassigned tasks
+        # are never materialized before the read authorization decision.
+        task_query = db.query(models.ReplenishmentTask).filter(
+            models.ReplenishmentTask.id == task_id,
+            models.ReplenishmentTask.store_id == actor.store_id,
         )
+        if actor.role == "EMPLOYEE":
+            task_query = task_query.filter(
+                models.ReplenishmentTask.assigned_user_id == actor.id,
+            )
+        task = task_query.first()
     if task is None:
         raise HTTPException(status_code=404, detail="Task not found")
     return (
