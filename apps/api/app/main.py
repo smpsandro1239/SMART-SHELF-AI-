@@ -4580,6 +4580,8 @@ def create_daily_sales_record(
 @app.post("/api/v1/sales/hourly", response_model=HourlySalesRecordRead, status_code=201, tags=["sales"])
 def create_hourly_sales_record(payload: HourlySalesRecordCreate, request: Request, db: Session = Depends(get_db)):
     actor = _request_user(db, request)
+    if actor is not None and actor.role not in {"ADMIN", "SUPERVISOR"}:
+        raise HTTPException(status_code=403, detail="Supervisor role required")
     _enforce_store_scope(actor, payload.store_id)
     if db.get(models.Store, payload.store_id) is None:
         raise HTTPException(status_code=404, detail="Store not found")
@@ -4600,6 +4602,8 @@ def create_hourly_sales_record(payload: HourlySalesRecordCreate, request: Reques
 @app.post("/api/v1/sales/traffic/hourly", response_model=HourlyStoreTrafficRecordRead, status_code=201, tags=["sales"])
 def create_hourly_store_traffic_record(payload: HourlyStoreTrafficRecordCreate, request: Request, db: Session = Depends(get_db)):
     actor = _request_user(db, request)
+    if actor is not None and actor.role not in {"ADMIN", "SUPERVISOR"}:
+        raise HTTPException(status_code=403, detail="Supervisor role required")
     _enforce_store_scope(actor, payload.store_id)
     if db.get(models.Store, payload.store_id) is None:
         raise HTTPException(status_code=404, detail="Store not found")
@@ -4626,6 +4630,8 @@ async def import_hourly_sales_csv(
 ):
     max_file_bytes = 5 * 1024 * 1024
     actor = _request_user(db, request)
+    if actor is not None and actor.role not in {"ADMIN", "SUPERVISOR"}:
+        raise HTTPException(status_code=403, detail="Supervisor role required")
     _enforce_store_scope(actor, store_id)
     if not db.get(models.Store, store_id):
         raise HTTPException(status_code=404, detail="Store not found")
@@ -4678,6 +4684,8 @@ async def import_hourly_traffic_csv(
 ):
     max_file_bytes = 5 * 1024 * 1024
     actor = _request_user(db, request)
+    if actor is not None and actor.role not in {"ADMIN", "SUPERVISOR"}:
+        raise HTTPException(status_code=403, detail="Supervisor role required")
     _enforce_store_scope(actor, store_id)
     if not db.get(models.Store, store_id):
         raise HTTPException(status_code=404, detail="Store not found")
@@ -4769,6 +4777,8 @@ def list_hourly_store_traffic_records(
 @app.post("/api/v1/sales/hourly/batch", status_code=201, tags=["sales"])
 def create_hourly_sales_batch(payload: HourlySalesBatchCreate, request: Request, db: Session = Depends(get_db)):
     actor = _request_user(db, request)
+    if actor is not None and actor.role not in {"ADMIN", "SUPERVISOR"}:
+        raise HTTPException(status_code=403, detail="Supervisor role required")
     store_id = payload.records[0].store_id
     _enforce_store_scope(actor, store_id)
     if db.get(models.Store, store_id) is None:
@@ -4795,6 +4805,8 @@ def create_hourly_sales_batch(payload: HourlySalesBatchCreate, request: Request,
 @app.post("/api/v1/sales/traffic/hourly/batch", status_code=201, tags=["sales"])
 def create_hourly_traffic_batch(payload: HourlyStoreTrafficBatchCreate, request: Request, db: Session = Depends(get_db)):
     actor = _request_user(db, request)
+    if actor is not None and actor.role not in {"ADMIN", "SUPERVISOR"}:
+        raise HTTPException(status_code=403, detail="Supervisor role required")
     store_id = payload.records[0].store_id
     _enforce_store_scope(actor, store_id)
     if db.get(models.Store, store_id) is None:
