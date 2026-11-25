@@ -284,5 +284,10 @@ jobs:
           sudo apt-get install --yes postgresql-client
           bash ../../infra/postgres/10-create-runtime-role.sh
           RUNTIME_DATABASE_URL=postgresql+psycopg://smart_shelf_runtime_ci:runtime-ci-password@localhost:5432/smart_shelf_ci python scripts/postgres_runtime_role_smoke.py
+      - name: Verify PostgreSQL inventory sync worker concurrency, fencing and SIGKILL recovery
+        env:
+          DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/smart_shelf_ci
+          APP_ENV: test
+        run: python scripts/postgres_inventory_sync_job_smoke.py
       - name: Run tests
         run: pytest -q
