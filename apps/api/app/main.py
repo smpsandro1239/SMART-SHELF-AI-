@@ -3271,6 +3271,8 @@ def _refresh_ocr_match_view(db: Session, rows: list[models.ShelfImageOCRMatch]):
 def match_shelf_image_ocr_to_catalogue(image_id: int, request: Request, db: Session = Depends(get_db)):
     """Rank active catalogue candidates for OCR text grouped by product detection."""
     actor = _request_user(db, request)
+    if actor is not None and actor.role not in {"ADMIN", "SUPERVISOR"}:
+        raise HTTPException(status_code=403, detail="Supervisor role required")
     image_record, _ = _lock_authorized_shelf_image(db, image_id, actor)
     _require_active_shelf_image(image_record)
 
@@ -3447,6 +3449,8 @@ def fuse_shelf_image_evidence(image_id: int, request: Request, db: Session = Dep
     from app.product_text import OCRText, TextCandidate, TextMatch
 
     actor = _request_user(db, request)
+    if actor is not None and actor.role not in {"ADMIN", "SUPERVISOR"}:
+        raise HTTPException(status_code=403, detail="Supervisor role required")
     image_record, _ = _lock_authorized_shelf_image(db, image_id, actor)
     _require_active_shelf_image(image_record)
 
@@ -4042,6 +4046,8 @@ def list_shelf_image_fused_evidence(
 def create_shelf_image_ocr_run(image_id: int, payload: ShelfImageOCRRunCreate, request: Request, db: Session = Depends(get_db)):
     """Persist one immutable OCR pass and its per-region detection associations."""
     actor = _request_user(db, request)
+    if actor is not None and actor.role not in {"ADMIN", "SUPERVISOR"}:
+        raise HTTPException(status_code=403, detail="Supervisor role required")
     image_record, _ = _lock_authorized_shelf_image(db, image_id, actor)
     _require_active_shelf_image(image_record)
 
