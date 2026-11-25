@@ -8,6 +8,8 @@ type InventoryMovement = {
   product_id: number;
   movement_type: "BACKROOM_TO_SHELF";
   quantity: number;
+  quantity_exact?: string;
+  unit_code?: string | null;
   source_snapshot_id: number;
   result_snapshot_id: number;
   actor_user_id: number;
@@ -25,6 +27,13 @@ function formatMovementDate(value: string): string {
   return new Intl.DateTimeFormat("pt-PT", {
     dateStyle: "medium", timeStyle: "short", timeZone: "Europe/Lisbon",
   }).format(date);
+}
+
+function formatMovementQuantity(value: string | number): string {
+  const numeric = Number(value);
+  return Number.isFinite(numeric)
+    ? new Intl.NumberFormat("pt-PT", { maximumFractionDigits: 3 }).format(numeric)
+    : String(value);
 }
 
 export default function InventoryMovementHistory({ token, storeId }: Props) {
@@ -68,8 +77,8 @@ export default function InventoryMovementHistory({ token, storeId }: Props) {
 
   useEffect(() => { void loadMovements(); }, [loadMovements]);
 
-  const totalUnits = useMemo(
-    () => movements.reduce((sum, movement) => sum + Number(movement.quantity || 0), 0),
+  const distinctProducts = useMemo(
+    () => new Set(movements.map(movement => movement.product_id)).size,
     [movements],
   );
   const latestMovement = movements[0];
@@ -101,7 +110,7 @@ export default function InventoryMovementHistory({ token, storeId }: Props) {
     {error && <div className="error-banner inventory-history-error" role="alert">{error}</div>}
     <div className="inventory-history-metrics">
       <div><span>Movimentos encontrados</span><strong>{movements.length}</strong></div>
-      <div><span>Unidades movimentadas</span><strong>{totalUnits.toLocaleString("pt-PT", { maximumFractionDigits: 3 })}</strong></div>
+      <div><span>Produtos distintos</span><strong>{distinctProducts}</strong></div>
       <div><span>Movimento mais recente</span><strong>{latestMovement ? formatMovementDate(latestMovement.created_at) : "—"}</strong></div>
     </div>
 
@@ -114,7 +123,7 @@ export default function InventoryMovementHistory({ token, storeId }: Props) {
           <div className="inventory-movement-main">
             <div className="inventory-movement-icon"><Package size={17} /></div>
             <div className="inventory-movement-title">
-              <strong>{movement.quantity.toLocaleString("pt-PT", { maximumFractionDigits: 3 })} unidades · Produto #{movement.product_id}</strong>
+              <strong>{formatMovementQuantity(movement.quantity_exact ?? movement.quantity)} {movement.unit_code || "unidade não registada"} · Produto #{movement.product_id}</strong>
               <span><Clock3 size={12} /> {formatMovementDate(movement.created_at)} · Tarefa #{movement.task_id}</span>
             </div>
             <span className="inventory-movement-type">Retaguarda → Prateleira</span>
@@ -125,6 +134,8 @@ export default function InventoryMovementHistory({ token, storeId }: Props) {
           {expanded && <div className="inventory-movement-detail">
             <div><span>Movimento</span><strong>#{movement.id}</strong></div>
             <div><span>Loja</span><strong>#{movement.store_id}</strong></div>
+            <div><span>Unidade base</span><strong>{movement.unit_code || "Não registada no histórico"}</strong></div>
+            <div><span>Quantidade exacta</span><strong>{movement.quantity_exact || String(movement.quantity)}</strong></div>
             <div><span>Responsável</span><strong>Utilizador #{movement.actor_user_id}</strong></div>
             <div><span>Snapshot de origem</span><strong>#{movement.source_snapshot_id}</strong></div>
             <div><span>Snapshot resultante</span><strong>#{movement.result_snapshot_id}</strong></div>
