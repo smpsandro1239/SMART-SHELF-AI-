@@ -248,3 +248,12 @@ A migration 0086_inventory_movement_identity_provenance acrescenta operation_id 
 A migração atribui UUID distinto a cada movimento histórico e copia a localização apenas do snapshot WMS imutável. O destino histórico permanece NULL: a relação actual da tarefa com a prateleira não prova, por si só, que essa era a prateleira no instante da aprovação. Novos movimentos congelam o destination_shelf_id no momento da criação. Os novos movimentos são protegidos por trigger INSERT PostgreSQL/SQLite que exige UUID, localização de origem não vazia e prateleira pertencente à mesma loja. Para executar o backfill, a migration suspende temporariamente apenas os triggers 0053 conhecidos dentro da própria transacção e recria-os exactamente antes de terminar; o teste dedicado verifica que UPDATE e DELETE continuam bloqueados após a migração.
 
 Limite desta fatia: o destino congelado é o identificador da prateleira; ainda não existe um código físico de localização de loja separado da identidade da prateleira. A migration não introduz ainda ledger de eventos do movimento, compensações ou confirmação WMS idempotente. A validação final depende dos workflows GitHub Actions no SHA desta alteração.
+
+
+## Precisão e semântica das reservas
+
+Os snapshots físicos persistem `on_hand_quantity` e `reserved_quantity` em `NUMERIC(12,3)`. O endpoint de criação rejeita precisão superior a três casas decimais e converte os números HTTP para Decimal antes da persistência, evitando arredondamento silencioso. O contrato de adapters já normaliza ambas as quantidades como Decimal e rejeita `reserved_quantity > on_hand_quantity`.
+
+A reserva é um agregado reportado pela fonte WMS para a localização configurada. O SMART SHELF AI calcula `available_quantity = on_hand_quantity - reserved_quantity`; não cria, liberta ou altera reservas externas. A criação/atribuição de uma tarefa de reposição não reserva stock e o plano de embalagens mantém `stock_reserved=false`.
+
+Não existe ainda detalhe de reserva por identificador externo, documento, estado ou linha de encomenda. Sem esse contrato do fornecedor, não é seguro inventar um ledger interno nem reconciliar reservas individuais. A reconciliação actual é ao nível do snapshot, loja, SKU e localização WMS autorizada.
