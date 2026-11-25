@@ -2072,3 +2072,10 @@ O API CI inclui agora `apps/api/scripts/postgres_inventory_movement_concurrency_
 ## Integridade da origem dos movimentos — migration 0088
 
 A migration `0088_inventory_movement_available_source_guard` reforça a fronteira da base de dados: um novo `InventoryMovement` só pode referenciar um snapshot WMS da mesma loja/produto/localização cujo estado seja explicitamente `AVAILABLE`. Snapshots `UNAVAILABLE`, `UNKNOWN` ou sem estado não suportam novos movimentos. O histórico é preservado; não são alterados movimentos antigos. A suite SQLite e o smoke PostgreSQL 16 cobrem a regra, mas a validação só fica concluída após CI verde no SHA final.
+
+
+## Unidade base e quantidade exacta dos movimentos — migration 0089
+
+Os movimentos novos congelam `Product.unit` em `inventory_movements.unit_code`. A base de dados exige que a unidade registada corresponda à unidade base do SKU no momento da operação. A quantidade continua persistida em `NUMERIC(12,3)`, tipada como Decimal e exposta também em `quantity_exact`; valores com mais de três casas decimais são rejeitados, não arredondados silenciosamente.
+
+Os movimentos históricos mantêm `unit_code=NULL`, porque não existe evidência suficiente para reconstruir com segurança a unidade usada no momento. A interface apresenta a unidade de cada movimento e não agrega quantidades de produtos com unidades diferentes. Não há conversão implícita unidade/caixa/palete.
