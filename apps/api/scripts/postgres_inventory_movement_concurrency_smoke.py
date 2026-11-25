@@ -191,96 +191,97 @@ def main() -> None:
         assert float(result_snapshot.reserved_quantity) == 1
         assert reconciled_task_event_count == 1, reconciled_task_event_count
 
-    rollback_product = client.post(
-        "/api/v1/products",
-        json={"sku": f"PG-MOVECON-ROLLBACK-{suffix}", "name": "Rollback test product"},
-    )
-    assert rollback_product.status_code == 201, rollback_product.text
-    rollback_product_id = rollback_product.json()["id"]
-    rollback_shelf = client.post(
-        "/api/v1/shelves",
-        json={"zone_id": zone.json()["id"], "code": f"PG-MOVECON-{suffix}-ROLLBACK"},
-    )
-    assert rollback_shelf.status_code == 201, rollback_shelf.text
-    rollback_assignment = client.post(
-        "/api/v1/shelf-products",
-        json={
-            "shelf_id": rollback_shelf.json()["id"],
-            "product_id": rollback_product_id,
-            "target_quantity": 5,
-            "min_display_quantity": 1,
-        },
-    )
-    assert rollback_assignment.status_code == 201, rollback_assignment.text
-    rollback_snapshot = client.post(
-        "/api/v1/inventory/snapshots",
-        json={
-            "store_id": store_id,
-            "product_id": rollback_product_id,
-            "on_hand_quantity": 5,
-            "reserved_quantity": 1,
-            "source": "WMS",
-            "external_reference": f"PG-MOVECON-ROLLBACK-SOURCE-{suffix}",
-            "location_code": "BACKROOM-CONCURRENCY",
-            "availability_status": "AVAILABLE",
-        },
-    )
-    assert rollback_snapshot.status_code == 201, rollback_snapshot.text
-    rollback_task = client.post(
-        "/api/v1/tasks",
-        json={
-            "store_id": store_id,
-            "shelf_id": rollback_shelf.json()["id"],
-            "product_id": rollback_product_id,
-            "requested_quantity": 2,
-        },
-    )
-    assert rollback_task.status_code == 201, rollback_task.text
-    rollback_task_id = rollback_task.json()["id"]
-    for payload in (
-        {"status": "ASSIGNED", "assigned_to": "CI operator"},
-        {"status": "IN_PROGRESS"},
-        {"status": "COMPLETED", "actual_quantity": 2},
-    ):
-        response = client.patch(f"/api/v1/tasks/{rollback_task_id}/status", json=payload)
-        assert response.status_code == 200, response.text
-
-    with SessionLocal() as db:
-        db.connection().exec_driver_sql("""
-            CREATE OR REPLACE FUNCTION fail_inventory_movement_event_insert_smoke()
-            RETURNS trigger LANGUAGE plpgsql AS $function$
-            BEGIN
-                RAISE EXCEPTION 'forced movement event failure' USING ERRCODE = '23514';
-            END;
-            $function$
-        """)
-        db.connection().exec_driver_sql("""
-            CREATE TRIGGER trg_fail_inventory_movement_event_insert_smoke
-            BEFORE INSERT ON inventory_movement_events
-            FOR EACH ROW EXECUTE FUNCTION fail_inventory_movement_event_insert_smoke()
-        """)
-        db.commit()
-
-    original_settings = main_module.settings
-    main_module.settings = original_settings.model_copy(update={"app_env": "production"})
-    try:
-        rollback_response = client.post(
-            f"/api/v1/tasks/{rollback_task_id}/reconcile-inventory",
-            json={"reason": "PostgreSQL movement event rollback smoke"},
-            headers=headers,
+    with TestClient(app) as rollback_client:
+        rollback_product = rollback_client.post(
+            "/api/v1/products",
+            json={"sku": f"PG-MOVECON-ROLLBACK-{suffix}", "name": "Rollback test product"},
         )
-    finally:
-        main_module.settings = original_settings
+        assert rollback_product.status_code == 201, rollback_product.text
+        rollback_product_id = rollback_product.json()["id"]
+        rollback_shelf = rollback_client.post(
+            "/api/v1/shelves",
+            json={"zone_id": zone.json()["id"], "code": f"PG-MOVECON-{suffix}-ROLLBACK"},
+        )
+        assert rollback_shelf.status_code == 201, rollback_shelf.text
+        rollback_assignment = rollback_client.post(
+            "/api/v1/shelf-products",
+            json={
+                "shelf_id": rollback_shelf.json()["id"],
+                "product_id": rollback_product_id,
+                "target_quantity": 5,
+                "min_display_quantity": 1,
+            },
+        )
+        assert rollback_assignment.status_code == 201, rollback_assignment.text
+        rollback_snapshot = rollback_client.post(
+            "/api/v1/inventory/snapshots",
+            json={
+                "store_id": store_id,
+                "product_id": rollback_product_id,
+                "on_hand_quantity": 5,
+                "reserved_quantity": 1,
+                "source": "WMS",
+                "external_reference": f"PG-MOVECON-ROLLBACK-SOURCE-{suffix}",
+                "location_code": "BACKROOM-CONCURRENCY",
+                "availability_status": "AVAILABLE",
+            },
+        )
+        assert rollback_snapshot.status_code == 201, rollback_snapshot.text
+        rollback_task = rollback_client.post(
+            "/api/v1/tasks",
+            json={
+                "store_id": store_id,
+                "shelf_id": rollback_shelf.json()["id"],
+                "product_id": rollback_product_id,
+                "requested_quantity": 2,
+            },
+        )
+        assert rollback_task.status_code == 201, rollback_task.text
+        rollback_task_id = rollback_task.json()["id"]
+        for payload in (
+            {"status": "ASSIGNED", "assigned_to": "CI operator"},
+            {"status": "IN_PROGRESS"},
+            {"status": "COMPLETED", "actual_quantity": 2},
+        ):
+            response = rollback_client.patch(f"/api/v1/tasks/{rollback_task_id}/status", json=payload)
+            assert response.status_code == 200, response.text
+    
         with SessionLocal() as db:
-            db.connection().exec_driver_sql(
-                "DROP TRIGGER IF EXISTS trg_fail_inventory_movement_event_insert_smoke ON inventory_movement_events"
-            )
-            db.connection().exec_driver_sql(
-                "DROP FUNCTION IF EXISTS fail_inventory_movement_event_insert_smoke()"
-            )
+            db.connection().exec_driver_sql("""
+                CREATE OR REPLACE FUNCTION fail_inventory_movement_event_insert_smoke()
+                RETURNS trigger LANGUAGE plpgsql AS $function$
+                BEGIN
+                    RAISE EXCEPTION 'forced movement event failure' USING ERRCODE = '23514';
+                END;
+                $function$
+            """)
+            db.connection().exec_driver_sql("""
+                CREATE TRIGGER trg_fail_inventory_movement_event_insert_smoke
+                BEFORE INSERT ON inventory_movement_events
+                FOR EACH ROW EXECUTE FUNCTION fail_inventory_movement_event_insert_smoke()
+            """)
             db.commit()
-
-    assert rollback_response.status_code == 409, rollback_response.text
+    
+        original_settings = main_module.settings
+        main_module.settings = original_settings.model_copy(update={"app_env": "production"})
+        try:
+            rollback_response = rollback_client.post(
+                f"/api/v1/tasks/{rollback_task_id}/reconcile-inventory",
+                json={"reason": "PostgreSQL movement event rollback smoke"},
+                headers=headers,
+            )
+        finally:
+            main_module.settings = original_settings
+            with SessionLocal() as db:
+                db.connection().exec_driver_sql(
+                    "DROP TRIGGER IF EXISTS trg_fail_inventory_movement_event_insert_smoke ON inventory_movement_events"
+                )
+                db.connection().exec_driver_sql(
+                    "DROP FUNCTION IF EXISTS fail_inventory_movement_event_insert_smoke()"
+                )
+                db.commit()
+    
+        assert rollback_response.status_code == 409, rollback_response.text
     assert rollback_response.json().get("detail", {}).get("code") == "INVENTORY_RECONCILIATION_CONFLICT"
     with SessionLocal() as db:
         assert db.query(models.InventoryMovement).filter_by(task_id=rollback_task_id).count() == 0
