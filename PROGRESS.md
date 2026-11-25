@@ -1535,3 +1535,14 @@ O commit `50fc1fcd9dac4c88dfb800aaa1f690ff1c0b6304` introduz o endpoint transacc
 - SHA de código: `50df52e59eca47aa2dfc868fc16621cf2f636586`.
 - API CI `45716912538`, Quality Gates `45716912911`, Security Scans `45716912543` e Docker Compose `45716912421`: todos concluídos com sucesso.
 - Próxima prioridade: continuar a auditoria de handlers de escrita protegidos pela política central, começando por operações de inventário e integrações, para identificar rotas em que o handler não repete o requisito de função.
+
+
+## 2026-11-25 — P0: RBAC explícito nas APIs de snapshots e lojas
+
+- A revisão dos handlers encontrou uma diferença entre a política central e a defesa no handler: o POST de snapshots verificava o perfil apenas para `source=MANUAL`, enquanto listagem e leitura do snapshot mais recente dependiam sobretudo do middleware.
+- Adicionada autorização ADMIN/SUPERVISOR no handler para ingestão de snapshots de qualquer origem, listagem e consulta latest; GET `/api/v1/stores` também reforçado para ADMIN/SUPERVISOR.
+- Teste regressivo confirma 403 para EMPLOYEE nos endpoints e ausência de persistência do snapshot WMS rejeitado.
+- A primeira execução do Quality Gates encontrou a guarda em falta na listagem; a correcção foi feita e a suite foi novamente executada no SHA final.
+- SHA final de código/testes: `19bf8dd2bf2b6990faff261effc0752523f59a5b`.
+- API CI `45718367981`: **1728 passed, 1 skipped**. Quality Gates `45718367943`, Security Scans `45718367972` e Docker Compose `45718367912`: sucesso.
+- Próxima prioridade: continuar a auditoria dos handlers que delegam RBAC no middleware, priorizando endpoints de escrita que alteram estado operacional ou criam evidência auditável.
