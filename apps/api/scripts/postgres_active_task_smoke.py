@@ -371,6 +371,8 @@ def main() -> None:
                 "on_hand_quantity": 8,
                 "reserved_quantity": 0,
                 "source": "WMS",
+                "location_code": "BACKROOM-CI",
+                "availability_status": "AVAILABLE",
             },
         )
         assert decision_inventory.status_code == 201, decision_inventory.text
