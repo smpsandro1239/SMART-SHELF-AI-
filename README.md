@@ -2031,3 +2031,8 @@ A evidência é imutável na base de dados e os eventos são append-only. A revi
 ## Validação PostgreSQL 16 — fila ERP/WMS
 
 O API CI inclui `apps/api/scripts/postgres_inventory_sync_job_smoke.py`: concorrência real de claims, fencing do worker antigo e recuperação do ledger STARTED após SIGKILL. O smoke não cobre ainda a morte após commit de uma página nem o replay de snapshots; esses cenários permanecem pendentes e não são apresentados como validados.
+
+
+### ERP/WMS — recuperação após commit de página
+
+O smoke PostgreSQL do worker executa o orquestrador real, termina o processo com SIGKILL após confirmar a primeira página e repete essa página no worker de recuperação. A asserção exige que o snapshot confirmado preserve o ID e conteúdo e não seja duplicado. A execução está integrada no API CI; a garantia só deve ser considerada validada após um run verde no SHA correspondente.
