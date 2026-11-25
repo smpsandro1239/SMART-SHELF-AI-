@@ -358,6 +358,7 @@ class InventoryMovementRead(BaseModel):
     destination_shelf_code: str
     destination_zone_id: int
     destination_zone_name: str
+    destination_location_backfilled: bool
     result_snapshot_id: int
     actor_user_id: int
     reason: str
