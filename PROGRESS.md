@@ -1335,3 +1335,15 @@ Auditar a reconciliação de reservas WMS. O modelo actual recebe `reserved_quan
 ## 2026-11-25 — Ledger de contagens manuais
 
 O commit `50fc1fcd9dac4c88dfb800aaa1f690ff1c0b6304` introduz o endpoint transaccional e o revision Alembic `0091_inventory_manual_count_audit`, com parent confirmado `0090_shelf_product_decimal_quantities`. Para `source=MANUAL`, exige actor activo ADMIN/SUPERVISOR e motivo; o snapshot e o evento são persistidos com flush e um commit. A tabela de eventos tem FK composta para snapshot/loja/produto e triggers PostgreSQL/SQLite para imutabilidade e validação de proveniência. Foram acrescentados testes HTTP/DB para RBAC, motivo, atomicidade, rollback, imutabilidade e associação entre loja/produto. A validação local e CI/PostgreSQL 16 permanece pendente.
+
+
+## 2026-11-25 — Hardening adicional do ledger MANUAL (0091)
+
+- Branch: `main`.
+- HEAD de implementação: `ecc751c1517cbd64bc774075a7131eb6e10f0f1f` (teste HTTP para actor inactivo); commit anterior `94fe02723e6621b6a4a682b912cf76a03f96d04a` corrige o trigger SQLite.
+- A revisão da migration 0091 detectou assimetria: PostgreSQL exigia `users.is_active`, mas o trigger SQLite aceitava um actor inactivo e não limitava explicitamente o papel a ADMIN/SUPERVISOR.
+- Corrigido o predicado SQLite para exigir actor activo e (ADMIN global ou SUPERVISOR da loja do evento).
+- Acrescentada regressão API que confirma HTTP 401 para supervisor inactivo; a cobertura existente mantém os casos sem actor, EMPLOYEE, motivo inválido, atomicidade e rollback.
+- Testes locais: não executados neste ambiente. A suite API usa `Base.metadata.create_all`; por isso não prova, por si só, a execução dos triggers da migration 0091.
+- CI: ainda não confirmada para os commits desta ronda. Os estados Vercel anteriores são `build-rate-limit` e não representam os workflows GitHub.
+- Próxima acção obrigatória: localizar/acrescentar teste de migration que execute efectivamente 0091 em SQLite, validar upgrade/downgrade e trigger de actor inactivo; depois confirmar API CI PostgreSQL 16 e os restantes workflows. Só então fechar a prioridade e avançar para a revisão seguinte do ledger de movimentos.
