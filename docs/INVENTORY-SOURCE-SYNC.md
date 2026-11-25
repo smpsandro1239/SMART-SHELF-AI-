@@ -163,3 +163,10 @@ Os quatro workflows terminaram com sucesso no mesmo commit:
 - [Docker Compose](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45522939260) — smoke de arranque e serviços aprovado.
 
 A correcção do teste de fencing captura os valores escalares do lease enquanto a instância ORM ainda está associada à sessão. Não alterou o mecanismo de produção de leases, fencing ou persistência. Estes resultados validam os cenários automatizados indicados; não constituem homologação de conectores ERP/WMS reais nem certificação de segurança independente.
+
+
+## Isolamento multi-loja na reconciliação
+
+O teste test_inventory_reconciliation_isolates_shared_product_snapshots_and_ledger_across_stores reutiliza um produto global em duas lojas e cria snapshots ERP/WMS independentes em cada uma. A API tem de seleccionar os snapshots usando simultaneamente store_id e product_id; a consulta e o ledger filtrados para uma loja não podem revelar evidência da outra. A revisão por ID estrangeiro é ocultada com HTTP 404 e não pode alterar o estado do registo. O teste está publicado no commit 07b141b91d2d76a6ff6e1cefe0e721cf42978e8b; aguarda validação CI nesse SHA.
+
+**Limite semântico por resolver:** o snapshot genérico apresentado no campo de retaguarda é actualmente seleccionado entre todas as fontes para a loja/produto, enquanto a API admite ERP, WMS, POS, MANUAL e IMPORT. Não existe no contrato actual uma declaração inequívoca de que todas essas fontes representam stock físico de retaguarda. A selecção não deve ser restringida por suposição; é necessária uma definição de origem/localização (por exemplo, armazém/retaguarda versus stock agregado de loja) antes de alterar esse comportamento.
