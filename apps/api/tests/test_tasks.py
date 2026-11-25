@@ -1191,6 +1191,7 @@ def test_replenishment_rejects_stale_or_future_inventory_snapshot(
         })
         assert observation.status_code == 201, observation.text
 
+        _configure_backroom_location(store_id)
         snapshot = client.post("/api/v1/inventory/snapshots", json={
             "store_id": store_id,
             "product_id": product_id,
