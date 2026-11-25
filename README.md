@@ -2108,3 +2108,8 @@ As reservas WMS são tratadas como quantidade agregada: disponibilidade = `on_ha
 ## Proveniência do destino dos movimentos
 
 Cada movimento conserva o ID e o código da prateleira de destino no instante da operação. O código é uma evidência histórica imutável: renomeações posteriores não reescrevem movimentos antigos. A API, o evento de auditoria e as guardas de base de dados validam que o destino pertence à loja e à tarefa.
+
+
+## Identidade histórica do destino dos movimentos
+
+Os movimentos guardam a prateleira e a zona de destino (IDs e nomes/códigos) no instante da operação. `destination_location_backfilled` distingue captura contemporânea de reconstrução histórica a partir da hierarquia actual. Renomeações posteriores não reescrevem o movimento; a eliminação física de entidades referenciadas fica bloqueada para preservar a rastreabilidade.
