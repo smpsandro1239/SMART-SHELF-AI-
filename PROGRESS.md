@@ -1266,3 +1266,19 @@ Auditar `packaging_units.py` e o endpoint `/api/v1/warehouse/replenishment-units
 - Corrigido o contrato HTTP para continuar a aceitar/devolver números JSON; o endpoint converte explicitamente os valores validados para Decimal antes da persistência. O modelo SQL mantém Numeric(12,3), sem perder a precisão armazenada.
 - O validador rejeita NaN/Inf, mais de três casas decimais e valores acima da capacidade Numeric(12,3), evitando quantização ou truncagem.
 - A primeira suite API reportou 3 falhas e 1694 testes aprovados; estas falhas foram analisadas e corrigidas nos commits `dc242cf`, `76a6fb9` e `e2eca8f`. A validação do novo HEAD está pendente; não marcar como concluído até nova CI verde.
+
+
+## Validação final — unidade base e quantidades de exposição (25/11/2026)
+
+- SHA de código validado: `dda035f509a34f4d893f52d2d3cf4aa2c440f0e6` (branch `main`).
+- API CI run `45625120737`: sucesso. PostgreSQL 16, migrations até 0090, smokes de proveniência, concorrência e recuperação; suite **1697 passed, 1 skipped** em 114.38s.
+- Quality Gates run `45625120955`: sucesso. TypeScript/build Web e suite **1697 passed, 1 skipped** em 116.43s.
+- Docker Compose smoke run `45625120891`: sucesso.
+- Security Scans run `45625120718`: sucesso; Python/Web dependency audits, Git history secret scan e OWASP ZAP passive baseline.
+- A primeira regressão de API por serialização Decimal foi corrigida mantendo o contrato JSON numérico; a primeira regressão do teste de plano era apenas uma chave de fixture incorrecta (`tasks`, não `items`) e foi alinhada com o contrato real da API.
+- Migration 0090 converte os dois campos de exposição para Numeric(12,3), preserva os valores históricos inteiros e bloqueia downgrade destrutivo quando existem fracções.
+- O endpoint de reposição mantém a quantidade sugerida e o plano UNIT/CASE/PALLET; o teste confirma 20.125 kg, mínimo 0.375 kg, factores exactos e ausência de reserva/movimento automático.
+- A actualização seguinte deste ficheiro é documental; não altera código ou migrations.
+
+### Próxima prioridade técnica
+Auditar a reconciliação de reservas WMS. O modelo actual recebe `reserved_quantity` agregado por snapshot WMS e calcula disponível como físico menos reservado; não existe ainda um ledger interno de reservas com identificador externo por reserva. Não criar reservas locais fictícias nem assumir que uma tarefa de reposição reserva stock no WMS. Determinar primeiro quais os dados que o contrato do adapter pode fornecer; avançar com validações de consistência e alertas baseados em snapshots enquanto não existir contrato de detalhe de reservas.
