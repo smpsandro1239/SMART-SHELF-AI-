@@ -2164,3 +2164,10 @@ Validação no SHA `d36af7332544204fc14b6764a3faf99c24aa4741`: API CI **1729 pas
 A criação de execuções OCR, correspondências com o catálogo e fusão de evidência visual/textual exige perfil SUPERVISOR/ADMIN. Funcionários não podem persistir nem recalcular estes artefactos; a autorização é verificada antes do acesso à captura.
 
 Validação no SHA `a9271dd595c7d913a93cd969cf73d58b5e49438d`: API CI **1730 passed, 1 skipped**, Quality Gates, Security Scans e Docker Compose concluídos com sucesso.
+
+
+### Autorização das operações de warehouse
+
+A criação de localizações e colocações, registo de paletes, configuração de políticas de rotação e simulação de rotação exigem perfil SUPERVISOR/ADMIN. Funcionários não podem alterar a configuração física do armazém nem o estado operacional das paletes.
+
+Validação no SHA `3f63efd0da73070cc1654e76ea58ecfe0e79ca93`: API CI **1731 passed, 1 skipped**, Quality Gates, Security Scans e Docker Compose concluídos com sucesso.
