@@ -953,6 +953,12 @@ def test_inventory_reconciliation_compares_fresh_erp_and_wms_snapshots(monkeypat
 
         actor = _supervisor_actor(store_id)
         monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: actor)
+        configured_skew = client.post("/api/v1/inventory/freshness-policies", json={
+            "store_id": store_id, "source": "ERP", "max_age_minutes": 240,
+            "comparison_skew_tolerance_minutes": 5,
+            "reason": "Tolerância temporal aprovada para reconciliação ERP/WMS",
+        })
+        assert configured_skew.status_code == 200, configured_skew.text
         response = client.get(
             "/api/v1/inventory/reconciliation",
             params={"store_id": store_id},
@@ -966,6 +972,8 @@ def test_inventory_reconciliation_compares_fresh_erp_and_wms_snapshots(monkeypat
         assert item["erp_freshness_status"] == "CURRENT"
         assert item["wms_freshness_status"] == "CURRENT"
         assert item["wms_erp_available_delta"] == -2
+        assert item["erp_wms_capture_skew_seconds"] is not None
+        assert item["erp_wms_capture_skew_tolerance_minutes"] == 5
         assert item["wms_erp_comparison_status"] == "DIVERGENCE"
 
         with TestingSession() as db:
@@ -1971,3 +1979,65 @@ def test_manual_inventory_event_sql_immutability_and_store_product_binding(monke
                 )
             db.rollback()
             assert db.query(models.InventoryManualCountEvent).count() == 1
+
+
+def test_inventory_reconciliation_requires_configured_capture_skew_tolerance(monkeypatch):
+    with TestClient(app) as client:
+        store_id, product_id = create_store_and_product(client)
+        zone = client.post("/api/v1/zones", json={"store_id": store_id, "name": "Zona skew temporal"}).json()
+        shelf = client.post("/api/v1/shelves", json={"zone_id": zone["id"], "code": "TEMPORAL-SKEW"}).json()
+        linked = client.post("/api/v1/shelf-products", json={"shelf_id": shelf["id"], "product_id": product_id, "target_quantity": 10, "min_display_quantity": 2})
+        assert linked.status_code == 201, linked.text
+        captured = datetime.now(timezone.utc) - timedelta(minutes=5)
+        erp = client.post("/api/v1/inventory/snapshots", json={
+            "store_id": store_id, "product_id": product_id, "on_hand_quantity": 30,
+            "reserved_quantity": 5, "source": "ERP", "external_reference": "ERP-TEMPORAL-SKEW",
+            "captured_at": captured.isoformat(),
+        })
+        wms = client.post("/api/v1/inventory/snapshots", json={
+            "store_id": store_id, "product_id": product_id, "on_hand_quantity": 26,
+            "reserved_quantity": 3, "source": "WMS", "external_reference": "WMS-TEMPORAL-SKEW",
+            "location_code": "BACKROOM-A", "availability_status": "AVAILABLE",
+            "captured_at": (captured + timedelta(minutes=1)).isoformat(),
+        })
+        assert erp.status_code == 201, erp.text
+        assert wms.status_code == 201, wms.text
+        _configure_backroom_location(store_id)
+        actor = _supervisor_actor(store_id)
+        monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: actor)
+        first = client.get("/api/v1/inventory/reconciliation", params={"store_id": store_id})
+        assert first.status_code == 200, first.text
+        item = first.json()["items"][0]
+        assert item["erp_wms_capture_skew_seconds"] == 60
+        assert item["erp_wms_capture_skew_tolerance_minutes"] is None
+        assert item["wms_erp_available_delta"] is None
+        assert item["wms_erp_comparison_status"] == "TEMPORAL_SKEW_UNCONFIGURED"
+        for tolerance, expected in ((0, "TEMPORAL_SKEW"), (2, "DIVERGENCE")):
+            configured = client.post("/api/v1/inventory/freshness-policies", json={
+                "store_id": store_id, "source": "ERP", "max_age_minutes": 240,
+                "comparison_skew_tolerance_minutes": tolerance,
+                "reason": f"Tolerância temporal ERP/WMS aprovada: {tolerance} minutos",
+            })
+            assert configured.status_code == 200, configured.text
+            response = client.get("/api/v1/inventory/reconciliation", params={"store_id": store_id})
+            assert response.status_code == 200, response.text
+            assert response.json()["items"][0]["wms_erp_comparison_status"] == expected
+        invalid_source = client.post("/api/v1/inventory/freshness-policies", json={
+            "store_id": store_id, "source": "WMS", "max_age_minutes": 240,
+            "comparison_skew_tolerance_minutes": 2, "reason": "A tolerância só pode pertencer à política ERP",
+        })
+        assert invalid_source.status_code == 422
+        missing_reason = client.post("/api/v1/inventory/freshness-policies", json={
+            "store_id": store_id, "source": "ERP", "max_age_minutes": 240,
+            "comparison_skew_tolerance_minutes": 3,
+        })
+        assert missing_reason.status_code == 422
+        with TestingSession() as db:
+            policy = db.query(models.InventoryFreshnessPolicy).filter_by(store_id=store_id, source="ERP").one()
+            events = db.query(models.InventoryFreshnessPolicyEvent).filter_by(policy_id=policy.id).order_by(models.InventoryFreshnessPolicyEvent.id.asc()).all()
+            assert len(events) == 2
+            assert events[0].previous_comparison_skew_tolerance_minutes is None
+            assert events[0].new_comparison_skew_tolerance_minutes == 0
+            assert events[1].previous_comparison_skew_tolerance_minutes == 0
+            assert events[1].new_comparison_skew_tolerance_minutes == 2
+            assert all(event.actor_user_id == actor.id for event in events)
