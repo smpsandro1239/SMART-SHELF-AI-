@@ -287,3 +287,16 @@ A revisão 0091 foi validada no SHA `c4f839bcfd076c2b5575eccfd314fae96983b3ed`. 
 Runs: API CI `45650155916`; Quality Gates `45650155829`; Security Scans `45650155800`; Docker Compose `45650155946`.
 
 A migration 0091 está homologada para os cenários cobertos. A próxima revisão centra-se na semântica de snapshots WMS consecutivos e reservas agregadas, sem criar um ledger de reservas individuais sem identificadores/documentos disponibilizados pelo fornecedor.
+
+
+## Proveniência de snapshots por execução de sincronização — migration 0092
+
+Os snapshots criados pelo worker ERP/WMS passam a transportar `source_sync_id`, referência à execução persistida em `inventory_source_syncs`. O vínculo é validado no INSERT: a execução tem de existir, pertencer à mesma loja, usar a mesma origem e permanecer em `STARTED`. PostgreSQL aplica FK RESTRICT e trigger com lock da linha da execução; SQLite aplica trigger equivalente. A imutabilidade do snapshot torna o vínculo permanente.
+
+Snapshots históricos, contagens MANUAL e snapshots criados fora do worker permanecem com `source_sync_id=NULL`; não foi fabricada proveniência retroactiva. No replay após falha, uma linha de página já commitada mantém a execução PARTIAL que realmente a inseriu; páginas novas pertencem à execução de recuperação SUCCESS. A API de leitura inclui o identificador para permitir navegar da evidência de stock até ao histórico de sincronização.
+
+A validação no branch `f63543c` terminou com API CI **1715 passed, 1 skipped**, PostgreSQL 16 smoke, Quality Gates, Security Scans e Docker Compose com sucesso. O commit de merge `76fb62d` ainda tinha os workflows main queued quando esta nota foi preparada.
+
+### Limitação em avaliação — skew temporal ERP/WMS
+
+A comparação actual pode classificar `DIVERGENCE` quando ambos os snapshots estão dentro das respectivas janelas de freshness, mesmo que tenham instantes de captura significativamente diferentes. A diferença de captura deve ser explicitada e sujeita a uma política de skew configurável antes de classificar a divergência. Não foi introduzido um limite arbitrário.

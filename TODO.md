@@ -2254,3 +2254,21 @@ Evidência parcial: PostgreSQL 16 `alembic upgrade head` passou no API CI SHA `3
 SHA de código e workflows validados: `c4f839bcfd076c2b5575eccfd314fae96983b3ed`.
 
 Próxima prioridade P1: auditar snapshots WMS consecutivos, semântica de reservado agregado, monotonicidade temporal e mudanças de localização; não criar ledger de reservas individuais sem contrato real do WMS.
+
+
+## 2026-11-25 — Proveniência por execução de sincronização (migration 0092)
+
+- [x] Adicionar `inventory_snapshots.source_sync_id` nullable, preservando snapshots históricos, contagens MANUAL e snapshots criados fora do worker sem uma execução de sync.
+- [x] Ligar cada snapshot novo criado pelo orchestrator ao `InventorySourceSync` que o originou.
+- [x] Impedir associação a execução inexistente, de outra loja, de outra origem ou já terminal.
+- [x] PostgreSQL: FK RESTRICT + trigger BEFORE INSERT com lock `FOR SHARE`; SQLite: trigger BEFORE INSERT equivalente, sem rebuild da tabela append-only.
+- [x] Expor `source_sync_id` no contrato de leitura `InventorySnapshotRead`.
+- [x] Preservar lineage original durante replay: uma linha já persistida por uma execução PARTIAL não é reescrita; novas páginas ficam ligadas à nova execução.
+- [x] Teste SQLite da migration 0092 (upgrade/downgrade, correspondência store/source/status, histórico NULL).
+- [x] Teste de integração do orchestrator com adapter WMS.
+- [x] Smoke PostgreSQL 16: página commitada antes de SIGKILL ligada à execução PARTIAL, replay sem duplicação, segunda página ligada à nova execução SUCCESS e escrita tardia contra execução terminal rejeitada.
+- [x] API CI: **1715 passed, 1 skipped** no SHA de branch validado `f63543caabe6df1a2e660f5801c35f53fc3422a1`.
+- [x] Quality Gates, Security Scans e Docker Compose: sucesso no mesmo SHA.
+- [ ] Confirmar novamente os quatro workflows no commit de merge `76fb62dfef9280fd8e6b291024be46a9e392e848` da branch `main`.
+
+Próxima prioridade P1: análise temporal ERP/WMS. Actualmente a comparação pode classificar DIVERGENCE quando ambas as fontes estão dentro da janela de freshness, mesmo com instantes de captura bastante diferentes. Definir um contrato de skew temporal (configuração e estado de comparação) antes de aplicar um limite; não inventar um valor operacional.

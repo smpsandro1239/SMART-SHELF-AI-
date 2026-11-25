@@ -1372,3 +1372,16 @@ O commit `50fc1fcd9dac4c88dfb800aaa1f690ff1c0b6304` introduz o endpoint transacc
 - Docker Compose smoke run `45650155946`: sucesso.
 - Corrigidos os fixtures de regressão que ficaram desactualizados quando o motivo e o actor passaram a ser obrigatórios para source=MANUAL. A suite completa confirmou **1707 passed, 1 skipped**.
 - Prioridade P0 da migration 0091 concluída. Próxima prioridade: rever semântica temporal de snapshots WMS, reservado agregado e mudanças de localização sem inventar detalhe de reservas que o adapter não fornece.
+
+
+## 2026-11-25 — Proveniência de snapshots WMS/ERP por execução
+
+- Merge na `main`: `76fb62dfef9280fd8e6b291024be46a9e392e848` (PR #13).
+- Migration `0092_inventory_snapshot_sync_lineage`: coluna nullable `inventory_snapshots.source_sync_id`, índice, FK RESTRICT em PostgreSQL e trigger de proveniência em ambos os motores.
+- O orchestrator define `source_sync_id=sync.id` em cada snapshot persistido. O trigger só aceita execução existente, da mesma loja/origem e ainda em STARTED; a imutabilidade dos snapshots impede alteração posterior do vínculo.
+- A API de leitura expõe o identificador. Snapshots antigos e MANUAL mantêm NULL, sem backfill inventado.
+- Replay após SIGKILL: a página já commitada mantém ligação à execução PARTIAL original; apenas páginas novas ficam ligadas à nova execução SUCCESS. O smoke PostgreSQL confirma também rejeição de novas inserções associadas a execução terminal.
+- Teste de migration SQLite, teste de integração WMS e smoke PostgreSQL 16 passaram.
+- Evidência no branch SHA `f63543caabe6df1a2e660f5801c35f53fc3422a1`: API CI **1715 passed, 1 skipped**, Quality Gates sucesso, Security Scans sucesso, Docker Compose sucesso.
+- Workflows do commit de merge `76fb62d` na `main` estavam queued no momento desta actualização; confirmar conclusão antes de declarar a integração final totalmente validada.
+- Próxima prioridade: comparar timestamps ERP/WMS. A classificação actual permite DIVERGENCE se ambas as fontes forem CURRENT, sem um limite explícito de skew entre capturas. Definir política de skew por loja/fonte e estado TEMPORAL_SKEW sem assumir um limite comercial.
