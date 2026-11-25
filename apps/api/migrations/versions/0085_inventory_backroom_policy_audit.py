@@ -53,16 +53,19 @@ def upgrade() -> None:
     )
     bind = op.get_bind()
     if bind.dialect.name == "postgresql":
-        op.execute(
-            "CREATE FUNCTION guard_inventory_freshness_policy_events_0085() "
-            "RETURNS trigger AS $$ BEGIN RAISE EXCEPTION "
-            "'inventory freshness policy events are append-only'; END; $$ LANGUAGE plpgsql"
-        )
-        op.execute(
-            "CREATE TRIGGER trg_inventory_freshness_policy_events_0085 "
-            "BEFORE UPDATE OR DELETE ON inventory_freshness_policy_events "
-            "FOR EACH ROW EXECUTE FUNCTION guard_inventory_freshness_policy_events_0085()"
-        )
+        bind.exec_driver_sql("""
+            CREATE FUNCTION guard_inventory_freshness_policy_events_0085()
+            RETURNS trigger
+            LANGUAGE plpgsql
+            AS 'BEGIN
+                RAISE EXCEPTION ''inventory freshness policy events are append-only'';
+            END;'
+        """)
+        bind.exec_driver_sql("""
+            CREATE TRIGGER trg_inventory_freshness_policy_events_0085
+            BEFORE UPDATE OR DELETE ON inventory_freshness_policy_events
+            FOR EACH ROW EXECUTE FUNCTION guard_inventory_freshness_policy_events_0085()
+        """)
     elif bind.dialect.name == "sqlite":
         op.execute(
             "CREATE TRIGGER trg_inventory_freshness_policy_events_update_0085 "
