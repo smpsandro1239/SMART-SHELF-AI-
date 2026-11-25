@@ -2143,3 +2143,10 @@ Validação no SHA `f925b875f871964ce80805c4927af15616f58774`: API CI, Quality G
 A leitura do histórico e o registo de alterações do ciclo de vida de paletes exigem perfil SUPERVISOR ou ADMIN. Os handlers repetem a autorização da política central antes de ler ou bloquear o registo; funcionários recebem 403 e não conseguem criar eventos nem alterar o estado.
 
 Validação no SHA `50df52e59eca47aa2dfc868fc16621cf2f636586`: API CI, Quality Gates, Security Scans e Docker Compose concluídos com sucesso.
+
+
+### RBAC das APIs de inventário
+
+A ingestão de snapshots de qualquer origem e a leitura/listagem de snapshots exigem perfil SUPERVISOR ou ADMIN. Funcionários não podem introduzir snapshots WMS/ERP/POS nem consultar quantidades de inventário através destas APIs. A listagem do catálogo de lojas também está limitada a SUPERVISOR/ADMIN.
+
+Validação no SHA `19bf8dd2bf2b6990faff261effc0752523f59a5b`: API CI **1728 passed, 1 skipped**, Quality Gates, Security Scans e Docker Compose concluídos com sucesso.
