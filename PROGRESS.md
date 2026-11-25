@@ -1566,3 +1566,13 @@ O commit `50fc1fcd9dac4c88dfb800aaa1f690ff1c0b6304` introduz o endpoint transacc
 - SHA de código/testes: `a9271dd595c7d913a93cd969cf73d58b5e49438d`.
 - API CI `45720266566`: **1730 passed, 1 skipped**; Quality Gates `45720266628`, Security Scans `45720266508` e Docker Compose `45720266578`: sucesso.
 - Próxima prioridade: continuar a auditoria de handlers de escrita de warehouse, localizações, colocações, registo de paletes e políticas de rotação, alinhando a autorização interna com a política central.
+
+
+## 2026-11-25 — RBAC explícito nas mutações de warehouse
+
+- Adicionada autorização ADMIN/SUPERVISOR nos handlers de criação de localizações, colocações, registo de paletes, criação/actualização de políticas de rotação e simulação.
+- O controlo ocorre antes de locks, leituras de recursos ou escrita.
+- Teste regressivo cobre seis operações com actor EMPLOYEE e confirma 403 sem persistência em localizações, colocações, paletes ou políticas.
+- SHA de código/testes: `3f63efd0da73070cc1654e76ea58ecfe0e79ca93`.
+- API CI `45721215742`: **1731 passed, 1 skipped**; Quality Gates `45721215822`, Security Scans `45721215637` e Docker Compose `45721215724`: sucesso.
+- Próxima prioridade: auditar rotas ADMIN_ONLY de criação/alteração de catálogo e configuração (lojas, zonas, produtos, embalagens, perfis e utilizadores), reforçando o papel no handler.
