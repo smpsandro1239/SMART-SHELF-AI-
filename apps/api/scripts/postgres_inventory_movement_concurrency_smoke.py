@@ -1,0 +1,184 @@
+"""Prove concurrent reconciliations cannot overdraw one WMS snapshot in PostgreSQL."""
+
+from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier
+from uuid import uuid4
+
+from fastapi.testclient import TestClient
+from sqlalchemy import func
+
+from app import main as main_module, models
+from app.database import SessionLocal
+from app.main import app
+from app.security import create_access_token
+
+
+def main() -> None:
+    suffix = uuid4().hex[:10]
+    with TestClient(app) as client:
+        store = client.post(
+            "/api/v1/stores",
+            json={"code": f"PG-MOVECON-{suffix}", "name": "Movement concurrency smoke"},
+        )
+        assert store.status_code == 201, store.text
+        store_id = store.json()["id"]
+
+        zone = client.post(
+            "/api/v1/zones",
+            json={"store_id": store_id, "name": "Movement concurrency zone"},
+        )
+        assert zone.status_code == 201, zone.text
+
+        shelves = []
+        for suffix_part in ("A", "B"):
+            shelf = client.post(
+                "/api/v1/shelves",
+                json={"zone_id": zone.json()["id"], "code": f"PG-MOVECON-{suffix}-{suffix_part}"},
+            )
+            assert shelf.status_code == 201, shelf.text
+            shelves.append(shelf.json()["id"])
+
+        product = client.post(
+            "/api/v1/products",
+            json={"sku": f"PG-MOVECON-SKU-{suffix}", "name": "Concurrency test product"},
+        )
+        assert product.status_code == 201, product.text
+        product_id = product.json()["id"]
+
+        for shelf_id in shelves:
+            assignment = client.post(
+                "/api/v1/shelf-products",
+                json={
+                    "shelf_id": shelf_id,
+                    "product_id": product_id,
+                    "target_quantity": 10,
+                    "min_display_quantity": 1,
+                },
+            )
+            assert assignment.status_code == 201, assignment.text
+
+        with SessionLocal() as db:
+            db.add(models.InventoryFreshnessPolicy(
+                store_id=store_id,
+                source="WMS",
+                max_age_minutes=240,
+                backroom_location_code="BACKROOM-CONCURRENCY",
+            ))
+            db.commit()
+
+        snapshot = client.post(
+            "/api/v1/inventory/snapshots",
+            json={
+                "store_id": store_id,
+                "product_id": product_id,
+                "on_hand_quantity": 6,
+                "reserved_quantity": 0,
+                "source": "WMS",
+                "external_reference": f"PG-MOVECON-SOURCE-{suffix}",
+                "location_code": "BACKROOM-CONCURRENCY",
+                "availability_status": "AVAILABLE",
+            },
+        )
+        assert snapshot.status_code == 201, snapshot.text
+        source_snapshot_id = snapshot.json()["id"]
+
+        task_ids = []
+        for shelf_id in shelves:
+            task = client.post(
+                "/api/v1/tasks",
+                json={
+                    "store_id": store_id,
+                    "shelf_id": shelf_id,
+                    "product_id": product_id,
+                    "requested_quantity": 4,
+                },
+            )
+            assert task.status_code == 201, task.text
+            task_ids.append(task.json()["id"])
+
+        for task_id in task_ids:
+            for payload in (
+                {"status": "ASSIGNED", "assigned_to": "CI operator"},
+                {"status": "IN_PROGRESS"},
+                {"status": "COMPLETED", "actual_quantity": 4},
+            ):
+                response = client.patch(f"/api/v1/tasks/{task_id}/status", json=payload)
+                assert response.status_code == 200, response.text
+
+        with SessionLocal() as db:
+            actor = models.User(
+                email=f"pg-move-concurrency-{suffix}@example.test",
+                full_name="Movement concurrency smoke supervisor",
+                password_hash="smoke-test-only",
+                role="SUPERVISOR",
+                store_id=store_id,
+                is_active=True,
+            )
+            db.add(actor)
+            db.commit()
+            actor_id = actor.id
+
+        token = create_access_token(user_id=actor_id, role="SUPERVISOR")[0]
+        headers = {"Authorization": f"Bearer {token}"}
+        original_settings = main_module.settings
+        main_module.settings = original_settings.model_copy(update={"app_env": "production"})
+        barrier = Barrier(2)
+
+        def reconcile(task_id: int):
+            barrier.wait(timeout=15)
+            return client.post(
+                f"/api/v1/tasks/{task_id}/reconcile-inventory",
+                json={"reason": "PostgreSQL concurrent stock conservation smoke"},
+                headers=headers,
+            )
+
+        try:
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                futures = [executor.submit(reconcile, task_id) for task_id in task_ids]
+                responses = [future.result(timeout=45) for future in futures]
+        finally:
+            main_module.settings = original_settings
+
+        successes = [response for response in responses if response.status_code == 201]
+        conflicts = [response for response in responses if response.status_code == 409]
+        assert len(successes) == 1, [(r.status_code, r.text) for r in responses]
+        assert len(conflicts) == 1, [(r.status_code, r.text) for r in responses]
+        conflict_body = conflicts[0].json()
+        assert conflict_body.get("detail", {}).get("code") == "INSUFFICIENT_BACKROOM_STOCK", conflict_body
+        assert conflict_body["detail"]["available_quantity"] == 2
+        assert conflict_body["detail"]["requested_quantity"] == 4
+
+        movement = successes[0].json()
+        assert movement["source_snapshot_id"] == source_snapshot_id
+        assert movement["quantity"] == 4
+
+        with SessionLocal() as db:
+            movement_count = db.query(func.count(models.InventoryMovement.id)).filter(
+                models.InventoryMovement.source_snapshot_id == source_snapshot_id,
+            ).scalar()
+            event_count = db.query(func.count(models.InventoryMovementEvent.id)).filter(
+                models.InventoryMovementEvent.movement_id == movement["id"],
+            ).scalar()
+            result_snapshot_count = db.query(func.count(models.InventorySnapshot.id)).filter(
+                models.InventorySnapshot.source == "MANUAL",
+                models.InventorySnapshot.external_reference == f"TASK-RECONCILIATION-{movement['task_id']}",
+            ).scalar()
+            reconciled_task_event_count = db.query(func.count(models.ReplenishmentTaskEvent.id)).filter(
+                models.ReplenishmentTaskEvent.event_type == "INVENTORY_RECONCILED",
+                models.ReplenishmentTaskEvent.task_id.in_(task_ids),
+            ).scalar()
+
+        assert movement_count == 1, movement_count
+        assert event_count == 1, event_count
+        assert result_snapshot_count == 1, result_snapshot_count
+        assert reconciled_task_event_count == 1, reconciled_task_event_count
+
+    print(
+        "PostgreSQL inventory movement concurrency smoke passed: two simultaneous "
+        "reconciliations competed for one WMS snapshot; exactly one movement, "
+        "result snapshot and audit event were committed, with no stock overdraw."
+    )
+
+
+if __name__ == "__main__":
+    main()
