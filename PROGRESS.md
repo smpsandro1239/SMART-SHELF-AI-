@@ -1185,3 +1185,14 @@ A primeira execução do novo smoke (API CI run 45611398632) falhou porque a lei
 - Criado teste SQLite para AVAILABLE, UNAVAILABLE, UNKNOWN e downgrade.
 - O smoke PostgreSQL foi alargado com INSERT directo cuja linhagem, tarefa, quantidade e snapshot resultante são coerentes, mas cuja origem está UNAVAILABLE; deve falhar especificamente no guard 0088.
 - A migration e o smoke estão publicados; validação no PostgreSQL 16 e workflows do SHA actual ainda pendentes.
+
+
+## 2026-11-25 — Migration 0089: unidade base e quantidade exacta
+
+- A auditoria confirmou que `Product.unit` já é a unidade base usada pelo cálculo de embalagens. A implementação passa a congelar esse código em cada novo movimento, sem escolher uma unidade global nem inferir dados históricos.
+- Migration `0089_inventory_movement_base_unit_snapshot`: coluna `unit_code` nullable para compatibilidade histórica e trigger PostgreSQL/SQLite que exige correspondência exacta com `products.unit` nos novos INSERTs.
+- `InventoryMovement.quantity` passou a estar tipado como Decimal. A API mantém o campo numérico `quantity` e acrescenta `quantity_exact`; a evidência `MOVEMENT_RECORDED` inclui quantidade exacta e unidade.
+- A reconciliação rejeita quantidades com mais de três casas decimais, de acordo com `NUMERIC(12,3)`; não arredonda nem altera silenciosamente a quantidade física.
+- A interface deixou de somar quantidades de SKUs com unidades incompatíveis e apresenta a unidade de cada movimento. Movimentos históricos sem prova mantêm unidade desconhecida.
+- Testes acrescentados: migration SQLite, produto em kg com quantidade 2.375, rejeição de 1.2345, unidade vazia e guard PostgreSQL para unidade incompatível.
+- Validação do SHA actual ainda pendente. Não declarar migration 0089 concluída até CI/PostgreSQL/TypeScript/build verde.
