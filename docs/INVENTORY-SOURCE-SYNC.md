@@ -334,3 +334,12 @@ O campo WMS `reserved_quantity` é tratado como agregado por SKU/localização, 
 A regressão `test_reserved_wms_quantity_is_subtracted_once_across_multiple_movements` valida dois movimentos sucessivos de 6 unidades sobre um snapshot com on-hand 20 e reserva agregada 5: disponibilidades resultantes 9 e 3, mantendo a reserva 5 e o snapshot WMS original imutável. API CI PostgreSQL 16: **1719 passed, 1 skipped** no SHA `043c15f4980b45c4d50d2cd47fb921c5504eccac`.
 
 A confirmação externa WMS permanece separada. Não se deve inferir que um snapshot posterior confirma um movimento apenas porque a quantidade mudou; é necessária correlação inequívoca fornecida pelo adapter/ERP/WMS e uma decisão de contrato explícita.
+
+
+## Proveniência física do destino dos movimentos — migration 0094
+
+Cada movimento conserva `destination_shelf_id` e `destination_shelf_code`. O ID identifica a entidade; o código é um snapshot imutável do identificador físico legível no instante da operação. O serviço bloqueia a prateleira de destino, confirma a associação à loja da tarefa e grava o código no movimento e no evento `MOVEMENT_RECORDED`.
+
+A migration 0094 preenche o código histórico através da relação tarefa → prateleira → zona/loja e falha de forma segura se encontrar movimentos sem destino consistente. Triggers PostgreSQL/SQLite validam novos movimentos contra a prateleira e a loja da tarefa, impedindo destino forjado ou ausente. Renomear uma prateleira posteriormente não altera a evidência histórica já registada.
+
+A validação no SHA `3f4c9740ce70e932c5cb35745e96edd1163bf864` incluiu migration PostgreSQL 16, teste SQLite de backfill/guardas, smoke PostgreSQL de linhagem e concorrência e suite API: **1720 passed, 1 skipped**.
