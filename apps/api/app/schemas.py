@@ -141,8 +141,8 @@ class ProductEmbeddingExemplarRead(BaseModel):
 class ShelfProductCreate(BaseModel):
     shelf_id: int
     product_id: int
-    target_quantity: int = Field(default=1, gt=0)
-    min_display_quantity: int = Field(default=0, ge=0)
+    target_quantity: Decimal = Field(default=Decimal("1.000"), gt=0, max_digits=12, decimal_places=3)
+    min_display_quantity: Decimal = Field(default=Decimal("0.000"), ge=0, max_digits=12, decimal_places=3)
     position: str | None = Field(default=None, max_length=80)
 
 
