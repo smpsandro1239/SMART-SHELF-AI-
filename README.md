@@ -2157,3 +2157,10 @@ Validação no SHA `19bf8dd2bf2b6990faff261effc0752523f59a5b`: API CI **1728 pas
 A criação de registos horários, importações batch e importações CSV de vendas e tráfego está limitada a perfis SUPERVISOR/ADMIN. Os handlers repetem a autorização antes de processar payloads ou ler ficheiros; funcionários não podem introduzir dados POS.
 
 Validação no SHA `d36af7332544204fc14b6764a3faf99c24aa4741`: API CI **1729 passed, 1 skipped**, Quality Gates, Security Scans e Docker Compose concluídos com sucesso.
+
+
+### Autorização da evidência OCR
+
+A criação de execuções OCR, correspondências com o catálogo e fusão de evidência visual/textual exige perfil SUPERVISOR/ADMIN. Funcionários não podem persistir nem recalcular estes artefactos; a autorização é verificada antes do acesso à captura.
+
+Validação no SHA `a9271dd595c7d913a93cd969cf73d58b5e49438d`: API CI **1730 passed, 1 skipped**, Quality Gates, Security Scans e Docker Compose concluídos com sucesso.
