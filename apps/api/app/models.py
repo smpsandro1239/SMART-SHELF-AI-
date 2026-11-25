@@ -732,7 +732,7 @@ class InventoryMovement(Base):
 
     @property
     def quantity_exact(self) -> str:
-        return format(Decimal(str(self.quantity)), "f")
+        return format(Decimal(str(self.quantity)).quantize(Decimal("0.001")), "f")
 
 
 class InventoryMovementEvent(Base):
