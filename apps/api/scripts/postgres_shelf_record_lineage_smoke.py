@@ -149,6 +149,56 @@ def main() -> None:
             "replenishment_tasks": 1,
         }, persisted
 
+    with SessionLocal() as db:
+        # No replenishment task exists for this shelf: retained image evidence alone
+        # must prevent shelf/zone cascades from bypassing image retention and legal hold.
+        evidence_zone = models.Zone(store_id=store_a_id, name=f"Retained evidence zone {suffix}")
+        db.add(evidence_zone)
+        db.flush()
+        evidence_shelf = models.Shelf(zone_id=evidence_zone.id, code=f"PG-RETAINED-{suffix}")
+        db.add(evidence_shelf)
+        db.flush()
+        evidence_session = models.CaptureSession(
+            store_id=store_a_id,
+            shelf_id=evidence_shelf.id,
+            source_type="mobile",
+            capture_mode="single",
+            created_by_user_id=user_id,
+        )
+        evidence_image = models.ShelfImage(
+            shelf_id=evidence_shelf.id,
+            original_filename=f"retained-{suffix}.jpg",
+            storage_path=f"smoke/retained/{suffix}.jpg",
+            mime_type="image/jpeg",
+            file_size_bytes=1,
+            sha256="a" * 64,
+            retention_status="ACTIVE",
+            legal_hold=True,
+        )
+        db.add_all([evidence_session, evidence_image])
+        db.commit()
+        evidence_zone_id, evidence_shelf_id, evidence_image_id = (
+            evidence_zone.id, evidence_shelf.id, evidence_image.id,
+        )
+
+        _must_reject(
+            db,
+            "DELETE FROM shelves WHERE id = :shelf_id",
+            {"shelf_id": evidence_shelf_id},
+            "deleting a shelf with retained image evidence but no replenishment task",
+        )
+        _must_reject(
+            db,
+            "DELETE FROM zones WHERE id = :zone_id",
+            {"zone_id": evidence_zone_id},
+            "deleting a zone with retained image evidence but no replenishment task",
+        )
+        retained = db.execute(
+            text("SELECT retention_status, legal_hold FROM shelf_images WHERE id = :image_id"),
+            {"image_id": evidence_image_id},
+        ).one()
+        assert retained == ("ACTIVE", True), retained
+
     print(
         "PostgreSQL shelf record lineage smoke passed: cross-store INSERT/UPDATE "
         "and upstream shelf/zone moves were rejected; valid records remained intact."
