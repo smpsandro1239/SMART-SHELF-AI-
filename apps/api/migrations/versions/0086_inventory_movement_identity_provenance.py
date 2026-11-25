@@ -42,10 +42,9 @@ def upgrade() -> None:
         op.execute("DROP TRIGGER IF EXISTS trg_inventory_movements_no_delete")
 
     rows = bind.execute(sa.text(
-        "SELECT m.id, s.location_code, t.shelf_id "
+        "SELECT m.id, s.location_code "
         "FROM inventory_movements AS m "
-        "LEFT JOIN inventory_snapshots AS s ON s.id = m.source_snapshot_id "
-        "LEFT JOIN replenishment_tasks AS t ON t.id = m.task_id"
+        "LEFT JOIN inventory_snapshots AS s ON s.id = m.source_snapshot_id"
     )).mappings().all()
     for row in rows:
         bind.execute(
@@ -59,7 +58,6 @@ def upgrade() -> None:
             {
                 "operation_id": str(uuid4()),
                 "source_location_code": row["location_code"],
-                "destination_shelf_id": row["shelf_id"],
                 "movement_id": row["id"],
             },
         )
