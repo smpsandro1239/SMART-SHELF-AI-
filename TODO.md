@@ -2133,7 +2133,7 @@ A tarefa de concorrência está parcialmente concluída até o workflow executar
 - [x] Preservar os registos históricos e o comportamento do downgrade para o contrato anterior.
 - [x] Adicionar teste SQLite para AVAILABLE, UNAVAILABLE, UNKNOWN e downgrade.
 - [x] Acrescentar ao smoke PostgreSQL um INSERT directo coerente em tarefa/quantidade/snapshots que só pode ser rejeitado pelo guard de disponibilidade.
-- [ ] Confirmar migration, smoke PostgreSQL, suite API e quatro workflows no SHA final.
+- [x] Confirmar migration 0088, smoke PostgreSQL, suite API e workflows verdes (API CI/Docker no SHA de código; Quality Gates/Security no SHA final).
 
 A validação de frescura temporal continua no serviço, com política por loja. A migration reforça a condição física mínima sem inventar um limite de idade nem alterar snapshots históricos.
 
@@ -2149,6 +2149,6 @@ A validação de frescura temporal continua no serviço, com política por loja.
 - [x] Rejeitar na conclusão da tarefa quantidades com mais de três casas decimais, correspondentes à escala `NUMERIC(12,3)`, antes de persistir; manter guard de reconciliação para dados legados.
 - [x] Actualizar histórico React para apresentar a unidade do produto e deixar de somar quantidades de unidades incompatíveis.
 - [x] Adicionar testes SQLite, API e smoke PostgreSQL para unidade incompatível, origem WMS indisponível e escala decimal.
-- [ ] Validar migration 0089, testes, PostgreSQL 16, TypeScript/build e quatro workflows no SHA final.
+- [x] Validar migration 0089, testes, PostgreSQL 16, TypeScript/build e workflows verdes (API CI/Docker no SHA de código; Quality Gates/Security no SHA final).
 
 Não são feitas conversões automáticas entre unidade, caixa e palete. Os factores continuam definidos por `ProductPackagingLevel.base_units_per_package`; o movimento regista sempre a unidade base do SKU. Os movimentos anteriores mantêm unidade desconhecida até existir evidência histórica fiável.
