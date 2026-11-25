@@ -6775,33 +6775,34 @@ def upsert_inventory_freshness_policy(
         .with_for_update()
         .first()
     )
-    previous_backroom_location_code = (
-        policy.backroom_location_code if policy is not None else None
-    )
+    previous_backroom_location_code = policy.backroom_location_code if policy is not None else None
+    previous_comparison_skew_tolerance_minutes = policy.comparison_skew_tolerance_minutes if policy is not None else None
     if policy is None:
         policy = models.InventoryFreshnessPolicy(
-            store_id=payload.store_id,
-            source=payload.source,
-            max_age_minutes=payload.max_age_minutes,
+            store_id=payload.store_id, source=payload.source, max_age_minutes=payload.max_age_minutes,
             backroom_location_code=payload.backroom_location_code,
+            comparison_skew_tolerance_minutes=payload.comparison_skew_tolerance_minutes,
         )
         db.add(policy)
     else:
         policy.max_age_minutes = payload.max_age_minutes
         if "backroom_location_code" in payload.model_fields_set:
             policy.backroom_location_code = payload.backroom_location_code
+        if "comparison_skew_tolerance_minutes" in payload.model_fields_set:
+            policy.comparison_skew_tolerance_minutes = payload.comparison_skew_tolerance_minutes
 
     try:
-        if (
-            "backroom_location_code" in payload.model_fields_set
-            and previous_backroom_location_code != payload.backroom_location_code
-        ):
+        location_changed = "backroom_location_code" in payload.model_fields_set and previous_backroom_location_code != payload.backroom_location_code
+        skew_changed = "comparison_skew_tolerance_minutes" in payload.model_fields_set and previous_comparison_skew_tolerance_minutes != payload.comparison_skew_tolerance_minutes
+        if location_changed or skew_changed:
             db.flush()
             db.add(models.InventoryFreshnessPolicyEvent(
                 policy_id=policy.id,
                 actor_user_id=actor.id,
                 previous_backroom_location_code=previous_backroom_location_code,
-                new_backroom_location_code=payload.backroom_location_code,
+                new_backroom_location_code=payload.backroom_location_code if "backroom_location_code" in payload.model_fields_set else previous_backroom_location_code,
+                previous_comparison_skew_tolerance_minutes=previous_comparison_skew_tolerance_minutes,
+                new_comparison_skew_tolerance_minutes=payload.comparison_skew_tolerance_minutes if "comparison_skew_tolerance_minutes" in payload.model_fields_set else previous_comparison_skew_tolerance_minutes,
                 reason=payload.reason,
                 created_at=models.utc_now(),
             ))
@@ -6821,18 +6822,23 @@ def upsert_inventory_freshness_policy(
                 detail="Inventory freshness policy changed concurrently; retry the request",
             ) from exc
         previous_backroom_location_code = policy.backroom_location_code
+        previous_comparison_skew_tolerance_minutes = policy.comparison_skew_tolerance_minutes
         policy.max_age_minutes = payload.max_age_minutes
         if "backroom_location_code" in payload.model_fields_set:
             policy.backroom_location_code = payload.backroom_location_code
-            if previous_backroom_location_code != payload.backroom_location_code:
-                db.add(models.InventoryFreshnessPolicyEvent(
-                    policy_id=policy.id,
-                    actor_user_id=actor.id,
-                    previous_backroom_location_code=previous_backroom_location_code,
-                    new_backroom_location_code=payload.backroom_location_code,
-                    reason=payload.reason,
-                    created_at=models.utc_now(),
-                ))
+        if "comparison_skew_tolerance_minutes" in payload.model_fields_set:
+            policy.comparison_skew_tolerance_minutes = payload.comparison_skew_tolerance_minutes
+        location_changed = "backroom_location_code" in payload.model_fields_set and previous_backroom_location_code != payload.backroom_location_code
+        skew_changed = "comparison_skew_tolerance_minutes" in payload.model_fields_set and previous_comparison_skew_tolerance_minutes != payload.comparison_skew_tolerance_minutes
+        if location_changed or skew_changed:
+            db.add(models.InventoryFreshnessPolicyEvent(
+                policy_id=policy.id, actor_user_id=actor.id,
+                previous_backroom_location_code=previous_backroom_location_code,
+                new_backroom_location_code=payload.backroom_location_code if "backroom_location_code" in payload.model_fields_set else previous_backroom_location_code,
+                previous_comparison_skew_tolerance_minutes=previous_comparison_skew_tolerance_minutes,
+                new_comparison_skew_tolerance_minutes=payload.comparison_skew_tolerance_minutes if "comparison_skew_tolerance_minutes" in payload.model_fields_set else previous_comparison_skew_tolerance_minutes,
+                reason=payload.reason, created_at=models.utc_now(),
+            ))
         try:
             db.commit()
         except IntegrityError as retry_exc:
@@ -7081,12 +7087,14 @@ def get_inventory_reconciliation(
     } if snapshot_ids else {}
 
     freshness_policies = {
-        policy.source: policy.max_age_minutes
+        policy.source: policy
         for policy in db.query(models.InventoryFreshnessPolicy).filter(
             models.InventoryFreshnessPolicy.store_id == store_id,
             models.InventoryFreshnessPolicy.source.in_(["ERP", "WMS"]),
         ).all()
     }
+    erp_policy = freshness_policies.get("ERP")
+    comparison_skew_tolerance_minutes = erp_policy.comparison_skew_tolerance_minutes if erp_policy is not None else None
 
     result = []
     now = models.utc_now()
@@ -7146,7 +7154,8 @@ def get_inventory_reconciliation(
             else:
                 captured = captured.astimezone(timezone.utc)
             age = (now - captured).total_seconds() / 60
-            max_age = freshness_policies.get(source_snapshot.source, 240)
+            source_policy = freshness_policies.get(source_snapshot.source)
+            max_age = source_policy.max_age_minutes if source_policy is not None else 240
             freshness = "FUTURE" if age < 0 else "STALE" if age > max_age else "CURRENT"
             return {
                 "snapshot_id": source_snapshot.id,
@@ -7170,11 +7179,25 @@ def get_inventory_reconciliation(
         erp = source_evidence(erp_snapshot)
         wms = source_evidence(wms_snapshot)
         source_delta = None
+        capture_skew_seconds = None
+        if erp_snapshot is not None and wms_snapshot is not None:
+            erp_captured_at = erp_snapshot.captured_at
+            wms_captured_at = wms_snapshot.captured_at
+            erp_captured_at = erp_captured_at.replace(tzinfo=timezone.utc) if erp_captured_at.tzinfo is None else erp_captured_at.astimezone(timezone.utc)
+            wms_captured_at = wms_captured_at.replace(tzinfo=timezone.utc) if wms_captured_at.tzinfo is None else wms_captured_at.astimezone(timezone.utc)
+            capture_skew_seconds = abs((wms_captured_at - erp_captured_at).total_seconds())
         if wms_snapshot is not None and wms_snapshot.availability_status != "AVAILABLE":
             source_comparison_status = "WMS_BACKROOM_UNAVAILABLE"
         elif erp["freshness_status"] == "CURRENT" and wms["freshness_status"] == "CURRENT":
-            source_delta = round(wms["available_quantity"] - erp["available_quantity"], 3)
-            source_comparison_status = "IN_SYNC" if source_delta == 0 else "DIVERGENCE"
+            if capture_skew_seconds is None:
+                source_comparison_status = "INVALID_TIMESTAMP"
+            elif comparison_skew_tolerance_minutes is None and capture_skew_seconds > 0:
+                source_comparison_status = "TEMPORAL_SKEW_UNCONFIGURED"
+            elif comparison_skew_tolerance_minutes is not None and capture_skew_seconds > comparison_skew_tolerance_minutes * 60:
+                source_comparison_status = "TEMPORAL_SKEW"
+            else:
+                source_delta = round(wms["available_quantity"] - erp["available_quantity"], 3)
+                source_comparison_status = "IN_SYNC" if source_delta == 0 else "DIVERGENCE"
         elif erp["freshness_status"] == "MISSING":
             source_comparison_status = "MISSING_ERP"
         elif wms["freshness_status"] == "MISSING":
@@ -7241,6 +7264,8 @@ def get_inventory_reconciliation(
             "wms_snapshot_age_minutes": wms["age_minutes"],
             "wms_freshness_status": wms["freshness_status"],
             "wms_erp_available_delta": source_delta,
+            "erp_wms_capture_skew_seconds": round(capture_skew_seconds, 3) if capture_skew_seconds is not None else None,
+            "erp_wms_capture_skew_tolerance_minutes": comparison_skew_tolerance_minutes,
             "wms_erp_comparison_status": source_comparison_status,
         })
     return {
