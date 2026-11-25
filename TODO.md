@@ -2011,3 +2011,13 @@ Capacity is calculated conservatively from the current time to the end of the ac
 - [ ] Adapter real ERP/WMS e homologação do fornecedor.
 - [ ] Integração com Vault/Secrets Manager ou gestor de segredos escolhido no deployment.
 - [ ] Agendamento recorrente por loja/fonte e janelas operacionais.
+
+
+## Reconciliação multi-loja — SKU partilhado entre lojas (2026-11-25)
+
+- [x] Adicionar regressão HTTP com o mesmo produto global associado a prateleiras de duas lojas.
+- [x] Criar snapshots ERP/WMS com quantidades distintas por loja e confirmar que cada reconciliação congela apenas os IDs e quantidades da própria loja.
+- [x] Confirmar que a consulta corrente e o ledger da loja A não expõem o registo da loja B.
+- [x] Confirmar que a tentativa de rever directamente uma reconciliação estrangeira devolve 404 e mantém o estado PENDING.
+- [ ] Confirmar API CI, Quality Gates, Security Scans e Docker Compose no commit de teste.
+- [ ] Definir, com evidência do contrato operacional, quais as fontes que representam stock físico de retaguarda. Não inferir que ERP, WMS, POS, MANUAL ou IMPORT são intercambiáveis nem alterar a selecção do snapshot genérico sem essa decisão.
