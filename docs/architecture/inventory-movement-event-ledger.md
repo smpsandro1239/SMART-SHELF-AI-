@@ -22,3 +22,12 @@ Só `MOVEMENT_RECORDED` é produzido nesta fase. Os restantes tipos são reserva
 ## Limites e evolução
 
 O endpoint actual é read-only. A confirmação WMS requer adapter homologado, identidade idempotente da confirmação e evidência externa validada. As compensações exigem regras de quantidade/unidade e autorização específicas. Não se infere que o snapshot `MANUAL` resultante seja confirmação do WMS. A migration preserva os movimentos históricos; não inventa eventos anteriores nem proveniência ausente.
+
+
+## Concorrência da reconciliação de movimentos
+
+A reconciliação serializa operações do mesmo produto através do lock da linha de produto e bloqueia o snapshot WMS seleccionado. A quantidade utilizável é calculada como on-hand menos reservas e movimentos já registados a partir do mesmo snapshot. O movimento, o snapshot MANUAL resultante, o evento `MOVEMENT_RECORDED` e o evento da tarefa são confirmados numa única transacção.
+
+O smoke `apps/api/scripts/postgres_inventory_movement_concurrency_smoke.py` cria duas tarefas concluídas para o mesmo SKU/loja e disputa simultaneamente a mesma evidência WMS em PostgreSQL 16. O cenário reserva uma unidade e disponibiliza seis: duas reposições de quatro unidades não podem ambas ser aprovadas. O resultado esperado é exactamente um movimento de quatro unidades, saldo resultante de três unidades on-hand com uma reservada, um evento de movimento e rejeição da segunda operação por stock insuficiente. O smoke repete ainda o pedido vencedor e exige conflito idempotente com referência ao movimento já existente.
+
+A existência do script e do passo CI não equivale a validação; só um workflow verde no SHA exacto confirma o cenário. O smoke não homologa adapters WMS nem define conversões entre unidade, caixa e palete.
