@@ -2197,7 +2197,14 @@ SHA validado: `dda035f509a34f4d893f52d2d3cf4aa2c440f0e6`. O commit seguinte dest
 - [x] Corrigir o endpoint directo de snapshots: rejeitar quantidades com mais de três casas decimais antes da persistência.
 - [x] Tipar `InventorySnapshot.on_hand_quantity` e `reserved_quantity` como Decimal e converter os valores HTTP de forma explícita.
 - [x] Testar persistência exacta de 10.125 kg físico e 2.375 kg reservado, e rejeição de escala 4 em qualquer dos campos.
-- [ ] Validar suite API, PostgreSQL 16, Quality Gates, Security Scans e Docker Compose no SHA final.
+- [x] Validar suite API, PostgreSQL 16, Quality Gates, Security Scans e Docker Compose no código do SHA `900c24f19f47e6720da64775d6904692e104c35f` e documentação do SHA `bc37246a298f3cfe2ae142ea9051cb70beac1e22`.
 - [ ] Auditar semântica de snapshots consecutivos, reservas agregadas e mudanças de localização; não criar ledger local de reservas sem contrato de detalhe do WMS.
 
 Decisão: `reserved_quantity` continua a ser o total reservado reportado pelo WMS para a localização física configurada. O SMART SHELF AI calcula disponível = físico − reservado; não cria nem altera reservas no WMS. Uma tarefa operacional não é uma reserva de stock.
+
+
+### Validação CI da precisão dos snapshots (25/11/2026)
+- [x] API CI [45626116643](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45626116643): sucesso; PostgreSQL 16, smokes e **1698 passed, 1 skipped**.
+- [x] Quality Gates [45626178152](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45626178152): sucesso; TypeScript/build e **1698 passed, 1 skipped**.
+- [x] Docker Compose [45626116401](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45626116401): sucesso.
+- [x] Security Scans [45626178472](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45626178472): sucesso; dependency audits, secret scan e ZAP passive baseline.
