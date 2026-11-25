@@ -127,8 +127,92 @@ def main() -> None:
         movement = reconciled.json()
         assert movement["source_snapshot_id"] == source_snapshot_id
         assert movement["quantity"] == 4
+        event_response = client.get(
+            f"/api/v1/inventory/movements/{movement['id']}/events",
+            headers=headers,
+        )
+        assert event_response.status_code == 200, event_response.text
+        assert len(event_response.json()) == 1
+        recorded_event = event_response.json()[0]
+        assert recorded_event["event_type"] == "MOVEMENT_RECORDED"
+        assert recorded_event["operation_id"] == movement["operation_id"]
+        assert recorded_event["actor_user_id"] == supervisor_id
+        assert recorded_event["evidence"]["source_snapshot_id"] == source_snapshot_id
 
     with SessionLocal() as db:
+        external_actor = models.User(
+            email=f"pg-movement-external-{suffix}@example.test",
+            full_name="Movement event integration actor",
+            password_hash="smoke-test-only",
+            role="SUPERVISOR",
+            store_id=store_id,
+            is_active=True,
+        )
+        db.add(external_actor)
+        db.commit()
+        external_actor_id = external_actor.id
+
+        # Future WMS events may have their own actor/reason, but must retain the
+        # exact movement operation and tenant identity.
+        db.execute(text("""
+            INSERT INTO inventory_movement_events
+                (movement_id, operation_id, store_id, event_type, actor_user_id, reason, evidence, created_at)
+            VALUES (:movement_id, :operation_id, :store_id, 'WMS_CONFIRMATION_RECORDED',
+                    :actor_id, 'Synthetic confirmation event for database smoke', '{}'::json, CURRENT_TIMESTAMP)
+        """), {
+            "movement_id": movement["id"],
+            "operation_id": movement["operation_id"],
+            "store_id": store_id,
+            "actor_id": external_actor_id,
+        })
+        db.commit()
+
+        try:
+            db.execute(text("""
+                INSERT INTO inventory_movement_events
+                    (movement_id, operation_id, store_id, event_type, actor_user_id, reason, evidence, created_at)
+                VALUES (:movement_id, :operation_id, :store_id, 'COMPENSATION_RECORDED',
+                        :actor_id, 'Mismatched operation smoke', '{}'::json, CURRENT_TIMESTAMP)
+            """), {
+                "movement_id": movement["id"],
+                "operation_id": str(uuid4()),
+                "store_id": store_id,
+                "actor_id": external_actor_id,
+            })
+            db.commit()
+        except DBAPIError:
+            db.rollback()
+        else:
+            raise AssertionError("PostgreSQL accepted a movement event with a mismatched operation_id")
+
+        movement_event_count = db.execute(
+            text("SELECT COUNT(*) FROM inventory_movement_events WHERE movement_id = :movement_id"),
+            {"movement_id": movement["id"]},
+        ).scalar_one()
+        assert movement_event_count == 2, movement_event_count
+
+        event_id = db.execute(
+            text("SELECT id FROM inventory_movement_events WHERE movement_id = :movement_id ORDER BY id LIMIT 1"),
+            {"movement_id": movement["id"]},
+        ).scalar_one()
+        for statement in (
+            "UPDATE inventory_movement_events SET reason = 'tampered' WHERE id = :event_id",
+            "DELETE FROM inventory_movement_events WHERE id = :event_id",
+        ):
+            try:
+                db.execute(text(statement), {"event_id": event_id})
+                db.commit()
+            except DBAPIError:
+                db.rollback()
+            else:
+                raise AssertionError("PostgreSQL allowed an inventory movement event mutation")
+
+        movement_event_count = db.execute(
+            text("SELECT COUNT(*) FROM inventory_movement_events WHERE movement_id = :movement_id"),
+            {"movement_id": movement["id"]},
+        ).scalar_one()
+        assert movement_event_count == 2, movement_event_count
+
         invalid_inserts = (
             {
                 "store_id": store_id + 100000,
@@ -203,8 +287,8 @@ def main() -> None:
         assert count == 1, count
 
     print(
-        "PostgreSQL inventory movement smoke passed: valid reconciliation persisted; "
-        "invalid lineage, non-conserving duplicates, UPDATE and DELETE were rejected."
+        "PostgreSQL inventory movement smoke passed: movement and lifecycle event were "
+        "persisted; mismatched event identity, invalid movement lineage, UPDATE and DELETE were rejected."
     )
 
 

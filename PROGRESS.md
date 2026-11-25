@@ -1133,3 +1133,16 @@ Ponto semântico ainda aberto: InventorySnapshot.source aceita ERP, WMS, POS, MA
 - Testes acrescentados para leitura, autorização, isolamento multi-loja, rollback e guards SQLite.
 - **Validação desta implementação pendente:** CI no novo SHA. Não foram executados testes localmente pelo conector.
 - Próxima acção: verificar API CI, Quality Gates, Security Scans e Docker Compose; corrigir qualquer falha antes da confirmação WMS. Unidade/caixa/palete permanece por definir e depende do contrato operacional.
+
+
+## 2026-11-25 — Validação inicial do ledger de movimentos e hardening PostgreSQL
+
+- Commit de implementação fase 1: `5bacdf429de11f97d619c775bcdfaba9b5154154`.
+- API CI/PostgreSQL 16: run 45610114252 — **1684 passed, 1 skipped**, migration 0087 e todos os smokes existentes concluídos com sucesso.
+- Quality Gates: run 45610177910 — sucesso.
+- Security Scans: run 45610177856 — sucesso.
+- Docker Compose: run 45610114012 — sucesso.
+- Vercel permanece condicionado pelo `build-rate-limit`; não foi feito deploy nem alteração de produção.
+- A validação inicial não exercitava directamente os triggers de eventos em PostgreSQL. Foi iniciado um reforço do smoke `postgres_inventory_movement_lineage_smoke.py` para validar leitura do evento, operação/tenant, evento posterior com actor/motivo próprios, rejeição de operação divergente e protecção append-only.
+- A migration 0087 foi ajustada para validar actor/motivo contra o movimento apenas no evento inicial MOVEMENT_RECORDED; eventos posteriores mantêm a identidade da operação/loja, mas podem registar actor e motivo próprios.
+- **Estado deste reforço:** código e teste actualizados; CI do novo SHA pendente.

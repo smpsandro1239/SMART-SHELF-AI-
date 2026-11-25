@@ -44,6 +44,12 @@ def test_movement_event_ledger_enforces_provenance_and_append_only(tmp_path):
                 (movement_id, operation_id, store_id, event_type, actor_user_id, reason, evidence, created_at)
             VALUES (1, ?, 10, 'MOVEMENT_RECORDED', 20, 'Reposição confirmada', '{}', CURRENT_TIMESTAMP)
         """, (operation_id,))
+        # Later external/system events share movement identity but have their own actor and reason.
+        connection.exec_driver_sql("""
+            INSERT INTO inventory_movement_events
+                (movement_id, operation_id, store_id, event_type, actor_user_id, reason, evidence, created_at)
+            VALUES (1, ?, 10, 'WMS_CONFIRMATION_RECORDED', 21, 'Confirmação externa recebida', '{}', CURRENT_TIMESTAMP)
+        """, (operation_id,))
         with pytest.raises(IntegrityError, match="append-only"):
             connection.exec_driver_sql("UPDATE inventory_movement_events SET reason = 'alterado' WHERE movement_id = 1")
         with pytest.raises(IntegrityError, match="append-only"):
@@ -52,8 +58,14 @@ def test_movement_event_ledger_enforces_provenance_and_append_only(tmp_path):
             connection.exec_driver_sql("""
                 INSERT INTO inventory_movement_events
                     (movement_id, operation_id, store_id, event_type, actor_user_id, reason, evidence, created_at)
-                VALUES (1, ?, 10, 'WMS_CONFIRMATION_RECORDED', 21, 'Outro actor', '{}', CURRENT_TIMESTAMP)
+                VALUES (1, ?, 10, 'MOVEMENT_RECORDED', 21, 'Actor incorrecto para o evento inicial', '{}', CURRENT_TIMESTAMP)
             """, (operation_id,))
+        with pytest.raises(IntegrityError, match="provenance mismatch"):
+            connection.exec_driver_sql("""
+                INSERT INTO inventory_movement_events
+                    (movement_id, operation_id, store_id, event_type, actor_user_id, reason, evidence, created_at)
+                VALUES (1, ?, 10, 'COMPENSATION_RECORDED', 21, 'Operação diferente', '{}', CURRENT_TIMESTAMP)
+            """, (uuid4().hex,))
         with pytest.raises(IntegrityError, match="CHECK constraint failed"):
             connection.exec_driver_sql("""
                 INSERT INTO inventory_movement_events

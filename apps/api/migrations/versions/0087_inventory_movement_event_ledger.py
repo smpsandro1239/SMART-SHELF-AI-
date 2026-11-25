@@ -36,8 +36,13 @@ def upgrade() -> None:
                     WHERE movement.id = NEW.movement_id
                       AND movement.operation_id = NEW.operation_id
                       AND movement.store_id = NEW.store_id
-                      AND movement.actor_user_id = NEW.actor_user_id
-                      AND movement.reason = NEW.reason
+                      AND (
+                          NEW.event_type <> 'MOVEMENT_RECORDED'
+                          OR (
+                              movement.actor_user_id = NEW.actor_user_id
+                              AND movement.reason = NEW.reason
+                          )
+                      )
                 ) THEN
                     RAISE EXCEPTION 'inventory movement event provenance mismatch' USING ERRCODE = '23514';
                 END IF;
@@ -73,8 +78,13 @@ def upgrade() -> None:
                     WHERE movement.id = NEW.movement_id
                       AND movement.operation_id = NEW.operation_id
                       AND movement.store_id = NEW.store_id
-                      AND movement.actor_user_id = NEW.actor_user_id
-                      AND movement.reason = NEW.reason
+                      AND (
+                          NEW.event_type <> 'MOVEMENT_RECORDED'
+                          OR (
+                              movement.actor_user_id = NEW.actor_user_id
+                              AND movement.reason = NEW.reason
+                          )
+                      )
                 )
                 THEN RAISE(ABORT, 'inventory movement event provenance mismatch')
                 END;

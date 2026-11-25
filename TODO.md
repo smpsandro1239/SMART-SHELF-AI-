@@ -2099,7 +2099,11 @@ Capacity is calculated conservatively from the current time to the end of the ac
 - [x] Registar `MOVEMENT_RECORDED` na mesma transacção da reconciliação, com rollback integral se a auditoria falhar.
 - [x] Expor histórico read-only com RBAC ADMIN/SUPERVISOR e ocultação de IDs cross-store.
 - [x] Acrescentar testes API de leitura, autorização, isolamento, atomicidade e migration SQLite.
-- [ ] Confirmar migration 0087, suite API/PostgreSQL 16, Quality Gates, Security Scans e Docker Compose no SHA final.
+- [x] Confirmar migration 0087 e suite API: 1684 passed, 1 skipped; API CI run 45610114252 no SHA `5bacdf429de11f97d619c775bcdfaba9b5154154`.
+- [x] Confirmar Quality Gates run 45610177910 e Security Scans run 45610177856 no HEAD documental `c5171613262482e8b198aa6f7e18631cfd675b92`.
+- [x] Confirmar Docker Compose run 45610114012 no SHA `5bacdf429de11f97d619c775bcdfaba9b5154154`.
+- [x] Acrescentar smoke PostgreSQL 16 ao fluxo de movimentos para validar leitura, identidade da operação, evento WMS com actor/motivo próprios, rejeição de operação divergente e append-only.
+- [ ] Validar o smoke PostgreSQL de eventos e os quatro workflows no novo SHA.
 - [ ] Implementar confirmação WMS correlacionada/idempotente após homologação do adapter.
 - [ ] Implementar movimentos compensatórios sem alterar movimentos aprovados.
 - [ ] Implementar registo e revisão de divergências associadas ao movimento.

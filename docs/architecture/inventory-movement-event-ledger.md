@@ -6,7 +6,7 @@
 
 ## Decisão
 
-A migration `0087_inventory_movement_event_ledger` introduz `inventory_movement_events`, um ledger append-only ligado ao movimento e à sua `operation_id`. Cada evento congela loja, actor, motivo, tipo, timestamp e evidência estruturada. A base de dados verifica que movimento, operação, loja, actor e motivo coincidem antes de aceitar o evento e impede UPDATE/DELETE em PostgreSQL e SQLite.
+A migration `0087_inventory_movement_event_ledger` introduz `inventory_movement_events`, um ledger append-only ligado ao movimento e à sua `operation_id`. Cada evento congela loja, actor, motivo, tipo, timestamp e evidência estruturada. A base de dados exige sempre a identidade exacta do movimento, operação e loja. Para MOVEMENT_RECORDED, também exige actor e motivo iguais aos do movimento aprovado; eventos externos posteriores podem ter actor e motivo próprios. UPDATE/DELETE são bloqueados em PostgreSQL e SQLite.
 
 A primeira fase grava `MOVEMENT_RECORDED` na mesma transacção que cria o snapshot resultante, o movimento e o evento da tarefa. Se a inserção do evento falhar, toda a reconciliação é revertida. A leitura é disponibilizada em `GET /api/v1/inventory/movements/{movement_id}/events`, limitada a ADMIN e SUPERVISOR com isolamento por loja e ocultação de IDs estrangeiros.
 
