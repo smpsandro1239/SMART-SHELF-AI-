@@ -2122,3 +2122,10 @@ As migrations 0096–0098 protegem a linhagem operacional contra eliminações e
 A interface de histórico de movimentos apresenta a prateleira e a zona de destino, distinguindo valores capturados no movimento de valores históricos reconstruídos pela migration 0095. A reconstrução histórica não recupera renomeações anteriores que nunca tenham sido auditadas.
 
 Validação no SHA `7bf95468320fc1dd4ab992b520e855d463b6e1f6`: API CI PostgreSQL 16 **1725 passed, 1 skipped**, Quality Gates, Security Scans e Docker Compose concluídos com sucesso. Não existe ainda operação de arquivamento/soft-delete; não remover as guardas nem usar eliminação física para descontinuar entidades.
+
+
+## Concorrência e auditoria do ciclo de vida das tarefas
+
+As transições de estado de tarefas são serializadas através do lock da linha da tarefa em PostgreSQL e validadas sobre o estado actualizado. O smoke concorrente confirma que atribuições simultâneas não duplicam eventos e que, numa corrida entre conclusão e cancelamento, apenas uma transição terminal é aceite (a perdedora recebe HTTP 409). O ledger append-only reflecte exactamente o vencedor. Falhas de auditoria depois do flush revertem atomicamente o estado e o evento; tarefas terminais não podem ser reabertas.
+
+Validação no SHA `cfeeab3f4e092709de9eccb0dfc54397f72f12af`: API CI PostgreSQL 16 **1725 passed, 1 skipped**, Quality Gates, Security Scans e Docker Compose concluídos com sucesso.
