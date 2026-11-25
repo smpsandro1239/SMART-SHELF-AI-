@@ -1633,7 +1633,7 @@ A frescura continua dependente da política por loja e é validada pelo serviço
 - [x] Rejeitar INSERT directo com unidade vazia ou diferente da unidade base do SKU em PostgreSQL/SQLite.
 - [x] Não preencher unidade nos movimentos históricos sem prova temporal.
 - [x] Expor `quantity_exact` e unidade na API e evidência de auditoria.
-- [x] Rejeitar precisão superior a três casas decimais em vez de arredondar silenciosamente.
+- [x] Rejeitar precisão superior a três casas decimais na conclusão da tarefa, antes de persistir, com validação defensiva na reconciliação.
 - [x] Corrigir a interface para não somar quantidades de unidades incompatíveis.
 - [ ] Validar migration 0089, suite API, PostgreSQL smoke e workflows no SHA final.
 
