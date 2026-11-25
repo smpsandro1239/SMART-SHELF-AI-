@@ -38,3 +38,10 @@ A existência do script e do passo CI não equivale a validação; só um workfl
 A migration `0088_inventory_movement_available_source_guard` reforça o trigger de proveniência da migration 0086. Para movimentos novos, a relação tarefa → prateleira → loja e snapshot → loja/produto/WMS/localização tem também de provar `availability_status=AVAILABLE`. `UNAVAILABLE`, `UNKNOWN` e NULL falham fechados ao nível da base de dados, mesmo em INSERT directo fora da API.
 
 A regra não reinterpreta snapshots históricos nem altera o ledger existente. A política de frescura continua a ser avaliada pelo serviço porque depende da configuração `InventoryFreshnessPolicy` da loja.
+
+
+## Unidade base e precisão decimal (migration 0089)
+
+A unidade base já existe no catálogo como `Product.unit` e é usada pelos níveis logísticos através de `base_units_per_package`. A migration `0089_inventory_movement_base_unit_snapshot` acrescenta `InventoryMovement.unit_code`: novos movimentos têm de guardar exactamente a unidade do produto no momento da inserção. O trigger PostgreSQL/SQLite rejeita unidade ausente, vazia ou diferente da unidade base do SKU.
+
+A coluna é nullable apenas para preservar movimentos históricos sem inferir a unidade retroactivamente. A quantidade é Decimal sobre `NUMERIC(12,3)`; a API mantém `quantity` numérico para compatibilidade e acrescenta `quantity_exact` textual para transporte sem perda. A reconciliação rejeita escalas superiores a três casas decimais. Não existe conversão implícita entre unidades ou embalagens.
