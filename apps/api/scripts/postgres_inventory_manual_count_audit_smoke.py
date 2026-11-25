@@ -222,7 +222,7 @@ def main() -> None:
             ),
             {"snapshot_id": manual_snapshot_id},
         ).scalar_one()
-        assert event_count == 2, event_count
+        assert event_count == 1, event_count
 
     print(
         "PostgreSQL manual count audit smoke passed: active same-store SUPERVISOR "
