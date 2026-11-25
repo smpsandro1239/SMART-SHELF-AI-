@@ -5267,6 +5267,8 @@ def create_warehouse_location(
     db: Session = Depends(get_db),
 ):
     actor = _request_user(db, request)
+    if actor is not None and actor.role not in {"ADMIN", "SUPERVISOR"}:
+        raise HTTPException(status_code=403, detail="Supervisor role required")
     _enforce_store_scope(actor, payload.store_id)
     if db.get(models.Store, payload.store_id) is None:
         raise HTTPException(status_code=404, detail="Store not found")
@@ -5323,6 +5325,8 @@ def create_warehouse_placement(
     db: Session = Depends(get_db),
 ):
     actor = _request_user(db, request)
+    if actor is not None and actor.role not in {"ADMIN", "SUPERVISOR"}:
+        raise HTTPException(status_code=403, detail="Supervisor role required")
     location = _lock_store_scoped_record(
         db,
         models.WarehouseLocation,
@@ -5433,6 +5437,8 @@ def register_store_pallet(
 ):
     """Register one identified physical pallet; does not change aggregate inventory."""
     actor = _request_user(db, request)
+    if actor is not None and actor.role not in {"ADMIN", "SUPERVISOR"}:
+        raise HTTPException(status_code=403, detail="Supervisor role required")
     _enforce_store_scope(actor, payload.store_id)
     if db.get(models.Store, payload.store_id) is None:
         raise HTTPException(status_code=404, detail="Store not found")
@@ -5510,6 +5516,8 @@ def create_pallet_rotation_policy(
     db: Session = Depends(get_db),
 ):
     actor = _request_user(db, request)
+    if actor is not None and actor.role not in {"ADMIN", "SUPERVISOR"}:
+        raise HTTPException(status_code=403, detail="Supervisor role required")
     _enforce_store_scope(actor, payload.store_id)
     if db.get(models.Store, payload.store_id) is None:
         raise HTTPException(status_code=404, detail="Store not found")
@@ -5539,6 +5547,8 @@ def update_pallet_rotation_policy(
     db: Session = Depends(get_db),
 ):
     actor = _request_user(db, request)
+    if actor is not None and actor.role not in {"ADMIN", "SUPERVISOR"}:
+        raise HTTPException(status_code=403, detail="Supervisor role required")
     policy = _lock_store_scoped_record(
         db,
         models.PalletRotationPolicy,
@@ -5581,6 +5591,8 @@ def simulate_pallet_rotation(
 ):
     """Evaluate one displayed pallet against registered replacement stock; read-only."""
     actor = _request_user(db, request)
+    if actor is not None and actor.role not in {"ADMIN", "SUPERVISOR"}:
+        raise HTTPException(status_code=403, detail="Supervisor role required")
     _enforce_store_scope(actor, payload.store_id)
     if db.get(models.Store, payload.store_id) is None:
         raise HTTPException(status_code=404, detail="Store not found")
