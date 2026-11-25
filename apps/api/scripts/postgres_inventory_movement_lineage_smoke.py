@@ -533,6 +533,48 @@ def main() -> None:
         assert task_without_movement.status_code == 201, task_without_movement.text
 
     with SessionLocal() as db:
+        task_id_without_movement = task_without_movement.json()["id"]
+        task_event_id = db.execute(
+            text("SELECT id FROM replenishment_task_events WHERE task_id = :task_id ORDER BY id LIMIT 1"),
+            {"task_id": task_id_without_movement},
+        ).scalar_one()
+        guarded_operations = (
+            (
+                "UPDATE replenishment_tasks SET shelf_id = :shelf_id WHERE id = :task_id",
+                {"shelf_id": shelf.json()["id"], "task_id": task_id_without_movement},
+                "replenishment task identity is immutable after audit begins",
+            ),
+            (
+                "DELETE FROM replenishment_tasks WHERE id = :task_id",
+                {"task_id": task_id_without_movement},
+                "replenishment task has audit history",
+            ),
+            (
+                "UPDATE replenishment_task_events SET reason = 'tampered' WHERE id = :event_id",
+                {"event_id": task_event_id},
+                "replenishment task events are append-only",
+            ),
+            (
+                "DELETE FROM replenishment_task_events WHERE id = :event_id",
+                {"event_id": task_event_id},
+                "replenishment task events are append-only",
+            ),
+        )
+        for statement, parameters, expected in guarded_operations:
+            try:
+                db.execute(text(statement), parameters)
+                db.commit()
+            except DBAPIError as exc:
+                db.rollback()
+                assert expected in str(exc.orig), str(exc.orig)
+            else:
+                raise AssertionError("PostgreSQL allowed task identity/audit history mutation")
+        task_event_count = db.execute(
+            text("SELECT COUNT(*) FROM replenishment_task_events WHERE task_id = :task_id"),
+            {"task_id": task_id_without_movement},
+        ).scalar_one()
+        assert task_event_count >= 1
+
         for statement, parameters, expected in (
             ("DELETE FROM shelves WHERE id = :id", {"id": retention_shelf.json()["id"]}, "shelf has replenishment task history"),
             ("DELETE FROM zones WHERE id = :id", {"id": retention_zone.json()["id"]}, "zone has replenishment task history"),
@@ -552,8 +594,8 @@ def main() -> None:
         assert retained == 1
 
     print(
-        "PostgreSQL inventory movement smoke passed: immutable movement/event and shelf/zone provenance, "
-        "retention after hierarchy rename, task-history deletion guards, append-only guards and rejection of UNAVAILABLE WMS sources."
+        "PostgreSQL inventory movement smoke passed: immutable movement/shelf/zone provenance, task identity and audit immutability, "
+        "retention after hierarchy rename, append-only guards and rejection of UNAVAILABLE WMS sources."
     )
 
 
