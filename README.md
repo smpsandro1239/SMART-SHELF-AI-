@@ -2055,3 +2055,10 @@ O smoke PostgreSQL do worker executa o orquestrador real, termina o processo com
 ## Validação da autoridade WMS — 25-11-2026
 
 No SHA `c8efb82b64d4aed9fcc81fdb4a0571695fdd23cf`, a suite API terminou com **1679 testes aprovados e 1 ignorado**. API CI, Quality Gates, Security Scans e Docker Compose concluíram com sucesso. Esta validação cobre o contrato de software e as migrações, não certifica um adapter WMS real nem a exactidão dos códigos de localização do fornecedor.
+
+
+## Ledger de eventos dos movimentos de inventário — fase 1 (2026-11-25)
+
+A migration `0087_inventory_movement_event_ledger` cria um ledger append-only ligado a cada movimento aprovado. A reconciliação regista `MOVEMENT_RECORDED` na mesma transacção que o movimento, o snapshot resultante e o evento da tarefa; uma falha de auditoria reverte toda a operação. `GET /api/v1/inventory/movements/{movement_id}/events` expõe o histórico a ADMIN/SUPERVISOR, com isolamento multi-loja. A tabela reserva tipos para futura confirmação WMS, compensações e divergências, mas esses fluxos ainda não estão implementados. Não são inventados eventos históricos e o snapshot MANUAL não equivale a confirmação WMS.
+
+Arquitectura: [docs/architecture/inventory-movement-event-ledger.md](docs/architecture/inventory-movement-event-ledger.md).
