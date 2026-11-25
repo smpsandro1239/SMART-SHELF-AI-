@@ -2076,6 +2076,6 @@ A migration `0088_inventory_movement_available_source_guard` reforça a fronteir
 
 ## Unidade base e quantidade exacta dos movimentos — migration 0089
 
-Os movimentos novos congelam `Product.unit` em `inventory_movements.unit_code`. A base de dados exige que a unidade registada corresponda à unidade base do SKU no momento da operação. A quantidade continua persistida em `NUMERIC(12,3)`, tipada como Decimal e exposta também em `quantity_exact`; valores com mais de três casas decimais são rejeitados, não arredondados silenciosamente.
+Os movimentos novos congelam `Product.unit` em `inventory_movements.unit_code`. A base de dados exige que a unidade registada corresponda à unidade base do SKU no momento da operação. A quantidade continua persistida em `NUMERIC(12,3)`, tipada como Decimal e exposta também em `quantity_exact`; valores com mais de três casas decimais são rejeitados na conclusão da tarefa, antes de persistir, e protegidos novamente na reconciliação; não são arredondados silenciosamente.
 
 Os movimentos históricos mantêm `unit_code=NULL`, porque não existe evidência suficiente para reconstruir com segurança a unidade usada no momento. A interface apresenta a unidade de cada movimento e não agrega quantidades de produtos com unidades diferentes. Não há conversão implícita unidade/caixa/palete.
