@@ -2113,3 +2113,12 @@ Cada movimento conserva o ID e o código da prateleira de destino no instante da
 ## Identidade histórica do destino dos movimentos
 
 Os movimentos guardam a prateleira e a zona de destino (IDs e nomes/códigos) no instante da operação. `destination_location_backfilled` distingue captura contemporânea de reconstrução histórica a partir da hierarquia actual. Renomeações posteriores não reescrevem o movimento; a eliminação física de entidades referenciadas fica bloqueada para preservar a rastreabilidade.
+
+
+## Retenção da hierarquia de prateleiras e auditoria de tarefas
+
+As migrations 0096–0098 protegem a linhagem operacional contra eliminações em cascata. Tarefas com histórico não podem ser apagadas; eventos de tarefa são append-only e a identidade loja/prateleira/produto fica imutável depois do primeiro evento. Uma prateleira/zona também não pode ser eliminada enquanto existirem observações, alertas, associações de SKU, planogramas, reconciliações, tarefas, sessões de captura, imagens ou eventos Edge associados. Esta regra protege, entre outros casos, imagens ACTIVE e sujeitas a legal hold mesmo quando não existe uma tarefa de reposição.
+
+A interface de histórico de movimentos apresenta a prateleira e a zona de destino, distinguindo valores capturados no movimento de valores históricos reconstruídos pela migration 0095. A reconstrução histórica não recupera renomeações anteriores que nunca tenham sido auditadas.
+
+Validação no SHA `7bf95468320fc1dd4ab992b520e855d463b6e1f6`: API CI PostgreSQL 16 **1725 passed, 1 skipped**, Quality Gates, Security Scans e Docker Compose concluídos com sucesso. Não existe ainda operação de arquivamento/soft-delete; não remover as guardas nem usar eliminação física para descontinuar entidades.
