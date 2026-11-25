@@ -71,8 +71,8 @@ def main() -> None:
             json={
                 "store_id": store_id,
                 "product_id": product_id,
-                "on_hand_quantity": 6,
-                "reserved_quantity": 0,
+                "on_hand_quantity": 7,
+                "reserved_quantity": 1,
                 "source": "WMS",
                 "external_reference": f"PG-MOVECON-SOURCE-{suffix}",
                 "location_code": "BACKROOM-CONCURRENCY",
@@ -136,6 +136,17 @@ def main() -> None:
             with ThreadPoolExecutor(max_workers=2) as executor:
                 futures = [executor.submit(reconcile, task_id) for task_id in task_ids]
                 responses = [future.result(timeout=45) for future in futures]
+            successful_movement_id = next(
+                response.json()["id"] for response in responses if response.status_code == 201
+            )
+            successful_task_id = next(
+                response.json()["task_id"] for response in responses if response.status_code == 201
+            )
+            retry = client.post(
+                f"/api/v1/tasks/{successful_task_id}/reconcile-inventory",
+                json={"reason": "PostgreSQL concurrent stock conservation smoke"},
+                headers=headers,
+            )
         finally:
             main_module.settings = original_settings
 
@@ -149,8 +160,12 @@ def main() -> None:
         assert conflict_body["detail"]["requested_quantity"] == 4
 
         movement = successes[0].json()
+        assert movement["id"] == successful_movement_id
         assert movement["source_snapshot_id"] == source_snapshot_id
         assert movement["quantity"] == 4
+        assert retry.status_code == 409, retry.text
+        assert retry.json().get("detail", {}).get("code") == "INVENTORY_ALREADY_RECONCILED"
+        assert retry.json()["detail"]["movement_id"] == movement["id"]
 
         with SessionLocal() as db:
             movement_count = db.query(func.count(models.InventoryMovement.id)).filter(
@@ -159,10 +174,11 @@ def main() -> None:
             event_count = db.query(func.count(models.InventoryMovementEvent.id)).filter(
                 models.InventoryMovementEvent.movement_id == movement["id"],
             ).scalar()
-            result_snapshot_count = db.query(func.count(models.InventorySnapshot.id)).filter(
+            result_snapshot = db.query(models.InventorySnapshot).filter(
                 models.InventorySnapshot.source == "MANUAL",
                 models.InventorySnapshot.external_reference == f"TASK-RECONCILIATION-{movement['task_id']}",
-            ).scalar()
+            ).one_or_none()
+            result_snapshot_count = int(result_snapshot is not None)
             reconciled_task_event_count = db.query(func.count(models.ReplenishmentTaskEvent.id)).filter(
                 models.ReplenishmentTaskEvent.event_type == "INVENTORY_RECONCILED",
                 models.ReplenishmentTaskEvent.task_id.in_(task_ids),
@@ -171,12 +187,15 @@ def main() -> None:
         assert movement_count == 1, movement_count
         assert event_count == 1, event_count
         assert result_snapshot_count == 1, result_snapshot_count
+        assert float(result_snapshot.on_hand_quantity) == 3
+        assert float(result_snapshot.reserved_quantity) == 1
         assert reconciled_task_event_count == 1, reconciled_task_event_count
 
     print(
         "PostgreSQL inventory movement concurrency smoke passed: two simultaneous "
-        "reconciliations competed for one WMS snapshot; exactly one movement, "
-        "result snapshot and audit event were committed, with no stock overdraw."
+        "reconciliations competed for one WMS snapshot; reservations were preserved, "
+        "exactly one movement/result snapshot/audit event committed, stock was not overdrawn, "
+        "and retry returned the existing movement conflict."
     )
 
 
