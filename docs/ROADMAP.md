@@ -1614,3 +1614,14 @@ A confirmação WMS, compensações e divergências permanecem pendentes; não h
 - [x] Acrescentar prova PostgreSQL de rollback integral quando a inserção do evento de movimento falha (execução CI pendente).
 
 A serialização depende dos locks de produto e snapshot no endpoint de reconciliação. O smoke exercita pedidos HTTP concorrentes com sessões de base de dados independentes; testes SQLite não substituem esta prova PostgreSQL.
+
+
+## 2026-11-25 — Migration 0088: disponibilidade WMS na fronteira de movimentos
+
+- [x] Reforçar trigger PostgreSQL e SQLite para exigir `availability_status=AVAILABLE` no snapshot WMS de origem de qualquer novo movimento.
+- [x] Preservar snapshots e movimentos históricos sem backfill ou mutação.
+- [x] Testar AVAILABLE/UNAVAILABLE/UNKNOWN e downgrade em SQLite.
+- [x] Acrescentar prova PostgreSQL por INSERT directo com tarefa, quantidade e snapshot resultante coerentes.
+- [ ] Validar migration 0088, smoke e workflows no SHA final.
+
+A frescura continua dependente da política por loja e é validada pelo serviço; a migration não introduz um limite temporal global.
