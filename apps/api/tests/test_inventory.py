@@ -1535,6 +1535,29 @@ def test_wms_backroom_location_is_configurable_per_store_through_policy_api(monk
         assert invalid.status_code == 422
 
 
+def test_shelf_product_quantities_reject_precision_beyond_numeric_scale():
+    with TestClient(app) as client:
+        store_id, product_id = create_store_and_product(client, unit="kg")
+        zone = client.post(
+            "/api/v1/zones",
+            json={"store_id": store_id, "name": "Zona de validação decimal"},
+        )
+        shelf = client.post(
+            "/api/v1/shelves",
+            json={"zone_id": zone.json()["id"], "code": f"DECIMAL-{uuid4().hex[:6]}"},
+        )
+        response = client.post(
+            "/api/v1/shelf-products",
+            json={
+                "shelf_id": shelf.json()["id"],
+                "product_id": product_id,
+                "target_quantity": 1.2345,
+                "min_display_quantity": 0,
+            },
+        )
+        assert response.status_code == 422, response.text
+
+
 def test_replenishment_plan_includes_read_only_packaging_options_for_unit_case_and_pallet():
     with TestClient(app) as client:
         store_id, product_id = create_store_and_product(client, unit="kg")
@@ -1552,9 +1575,11 @@ def test_replenishment_plan_includes_read_only_packaging_options_for_unit_case_a
             "shelf_id": shelf.json()["id"],
             "product_id": product_id,
             "target_quantity": 20.125,
-            "min_display_quantity": 2,
+            "min_display_quantity": 0.375,
         })
         assert assignment.status_code == 201, assignment.text
+        assert assignment.json()["target_quantity"] == 20.125
+        assert assignment.json()["min_display_quantity"] == 0.375
 
         with TestingSession() as db:
             db.add(models.InventoryFreshnessPolicy(
