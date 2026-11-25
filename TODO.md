@@ -2152,3 +2152,13 @@ A validação de frescura temporal continua no serviço, com política por loja.
 - [x] Validar migration 0089, testes, PostgreSQL 16, TypeScript/build e workflows verdes (API CI/Docker no SHA de código; Quality Gates/Security no SHA final).
 
 Não são feitas conversões automáticas entre unidade, caixa e palete. Os factores continuam definidos por `ProductPackagingLevel.base_units_per_package`; o movimento regista sempre a unidade base do SKU. Os movimentos anteriores mantêm unidade desconhecida até existir evidência histórica fiável.
+
+
+## 2026-11-25 — Quantidades Decimal exactas no planeamento UNIT/CASE/PALLET
+
+- [x] Receber `required_base_units` como Decimal no endpoint de planeamento.
+- [x] Expor campos textuais exactos para quantidade necessária, factor de embalagem, quantidade solta, quantidade planeada e excesso, mantendo os campos numéricos anteriores.
+- [x] Testar quantidades fraccionárias com CASE aberto e fechado.
+- [x] Testar UNIT, CASE e PALLET na API, incluindo arredondamento para embalagens fechadas e excesso calculado.
+- [x] Confirmar que o endpoint continua a devolver `automatic_stock_movement_allowed=false`.
+- [x] Validar suite API, TypeScript/build, PostgreSQL smokes, Docker Compose e Security Scans.
