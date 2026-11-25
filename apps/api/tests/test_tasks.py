@@ -62,6 +62,21 @@ def create_task_context(client):
     return store_id, shelf.json()["id"], product.json()["id"]
 
 
+def _configure_backroom_location(store_id: int, location_code: str = "BACKROOM-A"):
+    with TestingSession() as db:
+        policy = db.query(models.InventoryFreshnessPolicy).filter_by(
+            store_id=store_id, source="WMS",
+        ).first()
+        if policy is None:
+            db.add(models.InventoryFreshnessPolicy(
+                store_id=store_id, source="WMS", max_age_minutes=240,
+                backroom_location_code=location_code,
+            ))
+        else:
+            policy.backroom_location_code = location_code
+        db.commit()
+
+
 def test_task_lifecycle_pending_assignment_start_and_completion():
     with TestClient(app) as client:
         store_id, shelf_id, product_id = create_task_context(client)
@@ -212,9 +227,11 @@ def test_task_from_recommendation_is_rejected_without_backroom_stock():
             "shelf_id": shelf_id, "source": "simulation",
             "status": "EMPTY", "confidence": 0.99,
         })
+        _configure_backroom_location(store_id)
         client.post("/api/v1/inventory/snapshots", json={
             "store_id": store_id, "product_id": product_id,
             "on_hand_quantity": 0, "reserved_quantity": 0, "source": "WMS",
+            "location_code": "BACKROOM-A", "availability_status": "AVAILABLE",
         })
 
         response = client.post("/api/v1/tasks/from-recommendation", json={
@@ -295,9 +312,11 @@ def test_task_from_measured_recommendation_uses_suggested_refill_quantity():
             "confidence": 0.95, "observed_quantity": 1,
         })
         assert observation.status_code == 201
+        _configure_backroom_location(store_id)
         inventory = client.post("/api/v1/inventory/snapshots", json={
             "store_id": store_id, "product_id": product_id,
             "on_hand_quantity": 8, "reserved_quantity": 0, "source": "WMS",
+            "location_code": "BACKROOM-A", "availability_status": "AVAILABLE",
         })
         assert inventory.status_code == 201
 
@@ -463,12 +482,15 @@ def test_task_status_and_audit_event_roll_back_together_when_audit_fails(monkeyp
 
 def _freshness_reconciliation_context(client, snapshot_age_minutes: int):
     store_id, shelf_id, product_id = create_task_context(client)
+    _configure_backroom_location(store_id)
     snapshot = client.post("/api/v1/inventory/snapshots", json={
         "store_id": store_id,
         "product_id": product_id,
         "on_hand_quantity": 20,
         "reserved_quantity": 2,
         "source": "WMS",
+        "location_code": "BACKROOM-A",
+        "availability_status": "AVAILABLE",
         "external_reference": f"FRESH-{uuid4().hex[:10]}",
         "captured_at": (datetime.now(timezone.utc) - timedelta(minutes=snapshot_age_minutes)).isoformat(),
     })
@@ -1173,6 +1195,8 @@ def test_replenishment_rejects_stale_or_future_inventory_snapshot(
             "on_hand_quantity": 20,
             "reserved_quantity": 0,
             "source": "WMS",
+            "location_code": "BACKROOM-A",
+            "availability_status": "AVAILABLE",
             "captured_at": (datetime.now(timezone.utc) + snapshot_offset).isoformat(),
         })
         assert snapshot.status_code == 201, snapshot.text
@@ -1212,6 +1236,8 @@ def test_replenishment_uses_store_and_source_inventory_freshness_policy():
             "on_hand_quantity": 20,
             "reserved_quantity": 0,
             "source": "WMS",
+            "location_code": "BACKROOM-A",
+            "availability_status": "AVAILABLE",
             "captured_at": (datetime.now(timezone.utc) - timedelta(minutes=20)).isoformat(),
         })
         assert snapshot.status_code == 201, snapshot.text
@@ -1221,6 +1247,7 @@ def test_replenishment_uses_store_and_source_inventory_freshness_policy():
                 store_id=store_id,
                 source="WMS",
                 max_age_minutes=10,
+                backroom_location_code="BACKROOM-A",
             ))
             db.commit()
 
