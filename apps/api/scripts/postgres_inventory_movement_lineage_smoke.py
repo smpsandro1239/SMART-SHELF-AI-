@@ -51,6 +51,15 @@ def main() -> None:
         )
         assert assignment.status_code == 201, assignment.text
 
+        with SessionLocal() as db:
+            db.add(models.InventoryFreshnessPolicy(
+                store_id=store_id,
+                source="WMS",
+                max_age_minutes=240,
+                backroom_location_code="BACKROOM-CI",
+            ))
+            db.commit()
+
         snapshot = client.post(
             "/api/v1/inventory/snapshots",
             json={
@@ -58,8 +67,10 @@ def main() -> None:
                 "product_id": product_id,
                 "on_hand_quantity": 20,
                 "reserved_quantity": 2,
-                "source": "ERP",
+                "source": "WMS",
                 "external_reference": f"PG-MOVE-SOURCE-{suffix}",
+                "location_code": "BACKROOM-CI",
+                "availability_status": "AVAILABLE",
             },
         )
         assert snapshot.status_code == 201, snapshot.text
