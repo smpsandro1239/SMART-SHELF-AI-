@@ -2202,4 +2202,4 @@ def test_reserved_wms_quantity_is_subtracted_once_across_multiple_movements(monk
                 source_snapshot_id=source.json()["id"],
             ).all()
             assert len(stored_movements) == 2
-            assert sum((Decimal(str(item.quantity)) for item in stored_movements), Decimal("0")) == Decimal("12.000")
+            assert sum(item.quantity for item in stored_movements) == 12
