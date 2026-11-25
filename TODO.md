@@ -2136,3 +2136,19 @@ A tarefa de concorrência está parcialmente concluída até o workflow executar
 - [ ] Confirmar migration, smoke PostgreSQL, suite API e quatro workflows no SHA final.
 
 A validação de frescura temporal continua no serviço, com política por loja. A migration reforça a condição física mínima sem inventar um limite de idade nem alterar snapshots históricos.
+
+
+## 2026-11-25 — Unidade base e precisão exacta dos movimentos (0089)
+
+- [x] Reutilizar `Product.unit` como unidade base já definida pelo catálogo e usada pelos níveis de embalagem.
+- [x] Criar migration `0089_inventory_movement_base_unit_snapshot` com `unit_code` imutável por movimento novo.
+- [x] Exigir na base de dados que `unit_code` corresponda à unidade actual do produto no momento da inserção.
+- [x] Preservar movimentos históricos com `unit_code=NULL`; não inferir retroactivamente a unidade.
+- [x] Tipar a quantidade persistida como Decimal e expor `quantity_exact` sem remover o campo numérico legado.
+- [x] Incluir unidade e quantidade exacta na evidência do evento `MOVEMENT_RECORDED`.
+- [x] Rejeitar reconciliações com mais de três casas decimais, correspondentes à escala actual `NUMERIC(12,3)`, em vez de arredondar silenciosamente.
+- [x] Actualizar histórico React para apresentar a unidade do produto e deixar de somar quantidades de unidades incompatíveis.
+- [x] Adicionar testes SQLite, API e smoke PostgreSQL para unidade incompatível, origem WMS indisponível e escala decimal.
+- [ ] Validar migration 0089, testes, PostgreSQL 16, TypeScript/build e quatro workflows no SHA final.
+
+Não são feitas conversões automáticas entre unidade, caixa e palete. Os factores continuam definidos por `ProductPackagingLevel.base_units_per_package`; o movimento regista sempre a unidade base do SKU. Os movimentos anteriores mantêm unidade desconhecida até existir evidência histórica fiável.
