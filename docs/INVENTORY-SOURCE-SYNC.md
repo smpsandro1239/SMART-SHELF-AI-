@@ -343,3 +343,12 @@ Cada movimento conserva `destination_shelf_id` e `destination_shelf_code`. O ID 
 A migration 0094 preenche o código histórico através da relação tarefa → prateleira → zona/loja e falha de forma segura se encontrar movimentos sem destino consistente. Triggers PostgreSQL/SQLite validam novos movimentos contra a prateleira e a loja da tarefa, impedindo destino forjado ou ausente. Renomear uma prateleira posteriormente não altera a evidência histórica já registada.
 
 A validação no SHA `3f4c9740ce70e932c5cb35745e96edd1163bf864` incluiu migration PostgreSQL 16, teste SQLite de backfill/guardas, smoke PostgreSQL de linhagem e concorrência e suite API: **1720 passed, 1 skipped**.
+
+
+## Identidade completa do destino e retenção — migration 0095
+
+O movimento congela a identidade física do destino com `destination_shelf_id`, `destination_shelf_code`, `destination_zone_id` e `destination_zone_name`. O flag `destination_location_backfilled` distingue os dados capturados na operação (`false`) dos valores históricos preenchidos pela hierarquia actualmente disponível durante a migration (`true`). Esta distinção é necessária porque renomeações anteriores à migration não podem ser reconstruídas sem um ledger histórico.
+
+As guardas PostgreSQL/SQLite validam a correspondência tarefa → prateleira → zona → loja, incluindo código e nome, e rejeitam novos movimentos com o flag de backfill activo. O smoke PostgreSQL confirmou que renomear a prateleira/zona não altera os campos históricos do movimento e que a eliminação física da prateleira/zona é bloqueada pela cadeia de retenção que passa pela tarefa e pelo movimento.
+
+Se a operação exigir esconder ou descontinuar zonas/prateleiras, deve ser implementado arquivamento/soft-delete; não se deve remover FKs, apagar movimentos ou reescrever a evidência. API CI PostgreSQL 16: **1722 passed, 1 skipped** no SHA `48fdf8310d1b17179ba6520d7a559b3bcc822c7f`.
