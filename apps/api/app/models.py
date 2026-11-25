@@ -745,6 +745,7 @@ class InventoryMovement(Base):
         CheckConstraint("source_snapshot_id <> result_snapshot_id", name="ck_inventory_movement_distinct_snapshots"),
         CheckConstraint("destination_shelf_id IS NOT NULL AND destination_shelf_code IS NOT NULL AND length(trim(destination_shelf_code)) BETWEEN 1 AND 80", name="ck_inventory_movement_destination_snapshot_required"),
         CheckConstraint("destination_zone_id IS NOT NULL AND destination_zone_name IS NOT NULL AND length(trim(destination_zone_name)) BETWEEN 1 AND 120", name="ck_inventory_movement_destination_zone_snapshot_required"),
+        CheckConstraint("destination_location_backfilled IN (0, 1)", name="ck_inventory_movement_destination_backfill_flag"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -761,6 +762,7 @@ class InventoryMovement(Base):
     destination_shelf_code: Mapped[str] = mapped_column(String(80), nullable=False)
     destination_zone_id: Mapped[int] = mapped_column(Integer, nullable=False)
     destination_zone_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    destination_location_backfilled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=text("false"))
     result_snapshot_id: Mapped[int] = mapped_column(ForeignKey("inventory_snapshots.id", ondelete="RESTRICT"), nullable=False)
     actor_user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False, index=True)
     reason: Mapped[str] = mapped_column(Text, nullable=False)
