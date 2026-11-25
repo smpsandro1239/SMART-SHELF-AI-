@@ -1,6 +1,7 @@
 from datetime import date, datetime, timezone
+from uuid import UUID, uuid4
 
-from sqlalchemy import JSON, Date, DateTime, ForeignKey, String, Text, Float, Integer, Boolean, Numeric, UniqueConstraint, CheckConstraint, ForeignKeyConstraint, Index, BigInteger, text
+from sqlalchemy import JSON, Date, DateTime, ForeignKey, String, Text, Float, Integer, Boolean, Numeric, UniqueConstraint, CheckConstraint, ForeignKeyConstraint, Index, BigInteger, Uuid, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -706,18 +707,22 @@ class InventoryMovement(Base):
     __table_args__ = (
         UniqueConstraint("task_id", name="uq_inventory_movement_task"),
         UniqueConstraint("result_snapshot_id", name="uq_inventory_movement_result_snapshot"),
+        UniqueConstraint("operation_id", name="uq_inventory_movement_operation_id"),
         CheckConstraint("movement_type = 'BACKROOM_TO_SHELF'", name="ck_inventory_movement_type"),
         CheckConstraint("quantity > 0", name="ck_inventory_movement_quantity_positive"),
         CheckConstraint("source_snapshot_id <> result_snapshot_id", name="ck_inventory_movement_distinct_snapshots"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    operation_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), default=uuid4, nullable=False)
     task_id: Mapped[int] = mapped_column(ForeignKey("replenishment_tasks.id", ondelete="RESTRICT"), nullable=False)
     store_id: Mapped[int] = mapped_column(ForeignKey("stores.id", ondelete="RESTRICT"), nullable=False, index=True)
     product_id: Mapped[int] = mapped_column(ForeignKey("products.id", ondelete="RESTRICT"), nullable=False, index=True)
     movement_type: Mapped[str] = mapped_column(String(30), nullable=False, default="BACKROOM_TO_SHELF")
     quantity: Mapped[float] = mapped_column(Numeric(12, 3), nullable=False)
     source_snapshot_id: Mapped[int] = mapped_column(ForeignKey("inventory_snapshots.id", ondelete="RESTRICT"), nullable=False, index=True)
+    source_location_code: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    destination_shelf_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     result_snapshot_id: Mapped[int] = mapped_column(ForeignKey("inventory_snapshots.id", ondelete="RESTRICT"), nullable=False)
     actor_user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False, index=True)
     reason: Mapped[str] = mapped_column(Text, nullable=False)
