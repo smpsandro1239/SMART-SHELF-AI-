@@ -1,4 +1,5 @@
 from datetime import date, datetime
+from decimal import Decimal
 from typing import Literal
 from uuid import UUID
 
@@ -394,6 +395,13 @@ class ReplenishmentTaskStatusUpdate(BaseModel):
     assigned_user_id: int | None = None
     actual_quantity: float | None = Field(default=None, gt=0, allow_inf_nan=False)
     exception_reason: str | None = Field(default=None, min_length=3, max_length=1000)
+
+    @field_validator("actual_quantity")
+    @classmethod
+    def validate_actual_quantity_scale(cls, value: float | None) -> float | None:
+        if value is not None and Decimal(str(value)) != Decimal(str(value)).quantize(Decimal("0.001")):
+            raise ValueError("actual_quantity supports at most three decimal places")
+        return value
 
 
 class ReplenishmentTaskRead(BaseModel):
