@@ -2150,3 +2150,10 @@ Validação no SHA `50df52e59eca47aa2dfc868fc16621cf2f636586`: API CI, Quality G
 A ingestão de snapshots de qualquer origem e a leitura/listagem de snapshots exigem perfil SUPERVISOR ou ADMIN. Funcionários não podem introduzir snapshots WMS/ERP/POS nem consultar quantidades de inventário através destas APIs. A listagem do catálogo de lojas também está limitada a SUPERVISOR/ADMIN.
 
 Validação no SHA `19bf8dd2bf2b6990faff261effc0752523f59a5b`: API CI **1728 passed, 1 skipped**, Quality Gates, Security Scans e Docker Compose concluídos com sucesso.
+
+
+### Autorização da ingestão POS
+
+A criação de registos horários, importações batch e importações CSV de vendas e tráfego está limitada a perfis SUPERVISOR/ADMIN. Os handlers repetem a autorização antes de processar payloads ou ler ficheiros; funcionários não podem introduzir dados POS.
+
+Validação no SHA `d36af7332544204fc14b6764a3faf99c24aa4741`: API CI **1729 passed, 1 skipped**, Quality Gates, Security Scans e Docker Compose concluídos com sucesso.
