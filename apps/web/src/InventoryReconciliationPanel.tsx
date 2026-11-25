@@ -18,7 +18,9 @@ type ReconciliationItem = {
   wms_available_quantity: number | null; wms_source: string | null; wms_captured_at: string | null;
   wms_snapshot_age_minutes: number | null; wms_freshness_status: "MISSING" | "CURRENT" | "STALE" | "FUTURE";
   wms_erp_available_delta: number | null;
-  wms_erp_comparison_status: "MISSING_ERP" | "MISSING_WMS" | "INVALID_TIMESTAMP" | "STALE_SOURCE" | "IN_SYNC" | "DIVERGENCE";
+  erp_wms_capture_skew_seconds: number | null;
+  erp_wms_capture_skew_tolerance_minutes: number | null;
+  wms_erp_comparison_status: "MISSING_ERP" | "MISSING_WMS" | "INVALID_TIMESTAMP" | "STALE_SOURCE" | "IN_SYNC" | "DIVERGENCE" | "WMS_BACKROOM_UNAVAILABLE" | "WMS_BACKROOM_LOCATION_NOT_CONFIGURED" | "MISSING_WMS_BACKROOM_STOCK" | "TEMPORAL_SKEW_UNCONFIGURED" | "TEMPORAL_SKEW";
 };
 type LedgerRecord = {
   id: number; shelf_id: number; product_id: number; review_status: "PENDING" | "APPROVED" | "REJECTED" | "NEEDS_INVESTIGATION";
@@ -205,7 +207,16 @@ export default function InventoryReconciliationPanel({ token, storeId }: Props) 
           </div>
           <div className="inventory-reconciliation-footnote">
             <span>Observação #{item.observation_id ?? "—"} · Snapshot #{item.backroom_snapshot_id ?? "—"}</span>
-            <span>{item.wms_erp_comparison_status === "IN_SYNC" ? "ERP e WMS coincidem." : item.wms_erp_comparison_status === "DIVERGENCE" ? "Divergência WMS − ERP: " + quantity(item.wms_erp_available_delta) : "Comparação ERP/WMS indisponível: " + item.wms_erp_comparison_status} · Sem ajustes automáticos ao inventário contabilístico.</span>
+            <span>
+              {item.wms_erp_comparison_status === "IN_SYNC" ? "ERP e WMS coincidem."
+                : item.wms_erp_comparison_status === "DIVERGENCE" ? "Divergência WMS − ERP: " + quantity(item.wms_erp_available_delta)
+                  : item.wms_erp_comparison_status === "TEMPORAL_SKEW_UNCONFIGURED" ? "Comparação suspensa: falta configurar a tolerância temporal ERP/WMS."
+                    : item.wms_erp_comparison_status === "TEMPORAL_SKEW" ? "Comparação suspensa: diferença temporal superior à tolerância configurada."
+                      : "Comparação ERP/WMS indisponível: " + item.wms_erp_comparison_status}
+              {item.erp_wms_capture_skew_seconds !== null && " · Diferença entre capturas: " + item.erp_wms_capture_skew_seconds.toLocaleString("pt-PT") + " s"}
+              {item.erp_wms_capture_skew_tolerance_minutes !== null && " · Tolerância: " + item.erp_wms_capture_skew_tolerance_minutes + " min"}
+              {" · Sem ajustes automáticos ao inventário contabilístico."}
+            </span>
           </div>
           <div className="inventory-reconciliation-ledger-action">
             <span>Guardar evidência imutável e enviar para revisão humana.</span>
