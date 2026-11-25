@@ -1662,6 +1662,53 @@ def test_replenishment_plan_includes_read_only_packaging_options_for_unit_case_a
             assert db.query(models.InventoryMovement).filter_by(store_id=store_id).count() == 0
 
 
+def test_inventory_snapshot_persists_exact_decimal_physical_and_reserved_quantities():
+    with TestClient(app) as client:
+        store_id, product_id = create_store_and_product(client, unit="kg")
+        response = client.post(
+            "/api/v1/inventory/snapshots",
+            json={
+                "store_id": store_id,
+                "product_id": product_id,
+                "on_hand_quantity": 10.125,
+                "reserved_quantity": 2.375,
+                "source": "MANUAL",
+                "external_reference": f"DECIMAL-SNAPSHOT-{uuid4().hex}",
+            },
+        )
+        assert response.status_code == 201, response.text
+        assert response.json()["on_hand_quantity"] == 10.125
+        assert response.json()["reserved_quantity"] == 2.375
+
+        with TestingSession() as db:
+            persisted = db.get(models.InventorySnapshot, response.json()["id"])
+            assert persisted is not None
+            assert str(persisted.on_hand_quantity) == "10.125"
+            assert str(persisted.reserved_quantity) == "2.375"
+
+        invalid_quantities = (
+            {"on_hand_quantity": 10.1234, "reserved_quantity": 2.0},
+            {"on_hand_quantity": 10.0, "reserved_quantity": 2.0001},
+        )
+        for index, quantities in enumerate(invalid_quantities):
+            invalid = client.post(
+                "/api/v1/inventory/snapshots",
+                json={
+                    "store_id": store_id,
+                    "product_id": product_id,
+                    **quantities,
+                    "source": "MANUAL",
+                    "external_reference": f"INVALID-DECIMAL-SNAPSHOT-{index}-{uuid4().hex}",
+                },
+            )
+            assert invalid.status_code == 422, invalid.text
+
+        with TestingSession() as db:
+            assert db.query(models.InventorySnapshot).filter_by(
+                store_id=store_id, product_id=product_id,
+            ).count() == 1
+
+
 def test_inventory_movement_freezes_product_base_unit_and_exact_decimal_quantity(monkeypatch):
     with TestClient(app) as client:
         store_id, product_id, task_id, source_snapshot_id = _completed_replenishment(
