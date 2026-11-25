@@ -2121,3 +2121,85 @@ def test_wms_backroom_location_change_and_late_snapshot_never_restore_old_stock(
             assert events[0].new_backroom_location_code == "BACKROOM-NEW"
             assert events[0].actor_user_id == actor.id
             assert db.query(models.InventorySnapshot).filter_by(store_id=store_id, source="WMS").count() == 3
+
+
+def test_reserved_wms_quantity_is_subtracted_once_across_multiple_movements(monkeypatch):
+    with TestClient(app) as client:
+        store_id, product_id = create_store_and_product(client)
+        _configure_backroom_location(store_id)
+        captured = datetime.now(timezone.utc) - timedelta(minutes=5)
+        source = client.post("/api/v1/inventory/snapshots", json={
+            "store_id": store_id, "product_id": product_id,
+            "on_hand_quantity": 20, "reserved_quantity": 5,
+            "source": "WMS", "external_reference": "WMS-AGGREGATED-RESERVATION",
+            "location_code": "BACKROOM-A", "availability_status": "AVAILABLE",
+            "captured_at": captured.isoformat(),
+        })
+        assert source.status_code == 201, source.text
+        actor = _supervisor_actor(store_id)
+        monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: actor)
+        task_ids = []
+        for index in range(2):
+            zone = client.post("/api/v1/zones", json={
+                "store_id": store_id, "name": f"Zona reserva agregada {index}",
+            }).json()
+            shelf = client.post("/api/v1/shelves", json={
+                "zone_id": zone["id"], "code": f"RESERVED-{index}",
+            }).json()
+            linked = client.post("/api/v1/shelf-products", json={
+                "shelf_id": shelf["id"], "product_id": product_id,
+                "target_quantity": 12, "min_display_quantity": 2,
+            })
+            assert linked.status_code == 201, linked.text
+            created = client.post("/api/v1/tasks", json={
+                "store_id": store_id, "shelf_id": shelf["id"],
+                "product_id": product_id, "requested_quantity": 6,
+            })
+            assert created.status_code == 201, created.text
+            task_id = created.json()["id"]
+            assert client.patch(f"/api/v1/tasks/{task_id}/status", json={
+                "status": "ASSIGNED", "assigned_to": "operador",
+            }).status_code == 200
+            assert client.patch(f"/api/v1/tasks/{task_id}/status", json={
+                "status": "IN_PROGRESS",
+            }).status_code == 200
+            completed = client.patch(f"/api/v1/tasks/{task_id}/status", json={
+                "status": "COMPLETED", "actual_quantity": 6,
+                "exception_reason": "Reposição confirmada para validação de reserva agregada.",
+            })
+            assert completed.status_code == 200, completed.text
+            task_ids.append(task_id)
+
+        movements = []
+        for task_id in task_ids:
+            response = client.post(
+                f"/api/v1/tasks/{task_id}/reconcile-inventory",
+                json={"reason": "Movimento autorizado; reserva WMS agregada preservada."},
+            )
+            assert response.status_code == 201, response.text
+            movements.append(response.json())
+
+        assert all(item["source_snapshot_id"] == source.json()["id"] for item in movements)
+        assert [item["quantity"] for item in movements] == [6, 6]
+        history = client.get("/api/v1/inventory/snapshots", params={
+            "store_id": store_id, "product_id": product_id,
+        })
+        assert history.status_code == 200
+        snapshots = {item["id"]: item for item in history.json()}
+        source_snapshot = snapshots[source.json()["id"]]
+        first_result = snapshots[movements[0]["result_snapshot_id"]]
+        second_result = snapshots[movements[1]["result_snapshot_id"]]
+        assert source_snapshot["on_hand_quantity"] == 20
+        assert source_snapshot["reserved_quantity"] == 5
+        assert first_result["on_hand_quantity"] == 14
+        assert first_result["reserved_quantity"] == 5
+        assert first_result["available_quantity"] == 9
+        assert second_result["on_hand_quantity"] == 8
+        assert second_result["reserved_quantity"] == 5
+        assert second_result["available_quantity"] == 3
+        with TestingSession() as db:
+            stored_movements = db.query(models.InventoryMovement).filter_by(
+                source_snapshot_id=source.json()["id"],
+            ).all()
+            assert len(stored_movements) == 2
+            assert sum((Decimal(str(item.quantity)) for item in stored_movements), Decimal("0")) == Decimal("12.000")
