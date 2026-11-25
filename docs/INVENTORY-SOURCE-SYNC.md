@@ -264,3 +264,10 @@ Não existe ainda detalhe de reserva por identificador externo, documento, estad
 O catálogo define Product.unit como unidade base do SKU. ProductPackagingLevel.base_units_per_package expressa cada nível UNIT/CASE/PALLET nessa unidade base, com factor decimal persistido em NUMERIC(14,3). O planeamento converte quantidades com Decimal, expõe campos exactos textuais e não cria reservas nem movimentos de stock. A API rejeita factores com mais de três casas decimais para impedir que a persistência arredonde silenciosamente o factor.
 
 **Fronteira ainda não implementada:** o adapter WMS ainda não normaliza os códigos de unidade do fornecedor para Product.unit, nem homologa factores de conversão externos. Não assumir que EA, CS, BOX, PAL, kg, litros ou outras unidades são equivalentes sem catálogo/mapeamento aprovado por fornecedor e SKU. A configuração actual de embalagens internas não constitui prova de correspondência com a unidade externa.
+
+
+## Contagens MANUAL — identidade e auditoria (migration 0091)
+
+As contagens `source=MANUAL` exigem utilizador autenticado e activo com papel ADMIN ou SUPERVISOR autorizado para a loja, além de motivo explícito. O snapshot e o evento `inventory_manual_count_events` são inseridos na mesma transacção; uma falha de auditoria reverte também o snapshot. O evento é append-only, liga snapshot/loja/produto através de FK composta e preserva actor, motivo e timestamp. Os triggers PostgreSQL e SQLite validam a proveniência; o trigger SQLite exige igualmente actor activo e papel ADMIN ou SUPERVISOR da mesma loja. Esta operação regista uma contagem manual auditável, não constitui confirmação WMS nem altera o stock externo.
+
+A migration 0091 e a regressão de actor inactivo foram corrigidas no commit `94fe027` e `ecc751c`. A validação efectiva da migration em SQLite/PostgreSQL 16 e os workflows CI do HEAD continuam pendentes; não considerar a migration integralmente homologada até essa evidência existir.
