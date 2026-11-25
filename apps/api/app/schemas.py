@@ -265,6 +265,7 @@ class InventoryFreshnessPolicyUpsert(BaseModel):
     source: InventorySource
     max_age_minutes: int = Field(ge=1, le=10080)
     backroom_location_code: str | None = Field(default=None, min_length=1, max_length=120)
+    comparison_skew_tolerance_minutes: int | None = Field(default=None, ge=0, le=10080)
     reason: str | None = Field(default=None, max_length=1000)
 
     @field_validator("reason")
@@ -291,8 +292,10 @@ class InventoryFreshnessPolicyUpsert(BaseModel):
     def backroom_location_is_wms_only(self):
         if self.backroom_location_code is not None and self.source != "WMS":
             raise ValueError("backroom_location_code can only be configured for WMS")
-        if "backroom_location_code" in self.model_fields_set and self.reason is None:
-            raise ValueError("A reason is required when changing backroom location authority")
+        if self.comparison_skew_tolerance_minutes is not None and self.source != "ERP":
+            raise ValueError("comparison_skew_tolerance_minutes can only be configured on the ERP policy")
+        if ("backroom_location_code" in self.model_fields_set or "comparison_skew_tolerance_minutes" in self.model_fields_set) and self.reason is None:
+            raise ValueError("A reason is required when changing inventory authority or comparison policy")
         return self
 
 
@@ -302,6 +305,7 @@ class InventoryFreshnessPolicyRead(BaseModel):
     source: InventorySource
     max_age_minutes: int
     backroom_location_code: str | None
+    comparison_skew_tolerance_minutes: int | None
     updated_at: datetime
     model_config = ConfigDict(from_attributes=True)
 
