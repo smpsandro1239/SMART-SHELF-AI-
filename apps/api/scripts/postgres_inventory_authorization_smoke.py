@@ -860,6 +860,7 @@ def main() -> None:
                     "on_hand_quantity": 10,
                     "reserved_quantity": 1,
                     "source": "MANUAL",
+                    "reason": "Same-store manual count authorization positive control",
                     "external_reference": f"PG-AUTH-OWN-{suffix}",
                 },
                 headers=supervisor_headers,
