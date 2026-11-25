@@ -2236,3 +2236,35 @@ def test_inventory_snapshot_read_and_ingestion_handlers_require_supervisor(monke
             assert db.query(models.InventorySnapshot).filter_by(
                 store_id=store_id, product_id=product_id,
             ).count() == 0
+
+
+
+def test_employee_cannot_ingest_hourly_sales_or_traffic(monkeypatch):
+    with TestClient(app) as client:
+        store_id, product_id = create_store_and_product(client)
+        employee = _supervisor_actor(store_id, role="EMPLOYEE")
+        monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: employee)
+        sales_row = {
+            "store_id": store_id, "product_id": product_id,
+            "business_date": "2026-11-25", "hour_of_day": 10,
+            "quantity": 4, "source": "POS", "external_reference": "EMP-SALES-ONE",
+        }
+        traffic_row = {
+            "store_id": store_id, "business_date": "2026-11-25",
+            "hour_of_day": 10, "customer_count": 12,
+            "source": "POS", "external_reference": "EMP-TRAFFIC-ONE",
+        }
+        responses = [
+            client.post("/api/v1/sales/hourly", json=sales_row),
+            client.post("/api/v1/sales/traffic/hourly", json=traffic_row),
+            client.post("/api/v1/sales/hourly/batch", json={"records": [sales_row]}),
+            client.post("/api/v1/sales/traffic/hourly/batch", json={"records": [traffic_row]}),
+            client.post("/api/v1/sales/hourly/import-csv", data={"store_id": str(store_id)},
+                        files={"file": ("sales.csv", b"", "text/csv")}),
+            client.post("/api/v1/sales/traffic/hourly/import-csv", data={"store_id": str(store_id)},
+                        files={"file": ("traffic.csv", b"", "text/csv")}),
+        ]
+        assert [response.status_code for response in responses] == [403] * 6
+        with TestingSession() as db:
+            assert db.query(models.HourlySalesRecord).filter_by(store_id=store_id).count() == 0
+            assert db.query(models.HourlyStoreTrafficRecord).filter_by(store_id=store_id).count() == 0
