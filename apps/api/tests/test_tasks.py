@@ -196,9 +196,11 @@ def test_task_can_be_created_from_verified_recommendation_only_once():
             "status": "LOW_STOCK", "confidence": 0.94,
         })
         assert observation.status_code == 201
+        _configure_backroom_location(store_id)
         inventory = client.post("/api/v1/inventory/snapshots", json={
             "store_id": store_id, "product_id": product_id,
-            "on_hand_quantity": 15, "reserved_quantity": 3, "source": "ERP",
+            "on_hand_quantity": 15, "reserved_quantity": 3, "source": "WMS",
+            "location_code": "BACKROOM-A", "availability_status": "AVAILABLE",
         })
         assert inventory.status_code == 201
 
