@@ -2424,3 +2424,12 @@ A transição usa lock pessimista da tarefa e valida o estado já actualizado ap
 - [x] Exigir ADMIN/SUPERVISOR nos imports CSV horário de vendas e tráfego, antes de ler/processar o ficheiro.
 - [x] Testar os seis endpoints com actor EMPLOYEE: todos devolvem 403 e não persistem linhas.
 - [x] API CI `45719344000`: **1729 passed, 1 skipped**; Quality Gates `45719344142`, Security Scans `45719343998` e Docker Compose `45719344004` — sucesso no SHA `d36af7332544204fc14b6764a3faf99c24aa4741`.
+
+
+## P0/P1 — RBAC explícito na persistência de evidência OCR e fusão visual/textual
+
+- [x] Exigir ADMIN/SUPERVISOR para criar execuções OCR persistidas.
+- [x] Exigir ADMIN/SUPERVISOR para gerar/actualizar correspondências OCR com o catálogo.
+- [x] Exigir ADMIN/SUPERVISOR para persistir fusão de evidência visual + OCR.
+- [x] Testar actor EMPLOYEE nos três endpoints: todos devolvem 403 antes de bloquear/alterar a captura e nenhuma execução, correspondência ou fusão é persistida.
+- [x] API CI `45720266566`: **1730 passed, 1 skipped**; Quality Gates `45720266628`, Security Scans `45720266508` e Docker Compose `45720266578` — sucesso no SHA `a9271dd595c7d913a93cd969cf73d58b5e49438d`.
