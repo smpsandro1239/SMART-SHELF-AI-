@@ -1330,3 +1330,8 @@ Auditar a reconciliação de reservas WMS. O modelo actual recebe `reserved_quan
 - Docker Compose 45637232943: sucesso.
 - Commits de implementação/testes: 55e29d6, b13d1a6, 2b2b232.
 - Limite: isto fecha a conversão logística interna. O mapeamento das unidades/códigos externos WMS continua dependente do contrato do fornecedor. A reconciliação multi-localização não deve somar snapshots até serem definidas a elegibilidade das localizações e a semântica das reservas.
+
+
+## 2026-11-25 — Ledger de contagens manuais
+
+O commit `50fc1fcd9dac4c88dfb800aaa1f690ff1c0b6304` introduz o endpoint transaccional e o revision Alembic `0091_inventory_manual_count_audit`, com parent confirmado `0090_shelf_product_decimal_quantities`. Para `source=MANUAL`, exige actor activo ADMIN/SUPERVISOR e motivo; o snapshot e o evento são persistidos com flush e um commit. A tabela de eventos tem FK composta para snapshot/loja/produto e triggers PostgreSQL/SQLite para imutabilidade e validação de proveniência. Foram acrescentados testes HTTP/DB para RBAC, motivo, atomicidade, rollback, imutabilidade e associação entre loja/produto. A validação local e CI/PostgreSQL 16 permanece pendente.

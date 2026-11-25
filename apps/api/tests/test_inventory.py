@@ -1870,3 +1870,81 @@ def test_movement_event_insert_failure_rolls_back_movement_snapshot_and_task_aud
             assert db.query(models.InventorySnapshot).count() == 1
             assert db.query(models.ReplenishmentTaskEvent).filter_by(task_id=task_id, event_type="INVENTORY_RECONCILED").count() == 0
 
+
+
+
+def test_manual_inventory_snapshot_requires_actor_supervisor_and_reason(monkeypatch):
+    with TestClient(app) as client:
+        store_id, product_id = create_store_and_product(client)
+        payload = {"store_id": store_id, "product_id": product_id, "on_hand_quantity": 12, "source": "MANUAL", "reason": "Contagem física validada."}
+        monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: None)
+        assert client.post("/api/v1/inventory/snapshots", json=payload).status_code == 401
+        employee = _supervisor_actor(store_id, role="EMPLOYEE")
+        monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: employee)
+        assert client.post("/api/v1/inventory/snapshots", json=payload).status_code == 403
+        supervisor = _supervisor_actor(store_id)
+        monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: supervisor)
+        for reason in ("", "   ", "abc", "linha\\nquebrada"):
+            response = client.post("/api/v1/inventory/snapshots", json={**payload, "reason": reason})
+            assert response.status_code == 422, response.text
+        assert client.post("/api/v1/inventory/snapshots", json={**payload, "reason": None}).status_code == 422
+
+
+def test_manual_inventory_snapshot_and_event_are_committed_together(monkeypatch):
+    with TestClient(app) as client:
+        store_id, product_id = create_store_and_product(client)
+        actor = _supervisor_actor(store_id)
+        monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: actor)
+        payload = {"store_id": store_id, "product_id": product_id, "on_hand_quantity": 12, "source": "MANUAL", "reason": "Contagem cíclica corredor A."}
+        response = client.post("/api/v1/inventory/snapshots", json=payload)
+        assert response.status_code == 201, response.text
+        with TestingSession() as db:
+            snapshot = db.query(models.InventorySnapshot).filter_by(source="MANUAL").one()
+            event = db.query(models.InventoryManualCountEvent).one()
+            assert (event.snapshot_id, event.store_id, event.product_id, event.actor_user_id) == (snapshot.id, store_id, product_id, actor.id)
+            assert event.reason == payload["reason"]
+
+
+def test_manual_inventory_event_failure_rolls_back_snapshot(monkeypatch):
+    with TestClient(app) as client:
+        store_id, product_id = create_store_and_product(client)
+        actor = _supervisor_actor(store_id)
+        monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: actor)
+        with TestingSession() as db:
+            db.connection().exec_driver_sql("CREATE TRIGGER fail_manual_count_insert BEFORE INSERT ON inventory_manual_count_events BEGIN SELECT RAISE(ABORT, 'forced failure'); END")
+        response = client.post("/api/v1/inventory/snapshots", json={
+            "store_id": store_id, "product_id": product_id, "on_hand_quantity": 7,
+            "source": "MANUAL", "reason": "Teste de rollback transaccional."
+        })
+        assert response.status_code == 409, response.text
+        with TestingSession() as db:
+            assert db.query(models.InventorySnapshot).filter_by(source="MANUAL").count() == 0
+            assert db.query(models.InventoryManualCountEvent).count() == 0
+
+
+def test_manual_inventory_event_sql_immutability_and_store_product_binding(monkeypatch):
+    with TestClient(app) as client:
+        store_a, product_a = create_store_and_product(client)
+        store_b, product_b = create_store_and_product(client)
+        actor = _supervisor_actor(store_a)
+        monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: actor)
+        response = client.post("/api/v1/inventory/snapshots", json={
+            "store_id": store_a, "product_id": product_a, "on_hand_quantity": 9,
+            "source": "MANUAL", "reason": "Contagem validada na loja A."
+        })
+        assert response.status_code == 201, response.text
+        with TestingSession() as db:
+            event = db.query(models.InventoryManualCountEvent).one()
+            with pytest.raises(Exception):
+                db.connection().exec_driver_sql("UPDATE inventory_manual_count_events SET reason='alterado' WHERE id=?", (event.id,))
+            db.rollback()
+            with pytest.raises(Exception):
+                db.connection().exec_driver_sql("DELETE FROM inventory_manual_count_events WHERE id=?", (event.id,))
+            db.rollback()
+            with pytest.raises(Exception):
+                db.connection().exec_driver_sql(
+                    "INSERT INTO inventory_manual_count_events (snapshot_id,store_id,product_id,actor_user_id,reason,created_at) VALUES (?,?,?,?,?,CURRENT_TIMESTAMP)",
+                    (event.snapshot_id, store_b, product_b, actor.id, "Tentativa cross-tenant")
+                )
+            db.rollback()
+            assert db.query(models.InventoryManualCountEvent).count() == 1

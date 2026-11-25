@@ -2209,3 +2209,6 @@ Decisão: `reserved_quantity` continua a ser o total reservado reportado pelo WM
 - [x] Quality Gates [45626178152](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45626178152): sucesso; TypeScript/build e **1698 passed, 1 skipped**.
 - [x] Docker Compose [45626116401](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45626116401): sucesso.
 - [x] Security Scans [45626178472](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45626178472): sucesso; dependency audits, secret scan e ZAP passive baseline.
+
+
+- [ ] Executar CI/PostgreSQL 16 e corrigir eventuais falhas do ledger de contagens manuais (revision 0091) antes de fechar a prioridade.
