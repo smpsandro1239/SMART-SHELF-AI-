@@ -146,3 +146,6 @@ Este smoke não demonstra ainda a interrupção após commit de uma página real
 O smoke `apps/api/scripts/postgres_inventory_sync_job_smoke.py` executa o orquestrador real com um adapter determinístico. O processo é terminado com SIGKILL apenas depois de a primeira página ter sido confirmada e antes de a segunda resposta ser devolvida. Após takeover, a sincronização abandonada fica PARTIAL; a repetição da primeira página tem de reutilizar o snapshot existente (mesmo ID e conteúdo), e a página seguinte pode acrescentar uma nova referência.
 
 O teste corre no API CI contra PostgreSQL 16. A integração no workflow não equivale a aprovação: consultar o resultado do run correspondente ao SHA antes de declarar a garantia validada.
+
+
+O smoke testa também o fencing no limite de escrita: depois do takeover pelo worker B, tenta executar o orquestrador com o lease/fencing token antigo do worker A. A tentativa tem de falhar no lease guard antes de criar um novo ledger ou persistir snapshots; o teste confirma ambos os contadores a zero para a loja isolada.
