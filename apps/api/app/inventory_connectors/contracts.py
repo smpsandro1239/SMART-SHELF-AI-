@@ -50,6 +50,8 @@ class NormalizedInventoryRecord:
     reserved_quantity: Decimal
     captured_at: datetime
     external_reference: str
+    location_code: str | None = None
+    availability_status: Literal["AVAILABLE", "UNAVAILABLE", "UNKNOWN"] = "UNKNOWN"
 
     def __post_init__(self) -> None:
         for field, maximum in (("external_product_id", 120), ("sku", 120), ("external_reference", 120)):
@@ -68,6 +70,13 @@ class NormalizedInventoryRecord:
 
         if not isinstance(self.captured_at, datetime) or self.captured_at.tzinfo is None or self.captured_at.utcoffset() is None:
             raise ValueError("captured_at must be a timezone-aware datetime")
+        if self.location_code is not None:
+            location = self.location_code.strip()
+            if not location or len(location) > 120 or any(ord(ch) < 32 or 127 <= ord(ch) <= 159 for ch in location):
+                raise ValueError("location_code must be a valid non-empty location identifier")
+            object.__setattr__(self, "location_code", location)
+        if self.availability_status not in {"AVAILABLE", "UNAVAILABLE", "UNKNOWN"}:
+            raise ValueError("availability_status must be AVAILABLE, UNAVAILABLE or UNKNOWN")
 
 
 @dataclass(frozen=True, slots=True)
@@ -83,6 +92,15 @@ class InventorySyncBatch:
     def __post_init__(self) -> None:
         if self.source not in {"ERP", "WMS"}:
             raise ValueError("source must be ERP or WMS")
+        if self.source == "WMS":
+            incomplete = [
+                item.external_reference for item in self.records
+                if item.location_code is None or item.availability_status == "UNKNOWN"
+            ]
+            if incomplete:
+                raise ValueError(
+                    "WMS records require an explicit physical location and availability status"
+                )
         provider = self.provider.strip() if isinstance(self.provider, str) else ""
         if not provider or len(provider) > 120:
             raise ValueError("provider must contain between 1 and 120 characters")
