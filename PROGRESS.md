@@ -1196,3 +1196,13 @@ A primeira execução do novo smoke (API CI run 45611398632) falhou porque a lei
 - A interface deixou de somar quantidades de SKUs com unidades incompatíveis e apresenta a unidade de cada movimento. Movimentos históricos sem prova mantêm unidade desconhecida.
 - Testes acrescentados: migration SQLite, produto em kg com quantidade 2.375, rejeição de 1.2345, unidade vazia e guard PostgreSQL para unidade incompatível.
 - Validação do SHA actual ainda pendente. Não declarar migration 0089 concluída até CI/PostgreSQL/TypeScript/build verde.
+
+
+### Correcção de precisão — validação antes da persistência da tarefa
+
+- A primeira validação da migration 0089 detectou que `actual_quantity` era arredondada pelo tipo Numeric da tarefa antes de chegar à reconciliação. A validação apenas no endpoint de reconciliação era tardia.
+- A validação foi movida também para `ReplenishmentTaskStatusUpdate`: quantidades com mais de três casas decimais são rejeitadas com HTTP 422 antes de marcar a tarefa como COMPLETED ou persistir a quantidade.
+- Mantida a validação defensiva na reconciliação para dados legados ou operações internas.
+- Teste actualizado para provar que a tarefa permanece IN_PROGRESS e sem `actual_quantity` após a tentativa inválida.
+- Commits: `390364547a881faba586515dd3c59a037439fbac`, `d603bf6b2bd012fa9175751162d947c25100dca6`.
+- O run Quality Gates do SHA anterior encontrou 1 falha neste cenário (1688 passed, 1 skipped); o novo SHA com a validação antecipada aguarda nova execução.
