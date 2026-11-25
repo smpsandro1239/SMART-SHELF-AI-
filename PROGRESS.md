@@ -1,3 +1,12 @@
+## 2026-11-25 — Diagnóstico e correcção do smoke de fencing PostgreSQL
+
+- Consultado o log integral do API CI no commit `c7b90ee4ae8603ad1648abeb7f7b81608a91b73c`. PostgreSQL 16, migrações, provisionamento do runtime role e os 40 smokes anteriores terminaram com sucesso.
+- A falha ocorreu no início de `_verify_stale_worker_fencing()`: `sqlalchemy.orm.exc.DetachedInstanceError` ao avaliar `old.fencing_token` depois de a sessão que carregou o job ter fechado.
+- Causa: o claim confirma a transacção e o SQLAlchemy expira atributos; após o fecho da sessão, o teste tentava carregar novamente atributos da instância detached.
+- Correcção publicada: capturar `lease_token` e `fencing_token` como valores escalares enquanto a instância ainda está associada à sessão. O teste continua a exigir incremento de fencing, rejeição do lease antigo e rejeição do percurso de escrita do orquestrador.
+- Não foi alterada a lógica de produção do claim, lease, fencing ou orquestrador.
+- Commit: `e3dae9d04e58d6e1419a4e9b23188fe5d2c7ef39`. API CI do novo HEAD e restantes gates ainda pendentes de execução/conclusão.
+
 ## 2026-11-24 — Contrato de adapters ERP/WMS
 
 - Criado o pacote `app.inventory_connectors` com protocolo assíncrono read-only e lote normalizado.
