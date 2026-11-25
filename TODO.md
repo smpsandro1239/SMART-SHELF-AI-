@@ -2189,3 +2189,15 @@ Motivo: o teste de embalagem já representava um SKU medido em kg com alvo 20.12
 - [x] Plano de reposição para SKU em kg com target 20.125 e mínimo 0.375; conversões UNIT/CASE/PALLET mantêm exactidão Decimal e não movimentam nem reservam stock.
 
 SHA validado: `dda035f509a34f4d893f52d2d3cf4aa2c440f0e6`. O commit seguinte desta secção altera apenas documentação.
+
+
+## P1 — Precisão e reconciliação do reservado nos snapshots (25/11/2026)
+
+- [x] Confirmar que adapters ERP/WMS já normalizam físico e reservado em Decimal com escala Numeric(12,3).
+- [x] Corrigir o endpoint directo de snapshots: rejeitar quantidades com mais de três casas decimais antes da persistência.
+- [x] Tipar `InventorySnapshot.on_hand_quantity` e `reserved_quantity` como Decimal e converter os valores HTTP de forma explícita.
+- [x] Testar persistência exacta de 10.125 kg físico e 2.375 kg reservado, e rejeição de escala 4 em qualquer dos campos.
+- [ ] Validar suite API, PostgreSQL 16, Quality Gates, Security Scans e Docker Compose no SHA final.
+- [ ] Auditar semântica de snapshots consecutivos, reservas agregadas e mudanças de localização; não criar ledger local de reservas sem contrato de detalhe do WMS.
+
+Decisão: `reserved_quantity` continua a ser o total reservado reportado pelo WMS para a localização física configurada. O SMART SHELF AI calcula disponível = físico − reservado; não cria nem altera reservas no WMS. Uma tarefa operacional não é uma reserva de stock.
