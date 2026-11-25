@@ -149,3 +149,17 @@ O teste corre no API CI contra PostgreSQL 16. A integração no workflow não eq
 
 
 O smoke testa também o fencing no limite de escrita: depois do takeover pelo worker B, tenta executar o orquestrador com o lease/fencing token antigo do worker A. A tentativa tem de falhar no lease guard antes de criar um novo ledger ou persistir snapshots; o teste confirma ambos os contadores a zero para a loja isolada.
+
+
+## Validação CI — worker durável e recuperação idempotente (2026-11-25)
+
+Commit validado: `ffe76015e82d9d1ae608dc61a1bb5c9a9d8c710e`.
+
+Os quatro workflows terminaram com sucesso no mesmo commit:
+
+- [API CI](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45522939384) — migrações PostgreSQL 16, smoke de claims concorrentes/fencing, tentativa de escrita com credenciais obsoletas, SIGKILL após confirmação de uma página, recuperação PARTIAL e replay idempotente; suite da API aprovada.
+- [Quality Gates](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45522939251) — verificações de qualidade, compilação Python, testes API e build Web aprovados.
+- [Security Scans](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45522939233) — OWASP ZAP passive baseline e importação OpenAPI/análise em modo seguro concluídos com sucesso; Gitleaks e auditorias de dependências Web/Python aprovados.
+- [Docker Compose](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45522939260) — smoke de arranque e serviços aprovado.
+
+A correcção do teste de fencing captura os valores escalares do lease enquanto a instância ORM ainda está associada à sessão. Não alterou o mecanismo de produção de leases, fencing ou persistência. Estes resultados validam os cenários automatizados indicados; não constituem homologação de conectores ERP/WMS reais nem certificação de segurança independente.
