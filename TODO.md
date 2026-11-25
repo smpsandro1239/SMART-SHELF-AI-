@@ -2405,3 +2405,13 @@ A transição usa lock pessimista da tarefa e valida o estado já actualizado ap
 - [x] Testar que EMPLOYEE recebe 403 tanto na leitura como na escrita, sem alteração de estado nem criação de evento.
 - [x] Testar que SUPERVISOR consegue ler o histórico e registar uma transição válida.
 - [x] API CI `45716912538`, Quality Gates `45716912911`, Security Scans `45716912543` e Docker Compose `45716912421`: sucesso no SHA `50df52e59eca47aa2dfc868fc16621cf2f636586`.
+
+
+## P0 — RBAC explícito no catálogo de lojas e snapshots de inventário
+
+- [x] Reforçar GET `/api/v1/stores`: apenas ADMIN/SUPERVISOR, coerente com a política central.
+- [x] Exigir ADMIN/SUPERVISOR para criar snapshots de qualquer origem (ERP/WMS/POS/MANUAL/IMPORT), não apenas para contagens MANUAL.
+- [x] Exigir ADMIN/SUPERVISOR na listagem de snapshots e na consulta do snapshot mais recente.
+- [x] Testar que EMPLOYEE recebe 403 nos quatro endpoints e que a tentativa de ingestão não persiste snapshot.
+- [x] Corrigir regressão encontrada na primeira execução: o handler de listagem ainda permitia leitura em contexto de teste/direct-call; a guarda foi adicionada e a suite repetida.
+- [x] API CI `45718367981`: **1728 passed, 1 skipped**; Quality Gates `45718367943`, Security Scans `45718367972` e Docker Compose `45718367912` — sucesso no SHA `19bf8dd2bf2b6990faff261effc0752523f59a5b`.
