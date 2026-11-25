@@ -286,7 +286,7 @@ def main() -> None:
         assert db.query(models.InventoryMovement).filter_by(task_id=rollback_task_id).count() == 0
         assert db.query(models.InventoryMovementEvent).filter_by(
             movement_id=movement["id"],
-        ).count() == 2
+        ).count() == 1
         assert db.query(models.InventorySnapshot).filter_by(
             external_reference=f"TASK-RECONCILIATION-{rollback_task_id}",
         ).count() == 0
