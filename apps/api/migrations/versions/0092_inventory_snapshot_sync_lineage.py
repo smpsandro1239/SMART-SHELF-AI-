@@ -12,12 +12,7 @@ depends_on = None
 def upgrade() -> None:
     op.add_column(
         "inventory_snapshots",
-        sa.Column(
-            "source_sync_id",
-            sa.Integer(),
-            sa.ForeignKey("inventory_source_syncs.id", ondelete="RESTRICT"),
-            nullable=True,
-        ),
+        sa.Column("source_sync_id", sa.Integer(), nullable=True),
     )
     op.create_index(
         "ix_inventory_snapshots_source_sync_id",
@@ -27,6 +22,14 @@ def upgrade() -> None:
 
     bind = op.get_bind()
     if bind.dialect.name == "postgresql":
+        op.create_foreign_key(
+            "fk_inventory_snapshots_source_sync_id",
+            "inventory_snapshots",
+            "inventory_source_syncs",
+            ["source_sync_id"],
+            ["id"],
+            ondelete="RESTRICT",
+        )
         bind.exec_driver_sql("""
             CREATE FUNCTION guard_inventory_snapshot_source_sync_0092()
             RETURNS trigger
@@ -92,6 +95,11 @@ def downgrade() -> None:
         )
         bind.exec_driver_sql(
             "DROP FUNCTION IF EXISTS guard_inventory_snapshot_source_sync_0092()"
+        )
+        op.drop_constraint(
+            "fk_inventory_snapshots_source_sync_id",
+            "inventory_snapshots",
+            type_="foreignkey",
         )
     elif bind.dialect.name == "sqlite":
         op.execute(
