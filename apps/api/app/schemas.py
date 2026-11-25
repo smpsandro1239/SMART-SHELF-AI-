@@ -185,6 +185,12 @@ class InventorySnapshotCreate(BaseModel):
     def reserved_must_not_exceed_on_hand(self):
         if self.reserved_quantity > self.on_hand_quantity:
             raise ValueError("reserved_quantity cannot exceed on_hand_quantity")
+        if self.source == "WMS" and (
+            self.location_code is None or self.availability_status == "UNKNOWN"
+        ):
+            raise ValueError(
+                "WMS snapshots require an explicit physical location and availability status"
+            )
         return self
 
 
