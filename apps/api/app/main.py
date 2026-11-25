@@ -8071,6 +8071,15 @@ def reconcile_completed_replenishment(
         - already_moved
     )
     quantity = Decimal(str(task.actual_quantity))
+    if quantity != quantity.quantize(Decimal("0.001")):
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "MOVEMENT_QUANTITY_PRECISION_UNSUPPORTED",
+                "max_decimal_places": 3,
+                "unit_code": product.unit,
+            },
+        )
     if available < quantity:
         raise HTTPException(
             status_code=409,
@@ -8119,7 +8128,7 @@ def reconcile_completed_replenishment(
             evidence={
                 "movement_type": movement.movement_type,
                 "quantity": float(quantity),
-                "quantity_exact": format(quantity, "f"),
+                "quantity_exact": format(quantity.quantize(Decimal("0.001")), "f"),
                 "unit_code": product.unit,
                 "source_snapshot_id": source_snapshot.id,
                 "source_location_code": source_snapshot.location_code,
