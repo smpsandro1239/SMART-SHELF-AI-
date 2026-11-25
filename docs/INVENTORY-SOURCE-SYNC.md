@@ -169,4 +169,31 @@ A correcção do teste de fencing captura os valores escalares do lease enquanto
 
 O teste test_inventory_reconciliation_isolates_shared_product_snapshots_and_ledger_across_stores reutiliza um produto global em duas lojas e cria snapshots ERP/WMS independentes em cada uma. A API tem de seleccionar os snapshots usando simultaneamente store_id e product_id; a consulta e o ledger filtrados para uma loja não podem revelar evidência da outra. A revisão por ID estrangeiro é ocultada com HTTP 404 e não pode alterar o estado do registo. O teste está publicado no commit 07b141b91d2d76a6ff6e1cefe0e721cf42978e8b; aguarda validação CI nesse SHA.
 
-**Limite semântico por resolver:** o snapshot genérico apresentado no campo de retaguarda é actualmente seleccionado entre todas as fontes para a loja/produto, enquanto a API admite ERP, WMS, POS, MANUAL e IMPORT. Não existe no contrato actual uma declaração inequívoca de que todas essas fontes representam stock físico de retaguarda. A selecção não deve ser restringida por suposição; é necessária uma definição de origem/localização (por exemplo, armazém/retaguarda versus stock agregado de loja) antes de alterar esse comportamento.
+**Decisão operacional aprovada e contrato implementado (2026-11-25):** WMS é a fonte de referência do stock físico da retaguarda; ERP permanece uma fonte administrativa independente para reconciliação. POS alimenta vendas/procura. MANUAL regista operações/contagens auditáveis. IMPORT não recebe autoridade implícita.
+
+### Autoridade WMS por loja e localização
+
+A autoridade física é configurada por loja através de `InventoryFreshnessPolicy` com `source=WMS` e `backroom_location_code`. A localização é um identificador exacto fornecido pelo WMS; não existe inferência por nome, SKU ou proximidade. A alteração da localização exige motivo e cria um evento append-only em `inventory_freshness_policy_events`, com actor, localização anterior/nova e timestamp.
+
+Cada `InventorySnapshot` pode guardar `location_code` e `availability_status`:
+- `AVAILABLE`: pode alimentar a quantidade disponível, calculada como físico menos reservado.
+- `UNAVAILABLE`: não pode alimentar reposição.
+- `UNKNOWN`: não pode alimentar reposição.
+- Um snapshot sem localização não pode ser tratado como stock de retaguarda.
+- A localização só é elegível quando coincide exactamente com a localização WMS configurada para a loja.
+
+O sistema selecciona o snapshot WMS mais recente para a localização configurada, independentemente do estado de disponibilidade. Isto é intencional: um registo recente `UNAVAILABLE` ou `UNKNOWN` impede que um snapshot antigo `AVAILABLE` seja reutilizado. Não existe fallback para ERP, POS, MANUAL, IMPORT, outra localização ou outro snapshot antigo.
+
+Se não existir `backroom_location_code` configurado, o stock de retaguarda é desconhecido. A recomendação de reposição não recebe quantidade e a reconciliação de um movimento concluído é recusada com `BACKROOM_LOCATION_NOT_CONFIGURED`. O ERP continua visível como evidência independente, mas não é somado nem substitui o WMS.
+
+### Contratos e persistência
+
+- A API de snapshots aceita `location_code` e `availability_status`; registos legados são migrados como `UNKNOWN` e sem localização, portanto não se tornam elegíveis por migração.
+- O contrato `NormalizedInventoryRecord` mantém Decimal e timestamps com fuso horário. Um lote WMS exige localização física explícita e estado de disponibilidade explícito; um lote ERP não ganha autoridade física por conter esses campos.
+- O orquestrador persiste localização/estado e compara ambos durante replay idempotente. Reutilizar uma referência com localização ou disponibilidade diferente é conflito de conteúdo.
+- A reconciliação de movimentos só pode consumir snapshots WMS da localização configurada. As reservas e movimentos anteriores sobre o mesmo snapshot são subtraídos; o movimento preserva actor, motivo, tarefa, snapshot de origem e snapshot resultante.
+- A migration `0084_wms_backroom_location_authority` acrescenta metadados e política por loja; `0085_inventory_backroom_policy_audit` acrescenta o histórico append-only de alterações à autoridade.
+
+### Limites ainda existentes
+
+Não há adapter real de fornecedor nem integração WMS homologada. A configuração da localização é explícita, mas a sua exactidão depende do contrato e dos dados fornecidos pelo WMS. A normalização de unidades logísticas (unidade/caixa/palete), reservas multi-localização e regras de transferência entre localizações continuam a exigir contratos próprios. Não converter nem somar unidades incompatíveis. A validação CI da implementação desta fase tem de ser confirmada no SHA final antes de a considerar concluída.
