@@ -1175,3 +1175,13 @@ A primeira execução do novo smoke (API CI run 45611398632) falhou porque a lei
 - O trigger/função temporários são removidos num bloco `finally`, sem alterar o esquema persistente.
 - Commit: `670f656591ba2652994355776a2390c919ddbc31`.
 - Validação PostgreSQL 16 deste reforço ainda pendente; o run anterior só executou a versão sem este cenário.
+
+
+## 2026-11-25 — Migration 0088: origem WMS AVAILABLE obrigatória
+
+- A auditoria à migration 0086 detectou que o trigger aceitava qualquer snapshot WMS com localização correcta, mesmo se `availability_status` fosse `UNAVAILABLE` ou `UNKNOWN`. A API já rejeitava esses estados, mas a base de dados não protegia o mesmo invariante contra INSERT directo.
+- Criada a migration `0088_inventory_movement_available_source_guard`, que substitui o trigger PostgreSQL/SQLite e exige `source.availability_status = 'AVAILABLE'` para movimentos novos.
+- O downgrade restaura exactamente a regra anterior da 0086. Os movimentos/snapshots históricos não são alterados.
+- Criado teste SQLite para AVAILABLE, UNAVAILABLE, UNKNOWN e downgrade.
+- O smoke PostgreSQL foi alargado com INSERT directo cuja linhagem, tarefa, quantidade e snapshot resultante são coerentes, mas cuja origem está UNAVAILABLE; deve falhar especificamente no guard 0088.
+- A migration e o smoke estão publicados; validação no PostgreSQL 16 e workflows do SHA actual ainda pendentes.
