@@ -25,6 +25,10 @@ def build_replenishment_packaging_plan(
     if not task_creation_allowed or isinstance(suggested_quantity, bool) or suggested_quantity is None:
         return {**common, "status": "NOT_ACTIONABLE", "options": []}
 
+    required = Decimal(str(suggested_quantity))
+    if not required.is_finite() or required <= 0:
+        return {**common, "status": "NOT_ACTIONABLE", "options": []}
+
     levels = sorted(
         (dict(level) for level in packaging_levels),
         key=lambda level: (
@@ -39,7 +43,7 @@ def build_replenishment_packaging_plan(
     preferred_code: str | None = None
     for level in levels:
         result = calculate_replenishment_packs(
-            required_base_units=suggested_quantity,
+            required_base_units=required,
             base_units_per_package=level["base_units_per_package"],
             allow_open_package=False,
         )
@@ -62,8 +66,8 @@ def build_replenishment_packaging_plan(
     return {
         **common,
         "status": "AVAILABLE",
-        "required_base_units": float(suggested_quantity),
-        "required_base_units_exact": format(Decimal(str(suggested_quantity)), "f"),
+        "required_base_units": float(required),
+        "required_base_units_exact": format(required, "f"),
         "preferred_replenishment_packaging_code": preferred_code,
         "options": options,
     }
