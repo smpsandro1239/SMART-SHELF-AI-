@@ -210,3 +210,30 @@ Novos snapshots WMS têm de incluir `location_code` não vazio e `availability_s
 A regressão `test_inventory_backroom_authority_migration.py` cobre a preservação de snapshots legados, rejeição de novas linhas WMS sem proveniência, estados inválidos e imutabilidade dos snapshots/eventos. A suite completa passou com 1679 testes e 1 ignorado no SHA `c8efb82b64d4aed9fcc81fdb4a0571695fdd23cf`; os quatro workflows GitHub (API CI, Quality Gates, Security Scans e Docker Compose) terminaram com sucesso.
 
 **Limite:** não existe adapter WMS real homologado. O código não confirma que o código de localização configurado corresponde fisicamente à retaguarda no fornecedor. Não apresentar a CI como homologação de integração externa. Normalização unidade/caixa/palete e reservas multi-localização continuam por especificar.
+
+
+## Auditoria de proveniência dos movimentos de reposição (2026-11-25)
+
+### Estado observado no código
+
+A entidade `InventoryMovement` persiste tarefa, loja, produto, tipo, quantidade, snapshot de origem, snapshot resultante, actor, motivo e timestamp. O tipo está actualmente limitado a `BACKROOM_TO_SHELF`; a unicidade por tarefa e por snapshot resultante evita duplicações directas. O endpoint de reconciliação exige ADMIN/SUPERVISOR, tarefa concluída, quantidade efectivamente reposta positiva, snapshot WMS AVAILABLE na localização configurada e evidência dentro da política de frescura. As reservas e movimentos anteriores associados ao mesmo snapshot de origem são deduzidos antes de aceitar a quantidade.
+
+### Lacunas que permanecem abertas
+
+1. **Destino indirecto:** o movimento não congela directamente um identificador/código de localização de destino. O destino é inferido através da tarefa associada e da prateleira nela indicada. Para uma trilha probatória duradoura, o movimento deve guardar a identidade da prateleira/localização de destino no momento da aprovação, sem depender de uma relação operacional que possa ser alterada posteriormente.
+2. **Origem indirecta:** o código de localização de origem reside no snapshot WMS referenciado. Deve ser exposto explicitamente no contrato de leitura/auditoria, mantendo o snapshot como evidência imutável e validando a coincidência com a política WMS da loja.
+3. **Semântica do snapshot resultante:** a reconciliação cria um snapshot `MANUAL` com referência `TASK-RECONCILIATION-...`. Este registo representa a projecção interna do movimento aprovado; não é confirmação de escrita no WMS nem deve ser interpretado como novo saldo autoritativo da retaguarda. A sincronização WMS posterior tem de ser reconciliada sem somar novamente o movimento.
+4. **Ledger de eventos do movimento:** os metadados do movimento são imutáveis, mas ainda não existe, na entidade aqui auditada, um ledger de eventos de ciclo de vida independente que distinga aprovação, eventual anulação compensatória e reconciliação externa. Não se deve editar ou apagar um movimento aprovado; correcções futuras devem ser movimentos compensatórios ligados ao original, com actor e motivo.
+5. **Concorrência:** o endpoint usa bloqueio do snapshot de origem e trata conflitos de integridade, mas a existência do mecanismo no código não substitui um teste PostgreSQL com duas transacções independentes a disputar o mesmo saldo. A prova tem de confirmar que apenas uma operação consome a quantidade disponível e que a outra observa o saldo actualizado ou falha de forma controlada.
+
+### Contrato de segurança a implementar
+
+- Congelar no movimento a origem física e o destino físico, além dos IDs de evidência.
+- Manter Decimal na quantidade e declarar a unidade base do produto; não aceitar conversões implícitas.
+- Tratar o snapshot MANUAL resultante como registo interno de movimento, nunca como confirmação do WMS.
+- Introduzir correcções por compensação, sem UPDATE/DELETE de movimentos aprovados.
+- Garantir atomicidade entre movimento, snapshot de projecção e evento de tarefa, na mesma transacção.
+- Adicionar smoke PostgreSQL com sessões concorrentes, reservas, rollback após falha e repetição idempotente.
+- Só considerar o saldo externo reconciliado quando chegar evidência WMS posterior com referência/correlação inequívoca; divergências devem ir para revisão independente.
+
+**Estado desta auditoria:** leitura de código e documentação. Não foram alterados modelos, migrations, endpoints ou testes nesta passagem; os pontos acima são requisitos pendentes, não funcionalidades implementadas.
