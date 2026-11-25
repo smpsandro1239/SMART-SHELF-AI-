@@ -225,6 +225,7 @@ def main() -> None:
                 "store_id": store_id,
                 "product_id": product_id,
                 "quantity": 4,
+                "unit_code": "un",
                 "result_snapshot_id": movement["result_snapshot_id"],
             },
         )
