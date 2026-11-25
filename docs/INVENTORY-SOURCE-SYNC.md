@@ -239,3 +239,12 @@ A entidade `InventoryMovement` persiste tarefa, loja, produto, tipo, quantidade,
 - Só considerar o saldo externo reconciliado quando chegar evidência WMS posterior com referência/correlação inequívoca; divergências devem ir para revisão independente.
 
 **Estado desta auditoria:** revisão adicional das migrations `0052`, `0053`, `0076`, do modelo e do smoke PostgreSQL existente. A imutabilidade do movimento e a validação de lineage já estão implementadas; o ledger de eventos do movimento, a proveniência congelada e a confirmação WMS continuam pendentes. Não foram alterados modelos, migrations, endpoints ou testes nesta passagem.
+
+
+## 2026-11-25 — Identidade e proveniência física congelada dos movimentos
+
+A migration 0086_inventory_movement_identity_provenance acrescenta operation_id UUID único, source_location_code e destination_shelf_id a inventory_movements. O endpoint de reconciliação preenche a localização de origem a partir do snapshot WMS aprovado e a prateleira de destino a partir da tarefa concluída. O contrato de leitura expõe estes campos.
+
+A migração atribui UUID distinto a cada movimento histórico. Copia localização e prateleira apenas quando existem nos registos relacionados; valores desconhecidos permanecem NULL e não são inferidos. Os novos movimentos são protegidos por trigger INSERT PostgreSQL/SQLite que exige UUID, localização de origem não vazia e prateleira pertencente à mesma loja. A protecção append-only anterior de UPDATE/DELETE não é reconstruída nem removida.
+
+Limite desta fatia: o destino congelado é o identificador da prateleira; ainda não existe um código físico de localização de loja separado da identidade da prateleira. A migration não introduz ainda ledger de eventos do movimento, compensações ou confirmação WMS idempotente. A validação final depende dos workflows GitHub Actions no SHA desta alteração.
