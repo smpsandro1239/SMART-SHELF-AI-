@@ -86,6 +86,44 @@ def test_expired_lease_takeover_fences_out_old_worker(db):
     assert done.status == "SUCCEEDED"
 
 
+def test_expired_lease_closes_abandoned_source_sync_before_takeover(db):
+    job = enqueue(db)
+    old = claim_next_inventory_sync_job(db, worker_id="worker-crashed", lease_seconds=30)
+    now = models.utc_now()
+    sync = models.InventorySourceSync(
+        store_id=job.store_id,
+        source="ERP",
+        provider="ERP-Test",
+        status="STARTED",
+        started_at=now,
+        created_by_user_id=db.info["user_id"],
+        created_at=now,
+    )
+    db.add(sync)
+    db.flush()
+    job.latest_sync_id = sync.id
+    job.lease_expires_at = now - timedelta(seconds=1)
+    db.commit()
+
+    replacement = claim_next_inventory_sync_job(db, worker_id="worker-recovery", lease_seconds=30)
+
+    db.refresh(sync)
+    assert replacement.fencing_token == old.fencing_token + 1
+    assert sync.status == "PARTIAL"
+    assert sync.finished_at is not None
+    assert sync.error_code == "WORKER_LEASE_EXPIRED"
+    assert sync.received_records is None and sync.processed_records is None
+    events = db.query(models.InventorySourceSyncEvent).filter_by(sync_id=sync.id).all()
+    assert [(event.event_type, event.details["error_code"]) for event in events] == [
+        ("COMPLETED", "WORKER_LEASE_EXPIRED")
+    ]
+    with pytest.raises(InventorySyncJobLeaseLost):
+        assert_and_renew_inventory_sync_job_lease(
+            db, job_id=job.id, worker_id="worker-crashed",
+            lease_token=old.lease_token, fencing_token=old.fencing_token,
+        )
+
+
 def test_failure_schedules_retry_then_terminal_failure(db):
     job = enqueue(db)
     first = claim_next_inventory_sync_job(db, worker_id="worker-a", lease_seconds=30)
