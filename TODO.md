@@ -2172,6 +2172,7 @@ Não são feitas conversões automáticas entre unidade, caixa e palete. Os fact
 - [x] Proteger downgrade: recusar conversão para INTEGER enquanto existirem quantidades fraccionárias, sem truncar dados.
 - [x] Acrescentar teste SQLite da migration e regressão API com produto em kg, alvo 20.125 e mínimo 0.375.
 - [x] Rejeitar precisão superior a três casas decimais no contrato da API.
+- [x] Preservar a resposta JSON numérica legada; converter para Decimal apenas na fronteira de persistência e no cálculo interno.
 - [ ] Validar suite API completa, migração PostgreSQL 16, Quality Gates, Security Scans e Docker Compose no SHA final.
 
 Motivo: o teste de embalagem já representava um SKU medido em kg com alvo 20.125, mas o schema/API e a coluna SQL ainda eram INTEGER. Corrigida a inconsistência estrutural; não se deve arredondar quantidades físicas nem tratar kg como contagem inteira.
