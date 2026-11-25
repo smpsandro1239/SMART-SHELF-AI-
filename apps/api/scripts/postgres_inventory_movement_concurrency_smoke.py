@@ -163,6 +163,8 @@ def main() -> None:
         assert movement["id"] == successful_movement_id
         assert movement["source_snapshot_id"] == source_snapshot_id
         assert movement["quantity"] == 4
+        assert movement["quantity_exact"] == "4.000"
+        assert movement["unit_code"] == "un"
         assert retry.status_code == 409, retry.text
         assert retry.json().get("detail", {}).get("code") == "INVENTORY_ALREADY_RECONCILED"
         assert retry.json()["detail"]["movement_id"] == movement["id"]
