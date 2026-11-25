@@ -2086,3 +2086,8 @@ Os movimentos históricos mantêm `unit_code=NULL`, porque não existe evidênci
 O endpoint `GET /api/v1/warehouse/replenishment-units` mantém os campos numéricos existentes e acrescenta `required_base_units_exact`, `base_units_per_package_exact`, `loose_base_units_exact`, `planned_base_units_exact` e `excess_base_units_exact`. O parâmetro `required_base_units` é agora recebido como Decimal. Os cálculos continuam a não autorizar movimentos automáticos.
 
 A validação cobre níveis UNIT, CASE e PALLET, embalagem fechada, embalagem aberta e quantidades fraccionárias. A unidade base é a unidade do produto; o factor de embalagem é expresso nessa unidade, sem conversões implícitas entre SKUs.
+
+
+### Quantidades de exposição na unidade base
+
+Os níveis alvo e mínimo de exposição (`shelf_products.target_quantity` e `min_display_quantity`) usam `NUMERIC(12,3)`, alinhado com a unidade base do produto. Isto permite, por exemplo, configurar 20.125 kg sem arredondamento. A migration 0090 converte os valores inteiros existentes sem alterar o seu valor e o downgrade recusa truncar dados fraccionários.
