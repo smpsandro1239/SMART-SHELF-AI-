@@ -2396,3 +2396,12 @@ A transição usa lock pessimista da tarefa e valida o estado já actualizado ap
 - [x] Testar negação uniforme para tarefa própria, tarefa de colega, tarefa não atribuída e ID inexistente quando o actor é EMPLOYEE.
 - [x] API CI `45716057516`, Quality Gates `45716057563`, Security Scans `45716057667` e Docker Compose `45716057580`: todos concluídos com sucesso no SHA `f925b875f871964ce80805c4927af15616f58774`.
 
+
+
+## P0 — Defesa em profundidade nas operações de eventos de paletes
+
+- [x] Reforçar no handler de leitura de eventos de palete a autorização `SUPERVISOR_OR_ADMIN` definida na política central.
+- [x] Reforçar a mesma autorização no handler de registo de transições/alterações de palete, antes de bloquear ou alterar o registo.
+- [x] Testar que EMPLOYEE recebe 403 tanto na leitura como na escrita, sem alteração de estado nem criação de evento.
+- [x] Testar que SUPERVISOR consegue ler o histórico e registar uma transição válida.
+- [x] API CI `45716912538`, Quality Gates `45716912911`, Security Scans `45716912543` e Docker Compose `45716912421`: sucesso no SHA `50df52e59eca47aa2dfc868fc16621cf2f636586`.
