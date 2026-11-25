@@ -6770,21 +6770,20 @@ def upsert_inventory_freshness_policy(
         if "backroom_location_code" in payload.model_fields_set:
             policy.backroom_location_code = payload.backroom_location_code
 
-    if (
-        "backroom_location_code" in payload.model_fields_set
-        and previous_backroom_location_code != payload.backroom_location_code
-    ):
-        db.flush()
-        db.add(models.InventoryFreshnessPolicyEvent(
-            policy_id=policy.id,
-            actor_user_id=actor.id,
-            previous_backroom_location_code=previous_backroom_location_code,
-            new_backroom_location_code=payload.backroom_location_code,
-            reason=payload.reason,
-            created_at=models.utc_now(),
-        ))
-
     try:
+        if (
+            "backroom_location_code" in payload.model_fields_set
+            and previous_backroom_location_code != payload.backroom_location_code
+        ):
+            db.flush()
+            db.add(models.InventoryFreshnessPolicyEvent(
+                policy_id=policy.id,
+                actor_user_id=actor.id,
+                previous_backroom_location_code=previous_backroom_location_code,
+                new_backroom_location_code=payload.backroom_location_code,
+                reason=payload.reason,
+                created_at=models.utc_now(),
+            ))
         db.commit()
     except IntegrityError as exc:
         # Two first-time writers can both observe no row; recover the unique-key race.
