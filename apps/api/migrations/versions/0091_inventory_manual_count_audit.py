@@ -7,7 +7,11 @@ branch_labels = None
 depends_on = None
 
 def upgrade() -> None:
-    with op.batch_alter_table("inventory_snapshots") as batch:\n        batch.create_unique_constraint("uq_inventory_snapshot_identity", ["id", "store_id", "product_id"])
+    bind = op.get_bind()
+    if bind.dialect.name == "sqlite":
+        op.create_index("uq_inventory_snapshot_identity", "inventory_snapshots", ["id", "store_id", "product_id"], unique=True)
+    else:
+        op.create_unique_constraint("uq_inventory_snapshot_identity", "inventory_snapshots", ["id", "store_id", "product_id"])
     op.create_table("inventory_manual_count_events",
         sa.Column("id", sa.Integer(), primary_key=True),
         sa.Column("snapshot_id", sa.Integer(), nullable=False),
@@ -46,4 +50,7 @@ def downgrade() -> None:
     op.drop_index("ix_inventory_manual_count_actor_created", table_name="inventory_manual_count_events")
     op.drop_index("ix_inventory_manual_count_store_created", table_name="inventory_manual_count_events")
     op.drop_table("inventory_manual_count_events")
-    with op.batch_alter_table("inventory_snapshots") as batch:\n        batch.drop_constraint("uq_inventory_snapshot_identity", type_="unique")
+    if bind.dialect.name == "sqlite":
+        op.drop_index("uq_inventory_snapshot_identity", table_name="inventory_snapshots")
+    else:
+        op.drop_constraint("uq_inventory_snapshot_identity", "inventory_snapshots", type_="unique")
