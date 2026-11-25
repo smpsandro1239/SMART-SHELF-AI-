@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 
-from app import models
+from app import main as main_module, models
 from app.database import SessionLocal
 from app.main import app
 from app.security import create_access_token
@@ -99,18 +99,23 @@ def main() -> None:
             user_id=actor_ids["supervisor"], role="SUPERVISOR"
         )[0]
         headers = {"Authorization": f"Bearer {token}"}
-        manual = client.post(
-            "/api/v1/inventory/snapshots",
-            json={
-                "store_id": store_a_id,
-                "product_id": product_id,
-                "on_hand_quantity": 12,
-                "reserved_quantity": 0,
-                "source": "MANUAL",
-                "reason": "PostgreSQL audit smoke manual count",
-            },
-            headers=headers,
-        )
+        original_settings = main_module.settings
+        main_module.settings = original_settings.model_copy(update={"app_env": "production"})
+        try:
+            manual = client.post(
+                "/api/v1/inventory/snapshots",
+                json={
+                    "store_id": store_a_id,
+                    "product_id": product_id,
+                    "on_hand_quantity": 12,
+                    "reserved_quantity": 0,
+                    "source": "MANUAL",
+                    "reason": "PostgreSQL audit smoke manual count",
+                },
+                headers=headers,
+            )
+        finally:
+            main_module.settings = original_settings
         assert manual.status_code == 201, manual.text
         manual_snapshot_id = manual.json()["id"]
 
