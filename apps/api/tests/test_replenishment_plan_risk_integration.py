@@ -73,10 +73,16 @@ def _create_candidate(client, store_id, code, sku, name, stock, zone_id=None):
     })
     assert inventory.status_code == 201
     with TestingSession() as db:
-        db.add(models.InventoryFreshnessPolicy(
-            store_id=store_id, source="WMS", max_age_minutes=240,
-            backroom_location_code="BACKROOM-A",
-        ))
+        policy = db.query(models.InventoryFreshnessPolicy).filter_by(
+            store_id=store_id, source="WMS",
+        ).first()
+        if policy is None:
+            db.add(models.InventoryFreshnessPolicy(
+                store_id=store_id, source="WMS", max_age_minutes=240,
+                backroom_location_code="BACKROOM-A",
+            ))
+        else:
+            policy.backroom_location_code = "BACKROOM-A"
         db.commit()
     backroom = client.post("/api/v1/inventory/snapshots", json={
         "store_id": store_id, "product_id": product["id"],
