@@ -1104,3 +1104,12 @@ Ponto semântico ainda aberto: InventorySnapshot.source aceita ERP, WMS, POS, MA
 - O teste HTTP de reconciliação verifica UUID e proveniência congelada; foi criado teste dedicado à migration e ao backfill histórico, incluindo preservação de trigger UPDATE preexistente.
 - Commits de implementação: 1129295 (modelo), 72c78b0 (schema), 84f85bc (endpoint), ded06a2 (teste HTTP), 6a9e629 (migration), 5e92563 (teste migration), 9ed6683 (alinhamento do índice ORM).
 - Validação pendente: não foram executados testes localmente nesta sessão. A execução GitHub Actions para o HEAD resultante tem de ser consultada antes de declarar a alteração aprovada.
+
+
+## 2026-11-25 — Falha detectada e correcção no backfill 0086
+
+- O API CI no commit `d248723eb7832265b0b0bca0b3639a77c8bbb2b1` executou com PostgreSQL 16.16: as migrations Alembic, incluindo 0086, passaram no smoke de migrações.
+- A suite terminou com **1 falha, 1679 aprovados e 1 ignorado**. A falha estava no teste SQLite da migration: o UPDATE de backfill referia `:destination_shelf_id`, mas o dicionário de parâmetros não fornecia esse valor.
+- Corrigido em `ee68ab2bf41b7571833018d3928e7b32cd5a76b1`: o backfill passa explicitamente `destination_shelf_id = NULL`, preservando a decisão de não inferir destinos históricos.
+- A execução anterior confirma que a migration PostgreSQL sobe; ainda não confirma a suite completa nem os triggers de proveniência da migration 0086 em PostgreSQL. A validação integral permanece pendente até nova CI.
+- O ledger de eventos ainda não foi iniciado; fica bloqueado até a suite corrigida passar.
