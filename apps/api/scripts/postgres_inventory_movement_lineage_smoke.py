@@ -576,8 +576,8 @@ def main() -> None:
         assert task_event_count >= 1
 
         for statement, parameters, expected in (
-            ("DELETE FROM shelves WHERE id = :id", {"id": retention_shelf.json()["id"]}, "shelf has replenishment task history"),
-            ("DELETE FROM zones WHERE id = :id", {"id": retention_zone.json()["id"]}, "zone has replenishment task history"),
+            ("DELETE FROM shelves WHERE id = :id", {"id": retention_shelf.json()["id"]}, "shelf has retained operational evidence"),
+            ("DELETE FROM zones WHERE id = :id", {"id": retention_zone.json()["id"]}, "zone has retained shelf evidence"),
         ):
             try:
                 db.execute(text(statement), parameters)
