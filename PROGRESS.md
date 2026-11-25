@@ -1514,3 +1514,14 @@ O commit `50fc1fcd9dac4c88dfb800aaa1f690ff1c0b6304` introduz o endpoint transacc
 - Quality Gates `45689904362`, Security Scans `45689904247` e Docker Compose `45689904380`: sucesso no mesmo SHA.
 - Sem alterações ao código de produção nesta ronda: o mecanismo de lock já existia; a lacuna era a prova explícita da corrida entre estados terminais e a documentação operacional.
 - Próxima prioridade: rever consistência temporal dos campos `started_at`/`completed_at` e a política de atribuição/reafectação, sem inventar regras comerciais nem reabrir estados terminais.
+
+
+## 2026-11-25 — P0: isolamento do histórico de tarefas para funcionários
+
+- Corrigida a autorização de `GET /api/v1/tasks/{task_id}/events`: EMPLOYEE só consulta tarefas atribuídas ao próprio `assigned_user_id`; a filtragem é executada na query SQL antes de materializar a tarefa.
+- SUPERVISOR continua limitado à loja; ADMIN mantém acesso global.
+- Respostas 404 uniformes para tarefa de colega, não atribuída, inexistente ou de outra loja evitam exposição de existência e eventos.
+- Teste regressivo cobre tarefa própria, tarefa atribuída a colega, tarefa sem atribuição e ID inexistente.
+- Commits: teste `2fca1052d4e37dac4e0d2cce92b1e5953b494562`; implementação `e36d8708bb5a054c229144cce466eb074f69812f`.
+- API CI `45714946906`, Quality Gates `45714946958`, Security Scans `45714946858` e Docker Compose `45714946956`: sucesso no SHA final.
+- Próxima prioridade: auditar endpoints de leitura de eventos/auditoria de tarefas e operações adjacentes quanto a privilégios por função e isolamento de loja; manter as regras de retenção e os estados terminais.
