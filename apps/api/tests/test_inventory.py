@@ -1607,7 +1607,7 @@ def test_replenishment_plan_includes_read_only_packaging_options_for_unit_case_a
         items = [
             item
             for group in response.json()["groups"]
-            for item in group["tasks"]
+            for item in group["items"]
         ]
         assert len(items) == 1
         item = items[0]
