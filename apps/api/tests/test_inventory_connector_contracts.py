@@ -22,6 +22,8 @@ def record(**overrides):
         "reserved_quantity": Decimal("2.000"),
         "captured_at": datetime(2026, 11, 24, 12, 0, tzinfo=timezone.utc),
         "external_reference": "stock-row-001",
+        "location_code": "BACKROOM-A",
+        "availability_status": "AVAILABLE",
     }
     values.update(overrides)
     return NormalizedInventoryRecord(**values)
@@ -59,6 +61,22 @@ def test_batch_accepts_pagination_metadata():
     batch = InventorySyncBatch("WMS", "WMS vendor", "run-10", (record(),), "next-page")
     assert batch.next_cursor == "next-page"
     assert len(batch.records) == 1
+
+
+def test_wms_batch_requires_location_and_explicit_availability():
+    with pytest.raises(ValueError, match="physical location and availability"):
+        InventorySyncBatch(
+            "WMS", "WMS vendor", None,
+            (record(location_code=None, availability_status="UNKNOWN"),),
+        )
+
+
+def test_erp_batch_does_not_claim_backroom_location_authority():
+    batch = InventorySyncBatch(
+        "ERP", "ERP vendor", None,
+        (record(location_code=None, availability_status="UNKNOWN"),),
+    )
+    assert batch.records[0].location_code is None
 
 
 def test_adapter_loader_fails_closed_when_not_configured():
