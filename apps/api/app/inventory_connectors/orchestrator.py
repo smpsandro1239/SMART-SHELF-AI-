@@ -41,6 +41,8 @@ def _same_snapshot(existing: models.InventorySnapshot, item: Any) -> bool:
     return (
         Decimal(str(existing.on_hand_quantity)) == item.on_hand_quantity
         and Decimal(str(existing.reserved_quantity)) == item.reserved_quantity
+        and existing.location_code == item.location_code
+        and existing.availability_status == item.availability_status
         and _utc(existing.captured_at) == _utc(item.captured_at)
     )
 
@@ -228,6 +230,8 @@ async def run_inventory_source_sync(
                     reserved_quantity=item.reserved_quantity,
                     source=source,
                     external_reference=item.external_reference,
+                    location_code=item.location_code,
+                    availability_status=item.availability_status,
                     captured_at=item.captured_at,
                     created_at=models.utc_now(),
                 ))
