@@ -1709,3 +1709,10 @@ Os endpoints de registo horário, batch e importação CSV de vendas/tráfego pa
 Os handlers que persistem OCR runs, matches OCR→catálogo e fusão visual/textual repetem a política ADMIN/SUPERVISOR. A negação de EMPLOYEE ocorre antes do lock da imagem e antes de qualquer escrita; os testes confirmam ausência de registos após HTTP 403.
 
 **Evidência:** SHA `a9271dd595c7d913a93cd969cf73d58b5e49438d`; API CI **1730 passed, 1 skipped**; Quality Gates, Security Scans e Docker Compose — sucesso.
+
+
+## 2026-11-25 — RBAC das mutações de warehouse e paletes
+
+Os handlers de criação de localizações e colocações, registo de paletes, políticas de rotação e simulação agora repetem a autorização ADMIN/SUPERVISOR da política central. A negação ocorre antes de ler ou bloquear recursos. Teste com EMPLOYEE confirma 403 nas seis operações e ausência de mutações.
+
+**Evidência:** SHA `3f63efd0da73070cc1654e76ea58ecfe0e79ca93`; API CI **1731 passed, 1 skipped**; Quality Gates, Security Scans e Docker Compose — sucesso.
