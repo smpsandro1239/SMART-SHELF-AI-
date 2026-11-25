@@ -1673,6 +1673,7 @@ def test_inventory_snapshot_persists_exact_decimal_physical_and_reserved_quantit
                 "on_hand_quantity": 10.125,
                 "reserved_quantity": 2.375,
                 "source": "MANUAL",
+                "reason": "Exact decimal manual count regression",
                 "external_reference": f"DECIMAL-SNAPSHOT-{uuid4().hex}",
             },
         )
@@ -1698,6 +1699,7 @@ def test_inventory_snapshot_persists_exact_decimal_physical_and_reserved_quantit
                     "product_id": product_id,
                     **quantities,
                     "source": "MANUAL",
+                    "reason": "Invalid decimal manual count regression",
                     "external_reference": f"INVALID-DECIMAL-SNAPSHOT-{index}-{uuid4().hex}",
                 },
             )
