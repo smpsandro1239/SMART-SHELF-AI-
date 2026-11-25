@@ -1535,6 +1535,108 @@ def test_wms_backroom_location_is_configurable_per_store_through_policy_api(monk
         assert invalid.status_code == 422
 
 
+def test_replenishment_plan_includes_read_only_packaging_options_for_unit_case_and_pallet():
+    with TestClient(app) as client:
+        store_id, product_id = create_store_and_product(client, unit="kg")
+        zone = client.post(
+            "/api/v1/zones",
+            json={"store_id": store_id, "name": "Zona de reposição"},
+        )
+        assert zone.status_code == 201, zone.text
+        shelf = client.post(
+            "/api/v1/shelves",
+            json={"zone_id": zone.json()["id"], "code": f"PACK-PLAN-{uuid4().hex[:6]}"},
+        )
+        assert shelf.status_code == 201, shelf.text
+        assignment = client.post("/api/v1/shelf-products", json={
+            "shelf_id": shelf.json()["id"],
+            "product_id": product_id,
+            "target_quantity": 20.125,
+            "min_display_quantity": 2,
+        })
+        assert assignment.status_code == 201, assignment.text
+
+        with TestingSession() as db:
+            db.add(models.InventoryFreshnessPolicy(
+                store_id=store_id,
+                source="WMS",
+                max_age_minutes=240,
+                backroom_location_code="BACKROOM-PLAN",
+            ))
+            db.commit()
+
+        snapshot = client.post("/api/v1/inventory/snapshots", json={
+            "store_id": store_id,
+            "product_id": product_id,
+            "on_hand_quantity": 100,
+            "reserved_quantity": 0,
+            "source": "WMS",
+            "external_reference": f"PACK-PLAN-WMS-{uuid4().hex}",
+            "location_code": "BACKROOM-PLAN",
+            "availability_status": "AVAILABLE",
+        })
+        assert snapshot.status_code == 201, snapshot.text
+        observation = client.post("/api/v1/observations", json={
+            "shelf_id": shelf.json()["id"],
+            "product_id": product_id,
+            "source": "mobile",
+            "status": "LOW_STOCK",
+            "confidence": 0.99,
+            "observed_quantity": 0,
+        })
+        assert observation.status_code == 201, observation.text
+
+        for level in (
+            {"code": "UNIT", "name": "Unidade", "package_type": "UNIT", "base_units_per_package": 1},
+            {"code": "CASE", "name": "Caixa", "package_type": "CASE", "base_units_per_package": 12},
+            {"code": "PALLET", "name": "Palete", "package_type": "PALLET", "base_units_per_package": 720},
+        ):
+            created = client.post("/api/v1/warehouse/product-packaging", json={
+                "product_id": product_id,
+                **level,
+                "is_ordering_unit": level["code"] == "PALLET",
+                "is_replenishment_unit": level["code"] == "CASE",
+            })
+            assert created.status_code == 201, created.text
+
+        response = client.get(
+            "/api/v1/replenishment/plan",
+            params={"store_id": store_id},
+        )
+        assert response.status_code == 200, response.text
+        items = [
+            item
+            for group in response.json()["groups"]
+            for item in group["tasks"]
+        ]
+        assert len(items) == 1
+        item = items[0]
+        assert item["recommendation_status"] == "NEEDS_REPLENISHMENT"
+        assert item["task_creation_allowed"] is True
+        assert item["suggested_quantity"] == 20.125
+
+        packaging = item["packaging_plan"]
+        assert packaging["status"] == "AVAILABLE"
+        assert packaging["base_unit"] == "kg"
+        assert packaging["required_base_units_exact"] == "20.125"
+        assert packaging["preferred_replenishment_packaging_code"] == "CASE"
+        assert packaging["automatic_stock_movement_allowed"] is False
+        assert packaging["stock_reserved"] is False
+        options = {option["packaging_code"]: option for option in packaging["options"]}
+        assert set(options) == {"UNIT", "CASE", "PALLET"}
+        assert options["UNIT"]["package_count"] == 21
+        assert options["CASE"]["package_count"] == 2
+        assert options["CASE"]["planned_base_units_exact"] == "24.000"
+        assert options["CASE"]["excess_base_units_exact"] == "3.875"
+        assert options["CASE"]["preferred_for_replenishment"] is True
+        assert options["PALLET"]["package_count"] == 1
+        assert options["PALLET"]["planned_base_units_exact"] == "720.000"
+
+        with TestingSession() as db:
+            assert db.query(models.ReplenishmentTask).filter_by(store_id=store_id).count() == 0
+            assert db.query(models.InventoryMovement).filter_by(store_id=store_id).count() == 0
+
+
 def test_inventory_movement_freezes_product_base_unit_and_exact_decimal_quantity(monkeypatch):
     with TestClient(app) as client:
         store_id, product_id, task_id, source_snapshot_id = _completed_replenishment(
