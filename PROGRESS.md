@@ -1446,3 +1446,16 @@ O commit `50fc1fcd9dac4c88dfb800aaa1f690ff1c0b6304` introduz o endpoint transacc
 - Quality Gates `45678506006`, Security Scans `45678506005` e Docker Compose `45678506008`: sucesso no mesmo SHA.
 - Próxima prioridade: aprofundar a semântica das reservas agregadas e a correlação entre snapshots WMS consecutivos e movimentos; não criar ledger de reservas individuais sem identificadores/documentação do fornecedor.
 
+
+
+## 2026-11-25 — Reservas agregadas e movimentos sucessivos WMS
+
+- Adicionada regressão PostgreSQL/API com dois movimentos sucessivos sobre o mesmo snapshot WMS, em tarefas/prateleiras distintas.
+- O teste confirma `on_hand=20`, `reserved=5`, disponibilidade inicial 15; após movimentos de 6 e 6 unidades, os snapshots internos resultam em on_hand 14/8, reserva 5 preservada e disponibilidade 9/3.
+- O snapshot WMS de origem mantém-se imutável; a soma dos movimentos (12) é deduzida uma vez por movimento, além da reserva agregada.
+- O snapshot resultante MANUAL permanece uma projecção interna de movimento, não confirmação de escrita no WMS.
+- SHA validado: `043c15f4980b45c4d50d2cd47fb921c5504eccac`.
+- API CI `45680479412`: PostgreSQL 16 smokes e suite API — **1719 passed, 1 skipped**.
+- Quality Gates `45680479177`, Security Scans `45680479240` e Docker Compose `45680479172`: sucesso no mesmo SHA.
+- Próxima prioridade: especificar a correlação de confirmações WMS e snapshots posteriores com base num contrato real do fornecedor; não tratar qualquer alteração de stock como confirmação automática.
+
