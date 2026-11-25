@@ -6754,6 +6754,9 @@ def upsert_inventory_freshness_policy(
         .with_for_update()
         .first()
     )
+    previous_backroom_location_code = (
+        policy.backroom_location_code if policy is not None else None
+    )
     if policy is None:
         policy = models.InventoryFreshnessPolicy(
             store_id=payload.store_id,
@@ -6766,6 +6769,20 @@ def upsert_inventory_freshness_policy(
         policy.max_age_minutes = payload.max_age_minutes
         if "backroom_location_code" in payload.model_fields_set:
             policy.backroom_location_code = payload.backroom_location_code
+
+    if (
+        "backroom_location_code" in payload.model_fields_set
+        and previous_backroom_location_code != payload.backroom_location_code
+    ):
+        db.flush()
+        db.add(models.InventoryFreshnessPolicyEvent(
+            policy_id=policy.id,
+            actor_user_id=actor.id,
+            previous_backroom_location_code=previous_backroom_location_code,
+            new_backroom_location_code=payload.backroom_location_code,
+            reason=payload.reason,
+            created_at=models.utc_now(),
+        ))
 
     try:
         db.commit()
@@ -6783,9 +6800,19 @@ def upsert_inventory_freshness_policy(
                 status_code=409,
                 detail="Inventory freshness policy changed concurrently; retry the request",
             ) from exc
+        previous_backroom_location_code = policy.backroom_location_code
         policy.max_age_minutes = payload.max_age_minutes
         if "backroom_location_code" in payload.model_fields_set:
             policy.backroom_location_code = payload.backroom_location_code
+            if previous_backroom_location_code != payload.backroom_location_code:
+                db.add(models.InventoryFreshnessPolicyEvent(
+                    policy_id=policy.id,
+                    actor_user_id=actor.id,
+                    previous_backroom_location_code=previous_backroom_location_code,
+                    new_backroom_location_code=payload.backroom_location_code,
+                    reason=payload.reason,
+                    created_at=models.utc_now(),
+                ))
         try:
             db.commit()
         except IntegrityError as retry_exc:
