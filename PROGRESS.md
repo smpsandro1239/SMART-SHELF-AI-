@@ -1434,3 +1434,15 @@ O commit `50fc1fcd9dac4c88dfb800aaa1f690ff1c0b6304` introduz o endpoint transacc
 - Os quatro workflows passaram no mesmo SHA. Não foram executados testes localmente; a validação foi feita por GitHub Actions.
 - Próxima prioridade: auditar monotonicidade temporal e snapshots WMS consecutivos, reservas agregadas e mudanças de localização; não criar ledger de reservas individuais sem contrato do fornecedor.
 
+
+
+## 2026-11-25 — Isolamento de localização WMS e snapshots recebidos fora de ordem
+
+- Adicionada regressão HTTP para mudança auditada da localização WMS: os snapshots da localização anterior deixam de ser elegíveis e não existe fallback quando a nova localização ainda não tem evidência.
+- Adicionada regressão para chegada tardia de snapshot: um registo com `captured_at` mais antigo é preservado no histórico, mas não substitui o snapshot temporalmente mais recente da localização autorizada.
+- O teste confirma que a disponibilidade continua a ser calculada como `on_hand_quantity - reserved_quantity` (20 - 5 = 15), sem criar movimentos.
+- SHA validado: `fb1470185126dfe295a15b1f69f635aed05b3da3`.
+- API CI `45678506014`: PostgreSQL 16 smokes e suite API — **1718 passed, 1 skipped**.
+- Quality Gates `45678506006`, Security Scans `45678506005` e Docker Compose `45678506008`: sucesso no mesmo SHA.
+- Próxima prioridade: aprofundar a semântica das reservas agregadas e a correlação entre snapshots WMS consecutivos e movimentos; não criar ledger de reservas individuais sem identificadores/documentação do fornecedor.
+
