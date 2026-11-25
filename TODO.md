@@ -2309,3 +2309,15 @@ As duas caixas pendentes da secção de validação 0091 foram fechadas com a ev
 
 Evidência: API CI `45677287479` (**1717 passed, 1 skipped**); Quality Gates `45677287381`; Security Scans `45677287568`; Docker Compose `45677287570` — os quatro workflows concluídos com sucesso no mesmo SHA. A primeira execução revelou uma fixture de ledger que ainda assumia comparação sem tolerância; a fixture foi corrigida para configurar explicitamente a política ERP e a suite voltou a passar.
 
+
+
+## P1 — Snapshots WMS consecutivos, mudança de localização e chegada tardia
+
+- [x] Confirmar que a alteração auditada da localização WMS deixa de considerar snapshots da localização anterior, mesmo que sejam mais recentes.
+- [x] Confirmar que, após a mudança, a ausência de snapshot na nova localização não faz fallback para a localização antiga.
+- [x] Confirmar que um snapshot WMS atrasado, com `captured_at` anterior, permanece no histórico mas não substitui o snapshot mais recente da localização autorizada.
+- [x] Confirmar cálculo de disponibilidade com reserva agregada (`on_hand - reserved`) no snapshot seleccionado.
+- [x] API CI PostgreSQL 16 e suite completa: **1718 passed, 1 skipped** no SHA `fb1470185126dfe295a15b1f69f635aed05b3da3`.
+- [x] Quality Gates, Security Scans e Docker Compose aprovados no mesmo SHA.
+- [ ] Prosseguir a auditoria da semântica de reservas agregadas e correlação de movimentos com snapshots WMS sucessivos; não inventar identidade de reservas individuais sem contrato do fornecedor.
+
