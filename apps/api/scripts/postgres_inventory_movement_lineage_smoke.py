@@ -512,9 +512,48 @@ def main() -> None:
             else:
                 raise AssertionError("PostgreSQL allowed deletion of a shelf/zone referenced by an immutable movement")
 
+    with TestClient(app) as retention_client:
+        retention_zone = retention_client.post("/api/v1/zones", json={
+            "store_id": store_id, "name": f"Task retention zone {suffix}",
+        })
+        assert retention_zone.status_code == 201, retention_zone.text
+        retention_shelf = retention_client.post("/api/v1/shelves", json={
+            "zone_id": retention_zone.json()["id"], "code": f"TASK-RETENTION-{suffix}",
+        })
+        assert retention_shelf.status_code == 201, retention_shelf.text
+        assignment = retention_client.post("/api/v1/shelf-products", json={
+            "shelf_id": retention_shelf.json()["id"], "product_id": product_id,
+            "target_quantity": 10, "min_display_quantity": 1,
+        })
+        assert assignment.status_code == 201, assignment.text
+        task_without_movement = retention_client.post("/api/v1/tasks", json={
+            "store_id": store_id, "shelf_id": retention_shelf.json()["id"],
+            "product_id": product_id, "requested_quantity": 2,
+        })
+        assert task_without_movement.status_code == 201, task_without_movement.text
+
+    with SessionLocal() as db:
+        for statement, parameters, expected in (
+            ("DELETE FROM shelves WHERE id = :id", {"id": retention_shelf.json()["id"]}, "shelf has replenishment task history"),
+            ("DELETE FROM zones WHERE id = :id", {"id": retention_zone.json()["id"]}, "zone has replenishment task history"),
+        ):
+            try:
+                db.execute(text(statement), parameters)
+                db.commit()
+            except DBAPIError as exc:
+                db.rollback()
+                assert expected in str(exc.orig), str(exc.orig)
+            else:
+                raise AssertionError("PostgreSQL deleted a shelf/zone with task history but no movement")
+        retained = db.execute(
+            text("SELECT COUNT(*) FROM replenishment_tasks WHERE id = :task_id"),
+            {"task_id": task_without_movement.json()["id"]},
+        ).scalar_one()
+        assert retained == 1
+
     print(
         "PostgreSQL inventory movement smoke passed: immutable movement/event and shelf/zone provenance, "
-        "retention after hierarchy rename, append-only guards and rejection of UNAVAILABLE WMS sources."
+        "retention after hierarchy rename, task-history deletion guards, append-only guards and rejection of UNAVAILABLE WMS sources."
     )
 
 
