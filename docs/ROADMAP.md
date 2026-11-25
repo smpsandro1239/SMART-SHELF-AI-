@@ -1646,3 +1646,10 @@ O contrato actual usa a escala persistida `NUMERIC(12,3)`. A conversão de embal
 - [x] Manter compatibilidade dos campos numéricos e acrescentar campos `*_exact` textuais.
 - [x] Validar quantidades fraccionárias, caixa aberta/fechada, unidade e palete.
 - [x] Garantir que o cálculo não executa movimentos de stock.
+
+
+## 2026-11-25 — Skew temporal ERP/WMS (migration 0093)
+
+A reconciliação mede e expõe o skew absoluto de captura. A política ERP por loja pode definir tolerância opcional de 0–10080 minutos; NULL significa não configurada. Sem tolerância, timestamps diferentes não produzem delta nem DIVERGENCE. Acima do limite configurado, a comparação quantitativa também é suspensa. Só dentro do limite se comparam quantidades. A configuração exige motivo e fica auditada no ledger append-only. Não existe valor operacional por defeito.
+
+A migration 0093 e os testes SQLite/API foram preparados; validação PostgreSQL 16 e workflows GitHub no SHA final ainda pendentes.
