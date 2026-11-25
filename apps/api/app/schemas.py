@@ -149,10 +149,12 @@ class ShelfProductCreate(BaseModel):
     @classmethod
     def validate_base_unit_precision(cls, value: float) -> float:
         decimal_value = Decimal(str(value))
-        if decimal_value != decimal_value.quantize(Decimal("0.001")):
-            raise ValueError("Shelf quantities support at most three decimal places")
+        if not decimal_value.is_finite():
+            raise ValueError("Shelf quantities must be finite")
         if decimal_value.adjusted() >= 9:
             raise ValueError("Shelf quantities exceed NUMERIC(12, 3) capacity")
+        if decimal_value != decimal_value.quantize(Decimal("0.001")):
+            raise ValueError("Shelf quantities support at most three decimal places")
         return value
 
 
