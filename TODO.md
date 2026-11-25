@@ -2124,3 +2124,15 @@ Só `MOVEMENT_RECORDED` é emitido nesta fase. Tipos futuros estão reservados n
 - [x] Acrescentar cenário PostgreSQL de rollback integral perante falha na inserção do evento de movimento (execução CI pendente).
 
 A tarefa de concorrência está parcialmente concluída até o workflow executar o novo script com sucesso. O teste não define unidade base nem conversões de embalagem.
+
+
+## 2026-11-25 — Guard de disponibilidade da origem WMS nos movimentos (0088)
+
+- [x] Identificar que o trigger 0086 validava origem WMS/localização/loja/produto, mas não exigia `availability_status=AVAILABLE`.
+- [x] Criar migration `0088_inventory_movement_available_source_guard`, substituindo o trigger PostgreSQL/SQLite para rejeitar novas movimentações apoiadas em snapshots UNAVAILABLE, UNKNOWN ou sem estado.
+- [x] Preservar os registos históricos e o comportamento do downgrade para o contrato anterior.
+- [x] Adicionar teste SQLite para AVAILABLE, UNAVAILABLE, UNKNOWN e downgrade.
+- [x] Acrescentar ao smoke PostgreSQL um INSERT directo coerente em tarefa/quantidade/snapshots que só pode ser rejeitado pelo guard de disponibilidade.
+- [ ] Confirmar migration, smoke PostgreSQL, suite API e quatro workflows no SHA final.
+
+A validação de frescura temporal continua no serviço, com política por loja. A migration reforça a condição física mínima sem inventar um limite de idade nem alterar snapshots históricos.
