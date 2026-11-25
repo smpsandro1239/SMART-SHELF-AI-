@@ -2386,3 +2386,13 @@ Evidência no SHA `7bf95468320fc1dd4ab992b520e855d463b6e1f6`: API CI **1725 pass
 - [ ] Manter pendente o arquivamento/soft-delete de prateleiras e zonas até existir requisito operacional; não enfraquecer as guardas de retenção.
 
 A transição usa lock pessimista da tarefa e valida o estado já actualizado após adquirir o lock. A prova concorrente é executada com pedidos HTTP concorrentes em PostgreSQL e não é inferida dos testes SQLite.
+
+
+## P0 — Isolamento da leitura do histórico de tarefas por funcionário
+
+- [x] Aplicar filtro SQL por `assigned_user_id` quando o actor é EMPLOYEE, além do filtro de loja.
+- [x] Manter SUPERVISOR limitado à loja e ADMIN com leitura global.
+- [x] Devolver o mesmo HTTP 404 para tarefa inexistente, de outro tenant, não atribuída ao funcionário ou atribuída a colega, evitando enumeração e fuga de informação operacional.
+- [x] Testar leitura própria, tarefa de colega, tarefa não atribuída e ID inexistente.
+- [x] API CI `45714946906`, Quality Gates `45714946958`, Security Scans `45714946858` e Docker Compose `45714946956`: todos concluídos com sucesso no SHA `e36d8708bb5a054c229144cce466eb074f69812f`.
+
