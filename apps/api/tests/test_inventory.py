@@ -1882,6 +1882,10 @@ def test_manual_inventory_snapshot_requires_actor_supervisor_and_reason(monkeypa
         employee = _supervisor_actor(store_id, role="EMPLOYEE")
         monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: employee)
         assert client.post("/api/v1/inventory/snapshots", json=payload).status_code == 403
+        inactive_supervisor = _supervisor_actor(store_id)
+        inactive_supervisor.is_active = False
+        monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: inactive_supervisor)
+        assert client.post("/api/v1/inventory/snapshots", json=payload).status_code == 401
         supervisor = _supervisor_actor(store_id)
         monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: supervisor)
         for reason in ("", "   ", "abc", "linha" + chr(10) + "quebrada"):
