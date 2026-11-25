@@ -6424,6 +6424,7 @@ def get_product_stockout_risk(
     snapshot = db.query(models.InventorySnapshot).filter(
         models.InventorySnapshot.store_id == store_id,
         models.InventorySnapshot.product_id == product_id,
+        models.InventorySnapshot.source == "ERP",
     ).order_by(models.InventorySnapshot.captured_at.desc(), models.InventorySnapshot.id.desc()).first()
     if snapshot is None:
         return {
@@ -6549,6 +6550,7 @@ def get_store_stockout_risk_portfolio(
         snapshot = db.query(models.InventorySnapshot).filter(
             models.InventorySnapshot.store_id == store_id,
             models.InventorySnapshot.product_id == product.id,
+            models.InventorySnapshot.source == "ERP",
         ).order_by(
             models.InventorySnapshot.captured_at.desc(),
             models.InventorySnapshot.id.desc(),
