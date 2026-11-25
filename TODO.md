@@ -1972,7 +1972,7 @@ Capacity is calculated conservatively from the current time to the end of the ac
 - [x] Exigir integração activa da fonte e produto interno activo.
 - [x] Registar criação, alteração, desactivação e reactivação em audit trail append-only.
 - [x] Impedir alteração da identidade externa e eliminação física do mapping na base de dados.
-- [ ] Implementar worker durável com leases, fencing e recuperação de execuções STARTED abandonadas.
+- [x] Implementar worker durável com leases, fencing e recuperação de execuções STARTED abandonadas; a recuperação fecha tentativas abandonadas como PARTIAL com evento COMPLETED.
 - [ ] Integrar secret manager e adapter real homologado.
 
 
@@ -1983,6 +1983,9 @@ Capacity is calculated conservatively from the current time to the end of the ac
 - [x] Guard de lease na mesma transação de cada commit de página.
 - [x] Retries limitados com backoff e eventos append-only.
 - [x] API de enqueue, consulta de jobs e histórico com autorização multi-loja.
+- [x] Fechar tentativas STARTED abandonadas na mesma transacção de recuperação do lease, sem inventar contagens de páginas.
+- [x] Teste de regressão SQLite para finalização da tentativa abandonada e rejeição do worker antigo.
+- [ ] Testes concorrentes multi-worker em PostgreSQL 16 e recuperação após kill -9 durante uma página.
 - [ ] Adapter real ERP/WMS e homologação do fornecedor.
 - [ ] Integração com Vault/Secrets Manager ou gestor de segredos escolhido no deployment.
 - [ ] Testes concorrentes multi-worker em PostgreSQL 16 e recuperação após kill -9 durante uma página.
