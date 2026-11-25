@@ -2321,3 +2321,14 @@ Evidência: API CI `45677287479` (**1717 passed, 1 skipped**); Quality Gates `45
 - [x] Quality Gates, Security Scans e Docker Compose aprovados no mesmo SHA.
 - [ ] Prosseguir a auditoria da semântica de reservas agregadas e correlação de movimentos com snapshots WMS sucessivos; não inventar identidade de reservas individuais sem contrato do fornecedor.
 
+
+
+## P1 — Semântica das reservas agregadas WMS e movimentos sucessivos
+
+- [x] Confirmar que `reserved_quantity` é subtraída uma única vez do `on_hand_quantity` para obter disponibilidade.
+- [x] Confirmar que movimentos anteriores associados ao mesmo snapshot de origem são deduzidos adicionalmente, sem alterar o snapshot WMS imutável.
+- [x] Confirmar que dois movimentos sucessivos não consomem a quantidade reservada e deixam o saldo disponível correcto.
+- [x] Confirmar preservação da reserva agregada nos snapshots internos de resultado (projecção MANUAL), sem os confundir com confirmação WMS.
+- [x] API CI PostgreSQL 16: **1719 passed, 1 skipped** no SHA `043c15f4980b45c4d50d2cd47fb921c5504eccac`; Quality Gates, Security Scans e Docker Compose aprovados no mesmo SHA.
+- [ ] Evoluir confirmação externa WMS e correlação de snapshots posteriores apenas com contrato de fornecedor e identidade inequívoca; não inferir confirmação a partir de alteração de quantidade.
+
