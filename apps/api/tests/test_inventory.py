@@ -1496,6 +1496,7 @@ def test_wms_backroom_location_is_configurable_per_store_through_policy_api(monk
         configured = client.post("/api/v1/inventory/freshness-policies", json={
             "store_id": store_id, "source": "WMS", "max_age_minutes": 180,
             "backroom_location_code": "WH-BR-01",
+            "reason": "Localização física validada pelo responsável da loja",
         })
         assert configured.status_code == 200, configured.text
         assert configured.json()["backroom_location_code"] == "WH-BR-01"
@@ -1506,6 +1507,14 @@ def test_wms_backroom_location_is_configurable_per_store_through_policy_api(monk
         assert listed.status_code == 200, listed.text
         wms = next(item for item in listed.json() if item["source"] == "WMS")
         assert wms["backroom_location_code"] == "WH-BR-01"
+        with TestingSession() as db:
+            events = db.query(models.InventoryFreshnessPolicyEvent).filter_by(
+                policy_id=wms["id"],
+            ).all()
+            assert len(events) == 1
+            assert events[0].previous_backroom_location_code is None
+            assert events[0].new_backroom_location_code == "WH-BR-01"
+            assert events[0].actor_user_id == actor.id
 
         invalid = client.post("/api/v1/inventory/freshness-policies", json={
             "store_id": store_id, "source": "ERP", "max_age_minutes": 180,
