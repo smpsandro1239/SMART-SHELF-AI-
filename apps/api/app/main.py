@@ -4508,7 +4508,10 @@ def assign_product_to_shelf(
         shelf_id=payload.shelf_id, product_id=payload.product_id
     ).first():
         raise HTTPException(status_code=409, detail="Product is already assigned to this shelf")
-    item = models.ShelfProduct(**payload.model_dump())
+    item_data = payload.model_dump()
+    item_data["target_quantity"] = Decimal(str(payload.target_quantity))
+    item_data["min_display_quantity"] = Decimal(str(payload.min_display_quantity))
+    item = models.ShelfProduct(**item_data)
     db.add(item)
     try:
         db.commit()
