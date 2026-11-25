@@ -1166,3 +1166,12 @@ A primeira execução do novo smoke (API CI run 45611398632) falhou porque a lei
 - Testes locais: não executados; o conector GitHub não disponibiliza shell/ambiente local nesta sessão.
 - Validação do novo SHA: pendente. Os workflows anteriores ao smoke não validam este novo script.
 - Próxima acção: acompanhar API CI PostgreSQL 16; corrigir imediatamente qualquer falha. Depois acrescentar rollback real PostgreSQL para falha de inserção do evento, antes de avançar para unidades logísticas ou confirmação WMS.
+
+
+### Reforço do smoke — rollback transaccional PostgreSQL
+
+- Expandido o smoke concorrente com um segundo cenário isolado: injecção temporária de falha de integridade (SQLSTATE 23514) antes da inserção do evento.
+- A API tem de devolver conflito e reverter movimento, snapshot MANUAL resultante e evento `INVENTORY_RECONCILED`; o evento de movimento anterior permanece intacto.
+- O trigger/função temporários são removidos num bloco `finally`, sem alterar o esquema persistente.
+- Commit: `670f656591ba2652994355776a2390c919ddbc31`.
+- Validação PostgreSQL 16 deste reforço ainda pendente; o run anterior só executou a versão sem este cenário.
