@@ -2415,3 +2415,12 @@ A transição usa lock pessimista da tarefa e valida o estado já actualizado ap
 - [x] Testar que EMPLOYEE recebe 403 nos quatro endpoints e que a tentativa de ingestão não persiste snapshot.
 - [x] Corrigir regressão encontrada na primeira execução: o handler de listagem ainda permitia leitura em contexto de teste/direct-call; a guarda foi adicionada e a suite repetida.
 - [x] API CI `45718367981`: **1728 passed, 1 skipped**; Quality Gates `45718367943`, Security Scans `45718367972` e Docker Compose `45718367912` — sucesso no SHA `19bf8dd2bf2b6990faff261effc0752523f59a5b`.
+
+
+## P0/P1 — RBAC explícito na ingestão POS de vendas e tráfego
+
+- [x] Exigir ADMIN/SUPERVISOR nos endpoints de registo horário de vendas e tráfego.
+- [x] Exigir ADMIN/SUPERVISOR nos endpoints batch de vendas e tráfego.
+- [x] Exigir ADMIN/SUPERVISOR nos imports CSV horário de vendas e tráfego, antes de ler/processar o ficheiro.
+- [x] Testar os seis endpoints com actor EMPLOYEE: todos devolvem 403 e não persistem linhas.
+- [x] API CI `45719344000`: **1729 passed, 1 skipped**; Quality Gates `45719344142`, Security Scans `45719343998` e Docker Compose `45719344004` — sucesso no SHA `d36af7332544204fc14b6764a3faf99c24aa4741`.
