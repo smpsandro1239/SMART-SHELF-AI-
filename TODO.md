@@ -2332,3 +2332,16 @@ Evidência: API CI `45677287479` (**1717 passed, 1 skipped**); Quality Gates `45
 - [x] API CI PostgreSQL 16: **1719 passed, 1 skipped** no SHA `043c15f4980b45c4d50d2cd47fb921c5504eccac`; Quality Gates, Security Scans e Docker Compose aprovados no mesmo SHA.
 - [ ] Evoluir confirmação externa WMS e correlação de snapshots posteriores apenas com contrato de fornecedor e identidade inequívoca; não inferir confirmação a partir de alteração de quantidade.
 
+
+
+## P1 — Proveniência física imutável do destino dos movimentos (migration 0094)
+
+- [x] Persistir `destination_shelf_code` como snapshot do código físico da prateleira no momento do movimento.
+- [x] Capturar o destino sob lock e confirmar que a prateleira pertence à loja da tarefa.
+- [x] Incluir o código do destino no contrato de leitura e na evidência do evento `MOVEMENT_RECORDED`.
+- [x] Backfill histórico a partir da tarefa/prateleira; abortar a migration perante movimentos sem destino consistente.
+- [x] Impor no PostgreSQL/SQLite a correspondência tarefa → prateleira → zona/loja e impedir código de destino forjado.
+- [x] Validar migration SQLite, API, PostgreSQL 16, smoke de linhagem, concorrência, Quality Gates, Security Scans e Docker Compose.
+- [ ] Definir política de retenção/identidade para prateleiras eliminadas ou reestruturadas; preservar o snapshot do destino sem depender do nome actual.
+
+Evidência no SHA `3f4c9740ce70e932c5cb35745e96edd1163bf864`: API CI **1720 passed, 1 skipped**; smoke PostgreSQL de linhagem e concorrência passou; restantes workflows passaram.
