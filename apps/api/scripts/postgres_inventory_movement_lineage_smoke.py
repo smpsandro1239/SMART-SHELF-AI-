@@ -304,6 +304,20 @@ def main() -> None:
             },
         )
         assert unavailable_snapshot.status_code == 201, unavailable_snapshot.text
+        available_snapshot = unavailable_client.post(
+            "/api/v1/inventory/snapshots",
+            json={
+                "store_id": store_id,
+                "product_id": product_id,
+                "on_hand_quantity": 20,
+                "reserved_quantity": 2,
+                "source": "WMS",
+                "external_reference": f"PG-MOVE-AVAILABLE-UNIT-{suffix}",
+                "location_code": "BACKROOM-CI",
+                "availability_status": "AVAILABLE",
+            },
+        )
+        assert available_snapshot.status_code == 201, available_snapshot.text
         unavailable_task = unavailable_client.post(
             "/api/v1/tasks",
             json={
@@ -364,10 +378,39 @@ def main() -> None:
                 "operation_id": str(uuid4()),
             })
             db.commit()
-        except DBAPIError:
+        except DBAPIError as exc:
             db.rollback()
+            assert "same-store physical provenance" in str(exc.orig), str(exc.orig)
         else:
             raise AssertionError("PostgreSQL accepted a movement from an UNAVAILABLE WMS snapshot")
+
+        try:
+            db.execute(text("""
+                INSERT INTO inventory_movements
+                    (task_id, store_id, product_id, movement_type, quantity, unit_code,
+                     source_snapshot_id, source_location_code, destination_shelf_id,
+                     result_snapshot_id, actor_user_id, reason, operation_id, created_at)
+                VALUES
+                    (:task_id, :store_id, :product_id, 'BACKROOM_TO_SHELF', 4, 'kg',
+                     :source_snapshot_id, 'BACKROOM-CI', :destination_shelf_id,
+                     :result_snapshot_id, :actor_id, 'wrong base unit smoke',
+                     :operation_id, CURRENT_TIMESTAMP)
+            """), {
+                "task_id": unavailable_task_id,
+                "store_id": store_id,
+                "product_id": product_id,
+                "source_snapshot_id": available_snapshot.json()["id"],
+                "destination_shelf_id": shelf.json()["id"],
+                "result_snapshot_id": result_snapshot_id,
+                "actor_id": supervisor_id,
+                "operation_id": str(uuid4()),
+            })
+            db.commit()
+        except DBAPIError as exc:
+            db.rollback()
+            assert "match the product base unit" in str(exc.orig), str(exc.orig)
+        else:
+            raise AssertionError("PostgreSQL accepted a movement with a non-product base unit")
 
         unavailable_movement_count = db.execute(
             text("SELECT COUNT(*) FROM inventory_movements WHERE task_id = :task_id"),
