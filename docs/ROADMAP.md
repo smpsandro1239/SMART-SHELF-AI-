@@ -1534,3 +1534,10 @@ Continua pendente: API de gestão de mappings, worker durável/scheduler, secret
 A gestão de SKU externos passa a estar disponível por API autenticada e limitada à loja do utilizador (ADMIN pode gerir todas as lojas; SUPERVISOR apenas a sua). Criação requer integração activa e produto interno activo. Alterações exigem motivo, são auditadas e não alteram a identidade externa do mapping. Desactivação substitui eliminação; histórico append-only protegido por triggers.
 
 Próximo marco operacional: worker durável com leases/fencing e recuperação segura, seguido de secret manager e adapter real homologado.
+
+
+## 2026-11-25 — Concorrência e recuperação de workers ERP/WMS
+
+O API CI passa a executar um smoke dedicado em PostgreSQL 16 com dois claims concorrentes, takeover de lease, rejeição do worker antigo e interrupção real de um processo com SIGKILL após a confirmação da tentativa STARTED. A recuperação deve finalizar o ledger como PARTIAL, com evento COMPLETED e contagens desconhecidas.
+
+Limite da evidência: este smoke não mata o processo depois de confirmar uma página de inventário nem verifica o replay idempotente dos snapshots. Esse cenário continua como próximo teste de integração do orquestrador.
