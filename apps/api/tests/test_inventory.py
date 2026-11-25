@@ -2268,3 +2268,54 @@ def test_employee_cannot_ingest_hourly_sales_or_traffic(monkeypatch):
         with TestingSession() as db:
             assert db.query(models.HourlySalesRecord).filter_by(store_id=store_id).count() == 0
             assert db.query(models.HourlyStoreTrafficRecord).filter_by(store_id=store_id).count() == 0
+
+
+
+def test_employee_cannot_mutate_warehouse_locations_placements_or_pallet_policy(monkeypatch):
+    with TestClient(app) as client:
+        store_id, product_id = create_store_and_product(client)
+        with TestingSession() as db:
+            level = models.ProductPackagingLevel(
+                product_id=product_id, code="PALLET-RBAC", name="Palete RBAC",
+                package_type="PALLET", base_units_per_package=720, is_active=True,
+            )
+            db.add(level)
+            db.commit()
+            db.refresh(level)
+            level_id = level.id
+        employee = _supervisor_actor(store_id, role="EMPLOYEE")
+        monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: employee)
+
+        responses = [
+            client.post("/api/v1/warehouse/locations", json={
+                "store_id": store_id, "code": "EMP-RBAC-LOC", "distance_to_picking_m": 3,
+                "max_volume_cm3": 100000, "max_weight_kg": 500,
+            }),
+            client.post("/api/v1/warehouse/placements", json={
+                "location_id": 2147483000, "product_id": product_id, "quantity": 10,
+            }),
+            client.post("/api/v1/warehouse/pallets", json={
+                "store_id": store_id, "product_id": product_id, "packaging_level_id": level_id,
+                "pallet_code": "EMP-RBAC-PALLET", "base_quantity": 720,
+                "status": "READY", "location_type": "WAREHOUSE", "location_code": "ARZ-A-01",
+            }),
+            client.post("/api/v1/warehouse/pallet-rotation/policies", json={
+                "store_id": store_id, "product_id": product_id,
+                "threshold_ratio": 0.5, "is_enabled": True,
+            }),
+            client.patch("/api/v1/warehouse/pallet-rotation/policies/2147483000", json={
+                "is_enabled": False,
+            }),
+            client.post("/api/v1/warehouse/pallet-rotation/simulate", json={
+                "store_id": store_id, "pallet_id": 2147483000, "traffic_level": "HIGH",
+                "backroom_capacity_available": True, "conventional_replenishment_minutes": 20,
+                "pallet_swap_minutes": 5, "transport_minutes": 3, "pallet_rebuild_minutes": 4,
+                "labour_cost_per_hour": 12, "forecast_consumption_until_low_traffic": 100,
+            }),
+        ]
+        assert [response.status_code for response in responses] == [403] * 6
+        with TestingSession() as db:
+            assert db.query(models.WarehouseLocation).filter_by(store_id=store_id).count() == 0
+            assert db.query(models.WarehousePlacement).filter_by(product_id=product_id).count() == 0
+            assert db.query(models.StorePallet).filter_by(store_id=store_id).count() == 0
+            assert db.query(models.PalletRotationPolicy).filter_by(store_id=store_id).count() == 0
