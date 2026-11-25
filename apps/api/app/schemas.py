@@ -141,9 +141,19 @@ class ProductEmbeddingExemplarRead(BaseModel):
 class ShelfProductCreate(BaseModel):
     shelf_id: int
     product_id: int
-    target_quantity: Decimal = Field(default=Decimal("1.000"), gt=0, max_digits=12, decimal_places=3)
-    min_display_quantity: Decimal = Field(default=Decimal("0.000"), ge=0, max_digits=12, decimal_places=3)
+    target_quantity: float = Field(default=1.0, gt=0, allow_inf_nan=False)
+    min_display_quantity: float = Field(default=0.0, ge=0, allow_inf_nan=False)
     position: str | None = Field(default=None, max_length=80)
+
+    @field_validator("target_quantity", "min_display_quantity")
+    @classmethod
+    def validate_base_unit_precision(cls, value: float) -> float:
+        decimal_value = Decimal(str(value))
+        if decimal_value != decimal_value.quantize(Decimal("0.001")):
+            raise ValueError("Shelf quantities support at most three decimal places")
+        if decimal_value.adjusted() >= 9:
+            raise ValueError("Shelf quantities exceed NUMERIC(12, 3) capacity")
+        return value
 
 
 class ShelfProductRead(ShelfProductCreate):
