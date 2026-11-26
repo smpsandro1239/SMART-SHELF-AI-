@@ -1,3 +1,13 @@
+## P0 — Isolamento multi-loja nos históricos de tarefas e movimentos (2026-11-26)
+
+- [x] Fazer JOIN do evento ao recurso-pai (ReplenishmentTask / InventoryMovement) na consulta que devolve o histórico.
+- [x] Aplicar o filtro store_id directamente nessa consulta para SUPERVISOR, sem depender apenas de uma validação anterior do recurso-pai.
+- [x] Preservar a distinção entre histórico vazio de um recurso autorizado e recurso estrangeiro/inexistente (404 indistinguível).
+- [x] Acrescentar regressão HTTP para histórico de tarefas; reforçar a cobertura existente de movimentos, incluindo paridade estrangeiro/inexistente e bloqueio EMPLOYEE.
+- [ ] Executar testes focados, suite API, PostgreSQL 16, Quality Gates, Security Scans e Docker Compose no HEAD final.
+
+Limite: alterações e testes publicados; execução pendente. ADMIN mantém consulta global. As queries de eventos aplicam a linhagem do recurso-pai na mesma instrução SQL que devolve os eventos.
+
 ## P0 — Isolamento multi-loja no histórico de retenção de imagens (2026-11-26)
 
 - [x] Substituir a sequência de resolução global da loja + `db.get(ShelfImage, image_id)` por queries com JOIN ShelfImage → Shelf → Zone.
