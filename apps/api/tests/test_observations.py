@@ -414,9 +414,9 @@ def test_failed_image_analysis_can_be_retried_by_store_supervisor(tmp_path, monk
         store = client.post("/api/v1/stores", json={"code": "RETRY-01", "name": "Loja retry"})
         assert store.status_code == 201, store.text
         actor.store_id = store.json()["id"]
-        actor.role = "SUPERVISOR"
         zone = client.post("/api/v1/zones", json={"store_id": actor.store_id, "name": "Bebidas"})
         shelf = client.post("/api/v1/shelves", json={"zone_id": zone.json()["id"], "code": "RT-01"})
+        actor.role = "SUPERVISOR"
         uploaded = client.post(
             "/api/v1/shelf-images",
             data={"shelf_id": str(shelf.json()["id"])},
