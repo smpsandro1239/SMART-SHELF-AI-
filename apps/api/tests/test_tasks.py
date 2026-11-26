@@ -126,6 +126,61 @@ def test_task_lifecycle_pending_assignment_start_and_completion():
 
 
 
+
+def test_task_event_history_is_atomic_and_tenant_scoped(monkeypatch):
+    with TestClient(app) as client:
+        store_id, shelf_id, product_id = create_task_context(client)
+        with TestingSession() as db:
+            empty_task = models.ReplenishmentTask(
+                store_id=store_id,
+                shelf_id=shelf_id,
+                product_id=product_id,
+                status="PENDING",
+            )
+            db.add(empty_task)
+            db.commit()
+            db.refresh(empty_task)
+            empty_task_id = empty_task.id
+
+            foreign_store = models.Store(
+                code=f"TASK-FOREIGN-{uuid4().hex[:8].upper()}",
+                name="Loja estrangeira de tarefas",
+            )
+            db.add(foreign_store)
+            db.commit()
+            db.refresh(foreign_store)
+            foreign_task = models.ReplenishmentTask(
+                store_id=foreign_store.id,
+                shelf_id=shelf_id,
+                product_id=product_id,
+                status="PENDING",
+            )
+            db.add(foreign_task)
+            db.commit()
+            db.refresh(foreign_task)
+            foreign_task_id = foreign_task.id
+
+        actor = models.User(
+            id=987654321,
+            email=f"task-supervisor-{uuid4().hex}@example.test",
+            store_id=store_id,
+            full_name="Supervisor da loja",
+            password_hash="test-only-not-used",
+            role="SUPERVISOR",
+            is_active=True,
+        )
+        monkeypatch.setattr(main_module, "_request_user", lambda db, request: actor)
+
+        empty_history = client.get(f"/api/v1/tasks/{empty_task_id}/events")
+        assert empty_history.status_code == 200
+        assert empty_history.json() == []
+
+        foreign = client.get(f"/api/v1/tasks/{foreign_task_id}/events")
+        missing = client.get(f"/api/v1/tasks/{foreign_task_id + 999999}/events")
+        assert foreign.status_code == missing.status_code == 404
+        assert foreign.json() == missing.json()
+
+
 def test_database_unique_index_blocks_duplicate_active_tasks():
     with TestClient(app) as client:
         store_id, shelf_id, product_id = create_task_context(client)
