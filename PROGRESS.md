@@ -1,3 +1,14 @@
+## 2026-11-26 — Estado de suspensão segura da ronda Edge
+
+- Último commit documental: `b2ceb8c5cdbc1ebd95597b0401f53f33d552d7d7` (roadmap); branch `main`.
+- Estado da CI no commit anterior de PROGRESS: Vercel `smart-shelf-ai-r5gl` e `smart-shelf-ai` falharam com `build-rate-limit`. A consulta de estado não devolveu resultados de API CI, Quality Gates, Security Scans ou Docker Compose para os commits documentais. Não foram executados testes localmente.
+- Trabalho desta ronda: reconciliação do TODO com código Edge existente, contrato de acknowledgements e actualização do roadmap. Não houve alteração de código executável ou schema.
+- Próxima tarefa de produto: implementar a associação dispositivo-tarefa com vigência, versão e auditoria; depois adicionar handler de ACK sem concluir tarefas automaticamente.
+- Auditoria BOLA/IDOR: deliberadamente adiada até o utilizador pedir para a retomar.
+- Limitação: o acesso disponível nesta execução permite ler/escrever conteúdo GitHub, mas não executar comandos de terminal, pytest, migrations ou smokes PostgreSQL. Não publicar alterações executáveis sem validação real.
+
+---
+
 ## 2026-11-26 — Contrato de acknowledgements Edge para tarefas
 
 - Criado `docs/architecture/edge-task-acknowledgement-contract.md`.
