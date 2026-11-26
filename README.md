@@ -1,3 +1,9 @@
+## Segurança P0 — histórico de reconciliações e identidade do actor (2026-11-26)
+
+A listagem paginada de reconciliações carrega criadores/revisores numa consulta em lote e os eventos numa segunda consulta em lote, além da consulta principal. A serialização mantém a ordenação dos registos e dos eventos, o contrato JSON e o filtro tenant-scoped; não junta eventos à query paginada. Os novos eventos CREATED e de revisão guardam em evidence.actor_snapshot o user_id, role, store_id e full_name observados no momento da operação. Não existe backfill dos eventos históricos nem é bloqueada a transferência legítima de utilizadores entre lojas. Validação CI pendente no SHA desta alteração.
+
+---
+
 ## Segurança multi-loja — histórico de retenção de imagens (2026-11-26)
 
 O endpoint GET /api/v1/shelf-images/{image_id}/retention/events foi consolidado numa única instrução SQL: a imagem é a entidade-pai tenant-scoped e a página de eventos é ligada por OUTER JOIN. O desenho preserva histórico vazio e páginas para além do último evento sem uma segunda consulta de existência. IDs estrangeiros e inexistentes continuam a devolver 404 indistinguível. Regressão adicionada para histórico vazio, paginação, cross-store e ID inexistente. CI desta alteração pendente no SHA final.
