@@ -1381,7 +1381,8 @@ class EdgeDeviceTaskAssignment(Base):
         CheckConstraint("valid_until IS NULL OR valid_until > valid_from", name="ck_edge_task_assignment_validity"),
         CheckConstraint(
             "(revoked_at IS NULL AND revoked_by_user_id IS NULL AND revocation_reason IS NULL) OR "
-            "(revoked_at IS NOT NULL AND revoked_by_user_id IS NOT NULL AND length(trim(revocation_reason)) >= 3)",
+            "(revoked_at IS NOT NULL AND revoked_by_user_id IS NOT NULL "
+            "AND revocation_reason IS NOT NULL AND length(trim(revocation_reason)) >= 3)",
             name="ck_edge_task_assignment_revocation",
         ),
         Index(

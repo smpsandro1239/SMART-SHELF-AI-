@@ -80,12 +80,13 @@ def test_edge_task_assignment_migration_enforces_history_tenant_and_revision(tmp
         ).scalar_one() == 2
 
         # A caller cannot forge or skip the revision counter.
-        db.exec_driver_sql(
-            "UPDATE replenishment_tasks SET task_version=99 WHERE id=100"
-        )
+        with pytest.raises(IntegrityError, match="task_version is database managed"):
+            db.exec_driver_sql(
+                "UPDATE replenishment_tasks SET task_version=99 WHERE id=100"
+            )
         assert db.exec_driver_sql(
             "SELECT task_version FROM replenishment_tasks WHERE id=100"
-        ).scalar_one() == 3
+        ).scalar_one() == 2
 
         # Composite tenant lineage prevents cross-store device/task bindings.
         with pytest.raises(IntegrityError):

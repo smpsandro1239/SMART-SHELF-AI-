@@ -67,7 +67,8 @@ def upgrade() -> None:
         ),
         sa.CheckConstraint(
             "(revoked_at IS NULL AND revoked_by_user_id IS NULL AND revocation_reason IS NULL) OR "
-            "(revoked_at IS NOT NULL AND revoked_by_user_id IS NOT NULL AND length(trim(revocation_reason)) >= 3)",
+            "(revoked_at IS NOT NULL AND revoked_by_user_id IS NOT NULL "
+            "AND revocation_reason IS NOT NULL AND length(trim(revocation_reason)) >= 3)",
             name="ck_edge_task_assignment_revocation",
         ),
     )
@@ -145,6 +146,7 @@ def upgrade() -> None:
                        OLD.valid_from, OLD.valid_until, OLD.created_by_user_id, OLD.created_at)
                    OR NEW.revoked_at IS NULL
                    OR NEW.revoked_by_user_id IS NULL
+                   OR NEW.revocation_reason IS NULL
                    OR length(trim(NEW.revocation_reason)) < 3 THEN
                     RAISE EXCEPTION 'assignment identity is immutable; only one valid revocation is allowed'
                         USING ERRCODE = '23514';
@@ -179,9 +181,17 @@ def upgrade() -> None:
         """)
     elif bind.dialect.name == "sqlite":
         op.execute("""
+            CREATE TRIGGER trg_replenishment_task_version_write_guard_0102
+            BEFORE UPDATE OF task_version ON replenishment_tasks
+            WHEN NEW.task_version <> OLD.task_version + 1
+            BEGIN
+                SELECT RAISE(ABORT, 'task_version is database managed');
+            END
+        """)
+        op.execute("""
             CREATE TRIGGER trg_replenishment_task_version_0102
             AFTER UPDATE ON replenishment_tasks
-            WHEN NEW.task_version <> OLD.task_version + 1
+            WHEN NEW.task_version = OLD.task_version
             BEGIN
                 UPDATE replenishment_tasks
                 SET task_version = OLD.task_version + 1
@@ -248,6 +258,7 @@ def downgrade() -> None:
             "trg_edge_task_assignment_delete_guard_0102",
             "trg_edge_task_assignment_update_guard_0102",
             "trg_replenishment_task_version_0102",
+            "trg_replenishment_task_version_write_guard_0102",
         ):
             op.execute(f"DROP TRIGGER IF EXISTS {name}")
 
