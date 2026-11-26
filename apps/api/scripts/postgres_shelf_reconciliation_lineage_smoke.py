@@ -30,7 +30,7 @@ def _alert(store_id: int, shelf_id: int, product_id: int, condition: str):
     )
 
 
-def _assert_blocked_then_rejected(operation, label: str) -> None:
+def _assert_blocked_then_rejected(operation, label: str) -> tuple[Thread, Event, list[BaseException]]:
     started = Event()
     finished = Event()
     failures: list[BaseException] = []
