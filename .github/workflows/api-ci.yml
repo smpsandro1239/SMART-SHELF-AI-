@@ -183,6 +183,12 @@ jobs:
           APP_ENV: test
           JWT_SECRET_KEY: test-only-secret-not-for-production
         run: python scripts/postgres_embedding_review_smoke.py
+      - name: Verify PostgreSQL embedding review and source-image shelf lineage serialization
+        env:
+          DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/smart_shelf_ci
+          APP_ENV: test
+          JWT_SECRET_KEY: test-only-secret-not-for-production
+        run: python scripts/postgres_embedding_source_image_shelf_lineage_smoke.py
       - name: Verify PostgreSQL four-way SKU matching, retention and human-review concurrency
         env:
           DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/smart_shelf_ci
