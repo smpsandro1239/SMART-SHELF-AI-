@@ -1841,3 +1841,13 @@ A nota anterior que mantinha a migration 0099 aberta foi superada pelas execuç�
 - Quality Gates `45812501507`, Security Scans `45812501427` e Docker Compose `45812501364`: todos com sucesso no mesmo SHA de código.
 
 Estado: a prova concorrente 0099 passou de observação genérica de lock para confirmação do bloqueador exacto. As migrations 0099 e 0100 mantêm-se fechadas; a auditoria BOLA/IDOR dos restantes endpoints continua separada e aberta.
+
+## 2026-11-26 — Isolamento tenant no histórico de jobs ERP/WMS
+
+- HEAD de referência antes da alteração: 2990d14cf2aebf7e2842f5bd29dce125422b19ea.
+- Identificada uma janela TOCTOU em GET /api/v1/stores/{store_id}/inventory/sync-jobs/{job_id}/events: o handler validava o job numa query e lia os eventos numa segunda query apenas por job_id.
+- Alterado apps/api/app/main.py: parent job e eventos são agora lidos numa única instrução com OUTER JOIN e filtros simultâneos de job_id e store_id. Um job válido sem eventos continua a devolver lista vazia; job estrangeiro/inexistente devolve 404.
+- Alterado apps/api/tests/test_inventory_sync_jobs_api.py: acrescentada regressão que cria um job noutra loja e compara a resposta com um ID inexistente ao consultar através da loja autorizada; preserva o teste 403 para actor que tenta usar o path de outra loja.
+- Commits publicados em main: código a7bdf75cf62d2a855f257ca97be484f89a022da8; teste 56ca987260186601fd0f3e42088a18528b472552.
+- Validação pendente: não foi executada suite local; aguardar API CI/PostgreSQL 16, Quality Gates, Security Scans e Docker Compose no SHA final. Não declarar P0 concluído até confirmação.
+- Próxima acção obrigatória: rever a integridade/imutabilidade de InventorySyncJob.store_id e procurar outras queries de eventos que façam preflight separado do recurso-pai.
