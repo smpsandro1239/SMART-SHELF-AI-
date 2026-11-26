@@ -42,7 +42,7 @@ def test_edge_task_assignment_migration_enforces_history_tenant_and_revision(tmp
         db.exec_driver_sql("INSERT INTO stores (id) VALUES (1), (2)")
         db.exec_driver_sql("INSERT INTO users (id) VALUES (10)")
         db.exec_driver_sql(
-            "INSERT INTO replenishment_tasks (id, store_id) VALUES (100, 1)"
+            "INSERT INTO replenishment_tasks (id, store_id) VALUES (100, 1), (101, 1)"
         )
         db.exec_driver_sql(
             "INSERT INTO edge_devices (device_id, store_id) VALUES ('camera-a', 1), ('camera-b', 2)"
@@ -114,7 +114,7 @@ def test_edge_task_assignment_migration_enforces_history_tenant_and_revision(tmp
         # Assignment identity and creation facts cannot be rewritten.
         with pytest.raises(IntegrityError, match="assignment identity is immutable"):
             db.exec_driver_sql(
-                "UPDATE edge_device_task_assignments SET task_id=100 WHERE id=1"
+                "UPDATE edge_device_task_assignments SET task_id=101 WHERE id=1"
             )
         with pytest.raises(IntegrityError, match="assignment history is append-only"):
             db.exec_driver_sql("DELETE FROM edge_device_task_assignments WHERE id=1")
@@ -137,7 +137,7 @@ def test_edge_task_assignment_migration_enforces_history_tenant_and_revision(tmp
                     '2026-11-26T11:00:00+00:00')
             """
         )
-        with pytest.raises(IntegrityError, match="assignment revocation is immutable"):
+        with pytest.raises(IntegrityError, match="assignment identity is immutable"):
             db.exec_driver_sql(
                 "UPDATE edge_device_task_assignments SET revoked_at='2026-11-26T11:30:00+00:00' WHERE id=1"
             )

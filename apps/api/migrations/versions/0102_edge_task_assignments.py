@@ -28,11 +28,11 @@ def upgrade() -> None:
         "replenishment_tasks",
         sa.Column("task_version", sa.Integer(), nullable=False, server_default="1"),
     )
-    op.create_check_constraint(
-        "ck_replenishment_task_version_positive",
-        "replenishment_tasks",
-        "task_version > 0",
-    )
+    with op.batch_alter_table("replenishment_tasks") as batch:
+        batch.create_check_constraint(
+            "ck_replenishment_task_version_positive",
+            "task_version > 0",
+        )
 
     op.create_table(
         "edge_device_task_assignments",
@@ -257,7 +257,8 @@ def downgrade() -> None:
     op.drop_index("ix_edge_task_assignment_store_task", table_name="edge_device_task_assignments")
     op.drop_index("uq_edge_task_assignment_active_device_task", table_name="edge_device_task_assignments")
     op.drop_table("edge_device_task_assignments")
-    op.drop_constraint("ck_replenishment_task_version_positive", "replenishment_tasks", type_="check")
-    op.drop_column("replenishment_tasks", "task_version")
+    with op.batch_alter_table("replenishment_tasks") as batch:
+        batch.drop_constraint("ck_replenishment_task_version_positive", type_="check")
+        batch.drop_column("task_version")
     op.drop_index("uq_edge_device_id_store", table_name="edge_devices")
     op.drop_index("uq_replenishment_task_id_store", table_name="replenishment_tasks")
