@@ -7067,12 +7067,23 @@ def list_inventory_movement_events(
             models.InventoryMovement.store_id == actor.store_id,
             models.InventoryMovementEvent.store_id == actor.store_id,
         )
-    return (
+    events = (
         events_query
         .order_by(models.InventoryMovementEvent.created_at.asc(), models.InventoryMovementEvent.id.asc())
         .limit(limit)
         .all()
     )
+    if not events:
+        movement_query = db.query(models.InventoryMovement.id).filter(
+            models.InventoryMovement.id == movement_id
+        )
+        if actor.role != "ADMIN":
+            movement_query = movement_query.filter(
+                models.InventoryMovement.store_id == actor.store_id
+            )
+        if movement_query.first() is None:
+            raise HTTPException(status_code=404, detail="Inventory movement not found")
+    return events
 
 
 @app.get("/api/v1/inventory/reconciliation", tags=["inventory"])
