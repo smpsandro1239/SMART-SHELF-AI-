@@ -2189,3 +2189,8 @@ Validação no SHA `3f63efd0da73070cc1654e76ea58ecfe0e79ca93`: API CI **1731 pas
 ### Isolamento multi-loja no histórico de jobs de sincronização
 
 A leitura de eventos de um job ERP/WMS consulta agora o job e o seu histórico numa única instrução SQL, com `OUTER JOIN` e predicados simultâneos de `job_id` e `store_id`. Isto evita a janela TOCTOU entre validar a loja do job e carregar os eventos. Um job autorizado sem eventos mantém `items: []`; um job de outra loja e um ID inexistente devolvem o mesmo 404. A regressão API foi adicionada; a validação CI/PostgreSQL 16 desta alteração permanece pendente.
+
+
+### Serialização e integridade da propriedade de prateleiras
+
+As escritas de observações, sessões de captura e imagens bloqueiam a linhagem da prateleira pela ordem `Zone → Shelf` e revalidam a loja depois dos locks. O smoke PostgreSQL verifica que uma tentativa concorrente de alterar `zones.store_id` aguarda pela transacção de escrita; depois do commit da captura, a base de dados rejeita a transferência porque existe evidência operacional retida. A sessão e a zona permanecem associadas à loja original. A correcção do smoke foi publicada; a nova execução de API CI/PostgreSQL 16 está pendente.
