@@ -1,3 +1,11 @@
+## 2026-11-26 — Eliminação da leitura em duas fases no histórico de retenção de imagens
+
+- A auditoria de sessões de captura/imagens encontrou o mesmo padrão TOCTOU no GET /api/v1/shelf-images/{image_id}/retention/events: quando a página de eventos não continha linhas, uma segunda query confirmava a existência e o tenant da imagem.
+- O endpoint passou a consultar a imagem como entidade-pai, aplicar a loja através de Shelf → Zone e ligar por OUTER JOIN uma subquery de eventos já paginada. Assim, imagem autorizada sem eventos ou com offset além do último evento devolve [], enquanto imagem estrangeira/inexistente devolve 404, tudo decidido numa única instrução SQL.
+- Adicionada regressão para histórico vazio, primeira página, offset além do último evento e ocultação de imagem estrangeira/inexistente.
+- Commits: código `8c9eb1aa83baad6a28b7800562789a4d005536d2`; teste `6ee7d565b88e8f2d2ec9ebcf90bf9f9daa548da5`.
+- Testes e CI do SHA final ainda pendentes; não foram executados localmente nesta sessão.
+
 ## 2026-11-26 — Eliminação de leituras em duas fases no histórico de movimentos e alertas
 
 - A auditoria identificou que os endpoints de histórico de movimentos e alertas filtravam eventos com JOIN tenant-scoped, mas, quando não havia eventos, executavam uma segunda query para distinguir pai válido sem histórico de ID estrangeiro/inexistente. Essa segunda leitura podia observar uma linhagem diferente da primeira.
