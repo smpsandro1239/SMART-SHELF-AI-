@@ -2221,9 +2221,14 @@ def test_reserved_wms_quantity_is_subtracted_once_across_multiple_movements(monk
         own_history = client.get(f"/api/v1/inventory/movements/{movement_id}/events")
         assert own_history.status_code == 200, own_history.text
         assert own_history.json()
-        _, foreign_product_id = create_store_and_product(client)
         with TestingSession() as db:
-            foreign_store_id = db.query(models.Store.id).order_by(models.Store.id.desc()).first()[0]
+            foreign_store = models.Store(
+                code=f"INV-FOREIGN-{uuid4().hex[:8].upper()}",
+                name="Loja estrangeira de teste",
+            )
+            db.add(foreign_store)
+            db.commit()
+            foreign_store_id = foreign_store.id
         foreign_actor = _supervisor_actor(foreign_store_id)
         monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: foreign_actor)
         foreign_history = client.get(f"/api/v1/inventory/movements/{movement_id}/events")
