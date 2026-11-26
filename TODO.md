@@ -1,3 +1,14 @@
+## P0 — Imutabilidade da associação shelf da imagem-fonte de exemplares embedding (2026-11-26)
+
+- [x] Confirmar que a revisão de exemplares bloqueia primeiro a linha `shelf_images`, seguindo a ordem imagem → produto → exemplar.
+- [x] Identificar que a migration 0037 torna imutável a linhagem do exemplar, mas não impede a alteração posterior de `ShelfImage.shelf_id` quando existem exemplares derivados.
+- [x] Criar migration 0100 com guarda PostgreSQL/SQLite que rejeita a mudança de shelf enquanto existir `ProductEmbeddingExemplar` associado à imagem.
+- [x] Acrescentar teste SQLite para rejeição com exemplar, permissão sem exemplar e downgrade limitado à guarda nova.
+- [x] Acrescentar smoke PostgreSQL concorrente que usa a revisão HTTP real, observa os lock waits em `pg_stat_activity` e exige que a mudança cross-store seja rejeitada depois do commit da revisão.
+- [ ] Validar migration 0100, teste SQLite, smoke PostgreSQL 16, suite API, Quality Gates, Security Scans e Docker Compose no HEAD final.
+
+Limite: o smoke e a migration foram publicados; a validação CI ainda não terminou. A guarda cobre a associação directa imagem→shelf quando há exemplares embedding; não substitui a auditoria mais ampla de movimentos de shelf/zone/store nem de outros recursos com IDs directos.
+
 ## P0 — Isolamento multi-loja no histórico de eventos de alertas (2026-11-26)
 
 - [x] Fazer JOIN de ObservationAlertEvent com ObservationAlert na query que devolve o histórico.
