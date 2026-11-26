@@ -1994,3 +1994,21 @@ Estado: a prova concorrente 0099 passou de observação genérica de lock para c
 - HEAD documental subsequente: `21139e68e51c2b9b77a922550cc28911ba6ea18c`.
 - Limite: estes resultados validam o schema/modelos e a suite existente; não validam ainda serviço/API de atribuição, handler Edge nem concorrência específica de duas atribuições simultâneas.
 
+
+
+
+## 2026-11-26 — Serviço e API de associação Edge dispositivo-tarefa
+
+- Implementado `apps/api/app/edge_task_assignment_service.py` com criação e revogação transaccionais, actor humano, motivo obrigatório e conversão de conflitos de unicidade em HTTP 409.
+- A criação bloqueia Store → Task → Device, valida que ambos os recursos pertencem à mesma loja, exige tarefa activa e dispositivo ACTIVE, captura `task_version` e persiste o evento CREATED na mesma transacção.
+- A revogação resolve as chaves imutáveis da associação e bloqueia Store → Task → Device → Assignment; a alteração da associação e o evento REVOKED são confirmados no mesmo commit.
+- Criados schemas Pydantic para criação, revogação e leitura, incluindo validação de timezone e `valid_until > valid_from`.
+- Criados endpoints ADMIN/SUPERVISOR:
+  - `POST /api/v1/stores/{store_id}/edge-devices/{device_id}/tasks/{task_id}/assignment`
+  - `POST /api/v1/edge-task-assignments/{assignment_id}/revoke`
+- Registadas ambas as rotas na política central `SUPERVISOR_OR_ADMIN`.
+- Criado `test_edge_task_assignment_service.py` com quatro cenários de serviço e `postgres_edge_task_assignment_smoke.py` para corridas concorrentes de criação e revogação; o smoke foi ligado ao API CI.
+- Commits publicados nesta fase: serviço `73406f993dd5c42e2145bcfc7de9da93f56d6848`; schemas `8b179e252966e380a21e7f270fff96da0eb91425`; política `6b0aa1bea4266ae5fdeb9ce4a8f8e4bbee694d87`; endpoints `f030c88d83ee3e6a122de7eddfc7c0fe764dba44`; testes `37bab9963cc250b628e16b05e5e16e51124d9b7e`; CI smoke e workflow `3c3f70fd88d8ffad476cd66cae1fa16f4851a66d`.
+- Validação automatizada desencadeada no SHA `37bab9963cc250b628e16b05e5e16e51124d9b7e`: API CI `45881090392`, Quality Gates `45881090440`, Security Scans `45881090308` e Docker Compose `45881090274`. Resultados ainda não confirmados nesta actualização.
+- O smoke concorrente foi acrescentado depois desse SHA, pelo que a execução final de CI terá de validar também o HEAD que contém `postgres_edge_task_assignment_smoke.py` e o passo correspondente no workflow.
+- **Limites:** o handler `TASK_ACKNOWLEDGED` continua desactivado; o worker ainda necessita da fronteira transaccional acknowledgement + inbox sob fencing. Auditoria BOLA/IDOR permanece adiada.
