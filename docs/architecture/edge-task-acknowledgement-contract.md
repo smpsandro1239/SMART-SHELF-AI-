@@ -111,4 +111,4 @@ A implementação do serviço/API ainda deve bloquear Store → Task → Device 
 
 A unicidade e as regras de validade são garantidas no PostgreSQL, não apenas por validação Python. SQLite mantém cobertura unitária, mas não é prova de concorrência.
 
-**Estado:** schema e modelos implementados no commit `6ae449d883c845072127f188861be44e57dd2193`. A migration completa já passou no passo `alembic upgrade head` do API CI run `45876761643`; a suite pytest desse run ainda estava em execução quando este registo foi escrito. Serviço/API, handler e smoke concorrente dedicado permanecem pendentes. O worker mantém comportamento fail-closed.
+**Estado:** schema e modelos implementados no commit `6ae449d883c845072127f188861be44e57dd2193`. A migration completa passou no passo `alembic upgrade head` do API CI run `45876761643`; a suite concluiu com **1747 passed, 1 skipped**. Quality Gates `45876761651`, Security Scans `45876761497` e Docker Compose `45876761707` também passaram no mesmo SHA de código. Serviço/API, handler e smoke concorrente dedicado permanecem pendentes. O worker mantém comportamento fail-closed.

@@ -1976,9 +1976,21 @@ Estado: a prova concorrente 0099 passou de observação genérica de lock para c
 - Criados triggers para revisão monotónica gerida pela base de dados em cada UPDATE da tarefa; a escrita directa de `task_version` é rejeitada. O contador capturado pela associação permite detectar alterações concorrentes.
 - Actualizados os modelos SQLAlchemy para reflectir as novas tabelas, constraints, índices e FKs.
 - Commits de implementação: `d7868f85a68f71abf0872423c80c22d7094f4439`, `da330ba3654d56ab9d39469e1bcb34f82d181d94`, `6ae449d883c845072127f188861be44e57dd2193`.
-- API CI run `45876761643`: passo de migração completa PostgreSQL 16 (`alembic upgrade head`) concluído com sucesso; os smokes PostgreSQL anteriores à suite também concluíram com sucesso. A execução de pytest ainda estava em curso no momento deste registo; não declarar a suite aprovada.
+- Validação final no SHA de código `6ae449d883c845072127f188861be44e57dd2193`: API CI [45876761643](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45876761643) passou com PostgreSQL 16, migration completa e **1747 passed, 1 skipped**; Quality Gates [45876761651](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45876761651), Security Scans [45876761497](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45876761497) e Docker Compose [45876761707](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45876761707) também passaram no mesmo SHA.
 - O ambiente local continua sem resolução DNS para `github.com`; validação é feita via GitHub Actions. Estados Vercel continuam limitados por `build-rate-limit`.
 - Não foram criados endpoints nem serviço de atribuição nesta fase. O handler `TASK_ACKNOWLEDGED` permanece desactivado.
 - Auditoria BOLA/IDOR continua adiada por instrução explícita.
 
 **Próximo passo:** implementar serviço e endpoints ADMIN/SUPERVISOR para criar/revogar associações com lock order Store → Task → Device → Assignment, e criar smoke PostgreSQL concorrente. Antes de activar o handler, refactorizar a fronteira do worker para persistir acknowledgement + conclusão do inbox atomicamente sob fencing.
+
+
+### Validação final da migration 0102
+
+- API CI: `45876761643` — sucesso, PostgreSQL 16 e **1747 passed, 1 skipped**.
+- Quality Gates: `45876761651` — sucesso.
+- Security Scans: `45876761497` — sucesso.
+- Docker Compose: `45876761707` — sucesso.
+- Os quatro workflows validaram o mesmo SHA de código `6ae449d883c845072127f188861be44e57dd2193`.
+- HEAD documental subsequente: `21139e68e51c2b9b77a922550cc28911ba6ea18c`.
+- Limite: estes resultados validam o schema/modelos e a suite existente; não validam ainda serviço/API de atribuição, handler Edge nem concorrência específica de duas atribuições simultâneas.
+

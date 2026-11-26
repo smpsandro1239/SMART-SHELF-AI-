@@ -1460,6 +1460,7 @@ Objectivo: evoluir o projecto para uma plataforma de inteligência operacional d
 - [ ] Definir a associação operacional Capture Device → zona/prateleira/sessão, distinta do registo de identidade Edge já existente.
 - [x] Registo de dispositivos Edge por loja/tipo, credenciais individuais, rotação/revogação, autenticação HMAC, anti-replay, inbox persistente e worker com lease/fencing (migrations 0071–0073).
 - [x] Criar schema persistente de associação dispositivo-tarefa (migration 0102), com validade temporal, revogação única, identidade humana do actor, ledger append-only e FKs compostas que impedem ligações entre lojas; não reutilizar `assigned_user_id`.
+- [x] Validar migration 0102 em PostgreSQL 16 e teste de migration SQLite; API CI run [45876761643](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45876761643): 1747 passed, 1 skipped.
 - [x] Introduzir `ReplenishmentTask.task_version` gerida pela base de dados, monotónica em cada UPDATE e protegida contra escrita directa; migration inclui triggers PostgreSQL e SQLite.
 - [ ] Implementar serviço/API de criação e revogação da associação, com autorização ADMIN/SUPERVISOR, lock order consistente e persistência atómica da associação + evento.
 - [ ] Ligar o handler `TASK_ACKNOWLEDGED` à associação e à revisão da versão, sem alterar o estado oficial da tarefa ou inventário.
