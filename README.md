@@ -20,7 +20,12 @@ O backend inclui um ledger auditável para tentativas ERP/WMS, com ciclo de vida
 
 O smoke PostgreSQL de consumo de artefactos verifica combinações cruzadas de `image_id`, `artifact_id` e `store_id`, incluindo duas imagens na mesma loja e recursos de outra loja. Os casos inválidos têm de falhar antes de contactar o provider. O controlo positivo confirma que a integração activa da loja proprietária é seleccionada mesmo quando outra loja tem uma integração revogada com o mesmo identificador de sistema externo. A FK composta impede ainda que um artefacto filho referencie um pai de outra imagem.
 
-A validação desta alteração está pendente no API CI/PostgreSQL 16 e nos Quality Gates.
+Validação no API CI PostgreSQL 16 run [45812501875](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45812501875): sucesso. O passo "Verify PostgreSQL external artifact read and retention lock serialization" passou, juntamente com os smokes de linhagem, imutabilidade, monotonicidade do inventário e autorização pré-lock de IDs directos. Quality Gates [45812501507](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45812501507), Security Scans [45812501427](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45812501427) e Docker Compose [45812501364](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45812501364) também passaram no commit de código validado.
+
+
+## Segurança multi-loja — consenso de observações de prateleira
+
+A consulta de consenso volta a aplicar a linhagem `Observation → Shelf → Zone` na mesma query SQL que lê as observações, e também na validação da associação SKU/prateleira. Isto impede que uma transferência da zona entre a validação inicial da prateleira e a leitura da evidência exponha observações fora do tenant do SUPERVISOR. Um teste determinístico simula a transferência nesse intervalo. A validação CI do novo commit ainda está pendente; não é uma prova de concorrência PostgreSQL real.
 
 ## Segurança multi-loja — IDs de prateleiras em planogramas
 
@@ -83,11 +88,11 @@ A leitura de `GET /api/v1/observation-alerts/{alert_id}/events` aplica o âmbito
 
 ## BOLA — paridade de IDs directos de deteções e exemplares
 
-O smoke PostgreSQL pré-lock compara respostas HTTP completas (status e corpo JSON) para IDs estrangeiros reais e IDs inexistentes nos endpoints de revisão/histórico de deteções e revisão de exemplares. Os pedidos são feitos enquanto as linhas de origem e catálogo estão bloqueadas; exige-se HTTP 404 indistinguível e ausência de revisões persistidas. O reforço foi publicado no commit `1cdc4f67`; validação CI ainda pendente.
+O smoke PostgreSQL pré-lock compara respostas HTTP completas (status e corpo JSON) para IDs estrangeiros reais e IDs inexistentes nos endpoints de revisão/histórico de deteções e revisão de exemplares. Os pedidos são feitos enquanto as linhas de origem e catálogo estão bloqueadas; exige-se HTTP 404 indistinguível e ausência de revisões persistidas. O smoke passou no API CI PostgreSQL 16 [45812501875](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45812501875), no passo "Verify PostgreSQL direct-ID detection and exemplar tenant pre-lock authorization".
 
 ## Isolamento multi-loja de deteções
 
-Os endpoints que recebem `detection_id` directamente ocultam recursos de outras lojas com HTTP 404 indistinguível de um identificador inexistente. A autorização é validada antes do lock da imagem de origem e novamente após o lock, antes de consultar o histórico ou criar uma observação. A cobertura automatizada compara os dois cenários; a validação CI da revisão actual permanece pendente até os workflows terminarem.
+Os endpoints que recebem `detection_id` directamente ocultam recursos de outras lojas com HTTP 404 indistinguível de um identificador inexistente. A autorização é validada antes do lock da imagem de origem e novamente após o lock, antes de consultar o histórico ou criar uma observação. A cobertura automatizada compara os dois cenários. O smoke PostgreSQL pré-lock passou no API CI [45812501875](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45812501875); esta evidência cobre os cenários do script, não todos os endpoints BOLA/IDOR.
 
 ## Segurança — OWASP Secure Agent Playbook
 
