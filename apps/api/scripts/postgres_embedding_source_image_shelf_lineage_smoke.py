@@ -105,6 +105,7 @@ def main() -> None:
     release_product_lock = Event()
     move_started = Event()
     move_finished = Event()
+    holder_pid: list[int] = []
     move_pid: list[int] = []
     move_result: list[str] = []
     application_name = f"ss-embed-image-move-{suffix}"
@@ -119,6 +120,7 @@ def main() -> None:
             backend_pid = lock_db.execute(
                 text("SELECT pg_backend_pid()")
             ).scalar_one()
+            holder_pid.append(backend_pid)
             holder_ready.set()
             if not release_product_lock.wait(timeout=20):
                 raise TimeoutError("Timed out holding embedding review product lock")
@@ -173,7 +175,7 @@ def main() -> None:
         with ThreadPoolExecutor(max_workers=3) as executor:
             holder_future = executor.submit(hold_product_lock)
             assert holder_ready.wait(timeout=10), "product lock holder did not start"
-            holder_pid = holder_future.result(timeout=0.1) if holder_future.done() else None
+            assert holder_pid, "product lock holder backend PID was not captured"
 
             review_future = executor.submit(submit_review)
 
@@ -190,13 +192,12 @@ def main() -> None:
                             SELECT pid
                             FROM pg_stat_activity
                             WHERE wait_event_type = 'Lock'
-                              AND query ILIKE '%product_embedding_exemplars%'
                               AND :holder_pid = ANY(pg_blocking_pids(pid))
                             ORDER BY query_start DESC
                             LIMIT 1
                             """
                         ),
-                        {"holder_pid": holder_pid},
+                        {"holder_pid": holder_pid[0]},
                     ).scalar_one_or_none()
                 if row is not None:
                     review_backend_pid = row
