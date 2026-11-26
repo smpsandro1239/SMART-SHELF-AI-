@@ -2364,3 +2364,19 @@ def test_employee_cannot_manage_admin_catalogue_or_read_user_directory(monkeypat
             assert db.query(models.WarehouseProductProfile).count() == baseline["profiles"]
             assert db.query(models.ProductPackagingLevel).count() == baseline["packaging"]
             assert db.query(models.User).count() == baseline["users"]
+
+
+
+def test_every_versioned_api_route_has_an_explicit_authorization_policy():
+    from app.api_security_policy import classify_api_route
+
+    uncovered = []
+    for route in app.routes:
+        path = getattr(route, "path", "")
+        if not path.startswith("/api/v1/"):
+            continue
+        for method in getattr(route, "methods", set()) or set():
+            if classify_api_route(method, path) == "UNCLASSIFIED":
+                uncovered.append(f"{method} {path}")
+
+    assert uncovered == [], f"Versioned API routes without explicit RBAC policy: {uncovered}"
