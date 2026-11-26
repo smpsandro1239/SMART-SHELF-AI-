@@ -1698,3 +1698,13 @@ O commit `50fc1fcd9dac4c88dfb800aaa1f690ff1c0b6304` introduz o endpoint transacc
 - Security Scans `45794895272`: **sucesso**.
 - Demo Docker Compose smoke `45794895899`: **sucesso**.
 - Resultado: as quatro falhas anteriores foram resolvidas nos testes, sem relaxar a política ADMIN_ONLY nem alterar o comportamento de produção. A migration 0099 passou a validação de upgrade + integridade/concorrência no PostgreSQL 16. Falta ainda uma prova dedicada de downgrade para 0098 e reaplicação de 0099 em base isolada.
+
+
+## 2026-11-26 — Validação isolada de downgrade/reaplicação 0099 adicionada ao API CI
+
+- Criado `apps/api/scripts/postgres_shelf_reconciliation_lineage_migration_cycle_smoke.py`.
+- O smoke cria uma base PostgreSQL temporária, aplica migrations até 0099, confirma os seis triggers e cinco funções da migration, faz downgrade para 0098, confirma a remoção desses objectos e reaplica 0099, confirmando a sua recriação.
+- A base temporária é removida em bloco `finally` com `DROP DATABASE ... WITH (FORCE)`; a base principal `smart_shelf_ci` não é sujeita a downgrade.
+- Integrado no workflow API CI imediatamente após o upgrade normal de migrations.
+- Commits: script `53b08213e706e111672b8528e007f51a8d4515af`; workflow `91df1f671c712fee739735086bbed9a48a00aec5`.
+- A validação do novo smoke está pendente de execução CI. Não considerar o downgrade/reaplicação aprovados até o job passar.
