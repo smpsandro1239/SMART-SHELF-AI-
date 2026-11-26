@@ -1,3 +1,14 @@
+## 2026-11-26 — Contrato de acknowledgements Edge para tarefas
+
+- Criado `docs/architecture/edge-task-acknowledgement-contract.md`.
+- O contrato distingue aceitação técnica pelo dispositivo, declaração de início e declaração de conclusão; nenhuma mensagem Edge equivale a confirmação humana nem altera inventário.
+- A implementação exige associação explícita e vigente dispositivo-tarefa, versão da tarefa, idempotência, transacção atómica, fencing e revisão humana de declarações COMPLETED.
+- TODO actualizado: contrato concluído; handler permanece pendente até existir associação dispositivo-tarefa e cobertura PostgreSQL/CI. A auditoria BOLA/IDOR continua suspensa por indicação do utilizador.
+- Commit do contrato: `163c0bf445934a156fe317700b0b83c85bcf80b8`; commit TODO: `2f198a23e28b57b6e188ae20fca44522a1d44bcb`.
+- Testes não executados: alteração exclusivamente documental.
+
+---
+
 ## 2026-11-26 — Reconciliação do estado Edge AI (sem retomar auditoria de segurança)
 
 - HEAD de partida: `acaf5fb5fc5861bcff73d883629e6ab618e7cdfd`.
