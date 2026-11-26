@@ -2,7 +2,7 @@
 
 - Continuação a partir do HEAD `ab5104b1f555ff0e687bfafb0c64d42d6d8b0766`.
 - O endpoint `GET /api/v1/shelf-images/{image_id}/retention/events` resolvia o tenant, depois carregava a imagem por ID global e voltava a resolver o tenant. A sequência deixava uma janela entre a validação e a materialização.
-- A resolução foi substituída por uma query única com JOIN ShelfImage → Shelf → Zone e filtro de tenant na própria consulta para SUPERVISOR. A leitura dos eventos só prossegue após existir um ID de imagem visível.
+- A leitura foi reforçada com JOIN ShelfImage → Shelf → Zone e filtro de tenant directamente na query de eventos. Quando não existem eventos, uma query scoped separada distingue histórico vazio de imagem inexistente/estrangeira sem revelar a existência do recurso. Assim, a query que devolve eventos não depende apenas de uma validação anterior susceptível a alteração concorrente da associação da imagem.
 - Acrescentada regressão HTTP com imagem estrangeira que contém evento de retenção; compara ID estrangeiro e inexistente (404 e corpo idêntico).
 - Commits: implementação `838f2c0592f934ba91fb6f56af498cccf89ac15f`; teste `ceacbec09ca1e345e16c1eb47661933de275a8d8`.
 - A alteração anterior de embeddings e os seus testes permanecem publicados nos commits anteriores.
