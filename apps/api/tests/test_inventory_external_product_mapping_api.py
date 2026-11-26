@@ -145,3 +145,49 @@ def test_mapping_api_enforces_store_scope_and_role(db_session):
             store_a.id, payload, _request(employee), db_session,
         )
     assert forbidden.value.status_code == 403
+
+
+def test_mapping_event_history_hides_foreign_mapping_and_preserves_empty_history(db_session):
+    store_a, store_b, supervisor, _, product_a, product_b = _setup(db_session)
+    request = _request(supervisor)
+
+    local_mapping = models.InventoryExternalProductMapping(
+        store_id=store_a.id, source="ERP", external_product_id="local-1",
+        external_sku="LOCAL-1", product_id=product_a.id, active=True,
+        created_by_user_id=supervisor.id, updated_by_user_id=supervisor.id,
+    )
+    foreign_mapping = models.InventoryExternalProductMapping(
+        store_id=store_b.id, source="ERP", external_product_id="foreign-1",
+        external_sku="FOREIGN-1", product_id=product_b.id, active=True,
+        created_by_user_id=supervisor.id, updated_by_user_id=supervisor.id,
+    )
+    db_session.add_all([local_mapping, foreign_mapping])
+    db_session.flush()
+    db_session.add(models.InventoryExternalProductMappingEvent(
+        mapping_id=foreign_mapping.id, actor_user_id=supervisor.id,
+        event_type="CREATED", before_state=None,
+        after_state={"store_id": store_b.id, "product_id": product_b.id},
+        reason="Foreign mapping fixture",
+    ))
+    db_session.commit()
+
+    # A valid mapping without audit events is distinguishable from a
+    # foreign/nonexistent mapping and must return an empty history.
+    local_history = main_module.list_inventory_external_product_mapping_events(
+        store_a.id, local_mapping.id, request, db_session,
+    )
+    assert local_history == {"mapping_id": local_mapping.id, "items": []}
+
+    # Supplying a foreign mapping ID under the caller's own store path must
+    # not disclose its audit events.
+    with pytest.raises(HTTPException) as foreign:
+        main_module.list_inventory_external_product_mapping_events(
+            store_a.id, foreign_mapping.id, request, db_session,
+        )
+    assert foreign.value.status_code == 404
+
+    with pytest.raises(HTTPException) as missing:
+        main_module.list_inventory_external_product_mapping_events(
+            store_a.id, foreign_mapping.id + 100000, request, db_session,
+        )
+    assert missing.value.status_code == 404
