@@ -952,3 +952,118 @@ def test_cross_store_alert_event_history_is_denied(monkeypatch):
         admin_history = client.get(history_url)
         assert admin_history.status_code == 200, admin_history.text
         assert [event["event_type"] for event in admin_history.json()] == ["CREATED"]
+
+
+def test_shelf_write_endpoints_lock_and_revalidate_store_scope(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    from app.config import settings
+    import app.main as main_module
+
+    monkeypatch.setattr(settings, "image_storage_path", str(tmp_path))
+    Base.metadata.drop_all(bind=TEST_ENGINE)
+    Base.metadata.create_all(bind=TEST_ENGINE)
+
+    with TestClient(app) as client:
+        store_a = client.post(
+            "/api/v1/stores", json={"code": "SHELF-LOCK-A", "name": "Loja A"}
+        ).json()
+        store_b = client.post(
+            "/api/v1/stores", json={"code": "SHELF-LOCK-B", "name": "Loja B"}
+        ).json()
+        zone_a = client.post(
+            "/api/v1/zones", json={"store_id": store_a["id"], "name": "Zona A"}
+        ).json()
+        zone_b = client.post(
+            "/api/v1/zones", json={"store_id": store_b["id"], "name": "Zona B"}
+        ).json()
+        shelf_a = client.post(
+            "/api/v1/shelves", json={"zone_id": zone_a["id"], "code": "LOCK-A"}
+        ).json()
+        shelf_a_other = client.post(
+            "/api/v1/shelves", json={"zone_id": zone_a["id"], "code": "LOCK-A2"}
+        ).json()
+        shelf_b = client.post(
+            "/api/v1/shelves", json={"zone_id": zone_b["id"], "code": "LOCK-B"}
+        ).json()
+
+        foreign_session = client.post(
+            "/api/v1/capture-sessions",
+            json={"shelf_id": shelf_b["id"], "source_type": "MOBILE"},
+        )
+        assert foreign_session.status_code == 201, foreign_session.text
+
+        monkeypatch.setattr(
+            main_module,
+            "_request_user",
+            lambda db, request: SimpleNamespace(
+                id=501, role="SUPERVISOR", store_id=store_a["id"]
+            ),
+        )
+
+        observation_foreign = client.post(
+            "/api/v1/observations",
+            json={
+                "shelf_id": shelf_b["id"],
+                "source": "manual",
+                "status": "LOW_STOCK",
+                "confidence": 0.9,
+            },
+        )
+        assert observation_foreign.status_code == 404
+
+        session_foreign = client.post(
+            "/api/v1/capture-sessions",
+            json={"shelf_id": shelf_b["id"], "source_type": "MOBILE"},
+        )
+        assert session_foreign.status_code == 404
+
+        session_own = client.post(
+            "/api/v1/capture-sessions",
+            json={"shelf_id": shelf_a["id"], "source_type": "MOBILE"},
+        )
+        assert session_own.status_code == 201, session_own.text
+
+        upload_foreign_shelf = client.post(
+            "/api/v1/shelf-images",
+            data={"shelf_id": str(shelf_b["id"])},
+            files={"image": ("foreign.png", _valid_image_bytes(), "image/png")},
+        )
+        assert upload_foreign_shelf.status_code == 404
+
+        upload_foreign_session = client.post(
+            "/api/v1/shelf-images",
+            data={
+                "shelf_id": str(shelf_a["id"]),
+                "capture_session_id": str(foreign_session.json()["id"]),
+            },
+            files={"image": ("foreign-session.png", _valid_image_bytes(), "image/png")},
+        )
+        assert upload_foreign_session.status_code == 404
+
+        upload_mismatched_session = client.post(
+            "/api/v1/shelf-images",
+            data={
+                "shelf_id": str(shelf_a_other["id"]),
+                "capture_session_id": str(session_own.json()["id"]),
+            },
+            files={"image": ("mismatched.png", _valid_image_bytes(), "image/png")},
+        )
+        assert upload_mismatched_session.status_code == 422
+
+        upload_own = client.post(
+            "/api/v1/shelf-images",
+            data={
+                "shelf_id": str(shelf_a["id"]),
+                "capture_session_id": str(session_own.json()["id"]),
+            },
+            files={"image": ("own.png", _valid_image_bytes(), "image/png")},
+        )
+        assert upload_own.status_code == 201, upload_own.text
+
+        db = TestingSession()
+        try:
+            assert db.query(models.Observation).filter_by(shelf_id=shelf_b["id"]).count() == 0
+            assert db.query(models.ShelfImage).filter_by(shelf_id=shelf_b["id"]).count() == 0
+            assert db.query(models.ShelfImage).filter_by(shelf_id=shelf_a_other["id"]).count() == 0
+        finally:
+            db.close()
