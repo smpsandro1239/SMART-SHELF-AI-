@@ -2504,7 +2504,7 @@ A transição usa lock pessimista da tarefa e valida o estado já actualizado ap
 - [x] Impedir que alterações posteriores à associação SKU–prateleira, observação ou hierarquia invalidem evidência já retida.
 - [x] Implementar variantes PostgreSQL com locks `FOR SHARE` sobre as linhas de origem e SQLite com triggers equivalentes.
 - [x] Publicar teste SQLite para associações incompatíveis, snapshots cruzados, preservação sem persistência parcial, alterações a relações de origem e rejeição do preflight.
-- [ ] Executar API CI, Quality Gates e smoke PostgreSQL 16; a publicação dos testes não constitui prova de execução nem valida ainda a concorrência PostgreSQL em runtime.
+- [ ] Fechar API CI, Quality Gates e smoke PostgreSQL 16. A migration 0099 já foi aplicada no smoke de migrations PostgreSQL 16; a suite de testes reportou 1735 passados e 4 falhas não relacionadas identificadas no registo. O API CI foi interrompido por um fixture legado do smoke 0050 que não criava a associação SKU–prateleira exigida por 0099; fixture corrigido no commit f58b7724, nova execução pendente.
 - [x] Adicionar smoke PostgreSQL dedicado e ligá-lo ao API CI para competir inserção de alerta com transferência de zona e remoção da associação SKU; a execução continua pendente.
 
 A migration não altera snapshots, não enfraquece a retenção 0098 e não modifica a semântica das FKs existentes. O downgrade remove apenas as guardas introduzidas em 0099. A validação de dados históricos é deliberadamente bloqueante.
