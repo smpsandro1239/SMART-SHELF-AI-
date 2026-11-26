@@ -1,3 +1,7 @@
+## 2026-11-26 — Histórico de retenção de imagens tenant-atomic
+
+O GET /api/v1/shelf-images/{image_id}/retention/events deixou de consultar eventos e imagem em duas fases. A imagem e a sua loja são agora verificadas na mesma instrução SQL que junta por OUTER JOIN uma subquery de eventos paginada. Histórico vazio e páginas posteriores ao último evento permanecem válidos; IDs estrangeiros/inexistentes mantêm 404. Regressão adicionada. Commits `8c9eb1aa` e `6ee7d565`. CI pendente.
+
 ## 2026-11-26 — Leituras atómicas de histórico de movimentos e alertas
 
 Os endpoints de histórico de movimentos e alertas foram consolidados numa query pai + OUTER JOIN a eventos. O tenant é aplicado na mesma instrução; um pai autorizado sem eventos permanece distinguível de um ID estrangeiro/inexistente sem uma segunda query. Regressão de movimentos cobre same-store e cross-store; a cobertura existente de alertas mantém-se. Commits `cb9cb3fe` e `d0782203`. CI pendente.
