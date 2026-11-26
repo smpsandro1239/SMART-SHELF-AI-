@@ -1,3 +1,11 @@
+## 2026-11-26 — Eliminação de leituras em duas fases no histórico de movimentos e alertas
+
+- A auditoria identificou que os endpoints de histórico de movimentos e alertas filtravam eventos com JOIN tenant-scoped, mas, quando não havia eventos, executavam uma segunda query para distinguir pai válido sem histórico de ID estrangeiro/inexistente. Essa segunda leitura podia observar uma linhagem diferente da primeira.
+- Ambos os endpoints passaram a usar uma única query com a entidade-pai como raiz e OUTER JOIN aos eventos. Para supervisores, o predicado de loja é aplicado na mesma instrução que materializa o histórico. Administradores mantêm acesso global autorizado.
+- A regressão de movimentos verifica histórico same-store e que um supervisor de outra loja recebe 404, igual a um ID inexistente. Os testes existentes de alertas continuam a cobrir histórico vazio e ocultação cross-store.
+- Commits: código `cb9cb3fe8cd369eb3a4c454a8f28dc493e8fce41`; teste de movimentos `d0782203c1e0edc40b03d6fd61353b10f656128c`.
+- Validação de CI ainda pendente no momento deste registo.
+
 ## 2026-11-26 — Correcção de BOLA/TOCTOU no histórico de mapeamentos ERP/WMS
 
 - Na auditoria de rotas por identificador directo, foi encontrado um padrão de risco em GET /api/v1/stores/{store_id}/inventory/external-mappings/{mapping_id}/events: a autorização consultava o mapping com store_id, mas a leitura subsequente dos eventos filtrava apenas por mapping_id. Uma alteração de linhagem entre as duas queries podia expor histórico de outra loja.
