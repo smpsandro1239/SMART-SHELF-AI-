@@ -1,3 +1,19 @@
+## 2026-11-26 — Correcção de BOLA/TOCTOU no histórico de mapeamentos ERP/WMS
+
+- Na auditoria de rotas por identificador directo, foi encontrado um padrão de risco em GET /api/v1/stores/{store_id}/inventory/external-mappings/{mapping_id}/events: a autorização consultava o mapping com store_id, mas a leitura subsequente dos eventos filtrava apenas por mapping_id. Uma alteração de linhagem entre as duas queries podia expor histórico de outra loja.
+- A leitura foi consolidada numa única query com InventoryExternalProductMapping como tabela-pai, OUTER JOIN aos eventos e predicados simultâneos mapping_id + store_id. O resultado vazio continua válido para mapping autorizado sem eventos; mapping estrangeiro/inexistente devolve 404.
+- Acrescentada regressão API que verifica histórico vazio e ocultação de mapping estrangeiro sob o path da loja A.
+- Commits de código e teste: 3a95f8a19f3b723ef62f5944dccc27acacdb6974 e 41bfe0a639a9412f6d20d5518506f661cfd9ad97.
+- Validação desta correcção ainda pendente no momento desta actualização documental.
+
+## 2026-11-26 — Validação CI concluída da migration 0101 e correcção do smoke de captura
+
+- HEAD validado: 3bc6963176d7c142b223dbca82537691542a6aff.
+- API CI 45821668415: sucesso. PostgreSQL 16 aplicou 0100 → 0101; o smoke de sync jobs observou a rejeição inventory sync job store_id is immutable; o smoke de autorização de capture-session concluiu; a suite pytest terminou com sucesso.
+- Docker Compose 45821668480: sucesso; stack API/PostgreSQL/worker iniciou, readiness e seed foram verificados e perfis demo passaram.
+- Quality Gates 45821668581: ambos os jobs de testes/compilação API e build TypeScript/produção web passaram.
+- Security Scans 45821668381: ZAP passive baseline, auditorias de dependências Python/Web e Gitleaks de histórico passaram.
+
 ## 2026-11-26 — Imutabilidade da identidade de tenant dos sync jobs
 
 - A revisão de `main.py`, `inventory_sync_jobs.py` e `inventory_sync_worker.py` não encontrou qualquer fluxo da aplicação que reatribua `InventorySyncJob.store_id`. O enqueue define a loja; os handlers consultados filtram por loja; o worker captura o valor para executar o adapter e apenas actualiza campos de lifecycle/lease.
