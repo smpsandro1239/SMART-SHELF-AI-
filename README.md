@@ -1,3 +1,13 @@
+## Segurança multi-loja — auditoria de histórico de mapeamentos ERP/WMS (2026-11-26)
+
+O endpoint de eventos de mapeamentos externos lê agora o mapping e o seu histórico numa única query tenant-scoped (mapping_id + store_id, com OUTER JOIN). Isto elimina a janela entre o preflight do mapping e a leitura dos eventos. Um mapping autorizado sem eventos continua a devolver items: []; IDs de outra loja e inexistentes devolvem 404. Foi acrescentada regressão API para ambos os casos. A validação CI desta correcção está pendente.
+
+## Segurança multi-loja — validação da migration 0101 (2026-11-26)
+
+A API CI no SHA 3bc6963176d7c142b223dbca82537691542a6aff confirmou upgrade da migration 0100 → 0101, execução dos smokes PostgreSQL de capture-session e inventory sync jobs e conclusão da suite API. Docker Compose, Quality Gates e Security Scans também passaram nesse SHA. A auditoria BOLA/IDOR global continua em curso.
+
+---
+
 ## Segurança multi-loja — serialização das escritas por prateleira (2026-11-26)
 
 As operações de criação de observações, sessões de captura e upload de imagens bloqueiam a linha da zona proprietária antes de persistirem dados associados à prateleira. A autorização é revalidada depois do lock; a loja da sessão e o directório da imagem são derivados da zona bloqueada. O upload mantém a ordem `Zone → Shelf → CaptureSession` e remove ficheiros parciais se a persistência falhar.
