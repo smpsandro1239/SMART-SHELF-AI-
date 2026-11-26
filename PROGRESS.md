@@ -1805,3 +1805,13 @@ A nota anterior que mantinha a migration 0099 aberta foi superada pelas execuç�
 - Quality Gates `45805397438` e Security Scans `45805397536`: sucesso no HEAD documental `a09fc5a10dbbfe6d79e7e320dd3efb9979527cf1`, descendente sem alterações de código relativamente ao SHA validado pela API CI.
 
 **Conclusão:** migrations 0099 e 0100 estão validadas nos critérios de integridade, isolamento multi-loja, serialização concorrente, downgrade controlado e reaplicação em PostgreSQL 16. A migration 0100 também tem teste SQLite para a guarda e o downgrade. A auditoria global BOLA/IDOR e de todos os endpoints com IDs directos permanece trabalho separado; não confundir o fecho destas migrations com homologação de integração WMS/ERP ou validação de precisão de visão computacional.
+
+
+## 2026-11-26 — Prova de bloqueio 0099 ligada ao PID exacto da evidência
+
+- Reforcei `postgres_shelf_reconciliation_lineage_smoke.py`: cada transacção de evidência captura o seu próprio `pg_backend_pid()`; o observador só aceita o lock wait quando `pg_stat_activity.wait_event_type = 'Lock'` e o PID da evidência está efectivamente presente em `pg_blocking_pids(contender_pid)`.
+- Isto elimina a ambiguidade de um lock wait provocado por outra sessão e prova que a transacção de evidência esperada é o bloqueador nas três corridas: transferência da zona, remoção da associação SKU e mutação da observação de origem.
+- Commit de código `9a78d2f185ba2bcdf5ff043097f4895639125a09`; API CI `45812501875`: sucesso, PostgreSQL 16 e **1740 passed, 1 skipped**. O log final do smoke 0099 confirma que todos os writes concorrentes aguardaram por locks e foram rejeitados.
+- Quality Gates `45812501507`, Security Scans `45812501427` e Docker Compose `45812501364`: todos com sucesso no mesmo SHA de código.
+
+Estado: a prova concorrente 0099 passou de observação genérica de lock para confirmação do bloqueador exacto. As migrations 0099 e 0100 mantêm-se fechadas; a auditoria BOLA/IDOR dos restantes endpoints continua separada e aberta.
