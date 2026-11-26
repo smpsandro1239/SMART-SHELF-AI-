@@ -1,3 +1,13 @@
+## 2026-11-26 — Hardening BOLA/IDOR nos históricos de tarefas e movimentos
+
+- Continuação da auditoria dos históricos de recursos-pai com eventos sem tenant próprio.
+- Em `GET /api/v1/tasks/{task_id}/events`, a consulta dos eventos passou a fazer JOIN com `ReplenishmentTask` e a aplicar `store_id` na mesma query para SUPERVISOR. Quando a query não devolve eventos, uma verificação scoped distingue um histórico legitimamente vazio de um ID estrangeiro/inexistente.
+- Em `GET /api/v1/inventory/movements/{movement_id}/events`, a consulta passou a fazer JOIN com `InventoryMovement` e a filtrar `store_id` do movimento e do evento na mesma query. A verificação de existência só é necessária quando o histórico está vazio, preservando HTTP 404 para IDs estrangeiros/inexistentes e `[]` para um movimento autorizado sem eventos.
+- ADMIN conserva o acesso global e EMPLOYEE continua bloqueado. Não foram alteradas operações de escrita nem a semântica dos ledgers append-only.
+- Adicionada regressão HTTP para histórico de tarefas, comparando tarefa estrangeira com ID inexistente e confirmando acesso same-store. A regressão existente de movimentos já compara movimento estrangeiro/inexistente e verifica bloqueio EMPLOYEE; permanece aplicável à query reforçada.
+- Commits: implementação `8798143143d82605d978b9633c28e5e671e0b410` e `67f526a6385ef171cfa6c63d705f63ae4d10b53e`; teste `2663e06b8030169bdc2476577129b44a7bd71d70`.
+- Testes focados e workflows ainda não executados nesta sessão. Não declarar aprovação até existir evidência no SHA final.
+
 ## 2026-11-26 — Hardening BOLA/IDOR no histórico de retenção de imagens
 
 - Continuação a partir do HEAD `ab5104b1f555ff0e687bfafb0c64d42d6d8b0766`.
