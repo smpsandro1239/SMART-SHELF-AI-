@@ -220,6 +220,11 @@ jobs:
           APP_ENV: test
           JWT_SECRET_KEY: test-only-secret-not-for-production
         run: python scripts/postgres_shelf_product_assignment_concurrency_smoke.py
+      - name: Verify PostgreSQL shelf and reconciliation evidence lineage lock serialization
+        env:
+          DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/smart_shelf_ci
+          APP_ENV: test
+        run: python scripts/postgres_shelf_reconciliation_lineage_smoke.py
       - name: Verify PostgreSQL concurrent packaging-unit uniqueness
         env:
           DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/smart_shelf_ci
