@@ -1,16 +1,24 @@
+## P0 — Isolamento do histórico de auditoria de mapeamentos ERP/WMS (2026-11-26)
+
+- [x] Identificar a janela TOCTOU no endpoint GET /api/v1/stores/{store_id}/inventory/external-mappings/{mapping_id}/events: o preflight validava o mapping por loja, mas a query seguinte lia eventos apenas por mapping_id.
+- [x] Substituir preflight + leitura independente por uma única query InventoryExternalProductMapping OUTER JOIN InventoryExternalProductMappingEvent, filtrada simultaneamente por mapping_id e store_id.
+- [x] Preservar items: [] para mapping válido sem eventos e devolver 404 indistinguível para mapping estrangeiro/inexistente.
+- [x] Acrescentar regressão API para histórico vazio e tentativa de leitura do ID de mapping de outra loja sob o path da loja autorizada.
+- [ ] Validar teste focal, suite API e workflows CI no SHA final desta correcção.
+
 ## P0 — Isolamento tenant no histórico de eventos de jobs ERP/WMS (2026-11-26)
 
 - [x] Remover a separação entre preflight do job e leitura dos eventos: a query passa a usar InventorySyncJob como tabela-pai, OUTER JOIN aos eventos e predicados simultâneos job.id + job.store_id.
 - [x] Preservar histórico vazio como items: [] através do OUTER JOIN, sem confundir job válido sem eventos com job estrangeiro/inexistente.
 - [x] Adicionar regressão API para job de outra loja consultado através da loja autorizada e exigir 404 igual ao ID inexistente; manter a verificação 403 quando o actor tenta usar directamente o path de outra loja.
-- [ ] Executar teste focal, suite API/PostgreSQL 16, Quality Gates, Security Scans e Docker Compose no SHA final.
+- [x] Executar teste focal integrado na suite API, suite API/PostgreSQL 16, Quality Gates, Security Scans e Docker Compose no SHA final (HEAD 3bc6963; API CI 45821668415, Docker 45821668480, Quality Gates 45821668581, Security Scans 45821668381).
 - [x] Confirmar que `store_id` é identidade de tenant: o enqueue define a loja, os endpoints apenas lêem o job e o worker captura `store_id` sem o reassociar; os eventos são ligados apenas por `job_id`, pelo que alterar o tenant mudaria a visibilidade do histórico.
 - [x] Criar migration 0101 com guarda de imutabilidade de `inventory_sync_jobs.store_id` em PostgreSQL e SQLite, sem bloquear actualizações de estado/lease/fencing.
 - [x] Acrescentar teste SQLite da migration, incluindo actualização de campos operacionais, rejeição de reassociação e downgrade.
 - [x] Acrescentar smoke PostgreSQL concorrente: UPDATE de tenant aguarda por row lock, é rejeitado pela trigger após libertação e não altera a loja; actualizações normais do ciclo de vida continuam permitidas.
-- [ ] Executar migration 0101 em PostgreSQL 16, teste SQLite, smoke de concorrência, suite API, Quality Gates, Security Scans e Docker Compose no SHA final.
+- [x] Executar migration 0101 em PostgreSQL 16, teste SQLite, smoke de concorrência, suite API, Quality Gates, Security Scans e Docker Compose no SHA 3bc6963; API CI confirmou upgrade 0100 → 0101 e o smoke de reassociação concorrente.
 
-Limite: a query única elimina a janela entre a leitura do job e a leitura dos eventos no endpoint. A alteração e a regressão foram publicadas, mas ainda não estão validadas por execução CI. A auditoria BOLA/IDOR global permanece aberta.
+Validação: API CI/PostgreSQL 16, suite API, Docker Compose, Quality Gates e Security Scans concluídos com sucesso no SHA 3bc6963176d7c142b223dbca82537691542a6aff. O log confirma a aplicação da migration 0101 e a rejeição da reassociação pelo trigger. A auditoria BOLA/IDOR global permanece aberta.
 ## P0 — Serialização da propriedade da prateleira nas escritas (2026-11-26)
 
 - [x] Introduzir `_lock_store_scoped_shelf()`: obter a linhagem inicial, bloquear primeiro `Zone` com `SELECT FOR UPDATE`, validar novamente o tenant e bloquear depois `Shelf`; uma alteração de `zones.store_id` tem de aguardar pela transacção da escrita.
