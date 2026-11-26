@@ -1,3 +1,14 @@
+## 2026-11-26 — Redução de N+1 e snapshot de actor no ledger de reconciliações
+
+- HEAD inicial: `610cf05e6347a9aa728da29e733c49bff0dc6086`.
+- A listagem do ledger chamava o serializador individual por registo, que executava consultas separadas para criador, revisor e eventos. Foi substituída por uma consulta paginada + consulta em lote de utilizadores + consulta em lote de eventos, agrupados em memória.
+- Mantidos o contrato JSON, ordenação principal por created_at/id descendente, eventos por created_at/id ascendente e filtro tenant-scoped na query principal. Os eventos não são unidos directamente à query paginada.
+- Os novos eventos CREATED e de decisão guardam `evidence.actor_snapshot` com user_id, role, store_id e full_name no momento da operação; não incluem email. Eventos antigos não são alterados nem reconstruídos.
+- Foram acrescentadas regressões para o limite de três consultas com múltiplos registos e para o conteúdo do snapshot de criação/revisão. A validação ainda depende de CI; nenhum teste foi executado localmente nesta sessão.
+- SHA final e workflows: pendentes após publicação.
+
+---
+
 ## 2026-11-26 — Eliminação da leitura em duas fases no histórico de retenção de imagens
 
 - A auditoria de sessões de captura/imagens encontrou o mesmo padrão TOCTOU no GET /api/v1/shelf-images/{image_id}/retention/events: quando a página de eventos não continha linhas, uma segunda query confirmava a existência e o tenant da imagem.
