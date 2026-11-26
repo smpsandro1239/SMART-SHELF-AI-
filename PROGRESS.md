@@ -1641,3 +1641,8 @@ O commit `50fc1fcd9dac4c88dfb800aaa1f690ff1c0b6304` introduz o endpoint transacc
 - Publicado teste SQLite que cobre IDs existentes mas incompatíveis, ausência de persistência inválida, alterações upstream e preflight fail-closed.
 - Commits: migration `b49471424522ba6e5a30db87e86fe9de9c353efd`; teste `189eeaeed01ab75bd82dbc18a4d5bd87007522fd`.
 - Não foram executados testes localmente nesta sessão. A validação CI e o teste concorrente PostgreSQL 16 permanecem pendentes; não declarar a migration validada em runtime até esses resultados existirem.
+
+
+- Acrescentado `apps/api/scripts/postgres_shelf_reconciliation_lineage_smoke.py`: verifica que a inserção de alerta mantém locks de origem e que transferências cross-store da zona e remoções de associações SKU concorrentes aguardam e são rejeitadas.
+- O novo smoke foi ligado ao workflow `API CI` imediatamente após o smoke de concorrência de associações SKU. A execução do workflow ainda não foi observada nesta sessão.
+- Commit do smoke: `7d00a46fb80a812a167250a48aefc5e6939444d4`; ajuste de contrato do helper: `c8583ed347d3610c301d068f296685268f763fea`; integração CI: `2424b95235aec18897c5675bd40df587528c9e04`.
