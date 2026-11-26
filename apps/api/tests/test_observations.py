@@ -1011,6 +1011,28 @@ def test_shelf_write_endpoints_lock_and_revalidate_store_scope(tmp_path, monkeyp
         )
         assert observation_foreign.status_code == 404
 
+        observation_missing = client.post(
+            "/api/v1/observations",
+            json={
+                "shelf_id": 2147483000,
+                "source": "simulation",
+                "status": "LOW_STOCK",
+                "confidence": 0.9,
+            },
+        )
+        assert observation_missing.status_code == 404
+
+        observation_own = client.post(
+            "/api/v1/observations",
+            json={
+                "shelf_id": shelf_a["id"],
+                "source": "simulation",
+                "status": "LOW_STOCK",
+                "confidence": 0.9,
+            },
+        )
+        assert observation_own.status_code == 201, observation_own.text
+
         session_foreign = client.post(
             "/api/v1/capture-sessions",
             json={"shelf_id": shelf_b["id"], "source_type": "mobile"},
