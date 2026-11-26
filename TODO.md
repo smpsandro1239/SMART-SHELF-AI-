@@ -1,3 +1,13 @@
+## P0 — Isolamento multi-loja no histórico de retenção de imagens (2026-11-26)
+
+- [x] Substituir a sequência de resolução global da loja + `db.get(ShelfImage, image_id)` por uma query de existência com JOIN ShelfImage → Shelf → Zone.
+- [x] Aplicar o filtro `Zone.store_id == actor.store_id` na própria query para SUPERVISOR; IDs estrangeiros e inexistentes devolvem 404.
+- [x] Acrescentar regressão HTTP que cria um evento de retenção numa imagem estrangeira e compara a resposta com um ID inexistente.
+- [ ] Executar testes focados, suite API, PostgreSQL 16, Quality Gates, Security Scans e Docker Compose no novo HEAD.
+- [ ] Continuar a auditoria de concorrência e de outros endpoints com IDs directos.
+
+Limite: implementação e teste publicados; execução ainda pendente. O histórico de retenção não contém `store_id` próprio, pelo que a autorização deriva da imagem-pai validada por JOIN.
+
 ## P0 — Isolamento multi-loja na revisão de exemplares de embeddings (2026-11-26)
 
 - [x] Substituir a leitura inicial global por uma query tenant-scoped: exemplares associados a imagens de outras lojas não são materializados para SUPERVISOR.
