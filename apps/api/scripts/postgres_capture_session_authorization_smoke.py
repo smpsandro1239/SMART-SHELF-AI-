@@ -10,6 +10,7 @@ from uuid import uuid4
 
 from fastapi.testclient import TestClient
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 
 from app import main as main_module, models
 from app.database import SessionLocal
@@ -25,7 +26,7 @@ def _bearer(user_id: int, role: str) -> dict[str, str]:
 
 
 def _assert_zone_transfer_waits_for_shelf_write_lock() -> None:
-    """Prove a zone transfer waits for the shelf write's ownership lock."""
+    """Prove a zone transfer waits for the shelf lock and is then rejected because the committed capture is retained evidence."""
     suffix = uuid4().hex[:12]
     setup = SessionLocal()
     try:
@@ -127,7 +128,13 @@ def _assert_zone_transfer_waits_for_shelf_write_lock() -> None:
     writer.close()
     thread.join(timeout=10)
     assert finished.is_set(), "zone transfer remained blocked after shelf write commit"
-    assert not failures, f"zone transfer failed after serialized shelf write: {failures}"
+    assert len(failures) == 1 and isinstance(failures[0], IntegrityError), (
+        "zone transfer must be rejected after the capture session becomes retained evidence; "
+        f"failures={failures!r}"
+    )
+    assert "cannot move shelf hierarchy across stores while shelf records exist" in str(failures[0]), (
+        f"zone transfer was rejected for an unexpected reason: {failures[0]!r}"
+    )
 
     verify = SessionLocal()
     try:
@@ -135,24 +142,21 @@ def _assert_zone_transfer_waits_for_shelf_write_lock() -> None:
         moved_zone = verify.get(models.Zone, zone_id)
         assert persisted_capture is not None
         assert persisted_capture.store_id == store_a_id
-        assert moved_zone is not None and moved_zone.store_id == store_b_id
+        assert moved_zone is not None and moved_zone.store_id == store_a_id
     finally:
         verify.close()
 
-    stale_actor = SimpleNamespace(id=None, role="SUPERVISOR", store_id=store_a_id)
-    stale_request = SessionLocal()
+    current_actor = SimpleNamespace(id=None, role="SUPERVISOR", store_id=store_a_id)
+    current_request = SessionLocal()
     try:
-        try:
-            _lock_store_scoped_shelf(stale_request, shelf_id, stale_actor)
-        except Exception as exc:
-            from fastapi import HTTPException
-            assert isinstance(exc, HTTPException), repr(exc)
-            assert exc.status_code == 404
-        else:
-            raise AssertionError("previous store owner retained access after zone transfer")
+        current_shelf, current_zone = _lock_store_scoped_shelf(
+            current_request, shelf_id, current_actor
+        )
+        assert current_shelf.id == shelf_id
+        assert current_zone.store_id == store_a_id
     finally:
-        stale_request.rollback()
-        stale_request.close()
+        current_request.rollback()
+        current_request.close()
 
 def main() -> None:
     suffix = uuid4().hex[:12]
@@ -291,7 +295,8 @@ def main() -> None:
     print(
         "PostgreSQL capture-session authorization and shelf ownership-lock smoke passed: "
         "SUPERVISOR is store-scoped, foreign shelf filter is empty, "
-        "ADMIN sees both stores, and EMPLOYEE is denied."
+        "ADMIN sees both stores, EMPLOYEE is denied, and a zone transfer waits for the "
+        "capture write then fails closed because retained evidence pins the shelf to its store."
     )
 
 
