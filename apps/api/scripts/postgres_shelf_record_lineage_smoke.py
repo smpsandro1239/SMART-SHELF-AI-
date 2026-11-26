@@ -40,6 +40,15 @@ def main() -> None:
         db.add(shelf_a)
         db.flush()
 
+        # Migration 0099 requires every alert SKU to be assigned to its shelf.
+        db.add(models.ShelfProduct(
+            shelf_id=shelf_a.id,
+            product_id=product.id,
+            target_quantity=10,
+            min_display_quantity=1,
+        ))
+        db.flush()
+
         user = models.User(
             email=f"pg-lineage-admin-{suffix}@example.test",
             full_name="Shelf lineage smoke administrator",
