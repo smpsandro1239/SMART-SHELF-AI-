@@ -4,13 +4,14 @@
 - [x] Identificar que a migration 0037 torna imutável a linhagem do exemplar, mas não impede a alteração posterior de `ShelfImage.shelf_id` quando existem exemplares derivados.
 - [x] Criar migration 0100 com guarda PostgreSQL/SQLite que rejeita a mudança de shelf enquanto existir `ProductEmbeddingExemplar` associado à imagem.
 - [x] Acrescentar teste SQLite para rejeição com exemplar, permissão sem exemplar e downgrade limitado à guarda nova.
-- [x] Acrescentar smoke PostgreSQL concorrente que usa a revisão HTTP real, observa os lock waits em `pg_stat_activity` e exige que a mudança cross-store seja rejeitada depois do commit da revisão.
-- [x] API CI `45804056793` aplicou migration 0100 em PostgreSQL 16; o smoke concorrente passou, provando lock wait real e rejeição da reassociação cross-store depois da revisão HTTP. Suite completa: **1740 passed, 1 skipped**.
-- [x] Teste SQLite cobre rejeição com exemplar, reassociação permitida sem exemplar e downgrade da guarda.
-- [ ] Validar downgrade/reaplicação PostgreSQL 0100 em base isolada; smoke dedicado `postgres_embedding_source_image_shelf_lineage_migration_cycle_smoke.py` publicado no commit `24b1093c` e ligado ao API CI no commit `7e23d3d9`. Execução do workflow final ainda pendente.
-- [ ] Confirmar Quality Gates, Security Scans e Docker Compose após a extensão do ciclo 0100.
-
-Limite: o smoke e a migration foram publicados; a validação CI ainda não terminou. A guarda cobre a associação directa imagem→shelf quando há exemplares embedding; não substitui a auditoria mais ampla de movimentos de shelf/zone/store nem de outros recursos com IDs directos.
+- [x] Acrescentar smoke PostgreSQL concorrente que usa a revisão HTTP real e observa o lock wait efectivo através de `pg_stat_activity`.
+- [x] API CI `45805339672`, commit de código `bef29291b55f7a51dd35d917f0d64c3e0b2f7f11`: migration 0100 aplicada em PostgreSQL 16; smoke concorrente passou e provou que a reassociação cross-store aguardou pelo lock e foi rejeitada após o commit da revisão.
+- [x] Smoke de ciclo `45805339672`: upgrade 0100, downgrade 0100→0099 (confirmando que as seis triggers/cinco funções de 0099 permanecem), e reaplicação 0100 concluídos com sucesso.
+- [x] Suite API: **1740 passed, 1 skipped**.
+- [x] Docker Compose `45805339652`: sucesso no mesmo commit de código.
+- [x] Quality Gates `45805397438` e Security Scans `45805397536`: sucesso no descendente documental `a09fc5a10dbbfe6d79e7e320dd3efb9979527cf1`, sem alterações de código relativamente ao commit validado pela API CI.
+ 
+Conclusão: migration 0100 validada em PostgreSQL 16 e SQLite. A guarda protege a associação directa imagem→shelf enquanto existirem exemplares embedding; não substitui a auditoria mais ampla de outros endpoints com IDs directos nem a revisão global BOLA/IDOR.
 
 ## P0 — Isolamento multi-loja no histórico de eventos de alertas (2026-11-26)
 
