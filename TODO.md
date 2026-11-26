@@ -1,3 +1,13 @@
+## P0 — Isolamento multi-loja no histórico de eventos de alertas (2026-11-26)
+
+- [x] Fazer JOIN de ObservationAlertEvent com ObservationAlert na query que devolve o histórico.
+- [x] Aplicar `ObservationAlert.store_id == actor.store_id` na mesma query para SUPERVISOR.
+- [x] Preservar `[]` para alerta autorizado sem eventos e 404 indistinguível para alerta estrangeiro/inexistente.
+- [x] Acrescentar regressão HTTP com alertas nas duas lojas, evento próprio, evento estrangeiro e ID inexistente.
+- [ ] Executar teste focado, suite API, PostgreSQL 16, Quality Gates, Security Scans e Docker Compose no HEAD final.
+
+Limite: implementação e teste publicados; execução pendente. A autorização é derivada do alerta-pai, porque ObservationAlertEvent não possui `store_id` próprio.
+
 ## P0 — Isolamento multi-loja nos históricos de tarefas e movimentos (2026-11-26)
 
 - [x] Fazer JOIN do evento ao recurso-pai (ReplenishmentTask / InventoryMovement) na consulta que devolve o histórico.
