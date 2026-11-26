@@ -1,3 +1,14 @@
+## 2026-11-26 — Correcção do smoke PostgreSQL de propriedade da prateleira
+
+- SHA inicial desta correcção: `e502850fba7106944827b79cf1671c029b7b2d29`.
+- A API CI [45819714432](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45819714432) falhou no passo `Verify PostgreSQL capture-session tenant authorization`, antes de executar a suite pytest e o smoke dos sync jobs.
+- O log identificou a causa exacta: `_assert_zone_transfer_waits_for_shelf_write_lock()` esperava que o UPDATE de `zones.store_id` tivesse sucesso depois de libertar o lock. A trigger `prevent_shelf_record_upstream_store_change()` rejeitou-o correctamente porque a transacção tinha acabado de persistir uma `CaptureSession`, que constitui evidência operacional retida.
+- Corrigido `apps/api/scripts/postgres_capture_session_authorization_smoke.py`: mantém a prova de espera PostgreSQL (`wait_event_type='Lock'` e PID bloqueador), exige depois `IntegrityError` com a razão esperada, e confirma que a sessão e a zona permanecem na loja A e que o supervisor da loja A conserva acesso.
+- Commit da correcção: `5f7867bb67c2d2334d8afe85da7c8838ba87db5b`.
+- Não foi alterada nenhuma migration nem a regra de integridade. Não foram executados testes localmente nesta sessão; a validação depende da nova API CI/PostgreSQL 16 e dos restantes workflows no HEAD actualizado.
+
+## Continuação da auditoria P0
+
 ## P0 — Serialização da propriedade da prateleira nas escritas (2026-11-26)
 
 - [x] Introduzir `_lock_store_scoped_shelf()`: obter a linhagem inicial, bloquear primeiro `Zone` com `SELECT FOR UPDATE`, validar novamente o tenant e bloquear depois `Shelf`; uma alteração de `zones.store_id` tem de aguardar pela transacção da escrita.
