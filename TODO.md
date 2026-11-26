@@ -4,7 +4,11 @@
 - [x] Preservar histórico vazio como items: [] através do OUTER JOIN, sem confundir job válido sem eventos com job estrangeiro/inexistente.
 - [x] Adicionar regressão API para job de outra loja consultado através da loja autorizada e exigir 404 igual ao ID inexistente; manter a verificação 403 quando o actor tenta usar directamente o path de outra loja.
 - [ ] Executar teste focal, suite API/PostgreSQL 16, Quality Gates, Security Scans e Docker Compose no SHA final.
-- [ ] Avaliar concorrência PostgreSQL real de reassociação do job à loja e decidir se é necessária guarda de imutabilidade/serialização na camada de dados.
+- [x] Confirmar que `store_id` é identidade de tenant: o enqueue define a loja, os endpoints apenas lêem o job e o worker captura `store_id` sem o reassociar; os eventos são ligados apenas por `job_id`, pelo que alterar o tenant mudaria a visibilidade do histórico.
+- [x] Criar migration 0101 com guarda de imutabilidade de `inventory_sync_jobs.store_id` em PostgreSQL e SQLite, sem bloquear actualizações de estado/lease/fencing.
+- [x] Acrescentar teste SQLite da migration, incluindo actualização de campos operacionais, rejeição de reassociação e downgrade.
+- [x] Acrescentar smoke PostgreSQL concorrente: UPDATE de tenant aguarda por row lock, é rejeitado pela trigger após libertação e não altera a loja; actualizações normais do ciclo de vida continuam permitidas.
+- [ ] Executar migration 0101 em PostgreSQL 16, teste SQLite, smoke de concorrência, suite API, Quality Gates, Security Scans e Docker Compose no SHA final.
 
 Limite: a query única elimina a janela entre a leitura do job e a leitura dos eventos no endpoint. A alteração e a regressão foram publicadas, mas ainda não estão validadas por execução CI. A auditoria BOLA/IDOR global permanece aberta.
 ## P0 — Serialização da propriedade da prateleira nas escritas (2026-11-26)
