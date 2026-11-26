@@ -1428,3 +1428,69 @@ def test_retention_event_read_hides_foreign_and_missing_image_ids(db_session, tm
 
     assert foreign.value.status_code == missing.value.status_code == 404
     assert foreign.value.detail == missing.value.detail == "Shelf image not found"
+
+def test_retention_event_read_preserves_empty_history_and_pagination_in_single_tenant_query(
+    db_session, tmp_path, monkeypatch
+):
+    image_id, _ = build_restricted_image(
+        db_session, tmp_path, with_detection=False
+    )
+    foreign_image_id, _ = build_restricted_image(
+        db_session, tmp_path, with_detection=False
+    )
+    image = db_session.get(models.ShelfImage, image_id)
+    store_id = (
+        db_session.query(models.Zone.store_id)
+        .join(models.Shelf, models.Shelf.zone_id == models.Zone.id)
+        .filter(models.Shelf.id == image.shelf_id)
+        .scalar()
+    )
+    actor = models.User(
+        email="retention-history-owner@example.test",
+        full_name="Supervisor da loja proprietária",
+        password_hash="test-only",
+        role="SUPERVISOR",
+        store_id=store_id,
+        is_active=True,
+    )
+    db_session.add(actor)
+    db_session.commit()
+    monkeypatch.setattr(
+        main_module, "_request_user", lambda _db, _request: actor
+    )
+    request = SimpleNamespace(state=SimpleNamespace(user_id=actor.id))
+
+    # A visible image with no events must remain distinguishable from a
+    # foreign or missing image even though the event-page subquery is empty.
+    assert main_module.list_shelf_image_retention_events(
+        image_id, request, 100, 0, db_session
+    ) == []
+
+    event = models.ShelfImageRetentionEvent(
+        shelf_image_id=image_id,
+        event_type="RESTRICTED",
+        from_status="ACTIVE",
+        to_status="RESTRICTED",
+        actor_user_id=actor.id,
+        reason="Retention history pagination regression",
+    )
+    db_session.add(event)
+    db_session.commit()
+
+    first_page = main_module.list_shelf_image_retention_events(
+        image_id, request, 1, 0, db_session
+    )
+    beyond_last_page = main_module.list_shelf_image_retention_events(
+        image_id, request, 1, 1, db_session
+    )
+    assert [row.id for row in first_page] == [event.id]
+    assert beyond_last_page == []
+
+    for inaccessible_id in (foreign_image_id, 2147483000):
+        with pytest.raises(HTTPException) as exc:
+            main_module.list_shelf_image_retention_events(
+                inaccessible_id, request, 100, 0, db_session
+            )
+        assert exc.value.status_code == 404
+        assert exc.value.detail == "Shelf image not found"
+
