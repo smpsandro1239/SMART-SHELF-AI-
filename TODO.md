@@ -4,7 +4,7 @@
 - [x] Aplicar `ObservationAlert.store_id == actor.store_id` na mesma query para SUPERVISOR.
 - [x] Preservar `[]` para alerta autorizado sem eventos e 404 indistinguível para alerta estrangeiro/inexistente.
 - [x] Acrescentar regressão HTTP com alertas nas duas lojas, evento próprio, evento estrangeiro e ID inexistente.
-- [ ] Executar teste focado, suite API, PostgreSQL 16, Quality Gates, Security Scans e Docker Compose no HEAD final.
+- [x] Validado no código `eea9cc5d`: API CI `45797706450` (1739 passed, 1 skipped; PostgreSQL 16), Quality Gates `45798609654` e Security Scans `45798609531` no HEAD documental `3b288869`; Docker Compose `45797706344` passou no mesmo código.
 
 Limite: implementação e teste publicados; execução pendente. A autorização é derivada do alerta-pai, porque ObservationAlertEvent não possui `store_id` próprio.
 
@@ -14,7 +14,7 @@ Limite: implementação e teste publicados; execução pendente. A autorização
 - [x] Aplicar o filtro store_id directamente nessa consulta para SUPERVISOR, sem depender apenas de uma validação anterior do recurso-pai.
 - [x] Preservar a distinção entre histórico vazio de um recurso autorizado e recurso estrangeiro/inexistente (404 indistinguível).
 - [x] Acrescentar regressão HTTP para histórico de tarefas; reforçar a cobertura existente de movimentos, incluindo paridade estrangeiro/inexistente e bloqueio EMPLOYEE.
-- [ ] Executar testes focados, suite API, PostgreSQL 16, Quality Gates, Security Scans e Docker Compose no HEAD final.
+- [x] Validado no código `eea9cc5d`: API CI `45797706450` (1739 passed, 1 skipped; PostgreSQL 16), Quality Gates `45798609654` e Security Scans `45798609531` no HEAD documental `3b288869`; Docker Compose `45797706344` passou no mesmo código.
 
 Limite: alterações e testes publicados; execução pendente. ADMIN mantém consulta global. As queries de eventos aplicam a linhagem do recurso-pai na mesma instrução SQL que devolve os eventos.
 
@@ -33,7 +33,7 @@ Limite: implementação e teste publicados; execução ainda pendente. O histór
 - [x] Substituir a leitura inicial global por uma query tenant-scoped: exemplares associados a imagens de outras lojas não são materializados para SUPERVISOR.
 - [x] Preservar a regra ADMIN-only para exemplares sem imagem de origem; a query mantém esses registos apenas para aplicar a resposta 403 existente.
 - [x] Acrescentar regressão HTTP que compara ID de exemplar estrangeiro com ID inexistente (404/corpo idêntico) e confirma que o estado PENDING e a atribuição de revisão não mudam.
-- [ ] Executar teste focado, suite API, PostgreSQL 16, Quality Gates, Security Scans e Docker Compose no novo HEAD.
+- [x] Validado no código `eea9cc5d`: API CI `45797706450` (1739 passed, 1 skipped; PostgreSQL 16), Quality Gates `45798609654` e Security Scans `45798609531` no HEAD documental `3b288869`; Docker Compose `45797706344` passou no mesmo código.
 - [ ] Auditar concorrência entre alteração de associação da imagem e revisão do exemplar, além dos restantes endpoints com IDs directos.
 
 Limite: alteração e teste publicados; não foram executados nesta sessão. A query tenant-scoped reduz a exposição antes da autorização, mas a validação de concorrência e a CI continuam pendentes.
@@ -44,7 +44,7 @@ Limite: alteração e teste publicados; não foram executados nesta sessão. A q
 - [x] Confirmar que todos os endpoints `/api/v1/*` declarados em `main.py` têm política explícita; as únicas rotas sem política na aplicação principal são `/health` e `/health/ready`, fora da API versionada.
 - [x] Confirmar que a política `POST /api/v1/edge/events` corresponde ao router Edge separado, com autenticação própria.
 - [x] Acrescentar regressão que percorre as rotas FastAPI registadas e falha quando uma rota versionada não tem política RBAC explícita.
-- [ ] Executar teste focado, suite API, PostgreSQL 16, Quality Gates, Security Scans e Docker Compose no novo HEAD.
+- [x] Validado no código `eea9cc5d`: API CI `45797706450` (1739 passed, 1 skipped; PostgreSQL 16), Quality Gates `45798609654` e Security Scans `45798609531` no HEAD documental `3b288869`; Docker Compose `45797706344` passou no mesmo código.
 - [ ] Continuar auditoria BOLA/IDOR por identificador de recurso e provar isolamento multi-loja nas operações de leitura e escrita.
 
 Limite: a comparação estática confirma cobertura de classificação RBAC, não prova autorização correcta em cada handler nem isolamento de todos os recursos. A nova regressão foi publicada; ainda não foi executada nesta sessão.
@@ -1825,7 +1825,7 @@ A implementação de produção já verificava lease_lost nos caminhos de sucess
 - [x] Resolver a zona antes de criar a prateleira e verificar o tenant associado.
 - [x] Para SUPERVISOR, devolver HTTP 404 tanto para uma zona estrangeira como para um ID inexistente.
 - [x] Preservar a criação same-store e verificar que a tentativa cross-store não persiste uma prateleira.
-- [ ] Executar teste focado, suite API, PostgreSQL 16, Quality Gates, Security Scans e Docker Compose no novo HEAD.
+- [x] Validado no código `eea9cc5d`: auditoria de políticas RBAC passou no API CI `45797706450`, suite API **1739 passed, 1 skipped**, PostgreSQL 16; Quality Gates `45798609654` e Security Scans `45798609531` passaram no HEAD documental `3b288869`; Docker Compose `45797706344` passou.
 - [ ] Continuar auditoria das relações produto-prateleira e IDs directos de tarefas/movimentos.
 
 
