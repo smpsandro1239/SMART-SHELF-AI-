@@ -265,10 +265,6 @@ def main() -> None:
         "serialized with an upstream observation mutation. All competing writes "
         "waited on PostgreSQL locks and were rejected."
     )
-    print(
-        "PostgreSQL 0099 lineage smoke passed: alert and reconciliation evidence "
-        "serialized with competing upstream mutations."
-    )
 
 
 if __name__ == "__main__":
