@@ -1738,3 +1738,17 @@ O commit `50fc1fcd9dac4c88dfb800aaa1f690ff1c0b6304` introduz o endpoint transacc
 - Log explícito: `PostgreSQL 0099 lineage smoke passed: alert creation serialized with cross-store zone transfer and SKU unlink; reconciliation creation serialized with an upstream observation mutation. All competing writes waited on PostgreSQL locks and were rejected.`
 - A mesma execução concluiu `pytest -q` com **1739 passed, 1 skipped**; Demo Docker Compose smoke `45797706344`: sucesso.
 - Quality Gates e Security Scans para este SHA foram cancelados por commits sequenciais de documentação; os últimos resultados aprovados são Quality Gates `45796897497` e Security Scans `45796897524` (sucesso). Será feita nova execução após esta actualização documental.
+
+
+## 2026-11-26 — Fecho definitivo da migration 0099 e gates globais
+
+A nota anterior que mantinha a migration 0099 aberta foi superada pelas execuções seguintes e fica aqui corrigida por evidência posterior.
+
+- API CI `45797706450` no commit `eea9cc5d462c49dd2d43383f07ef3633e9f73ea6`: **sucesso**; suite completa **1739 passed, 1 skipped**.
+- O smoke PostgreSQL 16 cobriu criação de alerta concorrente com transferência cross-store da zona, remoção da associação SKU e criação de reconciliação concorrente com alteração da observação de origem. Nos três cenários, `pg_stat_activity` confirmou `wait_event_type = 'Lock'` e as alterações concorrentes foram rejeitadas, preservando a linhagem.
+- O ciclo de migration foi validado isoladamente no API CI `45795924709`: upgrade para 0099, downgrade para 0098, confirmação da remoção dos seis triggers/cinco funções e reaplicação de 0099 com recriação dos objectos.
+- Demo Docker Compose `45797706344`: sucesso.
+- No HEAD documental `3b288869a97f76ad057b273d5e19c93f69676372`, Quality Gates `45798609654` e Security Scans `45798609531` terminaram ambos com sucesso. Os jobs de build TypeScript, build de produção Web, API/Python compilation, auditorias de dependências, ZAP passive baseline e secret scan concluíram sem falhas.
+- As quatro falhas anteriores de pytest foram corrigidas nos fixtures, sem alterar RBAC de produção.
+
+**Conclusão:** migration 0099 fechada. Upgrade, integridade, isolamento multi-loja, serialização concorrente, downgrade e reaplicação estão comprovados em PostgreSQL 16/CI. Não reabrir sem nova evidência de regressão.
