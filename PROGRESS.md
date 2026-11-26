@@ -1752,3 +1752,12 @@ A nota anterior que mantinha a migration 0099 aberta foi superada pelas execuç�
 - As quatro falhas anteriores de pytest foram corrigidas nos fixtures, sem alterar RBAC de produção.
 
 **Conclusão:** migration 0099 fechada. Upgrade, integridade, isolamento multi-loja, serialização concorrente, downgrade e reaplicação estão comprovados em PostgreSQL 16/CI. Não reabrir sem nova evidência de regressão.
+
+
+## 2026-11-26 — Validação CI dos históricos multi-loja e cobertura RBAC
+
+- Reconciliado o estado documental dos cinco blocos P0 de isolamento de históricos (alertas, tarefas/movimentos, retenção de imagens, revisão de exemplares) e cobertura explícita RBAC com a execução API CI `45797706450` no código `eea9cc5d462c49dd2d43383f07ef3633e9f73ea6`.
+- O passo de auditoria de políticas RBAC terminou com sucesso; a suite PostgreSQL 16 + pytest terminou com **1739 passed, 1 skipped**.
+- Demo Docker Compose `45797706344` terminou com sucesso no mesmo código. Quality Gates `45798609654` e Security Scans `45798609531` passaram no HEAD documental `3b288869a97f76ad057b273d5e19c93f69676372`.
+- `TODO.md` actualizado no commit `8dba643eb832f7718af2e39ddd90ea7a76a2f8e3` para remover os estados pendentes que já estavam cobertos por estes workflows.
+- A auditoria BOLA/IDOR não está encerrada: continuam explicitamente abertas a análise de concorrência na revisão de exemplares e a revisão de outros endpoints com IDs directos. A cobertura estática RBAC não é prova de autorização de cada recurso.
