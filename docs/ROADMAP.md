@@ -1,3 +1,11 @@
+## 2026-11-26 — Isolamento do histórico de mapeamentos ERP/WMS
+
+Foi eliminada a separação entre o preflight do mapping e a leitura dos eventos em GET /api/v1/stores/{store_id}/inventory/external-mappings/{mapping_id}/events. A query usa o mapping como tabela-pai, OUTER JOIN aos eventos e filtra simultaneamente por mapping_id e store_id, preservando histórico vazio e ocultando IDs estrangeiros/inexistentes. Regressão API acrescentada; commits 3a95f8a1 e 41bfe0a6. Validação CI pendente.
+
+## 2026-11-26 — Validação da migration 0101 e dos smokes PostgreSQL
+
+No SHA 3bc6963176d7c142b223dbca82537691542a6aff, API CI/PostgreSQL 16, Docker Compose, Quality Gates e Security Scans concluíram com sucesso. A API CI aplicou 0101_inventory_sync_job_store_immutable, executou o smoke concorrente dos sync jobs e o smoke de capture-session, e terminou a suite API sem falhas.
+
 ## 2026-11-26 — Imutabilidade do tenant nos jobs ERP/WMS
 
 `InventorySyncJob.store_id` é definido no enqueue e não é alterado pelos handlers nem pelo worker. Como os eventos são ligados ao job por `job_id`, a loja do job é a fronteira de visibilidade do histórico e integra também a chave idempotente. Foi criada a migration `0101_inventory_sync_job_store_immutable`, com triggers PostgreSQL/SQLite que rejeitam alterações reais de `store_id`, preservando actualizações de lifecycle, lease e fencing. Foram adicionados teste SQLite da migration e smoke PostgreSQL concorrente que verifica espera por row lock, rejeição da reassociação e manutenção da loja original. Commits de implementação/testes: `50988b43`, `999fa077`, `319d6f67`, `fba79f53`. A execução de CI e validação PostgreSQL 16 no HEAD final permanecem pendentes.
