@@ -7495,7 +7495,11 @@ def create_inventory_reconciliation_record(payload: InventoryReconciliationRecor
     db.flush()
     db.add(models.InventoryReconciliationEvent(
         reconciliation_id=record.id, event_type="CREATED", actor_user_id=actor.id, reason=payload.reason,
-        evidence={"comparison_status": record.comparison_status, "snapshot_ids": {"observation": record.observation_id, "backroom": record.backroom_snapshot_id, "erp": record.erp_snapshot_id, "wms": record.wms_snapshot_id}},
+        evidence={
+            "comparison_status": record.comparison_status,
+            "snapshot_ids": {"observation": record.observation_id, "backroom": record.backroom_snapshot_id, "erp": record.erp_snapshot_id, "wms": record.wms_snapshot_id},
+            "actor_snapshot": _inventory_reconciliation_actor_snapshot(actor),
+        },
         created_at=now,
     ))
     db.commit()
@@ -7503,29 +7507,77 @@ def create_inventory_reconciliation_record(payload: InventoryReconciliationRecor
     return _inventory_reconciliation_record_payload(record, db)
 
 
-def _inventory_reconciliation_record_payload(record, db):
-    creator = db.get(models.User, record.created_by_user_id)
-    reviewer = db.get(models.User, record.reviewed_by_user_id) if record.reviewed_by_user_id else None
-    events = db.query(models.InventoryReconciliationEvent).filter_by(reconciliation_id=record.id).order_by(models.InventoryReconciliationEvent.created_at.asc(), models.InventoryReconciliationEvent.id.asc()).all()
+def _inventory_reconciliation_actor_snapshot(actor):
+    """Minimal immutable identity context captured when an audit event is written."""
     return {
-        "id": record.id, "store_id": record.store_id, "shelf_id": record.shelf_id, "product_id": record.product_id,
-        "observation_id": record.observation_id, "backroom_snapshot_id": record.backroom_snapshot_id,
-        "erp_snapshot_id": record.erp_snapshot_id, "wms_snapshot_id": record.wms_snapshot_id,
-        "display_target_quantity": float(record.display_target_quantity),
-        "display_quantity": float(record.display_quantity) if record.display_quantity is not None else None,
-        "wms_available_quantity": float(record.wms_available_quantity) if record.wms_available_quantity is not None else None,
-        "erp_available_quantity": float(record.erp_available_quantity) if record.erp_available_quantity is not None else None,
-        "display_delta": float(record.display_delta) if record.display_delta is not None else None,
-        "display_vs_wms_delta": float(record.display_vs_wms_delta) if record.display_vs_wms_delta is not None else None,
-        "display_vs_erp_delta": float(record.display_vs_erp_delta) if record.display_vs_erp_delta is not None else None,
-        "wms_erp_delta": float(record.wms_erp_delta) if record.wms_erp_delta is not None else None,
-        "comparison_status": record.comparison_status, "evidence": record.evidence,
-        "review_status": record.review_status, "created_by_user_id": record.created_by_user_id,
-        "created_by_name": creator.full_name if creator else None, "reviewed_by_user_id": record.reviewed_by_user_id,
-        "reviewed_by_name": reviewer.full_name if reviewer else None, "reviewed_at": record.reviewed_at,
-        "review_reason": record.review_reason, "created_at": record.created_at,
-        "events": [{"id": e.id, "event_type": e.event_type, "actor_user_id": e.actor_user_id, "reason": e.reason, "evidence": e.evidence, "created_at": e.created_at} for e in events],
+        "user_id": actor.id,
+        "role": actor.role,
+        "store_id": actor.store_id,
+        "full_name": actor.full_name,
     }
+
+
+def _inventory_reconciliation_record_payloads(records, db):
+    """Serialize a page with bounded batch reads, preserving the public response shape."""
+    if not records:
+        return []
+
+    reconciliation_ids = [record.id for record in records]
+    user_ids = {
+        user_id
+        for record in records
+        for user_id in (record.created_by_user_id, record.reviewed_by_user_id)
+        if user_id is not None
+    }
+    users = (
+        db.query(models.User).filter(models.User.id.in_(user_ids)).all()
+        if user_ids else []
+    )
+    users_by_id = {user.id: user for user in users}
+
+    events = (
+        db.query(models.InventoryReconciliationEvent)
+        .filter(models.InventoryReconciliationEvent.reconciliation_id.in_(reconciliation_ids))
+        .order_by(
+            models.InventoryReconciliationEvent.reconciliation_id.asc(),
+            models.InventoryReconciliationEvent.created_at.asc(),
+            models.InventoryReconciliationEvent.id.asc(),
+        )
+        .all()
+    )
+    events_by_reconciliation = {}
+    for event in events:
+        events_by_reconciliation.setdefault(event.reconciliation_id, []).append(event)
+
+    payloads = []
+    for record in records:
+        creator = users_by_id.get(record.created_by_user_id)
+        reviewer = users_by_id.get(record.reviewed_by_user_id) if record.reviewed_by_user_id else None
+        record_events = events_by_reconciliation.get(record.id, [])
+        payloads.append({
+            "id": record.id, "store_id": record.store_id, "shelf_id": record.shelf_id, "product_id": record.product_id,
+            "observation_id": record.observation_id, "backroom_snapshot_id": record.backroom_snapshot_id,
+            "erp_snapshot_id": record.erp_snapshot_id, "wms_snapshot_id": record.wms_snapshot_id,
+            "display_target_quantity": float(record.display_target_quantity),
+            "display_quantity": float(record.display_quantity) if record.display_quantity is not None else None,
+            "wms_available_quantity": float(record.wms_available_quantity) if record.wms_available_quantity is not None else None,
+            "erp_available_quantity": float(record.erp_available_quantity) if record.erp_available_quantity is not None else None,
+            "display_delta": float(record.display_delta) if record.display_delta is not None else None,
+            "display_vs_wms_delta": float(record.display_vs_wms_delta) if record.display_vs_wms_delta is not None else None,
+            "display_vs_erp_delta": float(record.display_vs_erp_delta) if record.display_vs_erp_delta is not None else None,
+            "wms_erp_delta": float(record.wms_erp_delta) if record.wms_erp_delta is not None else None,
+            "comparison_status": record.comparison_status, "evidence": record.evidence,
+            "review_status": record.review_status, "created_by_user_id": record.created_by_user_id,
+            "created_by_name": creator.full_name if creator else None, "reviewed_by_user_id": record.reviewed_by_user_id,
+            "reviewed_by_name": reviewer.full_name if reviewer else None, "reviewed_at": record.reviewed_at,
+            "review_reason": record.review_reason, "created_at": record.created_at,
+            "events": [{"id": event.id, "event_type": event.event_type, "actor_user_id": event.actor_user_id, "reason": event.reason, "evidence": event.evidence, "created_at": event.created_at} for event in record_events],
+        })
+    return payloads
+
+
+def _inventory_reconciliation_record_payload(record, db):
+    return _inventory_reconciliation_record_payloads([record], db)[0]
 
 
 @app.get("/api/v1/inventory/reconciliations", tags=["inventory"])
@@ -7542,7 +7594,11 @@ def list_inventory_reconciliation_records(store_id: int, product_id: int | None 
             raise HTTPException(status_code=422, detail="Invalid review_status")
         query = query.filter(models.InventoryReconciliation.review_status == review_status)
     records = query.order_by(models.InventoryReconciliation.created_at.desc(), models.InventoryReconciliation.id.desc()).limit(max(1, min(limit, 500))).all()
-    return {"store_id": store_id, "count": len(records), "items": [_inventory_reconciliation_record_payload(record, db) for record in records]}
+    return {
+        "store_id": store_id,
+        "count": len(records),
+        "items": _inventory_reconciliation_record_payloads(records, db),
+    }
 
 
 @app.post("/api/v1/inventory/reconciliations/{reconciliation_id}/review", tags=["inventory"])
@@ -7569,7 +7625,11 @@ def review_inventory_reconciliation(reconciliation_id: int, payload: InventoryRe
     record.reviewed_by_user_id = actor.id
     record.reviewed_at = now
     record.review_reason = payload.reason
-    db.add(models.InventoryReconciliationEvent(reconciliation_id=record.id, event_type=payload.decision, actor_user_id=actor.id, reason=payload.reason, evidence={"previous_status": "PENDING", "new_status": payload.decision}, created_at=now))
+    db.add(models.InventoryReconciliationEvent(reconciliation_id=record.id, event_type=payload.decision, actor_user_id=actor.id, reason=payload.reason, evidence={
+            "previous_status": "PENDING",
+            "new_status": payload.decision,
+            "actor_snapshot": _inventory_reconciliation_actor_snapshot(actor),
+        }, created_at=now))
     db.commit()
     db.refresh(record)
     return _inventory_reconciliation_record_payload(record, db)
