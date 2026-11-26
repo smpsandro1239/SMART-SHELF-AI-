@@ -1,3 +1,14 @@
+## 2026-11-26 — Hardening BOLA/IDOR na revisão de exemplares de embeddings
+
+- HEAD de partida: `2f44a16d5df769930314837f91f7ef06bb37e017`.
+- Identificada leitura inicial global por `db.get(ProductEmbeddingExemplar, exemplar_id)` antes da validação do tenant de origem.
+- Alterada a resolução inicial para aplicar joins ShelfImage → Shelf → Zone e filtrar pela loja do actor na própria query. Um exemplar de outra loja deixa de ser materializado para SUPERVISOR; IDs estrangeiros e inexistentes recebem 404 idêntico.
+- Mantida a regra para exemplares sem imagem: a query permite identificá-los apenas para conservar a resposta 403 ADMIN-only já definida.
+- Adicionada regressão HTTP que tenta rever exemplar estrangeiro, compara com ID inexistente e confirma que o exemplar continua PENDING sem reviewer/timestamp.
+- Commits: implementação `c14236cca79d307e65023951a1abd4ac131855d1`; teste `c0bb997e1f8ce938b706bf29d51223350184bed5`.
+- Teste e workflows ainda não executados nesta sessão. Não declarar aprovação.
+- Próxima prioridade: aprofundar os restantes endpoints directos e validar concorrência na relação exemplar/imagem.
+
 ## 2026-11-26 — Cobertura de políticas RBAC por rota
 
 - HEAD de partida: `c56c3ec00040a869c374481a918106bbd5456551`.
