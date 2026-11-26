@@ -1,3 +1,9 @@
+## Segurança multi-loja — histórico de retenção de imagens (2026-11-26)
+
+O endpoint GET /api/v1/shelf-images/{image_id}/retention/events foi consolidado numa única instrução SQL: a imagem é a entidade-pai tenant-scoped e a página de eventos é ligada por OUTER JOIN. O desenho preserva histórico vazio e páginas para além do último evento sem uma segunda consulta de existência. IDs estrangeiros e inexistentes continuam a devolver 404 indistinguível. Regressão adicionada para histórico vazio, paginação, cross-store e ID inexistente. CI desta alteração pendente no SHA final.
+
+---
+
 ## Segurança multi-loja — histórico de movimentos e alertas (2026-11-26)
 
 As rotas de histórico de movimentos de inventário e alertas usam agora uma única query com a entidade-pai, OUTER JOIN aos eventos e filtro de tenant na mesma instrução. Isto elimina a segunda consulta usada para distinguir histórico vazio de IDs estrangeiros/inexistentes. Supervisores apenas consultam a própria loja; administradores mantêm o âmbito global. Foi adicionada regressão API para o histórico de movimentos e mantida a cobertura de alertas. A validação CI desta alteração permanece pendente.
