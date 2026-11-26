@@ -528,6 +528,62 @@ def test_shelf_observation_consensus_endpoint_enforces_store_scope(monkeypatch):
 
 
 
+
+def test_shelf_observation_consensus_rechecks_tenant_on_evidence_query(monkeypatch):
+    from datetime import datetime, timezone
+    from types import SimpleNamespace
+    import app.main as main_module
+
+    Base.metadata.drop_all(bind=TEST_ENGINE)
+    Base.metadata.create_all(bind=TEST_ENGINE)
+    with TestClient(app) as client:
+        store_a = client.post("/api/v1/stores", json={"code": "CONS-RACE-A", "name": "Loja A"}).json()
+        store_b = client.post("/api/v1/stores", json={"code": "CONS-RACE-B", "name": "Loja B"}).json()
+        zone = client.post(
+            "/api/v1/zones",
+            json={"store_id": store_a["id"], "name": "Zona A"},
+        ).json()
+        shelf = client.post(
+            "/api/v1/shelves",
+            json={"zone_id": zone["id"], "code": "CONS-RACE-SHELF"},
+        ).json()
+        observation = client.post(
+            "/api/v1/observations",
+            json={
+                "shelf_id": shelf["id"],
+                "source": "simulation",
+                "status": "LOW_STOCK",
+                "confidence": 0.95,
+                "observed_at": datetime.now(timezone.utc).isoformat(),
+            },
+        )
+        assert observation.status_code == 201, observation.text
+
+        monkeypatch.setattr(
+            main_module,
+            "_request_user",
+            lambda db, request: SimpleNamespace(id=91, role="SUPERVISOR", store_id=store_a["id"]),
+        )
+        original_scope = main_module._get_store_scoped_shelf
+
+        def reassign_after_preflight(db, shelf_id, actor):
+            scoped_shelf = original_scope(db, shelf_id, actor)
+            db.query(models.Zone).filter(models.Zone.id == zone["id"]).update(
+                {models.Zone.store_id: store_b["id"]},
+                synchronize_session=False,
+            )
+            db.commit()
+            return scoped_shelf
+
+        monkeypatch.setattr(main_module, "_get_store_scoped_shelf", reassign_after_preflight)
+        response = client.get(f"/api/v1/shelves/{shelf['id']}/observation-consensus")
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["store_id"] == store_a["id"]
+        assert body["evaluated_observations"] == 0
+        assert body["consensus"]["status"] != "CONFIRMED"
+
+
 def test_observation_product_must_be_assigned_to_shelf():
     Base.metadata.drop_all(bind=TEST_ENGINE)
     Base.metadata.create_all(bind=TEST_ENGINE)
