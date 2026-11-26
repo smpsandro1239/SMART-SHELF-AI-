@@ -1719,3 +1719,12 @@ O commit `50fc1fcd9dac4c88dfb800aaa1f690ff1c0b6304` introduz o endpoint transacc
 - O passo completo `pytest -q` terminou com sucesso; o job API CI concluiu com sucesso.
 - Os gates Quality/Security deste SHA foram cancelados durante commits de documentação; os últimos resultados aprovados continuam a ser Quality Gates `45794895243` e Security Scans `45794895272` no commit `024b7624`. Docker Compose também passou em `45794895899`.
 - Conclusão: upgrade, validação de linhagem, serialização concorrente, downgrade e reaplicação da migration 0099 estão comprovados em PostgreSQL 16 isolado/CI. Manter a migration fechada, sem alteração de regra.
+
+
+## 2026-11-26 — Extensão do smoke 0099 para concorrência de reconciliações
+
+- A cobertura anterior validava concorrência na criação de alertas (transferência cross-store da zona e remoção SKU), mas não exercitava directamente o lock específico de `InventoryReconciliation` sobre a observação de origem.
+- Estendido `postgres_shelf_reconciliation_lineage_smoke.py` com um segundo cenário independente: inserir uma reconciliação com `observation_id`, manter a transacção aberta e tentar alterar concorrentemente `observations.product_id`.
+- O teste exige `wait_event_type = 'Lock'` em `pg_stat_activity`; depois do commit da reconciliação, a alteração upstream tem de ser rejeitada e a observação/reconciliação têm de permanecer coerentes.
+- Commits: cenário `fe2fb8939b56d5801ff65b2cc1924d1a697ecfe6`; limpeza de saída duplicada `eea9cc5d462c49dd2d43383f07ef3633e9f73ea6`.
+- Esta extensão ainda aguarda execução no API CI PostgreSQL 16. Os resultados anteriores de 0099 continuam válidos para os cenários alert/zone/SKU e ciclo downgrade/reaplicação; não antecipar aprovação deste novo cenário.
