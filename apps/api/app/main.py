@@ -4411,7 +4411,35 @@ def review_product_embedding_exemplar(
     # Follow the worker's lock order: source image, catalogue product,
     # exemplar. This prevents inversion with matching's prelocked image set.
     actor = _request_user(db, request)
-    initial = db.get(models.ProductEmbeddingExemplar, exemplar_id)
+    initial_query = db.query(models.ProductEmbeddingExemplar).filter(
+        models.ProductEmbeddingExemplar.id == exemplar_id
+    )
+    if actor is not None and actor.role != "ADMIN":
+        # Apply tenant scope in SQL before materializing the exemplar. Keep
+        # image-less records in the result only so the explicit ADMIN-only
+        # policy below can return its established 403 response.
+        initial_query = (
+            initial_query
+            .outerjoin(
+                models.ShelfImage,
+                models.ProductEmbeddingExemplar.shelf_image_id == models.ShelfImage.id,
+            )
+            .outerjoin(
+                models.Shelf,
+                models.ShelfImage.shelf_id == models.Shelf.id,
+            )
+            .outerjoin(
+                models.Zone,
+                models.Shelf.zone_id == models.Zone.id,
+            )
+            .filter(
+                or_(
+                    models.ProductEmbeddingExemplar.shelf_image_id.is_(None),
+                    models.Zone.store_id == actor.store_id,
+                )
+            )
+        )
+    initial = initial_query.first()
     if initial is None:
         raise HTTPException(status_code=404, detail="Embedding exemplar not found")
     # Image-less exemplars have no tenant-bound source to authorize against;
