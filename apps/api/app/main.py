@@ -2965,19 +2965,22 @@ def list_shelf_image_retention_events(
         raise HTTPException(status_code=401, detail="Authenticated user required")
     if actor is not None and actor.role not in {"ADMIN", "SUPERVISOR"}:
         raise HTTPException(status_code=403, detail="Supervisor role required")
-    store_id = _shelf_image_store_id(db, image_id)
-    if store_id is None or (
-        actor is not None
-        and actor.role != "ADMIN"
-        and actor.store_id != store_id
-    ):
-        raise HTTPException(status_code=404, detail="Shelf image not found")
-    item = db.get(models.ShelfImage, image_id)
-    if item is None or _shelf_image_store_id(db, image_id) != store_id:
+    image_query = (
+        db.query(models.ShelfImage.id)
+        .join(models.Shelf, models.ShelfImage.shelf_id == models.Shelf.id)
+        .join(models.Zone, models.Shelf.zone_id == models.Zone.id)
+        .filter(models.ShelfImage.id == image_id)
+    )
+    if actor is not None and actor.role != "ADMIN":
+        if actor.store_id is None:
+            raise HTTPException(status_code=404, detail="Shelf image not found")
+        image_query = image_query.filter(models.Zone.store_id == actor.store_id)
+    authorized_image_id = image_query.scalar()
+    if authorized_image_id is None:
         raise HTTPException(status_code=404, detail="Shelf image not found")
     return (
         db.query(models.ShelfImageRetentionEvent)
-        .filter(models.ShelfImageRetentionEvent.shelf_image_id == image_id)
+        .filter(models.ShelfImageRetentionEvent.shelf_image_id == authorized_image_id)
         .order_by(
             models.ShelfImageRetentionEvent.created_at.asc(),
             models.ShelfImageRetentionEvent.id.asc(),
