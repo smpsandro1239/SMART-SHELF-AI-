@@ -6,7 +6,7 @@
 - [x] Acrescentar regressão HTTP com alertas nas duas lojas, evento próprio, evento estrangeiro e ID inexistente.
 - [x] Validado no código `eea9cc5d`: API CI `45797706450` (1739 passed, 1 skipped; PostgreSQL 16), Quality Gates `45798609654` e Security Scans `45798609531` no HEAD documental `3b288869`; Docker Compose `45797706344` passou no mesmo código.
 
-Limite: implementação e teste publicados; execução pendente. A autorização é derivada do alerta-pai, porque ObservationAlertEvent não possui `store_id` próprio.
+Limite: implementação, regressão e CI validadas. A autorização é derivada do alerta-pai, porque ObservationAlertEvent não possui `store_id` próprio.
 
 ## P0 — Isolamento multi-loja nos históricos de tarefas e movimentos (2026-11-26)
 
@@ -16,17 +16,17 @@ Limite: implementação e teste publicados; execução pendente. A autorização
 - [x] Acrescentar regressão HTTP para histórico de tarefas; reforçar a cobertura existente de movimentos, incluindo paridade estrangeiro/inexistente e bloqueio EMPLOYEE.
 - [x] Validado no código `eea9cc5d`: API CI `45797706450` (1739 passed, 1 skipped; PostgreSQL 16), Quality Gates `45798609654` e Security Scans `45798609531` no HEAD documental `3b288869`; Docker Compose `45797706344` passou no mesmo código.
 
-Limite: alterações e testes publicados; execução pendente. ADMIN mantém consulta global. As queries de eventos aplicam a linhagem do recurso-pai na mesma instrução SQL que devolve os eventos.
+Limite: alterações, regressões e CI validadas. ADMIN mantém consulta global. As queries de eventos aplicam a linhagem do recurso-pai na mesma instrução SQL que devolve os eventos.
 
 ## P0 — Isolamento multi-loja no histórico de retenção de imagens (2026-11-26)
 
 - [x] Substituir a sequência de resolução global da loja + `db.get(ShelfImage, image_id)` por queries com JOIN ShelfImage → Shelf → Zone.
 - [x] Aplicar o filtro `Zone.store_id == actor.store_id` tanto na query de eventos como na verificação de existência quando o histórico está vazio; IDs estrangeiros e inexistentes devolvem 404.
 - [x] Acrescentar regressão HTTP que cria um evento de retenção numa imagem estrangeira e compara a resposta com um ID inexistente.
-- [ ] Executar testes focados, suite API, PostgreSQL 16, Quality Gates, Security Scans e Docker Compose no novo HEAD.
+- [x] Validado no código `eea9cc5d`: API CI `45797706450` (1739 passed, 1 skipped; PostgreSQL 16), Quality Gates `45798609654` e Security Scans `45798609531` no HEAD documental `3b288869`; Docker Compose `45797706344` passou no mesmo código.
 - [ ] Continuar a auditoria de concorrência e de outros endpoints com IDs directos.
 
-Limite: implementação e teste publicados; execução ainda pendente. O histórico de retenção não contém `store_id` próprio, pelo que a autorização deriva da imagem-pai validada por JOIN.
+Limite: implementação, regressão e CI validadas. O histórico de retenção não contém `store_id` próprio, pelo que a autorização deriva da imagem-pai validada por JOIN.
 
 ## P0 — Isolamento multi-loja na revisão de exemplares de embeddings (2026-11-26)
 
@@ -36,7 +36,7 @@ Limite: implementação e teste publicados; execução ainda pendente. O histór
 - [x] Validado no código `eea9cc5d`: API CI `45797706450` (1739 passed, 1 skipped; PostgreSQL 16), Quality Gates `45798609654` e Security Scans `45798609531` no HEAD documental `3b288869`; Docker Compose `45797706344` passou no mesmo código.
 - [ ] Auditar concorrência entre alteração de associação da imagem e revisão do exemplar, além dos restantes endpoints com IDs directos.
 
-Limite: alteração e teste publicados; não foram executados nesta sessão. A query tenant-scoped reduz a exposição antes da autorização, mas a validação de concorrência e a CI continuam pendentes.
+Limite: alteração, regressão e CI validadas. A query tenant-scoped reduz a exposição antes da autorização; permanece pendente a auditoria de concorrência entre alteração de associação da imagem e revisão do exemplar.
 
 ## P0 — Cobertura explícita de autorização RBAC (2026-11-26)
 
@@ -47,7 +47,7 @@ Limite: alteração e teste publicados; não foram executados nesta sessão. A q
 - [x] Validado no código `eea9cc5d`: API CI `45797706450` (1739 passed, 1 skipped; PostgreSQL 16), Quality Gates `45798609654` e Security Scans `45798609531` no HEAD documental `3b288869`; Docker Compose `45797706344` passou no mesmo código.
 - [ ] Continuar auditoria BOLA/IDOR por identificador de recurso e provar isolamento multi-loja nas operações de leitura e escrita.
 
-Limite: a comparação estática confirma cobertura de classificação RBAC, não prova autorização correcta em cada handler nem isolamento de todos os recursos. A nova regressão foi publicada; ainda não foi executada nesta sessão.
+Limite: a comparação estática e a regressão passaram no API CI. Isto confirma cobertura de classificação RBAC, não prova autorização correcta em cada handler nem isolamento de todos os recursos; a auditoria BOLA/IDOR continua aberta.
 
 ## P0 — Autoridade física WMS por loja/localização (2026-11-25)
 
