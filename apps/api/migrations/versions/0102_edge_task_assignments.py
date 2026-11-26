@@ -11,6 +11,17 @@ depends_on = None
 
 
 def upgrade() -> None:
+    op.add_column(
+        "replenishment_tasks",
+        sa.Column("task_version", sa.Integer(), nullable=False, server_default="1"),
+    )
+    with op.batch_alter_table("replenishment_tasks") as batch:
+        batch.create_check_constraint(
+            "ck_replenishment_task_version_positive",
+            "task_version > 0",
+        )
+
+    # Recreate the composite parent keys after SQLite's batch table rebuild.
     op.create_index(
         "uq_replenishment_task_id_store",
         "replenishment_tasks",
@@ -23,16 +34,6 @@ def upgrade() -> None:
         ["device_id", "store_id"],
         unique=True,
     )
-
-    op.add_column(
-        "replenishment_tasks",
-        sa.Column("task_version", sa.Integer(), nullable=False, server_default="1"),
-    )
-    with op.batch_alter_table("replenishment_tasks") as batch:
-        batch.create_check_constraint(
-            "ck_replenishment_task_version_positive",
-            "task_version > 0",
-        )
 
     op.create_table(
         "edge_device_task_assignments",
@@ -105,6 +106,7 @@ def upgrade() -> None:
         sa.Column("reason", sa.Text(), nullable=False),
         sa.Column("details", sa.JSON(), nullable=False, server_default=sa.text("'{}'")),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
+        sa.UniqueConstraint("assignment_id", "event_type", name="uq_edge_task_assignment_event_type"),
         sa.CheckConstraint("event_type IN ('CREATED', 'REVOKED')", name="ck_edge_task_assignment_event_type"),
         sa.CheckConstraint("length(trim(reason)) >= 3", name="ck_edge_task_assignment_event_reason"),
     )
@@ -147,7 +149,8 @@ def upgrade() -> None:
                    OR NEW.revoked_at IS NULL
                    OR NEW.revoked_by_user_id IS NULL
                    OR NEW.revocation_reason IS NULL
-                   OR length(trim(NEW.revocation_reason)) < 3 THEN
+                   OR NEW.revocation_reason IS NULL
+              OR length(trim(NEW.revocation_reason)) < 3 THEN
                     RAISE EXCEPTION 'assignment identity is immutable; only one valid revocation is allowed'
                         USING ERRCODE = '23514';
                 END IF;

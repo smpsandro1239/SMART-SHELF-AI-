@@ -799,6 +799,7 @@ class ReplenishmentTask(Base):
         CheckConstraint("priority IN ('LOW', 'NORMAL', 'HIGH', 'URGENT')", name="ck_task_priority"),
         CheckConstraint("status IN ('PENDING', 'ASSIGNED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED')", name="ck_task_status"),
         CheckConstraint("requested_quantity IS NULL OR requested_quantity > 0", name="ck_task_quantity_positive"),
+        CheckConstraint("task_version > 0", name="ck_replenishment_task_version_positive"),
         CheckConstraint("estimated_duration_minutes BETWEEN 1 AND 480", name="ck_task_estimated_duration_positive"),
         UniqueConstraint("id", "store_id", name="uq_replenishment_task_id_store"),
         Index(
@@ -1414,6 +1415,7 @@ class EdgeDeviceTaskAssignmentEvent(Base):
     """Append-only audit events for device-task assignment and revocation."""
     __tablename__ = "edge_device_task_assignment_events"
     __table_args__ = (
+        UniqueConstraint("assignment_id", "event_type", name="uq_edge_task_assignment_event_type"),
         CheckConstraint("event_type IN ('CREATED', 'REVOKED')", name="ck_edge_task_assignment_event_type"),
         CheckConstraint("length(trim(reason)) >= 3", name="ck_edge_task_assignment_event_reason"),
         Index("ix_edge_task_assignment_events_assignment_created", "assignment_id", "created_at"),

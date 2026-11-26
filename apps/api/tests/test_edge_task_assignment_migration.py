@@ -72,6 +72,15 @@ def test_edge_task_assignment_migration_enforces_history_tenant_and_revision(tmp
                     '2026-11-26T10:00:00+00:00')
             """
         )
+        with pytest.raises(IntegrityError):
+            db.exec_driver_sql(
+                """
+                INSERT INTO edge_device_task_assignment_events
+                    (id, assignment_id, event_type, actor_user_id, reason, created_at)
+                VALUES (9, 1, 'CREATED', 10, 'Evento criado duplicado',
+                        '2026-11-26T10:01:00+00:00')
+                """
+            )
 
         # Every persisted task mutation advances the DB-owned revision exactly once.
         db.exec_driver_sql("UPDATE replenishment_tasks SET store_id=1 WHERE id=100")
