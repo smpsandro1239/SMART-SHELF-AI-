@@ -1,3 +1,12 @@
+## P0 — Isolamento atómico do histórico de retenção de imagens (2026-11-26)
+
+- [x] Identificar a leitura em duas fases no GET /api/v1/shelf-images/{image_id}/retention/events: consulta dos eventos seguida de consulta separada da imagem quando a página vinha vazia.
+- [x] Substituir por uma única query tenant-scoped com ShelfImage como entidade-pai e OUTER JOIN a uma subquery de eventos paginada.
+- [x] Preservar histórico vazio e offset além do último evento como lista vazia para imagem autorizada.
+- [x] Preservar 404 idêntico para imagem de outra loja e identificador inexistente.
+- [x] Acrescentar regressão para histórico vazio, paginação, cross-store e ID inexistente.
+- [ ] Validar teste focal, suite API, PostgreSQL 16, Quality Gates, Security Scans e Docker Compose no SHA final.
+
 ## P0 — Leituras atómicas do histórico de alertas e movimentos (2026-11-26)
 
 - [x] Consolidar leitura do movimento e dos eventos numa única query com OUTER JOIN e filtro simultâneo de movement_id + store_id para supervisores.
