@@ -1716,3 +1716,8 @@ Os handlers que persistem OCR runs, matches OCR→catálogo e fusão visual/text
 Os handlers de criação de localizações e colocações, registo de paletes, políticas de rotação e simulação agora repetem a autorização ADMIN/SUPERVISOR da política central. A negação ocorre antes de ler ou bloquear recursos. Teste com EMPLOYEE confirma 403 nas seis operações e ausência de mutações.
 
 **Evidência:** SHA `3f63efd0da73070cc1654e76ea58ecfe0e79ca93`; API CI **1731 passed, 1 skipped**; Quality Gates, Security Scans e Docker Compose — sucesso.
+
+## Segurança multi-loja — revalidação da evidência de consenso (2026-11-26)
+
+O endpoint de consenso aplica agora o tenant scope na própria query de observações e na validação da associação SKU/prateleira. A regressão determinística cobre a transferência da zona entre o preflight da prateleira e a leitura da evidência. A implementação e o teste foram publicados; a validação no API CI/PostgreSQL 16 e nos restantes workflows permanece pendente. Isto não encerra a matriz BOLA/IDOR.
+
