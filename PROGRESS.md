@@ -1663,3 +1663,13 @@ O commit `50fc1fcd9dac4c88dfb800aaa1f690ff1c0b6304` introduz o endpoint transacc
 - Adicionado `db.flush()` imediatamente após a criação das duas associações SKU–prateleira, antes de inserir o alerta. A regra de integridade da migration não foi alterada.
 - Commit: `2169864fc7dfcdbf409016ac1298d940b028b3f2`.
 - O resultado da execução CI desencadeada por este commit ainda não foi confirmado. Por isso, o smoke concorrente `postgres_shelf_reconciliation_lineage_smoke.py` continua sem evidência de execução bem-sucedida, tal como downgrade/reaplicação.
+
+
+## 2026-11-26 — Smoke 0099: observação determinística de lock PostgreSQL
+
+- Substituída a inferência baseada numa espera fixa de 200 ms por observação directa de `pg_stat_activity`.
+- O contender captura o seu `pg_backend_pid()`; a sessão observadora exige que PostgreSQL reporte `wait_event_type = 'Lock'` antes de a transacção de evidência ser confirmada.
+- A verificação tem timeout limitado de 5 segundos e falha com diagnóstico se o backend não entrar num lock wait observável.
+- Commit: `6141e2d1d49506177dc457565e540ee0d5019469`.
+- A alteração está publicada na `main`; ainda não foi executada/validada em PostgreSQL CI. Não confundir a melhoria do teste com prova de que o teste passou.
+- Próximo passo: obter resultado de API CI que execute o smoke e, depois, cobrir explicitamente concorrência na inserção de reconciliação e downgrade/reaplicação.
