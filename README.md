@@ -2184,3 +2184,8 @@ Validação no SHA `a9271dd595c7d913a93cd969cf73d58b5e49438d`: API CI **1730 pas
 A criação de localizações e colocações, registo de paletes, configuração de políticas de rotação e simulação de rotação exigem perfil SUPERVISOR/ADMIN. Funcionários não podem alterar a configuração física do armazém nem o estado operacional das paletes.
 
 Validação no SHA `3f63efd0da73070cc1654e76ea58ecfe0e79ca93`: API CI **1731 passed, 1 skipped**, Quality Gates, Security Scans e Docker Compose concluídos com sucesso.
+
+
+### Isolamento multi-loja no histórico de jobs de sincronização
+
+A leitura de eventos de um job ERP/WMS consulta agora o job e o seu histórico numa única instrução SQL, com `OUTER JOIN` e predicados simultâneos de `job_id` e `store_id`. Isto evita a janela TOCTOU entre validar a loja do job e carregar os eventos. Um job autorizado sem eventos mantém `items: []`; um job de outra loja e um ID inexistente devolvem o mesmo 404. A regressão API foi adicionada; a validação CI/PostgreSQL 16 desta alteração permanece pendente.
