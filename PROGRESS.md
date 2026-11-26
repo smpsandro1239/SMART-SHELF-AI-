@@ -1646,3 +1646,12 @@ O commit `50fc1fcd9dac4c88dfb800aaa1f690ff1c0b6304` introduz o endpoint transacc
 - Acrescentado `apps/api/scripts/postgres_shelf_reconciliation_lineage_smoke.py`: verifica que a inserção de alerta mantém locks de origem e que transferências cross-store da zona e remoções de associações SKU concorrentes aguardam e são rejeitadas.
 - O novo smoke foi ligado ao workflow `API CI` imediatamente após o smoke de concorrência de associações SKU. A execução do workflow ainda não foi observada nesta sessão.
 - Commit do smoke: `7d00a46fb80a812a167250a48aefc5e6939444d4`; ajuste de contrato do helper: `c8583ed347d3610c301d068f296685268f763fea`; integração CI: `2424b95235aec18897c5675bd40df587528c9e04`.
+
+
+## 2026-11-26 — Validação CI de 0099 e correcção de fixture legado
+
+- A primeira execução do API CI (45788845876, commit 2424b952) aplicou com sucesso a migration 0099 no smoke de migrations PostgreSQL 16. A execução parou depois, no smoke anterior postgres_shelf_record_lineage_smoke.py: o fixture criava um alerta sem registar primeiro a associação SKU–prateleira, situação agora deliberadamente rejeitada por 0099.
+- Corrigido o fixture em apps/api/scripts/postgres_shelf_record_lineage_smoke.py: cria ShelfProduct antes do alerta. Commit f58b77248152ee238648427d72b98cdd78b40b32.
+- O Quality Gates reportou 1735 testes aprovados e 4 falhas: duas falhas de testes antigos que esperam respostas de criação de loja com id, e duas falhas de testes de planeamento que tentam criar produtos como SUPERVISOR apesar da política actual exigir ADMIN. Estas falhas não ocorreram nos testes novos de migration 0099, mas mantêm o gate global vermelho e carecem de correcção/triagem própria.
+- O novo API CI, Security Scans e Demo Docker Compose smoke foram iniciados para o commit f58b7724; ainda estavam em execução na última consulta.
+- Não foi possível confirmar ainda o resultado do novo smoke concorrente postgres_shelf_reconciliation_lineage_smoke.py, porque a execução anterior parou antes de chegar a esse passo.
