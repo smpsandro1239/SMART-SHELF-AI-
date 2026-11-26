@@ -528,7 +528,8 @@ Commits: `f6e2156e`, `659586be`, `7f372fbc`, `cbc6a1a6`, `70b1b351`.
 - [x] Implementar autenticação de pedidos Edge assinados, timestamp/nonce anti-replay, validação de scope e vinculação de tenant derivada exclusivamente da credencial.
 - [x] Implementar `POST /api/v1/edge/events`, envelope validado, inbox persistente imutável, fingerprint idempotente, cursor monotónico e criação transaccional da linha de processamento.
 - [x] Implementar worker com claim/lease/heartbeat/fencing, retries limitados, dead-letter e ACK de processamento; `DEVICE_HEARTBEAT` é o único handler built-in activo.
-- [ ] Implementar handlers de domínio para `SHELF_CAPTURED`, `SHELF_OBSERVATION` e `TASK_ACKNOWLEDGED` apenas depois de contratos de payload, revisão humana, proveniência e efeitos transaccionais estarem definidos; até lá, manter dead-letter fail-closed.
+- [ ] Implementar primeiro o handler `TASK_ACKNOWLEDGED), apenas depois da associação dispositivo-tarefa e da versão concorrente estarem persistidas e cobertas por testes PostgreSQL; `COMPLETED` continua a ser evidência pendente de revisão humana.
+- [ ] Implementar handlers de domínio para `SHELF_CAPTURED` e `SHELF_OBSERVATION` apenas depois de contratos de payload, revisão humana, proveniência e efeitos transaccionais estarem definidos; até lá, manter dead-letter fail-closed.
 - [x] Definir `docs/architecture/edge-task-acknowledgement-contract.md`: associação explícita dispositivo-tarefa, task_version, idempotência, fencing, revisão humana e proibição de conclusão/inventário automáticos.
 - [ ] Implementar outbox persistente no dispositivo Edge e protocolo de sincronização/ACK de entrega; o ACK HTTP actual confirma apenas aceitação durável na inbox, não processamento de domínio.
 - [ ] Validar a implementação Edge no HEAD actual com testes focados, suite API, PostgreSQL 16, Quality Gates, Security Scans e Docker Compose.
@@ -1456,8 +1457,11 @@ Objectivo: evoluir o projecto para uma plataforma de inteligência operacional d
 
 ### P1/P2 — captura, dispositivos e operação Edge
 - [ ] Definir contrato comum Capture Device Gateway para câmaras IP/RTSP, upload móvel e robôs, com adaptadores isolados por fabricante.
-- [ ] Registar device_id, tipo, loja/zona/prateleira, estado, versão de firmware/configuração, timestamp UTC, sessão e origem da captura.
-- [ ] Implementar registo, associação, rotação/revogação de credenciais e health checks de dispositivos; nunca guardar segredos em logs.
+- [ ] Definir a associação operacional Capture Device → zona/prateleira/sessão, distinta do registo de identidade Edge já existente.
+- [x] Registo de dispositivos Edge por loja/tipo, credenciais individuais, rotação/revogação, autenticação HMAC, anti-replay, inbox persistente e worker com lease/fencing (migrations 0071–0073).
+- [ ] Implementar associação explícita dispositivo-tarefa, versionada, com validade temporal, revogação e ledger append-only; não reutilizar `assigned_user_id`, que identifica exclusivamente o funcionário.
+- [ ] Introduzir versão concorrente explícita na tarefa (ou mecanismo equivalente validado) para rejeitar acknowledgements obsoletos; `updated_at` não é, por si só, um contrato de versão.
+- [ ] Implementar health policy/alertas operacionais de dispositivo e validar a frescura do heartbeat; não confundir último contacto com disponibilidade da câmara.
 - [ ] Implementar agendamento/configuração de captura, limites de frequência/resolução e backpressure para evitar sobrecarga de rede/storage/worker.
 - [ ] Criar fluxo móvel/PWA para captura manual, validação humana, leitura de código de barras e conclusão de tarefa, com permissões mínimas.
 - [ ] Definir integração de robôs como fonte de observações e tarefas de inspeção; não permitir controlo físico autónomo sem safety case, limites e aprovação separados.
