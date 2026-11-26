@@ -2144,12 +2144,19 @@ def test_reserved_wms_quantity_is_subtracted_once_across_multiple_movements(monk
         monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: actor)
         task_ids = []
         for index in range(2):
-            zone = client.post("/api/v1/zones", json={
+            # Zone/shelf configuration is ADMIN_ONLY; task operations below
+            # remain exercised with the store-scoped SUPERVISOR actor.
+            actor.role = "ADMIN"
+            zone_response = client.post("/api/v1/zones", json={
                 "store_id": store_id, "name": f"Zona reserva agregada {index}",
-            }).json()
-            shelf = client.post("/api/v1/shelves", json={
-                "zone_id": zone["id"], "code": f"RESERVED-{index}",
-            }).json()
+            })
+            assert zone_response.status_code == 201, zone_response.text
+            shelf_response = client.post("/api/v1/shelves", json={
+                "zone_id": zone_response.json()["id"], "code": f"RESERVED-{index}",
+            })
+            assert shelf_response.status_code == 201, shelf_response.text
+            shelf = shelf_response.json()
+            actor.role = "SUPERVISOR"
             linked = client.post("/api/v1/shelf-products", json={
                 "shelf_id": shelf["id"], "product_id": product_id,
                 "target_quantity": 12, "min_display_quantity": 2,
