@@ -1781,3 +1781,15 @@ A nota anterior que mantinha a migration 0099 aberta foi superada pelas execuç�
 - A suite completa terminou com **1740 passed, 1 skipped**. Demo Docker Compose `45804012587` passou com o código que já incluía a migration 0100. Quality Gates `45804113802` e Security Scans `45804113803` passaram no HEAD documental `443db02d`.
 - Extensão adicional: `postgres_shelf_reconciliation_lineage_migration_cycle_smoke.py` passou a verificar também downgrade 0100→0099 e reaplicação 0100, preservando as seis triggers/cinco funções de 0099. Commit `d161bd03`; esta extensão ainda aguarda CI.
 - Estado: a integridade e concorrência de 0100 estão aprovadas; o ciclo PostgreSQL de downgrade/reaplicação de 0100 continua pendente.
+
+
+## 2026-11-26 — Regressão BOLA para IDs aninhados de mappings ERP/WMS
+
+- Estendido `apps/api/scripts/postgres_inventory_authorization_smoke.py` com dois mappings reais, um por loja, e respectivos eventos append-only.
+- Para SUPERVISOR da loja A, o acesso ao histórico do mapping A permanece permitido; a substituição pelo ID real do mapping B no path A devolve 404, indistinguível de ID inexistente; a tentativa de PATCH ao mapping B também devolve 404.
+- O mesmo SUPERVISOR recebe 403 quando usa o path da loja B. ADMIN consegue consultar o histórico do mapping B como controlo positivo.
+- A verificação pós-request confirma que o mapping B continua activo e que o evento original não foi alterado nem duplicado.
+- Commit da extensão: `6db6fe6fdb0cdb79af88a69e858b50de77e1f229`.
+- API CI `45804056793` (commit de código `e96f1b372c984817c9157419a752892b90e9b1aa`): sucesso; smoke `Verify PostgreSQL inventory and warehouse cross-store authorization` passou e a suite completa terminou com **1740 passed, 1 skipped**.
+- No mesmo ciclo, o smoke de linhagem da imagem-fonte embedding / migration 0100 também passou. Quality Gates `45804113802` e Security Scans `45804113803` concluíram com sucesso no HEAD documental `443db02d8081af2bebe6d6e67141213da712b7bb`. Docker Compose `45804012587` terminou com sucesso com a migration 0100 já presente.
+- A matriz BOLA/IDOR continua aberta: esta é uma cobertura específica adicional, não uma declaração de auditoria completa.
