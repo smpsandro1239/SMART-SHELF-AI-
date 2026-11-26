@@ -2495,3 +2495,20 @@ def test_foreign_shelf_image_retention_history_is_hidden_from_supervisor(monkeyp
         assert foreign.status_code == missing.status_code == 404
         assert foreign.json() == missing.json()
 
+
+
+def test_task_event_history_scopes_parent_tenant_in_event_query(monkeypatch):
+    with TestClient(app) as client:
+        own_store_id, _, own_task_id, _ = _completed_replenishment(client)
+        _, _, foreign_task_id, _ = _completed_replenishment(client)
+        actor = _supervisor_actor(own_store_id)
+        monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: actor)
+
+        own = client.get(f"/api/v1/tasks/{own_task_id}/events")
+        foreign = client.get(f"/api/v1/tasks/{foreign_task_id}/events")
+        missing = client.get("/api/v1/tasks/2147483000/events")
+
+        assert own.status_code == 200, own.text
+        assert own.json()
+        assert foreign.status_code == missing.status_code == 404
+        assert foreign.json() == missing.json()
