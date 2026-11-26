@@ -1761,3 +1761,14 @@ A nota anterior que mantinha a migration 0099 aberta foi superada pelas execuç�
 - Demo Docker Compose `45797706344` terminou com sucesso no mesmo código. Quality Gates `45798609654` e Security Scans `45798609531` passaram no HEAD documental `3b288869a97f76ad057b273d5e19c93f69676372`.
 - `TODO.md` actualizado no commit `8dba643eb832f7718af2e39ddd90ea7a76a2f8e3` para remover os estados pendentes que já estavam cobertos por estes workflows.
 - A auditoria BOLA/IDOR não está encerrada: continuam explicitamente abertas a análise de concorrência na revisão de exemplares e a revisão de outros endpoints com IDs directos. A cobertura estática RBAC não é prova de autorização de cada recurso.
+
+
+## 2026-11-26 — Migration 0100: linhagem da shelf da imagem-fonte embedding
+
+- A auditoria do fluxo `PATCH /api/v1/product-embedding-exemplars/{exemplar_id}/review` confirmou a ordem de locks imagem → produto → exemplar e a revalidação do tenant depois do lock da imagem.
+- Identificada uma lacuna a jusante: a migration 0037 protegia a imutabilidade do exemplar e a eliminação da imagem, mas não bloqueava a alteração de `shelf_images.shelf_id` com exemplares existentes. Essa mudança podia transferir a linhagem/visibilidade tenant do exemplar após uma revisão válida.
+- Criada `0100_embedding_source_image_shelf_lineage.py` com trigger PostgreSQL e SQLite que rejeita a mudança de shelf enquanto existir exemplar derivado. O downgrade remove apenas a guarda 0100.
+- Adicionado teste SQLite para bloqueio, caso sem exemplar e downgrade.
+- Adicionado `postgres_embedding_source_image_shelf_lineage_smoke.py`: mantém a linha do produto bloqueada para forçar a revisão HTTP a reter o lock da imagem; observa depois o lock wait real da alteração concorrente e exige rejeição após a revisão confirmar.
+- Integração no API CI publicada no commit `e96f1b372c984817c9157419a752892b90e9b1aa`. Commits da migration/teste/smoke: `b0f7c766`, `a2e86139`, `43b4266d` e correcção de sincronização `8772488d`.
+- Estado: código e documentação publicados; execução CI PostgreSQL 16 pendente. Não declarar a migration 0100 validada até o novo smoke e suite completa passarem.
