@@ -1,3 +1,14 @@
+## P0 — Cobertura explícita de autorização RBAC (2026-11-26)
+
+- [x] Inventariar estaticamente os decorators HTTP de `apps/api/app/main.py` e comparar método/template com `API_ROUTE_POLICIES`.
+- [x] Confirmar que todos os endpoints `/api/v1/*` declarados em `main.py` têm política explícita; as únicas rotas sem política na aplicação principal são `/health` e `/health/ready`, fora da API versionada.
+- [x] Confirmar que a política `POST /api/v1/edge/events` corresponde ao router Edge separado, com autenticação própria.
+- [x] Acrescentar regressão que percorre as rotas FastAPI registadas e falha quando uma rota versionada não tem política RBAC explícita.
+- [ ] Executar teste focado, suite API, PostgreSQL 16, Quality Gates, Security Scans e Docker Compose no novo HEAD.
+- [ ] Continuar auditoria BOLA/IDOR por identificador de recurso e provar isolamento multi-loja nas operações de leitura e escrita.
+
+Limite: a comparação estática confirma cobertura de classificação RBAC, não prova autorização correcta em cada handler nem isolamento de todos os recursos. A nova regressão foi publicada; ainda não foi executada nesta sessão.
+
 ## P0 — Autoridade física WMS por loja/localização (2026-11-25)
 
 - [x] Definir WMS como fonte de referência da retaguarda e ERP como fonte administrativa independente.
