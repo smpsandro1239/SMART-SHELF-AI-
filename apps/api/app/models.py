@@ -800,6 +800,7 @@ class ReplenishmentTask(Base):
         CheckConstraint("status IN ('PENDING', 'ASSIGNED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED')", name="ck_task_status"),
         CheckConstraint("requested_quantity IS NULL OR requested_quantity > 0", name="ck_task_quantity_positive"),
         CheckConstraint("estimated_duration_minutes BETWEEN 1 AND 480", name="ck_task_estimated_duration_positive"),
+        UniqueConstraint("id", "store_id", name="uq_replenishment_task_id_store"),
         Index(
             "uq_active_task_store_shelf_product",
             "store_id", "shelf_id", "product_id",
@@ -817,6 +818,7 @@ class ReplenishmentTask(Base):
     status: Mapped[str] = mapped_column(String(16), default="PENDING", index=True, nullable=False)
     assigned_to: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
     assigned_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    task_version: Mapped[int] = mapped_column(Integer, default=1, server_default=text("1"), nullable=False)
     requested_quantity: Mapped[float | None] = mapped_column(Numeric(12, 3), nullable=True)
     estimated_duration_minutes: Mapped[int] = mapped_column(Integer, default=15, nullable=False)
     required_skill_code: Mapped[str | None] = mapped_column(String(60), nullable=True)
@@ -1339,6 +1341,7 @@ class EdgeDevice(Base):
     __table_args__ = (
         CheckConstraint("status IN ('ACTIVE', 'DISABLED')", name="ck_edge_device_status"),
         CheckConstraint("device_type IN ('fixed_camera', 'robot', 'mobile', 'gateway')", name="ck_edge_device_type"),
+        UniqueConstraint("device_id", "store_id", name="uq_edge_device_id_store"),
         Index("ix_edge_devices_store_status", "store_id", "status"),
         CheckConstraint("last_network_status IS NULL OR last_network_status IN ('ONLINE', 'DEGRADED', 'OFFLINE')", name="ck_edge_device_network_status"),
         CheckConstraint("battery_pct IS NULL OR (battery_pct >= 0 AND battery_pct <= 100)", name="ck_edge_device_battery_pct"),
@@ -1356,6 +1359,75 @@ class EdgeDevice(Base):
     firmware_version: Mapped[str | None] = mapped_column(String(100), nullable=True)
     battery_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
     storage_free_bytes: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+
+
+class EdgeDeviceTaskAssignment(Base):
+    """Time-bounded, revocable binding between one Edge device and one task."""
+    __tablename__ = "edge_device_task_assignments"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["device_id", "store_id"],
+            ["edge_devices.device_id", "edge_devices.store_id"],
+            ondelete="RESTRICT",
+            name="fk_edge_task_assignment_device_store",
+        ),
+        ForeignKeyConstraint(
+            ["task_id", "store_id"],
+            ["replenishment_tasks.id", "replenishment_tasks.store_id"],
+            ondelete="RESTRICT",
+            name="fk_edge_task_assignment_task_store",
+        ),
+        CheckConstraint("task_version > 0", name="ck_edge_task_assignment_task_version"),
+        CheckConstraint("valid_until IS NULL OR valid_until > valid_from", name="ck_edge_task_assignment_validity"),
+        CheckConstraint(
+            "(revoked_at IS NULL AND revoked_by_user_id IS NULL AND revocation_reason IS NULL) OR "
+            "(revoked_at IS NOT NULL AND revoked_by_user_id IS NOT NULL AND length(trim(revocation_reason)) >= 3)",
+            name="ck_edge_task_assignment_revocation",
+        ),
+        Index(
+            "uq_edge_task_assignment_active_device_task",
+            "device_id", "task_id",
+            unique=True,
+            sqlite_where=text("revoked_at IS NULL"),
+            postgresql_where=text("revoked_at IS NULL"),
+        ),
+        Index("ix_edge_task_assignment_store_task", "store_id", "task_id", "valid_from"),
+        Index("ix_edge_task_assignment_device_validity", "device_id", "valid_from", "valid_until"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    store_id: Mapped[int] = mapped_column(ForeignKey("stores.id", ondelete="RESTRICT"), nullable=False)
+    device_id: Mapped[str] = mapped_column(String(120), nullable=False)
+    task_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    task_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    valid_from: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    valid_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_by_user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    revoked_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=True)
+    revocation_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class EdgeDeviceTaskAssignmentEvent(Base):
+    """Append-only audit events for device-task assignment and revocation."""
+    __tablename__ = "edge_device_task_assignment_events"
+    __table_args__ = (
+        CheckConstraint("event_type IN ('CREATED', 'REVOKED')", name="ck_edge_task_assignment_event_type"),
+        CheckConstraint("length(trim(reason)) >= 3", name="ck_edge_task_assignment_event_reason"),
+        Index("ix_edge_task_assignment_events_assignment_created", "assignment_id", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    assignment_id: Mapped[int] = mapped_column(
+        ForeignKey("edge_device_task_assignments.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    event_type: Mapped[str] = mapped_column(String(12), nullable=False)
+    actor_user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    details: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
 
 
 class EdgeDeviceCredential(Base):
