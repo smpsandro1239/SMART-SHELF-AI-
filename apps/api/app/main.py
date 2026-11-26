@@ -7136,7 +7136,10 @@ def list_inventory_movement_events(
     if actor.role != "ADMIN":
         rows = rows.filter(
             models.InventoryMovement.store_id == actor.store_id,
-            models.InventoryMovementEvent.store_id == actor.store_id,
+            or_(
+                models.InventoryMovementEvent.store_id == actor.store_id,
+                models.InventoryMovementEvent.id.is_(None),
+            ),
         )
     result = (
         rows.order_by(
