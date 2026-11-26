@@ -1965,3 +1965,20 @@ Estado: a prova concorrente 0099 passou de observação genérica de lock para c
 - Auditoria BOLA/IDOR continua adiada por instrução explícita.
 
 **Próximo passo técnico:** implementar a migration para associação dispositivo-tarefa e versão concorrente da tarefa, incluindo ledger append-only e guardas PostgreSQL/SQLite; só depois ligar o handler e os smokes de concorrência. A alteração de código deve ser validada em CI PostgreSQL 16 antes de ser considerada concluída.
+
+
+## 2026-11-26 — Schema persistente de associação Edge dispositivo-tarefa (0102)
+
+- HEAD inicial desta implementação: `277d875ab4b57d11f602dc39a011b50e96c36251`.
+- Acrescentado teste de migration SQLite em `apps/api/tests/test_edge_task_assignment_migration.py` (primeiro commit de teste `a9a77379279f12dd0a52540bb7859bd99c119020`).
+- Implementada migration `0102_edge_task_assignments`: `ReplenishmentTask.task_version`, índice composto para integridade tenant, associação dispositivo-tarefa com validade temporal, revogação única, actor e FKs compostas para a mesma loja.
+- Criado ledger `edge_device_task_assignment_events`, com eventos CREATED/REVOKED, unicidade por associação/tipo e protecção append-only em PostgreSQL e SQLite.
+- Criados triggers para revisão monotónica gerida pela base de dados em cada UPDATE da tarefa; a escrita directa de `task_version` é rejeitada. O contador capturado pela associação permite detectar alterações concorrentes.
+- Actualizados os modelos SQLAlchemy para reflectir as novas tabelas, constraints, índices e FKs.
+- Commits de implementação: `d7868f85a68f71abf0872423c80c22d7094f4439`, `da330ba3654d56ab9d39469e1bcb34f82d181d94`, `6ae449d883c845072127f188861be44e57dd2193`.
+- API CI run `45876761643`: passo de migração completa PostgreSQL 16 (`alembic upgrade head`) concluído com sucesso; os smokes PostgreSQL anteriores à suite também concluíram com sucesso. A execução de pytest ainda estava em curso no momento deste registo; não declarar a suite aprovada.
+- O ambiente local continua sem resolução DNS para `github.com`; validação é feita via GitHub Actions. Estados Vercel continuam limitados por `build-rate-limit`.
+- Não foram criados endpoints nem serviço de atribuição nesta fase. O handler `TASK_ACKNOWLEDGED` permanece desactivado.
+- Auditoria BOLA/IDOR continua adiada por instrução explícita.
+
+**Próximo passo:** implementar serviço e endpoints ADMIN/SUPERVISOR para criar/revogar associações com lock order Store → Task → Device → Assignment, e criar smoke PostgreSQL concorrente. Antes de activar o handler, refactorizar a fronteira do worker para persistir acknowledgement + conclusão do inbox atomicamente sob fencing.
