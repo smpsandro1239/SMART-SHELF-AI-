@@ -139,6 +139,21 @@ def _assert_zone_transfer_waits_for_shelf_write_lock() -> None:
     finally:
         verify.close()
 
+    stale_actor = SimpleNamespace(id=None, role="SUPERVISOR", store_id=store_a_id)
+    stale_request = SessionLocal()
+    try:
+        try:
+            _lock_store_scoped_shelf(stale_request, shelf_id, stale_actor)
+        except Exception as exc:
+            from fastapi import HTTPException
+            assert isinstance(exc, HTTPException), repr(exc)
+            assert exc.status_code == 404
+        else:
+            raise AssertionError("previous store owner retained access after zone transfer")
+    finally:
+        stale_request.rollback()
+        stale_request.close()
+
 def main() -> None:
     suffix = uuid4().hex[:12]
     db = SessionLocal()
