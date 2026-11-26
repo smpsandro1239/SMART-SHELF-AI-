@@ -1728,3 +1728,13 @@ O commit `50fc1fcd9dac4c88dfb800aaa1f690ff1c0b6304` introduz o endpoint transacc
 - O teste exige `wait_event_type = 'Lock'` em `pg_stat_activity`; depois do commit da reconciliação, a alteração upstream tem de ser rejeitada e a observação/reconciliação têm de permanecer coerentes.
 - Commits: cenário `fe2fb8939b56d5801ff65b2cc1924d1a697ecfe6`; limpeza de saída duplicada `eea9cc5d462c49dd2d43383f07ef3633e9f73ea6`.
 - Esta extensão ainda aguarda execução no API CI PostgreSQL 16. Os resultados anteriores de 0099 continuam válidos para os cenários alert/zone/SKU e ciclo downgrade/reaplicação; não antecipar aprovação deste novo cenário.
+
+
+## 2026-11-26 — Concorrência de InventoryReconciliation aprovada em PostgreSQL 16
+
+- API CI run `45797706450` no commit de código `eea9cc5d462c49dd2d43383f07ef3633e9f73ea6`: **sucesso**.
+- O smoke 0099 passou com os três cenários: (1) criação de alerta versus transferência cross-store de zona; (2) criação de alerta versus remoção da associação SKU; (3) criação de reconciliação versus alteração concorrente de `observations.product_id`.
+- No terceiro cenário, o teste manteve aberta a transacção que insere `InventoryReconciliation`, observou `wait_event_type = 'Lock'` para o backend concorrente e confirmou que a alteração da observação foi rejeitada depois do commit. A reconciliação e a observação mantiveram a mesma linhagem.
+- Log explícito: `PostgreSQL 0099 lineage smoke passed: alert creation serialized with cross-store zone transfer and SKU unlink; reconciliation creation serialized with an upstream observation mutation. All competing writes waited on PostgreSQL locks and were rejected.`
+- A mesma execução concluiu `pytest -q` com **1739 passed, 1 skipped**; Demo Docker Compose smoke `45797706344`: sucesso.
+- Quality Gates e Security Scans para este SHA foram cancelados por commits sequenciais de documentação; os últimos resultados aprovados são Quality Gates `45796897497` e Security Scans `45796897524` (sucesso). Será feita nova execução após esta actualização documental.
