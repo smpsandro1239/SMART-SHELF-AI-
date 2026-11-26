@@ -1,3 +1,7 @@
+## 2026-11-26 — Imutabilidade do tenant nos jobs ERP/WMS
+
+`InventorySyncJob.store_id` é definido no enqueue e não é alterado pelos handlers nem pelo worker. Como os eventos são ligados ao job por `job_id`, a loja do job é a fronteira de visibilidade do histórico e integra também a chave idempotente. Foi criada a migration `0101_inventory_sync_job_store_immutable`, com triggers PostgreSQL/SQLite que rejeitam alterações reais de `store_id`, preservando actualizações de lifecycle, lease e fencing. Foram adicionados teste SQLite da migration e smoke PostgreSQL concorrente que verifica espera por row lock, rejeição da reassociação e manutenção da loja original. Commits de implementação/testes: `50988b43`, `999fa077`, `319d6f67`, `fba79f53`. A execução de CI e validação PostgreSQL 16 no HEAD final permanecem pendentes.
+
 ## 2026-11-26 — Correcção do smoke de serialização da propriedade da prateleira
 
 A API CI identificou uma expectativa incorrecta no smoke PostgreSQL: depois de provar que o UPDATE concorrente de `zones.store_id` aguardava pelo lock da escrita da prateleira, o teste esperava que a transferência fosse concluída. A base de dados rejeita-a correctamente porque a sessão de captura acabada de persistir é evidência operacional retida. O smoke foi corrigido para exigir o bloqueio, a rejeição por `IntegrityError` com a razão esperada e a permanência da sessão/zona na loja original. A alteração está publicada no commit `5f7867bb67c2d2334d8afe85da7c8838ba87db5b`; a validação CI no novo HEAD permanece pendente.
