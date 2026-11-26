@@ -1223,28 +1223,38 @@ def list_observation_alert_events(alert_id: int, request: Request, db: Session =
     actor = _request_user(db, request)
     if actor is None or actor.role not in {"ADMIN", "SUPERVISOR"}:
         raise HTTPException(status_code=403, detail="Supervisor role required")
-    if actor.role == "ADMIN":
-        alert = db.get(models.ObservationAlert, alert_id)
-    else:
-        # Scope the lookup itself to the actor's store. This avoids loading a
-        # foreign alert before authorization and gives foreign/missing IDs the
-        # same read-only lookup and HTTP response.
-        alert = (
-            db.query(models.ObservationAlert)
-            .filter(
-                models.ObservationAlert.id == alert_id,
-                models.ObservationAlert.store_id == actor.store_id,
-            )
-            .first()
-        )
-    if alert is None:
-        raise HTTPException(status_code=404, detail="Observation alert not found")
-    return (
+    events_query = (
         db.query(models.ObservationAlertEvent)
-        .filter(models.ObservationAlertEvent.alert_id == alert_id)
+        .join(
+            models.ObservationAlert,
+            models.ObservationAlertEvent.alert_id == models.ObservationAlert.id,
+        )
+        .filter(models.ObservationAlert.id == alert_id)
+    )
+    if actor.role != "ADMIN":
+        if actor.store_id is None:
+            raise HTTPException(status_code=404, detail="Observation alert not found")
+        # The tenant predicate belongs to the same query that materializes
+        # audit events, closing the gap between parent lookup and event read.
+        events_query = events_query.filter(
+            models.ObservationAlert.store_id == actor.store_id
+        )
+    events = (
+        events_query
         .order_by(models.ObservationAlertEvent.created_at.asc(), models.ObservationAlertEvent.id.asc())
         .all()
     )
+    if not events:
+        alert_query = db.query(models.ObservationAlert.id).filter(
+            models.ObservationAlert.id == alert_id
+        )
+        if actor.role != "ADMIN":
+            alert_query = alert_query.filter(
+                models.ObservationAlert.store_id == actor.store_id
+            )
+        if alert_query.first() is None:
+            raise HTTPException(status_code=404, detail="Observation alert not found")
+    return events
 
 
 @app.get("/api/v1/observations", response_model=list[ObservationRead], tags=["observations"])
