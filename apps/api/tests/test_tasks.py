@@ -1319,10 +1319,12 @@ def test_auto_assign_balances_workload_and_prioritizes_urgent_tasks(monkeypatch)
         finally:
             db.close()
 
+        actor_role = {"value": "ADMIN"}
         monkeypatch.setattr(
             main_module, "_request_user",
             lambda _db, _request: models.User(
-                id=supervisor_id, store_id=store_id, role="SUPERVISOR", is_active=True,
+                id=supervisor_id, store_id=store_id,
+                role=actor_role["value"], is_active=True,
             ),
         )
 
@@ -1341,6 +1343,7 @@ def test_auto_assign_balances_workload_and_prioritizes_urgent_tasks(monkeypatch)
             })
             assert linked.status_code == 201, linked.text
 
+        actor_role["value"] = "SUPERVISOR"
         baseline = client.post("/api/v1/tasks", json={
             "store_id": store_id, "shelf_id": shelf_id, "product_id": product_ids[0],
             "priority": "LOW",
@@ -1429,10 +1432,12 @@ def test_auto_assign_respects_persisted_shift_capacity_and_required_skill(monkey
         finally:
             db.close()
 
+        actor_role = {"value": "ADMIN"}
         monkeypatch.setattr(
             main_module, "_request_user",
             lambda _db, _request: models.User(
-                id=supervisor_id, store_id=store_id, role="SUPERVISOR", is_active=True,
+                id=supervisor_id, store_id=store_id,
+                role=actor_role["value"], is_active=True,
             ),
         )
 
@@ -1440,6 +1445,7 @@ def test_auto_assign_respects_persisted_shift_capacity_and_required_skill(monkey
             "sku": f"PLANNER-{uuid4().hex[:8]}", "name": "Produto planeador",
         })
         assert second_product.status_code == 201, second_product.text
+        actor_role["value"] = "SUPERVISOR"
         linked = client.post("/api/v1/shelf-products", json={
             "shelf_id": shelf_id, "product_id": second_product.json()["id"],
             "target_quantity": 10, "min_display_quantity": 2,
@@ -1470,3 +1476,145 @@ def test_auto_assign_respects_persisted_shift_capacity_and_required_skill(monkey
         assert result["assignments"][0]["assigned_user_id"] == skilled_id
         assert result["assignments"][0]["assigned_user_id"] != unskilled_id
 
+
+
+
+def test_employee_cannot_read_task_event_history(monkeypatch):
+    with TestClient(app) as client:
+        store_id, shelf_id, product_id = create_task_context(client)
+        second_shelf = client.post("/api/v1/shelves", json={
+            "zone_id": client.get("/api/v1/zones", params={"store_id": store_id}).json()[0]["id"],
+            "code": "TASK-EMPLOYEE-OTHER",
+        })
+        assert second_shelf.status_code == 201, second_shelf.text
+        second_product = client.post("/api/v1/products", json={
+            "sku": "TASK-EMPLOYEE-OTHER", "name": "Produto de outro operador",
+        })
+        assert second_product.status_code == 201, second_product.text
+        assert client.post("/api/v1/shelf-products", json={
+            "shelf_id": second_shelf.json()["id"], "product_id": second_product.json()["id"],
+            "target_quantity": 10, "min_display_quantity": 2,
+        }).status_code == 201
+        assert client.post("/api/v1/shelf-products", json={
+            "shelf_id": second_shelf.json()["id"], "product_id": product_id,
+            "target_quantity": 10, "min_display_quantity": 2,
+        }).status_code == 201
+
+        with TestingSession() as db:
+            employee = models.User(
+                email="task-events-owner@example.test", full_name="Operador titular",
+                password_hash="test-only-not-used", role="EMPLOYEE", store_id=store_id,
+                is_active=True,
+            )
+            coworker = models.User(
+                email="task-events-coworker@example.test", full_name="Outro operador",
+                password_hash="test-only-not-used", role="EMPLOYEE", store_id=store_id,
+                is_active=True,
+            )
+            db.add_all([employee, coworker])
+            db.commit()
+            db.refresh(employee)
+            db.refresh(coworker)
+            employee_id, coworker_id = employee.id, coworker.id
+
+        own_task = client.post("/api/v1/tasks", json={
+            "store_id": store_id, "shelf_id": shelf_id, "product_id": product_id,
+            "assigned_user_id": employee_id,
+        })
+        coworker_task = client.post("/api/v1/tasks", json={
+            "store_id": store_id, "shelf_id": second_shelf.json()["id"],
+            "product_id": second_product.json()["id"], "assigned_user_id": coworker_id,
+        })
+        unassigned_task = client.post("/api/v1/tasks", json={
+            "store_id": store_id, "shelf_id": second_shelf.json()["id"],
+            "product_id": product_id,
+        })
+        assert own_task.status_code == coworker_task.status_code == unassigned_task.status_code == 201
+
+        with TestingSession() as db:
+            employee = db.get(models.User, employee_id)
+            monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: employee)
+            own_events = client.get(f"/api/v1/tasks/{own_task.json()['id']}/events")
+            coworker_events = client.get(f"/api/v1/tasks/{coworker_task.json()['id']}/events")
+            unassigned_events = client.get(f"/api/v1/tasks/{unassigned_task.json()['id']}/events")
+            missing_events = client.get("/api/v1/tasks/2147483000/events")
+            assert own_events.status_code == 403
+            assert coworker_events.status_code == 403
+            assert unassigned_events.status_code == 403
+            assert missing_events.status_code == 403
+            assert own_events.json() == coworker_events.json() == unassigned_events.json() == missing_events.json()
+
+
+
+def test_pallet_lifecycle_events_require_supervisor_or_admin(monkeypatch):
+    with TestClient(app) as client:
+        store_id, _, product_id = create_task_context(client)
+        with TestingSession() as db:
+            level = models.ProductPackagingLevel(
+                product_id=product_id, code="PALLET-AUTH", name="Palete de autorização",
+                package_type="PALLET", base_units_per_package=720, is_active=True,
+            )
+            employee = models.User(
+                email="pallet-auth-employee@example.test", full_name="Operador",
+                password_hash="test-only-not-used", role="EMPLOYEE", store_id=store_id,
+                is_active=True,
+            )
+            supervisor = models.User(
+                email="pallet-auth-supervisor@example.test", full_name="Supervisor",
+                password_hash="test-only-not-used", role="SUPERVISOR", store_id=store_id,
+                is_active=True,
+            )
+            db.add_all([level, employee, supervisor])
+            db.commit()
+            db.refresh(level)
+            db.refresh(employee)
+            db.refresh(supervisor)
+            pallet = models.StorePallet(
+                store_id=store_id, product_id=product_id, packaging_level_id=level.id,
+                pallet_code="PALLET-AUTH-001", base_quantity=720, status="READY",
+                location_type="WAREHOUSE", location_code="ARZ-A-01",
+            )
+            db.add(pallet)
+            db.flush()
+            db.add(models.PalletRotationEvent(
+                pallet_id=pallet.id, event_type="REGISTERED", quantity_before=0,
+                quantity_after=720, reason="Registo inicial de teste", occurred_at=models.utc_now(),
+            ))
+            db.commit()
+            db.refresh(pallet)
+            pallet_id, employee_id, supervisor_id = pallet.id, employee.id, supervisor.id
+
+        with TestingSession() as db:
+            employee = db.get(models.User, employee_id)
+            monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: employee)
+            employee_read = client.get(
+                f"/api/v1/warehouse/pallets/{pallet_id}/events", params={"store_id": store_id},
+            )
+            employee_write = client.post(
+                f"/api/v1/warehouse/pallets/{pallet_id}/events", json={
+                    "expected_status": "READY", "expected_base_quantity": 720,
+                    "status": "QUARANTINED", "reason": "Operador sem autorização de supervisor",
+                },
+            )
+            assert employee_read.status_code == 403
+            assert employee_write.status_code == 403
+
+        with TestingSession() as db:
+            pallet = db.get(models.StorePallet, pallet_id)
+            assert pallet.status == "READY"
+            assert db.query(models.PalletRotationEvent).filter_by(pallet_id=pallet_id).count() == 1
+            supervisor = db.get(models.User, supervisor_id)
+            monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: supervisor)
+            supervisor_read = client.get(
+                f"/api/v1/warehouse/pallets/{pallet_id}/events", params={"store_id": store_id},
+            )
+            assert supervisor_read.status_code == 200, supervisor_read.text
+            assert len(supervisor_read.json()) == 1
+            supervisor_write = client.post(
+                f"/api/v1/warehouse/pallets/{pallet_id}/events", json={
+                    "expected_status": "READY", "expected_base_quantity": 720,
+                    "status": "QUARANTINED", "reason": "Quarentena aprovada pelo supervisor",
+                },
+            )
+            assert supervisor_write.status_code == 201, supervisor_write.text
+            assert supervisor_write.json()["event_type"] == "STATUS_REVIEWED"

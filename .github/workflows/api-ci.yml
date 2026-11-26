@@ -62,6 +62,14 @@ jobs:
         env:
           DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/smart_shelf_ci
         run: alembic upgrade head
+      - name: Verify PostgreSQL 0099 downgrade and re-apply in an isolated database
+        env:
+          DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/smart_shelf_ci
+        run: python scripts/postgres_shelf_reconciliation_lineage_migration_cycle_smoke.py
+      - name: Verify PostgreSQL 0100 downgrade and re-apply in an isolated database
+        env:
+          DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/smart_shelf_ci
+        run: python scripts/postgres_embedding_source_image_shelf_lineage_migration_cycle_smoke.py
       - name: Verify PostgreSQL vision worker lease recovery and fencing
         env:
           DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/smart_shelf_ci
@@ -179,12 +187,25 @@ jobs:
           APP_ENV: test
           JWT_SECRET_KEY: test-only-secret-not-for-production
         run: python scripts/postgres_embedding_review_smoke.py
+      - name: Verify PostgreSQL embedding review and source-image shelf lineage serialization
+        env:
+          DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/smart_shelf_ci
+          APP_ENV: test
+          JWT_SECRET_KEY: test-only-secret-not-for-production
+        run: python scripts/postgres_embedding_source_image_shelf_lineage_smoke.py
       - name: Verify PostgreSQL four-way SKU matching, retention and human-review concurrency
         env:
           DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/smart_shelf_ci
           APP_ENV: test
           JWT_SECRET_KEY: test-only-secret-not-for-production
         run: python scripts/postgres_four_way_concurrency_smoke.py
+      - name: Verify PostgreSQL manual inventory count audit provenance and immutability
+        env:
+          DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/smart_shelf_ci
+          APP_ENV: test
+          JWT_SECRET_KEY: test-only-secret-not-for-production
+        run: python scripts/postgres_inventory_manual_count_audit_smoke.py
+
       - name: Verify PostgreSQL inventory and warehouse cross-store authorization
         env:
           DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/smart_shelf_ci
@@ -213,6 +234,11 @@ jobs:
           APP_ENV: test
           JWT_SECRET_KEY: test-only-secret-not-for-production
         run: python scripts/postgres_shelf_product_assignment_concurrency_smoke.py
+      - name: Verify PostgreSQL shelf and reconciliation evidence lineage lock serialization
+        env:
+          DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/smart_shelf_ci
+          APP_ENV: test
+        run: python scripts/postgres_shelf_reconciliation_lineage_smoke.py
       - name: Verify PostgreSQL concurrent packaging-unit uniqueness
         env:
           DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/smart_shelf_ci

@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 
 from sqlalchemy import update
+from sqlalchemy.exc import DBAPIError
 
 from app import models
 from app.database import SessionLocal
@@ -263,6 +264,12 @@ def _verify_sigkill_after_page_commit_and_idempotent_replay():
                 external_reference="external-row-1",
             ).one_or_none()
             assert first_page is not None, "page one was not committed before SIGKILL"
+            initial_sync = db.query(models.InventorySourceSync).filter_by(
+                store_id=store_id, source="ERP", status="STARTED"
+            ).order_by(models.InventorySourceSync.id.desc()).first()
+            assert initial_sync is not None, "source-sync ledger was not created"
+            assert first_page.source_sync_id == initial_sync.id
+            initial_sync_id = initial_sync.id
             first_snapshot_id = first_page.id
             first_snapshot_quantity = Decimal(str(first_page.on_hand_quantity))
         process.kill()
@@ -318,6 +325,7 @@ def _verify_sigkill_after_page_commit_and_idempotent_replay():
         assert len(snapshots) == 2, f"expected exactly two unique snapshots, got {len(snapshots)}"
         replayed = next(row for row in snapshots if row.external_reference == "external-row-1")
         assert replayed.id == first_snapshot_id, "replay inserted a duplicate snapshot"
+        assert replayed.source_sync_id == initial_sync_id, "replay must preserve the original partial-run lineage"
         assert Decimal(str(replayed.on_hand_quantity)) == first_snapshot_quantity
         assert Decimal(str(replayed.on_hand_quantity)) == Decimal("12.000")
         assert {row.external_reference for row in snapshots} == {
@@ -327,6 +335,27 @@ def _verify_sigkill_after_page_commit_and_idempotent_replay():
             store_id=store_id, source="ERP"
         ).order_by(models.InventorySourceSync.id.desc()).first()
         assert sync is not None and sync.status == "SUCCESS"
+        replayed_second_page = next(row for row in snapshots if row.external_reference == "external-row-2")
+        assert replayed_second_page.source_sync_id == sync.id
+        db.add(models.InventorySnapshot(
+            store_id=store_id,
+            product_id=product_id,
+            on_hand_quantity=Decimal("1.000"),
+            reserved_quantity=Decimal("0.000"),
+            source="ERP",
+            external_reference=f"late-terminal-sync-{suffix}",
+            source_sync_id=sync.id,
+            captured_at=datetime.now(timezone.utc),
+            created_at=models.utc_now(),
+        ))
+        try:
+            db.flush()
+        except DBAPIError as exc:
+            db.rollback()
+            if "inventory snapshot source_sync_id provenance mismatch" not in str(exc):
+                raise
+        else:
+            raise AssertionError("terminal sync accepted a new linked inventory snapshot")
         complete_inventory_sync_job(
             db, job_id=job_id, worker_id="recovery-worker",
             lease_token=replacement_token, fencing_token=replacement_fencing,

@@ -104,3 +104,46 @@ def test_replenishment_units_api_returns_exact_decimal_quantities_for_all_packag
         assert pallet.json()["package_count"] == 2
         assert pallet.json()["planned_base_units_exact"] == "1440.000"
         assert pallet.json()["excess_base_units_exact"] == "718.875"
+
+
+def test_packaging_factor_rejects_precision_that_database_would_silently_round():
+    suffix = uuid4().hex[:8].upper()
+    with TestClient(app) as client:
+        product = client.post(
+            "/api/v1/products",
+            json={"sku": f"PACK-PRECISION-{suffix}", "name": "Produto com embalagem"},
+        )
+        assert product.status_code == 201, product.text
+        product_id = product.json()["id"]
+
+        valid = client.post(
+            "/api/v1/warehouse/product-packaging",
+            json={
+                "product_id": product_id,
+                "code": "CASE-VALID",
+                "name": "Caixa fraccionária válida",
+                "package_type": "CASE",
+                "base_units_per_package": "12.125",
+            },
+        )
+        assert valid.status_code == 201, valid.text
+        assert valid.json()["base_units_per_package"] == 12.125
+
+        invalid = client.post(
+            "/api/v1/warehouse/product-packaging",
+            json={
+                "product_id": product_id,
+                "code": "CASE-INVALID",
+                "name": "Caixa com precisão inválida",
+                "package_type": "CASE",
+                "base_units_per_package": "12.1254",
+            },
+        )
+        assert invalid.status_code == 422, invalid.text
+
+        listed = client.get(
+            "/api/v1/warehouse/product-packaging",
+            params={"product_id": product_id},
+        )
+        assert listed.status_code == 200, listed.text
+        assert [level["code"] for level in listed.json()] == ["CASE-VALID"]

@@ -50,3 +50,8 @@ A coluna é nullable apenas para preservar movimentos históricos sem inferir a 
 ## Quantidades exactas no planeamento logístico
 
 O cálculo de embalagens já opera internamente com Decimal. A API mantém os campos numéricos legados e acrescenta representações textuais exactas para quantidade necessária, factor por embalagem, quantidade solta, quantidade planeada e excesso. O parâmetro de entrada é interpretado como Decimal desde a query string. A regra é apenas de planeamento: `automatic_stock_movement_allowed=false` permanece obrigatório; o cálculo nunca cria movimentos.
+
+
+## Quantidades fraccionárias de exposição (migration 0090)
+
+O contrato de exposição também tem de respeitar a unidade base do SKU. `ShelfProduct.target_quantity` e `min_display_quantity` são agora `Decimal/Numeric(12,3)`, não inteiros. A migration 0090 converte os valores inteiros históricos sem alteração de valor. O downgrade só é permitido quando todos os valores forem integrais; caso contrário falha explicitamente para impedir truncagem. O limite de três casas decimais é consistente com os movimentos de inventário.

@@ -1,3 +1,17 @@
+## P0 — Serialização da propriedade da prateleira nas escritas (2026-11-26)
+
+- [x] Introduzir `_lock_store_scoped_shelf()`: obter a linhagem inicial, bloquear primeiro `Zone` com `SELECT FOR UPDATE`, validar novamente o tenant e bloquear depois `Shelf`; uma alteração de `zones.store_id` tem de aguardar pela transacção da escrita.
+- [x] Aplicar o helper à criação de observações, criação de sessões de captura e upload de imagens.
+- [x] Derivar `CaptureSession.store_id` e o directório de armazenamento da zona bloqueada, nunca de uma relação ORM carregada antes do lock.
+- [x] Manter a ordem de locks `Zone → Shelf → CaptureSession` no upload e validar que a sessão pertence à mesma prateleira e loja.
+- [x] Abranger escrita do ficheiro, `flush`, `refresh` e `commit` no mesmo bloco de limpeza; qualquer falha antes do commit faz rollback e remove um ficheiro parcial.
+- [x] Acrescentar regressão HTTP para observação, sessão e upload cross-store, sessão de outra loja, sessão da mesma loja mas de outra prateleira e controlo positivo same-store.
+- [x] Reforçar o smoke PostgreSQL já executado pelo API CI: criação HTTP de sessões same-store/cross-store e prova de que um UPDATE concorrente de `zones.store_id` fica em `wait_event_type='Lock'`, bloqueado pelo PID da transacção que mantém a escrita da prateleira.
+- [ ] Executar e confirmar API CI/PostgreSQL 16, Quality Gates, Security Scans e Docker Compose no SHA final.
+- [ ] Rever o resultado dos workflows e corrigir eventuais regressões antes de considerar P0.1 fechado.
+
+Limite: o inventário actual de rotas não encontrou endpoint HTTP de transferência/actualização de zonas. O smoke usa um UPDATE SQL concorrente para representar a alteração da loja proprietária e comprovar a serialização ao nível PostgreSQL; não afirma a existência de uma operação de transferência na API. Os testes adicionados e o smoke ainda carecem de execução CI no SHA final. As migrations 0099/0100 não foram alteradas.
+
 
 ## 2026-11-25 — Autoridade WMS por localização: validada
 
@@ -9,7 +23,7 @@ Novos snapshots WMS exigem localização e disponibilidade explícitas ao nível
 
 **Evidência:** API CI `45574197186` — 1679 testes aprovados, 1 ignorado e 47 smokes PostgreSQL concluídos; Quality Gates `45574197259` — sucesso; Security Scans `45574197237` — sucesso; Docker Compose `45574197037` — sucesso.
 
-**Ainda não homologado:** adapter WMS real, códigos/estados de localização do fornecedor, conversões unidade/caixa/palete e reservas multi-localização. O sucesso da CI não prova conectividade externa.
+**Ainda não homologado:** adapter WMS real, códigos/estados e mapeamento de unidades do fornecedor, factores logísticos externos e reservas multi-localização. A conversão interna por SKU entre unidade base, caixa e palete está implementada; não prova que os códigos/factores do fornecedor estejam correctos. O sucesso da CI não prova conectividade externa.
 
 ---
 
@@ -1646,3 +1660,78 @@ O contrato actual usa a escala persistida `NUMERIC(12,3)`. A conversão de embal
 - [x] Manter compatibilidade dos campos numéricos e acrescentar campos `*_exact` textuais.
 - [x] Validar quantidades fraccionárias, caixa aberta/fechada, unidade e palete.
 - [x] Garantir que o cálculo não executa movimentos de stock.
+
+
+## 2026-11-25 — Skew temporal ERP/WMS (migration 0093)
+
+A reconciliação mede e expõe o skew absoluto de captura. A política ERP por loja pode definir tolerância opcional de 0–10080 minutos; NULL significa não configurada. Sem tolerância, timestamps diferentes não produzem delta nem DIVERGENCE. Acima do limite configurado, a comparação quantitativa também é suspensa. Só dentro do limite se comparam quantidades. A configuração exige motivo e fica auditada no ledger append-only. Não existe valor operacional por defeito.
+
+A migration 0093 e os testes SQLite/API foram preparados; validação PostgreSQL 16 e workflows GitHub no SHA final ainda pendentes.
+
+
+## 2026-11-25 — Retenção da hierarquia e imutabilidade da auditoria de tarefas (0096–0098)
+
+- [x] Bloquear eliminação de prateleiras/zonas com histórico de tarefas.
+- [x] Proteger eventos de tarefa contra UPDATE/DELETE e congelar a identidade da tarefa após o primeiro evento.
+- [x] Bloquear cascades sobre imagens, sessões, observações, alertas, associações, planogramas, reconciliações e inbox Edge.
+- [x] Validar retenção de imagem ACTIVE com legal hold sem tarefa associada em PostgreSQL 16.
+- [x] Expor a proveniência física do destino no histórico Web de movimentos.
+- [x] API CI **1725 passed, 1 skipped**, Quality Gates, Security Scans e Docker Compose aprovados no SHA `7bf95468320fc1dd4ab992b520e855d463b6e1f6`.
+
+Arquivamento/soft-delete continua condicionado a requisito operacional; a eliminação física não é alternativa à retenção.
+
+
+## 2026-11-25 — Transições concorrentes do ciclo de vida das tarefas validadas
+
+O endpoint de transição usa lock pessimista da linha da tarefa e revalida o estado após o lock. O smoke PostgreSQL 16 prova que duas atribuições concorrentes produzem apenas um evento; uma conclusão concorrente com cancelamento produz exactamente um vencedor e um HTTP 409; a auditoria reflecte o estado vencedor e não existe segunda transição terminal. A falha forçada após flush do evento reverte tanto a alteração do estado como o evento. A repetição de cancelamento é rejeitada e a tarefa terminal não pode ser reaberta.
+
+**Evidência:** SHA `cfeeab3f4e092709de9eccb0dfc54397f72f12af`; API CI `45689904464` — **1725 passed, 1 skipped**; Quality Gates `45689904362`, Security Scans `45689904247` e Docker Compose `45689904380` — sucesso.
+
+**Próxima revisão:** consistência temporal de `started_at`/`completed_at` e política de atribuição/reafectação. Não introduzir regras de negócio sem requisito operacional aprovado.
+
+
+## 2026-11-25 — Autorização do histórico de eventos de tarefas
+
+A política central classifica `GET /api/v1/tasks/{task_id}/events` como `SUPERVISOR_OR_ADMIN`. O handler reforça explicitamente esta fronteira: EMPLOYEE recebe HTTP 403 para qualquer tarefa, incluindo as que lhe estão atribuídas. SUPERVISOR consulta apenas a sua loja; ADMIN mantém acesso global. O teste exercita tarefa própria, tarefa de colega, tarefa não atribuída e ID inexistente para provar a negação consistente.
+
+**Evidência:** SHA `f925b875f871964ce80805c4927af15616f58774`; API CI `45716057516`, Quality Gates `45716057563`, Security Scans `45716057667` e Docker Compose `45716057580` — todos com sucesso.
+
+
+## 2026-11-25 — Defesa em profundidade do RBAC de eventos de paletes
+
+Os handlers GET e POST do histórico/ciclo de vida de paletes agora repetem a autorização `SUPERVISOR_OR_ADMIN` já declarada na política central. Funcionários recebem 403 antes da leitura ou mutação. O teste confirma que a tentativa de escrita não altera o estado nem acrescenta evento e que um supervisor autorizado consegue ler e registar uma transição válida.
+
+**Evidência:** SHA `50df52e59eca47aa2dfc868fc16621cf2f636586`; API CI `45716912538`, Quality Gates `45716912911`, Security Scans `45716912543` e Docker Compose `45716912421` — todos com sucesso.
+
+
+## 2026-11-25 — RBAC explícito em snapshots de inventário e catálogo de lojas
+
+Os handlers de criação de snapshots, listagem e consulta do snapshot mais recente agora exigem ADMIN/SUPERVISOR independentemente da origem do snapshot. A criação não permite que um perfil EMPLOYEE injete dados WMS/ERP/POS/IMPORT só porque a regra anterior de perfil estava condicionada a MANUAL. O GET `/api/v1/stores` também reforça no handler a política de leitura ADMIN/SUPERVISOR. A regressão inicial da listagem foi identificada pelo Quality Gates, corrigida e validada na execução seguinte.
+
+**Evidência:** SHA `19bf8dd2bf2b6990faff261effc0752523f59a5b`; API CI **1728 passed, 1 skipped**; Quality Gates, Security Scans e Docker Compose — sucesso.
+
+
+## 2026-11-25 — RBAC explícito nos writes POS de vendas e tráfego
+
+Os endpoints de registo horário, batch e importação CSV de vendas/tráfego passaram a repetir no handler a exigência ADMIN/SUPERVISOR da política central. A verificação dos imports é feita antes da leitura do ficheiro. O teste usa actor EMPLOYEE e prova que os seis endpoints respondem 403 sem persistir linhas.
+
+**Evidência:** SHA `d36af7332544204fc14b6764a3faf99c24aa4741`; API CI **1729 passed, 1 skipped**; Quality Gates, Security Scans e Docker Compose — sucesso.
+
+
+## 2026-11-25 — Autorização da persistência OCR e fusão de evidência
+
+Os handlers que persistem OCR runs, matches OCR→catálogo e fusão visual/textual repetem a política ADMIN/SUPERVISOR. A negação de EMPLOYEE ocorre antes do lock da imagem e antes de qualquer escrita; os testes confirmam ausência de registos após HTTP 403.
+
+**Evidência:** SHA `a9271dd595c7d913a93cd969cf73d58b5e49438d`; API CI **1730 passed, 1 skipped**; Quality Gates, Security Scans e Docker Compose — sucesso.
+
+
+## 2026-11-25 — RBAC das mutações de warehouse e paletes
+
+Os handlers de criação de localizações e colocações, registo de paletes, políticas de rotação e simulação agora repetem a autorização ADMIN/SUPERVISOR da política central. A negação ocorre antes de ler ou bloquear recursos. Teste com EMPLOYEE confirma 403 nas seis operações e ausência de mutações.
+
+**Evidência:** SHA `3f63efd0da73070cc1654e76ea58ecfe0e79ca93`; API CI **1731 passed, 1 skipped**; Quality Gates, Security Scans e Docker Compose — sucesso.
+
+## Segurança multi-loja — revalidação da evidência de consenso (2026-11-26)
+
+O endpoint de consenso aplica agora o tenant scope na própria query de observações e na validação da associação SKU/prateleira. A regressão determinística cobre a transferência da zona entre o preflight da prateleira e a leitura da evidência. A implementação e o teste foram publicados; a validação no API CI/PostgreSQL 16 e nos restantes workflows permanece pendente. Isto não encerra a matriz BOLA/IDOR.
+

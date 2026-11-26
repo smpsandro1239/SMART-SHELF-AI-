@@ -1,3 +1,106 @@
+## P0 — Isolamento tenant no histórico de eventos de jobs ERP/WMS (2026-11-26)
+
+- [x] Remover a separação entre preflight do job e leitura dos eventos: a query passa a usar InventorySyncJob como tabela-pai, OUTER JOIN aos eventos e predicados simultâneos job.id + job.store_id.
+- [x] Preservar histórico vazio como items: [] através do OUTER JOIN, sem confundir job válido sem eventos com job estrangeiro/inexistente.
+- [x] Adicionar regressão API para job de outra loja consultado através da loja autorizada e exigir 404 igual ao ID inexistente; manter a verificação 403 quando o actor tenta usar directamente o path de outra loja.
+- [ ] Executar teste focal, suite API/PostgreSQL 16, Quality Gates, Security Scans e Docker Compose no SHA final.
+- [ ] Avaliar concorrência PostgreSQL real de reassociação do job à loja e decidir se é necessária guarda de imutabilidade/serialização na camada de dados.
+
+Limite: a query única elimina a janela entre a leitura do job e a leitura dos eventos no endpoint. A alteração e a regressão foram publicadas, mas ainda não estão validadas por execução CI. A auditoria BOLA/IDOR global permanece aberta.
+## P0 — Serialização da propriedade da prateleira nas escritas (2026-11-26)
+
+- [x] Introduzir `_lock_store_scoped_shelf()`: obter a linhagem inicial, bloquear primeiro `Zone` com `SELECT FOR UPDATE`, validar novamente o tenant e bloquear depois `Shelf`; uma alteração de `zones.store_id` tem de aguardar pela transacção da escrita.
+- [x] Aplicar o helper à criação de observações, criação de sessões de captura e upload de imagens.
+- [x] Derivar `CaptureSession.store_id` e o directório de armazenamento da zona bloqueada, nunca de uma relação ORM carregada antes do lock.
+- [x] Manter a ordem de locks `Zone → Shelf → CaptureSession` no upload e validar que a sessão pertence à mesma prateleira e loja.
+- [x] Abranger escrita do ficheiro, `flush`, `refresh` e `commit` no mesmo bloco de limpeza; qualquer falha antes do commit faz rollback e remove um ficheiro parcial.
+- [x] Acrescentar regressão HTTP para observação, sessão e upload cross-store, sessão de outra loja, sessão da mesma loja mas de outra prateleira e controlo positivo same-store.
+- [x] Reforçar o smoke PostgreSQL já executado pelo API CI: criação HTTP de sessões same-store/cross-store e prova de que um UPDATE concorrente de `zones.store_id` fica em `wait_event_type='Lock'`, bloqueado pelo PID da transacção que mantém a escrita da prateleira.
+- [x] Corrigir o smoke PostgreSQL: após comprovar que o UPDATE concorrente fica bloqueado pelo lock da escrita da prateleira, exigir que a transferência seja rejeitada pela protecção de evidência retida, em vez de esperar uma transferência bem-sucedida incompatível com o contrato de integridade.
+- [x] Verificar que, após a rejeição, a sessão de captura permanece associada à loja A, a zona continua na loja A e o supervisor autorizado mantém acesso.
+- [ ] Executar e confirmar API CI/PostgreSQL 16, Quality Gates, Security Scans e Docker Compose no SHA final.
+- [ ] Rever os resultados dos workflows e corrigir eventuais regressões antes de considerar P0.1 fechado.
+
+Limite: a falha anterior não era uma falha de autorização da sessão. O smoke esperava que a zona mudasse de loja depois do lock, mas a protecção de integridade da base de dados rejeita correctamente essa transferência quando já existe evidência operacional. O teste foi alinhado com esse contrato; ainda aguarda nova execução CI. O inventário actual de rotas não encontrou endpoint HTTP de transferência/actualização de zonas.
+
+## P0 — Revalidação tenant na leitura do consenso de observações (2026-11-26)
+
+- [x] Identificar que o endpoint fazia preflight de `shelf_id`, mas consultava depois observações apenas por `shelf_id`, sem repetir a linhagem de loja na query de evidência.
+- [x] Aplicar JOIN `Observation → Shelf → Zone` e filtro `Zone.store_id` na mesma query que lê as observações para SUPERVISOR.
+- [x] Reaplicar o mesmo tenant scope na validação de `ShelfProduct` quando é fornecido `product_id`.
+- [x] Preservar o `store_id` autorizado do actor na resposta do SUPERVISOR.
+- [x] Acrescentar regressão determinística que transfere a zona depois do preflight e antes da leitura, exigindo zero observações devolvidas.
+- [ ] Validar teste focal, suite API, PostgreSQL 16, Quality Gates, Security Scans e Docker Compose no SHA final.
+- [ ] Avaliar smoke concorrente PostgreSQL dedicado se a revisão das operações de transferência confirmar um caminho concorrente suportado que justifique serialização por lock.
+
+Limite: a alteração elimina a leitura de evidência sem predicado tenant na query. O teste publicado simula o interleaving entre preflight e leitura; ainda não prova lock wait/serialização PostgreSQL real nem fecha a auditoria BOLA/IDOR global.
+
+## P0 — Imutabilidade da associação shelf da imagem-fonte de exemplares embedding (2026-11-26)
+
+- [x] Confirmar que a revisão de exemplares bloqueia primeiro a linha `shelf_images`, seguindo a ordem imagem → produto → exemplar.
+- [x] Identificar que a migration 0037 torna imutável a linhagem do exemplar, mas não impede a alteração posterior de `ShelfImage.shelf_id` quando existem exemplares derivados.
+- [x] Criar migration 0100 com guarda PostgreSQL/SQLite que rejeita a mudança de shelf enquanto existir `ProductEmbeddingExemplar` associado à imagem.
+- [x] Acrescentar teste SQLite para rejeição com exemplar, permissão sem exemplar e downgrade limitado à guarda nova.
+- [x] Acrescentar smoke PostgreSQL concorrente que usa a revisão HTTP real e observa o lock wait efectivo através de `pg_stat_activity`.
+- [x] API CI `45805339672`, commit de código `bef29291b55f7a51dd35d917f0d64c3e0b2f7f11`: migration 0100 aplicada em PostgreSQL 16; smoke concorrente passou e provou que a reassociação cross-store aguardou pelo lock e foi rejeitada após o commit da revisão.
+- [x] Smoke de ciclo `45805339672`: upgrade 0100, downgrade 0100→0099 (confirmando que as seis triggers/cinco funções de 0099 permanecem), e reaplicação 0100 concluídos com sucesso.
+- [x] Suite API: **1740 passed, 1 skipped**.
+- [x] Docker Compose `45805339652`: sucesso no mesmo commit de código.
+- [x] Quality Gates `45805397438` e Security Scans `45805397536`: sucesso no descendente documental `a09fc5a10dbbfe6d79e7e320dd3efb9979527cf1`, sem alterações de código relativamente ao commit validado pela API CI.
+ 
+Conclusão: migration 0100 validada em PostgreSQL 16 e SQLite. A guarda protege a associação directa imagem→shelf enquanto existirem exemplares embedding; não substitui a auditoria mais ampla de outros endpoints com IDs directos nem a revisão global BOLA/IDOR.
+
+## P0 — Isolamento multi-loja no histórico de eventos de alertas (2026-11-26)
+
+- [x] Fazer JOIN de ObservationAlertEvent com ObservationAlert na query que devolve o histórico.
+- [x] Aplicar `ObservationAlert.store_id == actor.store_id` na mesma query para SUPERVISOR.
+- [x] Preservar `[]` para alerta autorizado sem eventos e 404 indistinguível para alerta estrangeiro/inexistente.
+- [x] Acrescentar regressão HTTP com alertas nas duas lojas, evento próprio, evento estrangeiro e ID inexistente.
+- [x] Validado no código `eea9cc5d`: API CI `45797706450` (1739 passed, 1 skipped; PostgreSQL 16), Quality Gates `45798609654` e Security Scans `45798609531` no HEAD documental `3b288869`; Docker Compose `45797706344` passou no mesmo código.
+
+Limite: implementação, regressão e CI validadas. A autorização é derivada do alerta-pai, porque ObservationAlertEvent não possui `store_id` próprio.
+
+## P0 — Isolamento multi-loja nos históricos de tarefas e movimentos (2026-11-26)
+
+- [x] Fazer JOIN do evento ao recurso-pai (ReplenishmentTask / InventoryMovement) na consulta que devolve o histórico.
+- [x] Aplicar o filtro store_id directamente nessa consulta para SUPERVISOR, sem depender apenas de uma validação anterior do recurso-pai.
+- [x] Preservar a distinção entre histórico vazio de um recurso autorizado e recurso estrangeiro/inexistente (404 indistinguível).
+- [x] Acrescentar regressão HTTP para histórico de tarefas; reforçar a cobertura existente de movimentos, incluindo paridade estrangeiro/inexistente e bloqueio EMPLOYEE.
+- [x] Validado no código `eea9cc5d`: API CI `45797706450` (1739 passed, 1 skipped; PostgreSQL 16), Quality Gates `45798609654` e Security Scans `45798609531` no HEAD documental `3b288869`; Docker Compose `45797706344` passou no mesmo código.
+
+Limite: alterações, regressões e CI validadas. ADMIN mantém consulta global. As queries de eventos aplicam a linhagem do recurso-pai na mesma instrução SQL que devolve os eventos.
+
+## P0 — Isolamento multi-loja no histórico de retenção de imagens (2026-11-26)
+
+- [x] Substituir a sequência de resolução global da loja + `db.get(ShelfImage, image_id)` por queries com JOIN ShelfImage → Shelf → Zone.
+- [x] Aplicar o filtro `Zone.store_id == actor.store_id` tanto na query de eventos como na verificação de existência quando o histórico está vazio; IDs estrangeiros e inexistentes devolvem 404.
+- [x] Acrescentar regressão HTTP que cria um evento de retenção numa imagem estrangeira e compara a resposta com um ID inexistente.
+- [x] Validado no código `eea9cc5d`: API CI `45797706450` (1739 passed, 1 skipped; PostgreSQL 16), Quality Gates `45798609654` e Security Scans `45798609531` no HEAD documental `3b288869`; Docker Compose `45797706344` passou no mesmo código.
+- [ ] Continuar a auditoria de concorrência e de outros endpoints com IDs directos.
+
+Limite: implementação, regressão e CI validadas. O histórico de retenção não contém `store_id` próprio, pelo que a autorização deriva da imagem-pai validada por JOIN.
+
+## P0 — Isolamento multi-loja na revisão de exemplares de embeddings (2026-11-26)
+
+- [x] Substituir a leitura inicial global por uma query tenant-scoped: exemplares associados a imagens de outras lojas não são materializados para SUPERVISOR.
+- [x] Preservar a regra ADMIN-only para exemplares sem imagem de origem; a query mantém esses registos apenas para aplicar a resposta 403 existente.
+- [x] Acrescentar regressão HTTP que compara ID de exemplar estrangeiro com ID inexistente (404/corpo idêntico) e confirma que o estado PENDING e a atribuição de revisão não mudam.
+- [x] Validado no código `eea9cc5d`: API CI `45797706450` (1739 passed, 1 skipped; PostgreSQL 16), Quality Gates `45798609654` e Security Scans `45798609531` no HEAD documental `3b288869`; Docker Compose `45797706344` passou no mesmo código.
+- [ ] Auditar concorrência entre alteração de associação da imagem e revisão do exemplar, além dos restantes endpoints com IDs directos.
+
+Limite: alteração, regressão e CI validadas. A query tenant-scoped reduz a exposição antes da autorização; permanece pendente a auditoria de concorrência entre alteração de associação da imagem e revisão do exemplar.
+
+## P0 — Cobertura explícita de autorização RBAC (2026-11-26)
+
+- [x] Inventariar estaticamente os decorators HTTP de `apps/api/app/main.py` e comparar método/template com `API_ROUTE_POLICIES`.
+- [x] Confirmar que todos os endpoints `/api/v1/*` declarados em `main.py` têm política explícita; as únicas rotas sem política na aplicação principal são `/health` e `/health/ready`, fora da API versionada.
+- [x] Confirmar que a política `POST /api/v1/edge/events` corresponde ao router Edge separado, com autenticação própria.
+- [x] Acrescentar regressão que percorre as rotas FastAPI registadas e falha quando uma rota versionada não tem política RBAC explícita.
+- [x] Validado no código `eea9cc5d`: API CI `45797706450` (1739 passed, 1 skipped; PostgreSQL 16), Quality Gates `45798609654` e Security Scans `45798609531` no HEAD documental `3b288869`; Docker Compose `45797706344` passou no mesmo código.
+- [ ] Continuar auditoria BOLA/IDOR por identificador de recurso e provar isolamento multi-loja nas operações de leitura e escrita.
+
+Limite: a comparação estática e a regressão passaram no API CI. Isto confirma cobertura de classificação RBAC, não prova autorização correcta em cada handler nem isolamento de todos os recursos; a auditoria BOLA/IDOR continua aberta.
+
 ## P0 — Autoridade física WMS por loja/localização (2026-11-25)
 
 - [x] Definir WMS como fonte de referência da retaguarda e ERP como fonte administrativa independente.
@@ -11,7 +114,8 @@
 - [x] Acrescentar regressões para ERP sem fallback, estado WMS indisponível, localização errada, configuração por loja e auditoria da política.
 - [x] Confirmar migrations 0084/0085, suite API (1679 passed, 1 skipped), PostgreSQL 16, Quality Gates, Security Scans e Docker Compose no SHA `c8efb82b64d4aed9fcc81fdb4a0571695fdd23cf`.
 - [ ] Homologar adapter WMS real e validar mapeamento de localizações com o fornecedor.
-- [ ] Definir normalização de unidade/caixa/palete e conversões autorizadas sem misturar unidades incompatíveis.
+- [x] Implementar normalização logística interna por SKU: Product.unit como unidade base e níveis UNIT/CASE/PALLET com factores Decimal, cálculo read-only e sem movimentos automáticos.
+- [ ] Mapear códigos/unidades e factores externos do WMS para a unidade base interna, com vigência/versionamento e homologação do fornecedor.
 - [ ] Expandir a auditoria de movimentos manuais e reconciliação de reservas multi-localização.
 
 Limite: o código suporta o contrato e a configuração, mas ainda não existe adapter WMS real homologado. Não apresentar o ledger de sincronização como prova de conectividade externa.
@@ -1674,7 +1778,7 @@ Critério global: nenhuma capacidade pode ser marcada como concluída sem códig
 - [x] Acrescentar o teste test_every_explicit_api_route_policy_matches_the_complete_role_matrix em apps/api/tests/test_security.py: valida todas as entradas método/template contra ADMIN, SUPERVISOR e EMPLOYEE, rejeita políticas duplicadas/categorias desconhecidas e confirma fail-closed para rotas não registadas.
 - [x] Quality Gates [44882467613](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44882467613) passou no commit b1c60246938befa86233b49f6d8a4841617fbfdc: compilação Python, build TypeScript/produção, detector Impeccable e suite API **1408 passed, 1 skipped, 1 warning**.
 - [x] API CI [44882467564](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/44882467564) passou no mesmo commit: auditoria estrita de rotas, migrations PostgreSQL 16, smokes de concorrência/isolamento/retention e **1408 passed, 1 skipped, 1 warning**.
-- [ ] Prosseguir a matriz handler × perfil × loja e caminhos indirectos. A cobertura de ordem de locks foi acrescentada para 22 handlers, mas não prova isolamento de cada recurso nem todos os caminhos indirectos.
+- [ ] Prosseguir a matriz handler × perfil × loja e caminhos indirectos. A cobertura de ordem de locks foi acrescentada para 22 handlers, mas não prova isolamento de cada recurso nem todos os caminhos indirectos. Incremento adicional: `postgres_inventory_authorization_smoke.py` cobre IDs aninhados de `InventoryExternalProductMapping`/eventos — supervisor A acede ao próprio mapping, recebe 404 indistinguível para mapping B sob o path A, não consegue alterar o mapping B e não acede ao path B; ADMIN mantém acesso positivo. Smoke aprovado no API CI `45804056793`.
 - [x] Executar SCA, Gitleaks e ZAP baseline/API safe-mode no workflow 44884714393; o scan não é autenticado e não substitui DAST autenticado/activo.
 
 ## Segurança — scanners automatizados SCA, segredos e DAST (2026-11-21)
@@ -1773,7 +1877,7 @@ A implementação de produção já verificava lease_lost nos caminhos de sucess
 - [x] Resolver a zona antes de criar a prateleira e verificar o tenant associado.
 - [x] Para SUPERVISOR, devolver HTTP 404 tanto para uma zona estrangeira como para um ID inexistente.
 - [x] Preservar a criação same-store e verificar que a tentativa cross-store não persiste uma prateleira.
-- [ ] Executar teste focado, suite API, PostgreSQL 16, Quality Gates, Security Scans e Docker Compose no novo HEAD.
+- [x] Validado no código `eea9cc5d`: auditoria de políticas RBAC passou no API CI `45797706450`, suite API **1739 passed, 1 skipped**, PostgreSQL 16; Quality Gates `45798609654` e Security Scans `45798609531` passaram no HEAD documental `3b288869`; Docker Compose `45797706344` passou.
 - [ ] Continuar auditoria das relações produto-prateleira e IDs directos de tarefas/movimentos.
 
 
@@ -2120,10 +2224,10 @@ Só `MOVEMENT_RECORDED` é emitido nesta fase. Tipos futuros estão reservados n
 - [x] Verificar que o snapshot resultante preserva uma unidade reservada e regista três unidades on-hand.
 - [x] Verificar unicidade do movimento/evento e retry idempotente da tarefa vencedora.
 - [x] Integrar o smoke no workflow API CI.
-- [ ] Executar e confirmar o smoke no PostgreSQL 16 e os quatro workflows no SHA final.
-- [x] Acrescentar cenário PostgreSQL de rollback integral perante falha na inserção do evento de movimento (execução CI pendente).
+- [x] Executar e confirmar o smoke no PostgreSQL 16 e os quatro workflows no SHA `dda035f509a34f4d893f52d2d3cf4aa2c440f0e6`.
+- [x] Acrescentar cenário PostgreSQL de rollback integral perante falha na inserção do evento de movimento; smoke confirmado no API CI.
 
-A tarefa de concorrência está parcialmente concluída até o workflow executar o novo script com sucesso. O teste não define unidade base nem conversões de embalagem.
+A tarefa de concorrência está concluída para o cenário WMS de uma localização configurada. Não define conversões entre unidade base e embalagens.
 
 
 ## 2026-11-25 — Guard de disponibilidade da origem WMS nos movimentos (0088)
@@ -2162,3 +2266,300 @@ Não são feitas conversões automáticas entre unidade, caixa e palete. Os fact
 - [x] Testar UNIT, CASE e PALLET na API, incluindo arredondamento para embalagens fechadas e excesso calculado.
 - [x] Confirmar que o endpoint continua a devolver `automatic_stock_movement_allowed=false`.
 - [x] Validar suite API, TypeScript/build, PostgreSQL smokes, Docker Compose e Security Scans.
+
+
+## 2026-11-25 — Quantidades fraccionárias de exposição por unidade base (migration 0090)
+
+- [x] Corrigir o contrato `ShelfProduct`: `target_quantity` e `min_display_quantity` passam a aceitar quantidades decimais.
+- [x] Persistir ambos os campos em `NUMERIC(12,3)`, coerente com a unidade base do SKU e com os movimentos de inventário.
+- [x] Criar migration 0090 com conversão conservadora dos valores inteiros existentes.
+- [x] Proteger downgrade: recusar conversão para INTEGER enquanto existirem quantidades fraccionárias, sem truncar dados.
+- [x] Acrescentar teste SQLite da migration e regressão API com produto em kg, alvo 20.125 e mínimo 0.375.
+- [x] Rejeitar precisão superior a três casas decimais no contrato da API.
+- [x] Preservar a resposta JSON numérica legada; converter para Decimal apenas na fronteira de persistência e no cálculo interno.
+- [x] Validar suite API completa, migração PostgreSQL 16, Quality Gates, Security Scans e Docker Compose no SHA `dda035f509a34f4d893f52d2d3cf4aa2c440f0e6`.
+
+Motivo: o teste de embalagem já representava um SKU medido em kg com alvo 20.125, mas o schema/API e a coluna SQL ainda eram INTEGER. Corrigida a inconsistência estrutural; não se deve arredondar quantidades físicas nem tratar kg como contagem inteira.
+
+
+## Validação final — migration 0090 e contrato de quantidades decimais (25/11/2026)
+
+- [x] API CI [45625120737](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45625120737): sucesso; migrations PostgreSQL 16, 48 smokes PostgreSQL e suite **1697 passed, 1 skipped**.
+- [x] Quality Gates [45625120955](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45625120955): sucesso; TypeScript/build Web e suite **1697 passed, 1 skipped**.
+- [x] Docker Compose [45625120891](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45625120891): sucesso.
+- [x] Security Scans [45625120718](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45625120718): sucesso; auditorias de dependências, secret scan e ZAP passive baseline.
+- [x] Migration 0090 validada em PostgreSQL 16 e teste SQLite; downgrade recusa truncar valores fraccionários.
+- [x] Resposta HTTP de ShelfProduct mantém números JSON; persistência continua Decimal/Numeric(12,3).
+- [x] Plano de reposição para SKU em kg com target 20.125 e mínimo 0.375; conversões UNIT/CASE/PALLET mantêm exactidão Decimal e não movimentam nem reservam stock.
+
+SHA validado: `dda035f509a34f4d893f52d2d3cf4aa2c440f0e6`. O commit seguinte desta secção altera apenas documentação.
+
+
+## P1 — Precisão e reconciliação do reservado nos snapshots (25/11/2026)
+
+- [x] Confirmar que adapters ERP/WMS já normalizam físico e reservado em Decimal com escala Numeric(12,3).
+- [x] Corrigir o endpoint directo de snapshots: rejeitar quantidades com mais de três casas decimais antes da persistência.
+- [x] Tipar `InventorySnapshot.on_hand_quantity` e `reserved_quantity` como Decimal e converter os valores HTTP de forma explícita.
+- [x] Testar persistência exacta de 10.125 kg físico e 2.375 kg reservado, e rejeição de escala 4 em qualquer dos campos.
+- [x] Validar suite API, PostgreSQL 16, Quality Gates, Security Scans e Docker Compose no código do SHA `900c24f19f47e6720da64775d6904692e104c35f` e documentação do SHA `bc37246a298f3cfe2ae142ea9051cb70beac1e22`.
+- [ ] Auditar semântica de snapshots consecutivos, reservas agregadas e mudanças de localização; não criar ledger local de reservas sem contrato de detalhe do WMS.
+
+Decisão: `reserved_quantity` continua a ser o total reservado reportado pelo WMS para a localização física configurada. O SMART SHELF AI calcula disponível = físico − reservado; não cria nem altera reservas no WMS. Uma tarefa operacional não é uma reserva de stock.
+
+
+### Validação CI da precisão dos snapshots (25/11/2026)
+- [x] API CI [45626116643](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45626116643): sucesso; PostgreSQL 16, smokes e **1698 passed, 1 skipped**.
+- [x] Quality Gates [45626178152](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45626178152): sucesso; TypeScript/build e **1698 passed, 1 skipped**.
+- [x] Docker Compose [45626116401](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45626116401): sucesso.
+- [x] Security Scans [45626178472](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45626178472): sucesso; dependency audits, secret scan e ZAP passive baseline.
+
+
+- [ ] Executar CI/PostgreSQL 16 e corrigir eventuais falhas do ledger de contagens manuais (revision 0091) antes de fechar a prioridade.
+
+
+## 2026-11-25 — Hardening do ledger de contagens manuais (0091)
+
+- [x] Exigir actor autenticado, activo e ADMIN/SUPERVISOR na rota MANUAL; exigir motivo válido.
+- [x] Persistir snapshot e evento append-only na mesma transacção, com rollback integral se o evento falhar.
+- [x] Reforçar o trigger SQLite para exigir actor activo e papel ADMIN ou SUPERVISOR da mesma loja, alinhando-o com PostgreSQL.
+- [x] Acrescentar regressão HTTP para supervisor inactivo.
+- [x] Validar migration 0091 e triggers reais em SQLite/PostgreSQL 16; teste de migration SQLite e smoke PostgreSQL 16 executados.
+- [x] Confirmar API CI, Quality Gates, Security Scans e Docker Compose no HEAD após esta correcção.
+
+
+## 2026-11-25 — Validação efectiva da migration 0091 e auditoria MANUAL
+
+- [x] Criar teste de migration SQLite que executa efectivamente `upgrade()`/`downgrade()` da revisão 0091.
+- [x] Cobrir trigger de proveniência: supervisor activo da loja e ADMIN global aceites; supervisor de outra loja, supervisor inactivo, EMPLOYEE e snapshot não-MANUAL rejeitados.
+- [x] Cobrir UPDATE/DELETE bloqueados no ledger e preservação dos snapshots no downgrade.
+- [x] Criar smoke PostgreSQL 16 com pedidos autenticados e INSERTs directos para validar os triggers reais, incluindo append-only.
+- [x] Integrar smoke PostgreSQL no API CI.
+- [x] Corrigir o smoke de autorização multi-loja que passou a falhar por omitir o motivo obrigatório num pedido MANUAL inválido; manter o teste a alcançar a camada de autorização.
+- [ ] Confirmar execução do teste SQLite 0091 na suite API CI do HEAD actual.
+- [ ] Confirmar API CI, Quality Gates, Security Scans e Docker Compose no mesmo HEAD; não marcar a prioridade global como concluída antes disso.
+
+Evidência final: migration 0091 validada em SQLite e PostgreSQL 16; API CI no SHA `c4f839b` passou com 1707 testes, 1 skipped; workflows principais posteriormente confirmados na main no SHA de código `76fb62d`, com 1715 passed, 1 skipped, Quality Gates, Security Scans e Docker Compose concluídos com sucesso.
+
+
+### Validação final — migration 0091 e ledger MANUAL (25/11/2026)
+
+- [x] Teste SQLite executou efectivamente upgrade/downgrade da migration 0091, verificando proveniência, actor activo, papel, isolamento multi-loja, origem MANUAL e append-only.
+- [x] PostgreSQL 16 `alembic upgrade head` executado com sucesso.
+- [x] Smoke PostgreSQL confirmou SUPERVISOR activo da mesma loja e ADMIN global; rejeitou supervisor inactivo, EMPLOYEE, supervisor de outra loja e snapshot WMS; UPDATE/DELETE rejeitados.
+- [x] Suite API: **1707 passed, 1 skipped**.
+- [x] API CI [45650155916](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45650155916): sucesso.
+- [x] Quality Gates [45650155829](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45650155829): sucesso.
+- [x] Security Scans [45650155800](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45650155800): sucesso.
+- [x] Docker Compose [45650155946](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45650155946): sucesso.
+- [x] Smoke PostgreSQL 16 de proveniência e imutabilidade incluído no workflow API CI.
+- [x] Corrigidos fixtures MANUAL legados que não forneciam motivo nem actor, preservando o objectivo dos testes de autorização e precisão Decimal.
+
+SHA de código e workflows validados: `c4f839bcfd076c2b5575eccfd314fae96983b3ed`.
+
+Próxima prioridade P1: auditar snapshots WMS consecutivos, semântica de reservado agregado, monotonicidade temporal e mudanças de localização; não criar ledger de reservas individuais sem contrato real do WMS.
+
+
+## 2026-11-25 — Proveniência por execução de sincronização (migration 0092)
+
+- [x] Adicionar `inventory_snapshots.source_sync_id` nullable, preservando snapshots históricos, contagens MANUAL e snapshots criados fora do worker sem uma execução de sync.
+- [x] Ligar cada snapshot novo criado pelo orchestrator ao `InventorySourceSync` que o originou.
+- [x] Impedir associação a execução inexistente, de outra loja, de outra origem ou já terminal.
+- [x] PostgreSQL: FK RESTRICT + trigger BEFORE INSERT com lock `FOR SHARE`; SQLite: trigger BEFORE INSERT equivalente, sem rebuild da tabela append-only.
+- [x] Expor `source_sync_id` no contrato de leitura `InventorySnapshotRead`.
+- [x] Preservar lineage original durante replay: uma linha já persistida por uma execução PARTIAL não é reescrita; novas páginas ficam ligadas à nova execução.
+- [x] Teste SQLite da migration 0092 (upgrade/downgrade, correspondência store/source/status, histórico NULL).
+- [x] Teste de integração do orchestrator com adapter WMS.
+- [x] Smoke PostgreSQL 16: página commitada antes de SIGKILL ligada à execução PARTIAL, replay sem duplicação, segunda página ligada à nova execução SUCCESS e escrita tardia contra execução terminal rejeitada.
+- [x] API CI: **1715 passed, 1 skipped** no SHA de branch validado `f63543caabe6df1a2e660f5801c35f53fc3422a1`.
+- [x] Quality Gates, Security Scans e Docker Compose: sucesso no mesmo SHA.
+- [x] Confirmar novamente os quatro workflows no commit de merge `76fb62dfef9280fd8e6b291024be46a9e392e848` da branch `main`: API CI, Quality Gates, Security Scans e Docker Compose passaram.
+
+Próxima prioridade P1: análise temporal ERP/WMS. Actualmente a comparação pode classificar DIVERGENCE quando ambas as fontes estão dentro da janela de freshness, mesmo com instantes de captura bastante diferentes. Definir um contrato de skew temporal (configuração e estado de comparação) antes de aplicar um limite; não inventar um valor operacional.
+
+
+### Confirmação final na branch main — 25/11/2026
+
+- HEAD de documentação: `5259f125500c46ff3e89fad1d8842128fc892db3`; código integrado em `76fb62dfef9280fd8e6b291024be46a9e392e848`.
+- API CI run `45654043683`: sucesso — **1715 passed, 1 skipped**.
+- Quality Gates run `45654278572`: sucesso (API tests/Python compilation e Web TypeScript/build).
+- Security Scans run `45654278738`: sucesso (dependências Python/web, secret scan e ZAP passive baseline).
+- Docker Compose smoke run `45654043988`: sucesso.
+- Os quatro workflows de validação da integração estão confirmados. O check Vercel continua a reportar `build-rate-limit`, que é uma limitação de quota do serviço e não uma falha dos testes/CI GitHub.
+
+
+### Correcção de estado documental — migration 0091
+
+As duas caixas pendentes da secção de validação 0091 foram fechadas com a evidência posterior. A nota de evidência parcial foi substituída pelo resultado final: SQLite e PostgreSQL 16 validados; API CI 1715 passed/1 skipped na integração final; Quality Gates, Security Scans e Docker Compose verdes na main.
+
+
+### Regressão adicional da migration 0092 — 25/11/2026
+
+- [x] Confirmar que o trigger SQLite rejeita também `source_sync_id` inexistente, além de loja/origem divergentes e execução terminal.
+- [x] API CI no HEAD `f7430342a9e52f9d269dd567c23719790fe638a0`: **1715 passed, 1 skipped**.
+- [x] API CI, Quality Gates, Security Scans e Docker Compose no mesmo SHA: sucesso.
+
+
+## P1 — Comparação temporal ERP/WMS (migration 0093)
+
+- [x] Expor o skew absoluto de captura ERP/WMS em segundos.
+- [x] Introduzir tolerância opcional por loja na política ERP, sem valor por defeito (NULL = não configurada).
+- [x] Suspender a comparação quantitativa quando a tolerância não está configurada e os timestamps diferem.
+- [x] Suspender a comparação quantitativa quando o skew excede a tolerância; zero exige timestamps coincidentes.
+- [x] Auditar alterações com actor, valor anterior/novo, motivo e timestamp.
+- [x] Rejeitar configuração na política WMS e valores fora de 0–10080 minutos.
+- [x] Validar migration SQLite/PostgreSQL 16, testes API, Quality Gates, Security Scans e Docker Compose no SHA `b54b2d4c927aee606f23fef35018b701c17aaf5f`.
+- [ ] Homologar tolerâncias por loja com cadência real e documentação do fornecedor ERP/WMS.
+
+Evidência: API CI `45677287479` (**1717 passed, 1 skipped**); Quality Gates `45677287381`; Security Scans `45677287568`; Docker Compose `45677287570` — os quatro workflows concluídos com sucesso no mesmo SHA. A primeira execução revelou uma fixture de ledger que ainda assumia comparação sem tolerância; a fixture foi corrigida para configurar explicitamente a política ERP e a suite voltou a passar.
+
+
+
+## P1 — Snapshots WMS consecutivos, mudança de localização e chegada tardia
+
+- [x] Confirmar que a alteração auditada da localização WMS deixa de considerar snapshots da localização anterior, mesmo que sejam mais recentes.
+- [x] Confirmar que, após a mudança, a ausência de snapshot na nova localização não faz fallback para a localização antiga.
+- [x] Confirmar que um snapshot WMS atrasado, com `captured_at` anterior, permanece no histórico mas não substitui o snapshot mais recente da localização autorizada.
+- [x] Confirmar cálculo de disponibilidade com reserva agregada (`on_hand - reserved`) no snapshot seleccionado.
+- [x] API CI PostgreSQL 16 e suite completa: **1718 passed, 1 skipped** no SHA `fb1470185126dfe295a15b1f69f635aed05b3da3`.
+- [x] Quality Gates, Security Scans e Docker Compose aprovados no mesmo SHA.
+- [ ] Prosseguir a auditoria da semântica de reservas agregadas e correlação de movimentos com snapshots WMS sucessivos; não inventar identidade de reservas individuais sem contrato do fornecedor.
+
+
+
+## P1 — Semântica das reservas agregadas WMS e movimentos sucessivos
+
+- [x] Confirmar que `reserved_quantity` é subtraída uma única vez do `on_hand_quantity` para obter disponibilidade.
+- [x] Confirmar que movimentos anteriores associados ao mesmo snapshot de origem são deduzidos adicionalmente, sem alterar o snapshot WMS imutável.
+- [x] Confirmar que dois movimentos sucessivos não consomem a quantidade reservada e deixam o saldo disponível correcto.
+- [x] Confirmar preservação da reserva agregada nos snapshots internos de resultado (projecção MANUAL), sem os confundir com confirmação WMS.
+- [x] API CI PostgreSQL 16: **1719 passed, 1 skipped** no SHA `043c15f4980b45c4d50d2cd47fb921c5504eccac`; Quality Gates, Security Scans e Docker Compose aprovados no mesmo SHA.
+- [ ] Evoluir confirmação externa WMS e correlação de snapshots posteriores apenas com contrato de fornecedor e identidade inequívoca; não inferir confirmação a partir de alteração de quantidade.
+
+
+
+## P1 — Proveniência física imutável do destino dos movimentos (migration 0094)
+
+- [x] Persistir `destination_shelf_code` como snapshot do código físico da prateleira no momento do movimento.
+- [x] Capturar o destino sob lock e confirmar que a prateleira pertence à loja da tarefa.
+- [x] Incluir o código do destino no contrato de leitura e na evidência do evento `MOVEMENT_RECORDED`.
+- [x] Backfill histórico a partir da tarefa/prateleira; abortar a migration perante movimentos sem destino consistente.
+- [x] Impor no PostgreSQL/SQLite a correspondência tarefa → prateleira → zona/loja e impedir código de destino forjado.
+- [x] Validar migration SQLite, API, PostgreSQL 16, smoke de linhagem, concorrência, Quality Gates, Security Scans e Docker Compose.
+- [ ] Definir política de retenção/identidade para prateleiras eliminadas ou reestruturadas; preservar o snapshot do destino sem depender do nome actual.
+
+Evidência no SHA `3f4c9740ce70e932c5cb35745e96edd1163bf864`: API CI **1720 passed, 1 skipped**; smoke PostgreSQL de linhagem e concorrência passou; restantes workflows passaram.
+
+
+## P1 — Identidade física completa e retenção do destino (migration 0095)
+
+- [x] Persistir `destination_zone_id` e `destination_zone_name` juntamente com o ID/código da prateleira.
+- [x] Distinguir evidência capturada no movimento (`destination_location_backfilled=false`) de valores históricos reconstruídos pela hierarquia actual na migration (`true`).
+- [x] Validar tarefa, prateleira, zona, loja, códigos e nomes nas guardas PostgreSQL/SQLite.
+- [x] Preservar os valores históricos quando prateleira e zona são renomeadas.
+- [x] Confirmar que a eliminação da prateleira/zona referenciada por um movimento é bloqueada pela cadeia de retenção task → movement.
+- [x] API CI PostgreSQL 16, smoke de linhagem/retention, migration SQLite, Quality Gates, Security Scans e Docker Compose.
+- [ ] Se existir necessidade de apagar fisicamente entidades de catálogo, desenhar soft-delete/arquivamento explícito e compatível com histórico; não enfraquecer FKs nem apagar movimentos.
+
+Evidência no SHA `48fdf8310d1b17179ba6520d7a559b3bcc822c7f`: API CI **1722 passed, 1 skipped**; smoke PostgreSQL confirmou renomeação e bloqueio de eliminação; restantes workflows passaram. Limitação: a hierarquia histórica anterior à migration não é recuperável quando não existia auditoria de renomeações; os registos antigos ficam marcados como backfill.
+
+
+## P0/P1 — Retenção de evidência operacional da hierarquia de prateleiras (migrations 0096–0098)
+
+- [x] Migration 0096 impede eliminar prateleiras/zonas com histórico de tarefas.
+- [x] Migration 0097 torna os eventos de tarefa append-only, bloqueia a eliminação de tarefas auditadas e congela loja/prateleira/produto depois do primeiro evento.
+- [x] Migration 0098 impede cascades sobre observações, alertas, associações SKU-prateleira, planogramas, reconciliações, tarefas, sessões de captura, imagens e inbox de eventos Edge.
+- [x] Testes SQLite cobrem cada tabela com referência direta à prateleira e a possibilidade de eliminar apenas quando não existe evidência.
+- [x] Smoke PostgreSQL confirma que uma imagem ACTIVE com legal hold, mesmo sem tarefa de reposição, impede eliminar a prateleira e a zona.
+- [x] API CI PostgreSQL 16, suite API, Quality Gates, Security Scans e Docker Compose aprovados.
+- [x] Histórico de movimentos na Web expõe prateleira/zona de destino e distingue captura contemporânea de backfill histórico.
+
+Evidência no SHA `7bf95468320fc1dd4ab992b520e855d463b6e1f6`: API CI **1725 passed, 1 skipped**; Quality Gates, Security Scans e Docker Compose concluídos com sucesso. A validação PostgreSQL exercitou as guardas de retenção, auditoria e imutabilidade.
+
+- [ ] Se a operação necessitar de ocultar zonas/prateleiras descontinuadas, desenhar arquivamento/soft-delete com autorização, auditoria e preservação de histórico. Não disponibilizar eliminação física como substituto.
+
+
+## P0 — Concorrência e auditoria das transições de estado das tarefas
+
+- [x] Confirmar bloqueio da linha da tarefa com autorização por loja antes e depois do lock (`SELECT ... FOR UPDATE` em PostgreSQL).
+- [x] Cobrir duas atribuições concorrentes: exactamente uma transição e um evento `STATUS_CHANGED`.
+- [x] Cobrir concorrência entre `COMPLETED` e `CANCELLED`: exactamente um pedido vence; o outro recebe HTTP 409; o ledger contém apenas a transição terminal vencedora.
+- [x] Verificar que a transição terminal preserva quantidade/motivo correctos e que uma tarefa terminal não pode ser reaberta.
+- [x] Injectar falha depois do flush do evento e confirmar rollback atómico do estado e da auditoria.
+- [x] API CI PostgreSQL 16: **1725 passed, 1 skipped** no SHA `cfeeab3f4e092709de9eccb0dfc54397f72f12af`; Quality Gates, Security Scans e Docker Compose aprovados no mesmo SHA.
+- [ ] Manter pendente o arquivamento/soft-delete de prateleiras e zonas até existir requisito operacional; não enfraquecer as guardas de retenção.
+
+A transição usa lock pessimista da tarefa e valida o estado já actualizado após adquirir o lock. A prova concorrente é executada com pedidos HTTP concorrentes em PostgreSQL e não é inferida dos testes SQLite.
+
+
+## P0 — Autorização explícita do histórico de eventos de tarefas
+
+- [x] Confirmar política de rota `SUPERVISOR_OR_ADMIN` para `GET /api/v1/tasks/{task_id}/events`.
+- [x] Reforçar a autorização no handler: EMPLOYEE recebe HTTP 403, incluindo quando consulta tarefa atribuída a si próprio; a auditoria detalhada fica reservada a supervisores e administradores.
+- [x] Manter SUPERVISOR limitado à loja e ADMIN com leitura global.
+- [x] Testar negação uniforme para tarefa própria, tarefa de colega, tarefa não atribuída e ID inexistente quando o actor é EMPLOYEE.
+- [x] API CI `45716057516`, Quality Gates `45716057563`, Security Scans `45716057667` e Docker Compose `45716057580`: todos concluídos com sucesso no SHA `f925b875f871964ce80805c4927af15616f58774`.
+
+
+
+## P0 — Defesa em profundidade nas operações de eventos de paletes
+
+- [x] Reforçar no handler de leitura de eventos de palete a autorização `SUPERVISOR_OR_ADMIN` definida na política central.
+- [x] Reforçar a mesma autorização no handler de registo de transições/alterações de palete, antes de bloquear ou alterar o registo.
+- [x] Testar que EMPLOYEE recebe 403 tanto na leitura como na escrita, sem alteração de estado nem criação de evento.
+- [x] Testar que SUPERVISOR consegue ler o histórico e registar uma transição válida.
+- [x] API CI `45716912538`, Quality Gates `45716912911`, Security Scans `45716912543` e Docker Compose `45716912421`: sucesso no SHA `50df52e59eca47aa2dfc868fc16621cf2f636586`.
+
+
+## P0 — RBAC explícito no catálogo de lojas e snapshots de inventário
+
+- [x] Reforçar GET `/api/v1/stores`: apenas ADMIN/SUPERVISOR, coerente com a política central.
+- [x] Exigir ADMIN/SUPERVISOR para criar snapshots de qualquer origem (ERP/WMS/POS/MANUAL/IMPORT), não apenas para contagens MANUAL.
+- [x] Exigir ADMIN/SUPERVISOR na listagem de snapshots e na consulta do snapshot mais recente.
+- [x] Testar que EMPLOYEE recebe 403 nos quatro endpoints e que a tentativa de ingestão não persiste snapshot.
+- [x] Corrigir regressão encontrada na primeira execução: o handler de listagem ainda permitia leitura em contexto de teste/direct-call; a guarda foi adicionada e a suite repetida.
+- [x] API CI `45718367981`: **1728 passed, 1 skipped**; Quality Gates `45718367943`, Security Scans `45718367972` e Docker Compose `45718367912` — sucesso no SHA `19bf8dd2bf2b6990faff261effc0752523f59a5b`.
+
+
+## P0/P1 — RBAC explícito na ingestão POS de vendas e tráfego
+
+- [x] Exigir ADMIN/SUPERVISOR nos endpoints de registo horário de vendas e tráfego.
+- [x] Exigir ADMIN/SUPERVISOR nos endpoints batch de vendas e tráfego.
+- [x] Exigir ADMIN/SUPERVISOR nos imports CSV horário de vendas e tráfego, antes de ler/processar o ficheiro.
+- [x] Testar os seis endpoints com actor EMPLOYEE: todos devolvem 403 e não persistem linhas.
+- [x] API CI `45719344000`: **1729 passed, 1 skipped**; Quality Gates `45719344142`, Security Scans `45719343998` e Docker Compose `45719344004` — sucesso no SHA `d36af7332544204fc14b6764a3faf99c24aa4741`.
+
+
+## P0/P1 — RBAC explícito na persistência de evidência OCR e fusão visual/textual
+
+- [x] Exigir ADMIN/SUPERVISOR para criar execuções OCR persistidas.
+- [x] Exigir ADMIN/SUPERVISOR para gerar/actualizar correspondências OCR com o catálogo.
+- [x] Exigir ADMIN/SUPERVISOR para persistir fusão de evidência visual + OCR.
+- [x] Testar actor EMPLOYEE nos três endpoints: todos devolvem 403 antes de bloquear/alterar a captura e nenhuma execução, correspondência ou fusão é persistida.
+- [x] API CI `45720266566`: **1730 passed, 1 skipped**; Quality Gates `45720266628`, Security Scans `45720266508` e Docker Compose `45720266578` — sucesso no SHA `a9271dd595c7d913a93cd969cf73d58b5e49438d`.
+
+
+## P0/P1 — RBAC explícito nas mutações de warehouse e rotação de paletes
+
+- [x] Exigir ADMIN/SUPERVISOR para criar localizações de armazém e colocações de produto.
+- [x] Exigir ADMIN/SUPERVISOR para registar paletes físicas.
+- [x] Exigir ADMIN/SUPERVISOR para criar/alterar políticas de rotação e executar simulações.
+- [x] Testar seis operações com actor EMPLOYEE: todas devolvem 403 antes da leitura/mutação e não criam localizações, colocações, paletes ou políticas.
+- [x] API CI `45721215742`: **1731 passed, 1 skipped**; Quality Gates `45721215822`, Security Scans `45721215637` e Docker Compose `45721215724` — sucesso no SHA `3f63efd0da73070cc1654e76ea58ecfe0e79ca93`.
+
+
+
+## P0 — Integridade referencial de alertas e reconciliações (migration 0099)
+
+- [x] Criar migration 0099 com preflight fail-closed para alertas e reconciliações históricas; não há backfill nem alteração automática de evidência.
+- [x] Validar alertas contra a loja efectiva da prateleira e a associação SKU–prateleira em `shelf_products`.
+- [x] Validar reconciliações contra loja/prateleira, associação SKU–prateleira, observação (mesma prateleira e SKU) e cada snapshot opcional (mesma loja e SKU).
+- [x] Impedir que alterações posteriores à associação SKU–prateleira, observação ou hierarquia invalidem evidência já retida.
+- [x] Implementar variantes PostgreSQL com locks `FOR SHARE` sobre as linhas de origem e SQLite com triggers equivalentes.
+- [x] Publicar teste SQLite para associações incompatíveis, snapshots cruzados, preservação sem persistência parcial, alterações a relações de origem e rejeição do preflight.
+- [x] Validar upgrade, integridade/concorrência PostgreSQL 16 e gates globais no commit `024b76241b8a116d9930ea448dd6668f434926c2`: API CI `45794895213`, Quality Gates `45794895243`, Security Scans `45794895272` e Demo Docker Compose `45794895899` terminaram com sucesso. O smoke 0099 confirmou lock wait real em `pg_stat_activity` para transferência cross-store da zona e remoção de associação SKU; ambas foram rejeitadas após a transacção de evidência confirmar. Os quatro testes antigos foram alinhados com a política ADMIN_ONLY nos fixtures, sem alterar autorização de produção.
+- [x] Validar no API CI `45795924709` o smoke `postgres_shelf_reconciliation_lineage_migration_cycle_smoke.py`: numa base PostgreSQL 16 isolada, upgrade para 0099, downgrade para 0098 com remoção dos seis triggers/cinco funções e reaplicação de 0099 com recriação dos objectos — sucesso. A base partilhada de CI e produção nunca são sujeitas a downgrade.
+- [x] Adicionar smoke PostgreSQL dedicado e ligá-lo ao API CI para competir inserção de alerta com transferência de zona e remoção da associação SKU; execução aprovada no API CI `45795924709`.
+- [x] Validar concorrência específica de `InventoryReconciliation` contra alteração da observação de origem: API CI `45797706450` confirmou lock wait real em `pg_stat_activity`, rejeição da alteração concorrente e preservação da linhagem; suite completa **1739 passed, 1 skipped**.
+- [x] Tornar determinística e específica a observação do bloqueio: capturar os PIDs PostgreSQL do contender e da transacção de evidência; exigir `wait_event_type = 'Lock'` e que o PID esperado esteja em `pg_blocking_pids(pid)`. Validado no commit `9a78d2f185ba2bcdf5ff043097f4895639125a09`: API CI `45812501875`, Quality Gates `45812501507`, Security Scans `45812501427` e Docker Compose `45812501364` passaram; suite API **1740 passed, 1 skipped**.
+
+A migration não altera snapshots, não enfraquece a retenção 0098 e não modifica a semântica das FKs existentes. O downgrade remove apenas as guardas introduzidas em 0099. A validação de dados históricos é deliberadamente bloqueante.

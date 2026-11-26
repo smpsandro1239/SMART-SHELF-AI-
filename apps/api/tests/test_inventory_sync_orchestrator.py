@@ -62,3 +62,39 @@ async def test_provider_page_fetch_stops_after_retry_limit():
     with pytest.raises(RuntimeError, match="bounded retries"):
         await _fetch_page(adapter, "STORE-1", None, 2)
     assert adapter.calls == 3
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("on_hand_quantity", Decimal("11.000")),
+        ("reserved_quantity", Decimal("3.000")),
+        ("location_code", "BACKROOM-B"),
+        ("availability_status", "UNAVAILABLE"),
+        ("captured_at", datetime(2026, 11, 24, 12, 1, tzinfo=timezone.utc)),
+    ],
+)
+def test_external_reference_replay_rejects_changed_stock_or_provenance(field, value):
+    existing = SimpleNamespace(
+        on_hand_quantity=Decimal("10.000"),
+        reserved_quantity=Decimal("2.000"),
+        location_code="BACKROOM-A",
+        availability_status="AVAILABLE",
+        captured_at=datetime(2026, 11, 24, 12, 0),
+    )
+    setattr(existing, field, value)
+    assert not _same_snapshot(existing, _record())
+
+
+def test_normalized_inventory_record_rejects_reserved_above_physical_stock():
+    with pytest.raises(ValueError, match="reserved_quantity cannot exceed on_hand_quantity"):
+        NormalizedInventoryRecord(
+            external_product_id="ext-1",
+            sku="SKU-1",
+            on_hand_quantity=Decimal("10.000"),
+            reserved_quantity=Decimal("10.001"),
+            captured_at=datetime(2026, 11, 24, 12, 0, tzinfo=timezone.utc),
+            external_reference="row-invalid",
+            location_code="BACKROOM-A",
+            availability_status="AVAILABLE",
+        )

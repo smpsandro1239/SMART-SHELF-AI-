@@ -405,16 +405,18 @@ def test_failed_image_analysis_can_be_retried_by_store_supervisor(tmp_path, monk
     import app.main as main_module
 
     monkeypatch.setattr(settings, "image_storage_path", str(tmp_path))
-    actor = SimpleNamespace(id=77, role="SUPERVISOR", store_id=None)
+    actor = SimpleNamespace(id=77, role="ADMIN", store_id=None)
     monkeypatch.setattr(main_module, "_request_user", lambda db, request: actor)
     Base.metadata.drop_all(bind=TEST_ENGINE)
     Base.metadata.create_all(bind=TEST_ENGINE)
 
     with TestClient(app) as client:
         store = client.post("/api/v1/stores", json={"code": "RETRY-01", "name": "Loja retry"})
+        assert store.status_code == 201, store.text
         actor.store_id = store.json()["id"]
         zone = client.post("/api/v1/zones", json={"store_id": actor.store_id, "name": "Bebidas"})
         shelf = client.post("/api/v1/shelves", json={"zone_id": zone.json()["id"], "code": "RT-01"})
+        actor.role = "SUPERVISOR"
         uploaded = client.post(
             "/api/v1/shelf-images",
             data={"shelf_id": str(shelf.json()["id"])},
@@ -524,6 +526,62 @@ def test_shelf_observation_consensus_endpoint_enforces_store_scope(monkeypatch):
         response = client.get(f"/api/v1/shelves/{shelf.json()['id']}/observation-consensus")
         assert response.status_code == 404
 
+
+
+
+def test_shelf_observation_consensus_rechecks_tenant_on_evidence_query(monkeypatch):
+    from datetime import datetime, timezone
+    from types import SimpleNamespace
+    import app.main as main_module
+
+    Base.metadata.drop_all(bind=TEST_ENGINE)
+    Base.metadata.create_all(bind=TEST_ENGINE)
+    with TestClient(app) as client:
+        store_a = client.post("/api/v1/stores", json={"code": "CONS-RACE-A", "name": "Loja A"}).json()
+        store_b = client.post("/api/v1/stores", json={"code": "CONS-RACE-B", "name": "Loja B"}).json()
+        zone = client.post(
+            "/api/v1/zones",
+            json={"store_id": store_a["id"], "name": "Zona A"},
+        ).json()
+        shelf = client.post(
+            "/api/v1/shelves",
+            json={"zone_id": zone["id"], "code": "CONS-RACE-SHELF"},
+        ).json()
+        observation = client.post(
+            "/api/v1/observations",
+            json={
+                "shelf_id": shelf["id"],
+                "source": "simulation",
+                "status": "LOW_STOCK",
+                "confidence": 0.95,
+                "observed_at": datetime.now(timezone.utc).isoformat(),
+            },
+        )
+        assert observation.status_code == 201, observation.text
+
+        monkeypatch.setattr(
+            main_module,
+            "_request_user",
+            lambda db, request: SimpleNamespace(id=91, role="SUPERVISOR", store_id=store_a["id"]),
+        )
+        original_scope = main_module._get_store_scoped_shelf
+
+        def reassign_after_preflight(db, shelf_id, actor):
+            scoped_shelf = original_scope(db, shelf_id, actor)
+            db.query(models.Zone).filter(models.Zone.id == zone["id"]).update(
+                {models.Zone.store_id: store_b["id"]},
+                synchronize_session=False,
+            )
+            db.commit()
+            return scoped_shelf
+
+        monkeypatch.setattr(main_module, "_get_store_scoped_shelf", reassign_after_preflight)
+        response = client.get(f"/api/v1/shelves/{shelf['id']}/observation-consensus")
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["store_id"] == store_a["id"]
+        assert body["evaluated_observations"] == 0
+        assert body["consensus"]["status"] != "CONFIRMED"
 
 
 def test_observation_product_must_be_assigned_to_shelf():
@@ -894,3 +952,140 @@ def test_cross_store_alert_event_history_is_denied(monkeypatch):
         admin_history = client.get(history_url)
         assert admin_history.status_code == 200, admin_history.text
         assert [event["event_type"] for event in admin_history.json()] == ["CREATED"]
+
+
+def test_shelf_write_endpoints_lock_and_revalidate_store_scope(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    from app.config import settings
+    import app.main as main_module
+
+    monkeypatch.setattr(settings, "image_storage_path", str(tmp_path))
+    Base.metadata.drop_all(bind=TEST_ENGINE)
+    Base.metadata.create_all(bind=TEST_ENGINE)
+
+    with TestClient(app) as client:
+        store_a = client.post(
+            "/api/v1/stores", json={"code": "SHELF-LOCK-A", "name": "Loja A"}
+        ).json()
+        store_b = client.post(
+            "/api/v1/stores", json={"code": "SHELF-LOCK-B", "name": "Loja B"}
+        ).json()
+        zone_a = client.post(
+            "/api/v1/zones", json={"store_id": store_a["id"], "name": "Zona A"}
+        ).json()
+        zone_b = client.post(
+            "/api/v1/zones", json={"store_id": store_b["id"], "name": "Zona B"}
+        ).json()
+        shelf_a = client.post(
+            "/api/v1/shelves", json={"zone_id": zone_a["id"], "code": "LOCK-A"}
+        ).json()
+        shelf_a_other = client.post(
+            "/api/v1/shelves", json={"zone_id": zone_a["id"], "code": "LOCK-A2"}
+        ).json()
+        shelf_b = client.post(
+            "/api/v1/shelves", json={"zone_id": zone_b["id"], "code": "LOCK-B"}
+        ).json()
+
+        foreign_session = client.post(
+            "/api/v1/capture-sessions",
+            json={"shelf_id": shelf_b["id"], "source_type": "mobile"},
+        )
+        assert foreign_session.status_code == 201, foreign_session.text
+
+        monkeypatch.setattr(
+            main_module,
+            "_request_user",
+            lambda db, request: SimpleNamespace(
+                id=None, role="SUPERVISOR", store_id=store_a["id"]
+            ),
+        )
+
+        observation_foreign = client.post(
+            "/api/v1/observations",
+            json={
+                "shelf_id": shelf_b["id"],
+                "source": "simulation",
+                "status": "LOW_STOCK",
+                "confidence": 0.9,
+            },
+        )
+        assert observation_foreign.status_code == 404
+
+        observation_missing = client.post(
+            "/api/v1/observations",
+            json={
+                "shelf_id": 2147483000,
+                "source": "simulation",
+                "status": "LOW_STOCK",
+                "confidence": 0.9,
+            },
+        )
+        assert observation_missing.status_code == 404
+
+        observation_own = client.post(
+            "/api/v1/observations",
+            json={
+                "shelf_id": shelf_a["id"],
+                "source": "simulation",
+                "status": "LOW_STOCK",
+                "confidence": 0.9,
+            },
+        )
+        assert observation_own.status_code == 201, observation_own.text
+
+        session_foreign = client.post(
+            "/api/v1/capture-sessions",
+            json={"shelf_id": shelf_b["id"], "source_type": "mobile"},
+        )
+        assert session_foreign.status_code == 404
+
+        session_own = client.post(
+            "/api/v1/capture-sessions",
+            json={"shelf_id": shelf_a["id"], "source_type": "mobile"},
+        )
+        assert session_own.status_code == 201, session_own.text
+
+        upload_foreign_shelf = client.post(
+            "/api/v1/shelf-images",
+            data={"shelf_id": str(shelf_b["id"])},
+            files={"image": ("foreign.png", _valid_image_bytes(), "image/png")},
+        )
+        assert upload_foreign_shelf.status_code == 404
+
+        upload_foreign_session = client.post(
+            "/api/v1/shelf-images",
+            data={
+                "shelf_id": str(shelf_a["id"]),
+                "capture_session_id": str(foreign_session.json()["id"]),
+            },
+            files={"image": ("foreign-session.png", _valid_image_bytes(), "image/png")},
+        )
+        assert upload_foreign_session.status_code == 404
+
+        upload_mismatched_session = client.post(
+            "/api/v1/shelf-images",
+            data={
+                "shelf_id": str(shelf_a_other["id"]),
+                "capture_session_id": str(session_own.json()["id"]),
+            },
+            files={"image": ("mismatched.png", _valid_image_bytes(), "image/png")},
+        )
+        assert upload_mismatched_session.status_code == 422
+
+        upload_own = client.post(
+            "/api/v1/shelf-images",
+            data={
+                "shelf_id": str(shelf_a["id"]),
+                "capture_session_id": str(session_own.json()["id"]),
+            },
+            files={"image": ("own.png", _valid_image_bytes(), "image/png")},
+        )
+        assert upload_own.status_code == 201, upload_own.text
+
+        db = TestingSession()
+        try:
+            assert db.query(models.Observation).filter_by(shelf_id=shelf_b["id"]).count() == 0
+            assert db.query(models.ShelfImage).filter_by(shelf_id=shelf_b["id"]).count() == 0
+            assert db.query(models.ShelfImage).filter_by(shelf_id=shelf_a_other["id"]).count() == 0
+        finally:
+            db.close()

@@ -447,6 +447,10 @@ def test_reconciliation_creates_immutable_movement_and_result_snapshot(monkeypat
         assert movement["operation_id"]
         assert movement["source_location_code"] == "BACKROOM-A"
         assert movement["destination_shelf_id"] is not None
+        assert movement["destination_shelf_code"].startswith("REC-")
+        assert movement["destination_zone_id"] is not None
+        assert movement["destination_zone_name"]
+        assert movement["destination_location_backfilled"] is False
         assert movement["quantity"] == 4
         assert movement["source_snapshot_id"] == source_snapshot_id
         assert movement["movement_type"] == "BACKROOM_TO_SHELF"
@@ -953,6 +957,12 @@ def test_inventory_reconciliation_compares_fresh_erp_and_wms_snapshots(monkeypat
 
         actor = _supervisor_actor(store_id)
         monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: actor)
+        configured_skew = client.post("/api/v1/inventory/freshness-policies", json={
+            "store_id": store_id, "source": "ERP", "max_age_minutes": 240,
+            "comparison_skew_tolerance_minutes": 5,
+            "reason": "Tolerância temporal aprovada para reconciliação ERP/WMS",
+        })
+        assert configured_skew.status_code == 200, configured_skew.text
         response = client.get(
             "/api/v1/inventory/reconciliation",
             params={"store_id": store_id},
@@ -966,6 +976,8 @@ def test_inventory_reconciliation_compares_fresh_erp_and_wms_snapshots(monkeypat
         assert item["erp_freshness_status"] == "CURRENT"
         assert item["wms_freshness_status"] == "CURRENT"
         assert item["wms_erp_available_delta"] == -2
+        assert item["erp_wms_capture_skew_seconds"] is not None
+        assert item["erp_wms_capture_skew_tolerance_minutes"] == 5
         assert item["wms_erp_comparison_status"] == "DIVERGENCE"
 
         with TestingSession() as db:
@@ -1165,6 +1177,12 @@ def test_inventory_reconciliation_ledger_persists_evidence_and_requires_independ
 
         creator = _supervisor_actor(store_id)
         monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: creator)
+        configured_skew = client.post("/api/v1/inventory/freshness-policies", json={
+            "store_id": store_id, "source": "ERP", "max_age_minutes": 240,
+            "comparison_skew_tolerance_minutes": 5,
+            "reason": "Tolerância temporal aprovada para evidência de reconciliação",
+        })
+        assert configured_skew.status_code == 200, configured_skew.text
         created = client.post("/api/v1/inventory/reconciliations", json={
             "store_id": store_id, "shelf_id": shelf["id"],
             "product_id": product_id, "reason": "Controlo periódico da loja",
@@ -1535,6 +1553,29 @@ def test_wms_backroom_location_is_configurable_per_store_through_policy_api(monk
         assert invalid.status_code == 422
 
 
+def test_shelf_product_quantities_reject_precision_beyond_numeric_scale():
+    with TestClient(app) as client:
+        store_id, product_id = create_store_and_product(client, unit="kg")
+        zone = client.post(
+            "/api/v1/zones",
+            json={"store_id": store_id, "name": "Zona de validação decimal"},
+        )
+        shelf = client.post(
+            "/api/v1/shelves",
+            json={"zone_id": zone.json()["id"], "code": f"DECIMAL-{uuid4().hex[:6]}"},
+        )
+        response = client.post(
+            "/api/v1/shelf-products",
+            json={
+                "shelf_id": shelf.json()["id"],
+                "product_id": product_id,
+                "target_quantity": 1.2345,
+                "min_display_quantity": 0,
+            },
+        )
+        assert response.status_code == 422, response.text
+
+
 def test_replenishment_plan_includes_read_only_packaging_options_for_unit_case_and_pallet():
     with TestClient(app) as client:
         store_id, product_id = create_store_and_product(client, unit="kg")
@@ -1552,9 +1593,11 @@ def test_replenishment_plan_includes_read_only_packaging_options_for_unit_case_a
             "shelf_id": shelf.json()["id"],
             "product_id": product_id,
             "target_quantity": 20.125,
-            "min_display_quantity": 2,
+            "min_display_quantity": 0.375,
         })
         assert assignment.status_code == 201, assignment.text
+        assert assignment.json()["target_quantity"] == 20.125
+        assert assignment.json()["min_display_quantity"] == 0.375
 
         with TestingSession() as db:
             db.add(models.InventoryFreshnessPolicy(
@@ -1607,7 +1650,7 @@ def test_replenishment_plan_includes_read_only_packaging_options_for_unit_case_a
         items = [
             item
             for group in response.json()["groups"]
-            for item in group["items"]
+            for item in group["tasks"]
         ]
         assert len(items) == 1
         item = items[0]
@@ -1635,6 +1678,57 @@ def test_replenishment_plan_includes_read_only_packaging_options_for_unit_case_a
         with TestingSession() as db:
             assert db.query(models.ReplenishmentTask).filter_by(store_id=store_id).count() == 0
             assert db.query(models.InventoryMovement).filter_by(store_id=store_id).count() == 0
+
+
+def test_inventory_snapshot_persists_exact_decimal_physical_and_reserved_quantities(monkeypatch):
+    with TestClient(app) as client:
+        store_id, product_id = create_store_and_product(client, unit="kg")
+        actor = _supervisor_actor(store_id)
+        monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: actor)
+        response = client.post(
+            "/api/v1/inventory/snapshots",
+            json={
+                "store_id": store_id,
+                "product_id": product_id,
+                "on_hand_quantity": 10.125,
+                "reserved_quantity": 2.375,
+                "source": "MANUAL",
+                "reason": "Exact decimal manual count regression",
+                "external_reference": f"DECIMAL-SNAPSHOT-{uuid4().hex}",
+            },
+        )
+        assert response.status_code == 201, response.text
+        assert response.json()["on_hand_quantity"] == 10.125
+        assert response.json()["reserved_quantity"] == 2.375
+
+        with TestingSession() as db:
+            persisted = db.get(models.InventorySnapshot, response.json()["id"])
+            assert persisted is not None
+            assert str(persisted.on_hand_quantity) == "10.125"
+            assert str(persisted.reserved_quantity) == "2.375"
+
+        invalid_quantities = (
+            {"on_hand_quantity": 10.1234, "reserved_quantity": 2.0},
+            {"on_hand_quantity": 10.0, "reserved_quantity": 2.0001},
+        )
+        for index, quantities in enumerate(invalid_quantities):
+            invalid = client.post(
+                "/api/v1/inventory/snapshots",
+                json={
+                    "store_id": store_id,
+                    "product_id": product_id,
+                    **quantities,
+                    "source": "MANUAL",
+                    "reason": "Invalid decimal manual count regression",
+                    "external_reference": f"INVALID-DECIMAL-SNAPSHOT-{index}-{uuid4().hex}",
+                },
+            )
+            assert invalid.status_code == 422, invalid.text
+
+        with TestingSession() as db:
+            assert db.query(models.InventorySnapshot).filter_by(
+                store_id=store_id, product_id=product_id,
+            ).count() == 1
 
 
 def test_inventory_movement_freezes_product_base_unit_and_exact_decimal_quantity(monkeypatch):
@@ -1798,3 +1892,698 @@ def test_movement_event_insert_failure_rolls_back_movement_snapshot_and_task_aud
             assert db.query(models.InventorySnapshot).count() == 1
             assert db.query(models.ReplenishmentTaskEvent).filter_by(task_id=task_id, event_type="INVENTORY_RECONCILED").count() == 0
 
+
+
+
+def test_manual_inventory_snapshot_requires_actor_supervisor_and_reason(monkeypatch):
+    with TestClient(app) as client:
+        store_id, product_id = create_store_and_product(client)
+        payload = {"store_id": store_id, "product_id": product_id, "on_hand_quantity": 12, "source": "MANUAL", "reason": "Contagem física validada."}
+        monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: None)
+        assert client.post("/api/v1/inventory/snapshots", json=payload).status_code == 401
+        employee = _supervisor_actor(store_id, role="EMPLOYEE")
+        monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: employee)
+        assert client.post("/api/v1/inventory/snapshots", json=payload).status_code == 403
+        inactive_supervisor = _supervisor_actor(store_id)
+        inactive_supervisor.is_active = False
+        monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: inactive_supervisor)
+        assert client.post("/api/v1/inventory/snapshots", json=payload).status_code == 401
+        supervisor = _supervisor_actor(store_id)
+        monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: supervisor)
+        for reason in ("", "   ", "abc", "linha" + chr(10) + "quebrada"):
+            response = client.post("/api/v1/inventory/snapshots", json={**payload, "reason": reason})
+            assert response.status_code == 422, response.text
+        assert client.post("/api/v1/inventory/snapshots", json={**payload, "reason": None}).status_code == 422
+
+
+def test_manual_inventory_snapshot_and_event_are_committed_together(monkeypatch):
+    with TestClient(app) as client:
+        store_id, product_id = create_store_and_product(client)
+        actor = _supervisor_actor(store_id)
+        monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: actor)
+        payload = {"store_id": store_id, "product_id": product_id, "on_hand_quantity": 12, "source": "MANUAL", "reason": "Contagem cíclica corredor A."}
+        response = client.post("/api/v1/inventory/snapshots", json=payload)
+        assert response.status_code == 201, response.text
+        with TestingSession() as db:
+            snapshot = db.query(models.InventorySnapshot).filter_by(source="MANUAL").one()
+            event = db.query(models.InventoryManualCountEvent).one()
+            assert (event.snapshot_id, event.store_id, event.product_id, event.actor_user_id) == (snapshot.id, store_id, product_id, actor.id)
+            assert event.reason == payload["reason"]
+
+
+def test_manual_inventory_event_failure_rolls_back_snapshot(monkeypatch):
+    with TestClient(app) as client:
+        store_id, product_id = create_store_and_product(client)
+        actor = _supervisor_actor(store_id)
+        monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: actor)
+        with TestingSession() as db:
+            db.connection().exec_driver_sql("CREATE TRIGGER fail_manual_count_insert BEFORE INSERT ON inventory_manual_count_events BEGIN SELECT RAISE(ABORT, 'forced failure'); END")
+        response = client.post("/api/v1/inventory/snapshots", json={
+            "store_id": store_id, "product_id": product_id, "on_hand_quantity": 7,
+            "source": "MANUAL", "reason": "Teste de rollback transaccional."
+        })
+        assert response.status_code == 409, response.text
+        with TestingSession() as db:
+            assert db.query(models.InventorySnapshot).filter_by(source="MANUAL").count() == 0
+            assert db.query(models.InventoryManualCountEvent).count() == 0
+
+
+def test_manual_inventory_event_sql_immutability_and_store_product_binding(monkeypatch):
+    with TestClient(app) as client:
+        store_a, product_a = create_store_and_product(client)
+        store_b, product_b = create_store_and_product(client)
+        actor = _supervisor_actor(store_a)
+        monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: actor)
+        response = client.post("/api/v1/inventory/snapshots", json={
+            "store_id": store_a, "product_id": product_a, "on_hand_quantity": 9,
+            "source": "MANUAL", "reason": "Contagem validada na loja A."
+        })
+        assert response.status_code == 201, response.text
+        with TestingSession() as db:
+            db.connection().exec_driver_sql("""
+                CREATE TRIGGER test_manual_count_event_provenance BEFORE INSERT ON inventory_manual_count_events
+                BEGIN
+                    SELECT CASE WHEN NOT EXISTS (
+                        SELECT 1 FROM inventory_snapshots s
+                        WHERE s.id=NEW.snapshot_id AND s.store_id=NEW.store_id
+                          AND s.product_id=NEW.product_id AND s.source='MANUAL'
+                    ) OR NOT EXISTS (
+                        SELECT 1 FROM users u WHERE u.id=NEW.actor_user_id
+                          AND (u.is_active AND (u.role='ADMIN' OR (u.role='SUPERVISOR' AND u.store_id=NEW.store_id)))
+                    ) THEN RAISE(ABORT, 'manual count provenance mismatch') END;
+                END
+            """)
+            db.connection().exec_driver_sql("CREATE TRIGGER test_manual_count_event_no_update BEFORE UPDATE ON inventory_manual_count_events BEGIN SELECT RAISE(ABORT, 'append-only'); END")
+            db.connection().exec_driver_sql("CREATE TRIGGER test_manual_count_event_no_delete BEFORE DELETE ON inventory_manual_count_events BEGIN SELECT RAISE(ABORT, 'append-only'); END")
+            event = db.query(models.InventoryManualCountEvent).one()
+            with pytest.raises(Exception):
+                db.connection().exec_driver_sql("UPDATE inventory_manual_count_events SET reason='alterado' WHERE id=?", (event.id,))
+            db.rollback()
+            with pytest.raises(Exception):
+                db.connection().exec_driver_sql("DELETE FROM inventory_manual_count_events WHERE id=?", (event.id,))
+            db.rollback()
+            with pytest.raises(Exception):
+                db.connection().exec_driver_sql(
+                    "INSERT INTO inventory_manual_count_events (snapshot_id,store_id,product_id,actor_user_id,reason,created_at) VALUES (?,?,?,?,?,CURRENT_TIMESTAMP)",
+                    (event.snapshot_id, store_b, product_b, actor.id, "Tentativa cross-tenant")
+                )
+            db.rollback()
+            assert db.query(models.InventoryManualCountEvent).count() == 1
+
+
+def test_inventory_reconciliation_requires_configured_capture_skew_tolerance(monkeypatch):
+    with TestClient(app) as client:
+        store_id, product_id = create_store_and_product(client)
+        zone = client.post("/api/v1/zones", json={"store_id": store_id, "name": "Zona skew temporal"}).json()
+        shelf = client.post("/api/v1/shelves", json={"zone_id": zone["id"], "code": "TEMPORAL-SKEW"}).json()
+        linked = client.post("/api/v1/shelf-products", json={"shelf_id": shelf["id"], "product_id": product_id, "target_quantity": 10, "min_display_quantity": 2})
+        assert linked.status_code == 201, linked.text
+        captured = datetime.now(timezone.utc) - timedelta(minutes=5)
+        erp = client.post("/api/v1/inventory/snapshots", json={
+            "store_id": store_id, "product_id": product_id, "on_hand_quantity": 30,
+            "reserved_quantity": 5, "source": "ERP", "external_reference": "ERP-TEMPORAL-SKEW",
+            "captured_at": captured.isoformat(),
+        })
+        wms = client.post("/api/v1/inventory/snapshots", json={
+            "store_id": store_id, "product_id": product_id, "on_hand_quantity": 26,
+            "reserved_quantity": 3, "source": "WMS", "external_reference": "WMS-TEMPORAL-SKEW",
+            "location_code": "BACKROOM-A", "availability_status": "AVAILABLE",
+            "captured_at": (captured + timedelta(minutes=1)).isoformat(),
+        })
+        assert erp.status_code == 201, erp.text
+        assert wms.status_code == 201, wms.text
+        _configure_backroom_location(store_id)
+        actor = _supervisor_actor(store_id)
+        monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: actor)
+        first = client.get("/api/v1/inventory/reconciliation", params={"store_id": store_id})
+        assert first.status_code == 200, first.text
+        item = first.json()["items"][0]
+        assert item["erp_wms_capture_skew_seconds"] == 60
+        assert item["erp_wms_capture_skew_tolerance_minutes"] is None
+        assert item["wms_erp_available_delta"] is None
+        assert item["wms_erp_comparison_status"] == "TEMPORAL_SKEW_UNCONFIGURED"
+        for tolerance, expected in ((0, "TEMPORAL_SKEW"), (2, "DIVERGENCE")):
+            configured = client.post("/api/v1/inventory/freshness-policies", json={
+                "store_id": store_id, "source": "ERP", "max_age_minutes": 240,
+                "comparison_skew_tolerance_minutes": tolerance,
+                "reason": f"Tolerância temporal ERP/WMS aprovada: {tolerance} minutos",
+            })
+            assert configured.status_code == 200, configured.text
+            response = client.get("/api/v1/inventory/reconciliation", params={"store_id": store_id})
+            assert response.status_code == 200, response.text
+            assert response.json()["items"][0]["wms_erp_comparison_status"] == expected
+        invalid_source = client.post("/api/v1/inventory/freshness-policies", json={
+            "store_id": store_id, "source": "WMS", "max_age_minutes": 240,
+            "comparison_skew_tolerance_minutes": 2, "reason": "A tolerância só pode pertencer à política ERP",
+        })
+        assert invalid_source.status_code == 422
+        missing_reason = client.post("/api/v1/inventory/freshness-policies", json={
+            "store_id": store_id, "source": "ERP", "max_age_minutes": 240,
+            "comparison_skew_tolerance_minutes": 3,
+        })
+        assert missing_reason.status_code == 422
+        with TestingSession() as db:
+            policy = db.query(models.InventoryFreshnessPolicy).filter_by(store_id=store_id, source="ERP").one()
+            events = db.query(models.InventoryFreshnessPolicyEvent).filter_by(policy_id=policy.id).order_by(models.InventoryFreshnessPolicyEvent.id.asc()).all()
+            assert len(events) == 2
+            assert events[0].previous_comparison_skew_tolerance_minutes is None
+            assert events[0].new_comparison_skew_tolerance_minutes == 0
+            assert events[1].previous_comparison_skew_tolerance_minutes == 0
+            assert events[1].new_comparison_skew_tolerance_minutes == 2
+            assert all(event.actor_user_id == actor.id for event in events)
+
+
+def test_wms_backroom_location_change_and_late_snapshot_never_restore_old_stock(monkeypatch):
+    with TestClient(app) as client:
+        store_id, product_id = create_store_and_product(client)
+        zone = client.post("/api/v1/zones", json={"store_id": store_id, "name": "Zona mudança de retaguarda"}).json()
+        shelf = client.post("/api/v1/shelves", json={"zone_id": zone["id"], "code": "WMS-LOCATION-CHANGE"}).json()
+        linked = client.post("/api/v1/shelf-products", json={
+            "shelf_id": shelf["id"], "product_id": product_id,
+            "target_quantity": 12, "min_display_quantity": 2,
+        })
+        assert linked.status_code == 201, linked.text
+        now = datetime.now(timezone.utc)
+        _configure_backroom_location(store_id, location_code="BACKROOM-OLD")
+        old_location = client.post("/api/v1/inventory/snapshots", json={
+            "store_id": store_id, "product_id": product_id, "on_hand_quantity": 100,
+            "reserved_quantity": 0, "source": "WMS", "external_reference": "WMS-OLD-LOCATION",
+            "location_code": "BACKROOM-OLD", "availability_status": "AVAILABLE",
+            "captured_at": (now - timedelta(minutes=1)).isoformat(),
+        })
+        assert old_location.status_code == 201, old_location.text
+
+        actor = _supervisor_actor(store_id)
+        monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: actor)
+        changed = client.post("/api/v1/inventory/freshness-policies", json={
+            "store_id": store_id, "source": "WMS", "max_age_minutes": 240,
+            "backroom_location_code": "BACKROOM-NEW",
+            "reason": "Mudança da localização física de retaguarda",
+        })
+        assert changed.status_code == 200, changed.text
+
+        before_new_snapshot = client.get("/api/v1/inventory/reconciliation", params={"store_id": store_id})
+        assert before_new_snapshot.status_code == 200, before_new_snapshot.text
+        empty_item = before_new_snapshot.json()["items"][0]
+        assert empty_item["backroom_snapshot_id"] is None
+        assert empty_item["backroom_available_quantity"] is None
+        assert empty_item["wms_erp_comparison_status"] == "MISSING_ERP"
+
+        current = client.post("/api/v1/inventory/snapshots", json={
+            "store_id": store_id, "product_id": product_id, "on_hand_quantity": 20,
+            "reserved_quantity": 5, "source": "WMS", "external_reference": "WMS-NEW-LOCATION-CURRENT",
+            "location_code": "BACKROOM-NEW", "availability_status": "AVAILABLE",
+            "captured_at": (now - timedelta(minutes=10)).isoformat(),
+        })
+        delayed = client.post("/api/v1/inventory/snapshots", json={
+            "store_id": store_id, "product_id": product_id, "on_hand_quantity": 999,
+            "reserved_quantity": 0, "source": "WMS", "external_reference": "WMS-NEW-LOCATION-LATE",
+            "location_code": "BACKROOM-NEW", "availability_status": "AVAILABLE",
+            "captured_at": (now - timedelta(minutes=20)).isoformat(),
+        })
+        assert current.status_code == 201, current.text
+        assert delayed.status_code == 201, delayed.text
+
+        reconciled = client.get("/api/v1/inventory/reconciliation", params={"store_id": store_id})
+        assert reconciled.status_code == 200, reconciled.text
+        item = reconciled.json()["items"][0]
+        assert item["backroom_snapshot_id"] == current.json()["id"]
+        assert item["backroom_location_code"] == "BACKROOM-NEW"
+        assert item["backroom_on_hand_quantity"] == 20
+        assert item["backroom_reserved_quantity"] == 5
+        assert item["backroom_available_quantity"] == 15
+        with TestingSession() as db:
+            events = db.query(models.InventoryFreshnessPolicyEvent).join(
+                models.InventoryFreshnessPolicy,
+                models.InventoryFreshnessPolicy.id == models.InventoryFreshnessPolicyEvent.policy_id,
+            ).filter(
+                models.InventoryFreshnessPolicy.store_id == store_id,
+                models.InventoryFreshnessPolicy.source == "WMS",
+            ).all()
+            assert len(events) == 1
+            assert events[0].previous_backroom_location_code == "BACKROOM-OLD"
+            assert events[0].new_backroom_location_code == "BACKROOM-NEW"
+            assert events[0].actor_user_id == actor.id
+            assert db.query(models.InventorySnapshot).filter_by(store_id=store_id, source="WMS").count() == 3
+
+
+def test_reserved_wms_quantity_is_subtracted_once_across_multiple_movements(monkeypatch):
+    with TestClient(app) as client:
+        store_id, product_id = create_store_and_product(client)
+        _configure_backroom_location(store_id)
+        captured = datetime.now(timezone.utc) - timedelta(minutes=5)
+        source = client.post("/api/v1/inventory/snapshots", json={
+            "store_id": store_id, "product_id": product_id,
+            "on_hand_quantity": 20, "reserved_quantity": 5,
+            "source": "WMS", "external_reference": "WMS-AGGREGATED-RESERVATION",
+            "location_code": "BACKROOM-A", "availability_status": "AVAILABLE",
+            "captured_at": captured.isoformat(),
+        })
+        assert source.status_code == 201, source.text
+        actor = _supervisor_actor(store_id)
+        monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: actor)
+        task_ids = []
+        for index in range(2):
+            # Zone/shelf configuration is ADMIN_ONLY; task operations below
+            # remain exercised with the store-scoped SUPERVISOR actor.
+            actor.role = "ADMIN"
+            zone_response = client.post("/api/v1/zones", json={
+                "store_id": store_id, "name": f"Zona reserva agregada {index}",
+            })
+            assert zone_response.status_code == 201, zone_response.text
+            shelf_response = client.post("/api/v1/shelves", json={
+                "zone_id": zone_response.json()["id"], "code": f"RESERVED-{index}",
+            })
+            assert shelf_response.status_code == 201, shelf_response.text
+            shelf = shelf_response.json()
+            actor.role = "SUPERVISOR"
+            linked = client.post("/api/v1/shelf-products", json={
+                "shelf_id": shelf["id"], "product_id": product_id,
+                "target_quantity": 12, "min_display_quantity": 2,
+            })
+            assert linked.status_code == 201, linked.text
+            created = client.post("/api/v1/tasks", json={
+                "store_id": store_id, "shelf_id": shelf["id"],
+                "product_id": product_id, "requested_quantity": 6,
+            })
+            assert created.status_code == 201, created.text
+            task_id = created.json()["id"]
+            assert client.patch(f"/api/v1/tasks/{task_id}/status", json={
+                "status": "ASSIGNED", "assigned_to": "operador",
+            }).status_code == 200
+            assert client.patch(f"/api/v1/tasks/{task_id}/status", json={
+                "status": "IN_PROGRESS",
+            }).status_code == 200
+            completed = client.patch(f"/api/v1/tasks/{task_id}/status", json={
+                "status": "COMPLETED", "actual_quantity": 6,
+                "exception_reason": "Reposição confirmada para validação de reserva agregada.",
+            })
+            assert completed.status_code == 200, completed.text
+            task_ids.append(task_id)
+
+        movements = []
+        for task_id in task_ids:
+            response = client.post(
+                f"/api/v1/tasks/{task_id}/reconcile-inventory",
+                json={"reason": "Movimento autorizado; reserva WMS agregada preservada."},
+            )
+            assert response.status_code == 201, response.text
+            movements.append(response.json())
+
+        assert all(item["source_snapshot_id"] == source.json()["id"] for item in movements)
+        assert [item["quantity"] for item in movements] == [6, 6]
+        history = client.get("/api/v1/inventory/snapshots", params={
+            "store_id": store_id, "product_id": product_id,
+        })
+        assert history.status_code == 200
+        snapshots = {item["id"]: item for item in history.json()}
+        source_snapshot = snapshots[source.json()["id"]]
+        first_result = snapshots[movements[0]["result_snapshot_id"]]
+        second_result = snapshots[movements[1]["result_snapshot_id"]]
+        assert source_snapshot["on_hand_quantity"] == 20
+        assert source_snapshot["reserved_quantity"] == 5
+        assert first_result["on_hand_quantity"] == 14
+        assert first_result["reserved_quantity"] == 5
+        assert first_result["available_quantity"] == 9
+        assert second_result["on_hand_quantity"] == 8
+        assert second_result["reserved_quantity"] == 5
+        assert second_result["available_quantity"] == 3
+        with TestingSession() as db:
+            stored_movements = db.query(models.InventoryMovement).filter_by(
+                source_snapshot_id=source.json()["id"],
+            ).all()
+            assert len(stored_movements) == 2
+            assert sum(item.quantity for item in stored_movements) == 12
+
+
+
+def test_inventory_snapshot_read_and_ingestion_handlers_require_supervisor(monkeypatch):
+    with TestClient(app) as client:
+        store_id, product_id = create_store_and_product(client)
+        employee = _supervisor_actor(store_id, role="EMPLOYEE")
+        monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: employee)
+
+        payload = {
+            "store_id": store_id, "product_id": product_id,
+            "on_hand_quantity": 12, "reserved_quantity": 2,
+            "source": "WMS", "external_reference": "EMPLOYEE-MUST-NOT-INGEST",
+            "location_code": "BACKROOM-A", "availability_status": "AVAILABLE",
+        }
+        stores = client.get("/api/v1/stores")
+        created = client.post("/api/v1/inventory/snapshots", json=payload)
+        listed = client.get("/api/v1/inventory/snapshots", params={"store_id": store_id})
+        latest = client.get("/api/v1/inventory/latest", params={
+            "store_id": store_id, "product_id": product_id,
+        })
+        assert stores.status_code == 403
+        assert created.status_code == 403
+        assert listed.status_code == 403
+        assert latest.status_code == 403
+        with TestingSession() as db:
+            assert db.query(models.InventorySnapshot).filter_by(
+                store_id=store_id, product_id=product_id,
+            ).count() == 0
+
+
+
+def test_employee_cannot_ingest_hourly_sales_or_traffic(monkeypatch):
+    with TestClient(app) as client:
+        store_id, product_id = create_store_and_product(client)
+        employee = _supervisor_actor(store_id, role="EMPLOYEE")
+        monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: employee)
+        sales_row = {
+            "store_id": store_id, "product_id": product_id,
+            "business_date": "2026-11-25", "hour_of_day": 10,
+            "quantity": 4, "source": "POS", "external_reference": "EMP-SALES-ONE",
+        }
+        traffic_row = {
+            "store_id": store_id, "business_date": "2026-11-25",
+            "hour_of_day": 10, "customer_count": 12,
+            "source": "POS", "external_reference": "EMP-TRAFFIC-ONE",
+        }
+        responses = [
+            client.post("/api/v1/sales/hourly", json=sales_row),
+            client.post("/api/v1/sales/traffic/hourly", json=traffic_row),
+            client.post("/api/v1/sales/hourly/batch", json={"records": [sales_row]}),
+            client.post("/api/v1/sales/traffic/hourly/batch", json={"records": [traffic_row]}),
+            client.post("/api/v1/sales/hourly/import-csv", data={"store_id": str(store_id)},
+                        files={"file": ("sales.csv", b"", "text/csv")}),
+            client.post("/api/v1/sales/traffic/hourly/import-csv", data={"store_id": str(store_id)},
+                        files={"file": ("traffic.csv", b"", "text/csv")}),
+        ]
+        assert [response.status_code for response in responses] == [403] * 6
+        with TestingSession() as db:
+            assert db.query(models.HourlySalesRecord).filter_by(store_id=store_id).count() == 0
+            assert db.query(models.HourlyStoreTrafficRecord).filter_by(store_id=store_id).count() == 0
+
+
+
+def test_employee_cannot_mutate_warehouse_locations_placements_or_pallet_policy(monkeypatch):
+    with TestClient(app) as client:
+        store_id, product_id = create_store_and_product(client)
+        with TestingSession() as db:
+            level = models.ProductPackagingLevel(
+                product_id=product_id, code="PALLET-RBAC", name="Palete RBAC",
+                package_type="PALLET", base_units_per_package=720, is_active=True,
+            )
+            db.add(level)
+            db.commit()
+            db.refresh(level)
+            level_id = level.id
+        employee = _supervisor_actor(store_id, role="EMPLOYEE")
+        monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: employee)
+
+        responses = [
+            client.post("/api/v1/warehouse/locations", json={
+                "store_id": store_id, "code": "EMP-RBAC-LOC", "distance_to_picking_m": 3,
+                "max_volume_cm3": 100000, "max_weight_kg": 500,
+            }),
+            client.post("/api/v1/warehouse/placements", json={
+                "location_id": 2147483000, "product_id": product_id, "quantity": 10,
+            }),
+            client.post("/api/v1/warehouse/pallets", json={
+                "store_id": store_id, "product_id": product_id, "packaging_level_id": level_id,
+                "pallet_code": "EMP-RBAC-PALLET", "base_quantity": 720,
+                "status": "READY", "location_type": "WAREHOUSE", "location_code": "ARZ-A-01",
+            }),
+            client.post("/api/v1/warehouse/pallet-rotation/policies", json={
+                "store_id": store_id, "product_id": product_id,
+                "threshold_ratio": 0.5, "is_enabled": True,
+            }),
+            client.patch("/api/v1/warehouse/pallet-rotation/policies/2147483000", json={
+                "is_enabled": False,
+            }),
+            client.post("/api/v1/warehouse/pallet-rotation/simulate", json={
+                "store_id": store_id, "pallet_id": 2147483000, "traffic_level": "HIGH",
+                "backroom_capacity_available": True, "conventional_replenishment_minutes": 20,
+                "pallet_swap_minutes": 5, "transport_minutes": 3, "pallet_rebuild_minutes": 4,
+                "labour_cost_per_hour": 12, "forecast_consumption_until_low_traffic": 100,
+            }),
+        ]
+        assert [response.status_code for response in responses] == [403] * 6
+        with TestingSession() as db:
+            assert db.query(models.WarehouseLocation).filter_by(store_id=store_id).count() == 0
+            assert db.query(models.WarehouseProductPlacement).filter_by(product_id=product_id).count() == 0
+            assert db.query(models.StorePallet).filter_by(store_id=store_id).count() == 0
+            assert db.query(models.PalletRotationPolicy).filter_by(store_id=store_id).count() == 0
+
+
+
+def test_employee_cannot_manage_admin_catalogue_or_read_user_directory(monkeypatch):
+    with TestClient(app) as client:
+        store_id, product_id = create_store_and_product(client)
+        employee = _supervisor_actor(store_id, role="EMPLOYEE")
+        monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: employee)
+        with TestingSession() as db:
+            baseline = {
+                "stores": db.query(models.Store).count(),
+                "zones": db.query(models.Zone).count(),
+                "products": db.query(models.Product).count(),
+                "profiles": db.query(models.WarehouseProductProfile).count(),
+                "packaging": db.query(models.ProductPackagingLevel).count(),
+                "users": db.query(models.User).count(),
+            }
+
+        responses = [
+            client.post("/api/v1/stores", json={"code": "EMP-ADMIN-STORE", "name": "Não autorizado"}),
+            client.post("/api/v1/zones", json={"store_id": store_id, "name": "Zona não autorizada"}),
+            client.post("/api/v1/products", json={"sku": "EMP-ADMIN-SKU", "name": "Produto não autorizado"}),
+            client.post("/api/v1/warehouse/product-profiles", json={
+                "product_id": product_id, "unit_volume_cm3": 100,
+                "unit_weight_kg": 1, "temperature_requirement": "AMBIENT",
+            }),
+            client.post("/api/v1/warehouse/product-packaging", json={
+                "product_id": product_id, "code": "EMP-CASE", "name": "Caixa não autorizada",
+                "package_type": "CASE", "base_units_per_package": 6,
+            }),
+            client.post("/api/v1/auth/users", json={
+                "email": "employee-created-user@example.test", "full_name": "Conta não autorizada",
+                "password": "Long-test-password-123", "role": "EMPLOYEE", "store_id": store_id,
+            }),
+            client.get("/api/v1/auth/users"),
+            client.get("/api/v1/products"),
+        ]
+        assert [response.status_code for response in responses] == [403] * 8
+        with TestingSession() as db:
+            assert db.query(models.Store).count() == baseline["stores"]
+            assert db.query(models.Zone).count() == baseline["zones"]
+            assert db.query(models.Product).count() == baseline["products"]
+            assert db.query(models.WarehouseProductProfile).count() == baseline["profiles"]
+            assert db.query(models.ProductPackagingLevel).count() == baseline["packaging"]
+            assert db.query(models.User).count() == baseline["users"]
+
+
+
+def test_every_versioned_api_route_has_an_explicit_authorization_policy():
+    from app.api_security_policy import classify_api_route
+
+    uncovered = []
+    for route in app.routes:
+        path = getattr(route, "path", "")
+        if not path.startswith("/api/v1/"):
+            continue
+        for method in getattr(route, "methods", set()) or set():
+            if classify_api_route(method, path) == "UNCLASSIFIED":
+                uncovered.append(f"{method} {path}")
+
+    assert uncovered == [], f"Versioned API routes without explicit RBAC policy: {uncovered}"
+
+def test_foreign_embedding_exemplar_review_is_hidden_before_materialization(monkeypatch):
+    with TestClient(app) as client:
+        own_store_id, product_id = create_store_and_product(client)
+        with TestingSession() as db:
+            foreign_store = models.Store(
+                code=f"EMBED-FOREIGN-{uuid4().hex[:8]}",
+                name="Embedding foreign tenant",
+            )
+            db.add(foreign_store)
+            db.flush()
+            zone = models.Zone(store_id=foreign_store.id, name="Foreign embedding zone")
+            db.add(zone)
+            db.flush()
+            shelf = models.Shelf(zone_id=zone.id, code="EMBED-FOREIGN-SHELF")
+            db.add(shelf)
+            db.flush()
+            image = models.ShelfImage(
+                shelf_id=shelf.id,
+                original_filename="foreign-reference.jpg",
+                storage_path=f"{foreign_store.id}/foreign-reference-{uuid4().hex}.jpg",
+                mime_type="image/jpeg",
+                file_size_bytes=128,
+                sha256="a" * 64,
+            )
+            db.add(image)
+            db.flush()
+            exemplar = models.ProductEmbeddingExemplar(
+                product_id=product_id,
+                shelf_image_id=image.id,
+                embedding=[0.1, 0.2, 0.3],
+                embedding_dimension=3,
+                model_version="tenant-scope-test",
+                image_sha256="a" * 64,
+                licence="test fixture",
+                review_status="PENDING",
+            )
+            db.add(exemplar)
+            db.commit()
+            foreign_exemplar_id = exemplar.id
+
+        actor = _supervisor_actor(own_store_id)
+        monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: actor)
+        payload = {
+            "review_status": "APPROVED",
+            "review_notes": "Cross-tenant access regression",
+        }
+        foreign = client.patch(
+            f"/api/v1/product-embedding-exemplars/{foreign_exemplar_id}/review",
+            json=payload,
+        )
+        missing = client.patch(
+            f"/api/v1/product-embedding-exemplars/999999999/review",
+            json=payload,
+        )
+        assert foreign.status_code == missing.status_code == 404
+        assert foreign.json() == missing.json()
+
+        with TestingSession() as db:
+            unchanged = db.get(
+                models.ProductEmbeddingExemplar, foreign_exemplar_id
+            )
+            assert unchanged is not None
+            assert unchanged.review_status == "PENDING"
+            assert unchanged.reviewed_by_user_id is None
+            assert unchanged.reviewed_at is None
+
+def test_foreign_shelf_image_retention_history_is_hidden_from_supervisor(monkeypatch):
+    with TestClient(app) as client:
+        own_store_id, _product_id = create_store_and_product(client)
+        with TestingSession() as db:
+            foreign_store = models.Store(
+                code=f"RETENTION-FOREIGN-{uuid4().hex[:8]}",
+                name="Foreign retention tenant",
+            )
+            db.add(foreign_store)
+            db.flush()
+            zone = models.Zone(store_id=foreign_store.id, name="Foreign retention zone")
+            db.add(zone)
+            db.flush()
+            shelf = models.Shelf(zone_id=zone.id, code="RETENTION-FOREIGN-SHELF")
+            db.add(shelf)
+            db.flush()
+            image = models.ShelfImage(
+                shelf_id=shelf.id,
+                original_filename="foreign-retention.jpg",
+                storage_path=f"{foreign_store.id}/foreign-retention-{uuid4().hex}.jpg",
+                mime_type="image/jpeg",
+                file_size_bytes=64,
+                sha256="b" * 64,
+            )
+            db.add(image)
+            db.flush()
+            event = models.ShelfImageRetentionEvent(
+                shelf_image_id=image.id,
+                event_type="RESTRICTED",
+                from_status="ACTIVE",
+                to_status="RESTRICTED",
+                reason="Tenant isolation regression",
+            )
+            db.add(event)
+            db.commit()
+            foreign_image_id = image.id
+
+        actor = _supervisor_actor(own_store_id)
+        monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: actor)
+        foreign = client.get(
+            f"/api/v1/shelf-images/{foreign_image_id}/retention/events"
+        )
+        missing = client.get(
+            "/api/v1/shelf-images/999999999/retention/events"
+        )
+        assert foreign.status_code == missing.status_code == 404
+        assert foreign.json() == missing.json()
+
+
+
+def test_task_event_history_scopes_parent_tenant_in_event_query(monkeypatch):
+    with TestClient(app) as client:
+        own_store_id, _, own_task_id, _ = _completed_replenishment(client)
+        _, _, foreign_task_id, _ = _completed_replenishment(client)
+        actor = _supervisor_actor(own_store_id)
+        monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: actor)
+
+        own = client.get(f"/api/v1/tasks/{own_task_id}/events")
+        foreign = client.get(f"/api/v1/tasks/{foreign_task_id}/events")
+        missing = client.get("/api/v1/tasks/2147483000/events")
+
+        assert own.status_code == 200, own.text
+        assert own.json()
+        assert foreign.status_code == missing.status_code == 404
+        assert foreign.json() == missing.json()
+
+
+def test_observation_alert_event_history_scopes_parent_tenant_in_event_query(monkeypatch):
+    with TestClient(app) as client:
+        own_store_id, own_product_id, own_task_id, _ = _completed_replenishment(client)
+        foreign_store_id, foreign_product_id, foreign_task_id, _ = _completed_replenishment(client)
+        now = datetime.now(timezone.utc)
+        with TestingSession() as db:
+            own_task = db.get(models.ReplenishmentTask, own_task_id)
+            foreign_task = db.get(models.ReplenishmentTask, foreign_task_id)
+            own_alert = models.ObservationAlert(
+                store_id=own_store_id,
+                shelf_id=own_task.shelf_id,
+                product_id=own_product_id,
+                condition="EMPTY",
+                status="OPEN",
+                first_seen_at=now,
+                last_seen_at=now,
+                confirmation_count=2,
+                average_confidence=0.9,
+                sources=["TEST"],
+            )
+            own_empty_alert = models.ObservationAlert(
+                store_id=own_store_id,
+                shelf_id=own_task.shelf_id,
+                product_id=own_product_id,
+                condition="LOW_STOCK",
+                status="OPEN",
+                first_seen_at=now,
+                last_seen_at=now,
+                confirmation_count=2,
+                average_confidence=0.8,
+                sources=["TEST"],
+            )
+            foreign_alert = models.ObservationAlert(
+                store_id=foreign_store_id,
+                shelf_id=foreign_task.shelf_id,
+                product_id=foreign_product_id,
+                condition="EMPTY",
+                status="OPEN",
+                first_seen_at=now,
+                last_seen_at=now,
+                confirmation_count=2,
+                average_confidence=0.9,
+                sources=["TEST"],
+            )
+            db.add_all([own_alert, own_empty_alert, foreign_alert])
+            db.flush()
+            own_alert_id, own_empty_alert_id, foreign_alert_id = own_alert.id, own_empty_alert.id, foreign_alert.id
+            db.add_all([
+                models.ObservationAlertEvent(alert_id=own_alert_id, event_type="CREATED"),
+                models.ObservationAlertEvent(alert_id=foreign_alert_id, event_type="CREATED"),
+            ])
+            db.commit()
+
+        actor = _supervisor_actor(own_store_id)
+        monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: actor)
+        own = client.get(f"/api/v1/observation-alerts/{own_alert_id}/events")
+        own_empty = client.get(f"/api/v1/observation-alerts/{own_empty_alert_id}/events")
+        foreign = client.get(f"/api/v1/observation-alerts/{foreign_alert_id}/events")
+        missing = client.get("/api/v1/observation-alerts/2147483000/events")
+
+        assert own.status_code == 200, own.text
+        assert len(own.json()) == 1
+        assert own_empty.status_code == 200
+        assert own_empty.json() == []
+        assert foreign.status_code == missing.status_code == 404
+        assert foreign.json() == missing.json()

@@ -141,9 +141,21 @@ class ProductEmbeddingExemplarRead(BaseModel):
 class ShelfProductCreate(BaseModel):
     shelf_id: int
     product_id: int
-    target_quantity: int = Field(default=1, gt=0)
-    min_display_quantity: int = Field(default=0, ge=0)
+    target_quantity: float = Field(default=1.0, gt=0, allow_inf_nan=False)
+    min_display_quantity: float = Field(default=0.0, ge=0, allow_inf_nan=False)
     position: str | None = Field(default=None, max_length=80)
+
+    @field_validator("target_quantity", "min_display_quantity")
+    @classmethod
+    def validate_base_unit_precision(cls, value: float) -> float:
+        decimal_value = Decimal(str(value))
+        if not decimal_value.is_finite():
+            raise ValueError("Shelf quantities must be finite")
+        if decimal_value.adjusted() >= 9:
+            raise ValueError("Shelf quantities exceed NUMERIC(12, 3) capacity")
+        if decimal_value != decimal_value.quantize(Decimal("0.001")):
+            raise ValueError("Shelf quantities support at most three decimal places")
+        return value
 
 
 class ShelfProductRead(ShelfProductCreate):
@@ -164,10 +176,23 @@ class InventorySnapshotCreate(BaseModel):
         default=0, ge=0, le=999_999_999.999, allow_inf_nan=False
     )
     source: InventorySource
+    reason: str | None = Field(default=None, max_length=1000)
     external_reference: str | None = Field(default=None, max_length=120)
     location_code: str | None = Field(default=None, min_length=1, max_length=120)
     availability_status: Literal["AVAILABLE", "UNAVAILABLE", "UNKNOWN"] = "UNKNOWN"
     captured_at: datetime | None = None
+
+    @field_validator("on_hand_quantity", "reserved_quantity")
+    @classmethod
+    def validate_inventory_quantity_precision(cls, value: float) -> float:
+        decimal_value = Decimal(str(value))
+        if not decimal_value.is_finite():
+            raise ValueError("Inventory quantities must be finite")
+        if decimal_value.adjusted() >= 9:
+            raise ValueError("Inventory quantity exceeds NUMERIC(12, 3) capacity")
+        if decimal_value != decimal_value.quantize(Decimal("0.001")):
+            raise ValueError("Inventory quantities support at most three decimal places")
+        return value
 
     @field_validator("location_code")
     @classmethod
@@ -177,6 +202,16 @@ class InventorySnapshotCreate(BaseModel):
         normalized = value.strip()
         if not normalized or any(ord(ch) < 32 or 127 <= ord(ch) <= 159 for ch in normalized):
             raise ValueError("location_code must be non-empty and contain no control characters")
+        return normalized
+
+    @field_validator("reason")
+    @classmethod
+    def validate_manual_count_reason(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        if len(normalized) < 5 or any(ord(ch) < 32 for ch in normalized) or any(127 <= ord(ch) <= 159 for ch in normalized):
+            raise ValueError("Manual inventory count reason must contain at least five valid characters")
         return normalized
 
     @field_validator("external_reference")
@@ -195,6 +230,10 @@ class InventorySnapshotCreate(BaseModel):
     def reserved_must_not_exceed_on_hand(self):
         if self.reserved_quantity > self.on_hand_quantity:
             raise ValueError("reserved_quantity cannot exceed on_hand_quantity")
+        if self.source == "MANUAL" and self.reason is None:
+            raise ValueError("MANUAL inventory snapshots require a reason")
+        if self.source != "MANUAL" and self.reason is not None:
+            raise ValueError("reason is only valid for MANUAL inventory snapshots")
         if self.source == "WMS" and (
             self.location_code is None or self.availability_status == "UNKNOWN"
         ):
@@ -213,6 +252,7 @@ class InventorySnapshotRead(BaseModel):
     available_quantity: float | None
     source: str
     external_reference: str | None
+    source_sync_id: int | None
     location_code: str | None
     availability_status: Literal["AVAILABLE", "UNAVAILABLE", "UNKNOWN"]
     captured_at: datetime
@@ -225,6 +265,7 @@ class InventoryFreshnessPolicyUpsert(BaseModel):
     source: InventorySource
     max_age_minutes: int = Field(ge=1, le=10080)
     backroom_location_code: str | None = Field(default=None, min_length=1, max_length=120)
+    comparison_skew_tolerance_minutes: int | None = Field(default=None, ge=0, le=10080)
     reason: str | None = Field(default=None, max_length=1000)
 
     @field_validator("reason")
@@ -251,8 +292,10 @@ class InventoryFreshnessPolicyUpsert(BaseModel):
     def backroom_location_is_wms_only(self):
         if self.backroom_location_code is not None and self.source != "WMS":
             raise ValueError("backroom_location_code can only be configured for WMS")
-        if "backroom_location_code" in self.model_fields_set and self.reason is None:
-            raise ValueError("A reason is required when changing backroom location authority")
+        if self.comparison_skew_tolerance_minutes is not None and self.source != "ERP":
+            raise ValueError("comparison_skew_tolerance_minutes can only be configured on the ERP policy")
+        if ("backroom_location_code" in self.model_fields_set or "comparison_skew_tolerance_minutes" in self.model_fields_set) and self.reason is None:
+            raise ValueError("A reason is required when changing inventory authority or comparison policy")
         return self
 
 
@@ -262,6 +305,7 @@ class InventoryFreshnessPolicyRead(BaseModel):
     source: InventorySource
     max_age_minutes: int
     backroom_location_code: str | None
+    comparison_skew_tolerance_minutes: int | None
     updated_at: datetime
     model_config = ConfigDict(from_attributes=True)
 
@@ -311,6 +355,10 @@ class InventoryMovementRead(BaseModel):
     source_snapshot_id: int
     source_location_code: str | None
     destination_shelf_id: int | None
+    destination_shelf_code: str
+    destination_zone_id: int
+    destination_zone_name: str
+    destination_location_backfilled: bool
     result_snapshot_id: int
     actor_user_id: int
     reason: str
@@ -1154,12 +1202,19 @@ class ProductPackagingLevelCreate(BaseModel):
     code: str = Field(min_length=1, max_length=40)
     name: str = Field(min_length=1, max_length=100)
     package_type: PackagingType
-    base_units_per_package: float = Field(gt=0, le=1_000_000_000, allow_inf_nan=False)
+    base_units_per_package: Decimal = Field(gt=Decimal("0"), le=Decimal("1000000000"), allow_inf_nan=False)
     barcode: str | None = Field(default=None, max_length=80)
     gross_weight_kg: float | None = Field(default=None, gt=0, le=1_000_000, allow_inf_nan=False)
     package_volume_cm3: float | None = Field(default=None, gt=0, le=1_000_000_000, allow_inf_nan=False)
     is_ordering_unit: bool = False
     is_replenishment_unit: bool = False
+
+    @field_validator("base_units_per_package")
+    @classmethod
+    def validate_packaging_factor_precision(cls, value: Decimal) -> Decimal:
+        if value != value.quantize(Decimal("0.001")):
+            raise ValueError("Packaging conversion factors support at most three decimal places")
+        return value
 
 
 class ReplenishmentPackCalculationRequest(BaseModel):

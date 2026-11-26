@@ -190,8 +190,8 @@ class ShelfProduct(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     shelf_id: Mapped[int] = mapped_column(ForeignKey("shelves.id", ondelete="CASCADE"), index=True)
     product_id: Mapped[int] = mapped_column(ForeignKey("products.id", ondelete="CASCADE"), index=True)
-    target_quantity: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
-    min_display_quantity: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    target_quantity: Mapped[Decimal] = mapped_column(Numeric(12, 3), default=Decimal("1.000"), nullable=False)
+    min_display_quantity: Mapped[Decimal] = mapped_column(Numeric(12, 3), default=Decimal("0.000"), nullable=False)
     position: Mapped[str | None] = mapped_column(String(80), nullable=True)
     shelf: Mapped[Shelf] = relationship(back_populates="product_links")
     product: Mapped[Product] = relationship(back_populates="shelf_links")
@@ -392,7 +392,7 @@ class ProductPackagingLevel(Base):
     code: Mapped[str] = mapped_column(String(40), nullable=False)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     package_type: Mapped[str] = mapped_column(String(12), nullable=False)
-    base_units_per_package: Mapped[float] = mapped_column(Numeric(14, 3), nullable=False)
+    base_units_per_package: Mapped[Decimal] = mapped_column(Numeric(14, 3), nullable=False)
     barcode: Mapped[str | None] = mapped_column(String(80), nullable=True)
     gross_weight_kg: Mapped[float | None] = mapped_column(Numeric(12, 3), nullable=True)
     package_volume_cm3: Mapped[float | None] = mapped_column(Numeric(14, 2), nullable=True)
@@ -562,6 +562,7 @@ class InventorySnapshot(Base):
     __table_args__ = (
         UniqueConstraint("store_id", "product_id", "source", "external_reference",
                          name="uq_inventory_snapshot_source_reference"),
+        Index("uq_inventory_snapshot_identity", "id", "store_id", "product_id", unique=True),
         CheckConstraint("on_hand_quantity >= 0", name="ck_inventory_on_hand_nonnegative"),
         CheckConstraint("reserved_quantity >= 0", name="ck_inventory_reserved_nonnegative"),
         CheckConstraint("reserved_quantity <= on_hand_quantity", name="ck_inventory_reserved_lte_on_hand"),
@@ -576,14 +577,18 @@ class InventorySnapshot(Base):
             "store_id", "product_id", "source", "location_code",
             "availability_status", "captured_at",
         ),
+        Index("ix_inventory_snapshots_source_sync_id", "source_sync_id"),
     )
     id: Mapped[int] = mapped_column(primary_key=True)
     store_id: Mapped[int] = mapped_column(ForeignKey("stores.id", ondelete="CASCADE"), index=True)
     product_id: Mapped[int] = mapped_column(ForeignKey("products.id", ondelete="CASCADE"), index=True)
-    on_hand_quantity: Mapped[float] = mapped_column(Numeric(12, 3), nullable=False)
-    reserved_quantity: Mapped[float] = mapped_column(Numeric(12, 3), default=0, nullable=False)
+    on_hand_quantity: Mapped[Decimal] = mapped_column(Numeric(12, 3), nullable=False)
+    reserved_quantity: Mapped[Decimal] = mapped_column(Numeric(12, 3), default=Decimal("0.000"), nullable=False)
     source: Mapped[str] = mapped_column(String(20), nullable=False)
     external_reference: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    source_sync_id: Mapped[int | None] = mapped_column(
+        ForeignKey("inventory_source_syncs.id", ondelete="RESTRICT"), nullable=True
+    )
     # WMS evidence must identify its physical location and availability state
     # before it can be considered authoritative backroom stock.
     location_code: Mapped[str | None] = mapped_column(String(120), nullable=True)
@@ -600,6 +605,25 @@ class InventorySnapshot(Base):
         return float(self.on_hand_quantity - self.reserved_quantity)
 
 
+class InventoryManualCountEvent(Base):
+    """Append-only provenance for a manually recorded inventory count."""
+    __tablename__ = "inventory_manual_count_events"
+    __table_args__ = (
+        ForeignKeyConstraint(["snapshot_id", "store_id", "product_id"], ["inventory_snapshots.id", "inventory_snapshots.store_id", "inventory_snapshots.product_id"], ondelete="RESTRICT", name="fk_inventory_manual_count_snapshot_identity"),
+        CheckConstraint("length(trim(reason)) >= 5", name="ck_inventory_manual_count_reason_nonblank"),
+        UniqueConstraint("snapshot_id", name="uq_inventory_manual_count_snapshot"),
+        Index("ix_inventory_manual_count_store_created", "store_id", "created_at", "id"),
+        Index("ix_inventory_manual_count_actor_created", "actor_user_id", "created_at"),
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    snapshot_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    store_id: Mapped[int] = mapped_column(ForeignKey("stores.id", ondelete="RESTRICT"), nullable=False)
+    product_id: Mapped[int] = mapped_column(ForeignKey("products.id", ondelete="RESTRICT"), nullable=False)
+    actor_user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+
 class InventoryFreshnessPolicy(Base):
     """Maximum accepted age for inventory evidence, scoped to one store and source."""
     __tablename__ = "inventory_freshness_policies"
@@ -608,6 +632,7 @@ class InventoryFreshnessPolicy(Base):
         CheckConstraint("source IN ('ERP', 'WMS', 'POS', 'MANUAL', 'IMPORT')", name="ck_inventory_freshness_source"),
         CheckConstraint("max_age_minutes >= 1 AND max_age_minutes <= 10080", name="ck_inventory_freshness_max_age"),
         CheckConstraint("backroom_location_code IS NULL OR (source = 'WMS' AND length(trim(backroom_location_code)) > 0)", name="ck_inventory_freshness_backroom_wms_location"),
+        CheckConstraint("comparison_skew_tolerance_minutes IS NULL OR (source = 'ERP' AND comparison_skew_tolerance_minutes BETWEEN 0 AND 10080)", name="ck_inventory_freshness_comparison_skew_erp_only"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -617,6 +642,7 @@ class InventoryFreshnessPolicy(Base):
     # Only the WMS policy may designate one exact physical backroom location.
     # NULL deliberately disables WMS authority for replenishment in that store.
     backroom_location_code: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    comparison_skew_tolerance_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False)
 
 
@@ -633,6 +659,9 @@ class InventoryFreshnessPolicyEvent(Base):
             name="ck_inventory_freshness_event_new_location",
         ),
         CheckConstraint("length(trim(reason)) >= 5", name="ck_inventory_freshness_event_reason_nonblank"),
+        CheckConstraint("previous_comparison_skew_tolerance_minutes IS NULL OR previous_comparison_skew_tolerance_minutes BETWEEN 0 AND 10080", name="ck_inventory_freshness_event_previous_skew_range"),
+        CheckConstraint("new_comparison_skew_tolerance_minutes IS NULL OR new_comparison_skew_tolerance_minutes BETWEEN 0 AND 10080", name="ck_inventory_freshness_event_new_skew_range"),
+        CheckConstraint("previous_backroom_location_code IS NOT NULL OR new_backroom_location_code IS NOT NULL OR previous_comparison_skew_tolerance_minutes IS NOT NULL OR new_comparison_skew_tolerance_minutes IS NOT NULL", name="ck_inventory_freshness_event_has_change"),
         Index("ix_inventory_freshness_policy_events_policy", "policy_id", "created_at", "id"),
         Index("ix_inventory_freshness_policy_events_actor", "actor_user_id", "created_at"),
     )
@@ -646,6 +675,8 @@ class InventoryFreshnessPolicyEvent(Base):
     )
     previous_backroom_location_code: Mapped[str | None] = mapped_column(String(120), nullable=True)
     new_backroom_location_code: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    previous_comparison_skew_tolerance_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    new_comparison_skew_tolerance_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
     reason: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
 
@@ -712,6 +743,8 @@ class InventoryMovement(Base):
         CheckConstraint("movement_type = 'BACKROOM_TO_SHELF'", name="ck_inventory_movement_type"),
         CheckConstraint("quantity > 0", name="ck_inventory_movement_quantity_positive"),
         CheckConstraint("source_snapshot_id <> result_snapshot_id", name="ck_inventory_movement_distinct_snapshots"),
+        CheckConstraint("destination_shelf_id IS NOT NULL AND destination_shelf_code IS NOT NULL AND length(trim(destination_shelf_code)) BETWEEN 1 AND 80", name="ck_inventory_movement_destination_snapshot_required"),
+        CheckConstraint("destination_zone_id IS NOT NULL AND destination_zone_name IS NOT NULL AND length(trim(destination_zone_name)) BETWEEN 1 AND 120", name="ck_inventory_movement_destination_zone_snapshot_required"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -725,6 +758,10 @@ class InventoryMovement(Base):
     source_snapshot_id: Mapped[int] = mapped_column(ForeignKey("inventory_snapshots.id", ondelete="RESTRICT"), nullable=False, index=True)
     source_location_code: Mapped[str | None] = mapped_column(String(120), nullable=True)
     destination_shelf_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    destination_shelf_code: Mapped[str] = mapped_column(String(80), nullable=False)
+    destination_zone_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    destination_zone_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    destination_location_backfilled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=text("false"))
     result_snapshot_id: Mapped[int] = mapped_column(ForeignKey("inventory_snapshots.id", ondelete="RESTRICT"), nullable=False)
     actor_user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False, index=True)
     reason: Mapped[str] = mapped_column(Text, nullable=False)

@@ -248,3 +248,107 @@ A migration 0086_inventory_movement_identity_provenance acrescenta operation_id 
 A migração atribui UUID distinto a cada movimento histórico e copia a localização apenas do snapshot WMS imutável. O destino histórico permanece NULL: a relação actual da tarefa com a prateleira não prova, por si só, que essa era a prateleira no instante da aprovação. Novos movimentos congelam o destination_shelf_id no momento da criação. Os novos movimentos são protegidos por trigger INSERT PostgreSQL/SQLite que exige UUID, localização de origem não vazia e prateleira pertencente à mesma loja. Para executar o backfill, a migration suspende temporariamente apenas os triggers 0053 conhecidos dentro da própria transacção e recria-os exactamente antes de terminar; o teste dedicado verifica que UPDATE e DELETE continuam bloqueados após a migração.
 
 Limite desta fatia: o destino congelado é o identificador da prateleira; ainda não existe um código físico de localização de loja separado da identidade da prateleira. A migration não introduz ainda ledger de eventos do movimento, compensações ou confirmação WMS idempotente. A validação final depende dos workflows GitHub Actions no SHA desta alteração.
+
+
+## Precisão e semântica das reservas
+
+Os snapshots físicos persistem `on_hand_quantity` e `reserved_quantity` em `NUMERIC(12,3)`. O endpoint de criação rejeita precisão superior a três casas decimais e converte os números HTTP para Decimal antes da persistência, evitando arredondamento silencioso. O contrato de adapters já normaliza ambas as quantidades como Decimal e rejeita `reserved_quantity > on_hand_quantity`.
+
+A reserva é um agregado reportado pela fonte WMS para a localização configurada. O SMART SHELF AI calcula `available_quantity = on_hand_quantity - reserved_quantity`; não cria, liberta ou altera reservas externas. A criação/atribuição de uma tarefa de reposição não reserva stock e o plano de embalagens mantém `stock_reserved=false`.
+
+Não existe ainda detalhe de reserva por identificador externo, documento, estado ou linha de encomenda. Sem esse contrato do fornecedor, não é seguro inventar um ledger interno nem reconciliar reservas individuais. A reconciliação actual é ao nível do snapshot, loja, SKU e localização WMS autorizada.
+
+
+## Unidade base e embalagens logísticas internas
+
+O catálogo define Product.unit como unidade base do SKU. ProductPackagingLevel.base_units_per_package expressa cada nível UNIT/CASE/PALLET nessa unidade base, com factor decimal persistido em NUMERIC(14,3). O planeamento converte quantidades com Decimal, expõe campos exactos textuais e não cria reservas nem movimentos de stock. A API rejeita factores com mais de três casas decimais para impedir que a persistência arredonde silenciosamente o factor.
+
+**Fronteira ainda não implementada:** o adapter WMS ainda não normaliza os códigos de unidade do fornecedor para Product.unit, nem homologa factores de conversão externos. Não assumir que EA, CS, BOX, PAL, kg, litros ou outras unidades são equivalentes sem catálogo/mapeamento aprovado por fornecedor e SKU. A configuração actual de embalagens internas não constitui prova de correspondência com a unidade externa.
+
+
+## Contagens MANUAL — identidade e auditoria (migration 0091)
+
+As contagens `source=MANUAL` exigem utilizador autenticado e activo com papel ADMIN ou SUPERVISOR autorizado para a loja, além de motivo explícito. O snapshot e o evento `inventory_manual_count_events` são inseridos na mesma transacção; uma falha de auditoria reverte também o snapshot. O evento é append-only, liga snapshot/loja/produto através de FK composta e preserva actor, motivo e timestamp. Os triggers PostgreSQL e SQLite validam a proveniência; o trigger SQLite exige igualmente actor activo e papel ADMIN ou SUPERVISOR da mesma loja. Esta operação regista uma contagem manual auditável, não constitui confirmação WMS nem altera o stock externo.
+
+A migration 0091 e a regressão de actor inactivo foram corrigidas no commit `94fe027` e `ecc751c`. A validação efectiva da migration em SQLite/PostgreSQL 16 e os workflows CI do HEAD continuam pendentes; não considerar a migration integralmente homologada até essa evidência existir.
+
+
+## Validação de proveniência da contagem MANUAL — revisão 0091
+
+A migration 0091 possui agora cobertura específica da migration SQLite, não apenas testes sobre tabelas criadas por ORM: a suite aplica directamente `upgrade()` e `downgrade()`, valida a aceitação de SUPERVISOR activo da mesma loja e ADMIN global, e rejeita actor de outra loja, actor inactivo, EMPLOYEE e snapshots com origem diferente de MANUAL. O mesmo teste verifica UPDATE/DELETE bloqueados e preservação dos snapshots no downgrade.
+
+O API CI inclui também `postgres_inventory_manual_count_audit_smoke.py`, que exercita PostgreSQL 16 após `alembic upgrade head`, através do endpoint autenticado e de INSERTs directos para provar os triggers da base de dados. O smoke específico passou no SHA `7a20c95`. A suite do HEAD posterior ainda tem de confirmar o teste SQLite, os restantes smokes, e os workflows globais antes de a revisão ser considerada homologada.
+
+
+### Homologação da migration 0091 (25/11/2026)
+
+A revisão 0091 foi validada no SHA `c4f839bcfd076c2b5575eccfd314fae96983b3ed`. O API CI executou `alembic upgrade head` em PostgreSQL 16 e o smoke dedicado confirmou os triggers de proveniência e append-only. A suite executou o teste de migration SQLite (upgrade/downgrade e rejeições de provenance) e terminou com **1707 passed, 1 skipped**. Quality Gates, Security Scans e Docker Compose terminaram com sucesso.
+
+Runs: API CI `45650155916`; Quality Gates `45650155829`; Security Scans `45650155800`; Docker Compose `45650155946`.
+
+A migration 0091 está homologada para os cenários cobertos. A próxima revisão centra-se na semântica de snapshots WMS consecutivos e reservas agregadas, sem criar um ledger de reservas individuais sem identificadores/documentos disponibilizados pelo fornecedor.
+
+
+## Proveniência de snapshots por execução de sincronização — migration 0092
+
+Os snapshots criados pelo worker ERP/WMS passam a transportar `source_sync_id`, referência à execução persistida em `inventory_source_syncs`. O vínculo é validado no INSERT: a execução tem de existir, pertencer à mesma loja, usar a mesma origem e permanecer em `STARTED`. PostgreSQL aplica FK RESTRICT e trigger com lock da linha da execução; SQLite aplica trigger equivalente. A imutabilidade do snapshot torna o vínculo permanente.
+
+Snapshots históricos, contagens MANUAL e snapshots criados fora do worker permanecem com `source_sync_id=NULL`; não foi fabricada proveniência retroactiva. No replay após falha, uma linha de página já commitada mantém a execução PARTIAL que realmente a inseriu; páginas novas pertencem à execução de recuperação SUCCESS. A API de leitura inclui o identificador para permitir navegar da evidência de stock até ao histórico de sincronização.
+
+A validação no branch `f63543c` terminou com API CI **1715 passed, 1 skipped**, PostgreSQL 16 smoke, Quality Gates, Security Scans e Docker Compose com sucesso. O commit de merge `76fb62d` ainda tinha os workflows main queued quando esta nota foi preparada.
+
+### Limitação em avaliação — skew temporal ERP/WMS
+
+A comparação actual pode classificar `DIVERGENCE` quando ambos os snapshots estão dentro das respectivas janelas de freshness, mesmo que tenham instantes de captura significativamente diferentes. A diferença de captura deve ser explicitada e sujeita a uma política de skew configurável antes de classificar a divergência. Não foi introduzido um limite arbitrário.
+
+
+### Confirmação dos workflows na main — 25/11/2026
+
+Após o merge da migration 0092, os workflows da branch `main` terminaram com sucesso: API CI `45654043683` (**1715 passed, 1 skipped**), Quality Gates `45654278572`, Security Scans `45654278738` e Docker Compose `45654043988`. O check Vercel continua com `build-rate-limit`, uma limitação de quota externa, separada da validação GitHub.
+
+A próxima análise é o skew temporal ERP/WMS. O sistema expõe os timestamps de cada origem, mas ainda não existe uma política operacional de tolerância entre capturas; nenhum limite deve ser inventado pelo código.
+
+
+## Política de skew temporal ERP/WMS — migration 0093
+
+A diferença absoluta entre os timestamps de captura ERP e WMS é exposta em `erp_wms_capture_skew_seconds`. A tolerância é configurada na política ERP da loja, através de `comparison_skew_tolerance_minutes`; o campo é opcional, aceita 0–10080 minutos e exige motivo auditável. A política WMS não pode definir esta tolerância. NULL significa explicitamente que a tolerância operacional ainda não foi configurada.
+
+Quando ambas as fontes estão CURRENT e a tolerância está NULL, timestamps diferentes produzem `TEMPORAL_SKEW_UNCONFIGURED`; o delta quantitativo fica NULL. Com tolerância configurada, um skew superior ao limite produz `TEMPORAL_SKEW`, também sem delta. Apenas capturas dentro da tolerância permitem comparar quantidades e produzir IN_SYNC/DIVERGENCE. Um valor zero exige timestamps coincidentes.
+
+Cada alteração é registada na mesma transacção da política, com actor, valor anterior/novo, motivo e timestamp no ledger append-only existente. A migration 0093 preserva políticas e eventos históricos com tolerância NULL; não introduz limite operacional por defeito. A configuração efectiva deve ser aprovada pelo responsável da operação e validada com a cadência real dos adapters.
+
+
+## Snapshots WMS fora de ordem e mudança da localização autorizada
+
+A reconciliação selecciona o snapshot WMS mais recente pela combinação `store_id + product_id + source=WMS + backroom_location_code`, ordenando por `captured_at DESC, id DESC`. Uma alteração da localização autorizada não reutiliza snapshots da localização anterior. Se ainda não existir evidência na nova localização, o stock de retaguarda permanece desconhecido; não há fallback para a localização antiga.
+
+Snapshots recebidos tardiamente com `captured_at` anterior são preservados como histórico imutável, mas não substituem evidência mais recente da mesma localização. O desempate de timestamps iguais é determinístico pelo ID do snapshot. A disponibilidade operacional continua a ser `on_hand_quantity - reserved_quantity`; a reserva é um agregado reportado pelo WMS, não uma lista de reservas individuais.
+
+A regressão `test_wms_backroom_location_change_and_late_snapshot_never_restore_old_stock` cobre a mudança auditada de localização, ausência de fallback, chegada tardia e cálculo de disponibilidade. API CI PostgreSQL 16 terminou com **1718 passed, 1 skipped** no SHA `fb1470185126dfe295a15b1f69f635aed05b3da3`; os quatro workflows GitHub passaram.
+
+
+## Reservas agregadas e movimentos internos
+
+O campo WMS `reserved_quantity` é tratado como agregado por SKU/localização, não como lista de reservas identificáveis. A disponibilidade do snapshot é `on_hand_quantity - reserved_quantity`. Ao reconciliar um movimento, o serviço deduz adicionalmente a soma dos movimentos já registados sobre o mesmo `source_snapshot_id`; não altera o snapshot WMS original. O snapshot interno resultante preserva o agregado reservado e reduz o on-hand pela quantidade movimentada, sendo uma projecção interna e não uma confirmação WMS.
+
+A regressão `test_reserved_wms_quantity_is_subtracted_once_across_multiple_movements` valida dois movimentos sucessivos de 6 unidades sobre um snapshot com on-hand 20 e reserva agregada 5: disponibilidades resultantes 9 e 3, mantendo a reserva 5 e o snapshot WMS original imutável. API CI PostgreSQL 16: **1719 passed, 1 skipped** no SHA `043c15f4980b45c4d50d2cd47fb921c5504eccac`.
+
+A confirmação externa WMS permanece separada. Não se deve inferir que um snapshot posterior confirma um movimento apenas porque a quantidade mudou; é necessária correlação inequívoca fornecida pelo adapter/ERP/WMS e uma decisão de contrato explícita.
+
+
+## Proveniência física do destino dos movimentos — migration 0094
+
+Cada movimento conserva `destination_shelf_id` e `destination_shelf_code`. O ID identifica a entidade; o código é um snapshot imutável do identificador físico legível no instante da operação. O serviço bloqueia a prateleira de destino, confirma a associação à loja da tarefa e grava o código no movimento e no evento `MOVEMENT_RECORDED`.
+
+A migration 0094 preenche o código histórico através da relação tarefa → prateleira → zona/loja e falha de forma segura se encontrar movimentos sem destino consistente. Triggers PostgreSQL/SQLite validam novos movimentos contra a prateleira e a loja da tarefa, impedindo destino forjado ou ausente. Renomear uma prateleira posteriormente não altera a evidência histórica já registada.
+
+A validação no SHA `3f4c9740ce70e932c5cb35745e96edd1163bf864` incluiu migration PostgreSQL 16, teste SQLite de backfill/guardas, smoke PostgreSQL de linhagem e concorrência e suite API: **1720 passed, 1 skipped**.
+
+
+## Identidade completa do destino e retenção — migration 0095
+
+O movimento congela a identidade física do destino com `destination_shelf_id`, `destination_shelf_code`, `destination_zone_id` e `destination_zone_name`. O flag `destination_location_backfilled` distingue os dados capturados na operação (`false`) dos valores históricos preenchidos pela hierarquia actualmente disponível durante a migration (`true`). Esta distinção é necessária porque renomeações anteriores à migration não podem ser reconstruídas sem um ledger histórico.
+
+As guardas PostgreSQL/SQLite validam a correspondência tarefa → prateleira → zona → loja, incluindo código e nome, e rejeitam novos movimentos com o flag de backfill activo. O smoke PostgreSQL confirmou que renomear a prateleira/zona não altera os campos históricos do movimento e que a eliminação física da prateleira/zona é bloqueada pela cadeia de retenção que passa pela tarefa e pelo movimento.
+
+Se a operação exigir esconder ou descontinuar zonas/prateleiras, deve ser implementado arquivamento/soft-delete; não se deve remover FKs, apagar movimentos ou reescrever a evidência. API CI PostgreSQL 16: **1722 passed, 1 skipped** no SHA `48fdf8310d1b17179ba6520d7a559b3bcc822c7f`.

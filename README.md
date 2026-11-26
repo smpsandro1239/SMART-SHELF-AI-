@@ -1,3 +1,11 @@
+## Segurança multi-loja — serialização das escritas por prateleira (2026-11-26)
+
+As operações de criação de observações, sessões de captura e upload de imagens bloqueiam a linha da zona proprietária antes de persistirem dados associados à prateleira. A autorização é revalidada depois do lock; a loja da sessão e o directório da imagem são derivados da zona bloqueada. O upload mantém a ordem `Zone → Shelf → CaptureSession` e remove ficheiros parciais se a persistência falhar.
+
+A regressão HTTP cobre IDs cross-store e associações de sessão inválidas. O smoke PostgreSQL executado pelo API CI observa o PID bloqueador e `wait_event_type='Lock'` durante um UPDATE concorrente de `zones.store_id`. O inventário actual não contém endpoint HTTP de transferência de zonas; o smoke representa a alteração concorrente directamente na base de dados. A validação CI desta alteração permanece pendente até os workflows terminarem no SHA final. Migrations 0099/0100 permanecem inalteradas.
+
+---
+
 # Autoridade de stock físico — WMS por loja (2026-11-25)
 
 O WMS é a fonte de referência do stock físico da retaguarda. O ERP mantém-se independente para reconciliação administrativa; POS fornece evidência de vendas/procura; MANUAL representa operações/contagens auditáveis; IMPORT não recebe autoridade implícita.
@@ -8,7 +16,7 @@ A configuração da localização é feita através de `POST /api/v1/inventory/f
 
 O contrato dos adapters WMS exige localização e disponibilidade explícitas. O orquestrador persiste estes campos e inclui-os na comparação de replay idempotente. A reconciliação de movimentos consome apenas snapshots WMS da localização configurada e preserva actor, motivo e referências de origem/resultante.
 
-**Limite:** ainda não existe adapter WMS real homologado. O contrato e a lógica de selecção não provam conectividade ou exactidão de um fornecedor. A normalização de unidade/caixa/palete permanece uma fase separada. Detalhes: [docs/INVENTORY-SOURCE-SYNC.md](docs/INVENTORY-SOURCE-SYNC.md).
+**Limite:** ainda não existe adapter WMS real homologado. O contrato e a lógica de selecção não provam conectividade ou exactidão de um fornecedor. A conversão logística interna por SKU (Product.unit → UNIT/CASE/PALLET) já está implementada com factores Decimal e cálculo read-only; continua pendente o mapeamento das unidades/códigos externos do WMS e a homologação dos factores com o fornecedor. Detalhes: [docs/INVENTORY-SOURCE-SYNC.md](docs/INVENTORY-SOURCE-SYNC.md).
 
 ---
 
@@ -20,7 +28,12 @@ O backend inclui um ledger auditável para tentativas ERP/WMS, com ciclo de vida
 
 O smoke PostgreSQL de consumo de artefactos verifica combinações cruzadas de `image_id`, `artifact_id` e `store_id`, incluindo duas imagens na mesma loja e recursos de outra loja. Os casos inválidos têm de falhar antes de contactar o provider. O controlo positivo confirma que a integração activa da loja proprietária é seleccionada mesmo quando outra loja tem uma integração revogada com o mesmo identificador de sistema externo. A FK composta impede ainda que um artefacto filho referencie um pai de outra imagem.
 
-A validação desta alteração está pendente no API CI/PostgreSQL 16 e nos Quality Gates.
+Validação no API CI PostgreSQL 16 run [45812501875](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45812501875): sucesso. O passo "Verify PostgreSQL external artifact read and retention lock serialization" passou, juntamente com os smokes de linhagem, imutabilidade, monotonicidade do inventário e autorização pré-lock de IDs directos. Quality Gates [45812501507](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45812501507), Security Scans [45812501427](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45812501427) e Docker Compose [45812501364](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45812501364) também passaram no commit de código validado.
+
+
+## Segurança multi-loja — consenso de observações de prateleira
+
+A consulta de consenso volta a aplicar a linhagem `Observation → Shelf → Zone` na mesma query SQL que lê as observações, e também na validação da associação SKU/prateleira. Isto impede que uma transferência da zona entre a validação inicial da prateleira e a leitura da evidência exponha observações fora do tenant do SUPERVISOR. Um teste determinístico simula a transferência nesse intervalo. A validação CI do novo commit ainda está pendente; não é uma prova de concorrência PostgreSQL real.
 
 ## Segurança multi-loja — IDs de prateleiras em planogramas
 
@@ -83,11 +96,11 @@ A leitura de `GET /api/v1/observation-alerts/{alert_id}/events` aplica o âmbito
 
 ## BOLA — paridade de IDs directos de deteções e exemplares
 
-O smoke PostgreSQL pré-lock compara respostas HTTP completas (status e corpo JSON) para IDs estrangeiros reais e IDs inexistentes nos endpoints de revisão/histórico de deteções e revisão de exemplares. Os pedidos são feitos enquanto as linhas de origem e catálogo estão bloqueadas; exige-se HTTP 404 indistinguível e ausência de revisões persistidas. O reforço foi publicado no commit `1cdc4f67`; validação CI ainda pendente.
+O smoke PostgreSQL pré-lock compara respostas HTTP completas (status e corpo JSON) para IDs estrangeiros reais e IDs inexistentes nos endpoints de revisão/histórico de deteções e revisão de exemplares. Os pedidos são feitos enquanto as linhas de origem e catálogo estão bloqueadas; exige-se HTTP 404 indistinguível e ausência de revisões persistidas. O smoke passou no API CI PostgreSQL 16 [45812501875](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45812501875), no passo "Verify PostgreSQL direct-ID detection and exemplar tenant pre-lock authorization".
 
 ## Isolamento multi-loja de deteções
 
-Os endpoints que recebem `detection_id` directamente ocultam recursos de outras lojas com HTTP 404 indistinguível de um identificador inexistente. A autorização é validada antes do lock da imagem de origem e novamente após o lock, antes de consultar o histórico ou criar uma observação. A cobertura automatizada compara os dois cenários; a validação CI da revisão actual permanece pendente até os workflows terminarem.
+Os endpoints que recebem `detection_id` directamente ocultam recursos de outras lojas com HTTP 404 indistinguível de um identificador inexistente. A autorização é validada antes do lock da imagem de origem e novamente após o lock, antes de consultar o histórico ou criar uma observação. A cobertura automatizada compara os dois cenários. O smoke PostgreSQL pré-lock passou no API CI [45812501875](https://github.com/smpsandro1239/SMART-SHELF-AI-/actions/runs/45812501875); esta evidência cobre os cenários do script, não todos os endpoints BOLA/IDOR.
 
 ## Segurança — OWASP Secure Agent Playbook
 
@@ -2086,3 +2099,93 @@ Os movimentos históricos mantêm `unit_code=NULL`, porque não existe evidênci
 O endpoint `GET /api/v1/warehouse/replenishment-units` mantém os campos numéricos existentes e acrescenta `required_base_units_exact`, `base_units_per_package_exact`, `loose_base_units_exact`, `planned_base_units_exact` e `excess_base_units_exact`. O parâmetro `required_base_units` é agora recebido como Decimal. Os cálculos continuam a não autorizar movimentos automáticos.
 
 A validação cobre níveis UNIT, CASE e PALLET, embalagem fechada, embalagem aberta e quantidades fraccionárias. A unidade base é a unidade do produto; o factor de embalagem é expresso nessa unidade, sem conversões implícitas entre SKUs.
+
+
+### Quantidades de exposição na unidade base
+
+Os níveis alvo e mínimo de exposição (`shelf_products.target_quantity` e `min_display_quantity`) usam `NUMERIC(12,3)`, alinhado com a unidade base do produto. Isto permite, por exemplo, configurar 20.125 kg sem arredondamento. A migration 0090 converte os valores inteiros existentes sem alterar o seu valor e o downgrade recusa truncar dados fraccionários.
+
+
+## Comparação temporal ERP/WMS — migration 0093
+
+A reconciliação expõe a diferença absoluta entre os timestamps de captura ERP/WMS. A tolerância é opcional e configurada na política ERP por loja através de `comparison_skew_tolerance_minutes`, com motivo obrigatório e auditoria append-only. Sem tolerância configurada, timestamps diferentes produzem `TEMPORAL_SKEW_UNCONFIGURED`; acima da tolerância produzem `TEMPORAL_SKEW`. Em ambos os estados o delta quantitativo fica NULL. Só capturas dentro da tolerância permitem classificar IN_SYNC/DIVERGENCE. Não existe valor operacional por defeito: a tolerância tem de ser homologada pela operação com base na cadência real dos adapters.
+
+Validação no SHA `b54b2d4c927aee606f23fef35018b701c17aaf5f`: API CI **1717 passed, 1 skipped**, Quality Gates, Security Scans e Docker Compose concluídos com sucesso.
+
+
+## Reservas WMS e movimentos
+
+As reservas WMS são tratadas como quantidade agregada: disponibilidade = `on_hand_quantity - reserved_quantity`. Os movimentos já reconciliados sobre o mesmo snapshot de origem são deduzidos adicionalmente, sem mutar o snapshot WMS. O snapshot resultante MANUAL é uma projecção interna e não representa confirmação de escrita no WMS. A confirmação externa exige uma correlação explícita do fornecedor.
+
+
+## Proveniência do destino dos movimentos
+
+Cada movimento conserva o ID e o código da prateleira de destino no instante da operação. O código é uma evidência histórica imutável: renomeações posteriores não reescrevem movimentos antigos. A API, o evento de auditoria e as guardas de base de dados validam que o destino pertence à loja e à tarefa.
+
+
+## Identidade histórica do destino dos movimentos
+
+Os movimentos guardam a prateleira e a zona de destino (IDs e nomes/códigos) no instante da operação. `destination_location_backfilled` distingue captura contemporânea de reconstrução histórica a partir da hierarquia actual. Renomeações posteriores não reescrevem o movimento; a eliminação física de entidades referenciadas fica bloqueada para preservar a rastreabilidade.
+
+
+## Retenção da hierarquia de prateleiras e auditoria de tarefas
+
+As migrations 0096–0098 protegem a linhagem operacional contra eliminações em cascata. Tarefas com histórico não podem ser apagadas; eventos de tarefa são append-only e a identidade loja/prateleira/produto fica imutável depois do primeiro evento. Uma prateleira/zona também não pode ser eliminada enquanto existirem observações, alertas, associações de SKU, planogramas, reconciliações, tarefas, sessões de captura, imagens ou eventos Edge associados. Esta regra protege, entre outros casos, imagens ACTIVE e sujeitas a legal hold mesmo quando não existe uma tarefa de reposição.
+
+A interface de histórico de movimentos apresenta a prateleira e a zona de destino, distinguindo valores capturados no movimento de valores históricos reconstruídos pela migration 0095. A reconstrução histórica não recupera renomeações anteriores que nunca tenham sido auditadas.
+
+Validação no SHA `7bf95468320fc1dd4ab992b520e855d463b6e1f6`: API CI PostgreSQL 16 **1725 passed, 1 skipped**, Quality Gates, Security Scans e Docker Compose concluídos com sucesso. Não existe ainda operação de arquivamento/soft-delete; não remover as guardas nem usar eliminação física para descontinuar entidades.
+
+
+## Concorrência e auditoria do ciclo de vida das tarefas
+
+As transições de estado de tarefas são serializadas através do lock da linha da tarefa em PostgreSQL e validadas sobre o estado actualizado. O smoke concorrente confirma que atribuições simultâneas não duplicam eventos e que, numa corrida entre conclusão e cancelamento, apenas uma transição terminal é aceite (a perdedora recebe HTTP 409). O ledger append-only reflecte exactamente o vencedor. Falhas de auditoria depois do flush revertem atomicamente o estado e o evento; tarefas terminais não podem ser reabertas.
+
+Validação no SHA `cfeeab3f4e092709de9eccb0dfc54397f72f12af`: API CI PostgreSQL 16 **1725 passed, 1 skipped**, Quality Gates, Security Scans e Docker Compose concluídos com sucesso.
+
+
+### Autorização do histórico operacional das tarefas
+
+A leitura detalhada dos eventos de tarefas é reservada a supervisores e administradores. Funcionários (`EMPLOYEE`) recebem HTTP 403, mesmo para tarefas atribuídas à sua própria conta. Supervisores consultam apenas tarefas da sua loja e administradores mantêm acesso global. A regra está declarada na política central de rotas e é novamente imposta no handler.
+
+Validação no SHA `f925b875f871964ce80805c4927af15616f58774`: API CI, Quality Gates, Security Scans e Docker Compose concluídos com sucesso.
+
+
+### Autorização das operações de paletes
+
+A leitura do histórico e o registo de alterações do ciclo de vida de paletes exigem perfil SUPERVISOR ou ADMIN. Os handlers repetem a autorização da política central antes de ler ou bloquear o registo; funcionários recebem 403 e não conseguem criar eventos nem alterar o estado.
+
+Validação no SHA `50df52e59eca47aa2dfc868fc16621cf2f636586`: API CI, Quality Gates, Security Scans e Docker Compose concluídos com sucesso.
+
+
+### RBAC das APIs de inventário
+
+A ingestão de snapshots de qualquer origem e a leitura/listagem de snapshots exigem perfil SUPERVISOR ou ADMIN. Funcionários não podem introduzir snapshots WMS/ERP/POS nem consultar quantidades de inventário através destas APIs. A listagem do catálogo de lojas também está limitada a SUPERVISOR/ADMIN.
+
+Validação no SHA `19bf8dd2bf2b6990faff261effc0752523f59a5b`: API CI **1728 passed, 1 skipped**, Quality Gates, Security Scans e Docker Compose concluídos com sucesso.
+
+
+### Autorização da ingestão POS
+
+A criação de registos horários, importações batch e importações CSV de vendas e tráfego está limitada a perfis SUPERVISOR/ADMIN. Os handlers repetem a autorização antes de processar payloads ou ler ficheiros; funcionários não podem introduzir dados POS.
+
+Validação no SHA `d36af7332544204fc14b6764a3faf99c24aa4741`: API CI **1729 passed, 1 skipped**, Quality Gates, Security Scans e Docker Compose concluídos com sucesso.
+
+
+### Autorização da evidência OCR
+
+A criação de execuções OCR, correspondências com o catálogo e fusão de evidência visual/textual exige perfil SUPERVISOR/ADMIN. Funcionários não podem persistir nem recalcular estes artefactos; a autorização é verificada antes do acesso à captura.
+
+Validação no SHA `a9271dd595c7d913a93cd969cf73d58b5e49438d`: API CI **1730 passed, 1 skipped**, Quality Gates, Security Scans e Docker Compose concluídos com sucesso.
+
+
+### Autorização das operações de warehouse
+
+A criação de localizações e colocações, registo de paletes, configuração de políticas de rotação e simulação de rotação exigem perfil SUPERVISOR/ADMIN. Funcionários não podem alterar a configuração física do armazém nem o estado operacional das paletes.
+
+Validação no SHA `3f63efd0da73070cc1654e76ea58ecfe0e79ca93`: API CI **1731 passed, 1 skipped**, Quality Gates, Security Scans e Docker Compose concluídos com sucesso.
+
+
+### Isolamento multi-loja no histórico de jobs de sincronização
+
+A leitura de eventos de um job ERP/WMS consulta agora o job e o seu histórico numa única instrução SQL, com `OUTER JOIN` e predicados simultâneos de `job_id` e `store_id`. Isto evita a janela TOCTOU entre validar a loja do job e carregar os eventos. Um job autorizado sem eventos mantém `items: []`; um job de outra loja e um ID inexistente devolvem o mesmo 404. A regressão API foi adicionada; a validação CI/PostgreSQL 16 desta alteração permanece pendente.

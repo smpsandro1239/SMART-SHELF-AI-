@@ -340,6 +340,57 @@ def _get_store_scoped_shelf(
         raise HTTPException(status_code=404, detail="Shelf not found")
     return shelf
 
+def _lock_store_scoped_shelf(
+    db: Session,
+    shelf_id: int,
+    actor: models.User | None,
+) -> tuple[models.Shelf, models.Zone]:
+    """Lock the ownership row before the shelf, then revalidate the full lineage.
+
+    Lock order is Zone → Shelf → dependent records. A concurrent UPDATE of
+    zones.store_id must wait until the caller commits, so the tenant decision
+    and the dependent write share one serialized ownership interval.
+    """
+    initial = (
+        db.query(models.Shelf.id, models.Shelf.zone_id)
+        .filter(models.Shelf.id == shelf_id)
+        .first()
+    )
+    if initial is None:
+        raise HTTPException(status_code=404, detail="Shelf not found")
+
+    zone = (
+        db.query(models.Zone)
+        .filter(models.Zone.id == initial.zone_id)
+        .with_for_update()
+        .populate_existing()
+        .first()
+    )
+    if zone is None:
+        raise HTTPException(status_code=404, detail="Shelf not found")
+    if actor is not None and actor.role != "ADMIN" and zone.store_id != actor.store_id:
+        raise HTTPException(status_code=404, detail="Shelf not found")
+
+    shelf = (
+        db.query(models.Shelf)
+        .filter(
+            models.Shelf.id == shelf_id,
+            models.Shelf.zone_id == zone.id,
+        )
+        .with_for_update()
+        .populate_existing()
+        .first()
+    )
+    if shelf is None:
+        raise HTTPException(
+            status_code=409,
+            detail="Shelf ownership changed concurrently; refresh and retry",
+        )
+    db.refresh(zone)
+    if actor is not None and actor.role != "ADMIN" and zone.store_id != actor.store_id:
+        raise HTTPException(status_code=404, detail="Shelf not found")
+    return shelf, zone
+
 
 def _resolve_detection_source_image_id(
     db: Session,
@@ -584,7 +635,9 @@ def readiness(db: Session = Depends(get_db)):
 
 @app.post("/api/v1/stores", response_model=StoreRead, status_code=201, tags=["stores"])
 def create_store(payload: StoreCreate, request: Request, db: Session = Depends(get_db)):
-    _request_user(db, request)
+    actor = _request_user(db, request)
+    if actor is not None and actor.role != "ADMIN":
+        raise HTTPException(status_code=403, detail="Administrator role required")
     if db.query(models.Store).filter_by(code=payload.code).first():
         raise HTTPException(status_code=409, detail="Store code already exists")
     item = models.Store(**payload.model_dump())
@@ -598,6 +651,8 @@ def create_store(payload: StoreCreate, request: Request, db: Session = Depends(g
 def list_stores(request: Request, db: Session = Depends(get_db)):
     query = db.query(models.Store)
     actor = _request_user(db, request)
+    if actor is not None and actor.role not in {"ADMIN", "SUPERVISOR"}:
+        raise HTTPException(status_code=403, detail="Supervisor role required")
     if actor is not None and actor.role != "ADMIN":
         query = query.filter(models.Store.id == actor.store_id)
     return query.order_by(models.Store.id).all()
@@ -620,7 +675,9 @@ def list_zones(request: Request, store_id: int | None = None, db: Session = Depe
 
 @app.post("/api/v1/zones", response_model=ZoneRead, status_code=201, tags=["zones"])
 def create_zone(payload: ZoneCreate, request: Request, db: Session = Depends(get_db)):
-    _request_user(db, request)
+    actor = _request_user(db, request)
+    if actor is not None and actor.role != "ADMIN":
+        raise HTTPException(status_code=403, detail="Administrator role required")
     if not db.get(models.Store, payload.store_id):
         raise HTTPException(status_code=404, detail="Store not found")
     item = models.Zone(**payload.model_dump())
@@ -925,16 +982,7 @@ def retire_shelf_planogram(
 @app.post("/api/v1/observations", response_model=ObservationRead, status_code=201, tags=["observations"])
 def create_observation(payload: ObservationCreate, request: Request, db: Session = Depends(get_db)):
     actor = _request_user(db, request)
-    shelf_scope = (
-        db.query(models.Shelf)
-        .join(models.Zone, models.Shelf.zone_id == models.Zone.id)
-        .filter(models.Shelf.id == payload.shelf_id)
-        .first()
-    )
-    if shelf_scope is None:
-        raise HTTPException(status_code=404, detail="Shelf not found")
-    if actor is not None and actor.role != "ADMIN" and shelf_scope.zone.store_id != actor.store_id:
-        raise HTTPException(status_code=404, detail="Shelf not found")
+    shelf, _zone = _lock_store_scoped_shelf(db, payload.shelf_id, actor)
     reserved_demo_evidence_fields = (
         "demo_detection_id=",
         "shelf_image_id=",
@@ -1217,28 +1265,38 @@ def list_observation_alert_events(alert_id: int, request: Request, db: Session =
     actor = _request_user(db, request)
     if actor is None or actor.role not in {"ADMIN", "SUPERVISOR"}:
         raise HTTPException(status_code=403, detail="Supervisor role required")
-    if actor.role == "ADMIN":
-        alert = db.get(models.ObservationAlert, alert_id)
-    else:
-        # Scope the lookup itself to the actor's store. This avoids loading a
-        # foreign alert before authorization and gives foreign/missing IDs the
-        # same read-only lookup and HTTP response.
-        alert = (
-            db.query(models.ObservationAlert)
-            .filter(
-                models.ObservationAlert.id == alert_id,
-                models.ObservationAlert.store_id == actor.store_id,
-            )
-            .first()
-        )
-    if alert is None:
-        raise HTTPException(status_code=404, detail="Observation alert not found")
-    return (
+    events_query = (
         db.query(models.ObservationAlertEvent)
-        .filter(models.ObservationAlertEvent.alert_id == alert_id)
+        .join(
+            models.ObservationAlert,
+            models.ObservationAlertEvent.alert_id == models.ObservationAlert.id,
+        )
+        .filter(models.ObservationAlert.id == alert_id)
+    )
+    if actor.role != "ADMIN":
+        if actor.store_id is None:
+            raise HTTPException(status_code=404, detail="Observation alert not found")
+        # The tenant predicate belongs to the same query that materializes
+        # audit events, closing the gap between parent lookup and event read.
+        events_query = events_query.filter(
+            models.ObservationAlert.store_id == actor.store_id
+        )
+    events = (
+        events_query
         .order_by(models.ObservationAlertEvent.created_at.asc(), models.ObservationAlertEvent.id.asc())
         .all()
     )
+    if not events:
+        alert_query = db.query(models.ObservationAlert.id).filter(
+            models.ObservationAlert.id == alert_id
+        )
+        if actor.role != "ADMIN":
+            alert_query = alert_query.filter(
+                models.ObservationAlert.store_id == actor.store_id
+            )
+        if alert_query.first() is None:
+            raise HTTPException(status_code=404, detail="Observation alert not found")
+    return events
 
 
 @app.get("/api/v1/observations", response_model=list[ObservationRead], tags=["observations"])
@@ -1277,17 +1335,23 @@ def get_shelf_observation_consensus(
     actor = _request_user(db, request)
     shelf = _get_store_scoped_shelf(db, shelf_id, actor)
     if product_id is not None:
-        shelf_product = (
+        shelf_product_query = (
             db.query(models.ShelfProduct)
+            .join(models.Shelf, models.ShelfProduct.shelf_id == models.Shelf.id)
+            .join(models.Zone, models.Shelf.zone_id == models.Zone.id)
             .join(models.Product, models.ShelfProduct.product_id == models.Product.id)
             .filter(
                 models.ShelfProduct.shelf_id == shelf_id,
                 models.ShelfProduct.product_id == product_id,
                 models.Product.is_active.is_(True),
             )
-            .first()
         )
-        if shelf_product is None:
+        if actor is not None and actor.role != "ADMIN":
+            # Reapply tenant scope in the same statement as the association read.
+            shelf_product_query = shelf_product_query.filter(
+                models.Zone.store_id == actor.store_id
+            )
+        if shelf_product_query.first() is None:
             raise HTTPException(
                 status_code=422,
                 detail="Product must be active and explicitly assigned to this shelf",
@@ -1296,12 +1360,25 @@ def get_shelf_observation_consensus(
     else:
         # Keep legacy shelf-only evidence separate from SKU-attributed evidence.
         observation_scope = models.Observation.product_id.is_(None)
-    observations = (
+
+    # Do not rely solely on the earlier shelf preflight: the shelf can be
+    # reassigned to another store before this evidence query executes. Resolve
+    # the complete tenant lineage in the same SQL statement that reads rows.
+    observations_query = (
         db.query(models.Observation)
+        .join(models.Shelf, models.Observation.shelf_id == models.Shelf.id)
+        .join(models.Zone, models.Shelf.zone_id == models.Zone.id)
         .filter(
             models.Observation.shelf_id == shelf_id,
             observation_scope,
         )
+    )
+    if actor is not None and actor.role != "ADMIN":
+        observations_query = observations_query.filter(
+            models.Zone.store_id == actor.store_id
+        )
+    observations = (
+        observations_query
         .order_by(models.Observation.observed_at.desc(), models.Observation.id.desc())
         .limit(500)
         .all()
@@ -1329,7 +1406,7 @@ def get_shelf_observation_consensus(
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return {
-        "store_id": shelf.zone.store_id,
+        "store_id": actor.store_id if actor is not None and actor.role != "ADMIN" else shelf.zone.store_id,
         "shelf_id": shelf.id,
         "shelf_code": shelf.code,
         "evaluated_observations": len(observations),
@@ -1345,8 +1422,8 @@ def create_capture_session(payload: CaptureSessionCreate, request: Request, db: 
     actor = _request_user(db, request)
     if actor is not None and actor.role == "EMPLOYEE":
         raise HTTPException(status_code=403, detail="Supervisor role required to create capture sessions")
-    shelf = _get_store_scoped_shelf(db, payload.shelf_id, actor)
-    store_id = shelf.zone.store_id
+    shelf, zone = _lock_store_scoped_shelf(db, payload.shelf_id, actor)
+    store_id = zone.store_id
     started_at = payload.started_at or models.utc_now()
     if started_at.tzinfo is None:
         raise HTTPException(status_code=422, detail="started_at must include a timezone")
@@ -1404,7 +1481,7 @@ async def upload_shelf_image(
 ):
     """Store a validated shelf photograph; analysis is queued for a later CV stage."""
     actor = _request_user(db, request)
-    shelf = _get_store_scoped_shelf(db, shelf_id, actor)
+    shelf, zone = _lock_store_scoped_shelf(db, shelf_id, actor)
 
     capture_session = None
     if capture_session_id is not None:
@@ -1416,7 +1493,7 @@ async def upload_shelf_image(
             "Capture session not found",
             hide_foreign=True,
         )
-        if capture_session.shelf_id != shelf.id or capture_session.store_id != shelf.zone.store_id:
+        if capture_session.shelf_id != shelf.id or capture_session.store_id != zone.store_id:
             raise HTTPException(status_code=422, detail="Capture session does not belong to this shelf")
         if capture_session.ended_at is not None:
             raise HTTPException(status_code=409, detail="Capture session is closed")
@@ -1458,10 +1535,9 @@ async def upload_shelf_image(
         raise HTTPException(status_code=415, detail="Uploaded file is not a valid supported image")
 
     image_id = uuid4().hex
-    directory = Path(settings.image_storage_path) / str(shelf.zone.store_id)
+    directory = Path(settings.image_storage_path) / str(zone.store_id)
     directory.mkdir(parents=True, exist_ok=True)
     destination = directory / f"{image_id}{extension}"
-    destination.write_bytes(content)
     captured_at = models.utc_now()
     record = models.ShelfImage(
         shelf_id=shelf.id,
@@ -1476,9 +1552,11 @@ async def upload_shelf_image(
         captured_at=captured_at,
     )
     try:
+        destination.write_bytes(content)
         db.add(record)
-        db.commit()
+        db.flush()
         db.refresh(record)
+        db.commit()
     except Exception:
         db.rollback()
         destination.unlink(missing_ok=True)
@@ -2959,19 +3037,30 @@ def list_shelf_image_retention_events(
         raise HTTPException(status_code=401, detail="Authenticated user required")
     if actor is not None and actor.role not in {"ADMIN", "SUPERVISOR"}:
         raise HTTPException(status_code=403, detail="Supervisor role required")
-    store_id = _shelf_image_store_id(db, image_id)
-    if store_id is None or (
-        actor is not None
-        and actor.role != "ADMIN"
-        and actor.store_id != store_id
-    ):
-        raise HTTPException(status_code=404, detail="Shelf image not found")
-    item = db.get(models.ShelfImage, image_id)
-    if item is None or _shelf_image_store_id(db, image_id) != store_id:
-        raise HTTPException(status_code=404, detail="Shelf image not found")
-    return (
+    events_query = (
         db.query(models.ShelfImageRetentionEvent)
-        .filter(models.ShelfImageRetentionEvent.shelf_image_id == image_id)
+        .join(
+            models.ShelfImage,
+            models.ShelfImageRetentionEvent.shelf_image_id == models.ShelfImage.id,
+        )
+        .join(models.Shelf, models.ShelfImage.shelf_id == models.Shelf.id)
+        .join(models.Zone, models.Shelf.zone_id == models.Zone.id)
+        .filter(models.ShelfImage.id == image_id)
+    )
+    image_query = (
+        db.query(models.ShelfImage.id)
+        .join(models.Shelf, models.ShelfImage.shelf_id == models.Shelf.id)
+        .join(models.Zone, models.Shelf.zone_id == models.Zone.id)
+        .filter(models.ShelfImage.id == image_id)
+    )
+    if actor is not None and actor.role != "ADMIN":
+        if actor.store_id is None:
+            raise HTTPException(status_code=404, detail="Shelf image not found")
+        events_query = events_query.filter(models.Zone.store_id == actor.store_id)
+        image_query = image_query.filter(models.Zone.store_id == actor.store_id)
+
+    events = (
+        events_query
         .order_by(
             models.ShelfImageRetentionEvent.created_at.asc(),
             models.ShelfImageRetentionEvent.id.asc(),
@@ -2980,6 +3069,14 @@ def list_shelf_image_retention_events(
         .limit(max(1, min(limit, 500)))
         .all()
     )
+    if events:
+        return events
+
+    # An empty history is valid only when the parent image is visible in the
+    # same tenant scope; keep foreign and missing image IDs indistinguishable.
+    if image_query.scalar() is None:
+        raise HTTPException(status_code=404, detail="Shelf image not found")
+    return []
 
 
 @app.get("/api/v1/shelf-images", response_model=list[ShelfImageRead], tags=["computer-vision"])
@@ -3269,6 +3366,8 @@ def _refresh_ocr_match_view(db: Session, rows: list[models.ShelfImageOCRMatch]):
 def match_shelf_image_ocr_to_catalogue(image_id: int, request: Request, db: Session = Depends(get_db)):
     """Rank active catalogue candidates for OCR text grouped by product detection."""
     actor = _request_user(db, request)
+    if actor is not None and actor.role not in {"ADMIN", "SUPERVISOR"}:
+        raise HTTPException(status_code=403, detail="Supervisor role required")
     image_record, _ = _lock_authorized_shelf_image(db, image_id, actor)
     _require_active_shelf_image(image_record)
 
@@ -3445,6 +3544,8 @@ def fuse_shelf_image_evidence(image_id: int, request: Request, db: Session = Dep
     from app.product_text import OCRText, TextCandidate, TextMatch
 
     actor = _request_user(db, request)
+    if actor is not None and actor.role not in {"ADMIN", "SUPERVISOR"}:
+        raise HTTPException(status_code=403, detail="Supervisor role required")
     image_record, _ = _lock_authorized_shelf_image(db, image_id, actor)
     _require_active_shelf_image(image_record)
 
@@ -4040,6 +4141,8 @@ def list_shelf_image_fused_evidence(
 def create_shelf_image_ocr_run(image_id: int, payload: ShelfImageOCRRunCreate, request: Request, db: Session = Depends(get_db)):
     """Persist one immutable OCR pass and its per-region detection associations."""
     actor = _request_user(db, request)
+    if actor is not None and actor.role not in {"ADMIN", "SUPERVISOR"}:
+        raise HTTPException(status_code=403, detail="Supervisor role required")
     image_record, _ = _lock_authorized_shelf_image(db, image_id, actor)
     _require_active_shelf_image(image_record)
 
@@ -4256,7 +4359,9 @@ def list_detection_sku_reviews(
 
 @app.post("/api/v1/products", response_model=ProductRead, status_code=201, tags=["products"])
 def create_product(payload: ProductCreate, request: Request, db: Session = Depends(get_db)):
-    _request_user(db, request)
+    actor = _request_user(db, request)
+    if actor is not None and actor.role != "ADMIN":
+        raise HTTPException(status_code=403, detail="Administrator role required")
     if db.query(models.Product).filter_by(sku=payload.sku).first():
         raise HTTPException(status_code=409, detail="Product SKU already exists")
     item = models.Product(**payload.model_dump())
@@ -4268,7 +4373,9 @@ def create_product(payload: ProductCreate, request: Request, db: Session = Depen
 
 @app.get("/api/v1/products", response_model=list[ProductRead], tags=["products"])
 def list_products(request: Request, active_only: bool = True, limit: int = 100, db: Session = Depends(get_db)):
-    _request_user(db, request)
+    actor = _request_user(db, request)
+    if actor is not None and actor.role not in {"ADMIN", "SUPERVISOR"}:
+        raise HTTPException(status_code=403, detail="Supervisor role required")
     limit = max(1, min(limit, 500))
     query = db.query(models.Product)
     if active_only:
@@ -4395,7 +4502,35 @@ def review_product_embedding_exemplar(
     # Follow the worker's lock order: source image, catalogue product,
     # exemplar. This prevents inversion with matching's prelocked image set.
     actor = _request_user(db, request)
-    initial = db.get(models.ProductEmbeddingExemplar, exemplar_id)
+    initial_query = db.query(models.ProductEmbeddingExemplar).filter(
+        models.ProductEmbeddingExemplar.id == exemplar_id
+    )
+    if actor is not None and actor.role != "ADMIN":
+        # Apply tenant scope in SQL before materializing the exemplar. Keep
+        # image-less records in the result only so the explicit ADMIN-only
+        # policy below can return its established 403 response.
+        initial_query = (
+            initial_query
+            .outerjoin(
+                models.ShelfImage,
+                models.ProductEmbeddingExemplar.shelf_image_id == models.ShelfImage.id,
+            )
+            .outerjoin(
+                models.Shelf,
+                models.ShelfImage.shelf_id == models.Shelf.id,
+            )
+            .outerjoin(
+                models.Zone,
+                models.Shelf.zone_id == models.Zone.id,
+            )
+            .filter(
+                or_(
+                    models.ProductEmbeddingExemplar.shelf_image_id.is_(None),
+                    models.Zone.store_id == actor.store_id,
+                )
+            )
+        )
+    initial = initial_query.first()
     if initial is None:
         raise HTTPException(status_code=404, detail="Embedding exemplar not found")
     # Image-less exemplars have no tenant-bound source to authorize against;
@@ -4508,7 +4643,10 @@ def assign_product_to_shelf(
         shelf_id=payload.shelf_id, product_id=payload.product_id
     ).first():
         raise HTTPException(status_code=409, detail="Product is already assigned to this shelf")
-    item = models.ShelfProduct(**payload.model_dump())
+    item_data = payload.model_dump()
+    item_data["target_quantity"] = Decimal(str(payload.target_quantity))
+    item_data["min_display_quantity"] = Decimal(str(payload.min_display_quantity))
+    item = models.ShelfProduct(**item_data)
     db.add(item)
     try:
         db.commit()
@@ -4575,6 +4713,8 @@ def create_daily_sales_record(
 @app.post("/api/v1/sales/hourly", response_model=HourlySalesRecordRead, status_code=201, tags=["sales"])
 def create_hourly_sales_record(payload: HourlySalesRecordCreate, request: Request, db: Session = Depends(get_db)):
     actor = _request_user(db, request)
+    if actor is not None and actor.role not in {"ADMIN", "SUPERVISOR"}:
+        raise HTTPException(status_code=403, detail="Supervisor role required")
     _enforce_store_scope(actor, payload.store_id)
     if db.get(models.Store, payload.store_id) is None:
         raise HTTPException(status_code=404, detail="Store not found")
@@ -4595,6 +4735,8 @@ def create_hourly_sales_record(payload: HourlySalesRecordCreate, request: Reques
 @app.post("/api/v1/sales/traffic/hourly", response_model=HourlyStoreTrafficRecordRead, status_code=201, tags=["sales"])
 def create_hourly_store_traffic_record(payload: HourlyStoreTrafficRecordCreate, request: Request, db: Session = Depends(get_db)):
     actor = _request_user(db, request)
+    if actor is not None and actor.role not in {"ADMIN", "SUPERVISOR"}:
+        raise HTTPException(status_code=403, detail="Supervisor role required")
     _enforce_store_scope(actor, payload.store_id)
     if db.get(models.Store, payload.store_id) is None:
         raise HTTPException(status_code=404, detail="Store not found")
@@ -4621,6 +4763,8 @@ async def import_hourly_sales_csv(
 ):
     max_file_bytes = 5 * 1024 * 1024
     actor = _request_user(db, request)
+    if actor is not None and actor.role not in {"ADMIN", "SUPERVISOR"}:
+        raise HTTPException(status_code=403, detail="Supervisor role required")
     _enforce_store_scope(actor, store_id)
     if not db.get(models.Store, store_id):
         raise HTTPException(status_code=404, detail="Store not found")
@@ -4673,6 +4817,8 @@ async def import_hourly_traffic_csv(
 ):
     max_file_bytes = 5 * 1024 * 1024
     actor = _request_user(db, request)
+    if actor is not None and actor.role not in {"ADMIN", "SUPERVISOR"}:
+        raise HTTPException(status_code=403, detail="Supervisor role required")
     _enforce_store_scope(actor, store_id)
     if not db.get(models.Store, store_id):
         raise HTTPException(status_code=404, detail="Store not found")
@@ -4764,6 +4910,8 @@ def list_hourly_store_traffic_records(
 @app.post("/api/v1/sales/hourly/batch", status_code=201, tags=["sales"])
 def create_hourly_sales_batch(payload: HourlySalesBatchCreate, request: Request, db: Session = Depends(get_db)):
     actor = _request_user(db, request)
+    if actor is not None and actor.role not in {"ADMIN", "SUPERVISOR"}:
+        raise HTTPException(status_code=403, detail="Supervisor role required")
     store_id = payload.records[0].store_id
     _enforce_store_scope(actor, store_id)
     if db.get(models.Store, store_id) is None:
@@ -4790,6 +4938,8 @@ def create_hourly_sales_batch(payload: HourlySalesBatchCreate, request: Request,
 @app.post("/api/v1/sales/traffic/hourly/batch", status_code=201, tags=["sales"])
 def create_hourly_traffic_batch(payload: HourlyStoreTrafficBatchCreate, request: Request, db: Session = Depends(get_db)):
     actor = _request_user(db, request)
+    if actor is not None and actor.role not in {"ADMIN", "SUPERVISOR"}:
+        raise HTTPException(status_code=403, detail="Supervisor role required")
     store_id = payload.records[0].store_id
     _enforce_store_scope(actor, store_id)
     if db.get(models.Store, store_id) is None:
@@ -5244,6 +5394,8 @@ def create_warehouse_location(
     db: Session = Depends(get_db),
 ):
     actor = _request_user(db, request)
+    if actor is not None and actor.role not in {"ADMIN", "SUPERVISOR"}:
+        raise HTTPException(status_code=403, detail="Supervisor role required")
     _enforce_store_scope(actor, payload.store_id)
     if db.get(models.Store, payload.store_id) is None:
         raise HTTPException(status_code=404, detail="Store not found")
@@ -5280,7 +5432,9 @@ def create_warehouse_product_profile(
     request: Request,
     db: Session = Depends(get_db),
 ):
-    _request_user(db, request)
+    actor = _request_user(db, request)
+    if actor is not None and actor.role != "ADMIN":
+        raise HTTPException(status_code=403, detail="Administrator role required")
     product = db.get(models.Product, payload.product_id)
     if product is None:
         raise HTTPException(status_code=404, detail="Product not found")
@@ -5300,6 +5454,8 @@ def create_warehouse_placement(
     db: Session = Depends(get_db),
 ):
     actor = _request_user(db, request)
+    if actor is not None and actor.role not in {"ADMIN", "SUPERVISOR"}:
+        raise HTTPException(status_code=403, detail="Supervisor role required")
     location = _lock_store_scoped_record(
         db,
         models.WarehouseLocation,
@@ -5332,7 +5488,9 @@ def create_product_packaging_level(
     request: Request,
     db: Session = Depends(get_db),
 ):
-    _request_user(db, request)
+    actor = _request_user(db, request)
+    if actor is not None and actor.role != "ADMIN":
+        raise HTTPException(status_code=403, detail="Administrator role required")
     product = db.get(models.Product, payload.product_id)
     if product is None:
         raise HTTPException(status_code=404, detail="Product not found")
@@ -5410,6 +5568,8 @@ def register_store_pallet(
 ):
     """Register one identified physical pallet; does not change aggregate inventory."""
     actor = _request_user(db, request)
+    if actor is not None and actor.role not in {"ADMIN", "SUPERVISOR"}:
+        raise HTTPException(status_code=403, detail="Supervisor role required")
     _enforce_store_scope(actor, payload.store_id)
     if db.get(models.Store, payload.store_id) is None:
         raise HTTPException(status_code=404, detail="Store not found")
@@ -5487,6 +5647,8 @@ def create_pallet_rotation_policy(
     db: Session = Depends(get_db),
 ):
     actor = _request_user(db, request)
+    if actor is not None and actor.role not in {"ADMIN", "SUPERVISOR"}:
+        raise HTTPException(status_code=403, detail="Supervisor role required")
     _enforce_store_scope(actor, payload.store_id)
     if db.get(models.Store, payload.store_id) is None:
         raise HTTPException(status_code=404, detail="Store not found")
@@ -5516,6 +5678,8 @@ def update_pallet_rotation_policy(
     db: Session = Depends(get_db),
 ):
     actor = _request_user(db, request)
+    if actor is not None and actor.role not in {"ADMIN", "SUPERVISOR"}:
+        raise HTTPException(status_code=403, detail="Supervisor role required")
     policy = _lock_store_scoped_record(
         db,
         models.PalletRotationPolicy,
@@ -5558,6 +5722,8 @@ def simulate_pallet_rotation(
 ):
     """Evaluate one displayed pallet against registered replacement stock; read-only."""
     actor = _request_user(db, request)
+    if actor is not None and actor.role not in {"ADMIN", "SUPERVISOR"}:
+        raise HTTPException(status_code=403, detail="Supervisor role required")
     _enforce_store_scope(actor, payload.store_id)
     if db.get(models.Store, payload.store_id) is None:
         raise HTTPException(status_code=404, detail="Store not found")
@@ -6023,6 +6189,8 @@ def list_pallet_lifecycle_events(
     db: Session = Depends(get_db),
 ):
     actor = _request_user(db, request)
+    if actor is not None and actor.role not in {"ADMIN", "SUPERVISOR"}:
+        raise HTTPException(status_code=403, detail="Supervisor role required")
     _enforce_store_scope(actor, store_id)
     pallet = db.query(models.StorePallet).filter_by(id=pallet_id, store_id=store_id).first()
     if pallet is None:
@@ -6041,6 +6209,8 @@ def record_pallet_lifecycle_update(
 ):
     """Record a supervised, optimistic-concurrency-protected pallet state update."""
     actor = _request_user(db, request)
+    if actor is not None and actor.role not in {"ADMIN", "SUPERVISOR"}:
+        raise HTTPException(status_code=403, detail="Supervisor role required")
     pallet = _lock_store_scoped_record(
         db,
         models.StorePallet,
@@ -6696,13 +6866,23 @@ def get_store_stockout_risk_portfolio(
 
 @app.post("/api/v1/inventory/snapshots", response_model=InventorySnapshotRead, status_code=201, tags=["inventory"])
 def create_inventory_snapshot(payload: InventorySnapshotCreate, request: Request, db: Session = Depends(get_db)):
-    _enforce_store_scope(_request_user(db, request), payload.store_id)
+    actor = _request_user(db, request)
+    if actor is not None and actor.role not in {"ADMIN", "SUPERVISOR"}:
+        raise HTTPException(status_code=403, detail="Supervisor approval is required for inventory snapshots")
+    if payload.source == "MANUAL":
+        if actor is None or not actor.is_active:
+            raise HTTPException(status_code=401, detail="Authentication is required for manual inventory counts")
+        if actor.role not in {"ADMIN", "SUPERVISOR"}:
+            raise HTTPException(status_code=403, detail="Supervisor approval is required for manual inventory counts")
+    _enforce_store_scope(actor, payload.store_id)
     if not db.get(models.Store, payload.store_id):
         raise HTTPException(status_code=404, detail="Store not found")
     product = db.query(models.Product).filter(models.Product.id == payload.product_id).with_for_update().first()
     if product is None:
         raise HTTPException(status_code=404, detail="Product not found")
-    data = payload.model_dump()
+    data = payload.model_dump(exclude={"reason"})
+    data["on_hand_quantity"] = Decimal(str(payload.on_hand_quantity))
+    data["reserved_quantity"] = Decimal(str(payload.reserved_quantity))
     if data["captured_at"] is None:
         data["captured_at"] = models.utc_now()
     elif data["captured_at"].tzinfo is None:
@@ -6710,9 +6890,14 @@ def create_inventory_snapshot(payload: InventorySnapshotCreate, request: Request
     item = models.InventorySnapshot(**data)
     db.add(item)
     try:
+        db.flush()
+        if payload.source == "MANUAL":
+            db.add(models.InventoryManualCountEvent(snapshot_id=item.id, store_id=item.store_id, product_id=item.product_id, actor_user_id=actor.id, reason=payload.reason, created_at=models.utc_now()))
         db.commit()
     except IntegrityError as exc:
         db.rollback()
+        if payload.source == "MANUAL":
+            raise HTTPException(status_code=409, detail="Manual inventory count could not be recorded atomically") from exc
         raise HTTPException(status_code=409, detail="Inventory source reference already exists") from exc
     db.refresh(item)
     return item
@@ -6759,33 +6944,34 @@ def upsert_inventory_freshness_policy(
         .with_for_update()
         .first()
     )
-    previous_backroom_location_code = (
-        policy.backroom_location_code if policy is not None else None
-    )
+    previous_backroom_location_code = policy.backroom_location_code if policy is not None else None
+    previous_comparison_skew_tolerance_minutes = policy.comparison_skew_tolerance_minutes if policy is not None else None
     if policy is None:
         policy = models.InventoryFreshnessPolicy(
-            store_id=payload.store_id,
-            source=payload.source,
-            max_age_minutes=payload.max_age_minutes,
+            store_id=payload.store_id, source=payload.source, max_age_minutes=payload.max_age_minutes,
             backroom_location_code=payload.backroom_location_code,
+            comparison_skew_tolerance_minutes=payload.comparison_skew_tolerance_minutes,
         )
         db.add(policy)
     else:
         policy.max_age_minutes = payload.max_age_minutes
         if "backroom_location_code" in payload.model_fields_set:
             policy.backroom_location_code = payload.backroom_location_code
+        if "comparison_skew_tolerance_minutes" in payload.model_fields_set:
+            policy.comparison_skew_tolerance_minutes = payload.comparison_skew_tolerance_minutes
 
     try:
-        if (
-            "backroom_location_code" in payload.model_fields_set
-            and previous_backroom_location_code != payload.backroom_location_code
-        ):
+        location_changed = "backroom_location_code" in payload.model_fields_set and previous_backroom_location_code != payload.backroom_location_code
+        skew_changed = "comparison_skew_tolerance_minutes" in payload.model_fields_set and previous_comparison_skew_tolerance_minutes != payload.comparison_skew_tolerance_minutes
+        if location_changed or skew_changed:
             db.flush()
             db.add(models.InventoryFreshnessPolicyEvent(
                 policy_id=policy.id,
                 actor_user_id=actor.id,
                 previous_backroom_location_code=previous_backroom_location_code,
-                new_backroom_location_code=payload.backroom_location_code,
+                new_backroom_location_code=payload.backroom_location_code if "backroom_location_code" in payload.model_fields_set else previous_backroom_location_code,
+                previous_comparison_skew_tolerance_minutes=previous_comparison_skew_tolerance_minutes,
+                new_comparison_skew_tolerance_minutes=payload.comparison_skew_tolerance_minutes if "comparison_skew_tolerance_minutes" in payload.model_fields_set else previous_comparison_skew_tolerance_minutes,
                 reason=payload.reason,
                 created_at=models.utc_now(),
             ))
@@ -6805,18 +6991,23 @@ def upsert_inventory_freshness_policy(
                 detail="Inventory freshness policy changed concurrently; retry the request",
             ) from exc
         previous_backroom_location_code = policy.backroom_location_code
+        previous_comparison_skew_tolerance_minutes = policy.comparison_skew_tolerance_minutes
         policy.max_age_minutes = payload.max_age_minutes
         if "backroom_location_code" in payload.model_fields_set:
             policy.backroom_location_code = payload.backroom_location_code
-            if previous_backroom_location_code != payload.backroom_location_code:
-                db.add(models.InventoryFreshnessPolicyEvent(
-                    policy_id=policy.id,
-                    actor_user_id=actor.id,
-                    previous_backroom_location_code=previous_backroom_location_code,
-                    new_backroom_location_code=payload.backroom_location_code,
-                    reason=payload.reason,
-                    created_at=models.utc_now(),
-                ))
+        if "comparison_skew_tolerance_minutes" in payload.model_fields_set:
+            policy.comparison_skew_tolerance_minutes = payload.comparison_skew_tolerance_minutes
+        location_changed = "backroom_location_code" in payload.model_fields_set and previous_backroom_location_code != payload.backroom_location_code
+        skew_changed = "comparison_skew_tolerance_minutes" in payload.model_fields_set and previous_comparison_skew_tolerance_minutes != payload.comparison_skew_tolerance_minutes
+        if location_changed or skew_changed:
+            db.add(models.InventoryFreshnessPolicyEvent(
+                policy_id=policy.id, actor_user_id=actor.id,
+                previous_backroom_location_code=previous_backroom_location_code,
+                new_backroom_location_code=payload.backroom_location_code if "backroom_location_code" in payload.model_fields_set else previous_backroom_location_code,
+                previous_comparison_skew_tolerance_minutes=previous_comparison_skew_tolerance_minutes,
+                new_comparison_skew_tolerance_minutes=payload.comparison_skew_tolerance_minutes if "comparison_skew_tolerance_minutes" in payload.model_fields_set else previous_comparison_skew_tolerance_minutes,
+                reason=payload.reason, created_at=models.utc_now(),
+            ))
         try:
             db.commit()
         except IntegrityError as retry_exc:
@@ -6841,6 +7032,8 @@ def list_inventory_snapshots(
     limit = max(1, min(limit, 500))
     query = db.query(models.InventorySnapshot)
     actor = _request_user(db, request)
+    if actor is not None and actor.role not in {"ADMIN", "SUPERVISOR"}:
+        raise HTTPException(status_code=403, detail="Supervisor role required")
     if actor is not None and actor.role != "ADMIN":
         _enforce_store_scope(actor, store_id if store_id is not None else actor.store_id)
         query = query.filter(models.InventorySnapshot.store_id == actor.store_id)
@@ -6858,7 +7051,10 @@ def get_latest_inventory_snapshot(
     request: Request,
     db: Session = Depends(get_db),
 ):
-    _enforce_store_scope(_request_user(db, request), store_id)
+    actor = _request_user(db, request)
+    if actor is not None and actor.role not in {"ADMIN", "SUPERVISOR"}:
+        raise HTTPException(status_code=403, detail="Supervisor role required")
+    _enforce_store_scope(actor, store_id)
     item = db.query(models.InventorySnapshot).filter(
         models.InventorySnapshot.store_id == store_id,
         models.InventorySnapshot.product_id == product_id,
@@ -6928,26 +7124,38 @@ def list_inventory_movement_events(
         raise HTTPException(status_code=403, detail="Supervisor role required")
     if limit < 1 or limit > 200:
         raise HTTPException(status_code=422, detail="limit must be between 1 and 200")
-    movement_query = db.query(models.InventoryMovement).filter(
-        models.InventoryMovement.id == movement_id
+    events_query = (
+        db.query(models.InventoryMovementEvent)
+        .join(
+            models.InventoryMovement,
+            models.InventoryMovementEvent.movement_id == models.InventoryMovement.id,
+        )
+        .filter(models.InventoryMovement.id == movement_id)
     )
     if actor.role != "ADMIN":
         if actor.store_id is None:
             raise HTTPException(status_code=404, detail="Inventory movement not found")
-        movement_query = movement_query.filter(models.InventoryMovement.store_id == actor.store_id)
-    movement = movement_query.first()
-    if movement is None:
-        raise HTTPException(status_code=404, detail="Inventory movement not found")
-    return (
-        db.query(models.InventoryMovementEvent)
-        .filter(
-            models.InventoryMovementEvent.movement_id == movement.id,
-            models.InventoryMovementEvent.store_id == movement.store_id,
+        events_query = events_query.filter(
+            models.InventoryMovement.store_id == actor.store_id,
+            models.InventoryMovementEvent.store_id == actor.store_id,
         )
+    events = (
+        events_query
         .order_by(models.InventoryMovementEvent.created_at.asc(), models.InventoryMovementEvent.id.asc())
         .limit(limit)
         .all()
     )
+    if not events:
+        movement_query = db.query(models.InventoryMovement.id).filter(
+            models.InventoryMovement.id == movement_id
+        )
+        if actor.role != "ADMIN":
+            movement_query = movement_query.filter(
+                models.InventoryMovement.store_id == actor.store_id
+            )
+        if movement_query.first() is None:
+            raise HTTPException(status_code=404, detail="Inventory movement not found")
+    return events
 
 
 @app.get("/api/v1/inventory/reconciliation", tags=["inventory"])
@@ -7065,12 +7273,14 @@ def get_inventory_reconciliation(
     } if snapshot_ids else {}
 
     freshness_policies = {
-        policy.source: policy.max_age_minutes
+        policy.source: policy
         for policy in db.query(models.InventoryFreshnessPolicy).filter(
             models.InventoryFreshnessPolicy.store_id == store_id,
             models.InventoryFreshnessPolicy.source.in_(["ERP", "WMS"]),
         ).all()
     }
+    erp_policy = freshness_policies.get("ERP")
+    comparison_skew_tolerance_minutes = erp_policy.comparison_skew_tolerance_minutes if erp_policy is not None else None
 
     result = []
     now = models.utc_now()
@@ -7130,7 +7340,8 @@ def get_inventory_reconciliation(
             else:
                 captured = captured.astimezone(timezone.utc)
             age = (now - captured).total_seconds() / 60
-            max_age = freshness_policies.get(source_snapshot.source, 240)
+            source_policy = freshness_policies.get(source_snapshot.source)
+            max_age = source_policy.max_age_minutes if source_policy is not None else 240
             freshness = "FUTURE" if age < 0 else "STALE" if age > max_age else "CURRENT"
             return {
                 "snapshot_id": source_snapshot.id,
@@ -7154,11 +7365,25 @@ def get_inventory_reconciliation(
         erp = source_evidence(erp_snapshot)
         wms = source_evidence(wms_snapshot)
         source_delta = None
+        capture_skew_seconds = None
+        if erp_snapshot is not None and wms_snapshot is not None:
+            erp_captured_at = erp_snapshot.captured_at
+            wms_captured_at = wms_snapshot.captured_at
+            erp_captured_at = erp_captured_at.replace(tzinfo=timezone.utc) if erp_captured_at.tzinfo is None else erp_captured_at.astimezone(timezone.utc)
+            wms_captured_at = wms_captured_at.replace(tzinfo=timezone.utc) if wms_captured_at.tzinfo is None else wms_captured_at.astimezone(timezone.utc)
+            capture_skew_seconds = abs((wms_captured_at - erp_captured_at).total_seconds())
         if wms_snapshot is not None and wms_snapshot.availability_status != "AVAILABLE":
             source_comparison_status = "WMS_BACKROOM_UNAVAILABLE"
         elif erp["freshness_status"] == "CURRENT" and wms["freshness_status"] == "CURRENT":
-            source_delta = round(wms["available_quantity"] - erp["available_quantity"], 3)
-            source_comparison_status = "IN_SYNC" if source_delta == 0 else "DIVERGENCE"
+            if capture_skew_seconds is None:
+                source_comparison_status = "INVALID_TIMESTAMP"
+            elif comparison_skew_tolerance_minutes is None and capture_skew_seconds > 0:
+                source_comparison_status = "TEMPORAL_SKEW_UNCONFIGURED"
+            elif comparison_skew_tolerance_minutes is not None and capture_skew_seconds > comparison_skew_tolerance_minutes * 60:
+                source_comparison_status = "TEMPORAL_SKEW"
+            else:
+                source_delta = round(wms["available_quantity"] - erp["available_quantity"], 3)
+                source_comparison_status = "IN_SYNC" if source_delta == 0 else "DIVERGENCE"
         elif erp["freshness_status"] == "MISSING":
             source_comparison_status = "MISSING_ERP"
         elif wms["freshness_status"] == "MISSING":
@@ -7225,6 +7450,8 @@ def get_inventory_reconciliation(
             "wms_snapshot_age_minutes": wms["age_minutes"],
             "wms_freshness_status": wms["freshness_status"],
             "wms_erp_available_delta": source_delta,
+            "erp_wms_capture_skew_seconds": round(capture_skew_seconds, 3) if capture_skew_seconds is not None else None,
+            "erp_wms_capture_skew_tolerance_minutes": comparison_skew_tolerance_minutes,
             "wms_erp_comparison_status": source_comparison_status,
         })
     return {
@@ -7785,12 +8012,23 @@ def list_store_inventory_sync_job_events(
 ):
     actor = _request_user(db, request)
     _require_mapping_admin_scope(actor, store_id)
-    job = db.query(models.InventorySyncJob).filter_by(id=job_id, store_id=store_id).first()
-    if job is None:
-        raise HTTPException(status_code=404, detail="Synchronization job not found")
-    events = db.query(models.InventorySyncJobEvent).filter_by(job_id=job_id).order_by(
-        models.InventorySyncJobEvent.sequence_number.asc()
+    # Read the parent and its events in one statement. The tenant predicate must
+    # participate in the event query itself: a separate parent preflight followed
+    # by an event lookup would leave a reassignment/TOCTOU window.
+    rows = db.query(
+        models.InventorySyncJob, models.InventorySyncJobEvent
+    ).outerjoin(
+        models.InventorySyncJobEvent,
+        models.InventorySyncJobEvent.job_id == models.InventorySyncJob.id,
+    ).filter(
+        models.InventorySyncJob.id == job_id,
+        models.InventorySyncJob.store_id == store_id,
+    ).order_by(
+        models.InventorySyncJobEvent.sequence_number.asc(),
     ).all()
+    if not rows:
+        raise HTTPException(status_code=404, detail="Synchronization job not found")
+    events = [event for _job, event in rows if event is not None]
     return {"job_id": job_id, "items": [{
         "sequence_number": event.sequence_number, "event_type": event.event_type,
         "worker_id": event.worker_id, "fencing_token": event.fencing_token,
@@ -7957,6 +8195,18 @@ def reconcile_completed_replenishment(
     product = db.query(models.Product).filter(models.Product.id == task.product_id).with_for_update().first()
     if product is None:
         raise HTTPException(status_code=404, detail="Product not found")
+    destination_shelf = (
+        db.query(models.Shelf)
+        .join(models.Zone, models.Zone.id == models.Shelf.zone_id)
+        .filter(
+            models.Shelf.id == task.shelf_id,
+            models.Zone.store_id == task.store_id,
+        )
+        .with_for_update()
+        .first()
+    )
+    if destination_shelf is None:
+        raise HTTPException(status_code=409, detail={"code": "DESTINATION_SHELF_UNAVAILABLE"})
 
     existing = db.query(models.InventoryMovement).filter_by(task_id=task.id).first()
     if existing is not None:
@@ -8113,7 +8363,10 @@ def reconcile_completed_replenishment(
         unit_code=product.unit,
         source_snapshot_id=source_snapshot.id,
         source_location_code=source_snapshot.location_code,
-        destination_shelf_id=task.shelf_id,
+        destination_shelf_id=destination_shelf.id,
+        destination_shelf_code=destination_shelf.code,
+        destination_zone_id=destination_shelf.zone.id,
+        destination_zone_name=destination_shelf.zone.name,
         actor_user_id=actor.id,
         reason=payload.reason.strip(),
         created_at=now,
@@ -8135,7 +8388,11 @@ def reconcile_completed_replenishment(
                 "unit_code": product.unit,
                 "source_snapshot_id": source_snapshot.id,
                 "source_location_code": source_snapshot.location_code,
-                "destination_shelf_id": task.shelf_id,
+                "destination_shelf_id": destination_shelf.id,
+                "destination_shelf_code": destination_shelf.code,
+                "destination_zone_id": destination_shelf.zone.id,
+                "destination_zone_name": destination_shelf.zone.name,
+                "destination_location_backfilled": False,
                 "result_snapshot_id": result_snapshot.id,
             },
             created_at=now,
@@ -8316,8 +8573,8 @@ def list_replenishment_recommendations(
                     else:
                         decision = suggest_shelf_refill(ShelfRefillInput(
                             shelf_quantity=observed_shelf_quantity,
-                            target_quantity=link.target_quantity,
-                            min_display_quantity=link.min_display_quantity,
+                            target_quantity=float(link.target_quantity),
+                            min_display_quantity=float(link.min_display_quantity),
                             backroom_available_quantity=available,
                             observation_confidence=observation.confidence,
                             observation_age_minutes=observation_age_minutes,
@@ -9546,31 +9803,42 @@ def update_replenishment_task_status(
 @app.get("/api/v1/tasks/{task_id}/events", response_model=list[ReplenishmentTaskEventRead], tags=["tasks"])
 def list_replenishment_task_events(task_id: int, request: Request, db: Session = Depends(get_db)):
     actor = _request_user(db, request)
-    if actor is None or actor.role == "ADMIN":
-        task = (
-            db.query(models.ReplenishmentTask)
-            .filter(models.ReplenishmentTask.id == task_id)
-            .first()
-        )
-    else:
-        # Apply tenant scope in SQL so a foreign task is never materialized
-        # before the read authorization decision.
-        task = (
-            db.query(models.ReplenishmentTask)
-            .filter(
-                models.ReplenishmentTask.id == task_id,
-                models.ReplenishmentTask.store_id == actor.store_id,
-            )
-            .first()
-        )
-    if task is None:
-        raise HTTPException(status_code=404, detail="Task not found")
-    return (
+    if actor is not None and actor.role == "EMPLOYEE":
+        raise HTTPException(status_code=403, detail="Supervisor role required")
+    events_query = (
         db.query(models.ReplenishmentTaskEvent)
-        .filter(models.ReplenishmentTaskEvent.task_id == task_id)
+        .join(
+            models.ReplenishmentTask,
+            models.ReplenishmentTaskEvent.task_id == models.ReplenishmentTask.id,
+        )
+        .filter(models.ReplenishmentTask.id == task_id)
+    )
+    if actor is not None and actor.role != "ADMIN":
+        if actor.store_id is None:
+            raise HTTPException(status_code=404, detail="Task not found")
+        # Keep the parent-task tenant predicate in the same query that returns
+        # the events, rather than relying on a separate authorization lookup.
+        events_query = events_query.filter(
+            models.ReplenishmentTask.store_id == actor.store_id
+        )
+    events = (
+        events_query
         .order_by(models.ReplenishmentTaskEvent.created_at.asc(), models.ReplenishmentTaskEvent.id.asc())
         .all()
     )
+    if not events:
+        # An authorized task may legitimately have no events; distinguish it
+        # from a missing/foreign task without exposing the parent identifier.
+        task_query = db.query(models.ReplenishmentTask.id).filter(
+            models.ReplenishmentTask.id == task_id
+        )
+        if actor is not None and actor.role != "ADMIN":
+            task_query = task_query.filter(
+                models.ReplenishmentTask.store_id == actor.store_id
+            )
+        if task_query.first() is None:
+            raise HTTPException(status_code=404, detail="Task not found")
+    return events
 
 
 def _lock_admin_bootstrap(db: Session) -> None:
@@ -9639,7 +9907,9 @@ def current_user(request: Request, db: Session = Depends(get_db)):
 
 @app.post("/api/v1/auth/users", response_model=UserRead, status_code=201, tags=["authentication"])
 def create_user(payload: UserCreate, request: Request, db: Session = Depends(get_db)):
-    _request_user(db, request)
+    actor = _request_user(db, request)
+    if actor is not None and actor.role != "ADMIN":
+        raise HTTPException(status_code=403, detail="Administrator role required")
     email = payload.email.strip().lower()
     if "@" not in email:
         raise HTTPException(status_code=422, detail="A valid email address is required")
@@ -9665,7 +9935,9 @@ def create_user(payload: UserCreate, request: Request, db: Session = Depends(get
 
 @app.get("/api/v1/auth/users", response_model=list[UserRead], tags=["authentication"])
 def list_users(request: Request, limit: int = 100, db: Session = Depends(get_db)):
-    _request_user(db, request)
+    actor = _request_user(db, request)
+    if actor is not None and actor.role != "ADMIN":
+        raise HTTPException(status_code=403, detail="Administrator role required")
     return db.query(models.User).order_by(models.User.id).limit(max(1, min(limit, 500))).all()
 
 

@@ -209,6 +209,85 @@ def main() -> None:
         assert cancellation_audit[-1]["reason"] == "CI cancellation lifecycle"
         assert len({event["id"] for event in cancellation_audit}) == 2
 
+        # Completion and cancellation are competing terminal transitions.
+        # Exactly one may commit; the row lock must prevent both terminal
+        # events from being recorded for the same IN_PROGRESS task.
+        terminal_task = client.post("/api/v1/tasks", json=payload)
+        assert terminal_task.status_code == 201, terminal_task.text
+        terminal_task_id = terminal_task.json()["id"]
+        terminal_assigned = client.patch(
+            f"/api/v1/tasks/{terminal_task_id}/status",
+            json={"status": "ASSIGNED", "assigned_to": "CI terminal-race operator"},
+        )
+        assert terminal_assigned.status_code == 200, terminal_assigned.text
+        terminal_started = client.patch(
+            f"/api/v1/tasks/{terminal_task_id}/status",
+            json={"status": "IN_PROGRESS"},
+        )
+        assert terminal_started.status_code == 200, terminal_started.text
+
+        terminal_barrier = Barrier(2)
+
+        def complete_terminal_task():
+            terminal_barrier.wait(timeout=10)
+            return client.patch(
+                f"/api/v1/tasks/{terminal_task_id}/status",
+                json={"status": "COMPLETED", "actual_quantity": 2},
+            )
+
+        def cancel_terminal_task():
+            terminal_barrier.wait(timeout=10)
+            return client.patch(
+                f"/api/v1/tasks/{terminal_task_id}/status",
+                json={
+                    "status": "CANCELLED",
+                    "exception_reason": "CI competing terminal transition",
+                },
+            )
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            completion_response, cancellation_response = list(executor.map(
+                lambda fn: fn(),
+                (complete_terminal_task, cancel_terminal_task),
+            ))
+        assert sorted((
+            completion_response.status_code, cancellation_response.status_code,
+        )) == [200, 409], [
+            completion_response.text, cancellation_response.text,
+        ]
+        winning_status = (
+            "COMPLETED" if completion_response.status_code == 200 else "CANCELLED"
+        )
+        losing_status = (
+            "CANCELLED" if winning_status == "COMPLETED" else "COMPLETED"
+        )
+
+        terminal_history = client.get(
+            f"/api/v1/tasks/{terminal_task_id}/events"
+        )
+        assert terminal_history.status_code == 200, terminal_history.text
+        terminal_events = terminal_history.json()
+        assert [event["event_type"] for event in terminal_events] == [
+            "CREATED", "STATUS_CHANGED", "STATUS_CHANGED", "STATUS_CHANGED",
+        ]
+        assert [
+            (event["from_status"], event["to_status"])
+            for event in terminal_events
+        ] == [
+            (None, "PENDING"),
+            ("PENDING", "ASSIGNED"),
+            ("ASSIGNED", "IN_PROGRESS"),
+            ("IN_PROGRESS", winning_status),
+        ]
+        assert terminal_events[-1]["to_status"] in {"COMPLETED", "CANCELLED"}
+        assert terminal_events[-1]["to_status"] != losing_status
+        if terminal_events[-1]["to_status"] == "COMPLETED":
+            assert terminal_events[-1]["actual_quantity"] == 2
+            assert terminal_events[-1]["reason"] is None
+        else:
+            assert terminal_events[-1]["actual_quantity"] is None
+            assert terminal_events[-1]["reason"] == "CI competing terminal transition"
+
         # An audit failure after flush must roll back both the state change
         # and the inserted event on PostgreSQL, not just in SQLite unit tests.
         rollback_task = client.post("/api/v1/tasks", json=payload)

@@ -45,6 +45,25 @@ def test_enqueue_list_and_events_are_store_scoped(db_session):
     assert [item["id"] for item in listed["items"]] == [first["id"]]
     events = main_module.list_store_inventory_sync_job_events(store_a.id, first["id"], request, db_session)
     assert [item["event_type"] for item in events["items"]] == ["QUEUED"]
+    # A supervisor cannot use a valid store-A path to enumerate a job
+    # belonging to store B. Foreign and nonexistent job IDs are indistinguishable.
+    supervisor_b = models.User(email="queue-supervisor-b@example.test", full_name="Supervisor B",
+        password_hash="test", role="SUPERVISOR", store_id=store_b.id, is_active=True)
+    db_session.add(supervisor_b)
+    db_session.flush()
+    db_session.add(models.StoreExternalIntegration(store_id=store_b.id, external_system="ERP",
+        provider="ERP-Test", status="ACTIVE", created_by_user_id=supervisor_b.id, updated_by_user_id=supervisor_b.id))
+    db_session.commit()
+    request_b = SimpleNamespace(state=SimpleNamespace(user_id=supervisor_b.id))
+    foreign_payload = InventorySyncJobEnqueue(source="ERP", provider="ERP-Test", idempotency_key="api-request-b")
+    foreign_job = main_module.enqueue_store_inventory_sync_job(store_b.id, foreign_payload, request_b, db_session)
+
     with pytest.raises(HTTPException) as foreign:
+        main_module.list_store_inventory_sync_job_events(store_a.id, foreign_job["id"], request, db_session)
+    with pytest.raises(HTTPException) as missing:
+        main_module.list_store_inventory_sync_job_events(store_a.id, 999999, request, db_session)
+    assert foreign.value.status_code == missing.value.status_code == 404
+
+    with pytest.raises(HTTPException) as wrong_store_path:
         main_module.list_store_inventory_sync_job_events(store_b.id, first["id"], request, db_session)
-    assert foreign.value.status_code == 403
+    assert wrong_store_path.value.status_code == 403

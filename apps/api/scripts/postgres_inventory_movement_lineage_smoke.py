@@ -130,6 +130,10 @@ def main() -> None:
         finally:
             main_module.settings = original_settings
         assert movement["source_snapshot_id"] == source_snapshot_id
+        assert movement["destination_shelf_code"] == shelf.json()["code"]
+        assert movement["destination_zone_id"] == zone.json()["id"]
+        assert movement["destination_zone_name"] == zone.json()["name"]
+        assert movement["destination_location_backfilled"] is False
         assert movement["quantity"] == 4
         assert event_response.status_code == 200, event_response.text
         assert len(event_response.json()) == 1
@@ -138,6 +142,10 @@ def main() -> None:
         assert recorded_event["operation_id"] == movement["operation_id"]
         assert recorded_event["actor_user_id"] == supervisor_id
         assert recorded_event["evidence"]["source_snapshot_id"] == source_snapshot_id
+        assert recorded_event["evidence"]["destination_shelf_code"] == shelf.json()["code"]
+        assert recorded_event["evidence"]["destination_zone_id"] == zone.json()["id"]
+        assert recorded_event["evidence"]["destination_zone_name"] == zone.json()["name"]
+        assert recorded_event["evidence"]["destination_location_backfilled"] is False
 
     with SessionLocal() as db:
         external_actor = models.User(
@@ -220,6 +228,11 @@ def main() -> None:
                 "quantity": 4,
                 "unit_code": "un",
                 "result_snapshot_id": movement["result_snapshot_id"],
+                "destination_shelf_id": shelf.json()["id"] + 100000,
+                "destination_shelf_code": shelf.json()["code"],
+                "destination_zone_id": zone.json()["id"],
+                "destination_zone_name": zone.json()["name"],
+                "destination_location_backfilled": False,
             },
             {
                 "store_id": store_id,
@@ -227,6 +240,35 @@ def main() -> None:
                 "quantity": 4,
                 "unit_code": "un",
                 "result_snapshot_id": movement["result_snapshot_id"],
+                "destination_shelf_id": shelf.json()["id"],
+                "destination_shelf_code": "FORGED-SHELF-CODE",
+                "destination_zone_id": zone.json()["id"],
+                "destination_zone_name": zone.json()["name"],
+                "destination_location_backfilled": False,
+            },
+            {
+                "store_id": store_id,
+                "product_id": product_id,
+                "quantity": 4,
+                "unit_code": "un",
+                "result_snapshot_id": movement["result_snapshot_id"],
+                "destination_shelf_id": shelf.json()["id"],
+                "destination_shelf_code": shelf.json()["code"],
+                "destination_zone_id": zone.json()["id"],
+                "destination_zone_name": "Forged zone name",
+                "destination_location_backfilled": False,
+            },
+            {
+                "store_id": store_id,
+                "product_id": product_id,
+                "quantity": 4,
+                "unit_code": "un",
+                "result_snapshot_id": movement["result_snapshot_id"],
+                "destination_shelf_id": shelf.json()["id"],
+                "destination_shelf_code": shelf.json()["code"],
+                "destination_zone_id": zone.json()["id"],
+                "destination_zone_name": zone.json()["name"],
+                "destination_location_backfilled": True,
             },
         )
         for values in invalid_inserts:
@@ -236,11 +278,14 @@ def main() -> None:
                         """
                         INSERT INTO inventory_movements
                             (task_id, store_id, product_id, movement_type, quantity,
-                             unit_code, source_snapshot_id, result_snapshot_id, actor_user_id,
-                             reason, created_at)
+                             unit_code, source_snapshot_id, destination_shelf_id,
+                             destination_shelf_code, destination_zone_id, destination_zone_name,
+                             destination_location_backfilled, result_snapshot_id, actor_user_id, reason, created_at)
                         VALUES
                             (:task_id, :store_id, :product_id, 'BACKROOM_TO_SHELF',
-                             :quantity, :unit_code, :source_id, :result_id, :actor_id,
+                             :quantity, :unit_code, :source_id, :destination_shelf_id,
+                             :destination_shelf_code, :destination_zone_id, :destination_zone_name,
+                             :destination_location_backfilled, :result_id, :actor_id,
                              'invalid lineage smoke', CURRENT_TIMESTAMP)
                         """
                     ),
@@ -251,6 +296,11 @@ def main() -> None:
                         "quantity": values["quantity"],
                         "unit_code": values["unit_code"],
                         "source_id": source_snapshot_id,
+                        "destination_shelf_id": values["destination_shelf_id"],
+                        "destination_shelf_code": values["destination_shelf_code"],
+                        "destination_zone_id": values["destination_zone_id"],
+                        "destination_zone_name": values["destination_zone_name"],
+                        "destination_location_backfilled": values["destination_location_backfilled"],
                         "result_id": values["result_snapshot_id"],
                         "actor_id": supervisor_id,
                     },
@@ -271,6 +321,8 @@ def main() -> None:
 
         for statement in (
             "UPDATE inventory_movements SET quantity = 99 WHERE task_id = :task_id",
+            "UPDATE inventory_movements SET destination_zone_name = 'Zona adulterada' WHERE task_id = :task_id",
+            "UPDATE inventory_movements SET destination_zone_id = destination_zone_id + 100000 WHERE task_id = :task_id",
             "DELETE FROM inventory_movements WHERE task_id = :task_id",
         ):
             try:
@@ -361,10 +413,12 @@ def main() -> None:
                 INSERT INTO inventory_movements
                     (task_id, store_id, product_id, movement_type, quantity, unit_code,
                      source_snapshot_id, source_location_code, destination_shelf_id,
+                     destination_shelf_code, destination_zone_id, destination_zone_name,
                      result_snapshot_id, actor_user_id, reason, operation_id, created_at)
                 VALUES
                     (:task_id, :store_id, :product_id, 'BACKROOM_TO_SHELF', 4, 'un',
                      :source_snapshot_id, 'BACKROOM-CI', :destination_shelf_id,
+                     :destination_shelf_code, :destination_zone_id, :destination_zone_name,
                      :result_snapshot_id, :actor_id, 'unavailable source guard smoke',
                      :operation_id, CURRENT_TIMESTAMP)
             """), {
@@ -373,6 +427,9 @@ def main() -> None:
                 "product_id": product_id,
                 "source_snapshot_id": unavailable_snapshot.json()["id"],
                 "destination_shelf_id": shelf.json()["id"],
+                "destination_shelf_code": shelf.json()["code"],
+                "destination_zone_id": zone.json()["id"],
+                "destination_zone_name": zone.json()["name"],
                 "result_snapshot_id": result_snapshot_id,
                 "actor_id": supervisor_id,
                 "operation_id": str(uuid4()),
@@ -389,10 +446,12 @@ def main() -> None:
                 INSERT INTO inventory_movements
                     (task_id, store_id, product_id, movement_type, quantity, unit_code,
                      source_snapshot_id, source_location_code, destination_shelf_id,
+                     destination_shelf_code, destination_zone_id, destination_zone_name,
                      result_snapshot_id, actor_user_id, reason, operation_id, created_at)
                 VALUES
                     (:task_id, :store_id, :product_id, 'BACKROOM_TO_SHELF', 4, 'kg',
                      :source_snapshot_id, 'BACKROOM-CI', :destination_shelf_id,
+                     :destination_shelf_code, :destination_zone_id, :destination_zone_name,
                      :result_snapshot_id, :actor_id, 'wrong base unit smoke',
                      :operation_id, CURRENT_TIMESTAMP)
             """), {
@@ -401,6 +460,9 @@ def main() -> None:
                 "product_id": product_id,
                 "source_snapshot_id": available_snapshot.json()["id"],
                 "destination_shelf_id": shelf.json()["id"],
+                "destination_shelf_code": shelf.json()["code"],
+                "destination_zone_id": zone.json()["id"],
+                "destination_zone_name": zone.json()["name"],
                 "result_snapshot_id": result_snapshot_id,
                 "actor_id": supervisor_id,
                 "operation_id": str(uuid4()),
@@ -418,9 +480,122 @@ def main() -> None:
         ).scalar_one()
         assert unavailable_movement_count == 0, unavailable_movement_count
 
+    with SessionLocal() as db:
+        renamed_shelf_code = f"RENAMED-{suffix}"
+        renamed_zone_name = f"Renamed zone {suffix}"
+        db.execute(
+            text("UPDATE shelves SET code = :code WHERE id = :shelf_id"),
+            {"code": renamed_shelf_code, "shelf_id": shelf.json()["id"]},
+        )
+        db.execute(
+            text("UPDATE zones SET name = :name WHERE id = :zone_id"),
+            {"name": renamed_zone_name, "zone_id": zone.json()["id"]},
+        )
+        db.commit()
+        frozen = db.execute(text("""
+            SELECT destination_shelf_code, destination_zone_id,
+                   destination_zone_name, destination_location_backfilled
+            FROM inventory_movements WHERE id = :movement_id
+        """), {"movement_id": movement["id"]}).one()
+        assert frozen == (
+            shelf.json()["code"], zone.json()["id"], zone.json()["name"], False,
+        ), frozen
+        for statement, parameters in (
+            ("DELETE FROM shelves WHERE id = :id", {"id": shelf.json()["id"]}),
+            ("DELETE FROM zones WHERE id = :id", {"id": zone.json()["id"]}),
+        ):
+            try:
+                db.execute(text(statement), parameters)
+                db.commit()
+            except DBAPIError:
+                db.rollback()
+            else:
+                raise AssertionError("PostgreSQL allowed deletion of a shelf/zone referenced by an immutable movement")
+
+    with TestClient(app) as retention_client:
+        retention_zone = retention_client.post("/api/v1/zones", json={
+            "store_id": store_id, "name": f"Task retention zone {suffix}",
+        })
+        assert retention_zone.status_code == 201, retention_zone.text
+        retention_shelf = retention_client.post("/api/v1/shelves", json={
+            "zone_id": retention_zone.json()["id"], "code": f"TASK-RETENTION-{suffix}",
+        })
+        assert retention_shelf.status_code == 201, retention_shelf.text
+        assignment = retention_client.post("/api/v1/shelf-products", json={
+            "shelf_id": retention_shelf.json()["id"], "product_id": product_id,
+            "target_quantity": 10, "min_display_quantity": 1,
+        })
+        assert assignment.status_code == 201, assignment.text
+        task_without_movement = retention_client.post("/api/v1/tasks", json={
+            "store_id": store_id, "shelf_id": retention_shelf.json()["id"],
+            "product_id": product_id, "requested_quantity": 2,
+        })
+        assert task_without_movement.status_code == 201, task_without_movement.text
+
+    with SessionLocal() as db:
+        task_id_without_movement = task_without_movement.json()["id"]
+        task_event_id = db.execute(
+            text("SELECT id FROM replenishment_task_events WHERE task_id = :task_id ORDER BY id LIMIT 1"),
+            {"task_id": task_id_without_movement},
+        ).scalar_one()
+        guarded_operations = (
+            (
+                "UPDATE replenishment_tasks SET shelf_id = :shelf_id WHERE id = :task_id",
+                {"shelf_id": shelf.json()["id"], "task_id": task_id_without_movement},
+                "replenishment task identity is immutable after audit begins",
+            ),
+            (
+                "DELETE FROM replenishment_tasks WHERE id = :task_id",
+                {"task_id": task_id_without_movement},
+                "replenishment task has audit history",
+            ),
+            (
+                "UPDATE replenishment_task_events SET reason = 'tampered' WHERE id = :event_id",
+                {"event_id": task_event_id},
+                "replenishment task events are append-only",
+            ),
+            (
+                "DELETE FROM replenishment_task_events WHERE id = :event_id",
+                {"event_id": task_event_id},
+                "replenishment task events are append-only",
+            ),
+        )
+        for statement, parameters, expected in guarded_operations:
+            try:
+                db.execute(text(statement), parameters)
+                db.commit()
+            except DBAPIError as exc:
+                db.rollback()
+                assert expected in str(exc.orig), str(exc.orig)
+            else:
+                raise AssertionError("PostgreSQL allowed task identity/audit history mutation")
+        task_event_count = db.execute(
+            text("SELECT COUNT(*) FROM replenishment_task_events WHERE task_id = :task_id"),
+            {"task_id": task_id_without_movement},
+        ).scalar_one()
+        assert task_event_count >= 1
+
+        for statement, parameters, expected in (
+            ("DELETE FROM shelves WHERE id = :id", {"id": retention_shelf.json()["id"]}, "shelf has retained operational evidence"),
+            ("DELETE FROM zones WHERE id = :id", {"id": retention_zone.json()["id"]}, "zone has retained shelf evidence"),
+        ):
+            try:
+                db.execute(text(statement), parameters)
+                db.commit()
+            except DBAPIError as exc:
+                db.rollback()
+                assert expected in str(exc.orig), str(exc.orig)
+            else:
+                raise AssertionError("PostgreSQL deleted a shelf/zone with task history but no movement")
+        retained = db.execute(
+            text("SELECT COUNT(*) FROM replenishment_tasks WHERE id = :task_id"),
+            {"task_id": task_without_movement.json()["id"]},
+        ).scalar_one()
+        assert retained == 1
+
     print(
-        "PostgreSQL inventory movement smoke passed: immutable movement/event lineage, "
-        "same-store provenance, append-only guards and rejection of UNAVAILABLE WMS sources."
+        "PostgreSQL inventory movement smoke passed: immutable movement/shelf/zone provenance, task identity and audit immutability, "
+        "retention after hierarchy rename, append-only guards and rejection of UNAVAILABLE WMS sources."
     )
 
 
