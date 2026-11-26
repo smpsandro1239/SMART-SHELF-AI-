@@ -1,3 +1,7 @@
+## 2026-11-26 — Correcção do smoke de serialização da propriedade da prateleira
+
+A API CI identificou uma expectativa incorrecta no smoke PostgreSQL: depois de provar que o UPDATE concorrente de `zones.store_id` aguardava pelo lock da escrita da prateleira, o teste esperava que a transferência fosse concluída. A base de dados rejeita-a correctamente porque a sessão de captura acabada de persistir é evidência operacional retida. O smoke foi corrigido para exigir o bloqueio, a rejeição por `IntegrityError` com a razão esperada e a permanência da sessão/zona na loja original. A alteração está publicada no commit `5f7867bb67c2d2334d8afe85da7c8838ba87db5b`; a validação CI no novo HEAD permanece pendente.
+
 ## P0 — Serialização da propriedade da prateleira nas escritas (2026-11-26)
 
 - [x] Introduzir `_lock_store_scoped_shelf()`: obter a linhagem inicial, bloquear primeiro `Zone` com `SELECT FOR UPDATE`, validar novamente o tenant e bloquear depois `Shelf`; uma alteração de `zones.store_id` tem de aguardar pela transacção da escrita.
