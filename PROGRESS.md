@@ -1772,3 +1772,12 @@ A nota anterior que mantinha a migration 0099 aberta foi superada pelas execuç�
 - Adicionado `postgres_embedding_source_image_shelf_lineage_smoke.py`: mantém a linha do produto bloqueada para forçar a revisão HTTP a reter o lock da imagem; observa depois o lock wait real da alteração concorrente e exige rejeição após a revisão confirmar.
 - Integração no API CI publicada no commit `e96f1b372c984817c9157419a752892b90e9b1aa`. Commits da migration/teste/smoke: `b0f7c766`, `a2e86139`, `43b4266d` e correcção de sincronização `8772488d`.
 - Estado: código e documentação publicados; execução CI PostgreSQL 16 pendente. Não declarar a migration 0100 validada até o novo smoke e suite completa passarem.
+
+
+## 2026-11-26 — Migration 0100 aplicada e smoke de concorrência aprovado
+
+- API CI `45804056793` aplicou `0100_embedding_source_image_shelf_lineage` em PostgreSQL 16 e executou com sucesso o novo smoke concorrente.
+- Log explícito: `PostgreSQL embedding source-image lineage smoke passed: the review held the image lock, the competing shelf reassignment waited on a real PostgreSQL lock, and migration 0100 rejected the reassignment after the review committed.`
+- A suite completa terminou com **1740 passed, 1 skipped**. Demo Docker Compose `45804012587` passou com o código que já incluía a migration 0100. Quality Gates `45804113802` e Security Scans `45804113803` passaram no HEAD documental `443db02d`.
+- Extensão adicional: `postgres_shelf_reconciliation_lineage_migration_cycle_smoke.py` passou a verificar também downgrade 0100→0099 e reaplicação 0100, preservando as seis triggers/cinco funções de 0099. Commit `d161bd03`; esta extensão ainda aguarda CI.
+- Estado: a integridade e concorrência de 0100 estão aprovadas; o ciclo PostgreSQL de downgrade/reaplicação de 0100 continua pendente.
