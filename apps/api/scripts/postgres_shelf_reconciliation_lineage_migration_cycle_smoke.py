@@ -11,6 +11,9 @@ from sqlalchemy.engine import make_url
 
 UP_REVISION = "0099_shelf_reconciliation_lineage"
 DOWN_REVISION = "0098_shelf_operational_evidence_retention"
+EMBEDDING_UP_REVISION = "0100_embedding_source_image_shelf_lineage"
+EMBEDDING_TRIGGER = "trg_shelf_image_embedding_shelf_lineage_0100"
+EMBEDDING_FUNCTION = "prevent_embedding_source_image_shelf_change_0100"
 
 TRIGGERS = (
     "trg_observation_alert_shelf_lineage_0099",
@@ -65,6 +68,31 @@ def _assert_objects(engine, *, expected: bool) -> None:
     )
 
 
+def _assert_embedding_image_objects(engine, *, expected: bool) -> None:
+    with engine.connect() as connection:
+        trigger_count = connection.execute(
+            text(
+                "SELECT COUNT(*) FROM pg_trigger "
+                "WHERE NOT tgisinternal AND tgname = :name"
+            ),
+            {"name": EMBEDDING_TRIGGER},
+        ).scalar_one()
+        function_count = connection.execute(
+            text(
+                "SELECT COUNT(*) FROM pg_proc "
+                "WHERE pg_function_is_visible(oid) AND proname = :name"
+            ),
+            {"name": EMBEDDING_FUNCTION},
+        ).scalar_one()
+    expected_count = 1 if expected else 0
+    assert trigger_count == expected_count, (
+        f"expected {expected_count} migration 0100 trigger(s), got {trigger_count}"
+    )
+    assert function_count == expected_count, (
+        f"expected {expected_count} migration 0100 function(s), got {function_count}"
+    )
+
+
 def main() -> None:
     configured_url = os.environ.get("DATABASE_URL")
     if not configured_url:
@@ -100,10 +128,27 @@ def main() -> None:
         _assert_revision(target_engine, UP_REVISION)
         _assert_objects(target_engine, expected=True)
 
+        command.upgrade(config, EMBEDDING_UP_REVISION)
+        _assert_revision(target_engine, EMBEDDING_UP_REVISION)
+        _assert_objects(target_engine, expected=True)
+        _assert_embedding_image_objects(target_engine, expected=True)
+
+        command.downgrade(config, UP_REVISION)
+        _assert_revision(target_engine, UP_REVISION)
+        _assert_objects(target_engine, expected=True)
+        _assert_embedding_image_objects(target_engine, expected=False)
+
+        command.upgrade(config, EMBEDDING_UP_REVISION)
+        _assert_revision(target_engine, EMBEDDING_UP_REVISION)
+        _assert_objects(target_engine, expected=True)
+        _assert_embedding_image_objects(target_engine, expected=True)
+
         print(
-            "PostgreSQL 0099 migration-cycle smoke passed: isolated database "
-            "upgraded to 0099, downgraded to 0098 with all six triggers and "
-            "five functions removed, then re-applied 0099 successfully."
+            "PostgreSQL migration-cycle smoke passed: isolated database "
+            "upgraded through 0099 and 0100; 0099 downgrade/re-apply removed "
+            "and restored its six triggers/five functions; 0100 downgrade/"
+            "re-apply removed and restored its source-image shelf-lineage "
+            "trigger/function."
         )
     finally:
         if target_engine is not None:
