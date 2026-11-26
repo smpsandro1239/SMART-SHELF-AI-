@@ -1,3 +1,9 @@
+## 2026-11-26 — Ledger de reconciliações: serialização em lote e contexto histórico do actor
+
+A listagem do ledger passou a executar três consultas SQL para uma página não vazia, independentemente do número de reconciliações: registos paginados, utilizadores criadores/revisores e eventos associados. Os eventos são agrupados por reconciliation_id e ordenados por created_at/id, preservando a paginação e o contrato da API. Novos eventos guardam o snapshot mínimo de contexto do actor (user_id, role, store_id e full_name). Sem backfill retroactivo. Testes e workflows aguardam validação no SHA final.
+
+---
+
 ## 2026-11-26 — Histórico de retenção de imagens tenant-atomic
 
 O GET /api/v1/shelf-images/{image_id}/retention/events deixou de consultar eventos e imagem em duas fases. A imagem e a sua loja são agora verificadas na mesma instrução SQL que junta por OUTER JOIN uma subquery de eventos paginada. Histórico vazio e páginas posteriores ao último evento permanecem válidos; IDs estrangeiros/inexistentes mantêm 404. Regressão adicionada. Commits `8c9eb1aa` e `6ee7d565`. CI pendente.
