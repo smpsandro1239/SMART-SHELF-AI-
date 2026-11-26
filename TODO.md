@@ -1,3 +1,12 @@
+## P0 — Leituras atómicas do histórico de alertas e movimentos (2026-11-26)
+
+- [x] Consolidar leitura do movimento e dos eventos numa única query com OUTER JOIN e filtro simultâneo de movement_id + store_id para supervisores.
+- [x] Preservar 404 idêntico para movimento estrangeiro/inexistente e histórico vazio como lista vazia para movimento autorizado.
+- [x] Acrescentar regressão API para leitura same-store e tentativa cross-store de histórico de movimento.
+- [x] Consolidar leitura do alerta e dos eventos numa única query com OUTER JOIN, filtro tenant-scoped e sem fallback em segunda query.
+- [x] Manter os testes existentes de histórico vazio, IDs estrangeiros/inexistentes e permissões de alertas.
+- [ ] Validar pytest focal, suite API, PostgreSQL 16, Quality Gates, Security Scans e Docker Compose no SHA final.
+
 ## P0 — Isolamento do histórico de auditoria de mapeamentos ERP/WMS (2026-11-26)
 
 - [x] Identificar a janela TOCTOU no endpoint GET /api/v1/stores/{store_id}/inventory/external-mappings/{mapping_id}/events: o preflight validava o mapping por loja, mas a query seguinte lia eventos apenas por mapping_id.
