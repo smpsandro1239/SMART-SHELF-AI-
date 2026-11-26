@@ -9816,40 +9816,30 @@ def list_replenishment_task_events(task_id: int, request: Request, db: Session =
     actor = _request_user(db, request)
     if actor is not None and actor.role == "EMPLOYEE":
         raise HTTPException(status_code=403, detail="Supervisor role required")
-    events_query = (
-        db.query(models.ReplenishmentTaskEvent)
-        .join(
-            models.ReplenishmentTask,
+    if actor is not None and actor.role != "ADMIN" and actor.store_id is None:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    # Read the parent and its audit events atomically. The OUTER JOIN preserves
+    # a valid task with no events while making foreign/missing IDs indistinguishable.
+    rows_query = (
+        db.query(models.ReplenishmentTask, models.ReplenishmentTaskEvent)
+        .outerjoin(
+            models.ReplenishmentTaskEvent,
             models.ReplenishmentTaskEvent.task_id == models.ReplenishmentTask.id,
         )
         .filter(models.ReplenishmentTask.id == task_id)
     )
     if actor is not None and actor.role != "ADMIN":
-        if actor.store_id is None:
-            raise HTTPException(status_code=404, detail="Task not found")
-        # Keep the parent-task tenant predicate in the same query that returns
-        # the events, rather than relying on a separate authorization lookup.
-        events_query = events_query.filter(
+        rows_query = rows_query.filter(
             models.ReplenishmentTask.store_id == actor.store_id
         )
-    events = (
-        events_query
-        .order_by(models.ReplenishmentTaskEvent.created_at.asc(), models.ReplenishmentTaskEvent.id.asc())
-        .all()
-    )
-    if not events:
-        # An authorized task may legitimately have no events; distinguish it
-        # from a missing/foreign task without exposing the parent identifier.
-        task_query = db.query(models.ReplenishmentTask.id).filter(
-            models.ReplenishmentTask.id == task_id
-        )
-        if actor is not None and actor.role != "ADMIN":
-            task_query = task_query.filter(
-                models.ReplenishmentTask.store_id == actor.store_id
-            )
-        if task_query.first() is None:
-            raise HTTPException(status_code=404, detail="Task not found")
-    return events
+    rows = rows_query.order_by(
+        models.ReplenishmentTaskEvent.created_at.asc(),
+        models.ReplenishmentTaskEvent.id.asc(),
+    ).all()
+    if not rows:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return [event for _, event in rows if event is not None]
 
 
 def _lock_admin_bootstrap(db: Session) -> None:
