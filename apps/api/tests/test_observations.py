@@ -988,7 +988,7 @@ def test_shelf_write_endpoints_lock_and_revalidate_store_scope(tmp_path, monkeyp
 
         foreign_session = client.post(
             "/api/v1/capture-sessions",
-            json={"shelf_id": shelf_b["id"], "source_type": "MOBILE"},
+            json={"shelf_id": shelf_b["id"], "source_type": "mobile"},
         )
         assert foreign_session.status_code == 201, foreign_session.text
 
@@ -1013,13 +1013,13 @@ def test_shelf_write_endpoints_lock_and_revalidate_store_scope(tmp_path, monkeyp
 
         session_foreign = client.post(
             "/api/v1/capture-sessions",
-            json={"shelf_id": shelf_b["id"], "source_type": "MOBILE"},
+            json={"shelf_id": shelf_b["id"], "source_type": "mobile"},
         )
         assert session_foreign.status_code == 404
 
         session_own = client.post(
             "/api/v1/capture-sessions",
-            json={"shelf_id": shelf_a["id"], "source_type": "MOBILE"},
+            json={"shelf_id": shelf_a["id"], "source_type": "mobile"},
         )
         assert session_own.status_code == 201, session_own.text
 
