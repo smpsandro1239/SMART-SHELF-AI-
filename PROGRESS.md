@@ -1673,3 +1673,14 @@ O commit `50fc1fcd9dac4c88dfb800aaa1f690ff1c0b6304` introduz o endpoint transacc
 - Commit: `6141e2d1d49506177dc457565e540ee0d5019469`.
 - A alteração está publicada na `main`; ainda não foi executada/validada em PostgreSQL CI. Não confundir a melhoria do teste com prova de que o teste passou.
 - Próximo passo: obter resultado de API CI que execute o smoke e, depois, cobrir explicitamente concorrência na inserção de reconciliação e downgrade/reaplicação.
+
+
+## 2026-11-26 — API CI: smoke concorrente 0099 aprovado; suite global mantém quatro falhas
+
+- API CI run `45793773197`, commit de código `6141e2d1d49506177dc457565e540ee0d5019469`: a migration Alembic foi aplicada com sucesso em PostgreSQL 16.
+- Os smokes PostgreSQL anteriores passaram, incluindo os dois fixtures anteriormente bloqueantes (`postgres_shelf_record_lineage_smoke.py` e `postgres_inventory_authorization_smoke.py`).
+- O passo `Verify PostgreSQL shelf and reconciliation evidence lineage lock serialization` terminou com sucesso. O log confirma: transferência cross-store da zona e remoção da associação SKU aguardaram pelos locks de evidência e foram rejeitadas. Este resultado valida as duas corridas cobertas pelo smoke.
+- Demo Docker Compose smoke `45793773029`: sucesso.
+- A API CI terminou globalmente em falha no passo `pytest -q`: **4 failed, 1735 passed, 1 skipped**. Falhas: `tests/test_inventory.py::test_reserved_wms_quantity_is_subtracted_once_across_multiple_movements`; `tests/test_observations.py::test_failed_image_analysis_can_be_retried_by_store_supervisor` (ambas `KeyError: 'id'`); `tests/test_tasks.py::test_auto_assign_balances_workload_and_prioritizes_urgent_tasks`; `tests/test_tasks.py::test_auto_assign_respects_persisted_shift_capacity_and_required_skill` (ambas esperam 201 para SUPERVISOR, mas a API devolve 403 — ADMIN obrigatório).
+- Quality Gates e Security Scans para este SHA foram cancelados durante a sequência de commits de documentação; não os marcar como aprovados. A triagem das quatro falhas de testes permanece independente da validação PostgreSQL 0099.
+- Conclusão parcial: o smoke de concorrência PostgreSQL 0099 passou; API CI global ainda não está verde. Downgrade e reaplicação PostgreSQL continuam sem validação dedicada.
