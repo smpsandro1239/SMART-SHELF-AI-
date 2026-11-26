@@ -1,3 +1,13 @@
+## 2026-11-26 — Cobertura de políticas RBAC por rota
+
+- HEAD de partida: `c56c3ec00040a869c374481a918106bbd5456551`.
+- Inventário estático dos decorators HTTP de `apps/api/app/main.py`: 156 rotas encontradas, das quais `/health` e `/health/ready` são endpoints operacionais fora de `/api/v1/*`. Todas as rotas versionadas da aplicação principal têm correspondência por método e template em `API_ROUTE_POLICIES`.
+- A entrada `POST /api/v1/edge/events` pertence ao router Edge separado e não foi confundida com uma rota sem classificação.
+- Adicionada regressão em `apps/api/tests/test_inventory.py` que percorre as rotas FastAPI registadas e falha perante qualquer rota `/api/v1/*` sem política explícita.
+- Commit: `011b823d17c39f9effbd8af8c702c5b3486bdde1`.
+- A regressão e os restantes workflows ainda não foram executados nesta sessão. Não declarar a cobertura runtime nem a suite CI aprovadas até existir evidência.
+- Próxima prioridade: auditoria BOLA/IDOR dos handlers com IDs directos, incluindo equivalência entre recurso estrangeiro e ID inexistente e prova de ausência de mutação após recusas.
+
 
 ## 2026-11-25 — Validação final da autoridade WMS por localização
 
