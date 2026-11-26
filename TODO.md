@@ -524,7 +524,13 @@ Commits: `f6e2156e`, `659586be`, `7f372fbc`, `cbc6a1a6`, `70b1b351`.
 - [x] Garantir que observações visuais não transportam quantidades de stock nem executam mutações.
 - [x] Documentar outbox offline, inbox transaccional, retries, isolamento por loja e requisitos de autenticação.
 - [x] Validar suite e integração CI no commit `91ea51e0`; 1545 testes aprovados, 1 ignorado. A ingestão persistente continua deliberadamente pendente.
-- [ ] Implementar registo de dispositivos, credenciais, endpoint de ingestão, inbox/outbox persistentes, cursor transaccional e acknowledgements; não activar ingestão antes destas peças.
+- [x] Implementar registo controlado de dispositivos por loja e tipo, emissão/rotação/revogação de credenciais com segredo armazenado apenas como SHA-256 e auditoria append-only.
+- [x] Implementar autenticação de pedidos Edge assinados, timestamp/nonce anti-replay, validação de scope e vinculação de tenant derivada exclusivamente da credencial.
+- [x] Implementar `POST /api/v1/edge/events`, envelope validado, inbox persistente imutável, fingerprint idempotente, cursor monotónico e criação transaccional da linha de processamento.
+- [x] Implementar worker com claim/lease/heartbeat/fencing, retries limitados, dead-letter e ACK de processamento; `DEVICE_HEARTBEAT` é o único handler built-in activo.
+- [ ] Implementar handlers de domínio para `SHELF_CAPTURED`, `SHELF_OBSERVATION` e `TASK_ACKNOWLEDGED` apenas depois de contratos de payload, revisão humana, proveniência e efeitos transaccionais estarem definidos; até lá, manter dead-letter fail-closed.
+- [ ] Implementar outbox persistente no dispositivo Edge e protocolo de sincronização/ACK de entrega; o ACK HTTP actual confirma apenas aceitação durável na inbox, não processamento de domínio.
+- [ ] Validar a implementação Edge no HEAD actual com testes focados, suite API, PostgreSQL 16, Quality Gates, Security Scans e Docker Compose.
 
 ## Computer Vision — manifesto ONNX Ed25519 v2 e anti-rollback (implementação publicada; CI validada em 2026-11-22)
 
