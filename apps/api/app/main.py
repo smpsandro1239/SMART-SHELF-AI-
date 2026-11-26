@@ -1265,38 +1265,31 @@ def list_observation_alert_events(alert_id: int, request: Request, db: Session =
     actor = _request_user(db, request)
     if actor is None or actor.role not in {"ADMIN", "SUPERVISOR"}:
         raise HTTPException(status_code=403, detail="Supervisor role required")
-    events_query = (
-        db.query(models.ObservationAlertEvent)
-        .join(
-            models.ObservationAlert,
+    if actor.role != "ADMIN" and actor.store_id is None:
+        raise HTTPException(status_code=404, detail="Observation alert not found")
+    # Read the alert and its history atomically with tenant scope. An OUTER
+    # JOIN keeps an authorized alert with no events distinguishable from a
+    # foreign/nonexistent alert without a second, race-prone parent lookup.
+    rows = (
+        db.query(models.ObservationAlert, models.ObservationAlertEvent)
+        .outerjoin(
+            models.ObservationAlertEvent,
             models.ObservationAlertEvent.alert_id == models.ObservationAlert.id,
         )
         .filter(models.ObservationAlert.id == alert_id)
     )
     if actor.role != "ADMIN":
-        if actor.store_id is None:
-            raise HTTPException(status_code=404, detail="Observation alert not found")
-        # The tenant predicate belongs to the same query that materializes
-        # audit events, closing the gap between parent lookup and event read.
-        events_query = events_query.filter(
-            models.ObservationAlert.store_id == actor.store_id
+        rows = rows.filter(models.ObservationAlert.store_id == actor.store_id)
+    result = (
+        rows.order_by(
+            models.ObservationAlertEvent.created_at.asc(),
+            models.ObservationAlertEvent.id.asc(),
         )
-    events = (
-        events_query
-        .order_by(models.ObservationAlertEvent.created_at.asc(), models.ObservationAlertEvent.id.asc())
         .all()
     )
-    if not events:
-        alert_query = db.query(models.ObservationAlert.id).filter(
-            models.ObservationAlert.id == alert_id
-        )
-        if actor.role != "ADMIN":
-            alert_query = alert_query.filter(
-                models.ObservationAlert.store_id == actor.store_id
-            )
-        if alert_query.first() is None:
-            raise HTTPException(status_code=404, detail="Observation alert not found")
-    return events
+    if not result:
+        raise HTTPException(status_code=404, detail="Observation alert not found")
+    return [event for _, event in result if event is not None]
 
 
 @app.get("/api/v1/observations", response_model=list[ObservationRead], tags=["observations"])
@@ -7124,38 +7117,38 @@ def list_inventory_movement_events(
         raise HTTPException(status_code=403, detail="Supervisor role required")
     if limit < 1 or limit > 200:
         raise HTTPException(status_code=422, detail="limit must be between 1 and 200")
-    events_query = (
-        db.query(models.InventoryMovementEvent)
-        .join(
+    if actor.role != "ADMIN" and actor.store_id is None:
+        raise HTTPException(status_code=404, detail="Inventory movement not found")
+    # Keep parent authorization and event materialization in one statement.
+    # The OUTER JOIN preserves a valid movement with no lifecycle events,
+    # while the tenant predicates prevent cross-store history disclosure.
+    rows = (
+        db.query(
             models.InventoryMovement,
+            models.InventoryMovementEvent,
+        )
+        .outerjoin(
+            models.InventoryMovementEvent,
             models.InventoryMovementEvent.movement_id == models.InventoryMovement.id,
         )
         .filter(models.InventoryMovement.id == movement_id)
     )
     if actor.role != "ADMIN":
-        if actor.store_id is None:
-            raise HTTPException(status_code=404, detail="Inventory movement not found")
-        events_query = events_query.filter(
+        rows = rows.filter(
             models.InventoryMovement.store_id == actor.store_id,
             models.InventoryMovementEvent.store_id == actor.store_id,
         )
-    events = (
-        events_query
-        .order_by(models.InventoryMovementEvent.created_at.asc(), models.InventoryMovementEvent.id.asc())
+    result = (
+        rows.order_by(
+            models.InventoryMovementEvent.created_at.asc(),
+            models.InventoryMovementEvent.id.asc(),
+        )
         .limit(limit)
         .all()
     )
-    if not events:
-        movement_query = db.query(models.InventoryMovement.id).filter(
-            models.InventoryMovement.id == movement_id
-        )
-        if actor.role != "ADMIN":
-            movement_query = movement_query.filter(
-                models.InventoryMovement.store_id == actor.store_id
-            )
-        if movement_query.first() is None:
-            raise HTTPException(status_code=404, detail="Inventory movement not found")
-    return events
+    if not result:
+        raise HTTPException(status_code=404, detail="Inventory movement not found")
+    return [event for _, event in result if event is not None]
 
 
 @app.get("/api/v1/inventory/reconciliation", tags=["inventory"])
