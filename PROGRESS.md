@@ -1655,3 +1655,11 @@ O commit `50fc1fcd9dac4c88dfb800aaa1f690ff1c0b6304` introduz o endpoint transacc
 - O Quality Gates reportou 1735 testes aprovados e 4 falhas: duas falhas de testes antigos que esperam respostas de criação de loja com id, e duas falhas de testes de planeamento que tentam criar produtos como SUPERVISOR apesar da política actual exigir ADMIN. Estas falhas não ocorreram nos testes novos de migration 0099, mas mantêm o gate global vermelho e carecem de correcção/triagem própria.
 - O novo API CI, Security Scans e Demo Docker Compose smoke foram iniciados para o commit f58b7724; ainda estavam em execução na última consulta.
 - Não foi possível confirmar ainda o resultado do novo smoke concorrente postgres_shelf_reconciliation_lineage_smoke.py, porque a execução anterior parou antes de chegar a esse passo.
+
+
+## 2026-11-26 — Segundo fixture PostgreSQL corrigido para 0099
+
+- A execução API CI `45792255046` ultrapassou o smoke de linhagem de prateleiras após a correcção anterior, mas parou em `postgres_inventory_authorization_smoke.py`: o fixture criava `ObservationAlert` antes de materializar as associações `ShelfProduct` exigidas pelo trigger de 0099.
+- Adicionado `db.flush()` imediatamente após a criação das duas associações SKU–prateleira, antes de inserir o alerta. A regra de integridade da migration não foi alterada.
+- Commit: `2169864fc7dfcdbf409016ac1298d940b028b3f2`.
+- O resultado da execução CI desencadeada por este commit ainda não foi confirmado. Por isso, o smoke concorrente `postgres_shelf_reconciliation_lineage_smoke.py` continua sem evidência de execução bem-sucedida, tal como downgrade/reaplicação.
