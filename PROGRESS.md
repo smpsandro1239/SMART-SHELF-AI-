@@ -1,3 +1,13 @@
+## 2026-11-26 — Imutabilidade da identidade de tenant dos sync jobs
+
+- A revisão de `main.py`, `inventory_sync_jobs.py` e `inventory_sync_worker.py` não encontrou qualquer fluxo da aplicação que reatribua `InventorySyncJob.store_id`. O enqueue define a loja; os handlers consultados filtram por loja; o worker captura o valor para executar o adapter e apenas actualiza campos de lifecycle/lease.
+- A identidade tem de ser imutável: os eventos são associados ao job apenas por `job_id`, e a loja do job determina o tenant autorizado a consultar o histórico. Uma reassociação alteraria a visibilidade de eventos históricos e quebraria a semântica da chave idempotente `(store_id, source, idempotency_key)`.
+- Criada a migration `0101_inventory_sync_job_store_immutable`, dependente de `0100_embedding_source_image_shelf_lineage`. PostgreSQL usa trigger com comparação `IS DISTINCT FROM`; SQLite usa trigger `BEFORE UPDATE OF store_id`. Ambas rejeitam apenas alterações reais de loja.
+- Criado `apps/api/tests/test_inventory_sync_job_store_immutable_migration.py`: verifica alteração operacional permitida, reassociação rejeitada, actualização do mesmo valor permitida e downgrade.
+- Reforçado `apps/api/scripts/postgres_inventory_sync_job_smoke.py`: transacção writer mantém `FOR UPDATE`; sessão concorrente tenta reassociar o job; o smoke exige espera real em `pg_stat_activity`, rejeição pela trigger e persistência da loja original. Também verifica que uma actualização normal do estado do job continua permitida.
+- Commits: migration `50988b43fface762f5c7052d237837308e4e6da7`; teste SQLite `999fa07701a493ff8a4512e42df4954d474a8243`; smoke PostgreSQL `319d6f67dd6d8b9a79450492c3cdec976bb9486d`; import do helper SQL `fba79f531dd94cc7db9d1d889d9b25ac8cda9439`.
+- **Validação pendente:** ainda não há resultado de execução para migration 0101, teste SQLite ou smoke PostgreSQL. Os workflows serão avaliados no SHA final; não declarar esta protecção validada até lá.
+
 ## 2026-11-26 — Correcção do smoke PostgreSQL de propriedade da prateleira
 
 - SHA inicial desta correcção: `e502850fba7106944827b79cf1671c029b7b2d29`.
