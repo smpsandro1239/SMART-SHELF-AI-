@@ -162,9 +162,112 @@ def main() -> None:
     finally:
         verify.close()
 
+    # Exercise the reconciliation-specific observation lock separately
+    # from the alert scenarios above. An upstream observation mutation must
+    # wait for the reconciliation insert, then be rejected as retained evidence.
+    setup = SessionLocal()
+    try:
+        reconciliation_zone = models.Zone(
+            store_id=store_a_id,
+            name=f"Reconciliation lineage zone {suffix}",
+        )
+        replacement_product = models.Product(
+            sku=f"LINEAGE-REPLACEMENT-{suffix}",
+            name="Replacement lineage product",
+        )
+        setup.add_all([reconciliation_zone, replacement_product])
+        setup.flush()
+        reconciliation_shelf = models.Shelf(
+            zone_id=reconciliation_zone.id,
+            code=f"RECON-LINEAGE-{suffix}",
+        )
+        setup.add(reconciliation_shelf)
+        setup.flush()
+        reconciliation_link = models.ShelfProduct(
+            shelf_id=reconciliation_shelf.id,
+            product_id=product_id,
+            target_quantity=10,
+            min_display_quantity=1,
+        )
+        actor = models.User(
+            email=f"lineage-{suffix}@example.test",
+            store_id=store_a_id,
+            full_name="PostgreSQL lineage smoke",
+            password_hash="test-only-not-used",
+            role="ADMIN",
+            is_active=True,
+        )
+        setup.add_all([reconciliation_link, actor])
+        setup.flush()
+        reconciliation_observation = models.Observation(
+            shelf_id=reconciliation_shelf.id,
+            product_id=product_id,
+            source="postgres-0099-smoke",
+            status="LOW_STOCK",
+            confidence=0.95,
+        )
+        setup.add(reconciliation_observation)
+        setup.commit()
+        reconciliation_shelf_id = reconciliation_shelf.id
+        reconciliation_observation_id = reconciliation_observation.id
+        replacement_product_id = replacement_product.id
+        actor_id = actor.id
+    finally:
+        setup.close()
+
+    evidence = SessionLocal()
+    evidence.add(
+        models.InventoryReconciliation(
+            store_id=store_a_id,
+            shelf_id=reconciliation_shelf_id,
+            product_id=product_id,
+            observation_id=reconciliation_observation_id,
+            display_target_quantity=10,
+            display_quantity=2,
+            comparison_status="MISMATCH",
+            evidence={"source": "postgres-0099-smoke"},
+            created_by_user_id=actor_id,
+        )
+    )
+    evidence.flush()
+    thread, finished, failures = _assert_blocked_then_rejected(
+        lambda contender: contender.execute(
+            text("UPDATE observations SET product_id = :product_id WHERE id = :observation_id"),
+            {
+                "product_id": replacement_product_id,
+                "observation_id": reconciliation_observation_id,
+            },
+        ),
+        "reconciliation observation mutation",
+    )
+    evidence.commit()
+    thread.join(timeout=10)
+    assert finished.is_set(), "observation mutation remained blocked after reconciliation commit"
+    assert failures, "observation mutation unexpectedly succeeded after reconciliation committed"
+
+    verify = SessionLocal()
+    try:
+        reconciliation = verify.query(models.InventoryReconciliation).filter_by(
+            shelf_id=reconciliation_shelf_id,
+            observation_id=reconciliation_observation_id,
+        ).one()
+        assert reconciliation.product_id == product_id
+        assert verify.query(models.Observation).filter_by(
+            id=reconciliation_observation_id,
+            product_id=product_id,
+        ).count() == 1
+    finally:
+        verify.close()
+
     print(
-        "PostgreSQL 0099 lineage smoke passed: cross-store zone transfer and "
-        "SKU unlink both waited for evidence-row locks and were rejected."
+        "PostgreSQL 0099 lineage smoke passed: alert creation serialized with "
+        "cross-store zone transfer and SKU unlink; reconciliation creation "
+        "serialized with an upstream observation mutation. All competing writes "
+        "waited on PostgreSQL locks and were rejected."
+    )
+    print(
+        "PostgreSQL 0099 lineage smoke passed: alert and reconciliation evidence "
+        "serialized with competing upstream mutations."
     )
 
 
