@@ -1319,10 +1319,12 @@ def test_auto_assign_balances_workload_and_prioritizes_urgent_tasks(monkeypatch)
         finally:
             db.close()
 
+        actor_role = {"value": "ADMIN"}
         monkeypatch.setattr(
             main_module, "_request_user",
             lambda _db, _request: models.User(
-                id=supervisor_id, store_id=store_id, role="SUPERVISOR", is_active=True,
+                id=supervisor_id, store_id=store_id,
+                role=actor_role["value"], is_active=True,
             ),
         )
 
@@ -1341,6 +1343,7 @@ def test_auto_assign_balances_workload_and_prioritizes_urgent_tasks(monkeypatch)
             })
             assert linked.status_code == 201, linked.text
 
+        actor_role["value"] = "SUPERVISOR"
         baseline = client.post("/api/v1/tasks", json={
             "store_id": store_id, "shelf_id": shelf_id, "product_id": product_ids[0],
             "priority": "LOW",
@@ -1429,10 +1432,12 @@ def test_auto_assign_respects_persisted_shift_capacity_and_required_skill(monkey
         finally:
             db.close()
 
+        actor_role = {"value": "ADMIN"}
         monkeypatch.setattr(
             main_module, "_request_user",
             lambda _db, _request: models.User(
-                id=supervisor_id, store_id=store_id, role="SUPERVISOR", is_active=True,
+                id=supervisor_id, store_id=store_id,
+                role=actor_role["value"], is_active=True,
             ),
         )
 
@@ -1440,6 +1445,7 @@ def test_auto_assign_respects_persisted_shift_capacity_and_required_skill(monkey
             "sku": f"PLANNER-{uuid4().hex[:8]}", "name": "Produto planeador",
         })
         assert second_product.status_code == 201, second_product.text
+        actor_role["value"] = "SUPERVISOR"
         linked = client.post("/api/v1/shelf-products", json={
             "shelf_id": shelf_id, "product_id": second_product.json()["id"],
             "target_quantity": 10, "min_display_quantity": 2,
