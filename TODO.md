@@ -2620,3 +2620,19 @@ A transição usa lock pessimista da tarefa e valida o estado já actualizado ap
 - [x] Tornar determinística e específica a observação do bloqueio: capturar os PIDs PostgreSQL do contender e da transacção de evidência; exigir `wait_event_type = 'Lock'` e que o PID esperado esteja em `pg_blocking_pids(pid)`. Validado no commit `9a78d2f185ba2bcdf5ff043097f4895639125a09`: API CI `45812501875`, Quality Gates `45812501507`, Security Scans `45812501427` e Docker Compose `45812501364` passaram; suite API **1740 passed, 1 skipped**.
 
 A migration não altera snapshots, não enfraquece a retenção 0098 e não modifica a semântica das FKs existentes. O downgrade remove apenas as guardas introduzidas em 0099. A validação de dados históricos é deliberadamente bloqueante.
+
+
+
+## Edge AI — associação operacional dispositivo-tarefa
+
+- [x] Implementar serviço transaccional para criar associações explícitas dispositivo-tarefa, capturando `task_version` e actor humano.
+- [x] Implementar revogação única com motivo obrigatório e evento append-only.
+- [x] Aplicar ordem de locks `Store → Task → Device → Assignment` nos fluxos de criação e revogação.
+- [x] Expor endpoints ADMIN/SUPERVISOR e registar as rotas na política central.
+- [x] Validar validade temporal timezone-aware, loja, estado do dispositivo/tarefa e duplicados activos.
+- [x] Acrescentar testes de serviço para criação/revogação, duplicação, actor inválido, datas sem fuso e dispositivo de outra loja.
+- [x] Acrescentar smoke PostgreSQL 16 para criação concorrente e revogação concorrente; execução CI ainda pendente.
+- [ ] Confirmar API CI, Quality Gates, Security Scans e Docker Compose no SHA final.
+- [ ] Adicionar testes HTTP dedicados de autorização ADMIN/SUPERVISOR/EMPLOYEE e isolamento de loja.
+- [ ] Não activar `TASK_ACKNOWLEDGED` até a persistência do acknowledgement e a conclusão do inbox estarem na mesma transacção sob fencing.
+- [ ] Não retomar auditoria BOLA/IDOR sem instrução explícita.
