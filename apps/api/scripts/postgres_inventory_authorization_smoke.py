@@ -152,6 +152,11 @@ def main() -> None:
                 min_display_quantity=1,
             ),
         ])
+        # Materialise SKU-to-shelf links before inserting alerts. PostgreSQL
+        # migration 0099 enforces this lineage in a BEFORE INSERT trigger; the
+        # ORM unit-of-work does not infer an ordering dependency between these
+        # independent model instances merely because they share FK values.
+        db.flush()
         completed_at = models.utc_now()
         foreign_task = models.ReplenishmentTask(
             store_id=store_b.id,
