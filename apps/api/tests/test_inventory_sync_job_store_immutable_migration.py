@@ -1,4 +1,4 @@
-"""SQLite migration contract for immutable ERP/WMS job tenant identity."""
+"""SQLite migration contract: a sync job's tenant is immutable from creation, before its first audit event."""
 
 import importlib.util
 from pathlib import Path
