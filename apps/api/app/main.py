@@ -7919,17 +7919,32 @@ def list_inventory_external_product_mapping_events(
     """Return the immutable audit history for one store-scoped mapping."""
     actor = _request_user(db, request)
     _require_mapping_admin_scope(actor, store_id)
-    mapping = db.query(models.InventoryExternalProductMapping).filter_by(
-        id=mapping_id, store_id=store_id
-    ).first()
-    if mapping is None:
+    # Read the parent mapping and its audit events in one tenant-scoped
+    # statement. A separate mapping preflight followed by an event query
+    # filtered only by mapping_id would create a TOCTOU/BOLA disclosure window.
+    rows = (
+        db.query(
+            models.InventoryExternalProductMapping,
+            models.InventoryExternalProductMappingEvent,
+        )
+        .outerjoin(
+            models.InventoryExternalProductMappingEvent,
+            models.InventoryExternalProductMappingEvent.mapping_id
+            == models.InventoryExternalProductMapping.id,
+        )
+        .filter(
+            models.InventoryExternalProductMapping.id == mapping_id,
+            models.InventoryExternalProductMapping.store_id == store_id,
+        )
+        .order_by(
+            models.InventoryExternalProductMappingEvent.created_at,
+            models.InventoryExternalProductMappingEvent.id,
+        )
+        .all()
+    )
+    if not rows:
         raise HTTPException(status_code=404, detail="Mapping not found")
-    events = db.query(models.InventoryExternalProductMappingEvent).filter_by(
-        mapping_id=mapping_id
-    ).order_by(
-        models.InventoryExternalProductMappingEvent.created_at,
-        models.InventoryExternalProductMappingEvent.id,
-    ).all()
+    events = [event for _, event in rows if event is not None]
     return {
         "mapping_id": mapping_id,
         "items": [{
