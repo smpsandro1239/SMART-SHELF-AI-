@@ -1,3 +1,17 @@
+## P0 — Serialização da propriedade da prateleira nas escritas (2026-11-26)
+
+- [x] Introduzir `_lock_store_scoped_shelf()`: obter a linhagem inicial, bloquear primeiro `Zone` com `SELECT FOR UPDATE`, validar novamente o tenant e bloquear depois `Shelf`; uma alteração de `zones.store_id` tem de aguardar pela transacção da escrita.
+- [x] Aplicar o helper à criação de observações, criação de sessões de captura e upload de imagens.
+- [x] Derivar `CaptureSession.store_id` e o directório de armazenamento da zona bloqueada, nunca de uma relação ORM carregada antes do lock.
+- [x] Manter a ordem de locks `Zone → Shelf → CaptureSession` no upload e validar que a sessão pertence à mesma prateleira e loja.
+- [x] Abranger escrita do ficheiro, `flush`, `refresh` e `commit` no mesmo bloco de limpeza; qualquer falha antes do commit faz rollback e remove um ficheiro parcial.
+- [x] Acrescentar regressão HTTP para observação, sessão e upload cross-store, sessão de outra loja, sessão da mesma loja mas de outra prateleira e controlo positivo same-store.
+- [x] Reforçar o smoke PostgreSQL já executado pelo API CI: criação HTTP de sessões same-store/cross-store e prova de que um UPDATE concorrente de `zones.store_id` fica em `wait_event_type='Lock'`, bloqueado pelo PID da transacção que mantém a escrita da prateleira.
+- [ ] Executar e confirmar API CI/PostgreSQL 16, Quality Gates, Security Scans e Docker Compose no SHA final.
+- [ ] Rever o resultado dos workflows e corrigir eventuais regressões antes de considerar P0.1 fechado.
+
+Limite: o inventário actual de rotas não encontrou endpoint HTTP de transferência/actualização de zonas. O smoke usa um UPDATE SQL concorrente para representar a alteração da loja proprietária e comprovar a serialização ao nível PostgreSQL; não afirma a existência de uma operação de transferência na API. Os testes adicionados e o smoke ainda carecem de execução CI no SHA final. As migrations 0099/0100 não foram alteradas.
+
 ## P0 — Revalidação tenant na leitura do consenso de observações (2026-11-26)
 
 - [x] Identificar que o endpoint fazia preflight de `shelf_id`, mas consultava depois observações apenas por `shelf_id`, sem repetir a linhagem de loja na query de evidência.
