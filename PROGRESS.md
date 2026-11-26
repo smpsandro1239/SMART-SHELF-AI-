@@ -1708,3 +1708,14 @@ O commit `50fc1fcd9dac4c88dfb800aaa1f690ff1c0b6304` introduz o endpoint transacc
 - Integrado no workflow API CI imediatamente após o upgrade normal de migrations.
 - Commits: script `53b08213e706e111672b8528e007f51a8d4515af`; workflow `91df1f671c712fee739735086bbed9a48a00aec5`.
 - A validação do novo smoke está pendente de execução CI. Não considerar o downgrade/reaplicação aprovados até o job passar.
+
+
+## 2026-11-26 — Migration 0099: downgrade e reaplicação aprovados em PostgreSQL 16
+
+- API CI run `45795924709`, commit de workflow `91df1f671c712fee739735086bbed9a48a00aec5`: **sucesso**.
+- O novo passo `Verify PostgreSQL 0099 downgrade and re-apply in an isolated database` terminou com sucesso.
+- O smoke executou upgrade até 0099 numa base temporária, confirmou seis triggers e cinco funções, fez downgrade para 0098 e confirmou a remoção dos objectos, reaplicou 0099 e confirmou a recriação integral. A base temporária foi removida.
+- O smoke concorrente `postgres_shelf_reconciliation_lineage_smoke.py` também terminou com sucesso na mesma execução: a transferência cross-store e a remoção da associação SKU esperaram pelo lock real e foram rejeitadas.
+- O passo completo `pytest -q` terminou com sucesso; o job API CI concluiu com sucesso.
+- Os gates Quality/Security deste SHA foram cancelados durante commits de documentação; os últimos resultados aprovados continuam a ser Quality Gates `45794895243` e Security Scans `45794895272` no commit `024b7624`. Docker Compose também passou em `45794895899`.
+- Conclusão: upgrade, validação de linhagem, serialização concorrente, downgrade e reaplicação da migration 0099 estão comprovados em PostgreSQL 16 isolado/CI. Manter a migration fechada, sem alteração de regra.
