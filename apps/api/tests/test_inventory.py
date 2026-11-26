@@ -2215,6 +2215,22 @@ def test_reserved_wms_quantity_is_subtracted_once_across_multiple_movements(monk
             assert len(stored_movements) == 2
             assert sum(item.quantity for item in stored_movements) == 12
 
+        # Audit history is readable in the owning store and hidden from a
+        # supervisor in another store, even when the movement ID is known.
+        movement_id = movements[0]["id"]
+        own_history = client.get(f"/api/v1/inventory/movements/{movement_id}/events")
+        assert own_history.status_code == 200, own_history.text
+        assert own_history.json()
+        _, foreign_product_id = create_store_and_product(client)
+        with TestingSession() as db:
+            foreign_store_id = db.query(models.Store.id).order_by(models.Store.id.desc()).first()[0]
+        foreign_actor = _supervisor_actor(foreign_store_id)
+        monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: foreign_actor)
+        foreign_history = client.get(f"/api/v1/inventory/movements/{movement_id}/events")
+        missing_history = client.get("/api/v1/inventory/movements/2147483000/events")
+        assert foreign_history.status_code == 404
+        assert missing_history.status_code == 404
+
 
 
 def test_inventory_snapshot_read_and_ingestion_handlers_require_supervisor(monkeypatch):
