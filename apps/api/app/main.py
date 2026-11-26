@@ -1538,7 +1538,6 @@ async def upload_shelf_image(
     directory = Path(settings.image_storage_path) / str(zone.store_id)
     directory.mkdir(parents=True, exist_ok=True)
     destination = directory / f"{image_id}{extension}"
-    destination.write_bytes(content)
     captured_at = models.utc_now()
     record = models.ShelfImage(
         shelf_id=shelf.id,
@@ -1553,9 +1552,11 @@ async def upload_shelf_image(
         captured_at=captured_at,
     )
     try:
+        destination.write_bytes(content)
         db.add(record)
-        db.commit()
+        db.flush()
         db.refresh(record)
+        db.commit()
     except Exception:
         db.rollback()
         destination.unlink(missing_ok=True)
