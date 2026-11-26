@@ -1793,3 +1793,15 @@ A nota anterior que mantinha a migration 0099 aberta foi superada pelas execuç�
 - API CI `45804056793` (commit de código `e96f1b372c984817c9157419a752892b90e9b1aa`): sucesso; smoke `Verify PostgreSQL inventory and warehouse cross-store authorization` passou e a suite completa terminou com **1740 passed, 1 skipped**.
 - No mesmo ciclo, o smoke de linhagem da imagem-fonte embedding / migration 0100 também passou. Quality Gates `45804113802` e Security Scans `45804113803` concluíram com sucesso no HEAD documental `443db02d8081af2bebe6d6e67141213da712b7bb`. Docker Compose `45804012587` terminou com sucesso com a migration 0100 já presente.
 - A matriz BOLA/IDOR continua aberta: esta é uma cobertura específica adicional, não uma declaração de auditoria completa.
+
+
+## 2026-11-26 — Fecho da migration 0100 e confirmação dos ciclos PostgreSQL
+
+- API CI `45805339672`, commit de código `bef29291b55f7a51dd35d917f0d64c3e0b2f7f11`: **sucesso** em PostgreSQL 16.
+- O smoke `postgres_shelf_reconciliation_lineage_smoke.py` já usa `pg_stat_activity.wait_event_type = 'Lock'` para provar os bloqueios reais nos três cenários 0099: transferência cross-store da zona, remoção da associação SKU e mutação da observação de origem da reconciliação. Não depende de um atraso fixo como prova de lock.
+- O smoke da migration 0100 confirmou concorrência real entre revisão HTTP do exemplar e reassociação da imagem-fonte: a alteração esperou pelo lock e foi rejeitada depois de a revisão confirmar.
+- O smoke dedicado do ciclo 0100 passou: upgrade para 0100; downgrade para 0099 com remoção apenas da trigger/função 0100 e preservação das seis triggers/cinco funções 0099; reaplicação 0100 com sucesso. O log do workflow confirma explicitamente cada fase.
+- Suite API: **1740 passed, 1 skipped**. Docker Compose `45805339652`: sucesso no mesmo commit de código.
+- Quality Gates `45805397438` e Security Scans `45805397536`: sucesso no HEAD documental `a09fc5a10dbbfe6d79e7e320dd3efb9979527cf1`, descendente sem alterações de código relativamente ao SHA validado pela API CI.
+
+**Conclusão:** migrations 0099 e 0100 estão validadas nos critérios de integridade, isolamento multi-loja, serialização concorrente, downgrade controlado e reaplicação em PostgreSQL 16. A migration 0100 também tem teste SQLite para a guarda e o downgrade. A auditoria global BOLA/IDOR e de todos os endpoints com IDs directos permanece trabalho separado; não confundir o fecho destas migrations com homologação de integração WMS/ERP ou validação de precisão de visão computacional.
