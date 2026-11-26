@@ -41,6 +41,16 @@ from app.inventory_sync_jobs import (
 from app.edge_device_http import router as edge_device_router
 from app import models
 from app.api_security_policy import api_role_denial, is_public_api_route
+from app.edge_task_assignment_service import (
+    EdgeTaskAssignmentError,
+    create_edge_task_assignment,
+    revoke_edge_task_assignment,
+)
+from app.schemas import (
+    EdgeTaskAssignmentCreate,
+    EdgeTaskAssignmentRead,
+    EdgeTaskAssignmentRevoke,
+)
 from app.artifact_access_policy import evaluate_artifact_access
 from app.operational_decision_engine import DecisionPolicy, evaluate_shelf_decision
 from app.observation_consensus import evaluate_observation_consensus
@@ -10549,3 +10559,63 @@ def create_task_from_operational_decision(
         approval_reason=f"Proposta operacional aprovada; quantidade sugerida={suggested}.",
     )
 
+
+
+
+@app.post(
+    "/api/v1/stores/{store_id}/edge-devices/{device_id}/tasks/{task_id}/assignment",
+    response_model=EdgeTaskAssignmentRead,
+    status_code=201,
+    tags=["edge-assignments"],
+)
+def create_edge_device_task_assignment_endpoint(
+    store_id: int,
+    device_id: str,
+    task_id: int,
+    payload: EdgeTaskAssignmentCreate,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    actor = _request_user(db, request)
+    try:
+        return create_edge_task_assignment(
+            db,
+            store_id=store_id,
+            task_id=task_id,
+            device_id=device_id,
+            actor=actor,
+            reason=payload.reason,
+            valid_from=payload.valid_from,
+            valid_until=payload.valid_until,
+        )
+    except EdgeTaskAssignmentError as exc:
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail={"code": exc.code, "message": exc.message},
+        ) from exc
+
+
+@app.post(
+    "/api/v1/edge-task-assignments/{assignment_id}/revoke",
+    response_model=EdgeTaskAssignmentRead,
+    tags=["edge-assignments"],
+)
+def revoke_edge_device_task_assignment_endpoint(
+    assignment_id: int,
+    payload: EdgeTaskAssignmentRevoke,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    actor = _request_user(db, request)
+    try:
+        return revoke_edge_task_assignment(
+            db,
+            assignment_id=assignment_id,
+            actor=actor,
+            reason=payload.reason,
+        )
+    except EdgeTaskAssignmentError as exc:
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail={"code": exc.code, "message": exc.message},
+        ) from exc
