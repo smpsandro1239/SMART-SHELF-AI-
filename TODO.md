@@ -1,3 +1,12 @@
+## P0 — Isolamento tenant no histórico de eventos de jobs ERP/WMS (2026-11-26)
+
+- [x] Remover a separação entre preflight do job e leitura dos eventos: a query passa a usar InventorySyncJob como tabela-pai, OUTER JOIN aos eventos e predicados simultâneos job.id + job.store_id.
+- [x] Preservar histórico vazio como items: [] através do OUTER JOIN, sem confundir job válido sem eventos com job estrangeiro/inexistente.
+- [x] Adicionar regressão API para job de outra loja consultado através da loja autorizada e exigir 404 igual ao ID inexistente; manter a verificação 403 quando o actor tenta usar directamente o path de outra loja.
+- [ ] Executar teste focal, suite API/PostgreSQL 16, Quality Gates, Security Scans e Docker Compose no SHA final.
+- [ ] Avaliar concorrência PostgreSQL real de reassociação do job à loja e decidir se é necessária guarda de imutabilidade/serialização na camada de dados.
+
+Limite: a query única elimina a janela entre a leitura do job e a leitura dos eventos no endpoint. A alteração e a regressão foram publicadas, mas ainda não estão validadas por execução CI. A auditoria BOLA/IDOR global permanece aberta.
 ## P0 — Serialização da propriedade da prateleira nas escritas (2026-11-26)
 
 - [x] Introduzir `_lock_store_scoped_shelf()`: obter a linhagem inicial, bloquear primeiro `Zone` com `SELECT FOR UPDATE`, validar novamente o tenant e bloquear depois `Shelf`; uma alteração de `zones.store_id` tem de aguardar pela transacção da escrita.
