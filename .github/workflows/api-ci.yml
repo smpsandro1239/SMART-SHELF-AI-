@@ -66,6 +66,10 @@ jobs:
         env:
           DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/smart_shelf_ci
         run: python scripts/postgres_shelf_reconciliation_lineage_migration_cycle_smoke.py
+      - name: Verify PostgreSQL 0100 downgrade and re-apply in an isolated database
+        env:
+          DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/smart_shelf_ci
+        run: python scripts/postgres_embedding_source_image_shelf_lineage_migration_cycle_smoke.py
       - name: Verify PostgreSQL vision worker lease recovery and fencing
         env:
           DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/smart_shelf_ci
