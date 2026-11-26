@@ -1293,17 +1293,23 @@ def get_shelf_observation_consensus(
     actor = _request_user(db, request)
     shelf = _get_store_scoped_shelf(db, shelf_id, actor)
     if product_id is not None:
-        shelf_product = (
+        shelf_product_query = (
             db.query(models.ShelfProduct)
+            .join(models.Shelf, models.ShelfProduct.shelf_id == models.Shelf.id)
+            .join(models.Zone, models.Shelf.zone_id == models.Zone.id)
             .join(models.Product, models.ShelfProduct.product_id == models.Product.id)
             .filter(
                 models.ShelfProduct.shelf_id == shelf_id,
                 models.ShelfProduct.product_id == product_id,
                 models.Product.is_active.is_(True),
             )
-            .first()
         )
-        if shelf_product is None:
+        if actor is not None and actor.role != "ADMIN":
+            # Reapply tenant scope in the same statement as the association read.
+            shelf_product_query = shelf_product_query.filter(
+                models.Zone.store_id == actor.store_id
+            )
+        if shelf_product_query.first() is None:
             raise HTTPException(
                 status_code=422,
                 detail="Product must be active and explicitly assigned to this shelf",
@@ -1312,12 +1318,25 @@ def get_shelf_observation_consensus(
     else:
         # Keep legacy shelf-only evidence separate from SKU-attributed evidence.
         observation_scope = models.Observation.product_id.is_(None)
-    observations = (
+
+    # Do not rely solely on the earlier shelf preflight: the shelf can be
+    # reassigned to another store before this evidence query executes. Resolve
+    # the complete tenant lineage in the same SQL statement that reads rows.
+    observations_query = (
         db.query(models.Observation)
+        .join(models.Shelf, models.Observation.shelf_id == models.Shelf.id)
+        .join(models.Zone, models.Shelf.zone_id == models.Zone.id)
         .filter(
             models.Observation.shelf_id == shelf_id,
             observation_scope,
         )
+    )
+    if actor is not None and actor.role != "ADMIN":
+        observations_query = observations_query.filter(
+            models.Zone.store_id == actor.store_id
+        )
+    observations = (
+        observations_query
         .order_by(models.Observation.observed_at.desc(), models.Observation.id.desc())
         .limit(500)
         .all()
@@ -1345,7 +1364,7 @@ def get_shelf_observation_consensus(
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return {
-        "store_id": shelf.zone.store_id,
+        "store_id": actor.store_id if actor is not None and actor.role != "ADMIN" else shelf.zone.store_id,
         "shelf_id": shelf.id,
         "shelf_code": shelf.code,
         "evaluated_observations": len(observations),
