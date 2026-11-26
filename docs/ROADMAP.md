@@ -1,3 +1,7 @@
+## 2026-11-26 — Leituras atómicas de histórico de movimentos e alertas
+
+Os endpoints de histórico de movimentos e alertas foram consolidados numa query pai + OUTER JOIN a eventos. O tenant é aplicado na mesma instrução; um pai autorizado sem eventos permanece distinguível de um ID estrangeiro/inexistente sem uma segunda query. Regressão de movimentos cobre same-store e cross-store; a cobertura existente de alertas mantém-se. Commits `cb9cb3fe` e `d0782203`. CI pendente.
+
 ## 2026-11-26 — Isolamento do histórico de mapeamentos ERP/WMS
 
 Foi eliminada a separação entre o preflight do mapping e a leitura dos eventos em GET /api/v1/stores/{store_id}/inventory/external-mappings/{mapping_id}/events. A query usa o mapping como tabela-pai, OUTER JOIN aos eventos e filtra simultaneamente por mapping_id e store_id, preservando histórico vazio e ocultando IDs estrangeiros/inexistentes. Regressão API acrescentada; commits 3a95f8a1 e 41bfe0a6. Validação CI pendente.
