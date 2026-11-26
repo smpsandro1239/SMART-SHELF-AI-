@@ -1684,3 +1684,17 @@ O commit `50fc1fcd9dac4c88dfb800aaa1f690ff1c0b6304` introduz o endpoint transacc
 - A API CI terminou globalmente em falha no passo `pytest -q`: **4 failed, 1735 passed, 1 skipped**. Falhas: `tests/test_inventory.py::test_reserved_wms_quantity_is_subtracted_once_across_multiple_movements`; `tests/test_observations.py::test_failed_image_analysis_can_be_retried_by_store_supervisor` (ambas `KeyError: 'id'`); `tests/test_tasks.py::test_auto_assign_balances_workload_and_prioritizes_urgent_tasks`; `tests/test_tasks.py::test_auto_assign_respects_persisted_shift_capacity_and_required_skill` (ambas esperam 201 para SUPERVISOR, mas a API devolve 403 — ADMIN obrigatório).
 - Quality Gates e Security Scans para este SHA foram cancelados durante a sequência de commits de documentação; não os marcar como aprovados. A triagem das quatro falhas de testes permanece independente da validação PostgreSQL 0099.
 - Conclusão parcial: o smoke de concorrência PostgreSQL 0099 passou; API CI global ainda não está verde. Downgrade e reaplicação PostgreSQL continuam sem validação dedicada.
+
+
+## 2026-11-26 — Gates verdes após alinhamento dos fixtures com RBAC actual
+
+- Corrigidos exclusivamente os quatro fixtures/testes legados que falhavam na execução anterior; não foi alterada a autorização de produção:
+  - `test_reserved_wms_quantity_is_subtracted_once_across_multiple_movements`: cria zonas/prateleiras enquanto actor ADMIN e regressa a SUPERVISOR para operações de tarefa.
+  - `test_failed_image_analysis_can_be_retried_by_store_supervisor`: cria loja/zona/prateleira como ADMIN e só depois muda para SUPERVISOR para upload/retry.
+  - Os dois testes de auto-assign criam catálogo como ADMIN e executam atribuição como SUPERVISOR, de acordo com as políticas dos endpoints.
+- Commit dos ajustes: `024b76241b8a116d9930ea448dd6668f434926c2` (com commits sequenciais dos fixtures: `a3560ab4`, `b9fdacd8`, `839a919f`).
+- API CI `45794895213`: **sucesso**. Incluiu aplicação de migrations PostgreSQL 16, todos os smokes PostgreSQL (incluindo smoke concorrente 0099) e suite pytest completa.
+- Quality Gates `45794895243`: **sucesso**, incluindo build TypeScript e API tests/Python compilation.
+- Security Scans `45794895272`: **sucesso**.
+- Demo Docker Compose smoke `45794895899`: **sucesso**.
+- Resultado: as quatro falhas anteriores foram resolvidas nos testes, sem relaxar a política ADMIN_ONLY nem alterar o comportamento de produção. A migration 0099 passou a validação de upgrade + integridade/concorrência no PostgreSQL 16. Falta ainda uma prova dedicada de downgrade para 0098 e reaplicação de 0099 em base isolada.
