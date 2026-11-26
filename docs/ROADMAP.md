@@ -1,3 +1,11 @@
+## 2026-11-26 — Edge AI: estado real da ingestão e acknowledgements de tarefas
+
+A ingestão Edge não está apenas em contrato: o repositório já contém provisionamento controlado de dispositivos, credenciais revogáveis armazenadas como digest, autenticação HMAC com nonce/timestamp, endpoint de ingestão, inbox imutável, cursor sequencial transaccional e worker com lease/fencing/retry/dead-letter. O ACK HTTP confirma aceitação durável na inbox, não execução de domínio.
+
+O worker mantém `DEVICE_HEARTBEAT` como único handler built-in. `SHELF_CAPTURED`, `SHELF_OBSERVATION` e `TASK_ACKNOWLEDGED` não devem produzir efeitos operacionais enquanto não existirem handlers e contratos específicos. Foi criado [edge-task-acknowledgement-contract.md](architecture/edge-task-acknowledgement-contract.md), que exige associação explícita dispositivo-tarefa, versão, idempotência, fencing e revisão humana; uma declaração Edge de conclusão não conclui a tarefa nem movimenta stock.
+
+Próxima implementação: associação dispositivo-tarefa versionada/auditável e revogável, seguida de handler que regista declarações sem substituir a confirmação humana. A auditoria BOLA/IDOR fica fora do âmbito desta fase por indicação do utilizador.
+
 ## 2026-11-26 — Ledger de reconciliações: serialização em lote e contexto histórico do actor
 
 A listagem do ledger passou a executar três consultas SQL para uma página não vazia, independentemente do número de reconciliações: registos paginados, utilizadores criadores/revisores e eventos associados. Os eventos são agrupados por reconciliation_id e ordenados por created_at/id, preservando a paginação e o contrato da API. Novos eventos guardam o snapshot mínimo de contexto do actor (user_id, role, store_id e full_name). Sem backfill retroactivo. Testes e workflows aguardam validação no SHA final.
