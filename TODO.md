@@ -1,3 +1,15 @@
+## P0 — Revalidação tenant na leitura do consenso de observações (2026-11-26)
+
+- [x] Identificar que o endpoint fazia preflight de `shelf_id`, mas consultava depois observações apenas por `shelf_id`, sem repetir a linhagem de loja na query de evidência.
+- [x] Aplicar JOIN `Observation → Shelf → Zone` e filtro `Zone.store_id` na mesma query que lê as observações para SUPERVISOR.
+- [x] Reaplicar o mesmo tenant scope na validação de `ShelfProduct` quando é fornecido `product_id`.
+- [x] Preservar o `store_id` autorizado do actor na resposta do SUPERVISOR.
+- [x] Acrescentar regressão determinística que transfere a zona depois do preflight e antes da leitura, exigindo zero observações devolvidas.
+- [ ] Validar teste focal, suite API, PostgreSQL 16, Quality Gates, Security Scans e Docker Compose no SHA final.
+- [ ] Avaliar smoke concorrente PostgreSQL dedicado se a revisão das operações de transferência confirmar um caminho concorrente suportado que justifique serialização por lock.
+
+Limite: a alteração elimina a leitura de evidência sem predicado tenant na query. O teste publicado simula o interleaving entre preflight e leitura; ainda não prova lock wait/serialização PostgreSQL real nem fecha a auditoria BOLA/IDOR global.
+
 ## P0 — Imutabilidade da associação shelf da imagem-fonte de exemplares embedding (2026-11-26)
 
 - [x] Confirmar que a revisão de exemplares bloqueia primeiro a linha `shelf_images`, seguindo a ordem imagem → produto → exemplar.
