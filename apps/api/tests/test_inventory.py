@@ -7,7 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -1198,6 +1198,13 @@ def test_inventory_reconciliation_ledger_persists_evidence_and_requires_independ
         assert record["wms_erp_delta"] == -3
         assert record["evidence"]["erp"]["captured_at"]
         assert [event["event_type"] for event in record["events"]] == ["CREATED"]
+        created_actor = record["events"][0]["evidence"]["actor_snapshot"]
+        assert created_actor == {
+            "user_id": creator.id,
+            "role": "SUPERVISOR",
+            "store_id": store_id,
+            "full_name": creator.full_name,
+        }
 
         self_review = client.post(
             f"/api/v1/inventory/reconciliations/{record['id']}/review",
@@ -1215,10 +1222,25 @@ def test_inventory_reconciliation_ledger_persists_evidence_and_requires_independ
         assert approved.json()["review_status"] == "APPROVED"
         assert approved.json()["reviewed_by_user_id"] == reviewer.id
         assert [event["event_type"] for event in approved.json()["events"]] == ["CREATED", "APPROVED"]
+        reviewed_actor = approved.json()["events"][1]["evidence"]["actor_snapshot"]
+        assert reviewed_actor == {
+            "user_id": reviewer.id,
+            "role": "SUPERVISOR",
+            "store_id": store_id,
+            "full_name": reviewer.full_name,
+        }
 
-        history = client.get("/api/v1/inventory/reconciliations", params={
-            "store_id": store_id, "review_status": "APPROVED",
-        })
+        query_count = {"value": 0}
+        def count_sql(_conn, _cursor, _statement, _parameters, _context, _executemany):
+            query_count["value"] += 1
+        event.listen(TEST_ENGINE, "before_cursor_execute", count_sql)
+        try:
+            history = client.get("/api/v1/inventory/reconciliations", params={
+                "store_id": store_id, "review_status": "APPROVED",
+            })
+        finally:
+            event.remove(TEST_ENGINE, "before_cursor_execute", count_sql)
+        assert query_count["value"] == 3, f"Expected page + users + events queries, got {query_count['value']}"
         assert history.status_code == 200
         assert history.json()["count"] == 1
         with TestingSession() as db:
@@ -1262,6 +1284,19 @@ def test_inventory_reconciliation_dashboard_aggregates_ledger_and_freshness(monk
         for reason in ("Auditoria inicial", "Auditoria de seguimento"):
             created = client.post("/api/v1/inventory/reconciliations", json={"store_id": store_id, "shelf_id": shelf["id"], "product_id": product_id, "reason": reason})
             assert created.status_code == 201, created.text
+        query_count = {"value": 0}
+        def count_sql(_conn, _cursor, _statement, _parameters, _context, _executemany):
+            query_count["value"] += 1
+        event.listen(TEST_ENGINE, "before_cursor_execute", count_sql)
+        try:
+            ledger = client.get("/api/v1/inventory/reconciliations", params={"store_id": store_id})
+        finally:
+            event.remove(TEST_ENGINE, "before_cursor_execute", count_sql)
+        assert ledger.status_code == 200, ledger.text
+        assert ledger.json()["count"] == 2
+        assert [item["events"][0]["event_type"] for item in ledger.json()["items"]] == ["CREATED", "CREATED"]
+        assert query_count["value"] == 3, f"Expected exactly 3 queries for 2 records, got {query_count['value']}"
+
         response = client.get("/api/v1/inventory/reconciliations/dashboard", params={"store_id": store_id})
         assert response.status_code == 200, response.text
         payload = response.json()
