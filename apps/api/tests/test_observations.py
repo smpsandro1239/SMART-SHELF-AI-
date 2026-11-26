@@ -996,7 +996,7 @@ def test_shelf_write_endpoints_lock_and_revalidate_store_scope(tmp_path, monkeyp
             main_module,
             "_request_user",
             lambda db, request: SimpleNamespace(
-                id=501, role="SUPERVISOR", store_id=store_a["id"]
+                id=None, role="SUPERVISOR", store_id=store_a["id"]
             ),
         )
 
