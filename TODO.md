@@ -2493,3 +2493,18 @@ A transição usa lock pessimista da tarefa e valida o estado já actualizado ap
 - [x] Exigir ADMIN/SUPERVISOR para criar/alterar políticas de rotação e executar simulações.
 - [x] Testar seis operações com actor EMPLOYEE: todas devolvem 403 antes da leitura/mutação e não criam localizações, colocações, paletes ou políticas.
 - [x] API CI `45721215742`: **1731 passed, 1 skipped**; Quality Gates `45721215822`, Security Scans `45721215637` e Docker Compose `45721215724` — sucesso no SHA `3f63efd0da73070cc1654e76ea58ecfe0e79ca93`.
+
+
+
+## P0 — Integridade referencial de alertas e reconciliações (migration 0099)
+
+- [x] Criar migration 0099 com preflight fail-closed para alertas e reconciliações históricas; não há backfill nem alteração automática de evidência.
+- [x] Validar alertas contra a loja efectiva da prateleira e a associação SKU–prateleira em `shelf_products`.
+- [x] Validar reconciliações contra loja/prateleira, associação SKU–prateleira, observação (mesma prateleira e SKU) e cada snapshot opcional (mesma loja e SKU).
+- [x] Impedir que alterações posteriores à associação SKU–prateleira, observação ou hierarquia invalidem evidência já retida.
+- [x] Implementar variantes PostgreSQL com locks `FOR SHARE` sobre as linhas de origem e SQLite com triggers equivalentes.
+- [x] Publicar teste SQLite para associações incompatíveis, snapshots cruzados, preservação sem persistência parcial, alterações a relações de origem e rejeição do preflight.
+- [ ] Executar API CI, Quality Gates e smoke PostgreSQL 16; a publicação dos testes não constitui prova de execução nem valida ainda a concorrência PostgreSQL em runtime.
+- [ ] Acrescentar/confirmar um teste concorrente PostgreSQL dedicado para inserção de evidência contra transferência de prateleira/zona e alteração de associação SKU.
+
+A migration não altera snapshots, não enfraquece a retenção 0098 e não modifica a semântica das FKs existentes. O downgrade remove apenas as guardas introduzidas em 0099. A validação de dados históricos é deliberadamente bloqueante.
