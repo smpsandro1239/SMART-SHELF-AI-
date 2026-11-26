@@ -1,3 +1,15 @@
+
+## 2026-11-26 — Revalidação de tenant no consenso de observações
+
+- SHA inicial da ronda: `702462a57d108041c62e92624aed79b609666a52`.
+- Alterado `apps/api/app/main.py`: a validação da associação SKU/prateleira e a query de observações aplicam agora o âmbito `Zone.store_id` através da linhagem Shelf → Zone, na própria instrução que lê os registos.
+- A resposta do SUPERVISOR mantém o `store_id` do tenant autenticado, sem voltar a expor o valor da relação após o preflight.
+- Alterado `apps/api/tests/test_observations.py`: regressão determinística que transfere a zona depois do preflight e confirma que a query de evidência não devolve observações do novo tenant.
+- Commits de código/teste: `61a69adfd2cb9325410daf4ea0c1f4e9d17dce9d` e `a61811c6f8a78358a7882d437a7358599503cba9`.
+- A documentação foi reconciliada com a evidência CI anterior: API CI `45812501875` confirmou os smokes de artefactos externos e IDs directos de deteções/exemplares; Quality Gates `45812501507`, Security Scans `45812501427` e Docker Compose `45812501364` passaram no commit de código anterior.
+- **Validação da alteração de consenso pendente:** os novos commits ainda precisam de API CI/PostgreSQL 16, Quality Gates, Security Scans e Docker Compose. Não afirmar que o novo teste passou até os workflows terminarem.
+- Próxima prioridade: continuar a auditoria de IDs directos e históricos ERP/WMS, incluindo a query de eventos de jobs de sincronização, sem assumir vulnerabilidade antes de provar a linhagem e o caminho concorrente.
+
 ## 2026-11-26 — Hardening BOLA/IDOR no histórico de eventos de alertas
 
 - A auditoria encontrou que `GET /api/v1/observation-alerts/{alert_id}/events` fazia uma leitura scoped do alerta-pai e, numa segunda query, carregava os eventos apenas por `alert_id`. Como `ObservationAlertEvent` não tem `store_id`, a query final não repetia a condição de tenant e existia uma janela de TOCTOU entre as duas leituras.
