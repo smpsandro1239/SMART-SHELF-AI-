@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Literal
 from uuid import UUID
@@ -1627,3 +1627,55 @@ class InventorySyncJobEnqueue(BaseModel):
         if value is not None and (value.tzinfo is None or value.utcoffset() is None):
             raise ValueError("scheduled_at tem de incluir fuso horário.")
         return value
+
+
+class EdgeTaskAssignmentCreate(BaseModel):
+    reason: str = Field(min_length=3, max_length=2000)
+    valid_from: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    valid_until: datetime | None = None
+
+    @field_validator("reason")
+    @classmethod
+    def normalize_assignment_reason(cls, value: str) -> str:
+        value = value.strip()
+        if len(value) < 3:
+            raise ValueError("O motivo deve conter pelo menos três caracteres.")
+        return value
+
+    @model_validator(mode="after")
+    def validate_assignment_window(self):
+        for name in ("valid_from", "valid_until"):
+            value = getattr(self, name)
+            if value is not None and (value.tzinfo is None or value.utcoffset() is None):
+                raise ValueError(f"{name} tem de incluir fuso horário.")
+        if self.valid_until is not None and self.valid_until <= self.valid_from:
+            raise ValueError("valid_until tem de ser posterior a valid_from.")
+        return self
+
+
+class EdgeTaskAssignmentRevoke(BaseModel):
+    reason: str = Field(min_length=3, max_length=2000)
+
+    @field_validator("reason")
+    @classmethod
+    def normalize_revocation_reason(cls, value: str) -> str:
+        value = value.strip()
+        if len(value) < 3:
+            raise ValueError("O motivo deve conter pelo menos três caracteres.")
+        return value
+
+
+class EdgeTaskAssignmentRead(BaseModel):
+    id: int
+    store_id: int
+    task_id: int
+    device_id: str
+    task_version: int
+    valid_from: datetime
+    valid_until: datetime | None
+    created_by_user_id: int
+    created_at: datetime
+    revoked_at: datetime | None
+    revoked_by_user_id: int | None
+    revocation_reason: str | None
+    model_config = ConfigDict(from_attributes=True)
