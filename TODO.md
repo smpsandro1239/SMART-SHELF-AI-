@@ -7,7 +7,7 @@
 - [x] Acrescentar smoke PostgreSQL concorrente que usa a revisão HTTP real, observa os lock waits em `pg_stat_activity` e exige que a mudança cross-store seja rejeitada depois do commit da revisão.
 - [x] API CI `45804056793` aplicou migration 0100 em PostgreSQL 16; o smoke concorrente passou, provando lock wait real e rejeição da reassociação cross-store depois da revisão HTTP. Suite completa: **1740 passed, 1 skipped**.
 - [x] Teste SQLite cobre rejeição com exemplar, reassociação permitida sem exemplar e downgrade da guarda.
-- [ ] Validar downgrade/reaplicação PostgreSQL 0100 em base isolada; extensão do smoke de ciclo publicada no commit `d161bd03`, CI pendente.
+- [ ] Validar downgrade/reaplicação PostgreSQL 0100 em base isolada; smoke dedicado `postgres_embedding_source_image_shelf_lineage_migration_cycle_smoke.py` publicado no commit `24b1093c` e ligado ao API CI no commit `7e23d3d9`. Execução do workflow final ainda pendente.
 - [ ] Confirmar Quality Gates, Security Scans e Docker Compose após a extensão do ciclo 0100.
 
 Limite: o smoke e a migration foram publicados; a validação CI ainda não terminou. A guarda cobre a associação directa imagem→shelf quando há exemplares embedding; não substitui a auditoria mais ampla de movimentos de shelf/zone/store nem de outros recursos com IDs directos.
