@@ -1949,3 +1949,19 @@ Estado: a prova concorrente 0099 passou de observação genérica de lock para c
 - Commits publicados em main: código a7bdf75cf62d2a855f257ca97be484f89a022da8; teste 56ca987260186601fd0f3e42088a18528b472552.
 - Validação pendente: não foi executada suite local; aguardar API CI/PostgreSQL 16, Quality Gates, Security Scans e Docker Compose no SHA final. Não declarar P0 concluído até confirmação.
 - Próxima acção obrigatória: rever a integridade/imutabilidade de InventorySyncJob.store_id e procurar outras queries de eventos que façam preflight separado do recurso-pai.
+
+## 2026-11-26 — Preparação da associação dispositivo-tarefa Edge
+
+- Retoma efectuada na `main`; HEAD de referência inicial: `6159c326909fa0d6d6fd830067d6e4e243391e87`.
+- Confirmei que `ReplenishmentTask.assigned_user_id` é uma atribuição a funcionário e não pode ser reutilizada para identificar um dispositivo.
+- Confirmei que `replenishment_assignment.py` apenas calcula propostas de atribuição a funcionários; não persiste associação dispositivo-tarefa.
+- Confirmei que o modelo de tarefa ainda não possui `task_version` explícito. A utilização de `updated_at` como versão concorrente não está contratualizada.
+- Confirmei que o ledger `ReplenishmentTaskEvent` tem tipos limitados ao ciclo de vida humano da tarefa; o acknowledgement Edge necessita de registo próprio, append-only, com proveniência do inbox.
+- Confirmei que o registo Edge, credenciais, inbox e worker já estão implementados nas migrations 0071–0073; não serão duplicados.
+- Actualizei `TODO.md` para remover a duplicação de trabalho e explicitar a dependência entre associação, versão concorrente e handler `TASK_ACKNOWLEDGED`.
+- Actualizei `docs/architecture/edge-task-acknowledgement-contract.md` com os limites do modelo actual e o desenho necessário para a próxima migration.
+- Commits documentais: `7b2e7375d9b615ab5ea3b86ddcee73a6f01ac5b8` e `5fd889f79b025c828372ec187226ce4aa75a2eb6`.
+- Validação: não foi possível clonar o repositório neste ambiente porque a resolução de `github.com` falhou; não foi executado pytest, Alembic, PostgreSQL nem CI nesta sessão. Não foi publicado código executável.
+- Auditoria BOLA/IDOR continua adiada por instrução explícita.
+
+**Próximo passo técnico:** implementar a migration para associação dispositivo-tarefa e versão concorrente da tarefa, incluindo ledger append-only e guardas PostgreSQL/SQLite; só depois ligar o handler e os smokes de concorrência. A alteração de código deve ser validada em CI PostgreSQL 16 antes de ser considerada concluída.
