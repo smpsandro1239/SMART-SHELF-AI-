@@ -1,3 +1,9 @@
+## Segurança multi-loja — histórico de movimentos e alertas (2026-11-26)
+
+As rotas de histórico de movimentos de inventário e alertas usam agora uma única query com a entidade-pai, OUTER JOIN aos eventos e filtro de tenant na mesma instrução. Isto elimina a segunda consulta usada para distinguir histórico vazio de IDs estrangeiros/inexistentes. Supervisores apenas consultam a própria loja; administradores mantêm o âmbito global. Foi adicionada regressão API para o histórico de movimentos e mantida a cobertura de alertas. A validação CI desta alteração permanece pendente.
+
+---
+
 ## Segurança multi-loja — auditoria de histórico de mapeamentos ERP/WMS (2026-11-26)
 
 O endpoint de eventos de mapeamentos externos lê agora o mapping e o seu histórico numa única query tenant-scoped (mapping_id + store_id, com OUTER JOIN). Isto elimina a janela entre o preflight do mapping e a leitura dos eventos. Um mapping autorizado sem eventos continua a devolver items: []; IDs de outra loja e inexistentes devolvem 404. Foi acrescentada regressão API para ambos os casos. A validação CI desta correcção está pendente.
