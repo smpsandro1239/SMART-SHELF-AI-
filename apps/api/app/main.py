@@ -2965,6 +2965,16 @@ def list_shelf_image_retention_events(
         raise HTTPException(status_code=401, detail="Authenticated user required")
     if actor is not None and actor.role not in {"ADMIN", "SUPERVISOR"}:
         raise HTTPException(status_code=403, detail="Supervisor role required")
+    events_query = (
+        db.query(models.ShelfImageRetentionEvent)
+        .join(
+            models.ShelfImage,
+            models.ShelfImageRetentionEvent.shelf_image_id == models.ShelfImage.id,
+        )
+        .join(models.Shelf, models.ShelfImage.shelf_id == models.Shelf.id)
+        .join(models.Zone, models.Shelf.zone_id == models.Zone.id)
+        .filter(models.ShelfImage.id == image_id)
+    )
     image_query = (
         db.query(models.ShelfImage.id)
         .join(models.Shelf, models.ShelfImage.shelf_id == models.Shelf.id)
@@ -2974,13 +2984,11 @@ def list_shelf_image_retention_events(
     if actor is not None and actor.role != "ADMIN":
         if actor.store_id is None:
             raise HTTPException(status_code=404, detail="Shelf image not found")
+        events_query = events_query.filter(models.Zone.store_id == actor.store_id)
         image_query = image_query.filter(models.Zone.store_id == actor.store_id)
-    authorized_image_id = image_query.scalar()
-    if authorized_image_id is None:
-        raise HTTPException(status_code=404, detail="Shelf image not found")
-    return (
-        db.query(models.ShelfImageRetentionEvent)
-        .filter(models.ShelfImageRetentionEvent.shelf_image_id == authorized_image_id)
+
+    events = (
+        events_query
         .order_by(
             models.ShelfImageRetentionEvent.created_at.asc(),
             models.ShelfImageRetentionEvent.id.asc(),
@@ -2989,6 +2997,14 @@ def list_shelf_image_retention_events(
         .limit(max(1, min(limit, 500)))
         .all()
     )
+    if events:
+        return events
+
+    # An empty history is valid only when the parent image is visible in the
+    # same tenant scope; keep foreign and missing image IDs indistinguishable.
+    if image_query.scalar() is None:
+        raise HTTPException(status_code=404, detail="Shelf image not found")
+    return []
 
 
 @app.get("/api/v1/shelf-images", response_model=list[ShelfImageRead], tags=["computer-vision"])
