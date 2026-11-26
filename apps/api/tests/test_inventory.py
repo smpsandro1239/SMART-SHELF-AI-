@@ -2512,3 +2512,56 @@ def test_task_event_history_scopes_parent_tenant_in_event_query(monkeypatch):
         assert own.json()
         assert foreign.status_code == missing.status_code == 404
         assert foreign.json() == missing.json()
+
+
+def test_observation_alert_event_history_scopes_parent_tenant_in_event_query(monkeypatch):
+    with TestClient(app) as client:
+        own_store_id, own_product_id, own_task_id, _ = _completed_replenishment(client)
+        foreign_store_id, foreign_product_id, foreign_task_id, _ = _completed_replenishment(client)
+        now = datetime.now(timezone.utc)
+        with TestingSession() as db:
+            own_task = db.get(models.ReplenishmentTask, own_task_id)
+            foreign_task = db.get(models.ReplenishmentTask, foreign_task_id)
+            own_alert = models.ObservationAlert(
+                store_id=own_store_id,
+                shelf_id=own_task.shelf_id,
+                product_id=own_product_id,
+                condition="EMPTY",
+                status="OPEN",
+                first_seen_at=now,
+                last_seen_at=now,
+                confirmation_count=2,
+                average_confidence=0.9,
+                sources=["TEST"],
+            )
+            foreign_alert = models.ObservationAlert(
+                store_id=foreign_store_id,
+                shelf_id=foreign_task.shelf_id,
+                product_id=foreign_product_id,
+                condition="EMPTY",
+                status="OPEN",
+                first_seen_at=now,
+                last_seen_at=now,
+                confirmation_count=2,
+                average_confidence=0.9,
+                sources=["TEST"],
+            )
+            db.add_all([own_alert, foreign_alert])
+            db.flush()
+            own_alert_id, foreign_alert_id = own_alert.id, foreign_alert.id
+            db.add_all([
+                models.ObservationAlertEvent(alert_id=own_alert_id, event_type="CREATED"),
+                models.ObservationAlertEvent(alert_id=foreign_alert_id, event_type="CREATED"),
+            ])
+            db.commit()
+
+        actor = _supervisor_actor(own_store_id)
+        monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: actor)
+        own = client.get(f"/api/v1/observation-alerts/{own_alert_id}/events")
+        foreign = client.get(f"/api/v1/observation-alerts/{foreign_alert_id}/events")
+        missing = client.get("/api/v1/observation-alerts/2147483000/events")
+
+        assert own.status_code == 200, own.text
+        assert len(own.json()) == 1
+        assert foreign.status_code == missing.status_code == 404
+        assert foreign.json() == missing.json()
