@@ -16,10 +16,12 @@ Limite: a query única elimina a janela entre a leitura do job e a leitura dos e
 - [x] Abranger escrita do ficheiro, `flush`, `refresh` e `commit` no mesmo bloco de limpeza; qualquer falha antes do commit faz rollback e remove um ficheiro parcial.
 - [x] Acrescentar regressão HTTP para observação, sessão e upload cross-store, sessão de outra loja, sessão da mesma loja mas de outra prateleira e controlo positivo same-store.
 - [x] Reforçar o smoke PostgreSQL já executado pelo API CI: criação HTTP de sessões same-store/cross-store e prova de que um UPDATE concorrente de `zones.store_id` fica em `wait_event_type='Lock'`, bloqueado pelo PID da transacção que mantém a escrita da prateleira.
+- [x] Corrigir o smoke PostgreSQL: após comprovar que o UPDATE concorrente fica bloqueado pelo lock da escrita da prateleira, exigir que a transferência seja rejeitada pela protecção de evidência retida, em vez de esperar uma transferência bem-sucedida incompatível com o contrato de integridade.
+- [x] Verificar que, após a rejeição, a sessão de captura permanece associada à loja A, a zona continua na loja A e o supervisor autorizado mantém acesso.
 - [ ] Executar e confirmar API CI/PostgreSQL 16, Quality Gates, Security Scans e Docker Compose no SHA final.
-- [ ] Rever o resultado dos workflows e corrigir eventuais regressões antes de considerar P0.1 fechado.
+- [ ] Rever os resultados dos workflows e corrigir eventuais regressões antes de considerar P0.1 fechado.
 
-Limite: o inventário actual de rotas não encontrou endpoint HTTP de transferência/actualização de zonas. O smoke usa um UPDATE SQL concorrente para representar a alteração da loja proprietária e comprovar a serialização ao nível PostgreSQL; não afirma a existência de uma operação de transferência na API. Os testes adicionados e o smoke ainda carecem de execução CI no SHA final. As migrations 0099/0100 não foram alteradas.
+Limite: a falha anterior não era uma falha de autorização da sessão. O smoke esperava que a zona mudasse de loja depois do lock, mas a protecção de integridade da base de dados rejeita correctamente essa transferência quando já existe evidência operacional. O teste foi alinhado com esse contrato; ainda aguarda nova execução CI. O inventário actual de rotas não encontrou endpoint HTTP de transferência/actualização de zonas.
 
 ## P0 — Revalidação tenant na leitura do consenso de observações (2026-11-26)
 
