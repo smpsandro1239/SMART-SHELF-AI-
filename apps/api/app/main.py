@@ -8012,12 +8012,23 @@ def list_store_inventory_sync_job_events(
 ):
     actor = _request_user(db, request)
     _require_mapping_admin_scope(actor, store_id)
-    job = db.query(models.InventorySyncJob).filter_by(id=job_id, store_id=store_id).first()
-    if job is None:
-        raise HTTPException(status_code=404, detail="Synchronization job not found")
-    events = db.query(models.InventorySyncJobEvent).filter_by(job_id=job_id).order_by(
-        models.InventorySyncJobEvent.sequence_number.asc()
+    # Read the parent and its events in one statement. The tenant predicate must
+    # participate in the event query itself: a separate parent preflight followed
+    # by an event lookup would leave a reassignment/TOCTOU window.
+    rows = db.query(
+        models.InventorySyncJob, models.InventorySyncJobEvent
+    ).outerjoin(
+        models.InventorySyncJobEvent,
+        models.InventorySyncJobEvent.job_id == models.InventorySyncJob.id,
+    ).filter(
+        models.InventorySyncJob.id == job_id,
+        models.InventorySyncJob.store_id == store_id,
+    ).order_by(
+        models.InventorySyncJobEvent.sequence_number.asc(),
     ).all()
+    if not rows:
+        raise HTTPException(status_code=404, detail="Synchronization job not found")
+    events = [event for _job, event in rows if event is not None]
     return {"job_id": job_id, "items": [{
         "sequence_number": event.sequence_number, "event_type": event.event_type,
         "worker_id": event.worker_id, "fencing_token": event.fencing_token,
