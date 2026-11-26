@@ -31,7 +31,7 @@ def _alert(store_id: int, shelf_id: int, product_id: int, condition: str):
 
 
 def _assert_blocked_then_rejected(
-    operation, label: str
+    operation, label: str, *, blocker_pid: int
 ) -> tuple[Thread, Event, list[BaseException]]:
     started = Event()
     finished = Event()
@@ -67,14 +67,18 @@ def _assert_blocked_then_rejected(
             row = observer.execute(
                 text(
                     """
-                    SELECT wait_event_type, wait_event
+                    SELECT wait_event_type, wait_event, pg_blocking_pids(pid) AS blocking_pids
                     FROM pg_stat_activity
                     WHERE pid = :pid
                     """
                 ),
                 {"pid": backend_pids[0]},
             ).one_or_none()
-            if row is not None and row.wait_event_type == "Lock":
+            if (
+                row is not None
+                and row.wait_event_type == "Lock"
+                and blocker_pid in (row.blocking_pids or [])
+            ):
                 observed_wait = (row.wait_event_type, row.wait_event)
                 break
             sleep(0.01)
@@ -82,8 +86,9 @@ def _assert_blocked_then_rejected(
         observer.close()
 
     assert observed_wait is not None, (
-        f"{label}: PostgreSQL did not report a lock wait for contender "
-        f"backend PID {backend_pids[0]} within 5 seconds"
+        f"{label}: PostgreSQL did not report a lock wait from contender "
+        f"backend PID {backend_pids[0]} blocked by expected evidence backend "
+        f"PID {blocker_pid} within 5 seconds"
     )
     assert not finished.is_set(), (
         f"{label}: contender finished despite PostgreSQL reporting a lock wait"
@@ -122,6 +127,7 @@ def main() -> None:
     # Evidence insertion locks shelf and zone FOR SHARE. A cross-store transfer
     # must wait, then fail after the evidence transaction commits.
     evidence = SessionLocal()
+    evidence_backend_pid = evidence.execute(text("SELECT pg_backend_pid()")).scalar_one()
     evidence.add(_alert(store_a_id, shelf_id, product_id, "EMPTY"))
     evidence.flush()
 
@@ -131,6 +137,7 @@ def main() -> None:
             {"store_id": store_b_id, "zone_id": zone_id},
         ),
         "zone transfer",
+        blocker_pid=evidence_backend_pid,
     )
     evidence.commit()
     thread.join(timeout=10)
@@ -140,6 +147,7 @@ def main() -> None:
     # A second evidence insert locks the shelf_products row FOR SHARE. Deleting
     # that association must wait and then fail because retained evidence exists.
     evidence = SessionLocal()
+    evidence_backend_pid = evidence.execute(text("SELECT pg_backend_pid()")).scalar_one()
     evidence.add(_alert(store_a_id, shelf_id, product_id, "DAMAGED"))
     evidence.flush()
     thread, finished, failures = _assert_blocked_then_rejected(
@@ -148,6 +156,7 @@ def main() -> None:
             {"link_id": link_id},
         ),
         "shelf SKU unlink",
+        blocker_pid=evidence_backend_pid,
     )
     evidence.commit()
     thread.join(timeout=10)
@@ -216,6 +225,7 @@ def main() -> None:
         setup.close()
 
     evidence = SessionLocal()
+    evidence_backend_pid = evidence.execute(text("SELECT pg_backend_pid()")).scalar_one()
     evidence.add(
         models.InventoryReconciliation(
             store_id=store_a_id,
@@ -239,6 +249,7 @@ def main() -> None:
             },
         ),
         "reconciliation observation mutation",
+        blocker_pid=evidence_backend_pid,
     )
     evidence.commit()
     thread.join(timeout=10)
