@@ -125,6 +125,78 @@ def main() -> None:
         db.add_all([supervisor, admin, employee, own_location, foreign_location])
         db.flush()
 
+        # Seed store-scoped ERP mappings and immutable events. These fixtures
+        # exercise nested-ID BOLA: a valid own-store path must not resolve a
+        # real mapping ID owned by another store.
+        mapping_time = models.utc_now()
+        own_integration = models.StoreExternalIntegration(
+            store_id=store_a.id,
+            external_system="ERP",
+            provider="authorization-smoke",
+            status="ACTIVE",
+            created_by_user_id=admin.id,
+            updated_by_user_id=admin.id,
+        )
+        foreign_integration = models.StoreExternalIntegration(
+            store_id=store_b.id,
+            external_system="ERP",
+            provider="authorization-smoke",
+            status="ACTIVE",
+            created_by_user_id=admin.id,
+            updated_by_user_id=admin.id,
+        )
+        db.add_all([own_integration, foreign_integration])
+        db.flush()
+        own_mapping = models.InventoryExternalProductMapping(
+            store_id=store_a.id,
+            source="ERP",
+            external_product_id=f"PG-ERP-A-{suffix}",
+            external_sku=f"PG-ERP-SKU-A-{suffix}",
+            product_id=product.id,
+            active=True,
+            created_by_user_id=admin.id,
+            updated_by_user_id=admin.id,
+            created_at=mapping_time,
+            updated_at=mapping_time,
+        )
+        foreign_mapping = models.InventoryExternalProductMapping(
+            store_id=store_b.id,
+            source="ERP",
+            external_product_id=f"PG-ERP-B-{suffix}",
+            external_sku=f"PG-ERP-SKU-B-{suffix}",
+            product_id=product.id,
+            active=True,
+            created_by_user_id=admin.id,
+            updated_by_user_id=admin.id,
+            created_at=mapping_time,
+            updated_at=mapping_time,
+        )
+        db.add_all([own_mapping, foreign_mapping])
+        db.flush()
+        db.add_all([
+            models.InventoryExternalProductMappingEvent(
+                mapping_id=own_mapping.id,
+                actor_user_id=admin.id,
+                event_type="CREATED",
+                before_state=None,
+                after_state={"store_id": store_a.id, "product_id": product.id, "active": True},
+                reason="PostgreSQL authorization smoke fixture",
+                created_at=mapping_time,
+            ),
+            models.InventoryExternalProductMappingEvent(
+                mapping_id=foreign_mapping.id,
+                actor_user_id=admin.id,
+                event_type="CREATED",
+                before_state=None,
+                after_state={"store_id": store_b.id, "product_id": product.id, "active": True},
+                reason="PostgreSQL authorization smoke fixture",
+                created_at=mapping_time,
+            ),
+        ])
+        db.flush()
+        own_mapping_id = own_mapping.id
+        foreign_mapping_id = foreign_mapping.id
+
         # Seed a completed foreign task and its source stock snapshot for
         # real JWT-backed cross-store authorization checks.
         own_zone = models.Zone(store_id=store_a.id, name="PG own task zone")
@@ -427,6 +499,46 @@ def main() -> None:
                     f"SUPERVISOR must not receive foreign rows from {resource}: "
                     f"{response.json()}"
                 )
+
+            # Nested-ID BOLA: a SUPERVISOR may access its own mapping through
+            # the matching store path, but cannot substitute a real foreign
+            # mapping ID beneath that valid parent store ID.
+            own_mapping_events = client.get(
+                f"/api/v1/stores/{store_a_id}/inventory/external-mappings/{own_mapping_id}/events",
+                headers=supervisor_headers,
+            )
+            foreign_mapping_events = client.get(
+                f"/api/v1/stores/{store_a_id}/inventory/external-mappings/{foreign_mapping_id}/events",
+                headers=supervisor_headers,
+            )
+            missing_mapping_events = client.get(
+                f"/api/v1/stores/{store_a_id}/inventory/external-mappings/-1/events",
+                headers=supervisor_headers,
+            )
+            foreign_mapping_update = client.patch(
+                f"/api/v1/stores/{store_a_id}/inventory/external-mappings/{foreign_mapping_id}",
+                json={"active": False, "reason": "Cross-store nested-ID BOLA regression"},
+                headers=supervisor_headers,
+            )
+            foreign_store_mapping_events = client.get(
+                f"/api/v1/stores/{store_b_id}/inventory/external-mappings/{foreign_mapping_id}/events",
+                headers=supervisor_headers,
+            )
+            admin_foreign_mapping_events = client.get(
+                f"/api/v1/stores/{store_b_id}/inventory/external-mappings/{foreign_mapping_id}/events",
+                headers=admin_headers,
+            )
+            assert own_mapping_events.status_code == 200, own_mapping_events.text
+            assert len(own_mapping_events.json()["items"]) == 1, own_mapping_events.json()
+            assert foreign_mapping_events.status_code == 404, foreign_mapping_events.text
+            assert missing_mapping_events.status_code == 404, missing_mapping_events.text
+            assert foreign_mapping_events.text == missing_mapping_events.text, (
+                "Foreign and missing mapping IDs must expose indistinguishable audit-history responses"
+            )
+            assert foreign_mapping_update.status_code == 404, foreign_mapping_update.text
+            assert foreign_store_mapping_events.status_code == 403, foreign_store_mapping_events.text
+            assert admin_foreign_mapping_events.status_code == 200, admin_foreign_mapping_events.text
+            assert len(admin_foreign_mapping_events.json()["items"]) == 1, admin_foreign_mapping_events.json()
 
             # ADMIN is the cross-store control: prove the foreign fixtures are
             # real and visible to the privileged actor, not merely absent data.
@@ -788,6 +900,16 @@ def main() -> None:
                 )
                 assert foreign_policy_state is not None
                 assert foreign_policy_state.is_enabled is True
+
+                foreign_mapping_state = db.get(
+                    models.InventoryExternalProductMapping, foreign_mapping_id
+                )
+                assert foreign_mapping_state is not None
+                assert foreign_mapping_state.store_id == store_b_id
+                assert foreign_mapping_state.active is True
+                assert db.query(models.InventoryExternalProductMappingEvent).filter_by(
+                    mapping_id=foreign_mapping_id
+                ).count() == 1
             finally:
                 db.close()
 
