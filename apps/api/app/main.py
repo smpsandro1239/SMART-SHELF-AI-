@@ -28,7 +28,7 @@ from fastapi.responses import JSONResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text, case, or_
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, aliased
 from sqlalchemy import func
 from jwt import InvalidTokenError
 
@@ -3030,46 +3030,38 @@ def list_shelf_image_retention_events(
         raise HTTPException(status_code=401, detail="Authenticated user required")
     if actor is not None and actor.role not in {"ADMIN", "SUPERVISOR"}:
         raise HTTPException(status_code=403, detail="Supervisor role required")
-    events_query = (
+    # Page the immutable event stream in a subquery, then LEFT JOIN that page
+    # to the tenant-scoped parent. The parent row survives empty histories and
+    # offsets beyond the final event, so authorization and event retrieval are
+    # decided by one SQL statement.
+    event_page = (
         db.query(models.ShelfImageRetentionEvent)
-        .join(
-            models.ShelfImage,
-            models.ShelfImageRetentionEvent.shelf_image_id == models.ShelfImage.id,
-        )
-        .join(models.Shelf, models.ShelfImage.shelf_id == models.Shelf.id)
-        .join(models.Zone, models.Shelf.zone_id == models.Zone.id)
-        .filter(models.ShelfImage.id == image_id)
-    )
-    image_query = (
-        db.query(models.ShelfImage.id)
-        .join(models.Shelf, models.ShelfImage.shelf_id == models.Shelf.id)
-        .join(models.Zone, models.Shelf.zone_id == models.Zone.id)
-        .filter(models.ShelfImage.id == image_id)
-    )
-    if actor is not None and actor.role != "ADMIN":
-        if actor.store_id is None:
-            raise HTTPException(status_code=404, detail="Shelf image not found")
-        events_query = events_query.filter(models.Zone.store_id == actor.store_id)
-        image_query = image_query.filter(models.Zone.store_id == actor.store_id)
-
-    events = (
-        events_query
+        .filter(models.ShelfImageRetentionEvent.shelf_image_id == image_id)
         .order_by(
             models.ShelfImageRetentionEvent.created_at.asc(),
             models.ShelfImageRetentionEvent.id.asc(),
         )
         .offset(max(0, offset))
         .limit(max(1, min(limit, 500)))
-        .all()
+        .subquery()
     )
-    if events:
-        return events
+    event = aliased(models.ShelfImageRetentionEvent, event_page)
+    query = (
+        db.query(models.ShelfImage.id, event)
+        .join(models.Shelf, models.ShelfImage.shelf_id == models.Shelf.id)
+        .join(models.Zone, models.Shelf.zone_id == models.Zone.id)
+        .outerjoin(event, event.shelf_image_id == models.ShelfImage.id)
+        .filter(models.ShelfImage.id == image_id)
+    )
+    if actor is not None and actor.role != "ADMIN":
+        if actor.store_id is None:
+            raise HTTPException(status_code=404, detail="Shelf image not found")
+        query = query.filter(models.Zone.store_id == actor.store_id)
 
-    # An empty history is valid only when the parent image is visible in the
-    # same tenant scope; keep foreign and missing image IDs indistinguishable.
-    if image_query.scalar() is None:
+    rows = query.order_by(event.created_at.asc(), event.id.asc()).all()
+    if not rows:
         raise HTTPException(status_code=404, detail="Shelf image not found")
-    return []
+    return [row[1] for row in rows if row[1] is not None]
 
 
 @app.get("/api/v1/shelf-images", response_model=list[ShelfImageRead], tags=["computer-vision"])
