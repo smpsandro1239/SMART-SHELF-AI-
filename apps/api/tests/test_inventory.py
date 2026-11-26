@@ -2380,3 +2380,70 @@ def test_every_versioned_api_route_has_an_explicit_authorization_policy():
                 uncovered.append(f"{method} {path}")
 
     assert uncovered == [], f"Versioned API routes without explicit RBAC policy: {uncovered}"
+
+def test_foreign_embedding_exemplar_review_is_hidden_before_materialization(monkeypatch):
+    with TestClient(app) as client:
+        own_store_id, product_id = create_store_and_product(client)
+        with TestingSession() as db:
+            foreign_store = models.Store(
+                code=f"EMBED-FOREIGN-{uuid4().hex[:8]}",
+                name="Embedding foreign tenant",
+            )
+            db.add(foreign_store)
+            db.flush()
+            zone = models.Zone(store_id=foreign_store.id, name="Foreign embedding zone")
+            db.add(zone)
+            db.flush()
+            shelf = models.Shelf(zone_id=zone.id, code="EMBED-FOREIGN-SHELF")
+            db.add(shelf)
+            db.flush()
+            image = models.ShelfImage(
+                shelf_id=shelf.id,
+                original_filename="foreign-reference.jpg",
+                storage_path=f"{foreign_store.id}/foreign-reference-{uuid4().hex}.jpg",
+                mime_type="image/jpeg",
+                file_size_bytes=128,
+                sha256="a" * 64,
+            )
+            db.add(image)
+            db.flush()
+            exemplar = models.ProductEmbeddingExemplar(
+                product_id=product_id,
+                shelf_image_id=image.id,
+                embedding=[0.1, 0.2, 0.3],
+                embedding_dimension=3,
+                model_version="tenant-scope-test",
+                image_sha256="a" * 64,
+                licence="test fixture",
+                review_status="PENDING",
+            )
+            db.add(exemplar)
+            db.commit()
+            foreign_exemplar_id = exemplar.id
+
+        actor = _supervisor_actor(own_store_id)
+        monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: actor)
+        payload = {
+            "review_status": "APPROVED",
+            "review_notes": "Cross-tenant access regression",
+        }
+        foreign = client.patch(
+            f"/api/v1/product-embedding-exemplars/{foreign_exemplar_id}/review",
+            json=payload,
+        )
+        missing = client.patch(
+            f"/api/v1/product-embedding-exemplars/999999999/review",
+            json=payload,
+        )
+        assert foreign.status_code == missing.status_code == 404
+        assert foreign.json() == missing.json()
+
+        with TestingSession() as db:
+            unchanged = db.get(
+                models.ProductEmbeddingExemplar, foreign_exemplar_id
+            )
+            assert unchanged is not None
+            assert unchanged.review_status == "PENDING"
+            assert unchanged.reviewed_by_user_id is None
+            assert unchanged.reviewed_at is None
+
