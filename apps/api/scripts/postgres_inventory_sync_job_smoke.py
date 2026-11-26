@@ -10,7 +10,7 @@ from uuid import uuid4
 from datetime import datetime, timezone
 from decimal import Decimal
 
-from sqlalchemy import update
+from sqlalchemy import text, update
 from sqlalchemy.exc import DBAPIError
 
 from app import models
