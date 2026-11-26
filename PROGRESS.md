@@ -3,7 +3,7 @@
 - A auditoria encontrou que `GET /api/v1/observation-alerts/{alert_id}/events` fazia uma leitura scoped do alerta-pai e, numa segunda query, carregava os eventos apenas por `alert_id`. Como `ObservationAlertEvent` não tem `store_id`, a query final não repetia a condição de tenant e existia uma janela de TOCTOU entre as duas leituras.
 - A consulta de eventos passou a fazer JOIN com `ObservationAlert` e, para SUPERVISOR, aplica `ObservationAlert.store_id == actor.store_id` directamente na query que devolve os eventos.
 - Quando não existem eventos, uma query scoped de existência distingue um alerta próprio sem histórico de um alerta estrangeiro/inexistente. O primeiro devolve `[]`; os dois últimos devolvem HTTP 404 indistinguível. ADMIN mantém acesso global e EMPLOYEE continua bloqueado antes da consulta.
-- Adicionada regressão HTTP com alertas e eventos em duas lojas; verifica histórico same-store, 404 para alerta estrangeiro e igualdade do corpo com ID inexistente.
+- Adicionada regressão HTTP com alertas e eventos em duas lojas; verifica histórico same-store, `[]` para alerta próprio sem eventos, 404 para alerta estrangeiro e igualdade do corpo com ID inexistente.
 - Commits: implementação `b18aed40e7c6bc9bcf0e1454e215f8466f10012e`; teste `4d465130334951865ba2abc5997d3f34699ce502`.
 - Testes e workflows ainda não executados nesta sessão; validação pendente no HEAD final.
 
