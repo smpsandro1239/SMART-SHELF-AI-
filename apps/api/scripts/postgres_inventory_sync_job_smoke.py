@@ -4,7 +4,8 @@ Exercises independent PostgreSQL sessions/processes, a real orchestrator page
 commit, SIGKILL between pages, lease takeover and idempotent page replay.
 """
 from multiprocessing import get_context
-from time import sleep
+from threading import Event, Thread
+from time import monotonic, sleep
 from uuid import uuid4
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -156,6 +157,104 @@ def _new_job(suffix):
             requested_by_user_id=user.id,
         )
         return store.id, user.id, product.id, job.id
+
+
+
+def _verify_store_identity_immutable_under_concurrency():
+    """A concurrent tenant reassignment waits for the row lock, then fails closed."""
+    suffix = uuid4().hex[:10]
+    store_id, _, _, job_id = _new_job(suffix)
+    with SessionLocal() as setup:
+        foreign_store = models.Store(
+            code=f"PG-INV-SYNC-OTHER-{suffix}",
+            name="Other inventory sync store",
+        )
+        setup.add(foreign_store)
+        setup.commit()
+        foreign_store_id = foreign_store.id
+
+    writer = SessionLocal()
+    writer_pid = writer.execute(text("SELECT pg_backend_pid()")).scalar_one()
+    job = writer.query(models.InventorySyncJob).filter_by(id=job_id).with_for_update().one()
+    assert job.store_id == store_id
+
+    started = Event()
+    finished = Event()
+    failures = []
+    contender_pids = []
+
+    def reassign():
+        contender = SessionLocal()
+        try:
+            contender_pids.append(
+                contender.execute(text("SELECT pg_backend_pid()")).scalar_one()
+            )
+            started.set()
+            contender.execute(
+                update(models.InventorySyncJob)
+                .where(models.InventorySyncJob.id == job_id)
+                .values(store_id=foreign_store_id)
+            )
+            contender.commit()
+        except BaseException as exc:
+            contender.rollback()
+            failures.append(exc)
+        finally:
+            contender.close()
+            finished.set()
+
+    thread = Thread(target=reassign, daemon=True)
+    thread.start()
+    assert started.wait(timeout=5), "store reassignment contender did not start"
+    assert contender_pids, "store reassignment backend PID was not captured"
+
+    observer = SessionLocal()
+    deadline = monotonic() + 5
+    observed_blocker = False
+    try:
+        while monotonic() < deadline and not finished.is_set():
+            row = observer.execute(
+                text("""
+                    SELECT wait_event_type, pg_blocking_pids(pid) AS blocking_pids
+                    FROM pg_stat_activity WHERE pid = :pid
+                """),
+                {"pid": contender_pids[0]},
+            ).one_or_none()
+            if (
+                row is not None
+                and row.wait_event_type == "Lock"
+                and writer_pid in (row.blocking_pids or [])
+            ):
+                observed_blocker = True
+                break
+            sleep(0.01)
+    finally:
+        observer.close()
+
+    assert observed_blocker, (
+        "store reassignment did not wait on the locked inventory sync job row; "
+        f"writer={writer_pid}, contender={contender_pids[0]}"
+    )
+    assert not finished.is_set(), "store reassignment completed before row lock release"
+    writer.commit()
+    writer.close()
+    thread.join(timeout=10)
+    assert finished.is_set(), "store reassignment remained blocked after row lock release"
+    assert len(failures) == 1, f"expected immutable-tenant rejection, got {failures!r}"
+    assert "inventory sync job store_id is immutable" in str(failures[0]), (
+        f"store reassignment failed for an unexpected reason: {failures[0]!r}"
+    )
+
+    with SessionLocal() as verify:
+        persisted = verify.get(models.InventorySyncJob, job_id)
+        assert persisted is not None and persisted.store_id == store_id
+        # The guard is column-specific: ordinary worker lifecycle updates remain valid.
+        persisted.status = "CANCELLED"
+        persisted.finished_at = models.utc_now()
+        persisted.updated_at = models.utc_now()
+        verify.commit()
+        verify.refresh(persisted)
+        assert persisted.status == "CANCELLED"
 
 
 def _verify_concurrent_single_claim():
@@ -364,11 +463,13 @@ def _verify_sigkill_after_page_commit_and_idempotent_replay():
 
 
 def main():
+    _verify_store_identity_immutable_under_concurrency()
     _verify_concurrent_single_claim()
     _verify_stale_worker_fencing()
     _verify_sigkill_after_page_commit_and_idempotent_replay()
     print(
-        "PostgreSQL 16 inventory sync smoke passed: concurrent single claim, "
+        "PostgreSQL 16 inventory sync smoke passed: immutable store identity under "
+        "concurrent reassignment, concurrent single claim, "
         "stale-worker fencing, SIGKILL after a committed page, PARTIAL ledger "
         "recovery and idempotent snapshot replay."
     )
