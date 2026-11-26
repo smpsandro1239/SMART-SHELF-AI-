@@ -2194,3 +2194,8 @@ A leitura de eventos de um job ERP/WMS consulta agora o job e o seu histórico n
 ### Serialização e integridade da propriedade de prateleiras
 
 As escritas de observações, sessões de captura e imagens bloqueiam a linhagem da prateleira pela ordem `Zone → Shelf` e revalidam a loja depois dos locks. O smoke PostgreSQL verifica que uma tentativa concorrente de alterar `zones.store_id` aguarda pela transacção de escrita; depois do commit da captura, a base de dados rejeita a transferência porque existe evidência operacional retida. A sessão e a zona permanecem associadas à loja original. A correcção do smoke foi publicada; a nova execução de API CI/PostgreSQL 16 está pendente.
+
+
+### Identidade multi-loja imutável nos jobs ERP/WMS
+
+A loja de um `InventorySyncJob` é definida no enqueue e não pode ser alterada posteriormente. A loja determina o tenant autorizado a consultar o histórico de eventos, que é associado ao job por `job_id`, e integra a chave idempotente do pedido. A migration `0101_inventory_sync_job_store_immutable` protege esta identidade ao nível da base de dados em PostgreSQL e SQLite, sem bloquear actualizações de estado, lease ou fencing token. Foram adicionados testes SQLite e um smoke PostgreSQL concorrente; a validação CI no HEAD final permanece pendente.
