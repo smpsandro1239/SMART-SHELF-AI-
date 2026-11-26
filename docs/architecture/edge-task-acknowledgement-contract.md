@@ -89,3 +89,24 @@ Rejeições de autorização não devem revelar a existência de tarefas de outr
 A API de ingestão e o worker Edge já existem. O worker mantém apenas `DEVICE_HEARTBEAT` como handler built-in; eventos sem handler vão para dead-letter. Esta é a política correcta até estarem implementadas a associação dispositivo-tarefa e as garantias acima.
 
 Este documento não autoriza a activação do handler `TASK_ACKNOWLEDGED`, não declara integração com robôs homologada e não altera o estado de tarefas ou inventário.
+
+
+## 10. Descoberta de implementação no código actual (2026-11-26)
+
+A inspecção do HEAD `6159c326909fa0d6d6fd830067d6e4e243391e87` confirmou:
+
+- `ReplenishmentTask.assigned_user_id` identifica um utilizador/funcionário. Não representa uma associação a um dispositivo Edge.
+- `ReplenishmentTaskEvent` é o ledger actual do ciclo de vida da tarefa; os tipos permitidos são CREATED, APPROVED, STATUS_CHANGED e INVENTORY_RECONCILED. Não deve ser reutilizado para registar silenciosamente eventos de dispositivo.
+- `replenishment_assignment.py` calcula um plano equilibrado de atribuição de tarefas a funcionários; é um planeador determinístico, não um registo persistente de atribuições de dispositivos.
+- `EdgeDevice`, credenciais, inbox e processamento persistente já existem nas migrations 0071–0073. Não criar um segundo registo de dispositivos nem duplicar a inbox.
+- O modelo actual `ReplenishmentTask` não expõe um campo explícito `task_version`. `updated_at` não deve ser tratado como substituto sem definir e provar a semântica concorrente.
+
+### Consequências para a implementação
+
+A próxima alteração de schema deve introduzir uma entidade própria de associação dispositivo-tarefa, com identidade estável, `store_id`, `device_id`, `task_id`, versão da tarefa, validade (`valid_from`/`valid_until`), estado/revogação, actor humano que criou/revogou e timestamps. A associação deve ser imutável como facto histórico: revogar uma associação fecha-a e acrescenta evento; não se apaga nem se reescreve o passado.
+
+A criação/alteração da associação deve bloquear a tarefa e o dispositivo numa ordem consistente, validar a loja de ambos e persistir associação + evento de auditoria na mesma transacção. O processamento do acknowledgement deve bloquear/revalidar associação e tarefa, verificar a versão exacta e inserir o acknowledgement append-only na mesma transacção que conclui a linha de processamento do inbox, sob o fencing token vigente.
+
+A unicidade e as regras de sobreposição temporal têm de ser garantidas no PostgreSQL, não apenas por validação Python. A implementação deve também ter comportamento equivalente em SQLite para testes unitários, sem apresentar SQLite como prova de concorrência. Antes de escrever migrations, inspeccionar a cadeia actual de Alembic e os triggers de imutabilidade existentes.
+
+**Estado:** descoberta e desenho refinado; nenhuma tabela, migration, rota ou handler foi implementado nesta sessão. O worker mantém o comportamento fail-closed descrito na secção 9.
