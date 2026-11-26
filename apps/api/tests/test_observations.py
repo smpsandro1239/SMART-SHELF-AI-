@@ -1004,7 +1004,7 @@ def test_shelf_write_endpoints_lock_and_revalidate_store_scope(tmp_path, monkeyp
             "/api/v1/observations",
             json={
                 "shelf_id": shelf_b["id"],
-                "source": "manual",
+                "source": "simulation",
                 "status": "LOW_STOCK",
                 "confidence": 0.9,
             },
