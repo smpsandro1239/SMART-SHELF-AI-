@@ -340,6 +340,57 @@ def _get_store_scoped_shelf(
         raise HTTPException(status_code=404, detail="Shelf not found")
     return shelf
 
+def _lock_store_scoped_shelf(
+    db: Session,
+    shelf_id: int,
+    actor: models.User | None,
+) -> tuple[models.Shelf, models.Zone]:
+    """Lock the ownership row before the shelf, then revalidate the full lineage.
+
+    Lock order is Zone → Shelf → dependent records. A concurrent UPDATE of
+    zones.store_id must wait until the caller commits, so the tenant decision
+    and the dependent write share one serialized ownership interval.
+    """
+    initial = (
+        db.query(models.Shelf.id, models.Shelf.zone_id)
+        .filter(models.Shelf.id == shelf_id)
+        .first()
+    )
+    if initial is None:
+        raise HTTPException(status_code=404, detail="Shelf not found")
+
+    zone = (
+        db.query(models.Zone)
+        .filter(models.Zone.id == initial.zone_id)
+        .with_for_update()
+        .populate_existing()
+        .first()
+    )
+    if zone is None:
+        raise HTTPException(status_code=404, detail="Shelf not found")
+    if actor is not None and actor.role != "ADMIN" and zone.store_id != actor.store_id:
+        raise HTTPException(status_code=404, detail="Shelf not found")
+
+    shelf = (
+        db.query(models.Shelf)
+        .filter(
+            models.Shelf.id == shelf_id,
+            models.Shelf.zone_id == zone.id,
+        )
+        .with_for_update()
+        .populate_existing()
+        .first()
+    )
+    if shelf is None:
+        raise HTTPException(
+            status_code=409,
+            detail="Shelf ownership changed concurrently; refresh and retry",
+        )
+    db.refresh(zone)
+    if actor is not None and actor.role != "ADMIN" and zone.store_id != actor.store_id:
+        raise HTTPException(status_code=404, detail="Shelf not found")
+    return shelf, zone
+
 
 def _resolve_detection_source_image_id(
     db: Session,
@@ -931,16 +982,7 @@ def retire_shelf_planogram(
 @app.post("/api/v1/observations", response_model=ObservationRead, status_code=201, tags=["observations"])
 def create_observation(payload: ObservationCreate, request: Request, db: Session = Depends(get_db)):
     actor = _request_user(db, request)
-    shelf_scope = (
-        db.query(models.Shelf)
-        .join(models.Zone, models.Shelf.zone_id == models.Zone.id)
-        .filter(models.Shelf.id == payload.shelf_id)
-        .first()
-    )
-    if shelf_scope is None:
-        raise HTTPException(status_code=404, detail="Shelf not found")
-    if actor is not None and actor.role != "ADMIN" and shelf_scope.zone.store_id != actor.store_id:
-        raise HTTPException(status_code=404, detail="Shelf not found")
+    shelf, _zone = _lock_store_scoped_shelf(db, payload.shelf_id, actor)
     reserved_demo_evidence_fields = (
         "demo_detection_id=",
         "shelf_image_id=",
@@ -1380,8 +1422,8 @@ def create_capture_session(payload: CaptureSessionCreate, request: Request, db: 
     actor = _request_user(db, request)
     if actor is not None and actor.role == "EMPLOYEE":
         raise HTTPException(status_code=403, detail="Supervisor role required to create capture sessions")
-    shelf = _get_store_scoped_shelf(db, payload.shelf_id, actor)
-    store_id = shelf.zone.store_id
+    shelf, zone = _lock_store_scoped_shelf(db, payload.shelf_id, actor)
+    store_id = zone.store_id
     started_at = payload.started_at or models.utc_now()
     if started_at.tzinfo is None:
         raise HTTPException(status_code=422, detail="started_at must include a timezone")
@@ -1439,7 +1481,7 @@ async def upload_shelf_image(
 ):
     """Store a validated shelf photograph; analysis is queued for a later CV stage."""
     actor = _request_user(db, request)
-    shelf = _get_store_scoped_shelf(db, shelf_id, actor)
+    shelf, zone = _lock_store_scoped_shelf(db, shelf_id, actor)
 
     capture_session = None
     if capture_session_id is not None:
@@ -1451,7 +1493,7 @@ async def upload_shelf_image(
             "Capture session not found",
             hide_foreign=True,
         )
-        if capture_session.shelf_id != shelf.id or capture_session.store_id != shelf.zone.store_id:
+        if capture_session.shelf_id != shelf.id or capture_session.store_id != zone.store_id:
             raise HTTPException(status_code=422, detail="Capture session does not belong to this shelf")
         if capture_session.ended_at is not None:
             raise HTTPException(status_code=409, detail="Capture session is closed")
@@ -1493,7 +1535,7 @@ async def upload_shelf_image(
         raise HTTPException(status_code=415, detail="Uploaded file is not a valid supported image")
 
     image_id = uuid4().hex
-    directory = Path(settings.image_storage_path) / str(shelf.zone.store_id)
+    directory = Path(settings.image_storage_path) / str(zone.store_id)
     directory.mkdir(parents=True, exist_ok=True)
     destination = directory / f"{image_id}{extension}"
     destination.write_bytes(content)
