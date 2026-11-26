@@ -1627,3 +1627,17 @@ O commit `50fc1fcd9dac4c88dfb800aaa1f690ff1c0b6304` introduz o endpoint transacc
 - SHA de código/testes: `3f63efd0da73070cc1654e76ea58ecfe0e79ca93`.
 - API CI `45721215742`: **1731 passed, 1 skipped**; Quality Gates `45721215822`, Security Scans `45721215637` e Docker Compose `45721215724`: sucesso.
 - Próxima prioridade: auditar rotas ADMIN_ONLY de criação/alteração de catálogo e configuração (lojas, zonas, produtos, embalagens, perfis e utilizadores), reforçando o papel no handler.
+
+
+
+## 2026-11-26 — Migration 0099: linhagem de alertas e reconciliações
+
+- Confirmado no schema que `InventoryReconciliation` contém `store_id`, `shelf_id`, `product_id`, `observation_id` e três referências opcionais a snapshots (`backroom_snapshot_id`, `erp_snapshot_id`, `wms_snapshot_id`). A migration 0076 tinha FKs individuais e imutabilidade da evidência, mas não garantia a coerência conjunta destas relações.
+- Publicada `0099_shelf_reconciliation_lineage`, dependente de 0098. O preflight conta alertas/reconciliações incompatíveis e aborta sem reescrever registos.
+- Alertas passam a exigir a associação SKU–prateleira e a loja efectiva da zona.
+- Reconciliações passam a exigir a mesma loja/prateleira/SKU, observação da mesma prateleira e SKU (quando indicada) e snapshots opcionais da mesma loja e SKU.
+- As guardas também impedem apagar/alterar uma associação SKU–prateleira ou reatribuir uma observação/hierarquia quando isso invalidaria evidência já criada.
+- PostgreSQL usa locks `FOR SHARE` nas linhas de prateleira, zona, associação, observação e snapshots consultados durante a inserção; SQLite recebe triggers equivalentes.
+- Publicado teste SQLite que cobre IDs existentes mas incompatíveis, ausência de persistência inválida, alterações upstream e preflight fail-closed.
+- Commits: migration `b49471424522ba6e5a30db87e86fe9de9c353efd`; teste `189eeaeed01ab75bd82dbc18a4d5bd87007522fd`.
+- Não foram executados testes localmente nesta sessão. A validação CI e o teste concorrente PostgreSQL 16 permanecem pendentes; não declarar a migration validada em runtime até esses resultados existirem.
