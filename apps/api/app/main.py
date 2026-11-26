@@ -7052,22 +7052,23 @@ def list_inventory_movement_events(
         raise HTTPException(status_code=403, detail="Supervisor role required")
     if limit < 1 or limit > 200:
         raise HTTPException(status_code=422, detail="limit must be between 1 and 200")
-    movement_query = db.query(models.InventoryMovement).filter(
-        models.InventoryMovement.id == movement_id
+    events_query = (
+        db.query(models.InventoryMovementEvent)
+        .join(
+            models.InventoryMovement,
+            models.InventoryMovementEvent.movement_id == models.InventoryMovement.id,
+        )
+        .filter(models.InventoryMovement.id == movement_id)
     )
     if actor.role != "ADMIN":
         if actor.store_id is None:
             raise HTTPException(status_code=404, detail="Inventory movement not found")
-        movement_query = movement_query.filter(models.InventoryMovement.store_id == actor.store_id)
-    movement = movement_query.first()
-    if movement is None:
-        raise HTTPException(status_code=404, detail="Inventory movement not found")
-    return (
-        db.query(models.InventoryMovementEvent)
-        .filter(
-            models.InventoryMovementEvent.movement_id == movement.id,
-            models.InventoryMovementEvent.store_id == movement.store_id,
+        events_query = events_query.filter(
+            models.InventoryMovement.store_id == actor.store_id,
+            models.InventoryMovementEvent.store_id == actor.store_id,
         )
+    return (
+        events_query
         .order_by(models.InventoryMovementEvent.created_at.asc(), models.InventoryMovementEvent.id.asc())
         .limit(limit)
         .all()
@@ -9710,31 +9711,40 @@ def list_replenishment_task_events(task_id: int, request: Request, db: Session =
     actor = _request_user(db, request)
     if actor is not None and actor.role == "EMPLOYEE":
         raise HTTPException(status_code=403, detail="Supervisor role required")
-    if actor is None or actor.role == "ADMIN":
-        task = (
-            db.query(models.ReplenishmentTask)
-            .filter(models.ReplenishmentTask.id == task_id)
-            .first()
-        )
-    else:
-        # Apply tenant scope in SQL so a foreign task is never materialized
-        # before the read authorization decision.
-        task = (
-            db.query(models.ReplenishmentTask)
-            .filter(
-                models.ReplenishmentTask.id == task_id,
-                models.ReplenishmentTask.store_id == actor.store_id,
-            )
-            .first()
-        )
-    if task is None:
-        raise HTTPException(status_code=404, detail="Task not found")
-    return (
+    events_query = (
         db.query(models.ReplenishmentTaskEvent)
-        .filter(models.ReplenishmentTaskEvent.task_id == task_id)
+        .join(
+            models.ReplenishmentTask,
+            models.ReplenishmentTaskEvent.task_id == models.ReplenishmentTask.id,
+        )
+        .filter(models.ReplenishmentTask.id == task_id)
+    )
+    if actor is not None and actor.role != "ADMIN":
+        if actor.store_id is None:
+            raise HTTPException(status_code=404, detail="Task not found")
+        # Keep the parent-task tenant predicate in the same query that returns
+        # the events, rather than relying on a separate authorization lookup.
+        events_query = events_query.filter(
+            models.ReplenishmentTask.store_id == actor.store_id
+        )
+    events = (
+        events_query
         .order_by(models.ReplenishmentTaskEvent.created_at.asc(), models.ReplenishmentTaskEvent.id.asc())
         .all()
     )
+    if not events:
+        # An authorized task may legitimately have no events; distinguish it
+        # from a missing/foreign task without exposing the parent identifier.
+        task_query = db.query(models.ReplenishmentTask.id).filter(
+            models.ReplenishmentTask.id == task_id
+        )
+        if actor is not None and actor.role != "ADMIN":
+            task_query = task_query.filter(
+                models.ReplenishmentTask.store_id == actor.store_id
+            )
+        if task_query.first() is None:
+            raise HTTPException(status_code=404, detail="Task not found")
+    return events
 
 
 def _lock_admin_bootstrap(db: Session) -> None:
