@@ -1,3 +1,11 @@
+## Segurança multi-loja — serialização das escritas por prateleira (2026-11-26)
+
+As operações de criação de observações, sessões de captura e upload de imagens bloqueiam a linha da zona proprietária antes de persistirem dados associados à prateleira. A autorização é revalidada depois do lock; a loja da sessão e o directório da imagem são derivados da zona bloqueada. O upload mantém a ordem `Zone → Shelf → CaptureSession` e remove ficheiros parciais se a persistência falhar.
+
+A regressão HTTP cobre IDs cross-store e associações de sessão inválidas. O smoke PostgreSQL executado pelo API CI observa o PID bloqueador e `wait_event_type='Lock'` durante um UPDATE concorrente de `zones.store_id`. O inventário actual não contém endpoint HTTP de transferência de zonas; o smoke representa a alteração concorrente directamente na base de dados. A validação CI desta alteração permanece pendente até os workflows terminarem no SHA final. Migrations 0099/0100 permanecem inalteradas.
+
+---
+
 # Autoridade de stock físico — WMS por loja (2026-11-25)
 
 O WMS é a fonte de referência do stock físico da retaguarda. O ERP mantém-se independente para reconciliação administrativa; POS fornece evidência de vendas/procura; MANUAL representa operações/contagens auditáveis; IMPORT não recebe autoridade implícita.
