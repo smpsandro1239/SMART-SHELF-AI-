@@ -2447,3 +2447,51 @@ def test_foreign_embedding_exemplar_review_is_hidden_before_materialization(monk
             assert unchanged.reviewed_by_user_id is None
             assert unchanged.reviewed_at is None
 
+def test_foreign_shelf_image_retention_history_is_hidden_from_supervisor(monkeypatch):
+    with TestClient(app) as client:
+        own_store_id, _product_id = create_store_and_product(client)
+        with TestingSession() as db:
+            foreign_store = models.Store(
+                code=f"RETENTION-FOREIGN-{uuid4().hex[:8]}",
+                name="Foreign retention tenant",
+            )
+            db.add(foreign_store)
+            db.flush()
+            zone = models.Zone(store_id=foreign_store.id, name="Foreign retention zone")
+            db.add(zone)
+            db.flush()
+            shelf = models.Shelf(zone_id=zone.id, code="RETENTION-FOREIGN-SHELF")
+            db.add(shelf)
+            db.flush()
+            image = models.ShelfImage(
+                shelf_id=shelf.id,
+                original_filename="foreign-retention.jpg",
+                storage_path=f"{foreign_store.id}/foreign-retention-{uuid4().hex}.jpg",
+                mime_type="image/jpeg",
+                file_size_bytes=64,
+                sha256="b" * 64,
+            )
+            db.add(image)
+            db.flush()
+            event = models.ShelfImageRetentionEvent(
+                shelf_image_id=image.id,
+                event_type="RESTRICTED",
+                from_status="ACTIVE",
+                to_status="RESTRICTED",
+                reason="Tenant isolation regression",
+            )
+            db.add(event)
+            db.commit()
+            foreign_image_id = image.id
+
+        actor = _supervisor_actor(own_store_id)
+        monkeypatch.setattr(main_module, "_request_user", lambda _db, _request: actor)
+        foreign = client.get(
+            f"/api/v1/shelf-images/{foreign_image_id}/retention/events"
+        )
+        missing = client.get(
+            "/api/v1/shelf-images/999999999/retention/events"
+        )
+        assert foreign.status_code == missing.status_code == 404
+        assert foreign.json() == missing.json()
+
