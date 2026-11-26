@@ -1,3 +1,16 @@
+## P0 — Histórico de reconciliações: consultas em lote e actor histórico (2026-11-26)
+
+- [x] Substituir serialização N+1 por uma consulta paginada, uma consulta de utilizadores e uma consulta de eventos.
+- [x] Preservar contrato JSON, ordem dos registos, ordem cronológica dos eventos e filtro de loja.
+- [x] Guardar actor_snapshot (user_id, role, store_id, full_name) nos novos eventos CREATED e de revisão.
+- [x] Acrescentar regressão que fixa em três consultas o custo da listagem com múltiplos registos e verifica os snapshots de actor.
+- [ ] Executar testes focados, suite API, PostgreSQL 16, Quality Gates, Security Scans e Docker Compose no SHA final.
+- [ ] Acrescentar cobertura explícita de página vazia e isolamento multi-loja para a listagem do ledger após a validação inicial.
+
+Limite: eventos antigos permanecem sem snapshot; não reconstruir identidade histórica com dados actuais do utilizador. O snapshot não inclui email nem outros identificadores de contacto.
+
+---
+
 ## P0 — Isolamento atómico do histórico de retenção de imagens (2026-11-26)
 
 - [x] Identificar a leitura em duas fases no GET /api/v1/shelf-images/{image_id}/retention/events: consulta dos eventos seguida de consulta separada da imagem quando a página vinha vazia.
