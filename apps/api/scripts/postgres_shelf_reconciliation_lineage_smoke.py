@@ -1,7 +1,7 @@
 """Prove PostgreSQL 0099 row-lock serialization against hierarchy/link changes."""
 
 from threading import Event, Thread
-from time import sleep
+from time import monotonic, sleep
 from uuid import uuid4
 
 from sqlalchemy import text
@@ -30,14 +30,18 @@ def _alert(store_id: int, shelf_id: int, product_id: int, condition: str):
     )
 
 
-def _assert_blocked_then_rejected(operation, label: str) -> tuple[Thread, Event, list[BaseException]]:
+def _assert_blocked_then_rejected(
+    operation, label: str
+) -> tuple[Thread, Event, list[BaseException]]:
     started = Event()
     finished = Event()
     failures: list[BaseException] = []
+    backend_pids: list[int] = []
 
     def contender():
         db = SessionLocal()
         try:
+            backend_pids.append(db.execute(text("SELECT pg_backend_pid()")).scalar_one())
             started.set()
             operation(db)
             db.commit()
@@ -51,8 +55,39 @@ def _assert_blocked_then_rejected(operation, label: str) -> tuple[Thread, Event,
     thread = Thread(target=contender, daemon=True)
     thread.start()
     assert started.wait(timeout=5), f"{label}: contender did not start"
-    sleep(0.2)
-    assert not finished.is_set(), f"{label}: competing write did not wait for source-row lock"
+    assert backend_pids, f"{label}: contender backend PID was not captured"
+
+    # Observe PostgreSQL itself instead of inferring a lock wait from a fixed
+    # sleep. The contender must be executing and waiting on a PostgreSQL lock.
+    observer = SessionLocal()
+    deadline = monotonic() + 5
+    observed_wait: tuple[str | None, str | None] | None = None
+    try:
+        while monotonic() < deadline and not finished.is_set():
+            row = observer.execute(
+                text(
+                    """
+                    SELECT wait_event_type, wait_event
+                    FROM pg_stat_activity
+                    WHERE pid = :pid
+                    """
+                ),
+                {"pid": backend_pids[0]},
+            ).one_or_none()
+            if row is not None and row.wait_event_type == "Lock":
+                observed_wait = (row.wait_event_type, row.wait_event)
+                break
+            sleep(0.01)
+    finally:
+        observer.close()
+
+    assert observed_wait is not None, (
+        f"{label}: PostgreSQL did not report a lock wait for contender "
+        f"backend PID {backend_pids[0]} within 5 seconds"
+    )
+    assert not finished.is_set(), (
+        f"{label}: contender finished despite PostgreSQL reporting a lock wait"
+    )
     return thread, finished, failures
 
 
