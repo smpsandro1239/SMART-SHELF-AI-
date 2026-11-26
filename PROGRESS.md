@@ -1,3 +1,15 @@
+## 2026-11-26 — Reconciliação do estado Edge AI (sem retomar auditoria de segurança)
+
+- HEAD de partida: `acaf5fb5fc5861bcff73d883629e6ab618e7cdfd`.
+- A leitura do código actual confirmou que a tarefa antiga do TODO estava desactualizada: já existem `EdgeDevice`, credenciais com digest SHA-256, eventos de auditoria, nonces anti-replay, inbox imutável, cursor sequencial, estado de processamento, endpoint HTTP assinado e worker com lease/heartbeat/fencing/retry/dead-letter.
+- O endpoint `POST /api/v1/edge/events` confirma aceitação durável na inbox; não significa que o evento já produziu efeito operacional. O único handler built-in activo é `DEVICE_HEARTBEAT`; os outros tipos continuam fail-closed em dead-letter, evitando criar observações ou concluir tarefas sem contratos e revisão adequados.
+- Actualizado TODO.md para separar componentes já presentes das lacunas reais: handlers de domínio, outbox persistente no dispositivo e validação CI no HEAD actual.
+- Não foram alterados código, schema ou comportamento operacional nesta passagem. Não foram executados testes nesta sessão; a validação do HEAD actual permanece pendente.
+- Próxima tarefa de produto: especificar e implementar, com testes, o handler seguro de `TASK_ACKNOWLEDGED` como recepção/validação de ACK sem transformar automaticamente uma mensagem Edge em conclusão humana da tarefa. A auditoria BOLA/IDOR fica deliberadamente suspensa até indicação posterior.
+- Commit documental TODO: `71b94f3e630d468b026c88655375b24ad15196ae`.
+ 
+---
+
 ## 2026-11-26 — Redução de N+1 e snapshot de actor no ledger de reconciliações
 
 - HEAD inicial: `610cf05e6347a9aa728da29e733c49bff0dc6086`.
