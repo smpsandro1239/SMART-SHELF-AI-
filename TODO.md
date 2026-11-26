@@ -1,3 +1,13 @@
+## P0 — Isolamento multi-loja na revisão de exemplares de embeddings (2026-11-26)
+
+- [x] Substituir a leitura inicial global por uma query tenant-scoped: exemplares associados a imagens de outras lojas não são materializados para SUPERVISOR.
+- [x] Preservar a regra ADMIN-only para exemplares sem imagem de origem; a query mantém esses registos apenas para aplicar a resposta 403 existente.
+- [x] Acrescentar regressão HTTP que compara ID de exemplar estrangeiro com ID inexistente (404/corpo idêntico) e confirma que o estado PENDING e a atribuição de revisão não mudam.
+- [ ] Executar teste focado, suite API, PostgreSQL 16, Quality Gates, Security Scans e Docker Compose no novo HEAD.
+- [ ] Auditar concorrência entre alteração de associação da imagem e revisão do exemplar, além dos restantes endpoints com IDs directos.
+
+Limite: alteração e teste publicados; não foram executados nesta sessão. A query tenant-scoped reduz a exposição antes da autorização, mas a validação de concorrência e a CI continuam pendentes.
+
 ## P0 — Cobertura explícita de autorização RBAC (2026-11-26)
 
 - [x] Inventariar estaticamente os decorators HTTP de `apps/api/app/main.py` e comparar método/template com `API_ROUTE_POLICIES`.
