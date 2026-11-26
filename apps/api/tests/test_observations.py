@@ -405,14 +405,16 @@ def test_failed_image_analysis_can_be_retried_by_store_supervisor(tmp_path, monk
     import app.main as main_module
 
     monkeypatch.setattr(settings, "image_storage_path", str(tmp_path))
-    actor = SimpleNamespace(id=77, role="SUPERVISOR", store_id=None)
+    actor = SimpleNamespace(id=77, role="ADMIN", store_id=None)
     monkeypatch.setattr(main_module, "_request_user", lambda db, request: actor)
     Base.metadata.drop_all(bind=TEST_ENGINE)
     Base.metadata.create_all(bind=TEST_ENGINE)
 
     with TestClient(app) as client:
         store = client.post("/api/v1/stores", json={"code": "RETRY-01", "name": "Loja retry"})
+        assert store.status_code == 201, store.text
         actor.store_id = store.json()["id"]
+        actor.role = "SUPERVISOR"
         zone = client.post("/api/v1/zones", json={"store_id": actor.store_id, "name": "Bebidas"})
         shelf = client.post("/api/v1/shelves", json={"zone_id": zone.json()["id"], "code": "RT-01"})
         uploaded = client.post(
