@@ -3,13 +3,17 @@
 Creates two stores and capture sessions, then checks supervisor scoping,
 shelf filters, administrator visibility, and employee denial through HTTP.
 """
+from threading import Event, Thread
+from time import monotonic, sleep
+from types import SimpleNamespace
 from uuid import uuid4
 
 from fastapi.testclient import TestClient
+from sqlalchemy import text
 
 from app import main as main_module, models
 from app.database import SessionLocal
-from app.main import app
+from app.main import app, _lock_store_scoped_shelf
 from app.security import create_access_token
 
 
@@ -17,6 +21,123 @@ def _bearer(user_id: int, role: str) -> dict[str, str]:
     token, _ = create_access_token(user_id=user_id, role=role)
     return {"Authorization": f"Bearer {token}"}
 
+
+
+
+def _assert_zone_transfer_waits_for_shelf_write_lock() -> None:
+    """Prove a zone transfer waits for the shelf write's ownership lock."""
+    suffix = uuid4().hex[:12]
+    setup = SessionLocal()
+    try:
+        store_a = models.Store(code=f"PG-SHELF-LOCK-A-{suffix}", name="Shelf lock A")
+        store_b = models.Store(code=f"PG-SHELF-LOCK-B-{suffix}", name="Shelf lock B")
+        setup.add_all([store_a, store_b])
+        setup.flush()
+        zone = models.Zone(store_id=store_a.id, name=f"Shelf lock zone {suffix}")
+        setup.add(zone)
+        setup.flush()
+        shelf = models.Shelf(zone_id=zone.id, code=f"SHELF-LOCK-{suffix}")
+        setup.add(shelf)
+        setup.commit()
+        store_a_id, store_b_id, zone_id, shelf_id = (
+            store_a.id, store_b.id, zone.id, shelf.id
+        )
+    finally:
+        setup.close()
+
+    writer = SessionLocal()
+    writer_pid = writer.execute(text("SELECT pg_backend_pid()")).scalar_one()
+    actor = SimpleNamespace(id=None, role="SUPERVISOR", store_id=store_a_id)
+    shelf_row, zone_row = _lock_store_scoped_shelf(writer, shelf_id, actor)
+    assert shelf_row.id == shelf_id
+    assert zone_row.store_id == store_a_id
+    capture = models.CaptureSession(
+        store_id=zone_row.store_id,
+        shelf_id=shelf_row.id,
+        source_type="mobile",
+        capture_mode="single",
+        started_at=models.utc_now(),
+    )
+    writer.add(capture)
+    writer.flush()
+    capture_id = capture.id
+
+    started = Event()
+    finished = Event()
+    failures: list[BaseException] = []
+    contender_pids: list[int] = []
+
+    def transfer_zone() -> None:
+        contender = SessionLocal()
+        try:
+            contender_pids.append(
+                contender.execute(text("SELECT pg_backend_pid()")).scalar_one()
+            )
+            started.set()
+            contender.execute(
+                text("UPDATE zones SET store_id = :store_id WHERE id = :zone_id"),
+                {"store_id": store_b_id, "zone_id": zone_id},
+            )
+            contender.commit()
+        except BaseException as exc:
+            contender.rollback()
+            failures.append(exc)
+        finally:
+            contender.close()
+            finished.set()
+
+    thread = Thread(target=transfer_zone, daemon=True)
+    thread.start()
+    assert started.wait(timeout=5), "zone transfer contender did not start"
+    assert contender_pids, "zone transfer backend PID was not captured"
+
+    observer = SessionLocal()
+    deadline = monotonic() + 5
+    observed_blocker = False
+    try:
+        while monotonic() < deadline and not finished.is_set():
+            row = observer.execute(
+                text(
+                    """
+                    SELECT wait_event_type, pg_blocking_pids(pid) AS blocking_pids
+                    FROM pg_stat_activity
+                    WHERE pid = :pid
+                    """
+                ),
+                {"pid": contender_pids[0]},
+            ).one_or_none()
+            if (
+                row is not None
+                and row.wait_event_type == "Lock"
+                and writer_pid in (row.blocking_pids or [])
+            ):
+                observed_blocker = True
+                break
+            sleep(0.01)
+    finally:
+        observer.close()
+
+    assert observed_blocker, (
+        "zone transfer did not report a PostgreSQL lock wait blocked by "
+        f"shelf writer PID {writer_pid}; contender PID={contender_pids[0]}"
+    )
+    assert not finished.is_set(), "zone transfer completed before shelf write committed"
+
+    writer.commit()
+    writer.close()
+    thread.join(timeout=10)
+    assert finished.is_set(), "zone transfer remained blocked after shelf write commit"
+    assert not failures, f"zone transfer failed after serialized shelf write: {failures}"
+
+    verify = SessionLocal()
+    try:
+        persisted_capture = verify.get(models.CaptureSession, capture_id)
+        moved_zone = verify.get(models.Zone, zone_id)
+        assert persisted_capture is not None
+        assert persisted_capture.store_id == store_a_id
+        assert moved_zone is not None and moved_zone.store_id == store_b_id
+    finally:
+        verify.close()
 
 def main() -> None:
     suffix = uuid4().hex[:12]
@@ -133,11 +254,27 @@ def main() -> None:
                 headers=_bearer(employee_id, "EMPLOYEE"),
             )
             assert employee_response.status_code == 403, employee_response.text
+
+            created_own = client.post(
+                "/api/v1/capture-sessions",
+                json={"shelf_id": shelf_a_id, "source_type": "mobile"},
+                headers=supervisor_headers,
+            )
+            assert created_own.status_code == 201, created_own.text
+            assert created_own.json()["store_id"] == store_a_id
+            created_foreign = client.post(
+                "/api/v1/capture-sessions",
+                json={"shelf_id": shelf_b_id, "source_type": "mobile"},
+                headers=supervisor_headers,
+            )
+            assert created_foreign.status_code == 404, created_foreign.text
     finally:
         main_module.settings = original_settings
 
+    _assert_zone_transfer_waits_for_shelf_write_lock()
+
     print(
-        "PostgreSQL capture-session authorization smoke passed: "
+        "PostgreSQL capture-session authorization and shelf ownership-lock smoke passed: "
         "SUPERVISOR is store-scoped, foreign shelf filter is empty, "
         "ADMIN sees both stores, and EMPLOYEE is denied."
     )
