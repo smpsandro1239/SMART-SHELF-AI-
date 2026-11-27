@@ -7,7 +7,11 @@ from sqlalchemy.orm import sessionmaker
 
 from app import models
 from app.database import Base
-from app.edge_event_worker import EdgeEventHandlerError, process_one_edge_event
+from app.edge_event_worker import (
+    BUILTIN_TRANSACTIONAL_HANDLERS,
+    EdgeEventHandlerError,
+    process_one_edge_event,
+)
 
 
 @pytest.fixture
@@ -258,7 +262,10 @@ def test_worker_routes_task_acknowledgement_through_fenced_transaction(session_f
     with session_factory() as db:
         movement_count_before = db.query(models.InventoryMovement).count()
 
-    assert process_one_edge_event(session_factory, worker_id="edge-worker-ack")
+    assert process_one_edge_event(
+        session_factory, worker_id="edge-worker-ack",
+        transactional_handlers=BUILTIN_TRANSACTIONAL_HANDLERS,
+    )
 
     with session_factory() as db:
         processing = db.query(models.EdgeDeviceEventProcessing).filter_by(inbox_id=inbox_id).one()
