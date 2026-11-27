@@ -8,6 +8,7 @@ restoring the service, lease loss, takeover and stale-fence rejection.
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+import logging
 import multiprocessing
 import os
 import subprocess
@@ -32,7 +33,17 @@ WORKER_ID = "edge-outage-worker-old"
 
 
 def _blocking_worker(ready_queue, release_event, inbox_id: int) -> None:
-    """Run the real worker loop against one deterministic no-op heartbeat."""
+    """Run the real worker loop and signal the actual heartbeat failure."""
+    edge_logger = logging.getLogger("smart_shelf.edge_worker")
+
+    class HeartbeatFailureSignal(logging.Handler):
+        def emit(self, record: logging.LogRecord) -> None:
+            if str(record.msg).startswith("Edge event lease renewal failed"):
+                ready_queue.put({"phase": "heartbeat_failed"})
+
+    signal_handler = HeartbeatFailureSignal(level=logging.ERROR)
+    edge_logger.addHandler(signal_handler)
+
     def handler(event: dict) -> None:
         if event["inbox_id"] != inbox_id:
             raise AssertionError("worker claimed an event outside the fault fixture")
@@ -57,6 +68,8 @@ def _blocking_worker(ready_queue, release_event, inbox_id: int) -> None:
         # Do not send exception text through the multiprocessing channel.
         ready_queue.put({"phase": "worker_error", "error_type": type(exc).__name__})
         raise
+    finally:
+        edge_logger.removeHandler(signal_handler)
 
 
 def _verify_session_termination_is_scoped() -> None:
@@ -232,9 +245,10 @@ def _verify_real_service_outage_and_takeover() -> None:
             ["docker", "stop", "--time", "1", container_id],
             check=True, capture_output=True, text=True, timeout=20,
         )
-        # The worker heartbeat interval is lease_seconds / 3 (>= 1s).
-        # Keep PostgreSQL unavailable long enough for a real renewal attempt.
-        time.sleep(2.5)
+        # Require the worker's own redacted lease-renewal failure signal while
+        # PostgreSQL is still stopped; a fixed sleep is not the proof.
+        heartbeat_failure = ready_queue.get(timeout=15)
+        assert heartbeat_failure.get("phase") == "heartbeat_failed", heartbeat_failure
     finally:
         try:
             if stopped:
