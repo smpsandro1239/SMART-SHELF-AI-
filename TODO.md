@@ -12,12 +12,17 @@
 - [x] Confirmar que `TASK_ACKNOWLEDGED` não está activo por omissão: `process_one_edge_event()` só consulta `transactional_handlers` fornecido explicitamente; `BUILTIN_TRANSACTIONAL_HANDLERS` não é injectada automaticamente.
 - [x] Confirmar que `COMPLETED` é persistido como `REVIEW_REQUIRED` e não altera tarefa, versão ou inventário.
 - [x] Confirmar que o worker dispõe de lease, heartbeat, fencing, retry exponencial limitado e DEAD_LETTER.
-- [ ] Definir e implementar configuração opt-in operacional explícita (feature flag/configuração de deployment), com valor por omissão desactivado e validação fail-closed. Não confundir a registry Python com uma feature flag de deployment.
+- [x] Confirmar a fronteira de deployment: não existe serviço/processo `edge-event-worker` no `docker-compose.yml`; `api` arranca apenas `uvicorn app.main:app`, `vision-worker` executa `app.vision_worker` (inferência de imagens) e `edge_event_worker.py` expõe apenas `process_one_edge_event()`, sem entrypoint/loop de supervisão. `Settings` também não define flag Edge ACK. **Decisão fail-closed:** não adicionar uma flag isolada nem injectar a registry num worker diferente; a activação de deployment fica bloqueada até existir um processo Edge dedicado, com ciclo de vida e supervisão reais.
+- [ ] Implementar processo dedicado de consumo Edge (entrypoint, loop, shutdown, identidade/lease e supervisão no deployment) e só então introduzir `EDGE_TASK_ACKNOWLEDGEMENT_ENABLED`, ausente/`false` por omissão, `true` apenas nesse processo e valores inválidos rejeitados. A flag nunca pode substituir a injecção explícita de `transactional_handlers`.
 - [ ] Definir autorização por acção (ACCEPTED/STARTED/COMPLETED), incluindo scopes/capacidades do dispositivo e política de revogação; a implementação actual valida dispositivo ACTIVE, loja, associação vigente e versão, mas não demonstra uma matriz de permissões por acção.
 - [ ] Acrescentar métricas e correlação estruturada para ACK recebido/aplicado/rejeitado, duplicados, stale version, retries, dead-letter, lease perdido e latência; logs actuais não substituem métricas/alertas operacionais.
 - [ ] Definir procedimento de revisão humana de `REVIEW_REQUIRED`, actor, decisão, motivo e reconciliação posterior, sem automatizar stock.
 - [ ] Testar recuperação end-to-end: crash antes/depois do commit, lease expirada, takeover, retry e dead-letter; separar prova SQLite de prova PostgreSQL.
 - [ ] Só considerar piloto após configuração, permissões por acção, observabilidade, revisão humana e ensaio operacional serem aprovados explicitamente.
+
+### Decisão de deployment — 2026-11-27
+
+A fase de configuração não pode ser implementada isoladamente: o repositório não contém actualmente um processo de deployment que consuma a inbox Edge. `vision-worker` não é um worker de eventos. Não declarar activação operacional nem adicionar variável de ambiente sem consumidor real. Próximo passo técnico: criar e testar o processo Edge supervisionado; depois ligar-lhe a flag fail-closed e manter a registry transaccional explicitamente injectada.
 
 ### Restrições não negociáveis
 - `TASK_ACKNOWLEDGED` permanece desactivado por omissão.
