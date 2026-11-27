@@ -1,3 +1,17 @@
+## P0 — Integração controlada do Edge Task Acknowledgement (2026-11-27)
+
+- [x] Exportar o handler TASK_ACKNOWLEDGED numa registry transaccional explícita, usando apply_edge_task_acknowledgement.
+- [x] Manter a registry opt-in: o worker não a activa por omissão enquanto a validação integral não estiver aprovada.
+- [x] Acrescentar teste do percurso worker → handler transaccional → ledger + PROCESSED, verificando COMPLETED = REVIEW_REQUIRED, versão/estado da tarefa inalterados e ausência de movimentos.
+- [x] Confirmar que o smoke PostgreSQL 16 dedicado já está ligado ao API CI e cobre rollback após insert, commit conjunto, replay, claim concorrente, fencing e triggers append-only.
+- [ ] Executar e validar a suite API, incluindo o novo teste de encaminhamento.
+- [ ] Confirmar API CI/PostgreSQL 16, Quality Gates, Security Scans e Docker Compose no SHA final.
+- [ ] Só depois da validação integral, decidir a activação da registry no worker de produção.
+- [ ] Acrescentar ao smoke/testes concorrência explícita entre revogação da associação e processamento, e isolamento cross-store.
+- [ ] Não retomar auditoria BOLA/IDOR sem instrução explícita.
+
+Limite: os commits desta ronda ainda não têm resultados CI confirmados. TASK_ACKNOWLEDGED permanece desactivado por omissão. Não declarar a integração validada até os workflows terminarem no mesmo SHA.
+
 ## P0 — Corrigir normalização temporal do Edge acknowledgement (2026-11-27)
 
 - [x] Identificar a falha exacta no teste `test_completed_ack_is_review_evidence_only`: SQLite remove `tzinfo` ao materializar colunas `DateTime(timezone=True)`; o serviço estava a tratar o timestamp persistido da associação como timestamp externo inválido.
