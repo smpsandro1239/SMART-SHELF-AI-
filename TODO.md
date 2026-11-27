@@ -1,3 +1,15 @@
+## P0 — Concorrência PostgreSQL Edge ACK vs revogação (2026-11-27)
+
+- [x] Acrescentar ao smoke PostgreSQL 16 os cenários determinísticos em ambas as ordens: revogação primeiro e ACK primeiro.
+- [x] Observar o bloqueio real do processo concorrente através de `pg_stat_activity.wait_event_type = 'Lock'` e `pg_blocking_pids()`, identificando o PID bloqueador.
+- [x] No cenário revogação-primeiro, confirmar que o ACK retoma após o commit, observa `revoked_at`, falha com `UNASSIGNED_DEVICE` e não persiste ledger.
+- [x] No cenário ACK-primeiro, confirmar que a revogação espera pelo commit do ACK, retoma e revoga; a evidência ACK permanece anterior à revogação.
+- [ ] Executar o smoke e a suite API em PostgreSQL 16 através do API CI no SHA final.
+- [ ] Confirmar Quality Gates, Security Scans e Docker Compose no SHA final e inspeccionar os passos individuais.
+- [ ] Só depois da validação integral, reavaliar a activação do handler; manter `TASK_ACKNOWLEDGED` opt-in até lá.
+
+Limite: o smoke foi alterado via GitHub API; não foi executado localmente nesta sessão. O cenário A mantém a transição de retry/dead-letter fora do âmbito e verifica o rollback da transacção ACK; a prova centra-se na serialização e na ausência de ledger após revogação.
+
 ### Actualização da integração opt-in — SHA cb0036ec1c8e5911f8005657ccbdd11db0a2c9a8
 
 - [x] Extrair EdgeEventHandlerError para módulo partilhado, removendo a dependência circular entre worker e serviço.
