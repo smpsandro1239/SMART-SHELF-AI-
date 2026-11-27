@@ -187,3 +187,88 @@ def test_transactional_handler_failure_rolls_back_domain_work(session_factory):
     assert _processing(session_factory).status == "RETRY"
     with session_factory() as db:
         assert db.get(models.EdgeDevice, "edge-worker-camera").firmware_version is None
+
+
+def test_worker_routes_task_acknowledgement_through_fenced_transaction(session_factory):
+    from datetime import timedelta
+    from types import SimpleNamespace
+
+    from app.edge_task_assignment_service import create_edge_task_assignment
+
+    # Drain the fixture heartbeat so the ACK is the next claim.
+    assert process_one_edge_event(session_factory, worker_id="edge-worker-ack")
+
+    now = datetime.now(timezone.utc)
+    with session_factory() as db:
+        store = db.query(models.Store).filter_by(code="EDGE-WORKER-STORE").one()
+        device = db.get(models.EdgeDevice, "edge-worker-camera")
+        user = models.User(
+            email="edge-worker-ack@example.test",
+            store_id=store.id,
+            full_name="ACK Supervisor",
+            password_hash="not-a-real-password-hash",
+            role="SUPERVISOR",
+            is_active=True,
+        )
+        zone = models.Zone(store_id=store.id, name="ACK zone")
+        product = models.Product(sku="EDGE-WORKER-ACK-SKU", name="ACK product", unit="un")
+        db.add_all([user, zone, product])
+        db.flush()
+        shelf = models.Shelf(zone_id=zone.id, code="EDGE-WORKER-ACK-SHELF")
+        db.add(shelf)
+        db.flush()
+        task = models.ReplenishmentTask(
+            store_id=store.id, shelf_id=shelf.id, product_id=product.id,
+            status="PENDING", priority="NORMAL",
+        )
+        db.add(task)
+        db.commit()
+        task_id = task.id
+        task_version = task.task_version
+        store_id = store.id
+        device_id = device.device_id
+        actor = SimpleNamespace(
+            id=user.id, role=user.role, store_id=user.store_id, is_active=True,
+        )
+        create_edge_task_assignment(
+            db, store_id=store_id, task_id=task_id, device_id=device_id,
+            actor=actor, reason="Teste de encaminhamento transaccional",
+            valid_from=now - timedelta(minutes=1),
+            valid_until=now + timedelta(hours=1),
+        )
+        inbox = models.EdgeDeviceEventInbox(
+            device_id=device_id,
+            event_id="00000000-0000-4000-8000-000000000103",
+            sequence_number=3, event_type="TASK_ACKNOWLEDGED",
+            store_id=store_id, shelf_id=None, occurred_at=now,
+            payload={"task_id": task_id, "task_version": task_version, "action": "COMPLETED"},
+            fingerprint_sha256="b" * 64, received_at=now,
+        )
+        db.add(inbox)
+        db.flush()
+        inbox_id = inbox.id
+        db.add(models.EdgeDeviceEventProcessing(
+            inbox_id=inbox_id, status="PENDING", attempt_count=0,
+            max_attempts=8, available_at=now, fencing_token=0,
+            created_at=now, updated_at=now,
+        ))
+        db.commit()
+
+    movement_count_before = 0
+    with session_factory() as db:
+        movement_count_before = db.query(models.InventoryMovement).count()
+
+    assert process_one_edge_event(session_factory, worker_id="edge-worker-ack")
+
+    with session_factory() as db:
+        processing = db.query(models.EdgeDeviceEventProcessing).filter_by(inbox_id=inbox_id).one()
+        acknowledgement = db.query(models.EdgeTaskAcknowledgement).filter_by(inbox_id=inbox_id).one()
+        task = db.get(models.ReplenishmentTask, task_id)
+        assert processing.status == "PROCESSED"
+        assert acknowledgement.action == "COMPLETED"
+        assert acknowledgement.result == "REVIEW_REQUIRED"
+        assert acknowledgement.fingerprint_sha256 == "b" * 64
+        assert task.status == "PENDING"
+        assert task.task_version == task_version
+        assert task.completed_at is None
+        assert db.query(models.InventoryMovement).count() == movement_count_before
