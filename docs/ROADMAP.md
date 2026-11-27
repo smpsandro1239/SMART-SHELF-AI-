@@ -1,3 +1,14 @@
+## 2026-11-27 — Integração controlada do Edge ACK (opt-in)
+
+O serviço apply_edge_task_acknowledgement foi ligado à fronteira transactional_handlers através de uma registry explícita. A registry não é seleccionada automaticamente pelo worker: o evento TASK_ACKNOWLEDGED continua sem handler activo por omissão até à validação integral da CI.
+
+Foi acrescentado um teste de worker que percorre a registry explicitamente e prova o caminho transaccional: acknowledgement e PROCESSED são confirmados juntos; COMPLETED fica REVIEW_REQUIRED; tarefa, versão e inventário permanecem inalterados.
+
+O smoke PostgreSQL 16 dedicado já está presente no repositório e no API CI. A sua cobertura inclui rollback após insert, commit conjunto, replay duplicado, claim concorrente, fencing e imutabilidade através de triggers reais PostgreSQL. Ainda falta validar o novo SHA em todos os workflows e acrescentar concorrência explícita entre revogação da associação e processamento, além de isolamento cross-store.
+
+Estado: implementação publicada, validação CI pendente. Não activar o handler no worker de produção antes de API CI/PostgreSQL 16, Quality Gates, Security Scans e Docker Compose passarem no mesmo SHA.
+
+
 ## 2026-11-27 — Correcção de timestamps no serviço Edge ACK
 
 A suite API no SHA `d1190003ad52d8b66d105f49530ac0bfa47227c7` falhou num único teste (1757 passed, 1 skipped): SQLite remove `tzinfo` ao ler `DateTime(timezone=True)`. A associação é criada pelo serviço de atribuições, que normaliza `valid_from` e `valid_until` para UTC antes da persistência; por isso, os valores naïve lidos do SQLite representam UTC. O serviço de ACK passou a usar uma normalização própria para estes campos persistidos, mantendo a validação estrita do timestamp externo `occurred_at`. Correcção publicada no commit `63554528867b3e432b0d117da1902d98370f0dc6`. A validação dos workflows deste SHA está pendente. O worker mantém o handler `TASK_ACKNOWLEDGED` desactivado e as restantes restrições de inventário mantêm-se.
