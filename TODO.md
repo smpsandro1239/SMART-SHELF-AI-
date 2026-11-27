@@ -1,45 +1,30 @@
-## P0 — Concorrência PostgreSQL Edge ACK vs revogação (2026-11-27)
+## P0 — Edge Task Acknowledgement: validação e fronteira operacional (2026-11-27)
 
-- [x] Acrescentar ao smoke PostgreSQL 16 os cenários determinísticos em ambas as ordens: revogação primeiro e ACK primeiro.
-- [x] Observar o bloqueio real do processo concorrente através de `pg_stat_activity.wait_event_type = 'Lock'` e `pg_blocking_pids()`, identificando o PID bloqueador.
-- [x] No cenário revogação-primeiro, confirmar que o ACK retoma após o commit, observa `revoked_at`, falha com `UNASSIGNED_DEVICE` e não persiste ledger.
-- [x] No cenário ACK-primeiro, confirmar que a revogação espera pelo commit do ACK, retoma e revoga; a evidência ACK permanece anterior à revogação.
-- [ ] Executar o smoke e a suite API em PostgreSQL 16 através do API CI no SHA final.
-- [ ] Confirmar Quality Gates, Security Scans e Docker Compose no SHA final e inspeccionar os passos individuais.
-- [ ] Só depois da validação integral, reavaliar a activação do handler; manter `TASK_ACKNOWLEDGED` opt-in até lá.
+### Validação concluída — código
+- [x] Validar atomicidade entre acknowledgement e conclusão PROCESSED na mesma transacção SQLAlchemy, protegida por owner, lease e fencing token.
+- [x] Validar replay, claim concorrente, fencing e imutabilidade do ledger no smoke PostgreSQL 16.
+- [x] Validar concorrência PostgreSQL 16 entre ACK e revogação nas duas ordens, com prova de lock através de `pg_stat_activity` e `pg_blocking_pids()`.
+- [x] Validar isolamento de identidade cross-store nos testes do serviço.
+- [x] Confirmar API CI, Quality Gates, Security Scans e Docker Compose no SHA de código `cd28865c03abaf4ccde959e098e1dcf462943299`: runs API `45998882415`, Quality Gates `45998882598`, Security Scans `45998882484`, Docker Compose `45998882648`.
+- [x] Confirmar os workflows documentais posteriores: Quality Gates `45999727222` e Security Scans `45999727282`, ambos concluídos com sucesso.
 
-Limite: o smoke foi alterado via GitHub API; não foi executado localmente nesta sessão. O cenário A mantém a transição de retry/dead-letter fora do âmbito e verifica o rollback da transacção ACK; a prova centra-se na serialização e na ausência de ledger após revogação.
+### Fronteira operacional — revisão em curso
+- [x] Confirmar que `TASK_ACKNOWLEDGED` não está activo por omissão: `process_one_edge_event()` só consulta `transactional_handlers` fornecido explicitamente; `BUILTIN_TRANSACTIONAL_HANDLERS` não é injectada automaticamente.
+- [x] Confirmar que `COMPLETED` é persistido como `REVIEW_REQUIRED` e não altera tarefa, versão ou inventário.
+- [x] Confirmar que o worker dispõe de lease, heartbeat, fencing, retry exponencial limitado e DEAD_LETTER.
+- [ ] Definir e implementar configuração opt-in operacional explícita (feature flag/configuração de deployment), com valor por omissão desactivado e validação fail-closed. Não confundir a registry Python com uma feature flag de deployment.
+- [ ] Definir autorização por acção (ACCEPTED/STARTED/COMPLETED), incluindo scopes/capacidades do dispositivo e política de revogação; a implementação actual valida dispositivo ACTIVE, loja, associação vigente e versão, mas não demonstra uma matriz de permissões por acção.
+- [ ] Acrescentar métricas e correlação estruturada para ACK recebido/aplicado/rejeitado, duplicados, stale version, retries, dead-letter, lease perdido e latência; logs actuais não substituem métricas/alertas operacionais.
+- [ ] Definir procedimento de revisão humana de `REVIEW_REQUIRED`, actor, decisão, motivo e reconciliação posterior, sem automatizar stock.
+- [ ] Testar recuperação end-to-end: crash antes/depois do commit, lease expirada, takeover, retry e dead-letter; separar prova SQLite de prova PostgreSQL.
+- [ ] Só considerar piloto após configuração, permissões por acção, observabilidade, revisão humana e ensaio operacional serem aprovados explicitamente.
 
-### Actualização da integração opt-in — SHA cb0036ec1c8e5911f8005657ccbdd11db0a2c9a8
+### Restrições não negociáveis
+- `TASK_ACKNOWLEDGED` permanece desactivado por omissão.
+- `COMPLETED` permanece apenas `REVIEW_REQUIRED`.
+- Nenhuma mensagem Edge conclui tarefa, altera stock, cria movimento ou reconcilia inventário.
+- CI verde valida os cenários automatizados; não autoriza produção nem substitui homologação operacional.
 
-- [x] Extrair EdgeEventHandlerError para módulo partilhado, removendo a dependência circular entre worker e serviço.
-- [ ] Validar imports, teste focal e suite API no CI deste SHA.
-- [ ] Aguardar os workflows completos antes de activar TASK_ACKNOWLEDGED.
-
-
-## P0 — Integração controlada do Edge Task Acknowledgement (2026-11-27)
-
-- [x] Exportar o handler TASK_ACKNOWLEDGED numa registry transaccional explícita, usando apply_edge_task_acknowledgement.
-- [x] Manter a registry opt-in: o worker não a activa por omissão enquanto a validação integral não estiver aprovada.
-- [x] Acrescentar teste do percurso worker → handler transaccional → ledger + PROCESSED, verificando COMPLETED = REVIEW_REQUIRED, versão/estado da tarefa inalterados e ausência de movimentos.
-- [x] Confirmar que o smoke PostgreSQL 16 dedicado já está ligado ao API CI e cobre rollback após insert, commit conjunto, replay, claim concorrente, fencing e triggers append-only.
-- [ ] Executar e validar a suite API, incluindo o novo teste de encaminhamento.
-- [ ] Confirmar API CI/PostgreSQL 16, Quality Gates, Security Scans e Docker Compose no SHA final.
-- [ ] Só depois da validação integral, decidir a activação da registry no worker de produção.
-- [ ] Acrescentar ao smoke/testes concorrência explícita entre revogação da associação e processamento, e isolamento cross-store.
-- [ ] Não retomar auditoria BOLA/IDOR sem instrução explícita.
-
-Limite: os commits desta ronda ainda não têm resultados CI confirmados. TASK_ACKNOWLEDGED permanece desactivado por omissão. Não declarar a integração validada até os workflows terminarem no mesmo SHA.
-
-## P0 — Corrigir normalização temporal do Edge acknowledgement (2026-11-27)
-
-- [x] Identificar a falha exacta no teste `test_completed_ack_is_review_evidence_only`: SQLite remove `tzinfo` ao materializar colunas `DateTime(timezone=True)`; o serviço estava a tratar o timestamp persistido da associação como timestamp externo inválido.
-- [x] Separar a validação estrita do timestamp recebido no evento da normalização dos timestamps persistidos da associação.
-- [x] Interpretar como UTC apenas valores naïve lidos da associação, cuja escrita já normaliza `valid_from`/`valid_until` para UTC.
-- [ ] Confirmar suite API, PostgreSQL 16, Quality Gates, Security Scans e Docker Compose no SHA `63554528867b3e432b0d117da1902d98370f0dc6`.
-- [ ] Prosseguir para smoke PostgreSQL 16 dedicado a atomicidade, concorrência, duplicados, fencing e triggers append-only; manter o handler desactivado até validação integral.
-
-Limite: não relaxar a validação de `occurred_at` recebido do dispositivo. Nenhuma migration anterior foi alterada. `COMPLETED` continua a resultar em `REVIEW_REQUIRED`, sem mutação da tarefa ou inventário.
 
 ---
 
