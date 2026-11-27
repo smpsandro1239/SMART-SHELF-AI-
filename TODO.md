@@ -2716,3 +2716,15 @@ A validação de `action` rejeita agora explicitamente valores que não sejam te
 - Acrescentados quatro cenários parametrizados de identidade cross-store em `test_edge_task_acknowledgement_service.py` (tarefa estrangeira, dispositivo estrangeiro, loja estrangeira com tarefa local e conjunto de identidades estrangeiras sem associação). Commit dos testes: `a840fac4b12d6f324c29c6a6b0b441a58aba85a5`.
 - A API CI/Quality Gates/Security Scans/Docker Compose do commit `a840fac4b12d6f324c29c6a6b0b441a58aba85a5` foi observada em execução; a validação do commit corretivo `6c4379e` ainda tem de ser confirmada. Não declarar suite aprovada.
 - A prova PostgreSQL de concorrência entre revogação e processamento ainda não foi acrescentada; manter este ponto explicitamente aberto. A registry permanece opt-in e `COMPLETED` continua apenas `REVIEW_REQUIRED`.
+
+
+## P0 — Edge ACK vs revogação: concorrência validada (2026-11-27)
+
+- [x] Provar em PostgreSQL 16 o cenário revogação-primeiro: o ACK fica bloqueado por lock PostgreSQL, a revogação confirma e o ACK é rejeitado como `UNASSIGNED_DEVICE`, sem acknowledgement persistido.
+- [x] Provar em PostgreSQL 16 o cenário ACK-primeiro: a revogação fica bloqueada, o ACK confirma primeiro e permanece no ledger com timestamp anterior à revogação.
+- [x] A prova de bloqueio exige `pg_stat_activity.wait_event_type = 'Lock'` e confirmação do PID bloqueador por `pg_blocking_pids()`; temporizações são apenas polling com timeout.
+- [x] Corrigir a preparação do segundo cenário para usar dispositivo independente, respeitando a unicidade histórica de associação dispositivo/tarefa.
+- [x] Validar no SHA `cd28865c03abaf4ccde959e098e1dcf462943299`: API CI `45998882415`, incluindo o smoke PostgreSQL 16 de ACK atomicity/concurrency/fencing/immutability; Quality Gates `45998882598`, Security Scans `45998882484` e Docker Compose `45998882648` — todos com sucesso.
+- [ ] Manter `TASK_ACKNOWLEDGED` opt-in/desactivado até revisão operacional explícita e decisão separada de activação.
+
+**Limite da prova:** no cenário revogação-primeiro, o smoke constrói manualmente a transacção de revogação com a ordem canónica Store → Task → Device → Assignment; no cenário ACK-primeiro, invoca `revoke_edge_task_assignment`. A evidência demonstra a serialização das duas ordens, mas não deve ser descrita como chamada do serviço real nos dois cenários.
