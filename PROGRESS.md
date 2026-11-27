@@ -1,3 +1,15 @@
+## 2026-11-27 — Smoke concorrente PostgreSQL Edge ACK vs revogação
+
+- SHA inicial desta ronda: `68a488f46fe1fa2d536c37443f3faeac7f459e16`.
+- Smoke actualizado em `apps/api/scripts/postgres_edge_task_acknowledgement_smoke.py` para cobrir as duas ordens de serialização sem temporizações como prova.
+- O helper consulta `pg_stat_activity`, exige `wait_event_type = 'Lock'` e confirma o PID bloqueador em `pg_blocking_pids()`.
+- Cenário A: a transacção de revogação bloqueia Store → Task → Device → Assignment; o ACK fica efectivamente à espera. Após o commit da revogação, o handler rejeita com `UNASSIGNED_DEVICE`; a transacção ACK faz rollback e não cria ledger.
+- Cenário B: o handler ACK adquire a cadeia de locks e mantém a transacção aberta; a chamada real de revogação fica bloqueada. Após o commit ACK, a revogação retoma e confirma; o ledger permanece associado à atribuição e o seu `received_at` antecede `revoked_at`.
+- O smoke continua ligado ao passo PostgreSQL 16 existente no API CI; não foi necessário alterar workflow nem migrations.
+- Commits publicados directamente na main: `daa9055aecc57c9027035f3623bc7df820048bad` (primeira versão do smoke) e `bb9d84a1f8252791456cb72b3855362e11690d6a` (correcção da expectativa de rollback).
+- Não foram executados testes localmente. A execução PostgreSQL 16 e os quatro workflows no SHA final ainda estão pendentes. Não declarar a garantia validada nem activar o handler antes dos resultados.
+- `TASK_ACKNOWLEDGED` mantém-se opt-in; `COMPLETED` continua a ser apenas evidência `REVIEW_REQUIRED`, sem mutação da tarefa ou inventário.
+
 ### Correcção estrutural após revisão — SHA cb0036ec1c8e5911f8005657ccbdd11db0a2c9a8
 
 A revisão da importação identificou uma dependência circular potencial entre edge_event_worker e edge_task_acknowledgement_service. Foi eliminada extraindo EdgeEventHandlerError para apps/api/app/edge_event_errors.py, importado pelo worker e pelo serviço. O handler permanece opt-in. Não foram executados testes localmente; CI ainda sem resultado confirmado para este SHA.
