@@ -186,9 +186,20 @@ def _prove_revocation_ack_races(
 
     # Scenario B: ACK owns the same canonical lock chain first. The revocation
     # service must wait on Store, then commit after the ACK transaction commits.
+    # Assignment history is retained and the database uniqueness rule is
+    # scoped to a device/task pair. Use a second active device for the second
+    # independent race instead of trying to recycle the same pair.
+    device_id_b = f"{device_id}-race-b"
+    with SessionLocal() as db:
+        db.add(models.EdgeDevice(
+            device_id=device_id_b, store_id=store_id,
+            device_type="robot", status="ACTIVE",
+        ))
+        db.commit()
+
     assignment_b, claim_b = _create_race_assignment_and_claim(
         suffix=suffix, scenario="B", store_id=store_id, task_id=task_id,
-        device_id=device_id, actor=actor, task_version=task_version,
+        device_id=device_id_b, actor=actor, task_version=task_version,
     )
     ack_locks_acquired = Event()
     allow_ack_commit = Event()
