@@ -97,12 +97,16 @@ def wait_for_both_postgres_lock_waits(
                 WHERE application_name IN (:first, :second)
             """), {"first": app_names[0], "second": app_names[1]}).mappings().all()
         last_state = [dict(row) for row in rows]
-        blocked = {
+        waiting = {
             row["application_name"]
             for row in rows
-            if row["wait_event_type"] == "Lock" and blocker_pid in row["blockers"]
+            if row["wait_event_type"] == "Lock"
         }
-        if blocked == set(app_names):
+        # PostgreSQL reports soft blockers too: the second waiter can be
+        # blocked by the first waiter in the lock queue, while the first is
+        # blocked by the transaction that owns the task row.
+        blockers = {pid for row in rows for pid in row["blockers"]}
+        if waiting == set(app_names) and blocker_pid in blockers:
             return
         sleep(0.05)
     raise AssertionError(

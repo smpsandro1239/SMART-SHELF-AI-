@@ -3,7 +3,7 @@
 ## Estado actual
 - Branch de trabalho: main
 - SHA inicial desta ronda: 5f4a9a2a944ca7b41ae1206653d3e77c4211b4c8
-- Último commit de implementação: 12d252bff69b36cc96858cf2a044e6fe678da998
+- Último commit de implementação: 5e6713c68993d2cffec5517e3ad5ef3b584a0c79
 - Última actualização: 2026-11-27
 
 ## EDGE-INGEST-OBSERVABILITY-01
@@ -18,7 +18,7 @@
 - A primeira execução Quality Gates revelou 7 falhas colaterais em `test_observations.py`: o novo fixture API removia um override de dependência definido ao nível do módulo por outro ficheiro de testes. Corrigido para restaurar o override anterior. A repetição da suite está pendente no SHA final.
 - Não foram executados testes localmente nesta sessão.
 - Acrescentado smoke PostgreSQL 16 que mantém a linha da tarefa bloqueada, envia dois POST HTTP concorrentes com a mesma chave e exige bloqueio real em `pg_stat_activity`, uma revisão persistida e respostas 201/200.
-- A primeira execução do smoke PostgreSQL falhou apenas na selecção do ACK: o script consultava `.one()` sem filtrar a inbox, mas o banco partilhado já continha ACKs de smokes anteriores. Corrigido para filtrar pelo `inbox_id` criado pelo próprio ensaio; repetir API CI pendente.
+- A primeira execução do smoke falhou na selecção do ACK, corrigida com filtro por `inbox_id`. A segunda execução confirmou que os dois pedidos esperavam por locks PostgreSQL, mas a asserção exigia que cada waiter listasse directamente o blocker raiz; PostgreSQL reporta também blockers suaves da fila (o segundo waiter pode listar o primeiro). Ajustada a verificação para exigir ambos em espera e o blocker raiz no conjunto dos blockers. Repetir API CI pendente.
 
 ## Próximas tarefas
 - [ ] Confirmar API CI/PostgreSQL 16, Quality Gates, Security Scans e Docker Compose no SHA final.
