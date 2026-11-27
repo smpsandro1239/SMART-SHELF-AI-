@@ -107,3 +107,16 @@ def test_acknowledgement_requires_active_assignment(ack_db):
         apply_edge_task_acknowledgement(db, event)
     assert error.value.code == "UNASSIGNED_DEVICE"
     assert db.query(models.EdgeTaskAcknowledgement).count() == 0
+
+
+@pytest.mark.parametrize("invalid_action", [None, 7, [], {}, True])
+def test_acknowledgement_rejects_non_string_action(ack_db, invalid_action):
+    db, _task_id, event = ack_db
+    event["payload"] = {**event["payload"], "action": invalid_action}
+    from app.edge_event_errors import EdgeEventHandlerError
+
+    with pytest.raises(EdgeEventHandlerError) as error:
+        apply_edge_task_acknowledgement(db, event)
+
+    assert error.value.code == "INVALID_ACK_ACTION"
+    assert db.query(models.EdgeTaskAcknowledgement).count() == 0
