@@ -4,7 +4,7 @@
 - O processo real do worker mantém um handler heartbeat controlado durante a paragem; a renovação da lease falha e o resultado local não pode ser confirmado após a recuperação.
 - O ensaio verifica expiração natural, takeover, fencing token monotónico, rejeição do worker antigo, evento de controlo noutra loja e inventário imutável.
 - O script recusa execução fora de GitHub Actions e exige exactamente um container com a imagem `postgres:16`.
-- Integrado no API CI depois dos restantes smokes PostgreSQL.
+- Integrado no API CI imediatamente após o smoke de atribuições Edge e antes do smoke Edge ACK, evitando que fixtures posteriores deixem leases expiradas elegíveis para claim.
 - **Validação pendente:** execução do novo smoke e confirmação de API CI, Docker Compose smoke, Quality Gates e Security Scans no mesmo SHA. Não confundir publicação com aprovação.
 
 ---

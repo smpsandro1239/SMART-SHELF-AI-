@@ -8,7 +8,7 @@ SHA base: `1b5d9dbe83f5edd6dfe9d7042b97766ac80dafee`.
 - O teste espera a expiração natural da lease, reclama o evento com um segundo worker, exige incremento do fencing token e rejeita a conclusão com as credenciais antigas.
 - Um evento elegível apenas no futuro numa segunda loja permanece PENDING; a contagem global de `InventoryMovement` tem de permanecer inalterada.
 - O script só permite a paragem do container exacto `postgres:16` em GitHub Actions e falha fora desse ambiente.
-- O novo passo foi ligado ao fim do job API CI, após os outros smokes PostgreSQL, para evitar competir com fixtures Edge anteriores.
+- O novo passo foi colocado imediatamente após o smoke de atribuições Edge e antes do smoke Edge ACK. Esta ordem evita que o cenário de revogação do ACK deixe leases PROCESSING que expirem antes do ensaio de fault injection.
 - **Não foram executados testes localmente nem existe ainda resultado CI para este novo SHA.** A implementação está publicada; a validação PostgreSQL 16 e os quatro workflows permanecem pendentes.
 - Limites preservados: `TASK_ACKNOWLEDGED` continua fail-closed, não é injectada a registry transaccional, `COMPLETED` continua `REVIEW_REQUIRED` e o teste não cria nem altera movimentos de inventário.
 

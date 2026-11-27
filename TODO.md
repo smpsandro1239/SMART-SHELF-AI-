@@ -3,7 +3,7 @@
 ### Implementação publicada — execução CI pendente
 - [x] Adicionar smoke PostgreSQL 16 que distingue `pg_terminate_backend` (uma sessão) da paragem efectiva do serviço PostgreSQL.
 - [x] Restringir a paragem do serviço ao container descartável `postgres:16` de GitHub Actions; o script recusa execução fora desse ambiente.
-- [x] Ligar o smoke ao API CI após os restantes smokes PostgreSQL, evitando competir com fixtures Edge anteriores.
+- [x] Ligar o smoke ao API CI imediatamente após o smoke de atribuições Edge e antes do smoke Edge ACK, evitando leases pendentes deixadas por cenários posteriores.
 - [x] Verificar falha do heartbeat, abandono do resultado local, expiração natural da lease, takeover e rejeição do fencing token anterior.
 - [x] Verificar evento de controlo numa segunda loja e contagem de movimentos de inventário inalterada.
 - [ ] Executar o novo smoke no PostgreSQL 16 e corrigir eventuais falhas.
