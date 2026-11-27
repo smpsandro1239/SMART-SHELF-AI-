@@ -203,6 +203,7 @@ def test_transactional_handler_failure_rolls_back_domain_work(session_factory):
 
 
 def test_worker_routes_task_acknowledgement_through_fenced_transaction(session_factory, caplog):
+    caplog.set_level("INFO")
     from datetime import timedelta
     from types import SimpleNamespace
 
