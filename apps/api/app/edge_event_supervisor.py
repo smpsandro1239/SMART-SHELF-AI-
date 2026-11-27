@@ -98,11 +98,17 @@ def healthcheck(
 def _terminate_child(process: subprocess.Popen[Any], timeout: float) -> None:
     if process.poll() is not None:
         return
-    process.terminate()
+    try:
+        process.terminate()
+    except ProcessLookupError:
+        return
     try:
         process.wait(timeout=timeout)
     except subprocess.TimeoutExpired:
-        process.kill()
+        try:
+            process.kill()
+        except ProcessLookupError:
+            return
         process.wait(timeout=timeout)
 
 

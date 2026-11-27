@@ -163,7 +163,7 @@ def test_supervisor_restarts_crashed_child_and_stops_second_child(tmp_path):
     state = json.loads(config.state_path.read_text(encoding="utf-8"))
     assert result == 0
     assert len(children) == 2
-    assert children[0].terminated
+    assert children[0].return_code == 17
     assert state["status"] == "STOPPED"
     assert state["restart_count"] == 1
 
