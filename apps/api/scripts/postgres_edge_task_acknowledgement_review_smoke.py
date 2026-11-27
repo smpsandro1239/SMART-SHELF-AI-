@@ -155,19 +155,16 @@ def main() -> None:
             "evidence_reference": f"evidence://concurrency/{suffix}",
             "idempotency_key": f"edge-review-{suffix}-same-key",
         }
-        try:
-            with TestClient(app) as client:
-                response = client.post(
-                    f"/api/v1/edge-task-acknowledgements/{acknowledgement_id}/reviews",
-                    json=payload,
-                    headers={
-                        "Authorization": f"Bearer {token}",
-                        "X-Smoke-Application": name,
-                    },
-                )
-            results[name] = {"status_code": response.status_code, "body": response.json()}
-        finally:
-            pass
+        with TestClient(app) as client:
+            response = client.post(
+                f"/api/v1/edge-task-acknowledgements/{acknowledgement_id}/reviews",
+                json=payload,
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "X-Smoke-Application": name,
+                },
+            )
+        results[name] = {"status_code": response.status_code, "body": response.json()}
 
     original_settings = main_module.settings
     main_module.settings = original_settings.model_copy(update={"app_env": "production"})
