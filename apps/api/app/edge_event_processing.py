@@ -175,9 +175,14 @@ def complete_edge_event_transactionally(
     fencing_token: int,
     event: dict,
     handler,
+    now: datetime | None = None,
 ) -> None:
-    """Run DB-only domain work and inbox completion in one fenced transaction."""
-    current = _now()
+    """Run DB-only domain work and inbox completion in one fenced transaction.
+
+    ``now`` is an injectable clock for deterministic tests; production callers
+    should omit it so lease validity is checked against wall-clock UTC.
+    """
+    current = _utc(now or _now())
     try:
         item = (
             db.query(models.EdgeDeviceEventProcessing)
@@ -193,7 +198,7 @@ def complete_edge_event_transactionally(
             raise EdgeEventProcessingError("worker lease is stale or no longer owned")
 
         handler(db, event)
-        completed_at = _now()
+        completed_at = _utc(now or _now())
         if (
             item.status != "PROCESSING" or item.lease_owner != worker_id
             or item.fencing_token != fencing_token or item.lease_expires_at is None
