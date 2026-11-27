@@ -1,7 +1,7 @@
 ## 2026-11-27 — Primeiro incremento do Edge Event Worker autónomo
 
 - HEAD de referência antes da implementação: `09f2b4ffacb00e8bfc4d899c9bb2a93d782dc3f6`.
-- Criado `apps/api/app/edge_event_worker_runtime.py` com polling supervisionado, validação de parâmetros, recuperação de falhas de polling e espera interruptível.
+- Criado runtime de polling integrado em `apps/api/app/edge_event_worker.py` com polling supervisionado, validação de parâmetros, recuperação de falhas de polling e espera interruptível.
 - `apps/api/app/edge_event_worker.py` passa a expor `python -m app.edge_event_worker`, preservando a função de processamento existente.
 - SIGTERM/SIGINT solicitam shutdown gracioso; o ciclo deixa terminar o evento em curso e não inicia outro.
 - Criado `edge-event-worker` no Docker Compose, independente da API e do vision-worker, com restart policy, utilizador não-root, filesystem read-only, capabilities removidas e dependências de DB/migrations.
