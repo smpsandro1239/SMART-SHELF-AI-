@@ -1,3 +1,11 @@
+## 2026-11-27 — Concorrência Edge ACK vs revogação: smoke acrescentado, CI pendente
+
+O smoke `postgres_edge_task_acknowledgement_smoke.py` inclui agora dois cenários concorrentes em PostgreSQL. Não usa apenas uma barreira/temporização para inferir bloqueio: consulta `pg_stat_activity`, exige `wait_event_type='Lock'` e verifica que `pg_blocking_pids()` contém o PID da transacção que detém a cadeia de locks.
+
+No cenário revogação-primeiro, a transacção de revogação mantém Store → Task → Device → Assignment bloqueados; o ACK aguarda, retoma após o commit, observa a associação revogada e falha sem persistir acknowledgement. No cenário ACK-primeiro, o handler mantém a transacção depois de adquirir os locks; a chamada de revogação fica bloqueada, retoma após o commit ACK e revoga a associação. O ledger conserva a evidência com timestamp anterior à revogação.
+
+O smoke existente já está ligado ao API CI PostgreSQL 16; não foi alterado qualquer workflow ou migration. A alteração foi publicada directamente na main, commits `daa9055a` e `bb9d84a1`. A execução do smoke, a suite API e os quatro workflows no SHA final permanecem pendentes. O handler continua opt-in e não deve ser activado até validação integral.
+
 ### Correcção de dependência circular — 2026-11-27
 
 EdgeEventHandlerError passou para um módulo partilhado, evitando importação circular entre o worker e o serviço de acknowledgements. A registry transaccional continua opt-in. O SHA cb0036ec1c8e5911f8005657ccbdd11db0a2c9a8 aguarda validação CI; não activar o handler antes dos quatro workflows concluírem com sucesso.
