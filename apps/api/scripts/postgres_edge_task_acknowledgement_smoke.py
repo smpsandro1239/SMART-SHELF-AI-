@@ -73,6 +73,7 @@ def main() -> None:
         )
         db.add(task)
         db.commit()
+        inventory_movement_count_before = db.query(models.InventoryMovement).count()
 
         store_id, task_id, device_id = store.id, task.id, device.device_id
         actor = SimpleNamespace(
@@ -275,7 +276,7 @@ def main() -> None:
         assert task_after.status == "PENDING"
         assert task_after.task_version == task_version
         assert task_after.completed_at is None
-        assert verify.query(models.InventoryMovement).count() == 0
+        assert verify.query(models.InventoryMovement).count() == inventory_movement_count_before
         processing_states = {
             row.inbox_id: row.status
             for row in verify.query(models.EdgeDeviceEventProcessing)
