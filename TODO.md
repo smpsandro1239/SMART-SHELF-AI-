@@ -1,3 +1,15 @@
+## P1 — Resiliência operacional Edge: diagnóstico seguro (2026-11-27)
+
+- [x] Remover logs de traceback/texto de excepção nas falhas de renovação de lease e execução de handlers; manter apenas tipo da excepção e inbox_id.
+- [x] Cobrir com regressões que mensagens sensíveis simuladas não aparecem nos logs de polling nem de execução/renovação.
+- [ ] Confirmar testes focados, suite API e workflows no SHA final.
+- [ ] Prosseguir para ensaio de indisponibilidade PostgreSQL durante polling, heartbeat/lease renewal, falha ao concluir e recuperação após restabelecimento.
+- [ ] Demonstrar recuperação sem ACK implícito, sem duplicação de efeitos de domínio e sem alterações de inventário.
+
+Limite: esta ronda não prova ainda uma indisponibilidade PostgreSQL real nem a recuperação de uma ligação após restabelecimento. Os testes novos ainda aguardam execução CI; não declarar esta tarefa validada antes disso.
+
+---
+
 ## P0 — Edge Event Worker autónomo (2026-11-27)
 
 ### Implementação publicada — validação pendente
