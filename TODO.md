@@ -3,8 +3,9 @@
 - [x] Definir heartbeat do worker com contadores de polling, eventos reclamados, polls ociosos e falhas.
 - [x] Registar duração do último polling, instante do último evento e tipo da última falha, sem texto de excepção.
 - [x] Propagar snapshot de métricas do filho para o estado operacional do supervisor.
-- [ ] Acrescentar correlação/outcomes por evento: PROCESSED, RETRY, DEAD_LETTER, lease perdida e ACK recebido/aplicado/rejeitado.
-- [ ] Testar contadores, reinício/reset do processo, isolamento de dados sensíveis e workflows no SHA final.
+- [x] Acrescentar logs correlacionados por evento com event_id, inbox_id, processing_id, store_id, device_id, worker_id, tentativa, duração e outcome PROCESSED/RETRY/DEAD_LETTER/LEASE_LOST/ACK_CLAIMED/ACK_APPLIED/ACK_REJECTED.
+- [x] Acrescentar testes para contadores de polling, duração, falhas sem texto de excepção e correlação de ACK aplicado/DEAD_LETTER.
+- [ ] Confirmar API CI, Quality Gates, Security Scans e Docker Compose no SHA actual.
 - [ ] Decidir mecanismo de exportação/consumo das métricas sem introduzir dependências ou portas expostas desnecessárias.
 
 Limite: os contadores no heartbeat são snapshots voláteis por processo, não um ledger durável nem métricas agregadas históricas. A implementação não activa ACK nem altera efeitos de domínio.

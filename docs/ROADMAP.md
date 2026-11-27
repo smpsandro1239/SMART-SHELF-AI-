@@ -1,3 +1,11 @@
+## 2026-11-27 — Observabilidade operacional Edge (incremento implementado; CI pendente)
+
+O heartbeat do worker passou a incluir contadores por processo: tentativas de polling, eventos reclamados, polls ociosos, falhas, duração do último polling, instante do último evento e tipo da última falha. O supervisor propaga o snapshot do filho para o seu estado operacional. Estes valores são voláteis por processo e não substituem um ledger histórico.
+
+Os outcomes por evento passaram a produzir logs correlacionados com event_id, inbox_id, processing_id, store_id, device_id, worker_id, tentativa, duração e resultado. Os resultados distinguem CLAIMED/ACK_CLAIMED, PROCESSED, RETRY, DEAD_LETTER, LEASE_LOST, ACK_APPLIED e ACK_REJECTED. Não é registado payload nem texto de excepções. A implementação não activa ACK automaticamente nem altera o inventário.
+
+Testes adicionados para contadores, falhas sem detalhes sensíveis, ACK aplicado e dead-letter. A validação da nova telemetria depende dos workflows no SHA actual. A exportação para um sistema de métricas permanece em aberto para evitar infraestrutura ou dependências sem consumidor demonstrado.
+
 ## P1 — Métricas operacionais Edge (2026-11-27)
 
 - [x] Definir heartbeat do worker com contadores de polling, eventos reclamados, polls ociosos e falhas.

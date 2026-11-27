@@ -9,7 +9,7 @@
 ## Tarefa atual
 - Identificador: EDGE-OBSERVABILITY-01
 - Descrição: métricas operacionais do Edge Worker e correlação de eventos.
-- Estado: IN_PROGRESS — contadores de polling e heartbeat implementados; outcomes por evento e validação CI pendentes.
+- Estado: PARTIALLY_COMPLETED — contadores no heartbeat e outcomes correlacionados por evento implementados; validação CI do último commit pendente.
 
 ## Tarefas concluídas
 - [x] Supervisor independente com subprocesso, heartbeat, PID e estado operacional.
@@ -21,10 +21,12 @@
 - [x] Integração Docker Compose com rootfs read-only, utilizador não-root e capabilities removidas.
 - [x] API CI, Quality Gates, Security Scans e Docker Compose no SHA 9be6f3f: SUCCESS.
 - [x] Smoke Docker de SIGKILL e heartbeat obsoleto: SUCCESS.
+- [x] Métricas do polling no heartbeat: tentativas, eventos reclamados, polls ociosos, falhas, duração e último evento.
+- [x] Logs correlacionados de outcomes com IDs internos e duração, sem payload nem texto de excepção.
 
 ## Tarefas pendentes
 - [ ] Confirmar os workflows do smoke SIGTERM e do supervisor.
-- [ ] Completar métricas de outcomes por evento: PROCESSED, RETRY, DEAD_LETTER, lease perdida e ACK.
+- [ ] Confirmar testes e workflows para outcomes correlacionados no SHA actual.
 - [ ] Definir consumo/exportação das métricas sem expor uma porta ou adicionar dependências desnecessárias.
 
 ## Tarefas bloqueadas
@@ -50,7 +52,7 @@
 - Nenhuma operação de inventário ou migration foi alterada.
 
 ## Próxima ação obrigatória
-- Validar a extensão de métricas do heartbeat na CI; depois acrescentar correlação/outcomes por evento mantendo ACK fail-closed.
+- Validar CI da telemetria correlacionada; depois decidir o mecanismo de exportação/consumo sem dependências nem portas desnecessárias.
 
 ---
 
