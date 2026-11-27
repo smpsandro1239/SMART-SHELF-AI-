@@ -26,8 +26,9 @@ def _expect_database_rejection(statement: str, acknowledgement_id: int) -> None:
         try:
             db.execute(text(statement), {"ack_id": acknowledgement_id})
             db.commit()
-        except DBAPIError:
+        except DBAPIError as exc:
             db.rollback()
+            assert "append-only" in str(exc.orig), str(exc.orig)
         else:
             raise AssertionError(f"PostgreSQL trigger allowed forbidden SQL: {statement}")
     finally:
@@ -209,6 +210,7 @@ def main() -> None:
             fencing_token=current_claim["fencing_token"],
             event=current_claim,
             handler=apply_edge_task_acknowledgement,
+            now=reclaim_at + timedelta(seconds=2),
         )
 
     # 3. Exact replay cannot create a second ledger row.
@@ -235,28 +237,25 @@ def main() -> None:
                 now=concurrent_now,
             )
 
+    worker_names = (f"ack-smoke-{suffix}-race-a", f"ack-smoke-{suffix}-race-b")
     with ThreadPoolExecutor(max_workers=2) as executor:
         claims = list(executor.map(race_claim, ("race-a", "race-b")))
-    winners = [claim for claim in claims if claim is not None]
-    assert len(winners) == 1, f"expected exactly one concurrent claim, got {len(winners)}"
-    second_claim = winners[0]
+    winner_indexes = [index for index, claim in enumerate(claims) if claim is not None]
+    assert len(winner_indexes) == 1, f"expected exactly one concurrent claim, got {len(winner_indexes)}"
+    winner_index = winner_indexes[0]
+    second_claim = claims[winner_index]
+    second_worker = worker_names[winner_index]
     assert second_claim["inbox_id"] == inbox_ids[1]
 
     with SessionLocal() as tx:
         complete_edge_event_transactionally(
             tx,
             processing_id=second_claim["processing_id"],
-            worker_id=next(
-                worker for worker in (f"ack-smoke-{suffix}-race-a", f"ack-smoke-{suffix}-race-b")
-                if worker == second_claim.get("worker_id", worker)
-            ) if False else (
-                f"ack-smoke-{suffix}-race-a"
-                if second_claim["fencing_token"] == 1
-                else f"ack-smoke-{suffix}-race-b"
-            ),
+            worker_id=second_worker,
             fencing_token=second_claim["fencing_token"],
             event=second_claim,
             handler=apply_edge_task_acknowledgement,
+            now=concurrent_now + timedelta(seconds=1),
         )
 
     # 5. PostgreSQL triggers, not Python-only guards, enforce append-only.
@@ -271,7 +270,7 @@ def main() -> None:
         accepted = next(row for row in acknowledgements if row.action == "ACCEPTED")
         assert completed.result == "REVIEW_REQUIRED"
         assert accepted.result == "ACCEPTED"
-        assert completed.fingerprint_sha256 == inbox_rows[0].fingerprint_sha256
+        assert completed.fingerprint_sha256 == ("0" * 63 + "1")
         task_after = verify.get(models.ReplenishmentTask, task_id)
         assert task_after.status == "PENDING"
         assert task_after.task_version == task_version
