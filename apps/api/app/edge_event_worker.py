@@ -13,6 +13,8 @@ from typing import Any
 
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.edge_event_errors import EdgeEventHandlerError
+from app.edge_task_acknowledgement_service import apply_edge_task_acknowledgement
 from app.edge_event_processing import (
     EdgeEventProcessingError,
     claim_next_edge_event,
@@ -25,20 +27,8 @@ from app.edge_event_processing import (
 logger = logging.getLogger("smart_shelf.edge_worker")
 
 
-class EdgeEventHandlerError(RuntimeError):
-    """A handler failure with an explicit retry policy."""
-
-    def __init__(self, code: str, *, retryable: bool = True):
-        super().__init__(code)
-        self.code = code
-        self.retryable = retryable
-
-
 EdgeEventHandler = Callable[[dict[str, Any]], None]
 TransactionalEdgeEventHandler = Callable[[Session, dict[str, Any]], None]
-
-# Imported after EdgeEventHandlerError is defined: the service uses that error type.
-from app.edge_task_acknowledgement_service import apply_edge_task_acknowledgement
 
 
 def _heartbeat_event_handler(event: dict[str, Any]) -> None:
