@@ -1,3 +1,8 @@
+### Correcção de dependência circular — 2026-11-27
+
+EdgeEventHandlerError passou para um módulo partilhado, evitando importação circular entre o worker e o serviço de acknowledgements. A registry transaccional continua opt-in. O SHA cb0036ec1c8e5911f8005657ccbdd11db0a2c9a8 aguarda validação CI; não activar o handler antes dos quatro workflows concluírem com sucesso.
+
+
 ## 2026-11-27 — Integração controlada do Edge ACK (opt-in)
 
 O serviço apply_edge_task_acknowledgement foi ligado à fronteira transactional_handlers através de uma registry explícita. A registry não é seleccionada automaticamente pelo worker: o evento TASK_ACKNOWLEDGED continua sem handler activo por omissão até à validação integral da CI.
