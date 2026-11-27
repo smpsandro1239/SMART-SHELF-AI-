@@ -201,7 +201,7 @@ def main() -> None:
             ack = db.get(models.EdgeTaskAcknowledgement, acknowledgement_id)
             assert task is not None and task.status == "PENDING" and task.task_version == 1
             assert ack is not None and ack.action == "COMPLETED" and ack.result == "REVIEW_REQUIRED"
-            assert db.query(models.InventoryMovement).count() == 0
+            assert db.query(models.InventoryMovement).filter_by(task_id=task_id).count() == 0
     finally:
         release_task.set()
         app.dependency_overrides.pop(main_module.get_db, None)

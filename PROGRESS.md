@@ -3,7 +3,7 @@
 ## Estado actual
 - Branch de trabalho: main
 - SHA inicial desta ronda: 5f4a9a2a944ca7b41ae1206653d3e77c4211b4c8
-- Último commit de implementação: 6677f04838fb6bde918b2ba7767d4e58622a1432
+- Último commit de implementação: fda85e10ac791dcfe30314e020e1a4021df962ae
 - Última actualização: 2026-11-27
 
 ## EDGE-INGEST-OBSERVABILITY-01
@@ -15,7 +15,8 @@
 - Implementados serviço transaccional, idempotência por store/ACK/actor, autorização ADMIN/SUPERVISOR, isolamento multi-loja e endpoints POST/GET.
 - O registo de revisão é também o registo de auditoria atómico; nenhuma tarefa, ACK ou entidade de inventário é actualizada.
 - Adicionados testes de serviço, API e migration SQLite.
-- A validação GitHub Actions do código ainda não foi concluída. Não foram executados testes localmente nesta sessão.
+- A primeira execução Quality Gates revelou 7 falhas colaterais em `test_observations.py`: o novo fixture API removia um override de dependência definido ao nível do módulo por outro ficheiro de testes. Corrigido para restaurar o override anterior. A repetição da suite está pendente no SHA final.
+- Não foram executados testes localmente nesta sessão.
 - Acrescentado smoke PostgreSQL 16 que mantém a linha da tarefa bloqueada, envia dois POST HTTP concorrentes com a mesma chave e exige bloqueio real em `pg_stat_activity`, uma revisão persistida e respostas 201/200.
 - Validação do novo smoke ainda pendente no API CI do SHA seguinte.
 
