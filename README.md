@@ -1,3 +1,13 @@
+## Edge task acknowledgements — revisão humana (2026-11-27)
+
+A API permite registar e consultar revisões humanas das declarações Edge `COMPLETED` que tenham resultado `REVIEW_REQUIRED`. O ledger `edge_task_acknowledgement_reviews` é o próprio registo de decisão e auditoria: guarda loja, tarefa, ACK original, actor autenticado, decisão, motivo, referência de evidência, chave de idempotência e timestamp UTC. ADMIN pode rever em qualquer loja; SUPERVISOR apenas na sua loja; EMPLOYEE e contas inactivas são recusados.
+
+A chave de idempotência é única por loja/ACK/actor. Repetir a mesma chave e os mesmos dados devolve o registo existente; reutilizá-la com dados diferentes devolve conflito. Locks da tarefa e do ACK serializam revisões concorrentes e constraints/FKs compostas protegem a identidade multi-loja. PostgreSQL e SQLite impedem UPDATE/DELETE do ledger.
+
+A revisão não altera a tarefa, o estado/versão do ACK, snapshots, movimentos ou inventário. `APPROVED` e `REJECTED` são decisões de revisão da declaração, não confirmação de reposição física. A reconciliação de inventário permanece um processo separado.
+
+---
+
 ## Edge API — métricas de ingestão (2026-11-27)
 
 A rota autenticada POST /api/v1/edge/events contabiliza no próprio processo da API os eventos recebidos, aceites, duplicados e rejeitados, distinguindo rejeições de autenticação, autorização/tenant, contrato, replay de nonce, conflito de sequência e conflito de identidade do event_id. Os contadores são protegidos por lock, têm nomes limitados e são emitidos em logs estruturados sem payload, credenciais, assinatura ou texto de excepção. Não existe endpoint público de métricas.

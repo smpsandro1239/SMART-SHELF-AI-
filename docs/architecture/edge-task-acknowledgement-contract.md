@@ -166,3 +166,14 @@ Compose define ambos os valores de forma segura: flag `false` e registry vazio. 
 A criação de uma associação aceita `allowed_actions` com os valores `ACCEPTED`, `STARTED` e `COMPLETED`. O valor por omissão é uma lista vazia. A allowlist é gravada no evento CREATED append-only, na mesma transacção que cria a associação. O handler de ACK consulta esse evento sob lock e rejeita acções fora da lista com `DEVICE_ACTION_NOT_ALLOWED`. Associações históricas sem a chave `allowed_actions` são tratadas como lista vazia, portanto não recebem permissões retroactivas.
 
 A API não deriva permissões do tipo de dispositivo. Uma alteração de permissões exige revogar a associação anterior e criar outra com a nova allowlist, preservando a auditoria. O handler continua opt-in e inactivo por omissão; a configuração exige flag e selector explícitos e esta alteração não constitui autorização de produção.
+
+
+## 15. Revisão humana da declaração COMPLETED — implementação técnica (2026-11-27)
+
+A migration 0104 introduz `edge_task_acknowledgement_reviews`, ledger separado e append-only. Cada linha liga `store_id`, `task_id` e `acknowledgement_id` através de FKs compostas, identifica o actor autenticado, decisão APPROVED/REJECTED, motivo, referência de evidência, chave de idempotência e timestamp UTC do servidor. Constraints garantem decisão válida e unicidade da chave por loja/ACK/actor; triggers PostgreSQL/SQLite bloqueiam UPDATE/DELETE.
+
+Os endpoints POST/GET são classificados explicitamente como SUPERVISOR_OR_ADMIN. A API recarrega o utilizador activo; o serviço volta a validar actor/role, aplica tenant scope e só aceita `action=COMPLETED` com `result=REVIEW_REQUIRED`. A repetição com a mesma chave e conteúdo devolve a revisão existente; a mesma chave com dados diferentes é conflito. A tarefa é bloqueada antes do ACK para serializar pedidos concorrentes do mesmo trabalho.
+
+O registo de revisão é o próprio evento de auditoria, persistido numa única transacção. Nenhuma decisão altera a declaração Edge, estado/versão da tarefa, stock, snapshots ou movimentos. `APPROVED` significa apenas que o supervisor aprovou a declaração, não que o sistema verificou fisicamente a reposição.
+
+**Estado:** implementação publicada nos commits da fase de revisão; testes locais não executados. A CI PostgreSQL 16 e os quatro workflows ainda têm de ser confirmados. A prova de concorrência específica PostgreSQL entre duas revisões simultâneas permanece pendente. `TASK_ACKNOWLEDGED` continua desactivado por omissão.

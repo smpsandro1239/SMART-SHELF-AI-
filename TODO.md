@@ -1,3 +1,20 @@
+## P1 — Revisão humana das declarações Edge COMPLETED (2026-11-27)
+
+- [x] Criar migration PostgreSQL/SQLite 0104 e ledger `edge_task_acknowledgement_reviews` append-only.
+- [x] Associar cada revisão à mesma loja, tarefa e ACK por FKs compostas.
+- [x] Exigir actor ADMIN/SUPERVISOR activo, derivado da sessão; supervisor limitado à própria loja.
+- [x] Exigir decisão, motivo, referência de evidência e chave de idempotência validados.
+- [x] Implementar endpoints autenticados POST/GET para registar e consultar revisões.
+- [x] Serializar por tarefa/ACK, devolver replay idempotente e rejeitar reutilização de chave com payload diferente.
+- [x] Manter tarefa, ACK e inventário imutáveis perante uma revisão.
+- [x] Acrescentar testes de serviço, API, idempotência, autorização, isolamento e triggers append-only.
+- [ ] Validar migration e testes em PostgreSQL 16, API CI, Quality Gates, Security Scans e Docker Compose no SHA final.
+- [ ] Acrescentar prova concorrente PostgreSQL dedicada a duas revisões simultâneas do mesmo ACK.
+
+Limite: o ledger de revisão é o próprio registo de auditoria atómico. Não existe ainda decisão operacional para activar `TASK_ACKNOWLEDGED` em produção; a flag permanece desactivada por omissão.
+
+---
+
 ## P1 — Configuração fail-closed do Edge ACK (2026-11-27)
 
 - [x] Adicionar `EDGE_TASK_ACKNOWLEDGEMENT_ENABLED`, por omissão `false`, apenas no serviço Edge dedicado.

@@ -1,29 +1,29 @@
 # PROGRESS — SMART SHELF AI
 
-## Estado atual
-- Branch: main
-- HEAD anterior confirmado: 460bf6c4f3b472b6fed1251bbbca559d1f272cb2
-- Última atualização: 2026-11-27
+## Estado actual
+- Branch de trabalho: main
+- SHA inicial desta ronda: 5f4a9a2a944ca7b41ae1206653d3e77c4211b4c8
+- Último commit de implementação: 6677f04838fb6bde918b2ba7767d4e58622a1432
+- Última actualização: 2026-11-27
 
-## Validação EDGE-OBSERVABILITY-02
-- API CI: SUCCESS — run 46029148954.
-- Quality Gates: SUCCESS — run 46029148883.
-- Security Scans: SUCCESS — run 46029148963.
-- Docker Compose Smoke: SUCCESS — run 46029149013.
-- Os quatro workflows foram concluídos com sucesso no SHA 460bf6c4f3b472b6fed1251bbbca559d1f272cb2.
+## EDGE-INGEST-OBSERVABILITY-01
+- A instrumentação da ingestão HTTP foi validada no SHA inicial desta ronda: API CI 46030149210, Quality Gates 46030149206, Security Scans 46030149185 e Docker Compose Smoke 46030149183 — todos SUCCESS.
+- Os contadores continuam process-local e não constituem retenção histórica.
 
-## Tarefa actual — EDGE-INGEST-OBSERVABILITY-01
-- Implementados contadores na fronteira HTTP da API: received, accepted, duplicate, rejected e categorias de rejeição.
-- Os contadores são process-local, protegidos por lock e registados em logs estruturados sem payload/segredos.
-- Acrescentado teste HTTP que cobre aceite, duplicado, conflito de sequência e autenticação inválida.
-- Não existe endpoint público nem retenção histórica; estes limites estão documentados.
-- Validação desta alteração: pendente de GitHub Actions.
+## EDGE-HUMAN-ACK-REVIEW-01
+- Adicionado ledger append-only para decisões humanas sobre ACK COMPLETED/REVIEW_REQUIRED.
+- Implementados serviço transaccional, idempotência por store/ACK/actor, autorização ADMIN/SUPERVISOR, isolamento multi-loja e endpoints POST/GET.
+- O registo de revisão é também o registo de auditoria atómico; nenhuma tarefa, ACK ou entidade de inventário é actualizada.
+- Adicionados testes de serviço, API e migration SQLite.
+- A validação GitHub Actions do código ainda não foi concluída. Não foram executados testes localmente nesta sessão.
+- A prova de concorrência específica PostgreSQL para duas revisões simultâneas do mesmo ACK permanece pendente.
 
 ## Próximas tarefas
-- [ ] Definir agregação durável e retenção histórica sem transformar métricas em ledger.
-- [ ] Implementar revisão humana append-only das declarações COMPLETED (actor autenticado, decisão, motivo obrigatório, timestamp e referência de evidência), sem mutação automática de tarefa/inventário.
-- [ ] Manter TASK_ACKNOWLEDGED desactivado por omissão.
+- [ ] Confirmar API CI/PostgreSQL 16, Quality Gates, Security Scans e Docker Compose no SHA final.
+- [ ] Acrescentar smoke concorrente PostgreSQL dedicado a duas revisões simultâneas do mesmo ACK.
+- [ ] Manter `TASK_ACKNOWLEDGED` desactivado por omissão e sem autorização de produção.
+- [ ] Definir agregação durável e retenção histórica das métricas operacionais.
 
 ## Limites de validação
-- Não foram executados testes localmente nesta sessão.
-- Os resultados de CI acima referem-se exclusivamente ao commit anterior, não à alteração de ingestão agora preparada.
+- Sem execução local; a validação depende dos workflows GitHub Actions.
+- A revisão humana não confirma fisicamente reposição nem altera inventário.

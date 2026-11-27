@@ -1,3 +1,13 @@
+## 2026-11-27 — Revisão humana append-only das declarações Edge COMPLETED
+
+Implementado um ledger próprio `edge_task_acknowledgement_reviews` para decisões `APPROVED`/`REJECTED` sobre ACK `COMPLETED` com resultado `REVIEW_REQUIRED`. A migration 0104 liga review, ACK, tarefa e loja através de FKs compostas, exige actor e guarda decisão, motivo, referência de evidência, idempotency key e timestamp UTC. Triggers PostgreSQL/SQLite impedem UPDATE/DELETE.
+
+O serviço bloqueia a tarefa e o ACK antes de verificar idempotência e inserir o registo. A chave é única por store/ACK/actor; replay idêntico devolve o registo anterior e payload diferente gera conflito. A API tem POST/GET autenticados e a política explícita limita a ADMIN/SUPERVISOR; supervisor só consulta/escreve na própria loja. O ledger de revisão é o registo de auditoria atómico. A operação não actualiza tarefa, ACK, snapshots, movimentos ou inventário.
+
+Foram acrescentados testes de serviço, API e migration SQLite. Não foram executados testes locais nesta ronda; validação PostgreSQL 16 e workflows no SHA final pendentes. A prova concorrente PostgreSQL dedicada a duas revisões do mesmo ACK permanece pendente.
+
+---
+
 ## 2026-11-27 — Observabilidade operacional Edge (incremento implementado; CI pendente)
 
 O heartbeat do worker passou a incluir contadores por processo: tentativas de polling, eventos reclamados, polls ociosos, falhas, duração do último polling, instante do último evento e tipo da última falha. O supervisor propaga o snapshot do filho para o seu estado operacional. Estes valores são voláteis por processo e não substituem um ledger histórico.
