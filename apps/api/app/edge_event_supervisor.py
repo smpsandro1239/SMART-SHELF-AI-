@@ -196,6 +196,7 @@ def run_supervisor(
                 "status": "RUNNING", "supervisor_pid": os.getpid(),
                 "heartbeat_at": last_heartbeat_at, "child_pid": child.pid,
                 "child_heartbeat_at": child_heartbeat_at if child_seen else None,
+                "worker_metrics": child_status.get("metrics") if child_seen and child_status is not None else None,
                 "restart_count": restart_count, "consecutive_failures": consecutive_failures,
                 "last_restart_at": last_restart_at, "last_exit_code": last_exit_code,
                 "failure_reason": None,

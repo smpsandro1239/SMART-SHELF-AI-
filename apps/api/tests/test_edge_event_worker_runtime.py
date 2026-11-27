@@ -210,3 +210,56 @@ def test_supervisor_singleton_lock_rejects_a_second_instance(tmp_path):
     second = _acquire_singleton_lock(lock_path)
     assert second is not None
     os.close(second)
+
+
+def test_worker_heartbeat_exports_poll_counters_and_duration(tmp_path, monkeypatch):
+    target = tmp_path / "worker.json"
+    monkeypatch.setenv("EDGE_EVENT_CHILD_HEARTBEAT_PATH", str(target))
+    stop_event = threading.Event()
+
+    def process_event(_factory, **_kwargs):
+        stop_event.set()
+        return True
+
+    result = run_worker(
+        worker_id="edge-metrics-test",
+        poll_interval=0.5,
+        lease_seconds=30,
+        stop_event=stop_event,
+        process_event=process_event,
+    )
+
+    heartbeat = json.loads(target.read_text(encoding="utf-8"))
+    metrics = heartbeat["metrics"]
+    assert result == 0
+    assert metrics["poll_attempts"] == 1
+    assert metrics["claimed_events"] == 1
+    assert metrics["idle_polls"] == 0
+    assert metrics["poll_failures"] == 0
+    assert metrics["last_poll_duration_ms"] >= 0
+    assert metrics["last_event_at"] is not None
+    assert metrics["last_error_type"] is None
+
+
+def test_worker_heartbeat_records_poll_failures(tmp_path, monkeypatch):
+    target = tmp_path / "worker-failure.json"
+    monkeypatch.setenv("EDGE_EVENT_CHILD_HEARTBEAT_PATH", str(target))
+    stop_event = threading.Event()
+
+    def fail_poll(_factory, **_kwargs):
+        raise RuntimeError("private database detail")
+
+    result = run_worker(
+        worker_id="edge-metrics-failure",
+        poll_interval=0.5,
+        lease_seconds=30,
+        stop_event=stop_event,
+        process_event=fail_poll,
+        once=True,
+    )
+
+    metrics = json.loads(target.read_text(encoding="utf-8"))["metrics"]
+    assert result == 1
+    assert metrics["poll_attempts"] == 1
+    assert metrics["poll_failures"] == 1
+    assert metrics["last_error_type"] == "RuntimeError"

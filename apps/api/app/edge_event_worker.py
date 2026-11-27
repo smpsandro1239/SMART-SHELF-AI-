@@ -266,6 +266,15 @@ def run_worker(
 
     logger.info("Edge event worker started: worker_id=%s", worker_id)
     heartbeat_path = os.getenv("EDGE_EVENT_CHILD_HEARTBEAT_PATH")
+    metrics: dict[str, Any] = {
+        "poll_attempts": 0,
+        "claimed_events": 0,
+        "idle_polls": 0,
+        "poll_failures": 0,
+        "last_poll_duration_ms": 0,
+        "last_event_at": None,
+        "last_error_type": None,
+    }
 
     def write_heartbeat() -> None:
         if not heartbeat_path:
@@ -273,7 +282,12 @@ def run_worker(
         target = Path(heartbeat_path)
         target.parent.mkdir(parents=True, exist_ok=True)
         temporary = target.with_name(f".{target.name}.{os.getpid()}.tmp")
-        temporary.write_text(json.dumps({"pid": os.getpid(), "heartbeat_at": time.time()}), encoding="utf-8")
+        payload = {
+            "pid": os.getpid(),
+            "heartbeat_at": time.time(),
+            "metrics": metrics.copy(),
+        }
+        temporary.write_text(json.dumps(payload), encoding="utf-8")
         os.replace(temporary, target)
 
     while not stop_event.is_set():
@@ -282,6 +296,9 @@ def run_worker(
         except OSError as exc:
             logger.error("Edge worker heartbeat write failed: error_type=%s", type(exc).__name__)
             return 1
+
+        metrics["poll_attempts"] += 1
+        poll_started = time.monotonic()
         try:
             processed = process_event(
                 SessionLocal,
@@ -289,16 +306,30 @@ def run_worker(
                 lease_seconds=lease_seconds,
             )
         except Exception as exc:
-            # Do not log exception text: provider/database errors may contain
-            # connection details. The next poll retries after a bounded wait.
+            metrics["poll_failures"] += 1
+            metrics["last_error_type"] = type(exc).__name__
+            metrics["last_poll_duration_ms"] = round((time.monotonic() - poll_started) * 1000)
             logger.error(
                 "Edge event polling failed; recovering: error_type=%s",
                 type(exc).__name__,
             )
+            try:
+                write_heartbeat()
+            except OSError as heartbeat_exc:
+                logger.error("Edge worker heartbeat write failed: error_type=%s", type(heartbeat_exc).__name__)
+                return 1
             if once:
                 return 1
             stop_event.wait(poll_interval)
             continue
+
+        metrics["last_poll_duration_ms"] = round((time.monotonic() - poll_started) * 1000)
+        metrics["last_error_type"] = None
+        if processed:
+            metrics["claimed_events"] += 1
+            metrics["last_event_at"] = time.time()
+        else:
+            metrics["idle_polls"] += 1
 
         try:
             write_heartbeat()

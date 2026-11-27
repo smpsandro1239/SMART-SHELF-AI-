@@ -1,3 +1,16 @@
+## P1 — Métricas operacionais Edge (2026-11-27)
+
+- [x] Definir heartbeat do worker com contadores de polling, eventos reclamados, polls ociosos e falhas.
+- [x] Registar duração do último polling, instante do último evento e tipo da última falha, sem texto de excepção.
+- [x] Propagar snapshot de métricas do filho para o estado operacional do supervisor.
+- [ ] Acrescentar correlação/outcomes por evento: PROCESSED, RETRY, DEAD_LETTER, lease perdida e ACK recebido/aplicado/rejeitado.
+- [ ] Testar contadores, reinício/reset do processo, isolamento de dados sensíveis e workflows no SHA final.
+- [ ] Decidir mecanismo de exportação/consumo das métricas sem introduzir dependências ou portas expostas desnecessárias.
+
+Limite: os contadores no heartbeat são snapshots voláteis por processo, não um ledger durável nem métricas agregadas históricas. A implementação não activa ACK nem altera efeitos de domínio.
+
+---
+
 ## P1 — Supervisor independente do Edge Worker (2026-11-27)
 
 - [x] Criar supervisor independente em `app.edge_event_supervisor`, com processo filho separado.

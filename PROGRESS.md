@@ -7,9 +7,9 @@
 - Última atualização: 2026-11-27
 
 ## Tarefa atual
-- Identificador: EDGE-SUPERVISOR-01
-- Descrição: supervisor independente do Edge Event Worker.
-- Estado: PARTIALLY_COMPLETED — implementação e recuperação SIGKILL/heartbeat validadas; extensão SIGTERM no smoke à espera de CI.
+- Identificador: EDGE-OBSERVABILITY-01
+- Descrição: métricas operacionais do Edge Worker e correlação de eventos.
+- Estado: IN_PROGRESS — contadores de polling e heartbeat implementados; outcomes por evento e validação CI pendentes.
 
 ## Tarefas concluídas
 - [x] Supervisor independente com subprocesso, heartbeat, PID e estado operacional.
@@ -23,9 +23,9 @@
 - [x] Smoke Docker de SIGKILL e heartbeat obsoleto: SUCCESS.
 
 ## Tarefas pendentes
-- [ ] Validar smoke de SIGTERM real ao container e reinício limpo no SHA c5779e1.
-- [ ] Confirmar os quatro workflows no SHA actual.
-- [ ] Próxima prioridade após validação: observabilidade operacional do Edge (métricas/correlação de ACK, retries, lease perdida e DEAD_LETTER), sem activar handlers transaccionais.
+- [ ] Confirmar os workflows do smoke SIGTERM e do supervisor.
+- [ ] Completar métricas de outcomes por evento: PROCESSED, RETRY, DEAD_LETTER, lease perdida e ACK.
+- [ ] Definir consumo/exportação das métricas sem expor uma porta ou adicionar dependências desnecessárias.
 
 ## Tarefas bloqueadas
 - Nenhuma dependência externa identificada nesta fase.
@@ -50,7 +50,7 @@
 - Nenhuma operação de inventário ou migration foi alterada.
 
 ## Próxima ação obrigatória
-- Aguardar e verificar os quatro workflows no SHA c5779e1; corrigir qualquer falha do smoke de shutdown antes de avançar para métricas operacionais Edge.
+- Validar a extensão de métricas do heartbeat na CI; depois acrescentar correlação/outcomes por evento mantendo ACK fail-closed.
 
 ---
 
