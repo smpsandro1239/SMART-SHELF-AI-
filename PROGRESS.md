@@ -16,7 +16,8 @@
 - O registo de revisão é também o registo de auditoria atómico; nenhuma tarefa, ACK ou entidade de inventário é actualizada.
 - Adicionados testes de serviço, API e migration SQLite.
 - A validação GitHub Actions do código ainda não foi concluída. Não foram executados testes localmente nesta sessão.
-- A prova de concorrência específica PostgreSQL para duas revisões simultâneas do mesmo ACK permanece pendente.
+- Acrescentado smoke PostgreSQL 16 que mantém a linha da tarefa bloqueada, envia dois POST HTTP concorrentes com a mesma chave e exige bloqueio real em `pg_stat_activity`, uma revisão persistida e respostas 201/200.
+- Validação do novo smoke ainda pendente no API CI do SHA seguinte.
 
 ## Próximas tarefas
 - [ ] Confirmar API CI/PostgreSQL 16, Quality Gates, Security Scans e Docker Compose no SHA final.

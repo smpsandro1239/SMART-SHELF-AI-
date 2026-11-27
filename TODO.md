@@ -9,7 +9,8 @@
 - [x] Manter tarefa, ACK e inventário imutáveis perante uma revisão.
 - [x] Acrescentar testes de serviço, API, idempotência, autorização, isolamento e triggers append-only.
 - [ ] Validar migration e testes em PostgreSQL 16, API CI, Quality Gates, Security Scans e Docker Compose no SHA final.
-- [ ] Acrescentar prova concorrente PostgreSQL dedicada a duas revisões simultâneas do mesmo ACK.
+- [x] Acrescentar smoke PostgreSQL dedicado a duas revisões HTTP simultâneas do mesmo ACK e à idempotência concorrente.
+- [ ] Validar o smoke concorrente no API CI do SHA final.
 
 Limite: o ledger de revisão é o próprio registo de auditoria atómico. Não existe ainda decisão operacional para activar `TASK_ACKNOWLEDGED` em produção; a flag permanece desactivada por omissão.
 

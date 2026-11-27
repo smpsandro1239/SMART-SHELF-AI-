@@ -4,7 +4,7 @@ Implementado um ledger próprio `edge_task_acknowledgement_reviews` para decisõ
 
 O serviço bloqueia a tarefa e o ACK antes de verificar idempotência e inserir o registo. A chave é única por store/ACK/actor; replay idêntico devolve o registo anterior e payload diferente gera conflito. A API tem POST/GET autenticados e a política explícita limita a ADMIN/SUPERVISOR; supervisor só consulta/escreve na própria loja. O ledger de revisão é o registo de auditoria atómico. A operação não actualiza tarefa, ACK, snapshots, movimentos ou inventário.
 
-Foram acrescentados testes de serviço, API e migration SQLite. Não foram executados testes locais nesta ronda; validação PostgreSQL 16 e workflows no SHA final pendentes. A prova concorrente PostgreSQL dedicada a duas revisões do mesmo ACK permanece pendente.
+Foram acrescentados testes de serviço, API e migration SQLite. Não foram executados testes locais nesta ronda; validação PostgreSQL 16 e workflows no SHA final pendentes. Foi acrescentado `postgres_edge_task_acknowledgement_review_smoke.py`: duas chamadas HTTP concorrentes com a mesma chave aguardam a mesma linha de tarefa, e o ensaio verifica os dois bloqueios em `pg_stat_activity`, um único registo e respostas 201/200. A validação deste smoke permanece pendente.
 
 ---
 

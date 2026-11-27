@@ -2,7 +2,7 @@
 
 A API permite registar e consultar revisões humanas das declarações Edge `COMPLETED` que tenham resultado `REVIEW_REQUIRED`. O ledger `edge_task_acknowledgement_reviews` é o próprio registo de decisão e auditoria: guarda loja, tarefa, ACK original, actor autenticado, decisão, motivo, referência de evidência, chave de idempotência e timestamp UTC. ADMIN pode rever em qualquer loja; SUPERVISOR apenas na sua loja; EMPLOYEE e contas inactivas são recusados.
 
-A chave de idempotência é única por loja/ACK/actor. Repetir a mesma chave e os mesmos dados devolve o registo existente; reutilizá-la com dados diferentes devolve conflito. Locks da tarefa e do ACK serializam revisões concorrentes e constraints/FKs compostas protegem a identidade multi-loja. PostgreSQL e SQLite impedem UPDATE/DELETE do ledger.
+A chave de idempotência é única por loja/ACK/actor. Repetir a mesma chave e os mesmos dados devolve o registo existente; reutilizá-la com dados diferentes devolve conflito. Locks da tarefa e do ACK serializam revisões concorrentes e constraints/FKs compostas protegem a identidade multi-loja. O API CI inclui um smoke PostgreSQL 16 que envia dois POST HTTP simultâneos com a mesma chave, observa os bloqueios reais e verifica uma única revisão persistida. PostgreSQL e SQLite impedem UPDATE/DELETE do ledger.
 
 A revisão não altera a tarefa, o estado/versão do ACK, snapshots, movimentos ou inventário. `APPROVED` e `REJECTED` são decisões de revisão da declaração, não confirmação de reposição física. A reconciliação de inventário permanece um processo separado.
 
