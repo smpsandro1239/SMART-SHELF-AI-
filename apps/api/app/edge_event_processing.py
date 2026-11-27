@@ -166,6 +166,54 @@ def renew_edge_event_lease(
         raise
 
 
+
+def complete_edge_event_transactionally(
+    db: Session,
+    *,
+    processing_id: int,
+    worker_id: str,
+    fencing_token: int,
+    event: dict,
+    handler,
+) -> None:
+    """Run DB-only domain work and inbox completion in one fenced transaction."""
+    current = _now()
+    try:
+        item = (
+            db.query(models.EdgeDeviceEventProcessing)
+            .filter_by(id=processing_id)
+            .with_for_update()
+            .first()
+        )
+        if (
+            item is None or item.status != "PROCESSING"
+            or item.lease_owner != worker_id or item.fencing_token != fencing_token
+            or item.lease_expires_at is None or _utc(item.lease_expires_at) <= current
+        ):
+            raise EdgeEventProcessingError("worker lease is stale or no longer owned")
+
+        handler(db, event)
+        completed_at = _now()
+        if (
+            item.status != "PROCESSING" or item.lease_owner != worker_id
+            or item.fencing_token != fencing_token or item.lease_expires_at is None
+            or _utc(item.lease_expires_at) <= completed_at
+        ):
+            raise EdgeEventProcessingError("worker lease expired during transactional handler")
+
+        item.status = "PROCESSED"
+        item.lease_owner = None
+        item.lease_expires_at = None
+        item.processed_at = completed_at
+        item.finished_at = completed_at
+        item.last_error_code = None
+        item.updated_at = completed_at
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+
+
 def complete_edge_event(
     db: Session,
     *,

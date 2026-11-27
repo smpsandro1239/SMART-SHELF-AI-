@@ -2636,3 +2636,12 @@ A migration não altera snapshots, não enfraquece a retenção 0098 e não modi
 - [ ] Adicionar testes HTTP dedicados de autorização ADMIN/SUPERVISOR/EMPLOYEE e isolamento de loja.
 - [ ] Não activar `TASK_ACKNOWLEDGED` até a persistência do acknowledgement e a conclusão do inbox estarem na mesma transacção sob fencing.
 - [ ] Não retomar auditoria BOLA/IDOR sem instrução explícita.
+
+
+## Edge worker — fronteira transaccional para handlers (2026-11-27)
+
+- Criada a via explícita `transactional_handlers`: o handler recebe a mesma sessão SQLAlchemy usada para finalizar o processamento.
+- A função `complete_edge_event_transactionally` bloqueia a linha de processamento, valida estado, owner, fencing token e expiração, executa operações de base de dados e confirma `PROCESSED` na mesma transacção.
+- Qualquer excepção faz rollback dos efeitos do handler e da conclusão. O worker tenta aplicar retry/dead-letter separadamente, sempre sob fencing; se o lease já não for válido, não altera o estado.
+- Os handlers legados mantêm-se separados. `TASK_ACKNOWLEDGED` continua desactivado; falta implementar ledger de acknowledgements, validar associação/versão e criar smoke PostgreSQL concorrente.
+- Foram adicionados testes SQLite para commit conjunto e rollback. Ainda não executados nesta publicação; a CI PostgreSQL 16 tem de validar a alteração antes de a considerar concluída.

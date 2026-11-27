@@ -2012,3 +2012,12 @@ Estado: a prova concorrente 0099 passou de observação genérica de lock para c
 - Validação automatizada desencadeada no SHA `37bab9963cc250b628e16b05e5e16e51124d9b7e`: API CI `45881090392`, Quality Gates `45881090440`, Security Scans `45881090308` e Docker Compose `45881090274`. Resultados ainda não confirmados nesta actualização.
 - O smoke concorrente foi acrescentado depois desse SHA, pelo que a execução final de CI terá de validar também o HEAD que contém `postgres_edge_task_assignment_smoke.py` e o passo correspondente no workflow.
 - **Limites:** o handler `TASK_ACKNOWLEDGED` continua desactivado; o worker ainda necessita da fronteira transaccional acknowledgement + inbox sob fencing. Auditoria BOLA/IDOR permanece adiada.
+
+
+## Edge worker — fronteira transaccional para handlers (2026-11-27)
+
+- Criada a via explícita `transactional_handlers`: o handler recebe a mesma sessão SQLAlchemy usada para finalizar o processamento.
+- A função `complete_edge_event_transactionally` bloqueia a linha de processamento, valida estado, owner, fencing token e expiração, executa operações de base de dados e confirma `PROCESSED` na mesma transacção.
+- Qualquer excepção faz rollback dos efeitos do handler e da conclusão. O worker tenta aplicar retry/dead-letter separadamente, sempre sob fencing; se o lease já não for válido, não altera o estado.
+- Os handlers legados mantêm-se separados. `TASK_ACKNOWLEDGED` continua desactivado; falta implementar ledger de acknowledgements, validar associação/versão e criar smoke PostgreSQL concorrente.
+- Foram adicionados testes SQLite para commit conjunto e rollback. Ainda não executados nesta publicação; a CI PostgreSQL 16 tem de validar a alteração antes de a considerar concluída.

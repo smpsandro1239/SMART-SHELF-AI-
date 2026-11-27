@@ -1781,3 +1781,12 @@ O endpoint de consenso aplica agora o tenant scope na própria query de observa�
 Foi implementado o primeiro fluxo operacional da associação Edge: serviço transaccional de criação/revogação, schemas, endpoints autenticados ADMIN/SUPERVISOR e política central explícita. A associação captura a versão da tarefa e regista CREATED/REVOKED no ledger append-only dentro da mesma transacção que altera a associação. A ordem de locks é Store → Task → Device → Assignment. A validade exige timestamps timezone-aware e o fim, quando definido, tem de ser posterior ao início.
 
 **Validação pendente:** quatro testes de serviço e um smoke PostgreSQL 16 para corridas de criação/revogação foram adicionados; o smoke está ligado ao API CI. Aguardar resultados de todos os workflows no SHA final que inclui o smoke. A existência da API não autoriza ainda o handler `TASK_ACKNOWLEDGED`: a persistência do acknowledgement e a conclusão do inbox continuam a ter de ser atómicas sob fencing. A auditoria BOLA/IDOR permanece adiada.
+
+
+## Edge worker — fronteira transaccional para handlers (2026-11-27)
+
+- Criada a via explícita `transactional_handlers`: o handler recebe a mesma sessão SQLAlchemy usada para finalizar o processamento.
+- A função `complete_edge_event_transactionally` bloqueia a linha de processamento, valida estado, owner, fencing token e expiração, executa operações de base de dados e confirma `PROCESSED` na mesma transacção.
+- Qualquer excepção faz rollback dos efeitos do handler e da conclusão. O worker tenta aplicar retry/dead-letter separadamente, sempre sob fencing; se o lease já não for válido, não altera o estado.
+- Os handlers legados mantêm-se separados. `TASK_ACKNOWLEDGED` continua desactivado; falta implementar ledger de acknowledgements, validar associação/versão e criar smoke PostgreSQL concorrente.
+- Foram adicionados testes SQLite para commit conjunto e rollback. Ainda não executados nesta publicação; a CI PostgreSQL 16 tem de validar a alteração antes de a considerar concluída.

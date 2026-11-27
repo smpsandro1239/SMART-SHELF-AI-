@@ -17,6 +17,7 @@ from app.edge_event_processing import (
     EdgeEventProcessingError,
     claim_next_edge_event,
     complete_edge_event,
+    complete_edge_event_transactionally,
     fail_edge_event,
     renew_edge_event_lease,
 )
@@ -34,6 +35,7 @@ class EdgeEventHandlerError(RuntimeError):
 
 
 EdgeEventHandler = Callable[[dict[str, Any]], None]
+TransactionalEdgeEventHandler = Callable[[Session, dict[str, Any]], None]
 
 
 def _heartbeat_event_handler(event: dict[str, Any]) -> None:
@@ -53,6 +55,7 @@ def process_one_edge_event(
     worker_id: str,
     lease_seconds: int = 60,
     handlers: dict[str, EdgeEventHandler] | None = None,
+    transactional_handlers: dict[str, TransactionalEdgeEventHandler] | None = None,
 ) -> bool:
     """Claim and process at most one event; return False when the queue is idle."""
     with session_factory() as db:
@@ -64,7 +67,8 @@ def process_one_edge_event(
 
     routes = BUILTIN_HANDLERS if handlers is None else handlers
     handler = routes.get(claim["event_type"])
-    if handler is None:
+    transactional_handler = (transactional_handlers or {}).get(claim["event_type"])
+    if handler is None and transactional_handler is None:
         with session_factory() as db:
             state = fail_edge_event(
                 db,
@@ -121,6 +125,50 @@ def process_one_edge_event(
                 "Edge event heartbeat did not stop promptly; abandoning local result: inbox_id=%s",
                 claim["inbox_id"],
             )
+
+    if transactional_handler is not None:
+        # Stop renewals before acquiring the processing row lock. The fenced
+        # handler and PROCESSED transition then share one database transaction.
+        stop_and_join_heartbeat()
+        if lease_lost.is_set():
+            return True
+        try:
+            with session_factory() as db:
+                complete_edge_event_transactionally(
+                    db,
+                    processing_id=claim["processing_id"],
+                    worker_id=worker_id,
+                    fencing_token=claim["fencing_token"],
+                    event=claim,
+                    handler=transactional_handler,
+                )
+        except EdgeEventHandlerError as exc:
+            with session_factory() as db:
+                try:
+                    fail_edge_event(
+                        db, processing_id=claim["processing_id"], worker_id=worker_id,
+                        fencing_token=claim["fencing_token"], error_code=exc.code,
+                        retryable=exc.retryable,
+                    )
+                except EdgeEventProcessingError:
+                    logger.warning("Transactional Edge handler lost its lease: inbox_id=%s", claim["inbox_id"])
+        except Exception:
+            with session_factory() as db:
+                try:
+                    fail_edge_event(
+                        db, processing_id=claim["processing_id"], worker_id=worker_id,
+                        fencing_token=claim["fencing_token"], error_code="WORKER_ERROR",
+                        retryable=True,
+                    )
+                except EdgeEventProcessingError:
+                    logger.warning("Transactional Edge handler failed after lease loss: inbox_id=%s", claim["inbox_id"])
+            logger.exception("Transactional Edge event handler failed: inbox_id=%s", claim["inbox_id"])
+        else:
+            logger.info(
+                "Edge event processed transactionally: type=%s inbox_id=%s attempt=%s",
+                claim["event_type"], claim["inbox_id"], claim["attempt_count"],
+            )
+        return True
 
     try:
         handler(claim)

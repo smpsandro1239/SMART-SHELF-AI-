@@ -180,3 +180,43 @@ def test_lease_renewal_validates_arguments(db):
             db, processing_id=processing_id, worker_id="worker-a",
             fencing_token=0, lease_seconds=30, now=now,
         )
+
+
+def test_transactional_handler_and_completion_share_commit(db):
+    from app.edge_event_processing import complete_edge_event_transactionally
+
+    processing_id, now = seed_event(db)
+    claim = claim_next_edge_event(db, worker_id="worker-atomic", lease_seconds=30, now=now)
+    def handler(session, event):
+        session.query(models.EdgeDeviceEventProcessing).filter_by(id=processing_id).update(
+            {models.EdgeDeviceEventProcessing.last_error_code: "DOMAIN_WRITE"}
+        )
+    complete_edge_event_transactionally(
+        db, processing_id=processing_id, worker_id="worker-atomic",
+        fencing_token=claim["fencing_token"], event=claim, handler=handler,
+    )
+    db.expire_all()
+    row = db.get(models.EdgeDeviceEventProcessing, processing_id)
+    assert row.status == "PROCESSED"
+    assert row.last_error_code is None
+
+
+def test_transactional_handler_exception_rolls_back_domain_writes(db):
+    from app.edge_event_processing import complete_edge_event_transactionally
+
+    processing_id, now = seed_event(db)
+    claim = claim_next_edge_event(db, worker_id="worker-atomic", lease_seconds=30, now=now)
+    def handler(session, event):
+        session.query(models.EdgeDeviceEventProcessing).filter_by(id=processing_id).update(
+            {models.EdgeDeviceEventProcessing.last_error_code: "ROLLBACK_ME"}
+        )
+        raise RuntimeError("handler failed")
+    with pytest.raises(RuntimeError, match="handler failed"):
+        complete_edge_event_transactionally(
+            db, processing_id=processing_id, worker_id="worker-atomic",
+            fencing_token=claim["fencing_token"], event=claim, handler=handler,
+        )
+    db.expire_all()
+    row = db.get(models.EdgeDeviceEventProcessing, processing_id)
+    assert row.status == "PROCESSING"
+    assert row.last_error_code is None

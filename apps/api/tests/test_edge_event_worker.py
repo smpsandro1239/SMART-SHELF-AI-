@@ -160,3 +160,30 @@ def test_worker_does_not_change_state_after_lease_renewal_failure(
     assert row.status == "PROCESSING"
     assert row.lease_owner == "edge-worker-a"
     assert row.finished_at is None
+
+
+def test_transactional_handler_commits_domain_work_with_processing(session_factory):
+    def handler(db, claim):
+        device = db.get(models.EdgeDevice, claim["device_id"])
+        device.firmware_version = "atomic-test"
+    assert process_one_edge_event(
+        session_factory, worker_id="edge-worker-atomic",
+        transactional_handlers={"DEVICE_HEARTBEAT": handler},
+    )
+    assert _processing(session_factory).status == "PROCESSED"
+    with session_factory() as db:
+        assert db.get(models.EdgeDevice, "edge-worker-camera").firmware_version == "atomic-test"
+
+
+def test_transactional_handler_failure_rolls_back_domain_work(session_factory):
+    def handler(db, claim):
+        device = db.get(models.EdgeDevice, claim["device_id"])
+        device.firmware_version = "rollback-test"
+        raise RuntimeError("transaction failed")
+    assert process_one_edge_event(
+        session_factory, worker_id="edge-worker-atomic",
+        transactional_handlers={"DEVICE_HEARTBEAT": handler},
+    )
+    assert _processing(session_factory).status == "RETRY"
+    with session_factory() as db:
+        assert db.get(models.EdgeDevice, "edge-worker-camera").firmware_version is None
