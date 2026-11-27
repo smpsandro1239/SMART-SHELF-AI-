@@ -1,7 +1,7 @@
 ## P0 — Edge Event Worker autónomo (2026-11-27)
 
 ### Implementação publicada — validação pendente
-- [x] Criar runtime de polling dedicado em `app.edge_event_worker_runtime`, mantendo o módulo de serviço `app.edge_event_worker`.
+- [x] Criar runtime de polling dedicado em `app.edge_event_worker`, mantendo o módulo de serviço `app.edge_event_worker`.
 - [x] Expor o entrypoint `python -m app.edge_event_worker`.
 - [x] Implementar espera interruptível, tratamento de falhas de polling e encerramento gracioso por SIGTERM/SIGINT (termina o evento em curso antes de sair).
 - [x] Validar intervalo de polling, lease e identidade do worker antes do ciclo.
