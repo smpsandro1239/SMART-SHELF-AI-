@@ -22,12 +22,10 @@ Limite: os contadores no heartbeat são snapshots voláteis por processo, não u
 - [x] Implementar SIGTERM/SIGINT gracioso, timeout e SIGKILL como último recurso.
 - [x] Criar healthcheck que valida heartbeats recentes e PIDs vivos/coincidentes.
 - [x] Integrar o supervisor no serviço Docker Compose mantendo hardening e ACK fail-closed.
-- [x] Validar compileall, suite API, Quality Gates, Security Scans e Docker Compose no SHA `9be6f3fb7a446f537bf989544df178a100050c7b`.
-- [x] Smoke Docker comprovou arranque, SIGKILL e recuperação de heartbeat obsoleto no SHA `9be6f3fb7a446f537bf989544df178a100050c7b`.
-- [ ] Validar o novo smoke de SIGTERM real ao container, encerramento do filho e novo arranque saudável no SHA actual.
-- [ ] Confirmar os quatro workflows no SHA final após a extensão do smoke.
+- [x] Validar compileall, suite API, PostgreSQL 16, Quality Gates, Security Scans e Docker Compose no SHA `4024763c177dfad63179e3b3cb73648371a729dc`.
+- [x] Smoke Docker comprovou arranque, SIGKILL, heartbeat obsoleto, SIGTERM real, shutdown do filho e reinício saudável.
 
-Limite: não foram executados comandos localmente; os resultados positivos provêm dos workflows GitHub Actions. O heartbeat do filho representa progresso do ciclo de polling; o timeout deve exceder a duração máxima esperada dos handlers. `TASK_ACKNOWLEDGED` continua fail-closed e não há alterações ao inventário.
+Limite: não foram executados comandos localmente; os resultados provêm dos workflows GitHub Actions. O heartbeat do filho representa progresso do ciclo de polling; o timeout deve exceder a duração máxima esperada dos handlers. `TASK_ACKNOWLEDGED` continua fail-closed e não há alterações ao inventário.
 
 ---
 
