@@ -92,6 +92,9 @@ def test_worker_retries_transient_handler_failure(session_factory, caplog):
     assert row.last_error_code == "WORKER_ERROR"
     assert row.finished_at is None
     assert private_detail not in caplog.text
+    assert "edge_event_outcome outcome=RETRY" in caplog.text
+    assert "error_type=RuntimeError" in caplog.text
+    assert "duration_ms=" in caplog.text
 
 
 def test_worker_respects_explicit_non_retryable_handler_failure(session_factory):
@@ -133,6 +136,7 @@ def test_worker_abandons_result_when_lease_renewal_fails(session_factory, monkey
     assert row.lease_owner == "edge-worker-a"
     assert row.finished_at is None
     assert "database connection interrupted" not in caplog.text
+    assert "edge_event_outcome outcome=LEASE_LOST" in caplog.text
 
 
 @pytest.mark.parametrize(
@@ -288,3 +292,27 @@ def test_worker_routes_task_acknowledgement_through_fenced_transaction(session_f
     assert "edge_event_outcome outcome=ACK_RECORDED" in caplog.text
     assert "event_id=00000000-0000-4000-8000-000000000103" in caplog.text
     assert "duration_ms=" in caplog.text
+
+
+def test_transactional_ack_rejection_is_correlated_without_payload(session_factory, caplog):
+    with session_factory() as db:
+        inbox = db.query(models.EdgeDeviceEventInbox).one()
+        inbox.event_type = "TASK_ACKNOWLEDGED"
+        inbox.payload = {"action": "COMPLETED", "sensitive": "must-not-be-logged"}
+        db.commit()
+
+    def reject_ack(_db, _event):
+        raise EdgeEventHandlerError("ACK_NOT_AUTHORIZED", retryable=False)
+
+    assert process_one_edge_event(
+        session_factory,
+        worker_id="edge-worker-ack-rejected",
+        transactional_handlers={"TASK_ACKNOWLEDGED": reject_ack},
+    )
+
+    row = _processing(session_factory)
+    assert row.status == "DEAD_LETTER"
+    assert row.last_error_code == "ACK_NOT_AUTHORIZED"
+    assert "edge_event_outcome outcome=ACK_REJECTED" in caplog.text
+    assert "error_code=ACK_NOT_AUTHORIZED" in caplog.text
+    assert "must-not-be-logged" not in caplog.text
