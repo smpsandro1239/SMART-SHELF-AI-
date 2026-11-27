@@ -19,6 +19,7 @@ from app.edge_event_processing import (
     claim_next_edge_event,
     complete_edge_event,
     complete_edge_event_transactionally,
+    fail_edge_event,
 )
 from app.edge_event_worker import EdgeEventHandlerError
 from app.edge_task_acknowledgement_service import apply_edge_task_acknowledgement
@@ -696,6 +697,17 @@ def main() -> None:
             )
     except EdgeEventHandlerError as exc:
         assert exc.code == "DEVICE_ACTION_NOT_ALLOWED"
+        with SessionLocal() as fail_db:
+            state = fail_edge_event(
+                fail_db,
+                processing_id=denied_claim["processing_id"],
+                worker_id=f"ack-smoke-{suffix}-denied",
+                fencing_token=denied_claim["fencing_token"],
+                error_code=exc.code,
+                retryable=False,
+                now=permission_now + timedelta(seconds=2),
+            )
+        assert state == "DEAD_LETTER"
     else:
         raise AssertionError("ACK action outside the assignment allowlist was accepted")
 
@@ -706,7 +718,7 @@ def main() -> None:
         denied_row = verify.query(models.EdgeDeviceEventProcessing).filter_by(
             inbox_id=denied_inbox_id
         ).one()
-        assert denied_row.status == "PROCESSING"
+        assert denied_row.status == "DEAD_LETTER"
 
     # 6. PostgreSQL triggers, not Python-only guards, enforce append-only.
     with SessionLocal() as verify:
