@@ -48,11 +48,12 @@ def test_runtime_waits_when_queue_is_idle_and_shutdown_is_requested():
     assert calls == [True]
 
 
-def test_runtime_once_returns_failure_when_polling_raises():
+def test_runtime_once_returns_failure_when_polling_raises(caplog):
     stop_event = threading.Event()
+    sensitive_detail = "sensitive connection detail"
 
     def fail_poll(_factory, **_kwargs):
-        raise RuntimeError("sensitive connection detail")
+        raise RuntimeError(sensitive_detail)
 
     result = run_worker(
         worker_id="edge-runtime-once",
@@ -64,6 +65,7 @@ def test_runtime_once_returns_failure_when_polling_raises():
     )
 
     assert result == 1
+    assert sensitive_detail not in caplog.text
 
 
 def test_module_entrypoint_loads_and_exposes_cli_help():
