@@ -1,3 +1,9 @@
+## Observabilidade histórica Edge — política aprovada (2026-11-27)
+
+A próxima camada de observabilidade utilizará as fontes PostgreSQL já existentes (inbox, estado de processamento, ACK, revisões humanas e estado actual dos dispositivos), sem duplicar ledgers de negócio. Os agregados de 15 minutos, diários e eventos operacionais do supervisor terão retenção de **90 dias**. A retenção não se aplica à inbox, processing, ACK, revisões humanas, auditoria de dispositivos ou telemetria actual. O agregador será independente do Edge Worker, idempotente, tenant-scoped e sem endpoint público; uma falha de observabilidade nunca pode afectar o processamento de negócio. O contrato detalhado e os critérios de aceitação estão em [docs/architecture/edge-observability-retention-contract.md](docs/architecture/edge-observability-retention-contract.md).
+
+---
+
 ## Edge task acknowledgements — revisão humana (2026-11-27)
 
 A API permite registar e consultar revisões humanas das declarações Edge `COMPLETED` que tenham resultado `REVIEW_REQUIRED`. O ledger `edge_task_acknowledgement_reviews` é o próprio registo de decisão e auditoria: guarda loja, tarefa, ACK original, actor autenticado, decisão, motivo, referência de evidência, chave de idempotência e timestamp UTC. ADMIN pode rever em qualquer loja; SUPERVISOR apenas na sua loja; EMPLOYEE e contas inactivas são recusados.

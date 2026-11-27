@@ -1,5 +1,15 @@
 # PROGRESS — SMART SHELF AI
 
+## EDGE-OBSERVABILITY-HISTORY-01 — desenho aprovado; implementação por iniciar
+
+- HEAD da main confirmado no início desta fase: 9bac2589727c9fe75d8a077736f9d29e616e8cea.
+- Política aprovada: 90 dias para agregados de 15 minutos, agregados diários e eventos operacionais do supervisor.
+- Inbox, processing, ACK, revisões humanas, auditoria de dispositivos e telemetria actual permanecem fora desta política.
+- Agregador independente do Edge Worker; agregação idempotente e tenant-scoped; sem endpoint público.
+- Não se pretende guardar cada transição/tentativa individual nem inferir contadores de rejeições/duplicados sem fonte durável.
+- Nesta actualização foi formalizado o contrato arquitectural. Não foram alterados código, migrations ou dados; não foram executados testes.
+
+
 ## Estado actual
 - Branch: main
 - SHA validado: f9ff01b477575b8f1ebc8534a940ffac25d1f637

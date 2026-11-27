@@ -1,3 +1,13 @@
+## 2026-11-27 — Observabilidade histórica Edge: política e contrato aprovados
+
+Foi aprovada retenção de **90 dias** para agregações de 15 minutos, agregações diárias e eventos operacionais do supervisor. As fontes de verdade de negócio (inbox, estado de processamento, ACK, revisões humanas, auditoria de dispositivos e telemetria actual) ficam fora desta política e não recebem purga automática nesta fase.
+
+A implementação deverá usar um agregador independente do Edge Worker, com janelas UTC, UPSERT idempotente, checkpoints transaccionais, isolamento multi-loja e retenção em lotes limitados. Os eventos do supervisor terão campos allowlisted, sem payloads, segredos ou texto de excepção. Não serão inferidos pedidos rejeitados/duplicados que não tenham registo durável, nem será criado um ledger de cada tentativa individual nesta primeira versão. Não haverá endpoint público de métricas.
+
+Contrato: [edge-observability-retention-contract.md](architecture/edge-observability-retention-contract.md).
+
+**Estado:** contrato e política documentados; migration, modelos, agregador, processo Docker e testes ainda não implementados nem validados.
+
 ## 2026-11-27 — Revisão humana append-only das declarações Edge COMPLETED
 
 Implementado um ledger próprio `edge_task_acknowledgement_reviews` para decisões `APPROVED`/`REJECTED` sobre ACK `COMPLETED` com resultado `REVIEW_REQUIRED`. A migration 0104 liga review, ACK, tarefa e loja através de FKs compostas, exige actor e guarda decisão, motivo, referência de evidência, idempotency key e timestamp UTC. Triggers PostgreSQL/SQLite impedem UPDATE/DELETE.

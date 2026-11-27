@@ -1,3 +1,20 @@
+## P1 — Observabilidade histórica Edge e retenção (2026-11-27)
+
+**Decisão aprovada:** retenção de 90 dias para agregações de 15 minutos, agregações diárias e eventos operacionais do supervisor. As fontes de verdade de negócio ficam fora desta política.
+
+- [ ] Criar migration posterior a 0104 para agregados, checkpoints e eventos operacionais do supervisor.
+- [ ] Implementar agregador independente do Edge Worker, com janelas UTC de 15 minutos/diárias, UPSERT idempotente e checkpoints transaccionais.
+- [ ] Derivar métricas apenas da inbox/processing/ledgers existentes; não inferir rejeições ou duplicados não persistidos.
+- [ ] Persistir eventos do supervisor com allowlist de campos e sem payloads, segredos ou texto de excepção.
+- [ ] Aplicar retenção configurável com default 90 dias, em lotes limitados e sem purga das fontes de verdade.
+- [ ] Testar replay, atraso, janelas UTC, isolamento multi-loja, concorrência PostgreSQL 16, falha do agregador e retenção.
+- [ ] Integrar processo independente no Docker Compose com hardening; sem endpoint público/porta adicional.
+- [ ] Validar API CI/PostgreSQL 16, Quality Gates, Security Scans e Docker Compose no mesmo SHA.
+
+Contrato: [docs/architecture/edge-observability-retention-contract.md](docs/architecture/edge-observability-retention-contract.md).
+
+---
+
 ## P1 — Revisão humana das declarações Edge COMPLETED (2026-11-27)
 
 - [x] Criar migration PostgreSQL/SQLite 0104 e ledger `edge_task_acknowledgement_reviews` append-only.
