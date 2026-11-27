@@ -1821,3 +1821,8 @@ Foi implementado o primeiro fluxo operacional da associação Edge: serviço tra
 A migration 0103 introduz um ledger append-only independente, ligado por chaves estrangeiras compostas ao evento autenticado da inbox e à associação dispositivo-tarefa versionada. O serviço de aplicação valida loja, dispositivo activo, associação não revogada, validade temporal e revisão da tarefa. As declarações COMPLETED são persistidas como REVIEW_REQUIRED e não alteram a tarefa nem o inventário.
 
 A fronteira transaccional existente passa a fornecer o fingerprint do evento original ao handler. O handler continua desactivado: falta fechar cobertura de replay, fencing/rollback, concorrência PostgreSQL 16 e CI integral antes de qualquer registo de rota.
+
+
+### 2026-11-27 — Validação defensiva adicional do Edge ACK
+
+A validação de `action` rejeita agora explicitamente valores que não sejam texto, incluindo listas, objectos, booleanos e números. Foram acrescentados cinco casos parametrizados para garantir `INVALID_ACK_ACTION` sem persistência. A execução dos testes e os workflows CI continuam pendentes; não activar a registry por omissão. A revisão também confirmou que o smoke PostgreSQL existente ainda não cobre concorrência entre revogação e ACK nem isolamento adversarial cross-store — estas provas permanecem em falta.
