@@ -213,6 +213,7 @@ services:
       migrate:
         condition: service_completed_successfully
 
+  # API CI exercises lease loss and PostgreSQL service recovery for this independent process.
   edge-event-worker:
     build:
       context: ./apps/api
