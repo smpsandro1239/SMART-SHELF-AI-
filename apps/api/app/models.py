@@ -1975,6 +1975,18 @@ class EdgeTaskAcknowledgement(Base):
     __table_args__ = (
         UniqueConstraint("inbox_id", name="uq_edge_task_ack_inbox"),
         UniqueConstraint("device_id", "event_id", name="uq_edge_task_ack_device_event"),
+        ForeignKeyConstraint(
+            ["device_id", "event_id"],
+            ["edge_device_event_inbox.device_id", "edge_device_event_inbox.event_id"],
+            ondelete="RESTRICT", name="fk_edge_task_ack_inbox_identity",
+        ),
+        ForeignKeyConstraint(
+            ["assignment_id", "device_id", "task_id", "store_id", "task_version"],
+            ["edge_device_task_assignments.id", "edge_device_task_assignments.device_id",
+             "edge_device_task_assignments.task_id", "edge_device_task_assignments.store_id",
+             "edge_device_task_assignments.task_version"],
+            ondelete="RESTRICT", name="fk_edge_task_ack_assignment_identity",
+        ),
         CheckConstraint("task_version > 0", name="ck_edge_task_ack_task_version"),
         CheckConstraint("sequence_number > 0", name="ck_edge_task_ack_sequence"),
         CheckConstraint("length(fingerprint_sha256) = 64", name="ck_edge_task_ack_fingerprint"),

@@ -10,6 +10,10 @@ depends_on = None
 
 
 def upgrade() -> None:
+    op.create_index(
+        "uq_edge_task_assignment_ack_identity", "edge_device_task_assignments",
+        ["id", "device_id", "task_id", "store_id", "task_version"], unique=True,
+    )
     op.create_table(
         "edge_task_acknowledgements",
         sa.Column("id", sa.Integer(), primary_key=True, autoincrement=True),
@@ -28,6 +32,17 @@ def upgrade() -> None:
         sa.Column("received_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
         sa.UniqueConstraint("inbox_id", name="uq_edge_task_ack_inbox"),
         sa.UniqueConstraint("device_id", "event_id", name="uq_edge_task_ack_device_event"),
+        sa.ForeignKeyConstraint(
+            ["device_id", "event_id"], ["edge_device_event_inbox.device_id", "edge_device_event_inbox.event_id"],
+            ondelete="RESTRICT", name="fk_edge_task_ack_inbox_identity",
+        ),
+        sa.ForeignKeyConstraint(
+            ["assignment_id", "device_id", "task_id", "store_id", "task_version"],
+            ["edge_device_task_assignments.id", "edge_device_task_assignments.device_id",
+             "edge_device_task_assignments.task_id", "edge_device_task_assignments.store_id",
+             "edge_device_task_assignments.task_version"],
+            ondelete="RESTRICT", name="fk_edge_task_ack_assignment_identity",
+        ),
         sa.CheckConstraint("task_version > 0", name="ck_edge_task_ack_task_version"),
         sa.CheckConstraint("sequence_number > 0", name="ck_edge_task_ack_sequence"),
         sa.CheckConstraint("length(fingerprint_sha256) = 64", name="ck_edge_task_ack_fingerprint"),
@@ -87,3 +102,4 @@ def downgrade() -> None:
     op.drop_index("ix_edge_task_ack_assignment_created", table_name="edge_task_acknowledgements")
     op.drop_index("ix_edge_task_ack_store_task_created", table_name="edge_task_acknowledgements")
     op.drop_table("edge_task_acknowledgements")
+    op.drop_index("uq_edge_task_assignment_ack_identity", table_name="edge_device_task_assignments")

@@ -110,6 +110,7 @@ def claim_next_edge_event(
             "store_id": inbox.store_id,
             "shelf_id": inbox.shelf_id,
             "sequence_number": inbox.sequence_number,
+            "fingerprint_sha256": inbox.fingerprint_sha256,
             "occurred_at": inbox.occurred_at,
             "payload": inbox.payload,
             "attempt_count": item.attempt_count,
