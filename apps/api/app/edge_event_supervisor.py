@@ -79,6 +79,7 @@ def healthcheck(
     try:
         supervisor_age = current - float(state["heartbeat_at"])
         child_age = current - float(child["heartbeat_at"])
+        supervisor_pid = int(state["supervisor_pid"])
         child_pid = int(state["child_pid"])
         recorded_child_pid = int(child["pid"])
     except (KeyError, TypeError, ValueError):
@@ -90,6 +91,7 @@ def healthcheck(
     if child_pid != recorded_child_pid:
         return False
     try:
+        os.kill(supervisor_pid, 0)
         os.kill(child_pid, 0)
     except (OSError, ProcessLookupError):
         return False

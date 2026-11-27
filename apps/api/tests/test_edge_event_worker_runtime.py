@@ -93,7 +93,7 @@ def test_supervisor_healthcheck_rejects_stale_heartbeat(tmp_path):
     child = tmp_path / "child.json"
     now = time.time()
     state.write_text(json.dumps({
-        "status": "RUNNING", "heartbeat_at": now, "child_pid": os.getpid()
+        "status": "RUNNING", "heartbeat_at": now, "supervisor_pid": os.getpid(), "child_pid": os.getpid()
     }), encoding="utf-8")
     child.write_text(json.dumps({
         "pid": os.getpid(), "heartbeat_at": now - 121
@@ -106,7 +106,7 @@ def test_supervisor_healthcheck_requires_live_matching_child(tmp_path):
     child = tmp_path / "child.json"
     now = time.time()
     state.write_text(json.dumps({
-        "status": "RUNNING", "heartbeat_at": now, "child_pid": os.getpid()
+        "status": "RUNNING", "heartbeat_at": now, "supervisor_pid": os.getpid(), "child_pid": os.getpid()
     }), encoding="utf-8")
     child.write_text(json.dumps({
         "pid": os.getpid() + 100000, "heartbeat_at": now
