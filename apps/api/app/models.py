@@ -1538,6 +1538,44 @@ class EdgeDeviceEventInbox(Base):
     received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
 
 
+
+class EdgeTaskAcknowledgementReview(Base):
+    """Append-only human review decision for a COMPLETED Edge declaration."""
+    __tablename__ = "edge_task_acknowledgement_reviews"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["acknowledgement_id", "store_id", "task_id"],
+            ["edge_task_acknowledgements.id", "edge_task_acknowledgements.store_id", "edge_task_acknowledgements.task_id"],
+            ondelete="RESTRICT", name="fk_edge_ack_review_ack_identity",
+        ),
+        ForeignKeyConstraint(
+            ["task_id", "store_id"],
+            ["replenishment_tasks.id", "replenishment_tasks.store_id"],
+            ondelete="RESTRICT", name="fk_edge_ack_review_task_identity",
+        ),
+        UniqueConstraint(
+            "store_id", "acknowledgement_id", "actor_user_id", "idempotency_key",
+            name="uq_edge_ack_review_idempotency",
+        ),
+        CheckConstraint("decision IN ('APPROVED', 'REJECTED')", name="ck_edge_ack_review_decision"),
+        CheckConstraint("length(reason) >= 3", name="ck_edge_ack_review_reason"),
+        CheckConstraint("length(evidence_reference) >= 1", name="ck_edge_ack_review_evidence"),
+        Index("ix_edge_ack_review_store_ack_time", "store_id", "acknowledgement_id", "reviewed_at"),
+        Index("ix_edge_ack_review_task_time", "task_id", "reviewed_at"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    store_id: Mapped[int] = mapped_column(ForeignKey("stores.id", ondelete="RESTRICT"), nullable=False)
+    task_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    acknowledgement_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    actor_user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
+    decision: Mapped[str] = mapped_column(String(8), nullable=False)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    evidence_reference: Mapped[str] = mapped_column(String(500), nullable=False)
+    idempotency_key: Mapped[str] = mapped_column(String(128), nullable=False)
+    reviewed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+
 class EdgeDeviceEventProcessing(Base):
     """Mutable processing control row; the authenticated event inbox remains immutable."""
     __tablename__ = "edge_device_event_processing"
@@ -1988,6 +2026,7 @@ class EdgeTaskAcknowledgement(Base):
     __tablename__ = "edge_task_acknowledgements"
     __table_args__ = (
         UniqueConstraint("inbox_id", name="uq_edge_task_ack_inbox"),
+        UniqueConstraint("id", "store_id", "task_id", name="uq_edge_task_ack_id_store_task"),
         UniqueConstraint("device_id", "event_id", name="uq_edge_task_ack_device_event"),
         ForeignKeyConstraint(
             ["device_id", "event_id"],

@@ -343,6 +343,53 @@ class InventoryReconciliationReview(BaseModel):
         return normalized
 
 
+class EdgeTaskAcknowledgementReviewCreate(BaseModel):
+    decision: Literal["APPROVED", "REJECTED"]
+    reason: str = Field(min_length=3, max_length=1000)
+    evidence_reference: str = Field(min_length=1, max_length=500)
+    idempotency_key: str = Field(min_length=8, max_length=128)
+
+    @field_validator("reason")
+    @classmethod
+    def validate_reason(cls, value: str) -> str:
+        normalized = value.strip()
+        if len(normalized) < 3:
+            raise ValueError("reason must contain at least 3 non-space characters")
+        return normalized
+
+    @field_validator("evidence_reference")
+    @classmethod
+    def validate_evidence_reference(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized or any(ord(char) < 32 for char in normalized):
+            raise ValueError("evidence_reference must be a non-empty reference without control characters")
+        return normalized
+
+    @field_validator("idempotency_key")
+    @classmethod
+    def validate_idempotency_key(cls, value: str) -> str:
+        normalized = value.strip()
+        if len(normalized) < 8 or len(normalized) > 128 or not all(
+            char.isascii() and (char.isalnum() or char in "._:-") for char in normalized
+        ):
+            raise ValueError("idempotency_key must contain 8-128 safe ASCII characters")
+        return normalized
+
+
+class EdgeTaskAcknowledgementReviewRead(BaseModel):
+    id: int
+    store_id: int
+    task_id: int
+    acknowledgement_id: int
+    actor_user_id: int
+    decision: Literal["APPROVED", "REJECTED"]
+    reason: str
+    evidence_reference: str
+    idempotency_key: str
+    reviewed_at: datetime
+    model_config = ConfigDict(from_attributes=True)
+
+
 class InventoryMovementRead(BaseModel):
     id: int
     operation_id: UUID

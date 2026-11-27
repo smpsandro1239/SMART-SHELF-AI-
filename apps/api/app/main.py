@@ -46,10 +46,16 @@ from app.edge_task_assignment_service import (
     create_edge_task_assignment,
     revoke_edge_task_assignment,
 )
+from app.edge_task_acknowledgement_review_service import (
+    EdgeTaskAcknowledgementReviewError,
+    record_edge_task_acknowledgement_review,
+)
 from app.schemas import (
     EdgeTaskAssignmentCreate,
     EdgeTaskAssignmentRead,
     EdgeTaskAssignmentRevoke,
+    EdgeTaskAcknowledgementReviewCreate,
+    EdgeTaskAcknowledgementReviewRead,
 )
 from app.artifact_access_policy import evaluate_artifact_access
 from app.operational_decision_engine import DecisionPolicy, evaluate_shelf_decision
@@ -9902,6 +9908,80 @@ def list_replenishment_task_events(task_id: int, request: Request, db: Session =
     if not rows:
         raise HTTPException(status_code=404, detail="Task not found")
     return [event for _, event in rows if event is not None]
+
+
+@app.post(
+    "/api/v1/edge-task-acknowledgements/{acknowledgement_id}/reviews",
+    response_model=EdgeTaskAcknowledgementReviewRead,
+    status_code=201,
+    tags=["tasks"],
+)
+def create_edge_task_acknowledgement_review(
+    acknowledgement_id: int,
+    payload: EdgeTaskAcknowledgementReviewCreate,
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+):
+    actor = _request_user(db, request)
+    if actor is None:
+        raise HTTPException(status_code=401, detail="Authenticated user required")
+    try:
+        review, created = record_edge_task_acknowledgement_review(
+            db, acknowledgement_id=acknowledgement_id, actor=actor,
+            decision=payload.decision, reason=payload.reason,
+            evidence_reference=payload.evidence_reference,
+            idempotency_key=payload.idempotency_key,
+        )
+        db.commit()
+    except EdgeTaskAcknowledgementReviewError as exc:
+        db.rollback()
+        status = {
+            "ACTOR_INACTIVE": 401, "FORBIDDEN": 403,
+            "ACK_NOT_FOUND": 404, "TASK_NOT_FOUND": 404,
+            "ACK_NOT_REVIEWABLE": 409, "IDEMPOTENCY_CONFLICT": 409,
+        }.get(exc.code, 409)
+        raise HTTPException(status_code=status, detail={"code": exc.code, "message": str(exc)}) from exc
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Review conflicts with an existing idempotency record") from exc
+    if not created:
+        response.status_code = 200
+    db.refresh(review)
+    return review
+
+
+@app.get(
+    "/api/v1/edge-task-acknowledgements/{acknowledgement_id}/reviews",
+    response_model=list[EdgeTaskAcknowledgementReviewRead],
+    tags=["tasks"],
+)
+def list_edge_task_acknowledgement_reviews(
+    acknowledgement_id: int, request: Request, db: Session = Depends(get_db),
+):
+    actor = _request_user(db, request)
+    if actor is None or not actor.is_active:
+        raise HTTPException(status_code=401, detail="Active authenticated user required")
+    if actor.role not in {"ADMIN", "SUPERVISOR"}:
+        raise HTTPException(status_code=403, detail="Supervisor role required")
+    parent = db.query(models.EdgeTaskAcknowledgement).filter(
+        models.EdgeTaskAcknowledgement.id == acknowledgement_id,
+    )
+    if actor.role != "ADMIN":
+        if actor.store_id is None:
+            raise HTTPException(status_code=404, detail="Acknowledgement not found")
+        parent = parent.filter(models.EdgeTaskAcknowledgement.store_id == actor.store_id)
+    acknowledgement = parent.first()
+    if acknowledgement is None:
+        raise HTTPException(status_code=404, detail="Acknowledgement not found")
+    query = db.query(models.EdgeTaskAcknowledgementReview).filter(
+        models.EdgeTaskAcknowledgementReview.acknowledgement_id == acknowledgement_id,
+        models.EdgeTaskAcknowledgementReview.store_id == acknowledgement.store_id,
+    )
+    return query.order_by(
+        models.EdgeTaskAcknowledgementReview.reviewed_at.asc(),
+        models.EdgeTaskAcknowledgementReview.id.asc(),
+    ).all()
 
 
 def _lock_admin_bootstrap(db: Session) -> None:

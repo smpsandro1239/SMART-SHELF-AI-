@@ -21,6 +21,8 @@ API_ROUTE_POLICIES = (
     ("POST", "/api/v1/capture-sessions/{session_id}/close", "SUPERVISOR_OR_ADMIN"),
     ("POST", "/api/v1/stores/{store_id}/edge-devices/{device_id}/tasks/{task_id}/assignment", "SUPERVISOR_OR_ADMIN"),
     ("POST", "/api/v1/edge-task-assignments/{assignment_id}/revoke", "SUPERVISOR_OR_ADMIN"),
+    ("GET", "/api/v1/edge-task-acknowledgements/{acknowledgement_id}/reviews", "SUPERVISOR_OR_ADMIN"),
+    ("POST", "/api/v1/edge-task-acknowledgements/{acknowledgement_id}/reviews", "SUPERVISOR_OR_ADMIN"),
     ("GET", "/api/v1/dashboard/summary", "EMPLOYEE_ALLOWLIST"),
     ("GET", "/api/v1/dashboard/operations", "EMPLOYEE_ALLOWLIST"),
     ("GET", "/api/v1/forecasting/demand", "SUPERVISOR_OR_ADMIN"),
