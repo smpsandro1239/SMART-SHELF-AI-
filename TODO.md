@@ -1,3 +1,17 @@
+## P1 — Configuração fail-closed do Edge ACK (2026-11-27)
+
+- [x] Adicionar `EDGE_TASK_ACKNOWLEDGEMENT_ENABLED`, por omissão `false`, apenas no serviço Edge dedicado.
+- [x] Exigir o selector exacto `EDGE_TASK_ACKNOWLEDGEMENT_HANDLER_REGISTRY=builtin-v1`; a flag isolada nunca activa handlers.
+- [x] Injectar explicitamente o mapa transaccional em `run_worker` e `process_one_edge_event`; rejeitar mapa sem flag e flag sem mapa.
+- [x] Rejeitar valores booleanos/registry inválidos e manter o supervisor em estado FAILED sem ciclo de restart quando o filho termina com erro de configuração.
+- [x] Testar default disabled, flag isolada, selector inválido, injecção explícita, erro de configuração do filho e Compose default.
+- [x] Validar API CI, Quality Gates, Security Scans e Docker Compose no SHA `4ea755b6a110bb6766748cb970db0458583444b8` — todos SUCCESS.
+- [ ] Não activar em produção sem aprovação operacional explícita e plano de revisão humana.
+
+A configuração é dedicada ao subprocesso `app.edge_event_worker`; não é lida pela API nem pelo vision worker. O handler permanece desactivado por omissão.
+
+---
+
 ## P1 — Métricas operacionais Edge (2026-11-27)
 
 - [x] Definir heartbeat do worker com contadores de polling, eventos reclamados, polls ociosos e falhas.

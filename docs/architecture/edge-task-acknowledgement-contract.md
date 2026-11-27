@@ -91,7 +91,7 @@ A migration 0102, o serviço/API de associação dispositivo-tarefa, a migration
 
 O handler apply_edge_task_acknowledgement está disponível numa registry transaccional explícita, mas essa registry não é activada por omissão pelo worker. A CI integral do código passou no SHA cd28865c03abaf4ccde959e098e1dcf462943299 (API CI 45998882415, Quality Gates 45998882598, Security Scans 45998882484 e Docker Compose 45998882648). Os workflows documentais posteriores Quality Gates 45999727222 e Security Scans 45999727282 também terminaram com sucesso. Isto valida os cenários automatizados, não concede autorização operacional ou de produção. A registry Python opt-in não é uma feature flag de deployment. Ainda faltam configuração fail-closed dedicada, matriz de permissões por acção, métricas/alertas, fluxo auditável de revisão humana e ensaios end-to-end de crash/recuperação. O smoke PostgreSQL 16 cobre rollback após insert, commit conjunto, replay, claim concorrente, fencing, triggers append-only e concorrência ACK/revogação.
 
-Ainda falta validar os workflows no SHA final, acrescentar concorrência explícita entre revogação da associação e processamento e reforçar o isolamento cross-store no smoke dedicado. A implementação não declara integração com robôs homologada. COMPLETED continua a produzir apenas REVIEW_REQUIRED, sem alterar tarefa ou inventário.
+Os quatro workflows passaram no SHA `4ea755b6a110bb6766748cb970db0458583444b8`; o smoke PostgreSQL inclui agora negação de acção fora da allowlist. A implementação não declara integração com robôs homologada. COMPLETED continua a produzir apenas REVIEW_REQUIRED, sem alterar tarefa ou inventário.
 
 
 ## 10. Descoberta de implementação no código actual (2026-11-26)
@@ -140,23 +140,24 @@ O worker já dispõe de lease, heartbeat, fencing, retry exponencial limitado e 
 **Decisão:** manter o handler desactivado por omissão. Não concluir tarefa nem alterar inventário com eventos Edge. Não autorizar produção até os gaps operacionais serem fechados, ensaiados e aprovados explicitamente.
 
 
-## 13. Fronteira de deployment e feature flag — verificação 2026-11-27
+## 13. Configuração fail-closed e injecção explícita — validada 2026-11-27
 
-A configuração opt-in de deployment não foi introduzida porque a inspecção do repositório confirmou que ainda não existe um consumidor Edge implantado:
+O serviço `edge-event-worker` é agora iniciado sob o supervisor independente. A configuração dedicada existe apenas nesse serviço e é herdada pelo processo filho `app.edge_event_worker`:
 
-- O Compose não define um serviço `edge-event-worker`.
-- O serviço `api` executa `uvicorn app.main:app`; não arranca o processador da inbox.
-- O serviço `vision-worker` executa `app.vision_worker` e processa inferência de imagens; não é o worker de eventos Edge.
-- O módulo `app.edge_event_worker` disponibiliza `process_one_edge_event()`, mas não contém entrypoint/loop de polling e não é iniciado por um serviço de deployment.
-- `app.config.Settings` não contém uma configuração Edge ACK.
+- `EDGE_TASK_ACKNOWLEDGEMENT_ENABLED`: ausente/false por omissão; valores diferentes de true/false são rejeitados.
+- `EDGE_TASK_ACKNOWLEDGEMENT_HANDLER_REGISTRY`: vazio por omissão; quando a flag é true tem de ser exactamente `builtin-v1`.
+- Flag true sem selector explícito, selector desconhecido, ou selector presente com flag false causam erro de configuração.
+- `run_worker` exige simultaneamente `enable_transactional_ack=True` e um mapa `transactional_handlers` não vazio. A flag isolada nunca injecta nem activa handlers.
+- O ponto de arranque resolve o selector suportado e injecta explicitamente `BUILTIN_TRANSACTIONAL_HANDLERS` em `run_worker`, que o passa explicitamente a `process_one_edge_event`.
+- A configuração não é consumida pela API nem pelo `vision-worker`.
+- Se o filho sair com erro de configuração (exit code 2), o supervisor publica estado `FAILED`, mantém o heartbeat de diagnóstico e não entra num ciclo de restart. O healthcheck fica unhealthy até correcção e reinício operacional.
 
-**Regra fail-closed:** não declarar a feature como configurável/operacional nem criar uma flag sem consumidor real. Não ligar a registry ao API ou ao vision-worker. A próxima implementação deve criar primeiro o processo Edge supervisionado; só depois poderá adicionar `EDGE_TASK_ACKNOWLEDGEMENT_ENABLED` (ausente/false desactivada, true opt-in exclusivo do processo Edge, valor inválido rejeitado). Mesmo com a flag activa, `BUILTIN_TRANSACTIONAL_HANDLERS` tem de continuar a ser injectada explicitamente pelo ponto de arranque autorizado.
+Compose define ambos os valores de forma segura: flag `false` e registry vazio. A CI testa o default, a flag isolada, selector inválido, injecção explícita, e erro de configuração sem restart loop.
 
-Até essa implementação e respectiva CI, `TASK_ACKNOWLEDGED` mantém-se inactivo por omissão. `COMPLETED` continua apenas `REVIEW_REQUIRED`; nenhum acknowledgement altera tarefa, versão, stock ou movimentos.
+**Estado operacional:** o handler continua desactivado por omissão. O facto de existir um mecanismo opt-in não constitui aprovação para o activar em produção. A activação exige aprovação operacional, revisão humana auditável e validação no ambiente-alvo.
 
-
-## 13. Autorização por acção — implementação técnica (2026-11-27)
+## 14. Autorização por acção — implementação técnica (2026-11-27)
 
 A criação de uma associação aceita `allowed_actions` com os valores `ACCEPTED`, `STARTED` e `COMPLETED`. O valor por omissão é uma lista vazia. A allowlist é gravada no evento CREATED append-only, na mesma transacção que cria a associação. O handler de ACK consulta esse evento sob lock e rejeita acções fora da lista com `DEVICE_ACTION_NOT_ALLOWED`. Associações históricas sem a chave `allowed_actions` são tratadas como lista vazia, portanto não recebem permissões retroactivas.
 
-A API não deriva permissões do tipo de dispositivo. Uma alteração de permissões exige revogar a associação anterior e criar outra com a nova allowlist, preservando a auditoria. O handler continua opt-in e inactivo por omissão; esta alteração não constitui autorização de produção.
+A API não deriva permissões do tipo de dispositivo. Uma alteração de permissões exige revogar a associação anterior e criar outra com a nova allowlist, preservando a auditoria. O handler continua opt-in e inactivo por omissão; a configuração exige flag e selector explícitos e esta alteração não constitui autorização de produção.
