@@ -309,8 +309,14 @@ def run_worker(
     stop_event: threading.Event,
     process_event: Callable[..., bool] = process_one_edge_event,
     once: bool = False,
+    enable_transactional_ack: bool = False,
+    transactional_handlers: dict[str, Callable[..., Any]] | None = None,
 ) -> int:
     """Poll until shutdown; finish an in-flight event before stopping."""
+    if enable_transactional_ack and not transactional_handlers:
+        raise ValueError("transactional ACK requires an explicitly injected non-empty handler registry")
+    if not enable_transactional_ack and transactional_handlers is not None:
+        raise ValueError("transactional handlers cannot be injected while ACK is disabled")
     if not 0.5 <= poll_interval <= 300:
         raise ValueError("poll_interval must be between 0.5 and 300 seconds")
     if not 5 <= lease_seconds <= 3600:
@@ -354,11 +360,13 @@ def run_worker(
         metrics["poll_attempts"] += 1
         poll_started = time.monotonic()
         try:
-            processed = process_event(
-                SessionLocal,
-                worker_id=worker_id,
-                lease_seconds=lease_seconds,
-            )
+            process_kwargs: dict[str, Any] = {
+                "worker_id": worker_id,
+                "lease_seconds": lease_seconds,
+            }
+            if enable_transactional_ack:
+                process_kwargs["transactional_handlers"] = transactional_handlers
+            processed = process_event(SessionLocal, **process_kwargs)
         except Exception as exc:
             metrics["poll_failures"] += 1
             metrics["last_error_type"] = type(exc).__name__
@@ -400,6 +408,34 @@ def run_worker(
     return 0
 
 
+def resolve_transactional_ack_configuration(
+    enabled_value: str | None = None,
+    registry_value: str | None = None,
+) -> tuple[bool, dict[str, Callable[..., Any]] | None]:
+    """Resolve the dedicated feature flag and explicit handler registry selector.
+
+    A true flag alone never activates handlers. The operator must also select
+    the exact supported registry; the resulting mapping is then injected into
+    run_worker and process_one_edge_event explicitly.
+    """
+    raw_enabled = (enabled_value if enabled_value is not None else os.getenv(
+        "EDGE_TASK_ACKNOWLEDGEMENT_ENABLED", "false"
+    )).strip().lower()
+    registry = (registry_value if registry_value is not None else os.getenv(
+        "EDGE_TASK_ACKNOWLEDGEMENT_HANDLER_REGISTRY", ""
+    )).strip()
+
+    if raw_enabled not in {"true", "false"}:
+        raise ValueError("EDGE_TASK_ACKNOWLEDGEMENT_ENABLED must be true or false")
+    if raw_enabled == "false":
+        if registry:
+            raise ValueError("handler registry cannot be selected while TASK_ACKNOWLEDGED is disabled")
+        return False, None
+    if registry != "builtin-v1":
+        raise ValueError("enabled TASK_ACKNOWLEDGED requires explicit EDGE_TASK_ACKNOWLEDGEMENT_HANDLER_REGISTRY=builtin-v1")
+    return True, BUILTIN_TRANSACTIONAL_HANDLERS
+
+
 def _default_worker_id() -> str:
     configured = os.getenv("EDGE_EVENT_WORKER_ID", "").strip()
     return configured or f"{socket.gethostname()}-{os.getpid()}"
@@ -438,6 +474,12 @@ def main(argv: list[str] | None = None) -> int:
         level=os.getenv("LOG_LEVEL", "INFO").upper(),
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
     )
+    try:
+        enable_transactional_ack, transactional_handlers = resolve_transactional_ack_configuration()
+    except ValueError as exc:
+        logger.error("Edge transactional ACK configuration rejected: error_type=%s", type(exc).__name__)
+        return 2
+
     stop_event = threading.Event()
 
     def request_shutdown(signum: int, _frame: Any) -> None:
@@ -453,6 +495,8 @@ def main(argv: list[str] | None = None) -> int:
             lease_seconds=args.lease_seconds,
             stop_event=stop_event,
             once=args.once,
+            enable_transactional_ack=enable_transactional_ack,
+            transactional_handlers=transactional_handlers,
         )
     finally:
         signal.signal(signal.SIGTERM, previous_sigterm)

@@ -263,3 +263,65 @@ def test_worker_heartbeat_records_poll_failures(tmp_path, monkeypatch):
     assert metrics["poll_attempts"] == 1
     assert metrics["poll_failures"] == 1
     assert metrics["last_error_type"] == "RuntimeError"
+
+
+def test_run_worker_rejects_registry_when_ack_flag_is_disabled():
+    with pytest.raises(ValueError, match="cannot be injected"):
+        run_worker(
+            worker_id="edge-ack-disabled-test",
+            poll_interval=1,
+            lease_seconds=30,
+            stop_event=threading.Event(),
+            transactional_handlers={"TASK_ACKNOWLEDGED": lambda _db, _event: None},
+            enable_transactional_ack=False,
+        )
+
+
+def test_supervisor_does_not_restart_child_with_configuration_exit_code(tmp_path):
+    class ConfigurationFailureChild:
+        pid = os.getpid() + 200000
+
+        def poll(self):
+            return 2
+
+        def terminate(self):
+            raise AssertionError("exited child must not be terminated")
+
+        def wait(self, timeout=None):
+            return 2
+
+        def kill(self):
+            raise AssertionError("exited child must not be killed")
+
+    class StopAfterOneWait(threading.Event):
+        def wait(self, timeout=None):
+            self.set()
+            return True
+
+    stop = StopAfterOneWait()
+    spawned = []
+
+    def spawn(_command, **_kwargs):
+        child = ConfigurationFailureChild()
+        spawned.append(child)
+        return child
+
+    config = SupervisorConfig(
+        worker_id="supervisor-config-test",
+        poll_interval=0.5,
+        lease_seconds=30,
+        heartbeat_interval=0.5,
+        heartbeat_timeout=10,
+        restart_base_seconds=1,
+        restart_max_seconds=2,
+        shutdown_timeout=1,
+        state_path=tmp_path / "state.json",
+        child_heartbeat_path=tmp_path / "child.json",
+    )
+    result = run_supervisor(config, stop, popen_factory=spawn)
+    state = json.loads(config.state_path.read_text(encoding="utf-8"))
+    assert result == 0
+    assert len(spawned) == 1
+    assert state["status"] == "STOPPED"
+    assert state["restart_count"] == 0
+    assert state["last_exit_code"] == 2

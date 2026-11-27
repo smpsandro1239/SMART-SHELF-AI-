@@ -188,7 +188,7 @@ def run_supervisor(
             return_code = child.poll()
             if return_code is not None:
                 last_exit_code = return_code
-                failure_reason = "CHILD_EXITED"
+                failure_reason = "CHILD_CONFIGURATION_ERROR" if return_code == 2 else "CHILD_EXITED"
                 break
 
             last_heartbeat_at = wall_clock()
@@ -202,6 +202,26 @@ def run_supervisor(
                 "failure_reason": None,
             })
             stop_event.wait(config.heartbeat_interval)
+
+        if not stop_event.is_set() and failure_reason == "CHILD_CONFIGURATION_ERROR":
+            logger.error("Edge worker configuration is invalid; supervisor remains degraded until operator restart")
+            while not stop_event.is_set():
+                _write_json_atomic(config.state_path, {
+                    "status": "FAILED", "supervisor_pid": os.getpid(),
+                    "heartbeat_at": wall_clock(), "child_pid": None,
+                    "restart_count": restart_count, "consecutive_failures": consecutive_failures,
+                    "last_restart_at": last_restart_at, "last_exit_code": last_exit_code,
+                    "failure_reason": failure_reason,
+                })
+                stop_event.wait(config.heartbeat_interval)
+            _write_json_atomic(config.state_path, {
+                "status": "STOPPED", "supervisor_pid": os.getpid(),
+                "heartbeat_at": wall_clock(), "child_pid": None,
+                "restart_count": restart_count, "consecutive_failures": consecutive_failures,
+                "last_restart_at": last_restart_at, "last_exit_code": last_exit_code,
+                "failure_reason": None,
+            })
+            return 0
 
         if stop_event.is_set():
             _terminate_child(child, config.shutdown_timeout)
