@@ -80,7 +80,7 @@ def create_fixture(suffix: str) -> tuple[int, int, int, int]:
             "payload": inbox.payload,
         })
         db.commit()
-        acknowledgement = db.query(models.EdgeTaskAcknowledgement).one()
+        acknowledgement = db.query(models.EdgeTaskAcknowledgement).filter_by(inbox_id=inbox.id).one()
         return store.id, task.id, acknowledgement.id, supervisor.id
 
 
