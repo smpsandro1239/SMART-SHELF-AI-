@@ -1,3 +1,18 @@
+## P0 — PostgreSQL Edge worker fault injection (2026-11-27)
+
+### Implementação publicada — execução CI pendente
+- [x] Adicionar smoke PostgreSQL 16 que distingue `pg_terminate_backend` (uma sessão) da paragem efectiva do serviço PostgreSQL.
+- [x] Restringir a paragem do serviço ao container descartável `postgres:16` de GitHub Actions; o script recusa execução fora desse ambiente.
+- [x] Ligar o smoke ao API CI após os restantes smokes PostgreSQL, evitando competir com fixtures Edge anteriores.
+- [x] Verificar falha do heartbeat, abandono do resultado local, expiração natural da lease, takeover e rejeição do fencing token anterior.
+- [x] Verificar evento de controlo numa segunda loja e contagem de movimentos de inventário inalterada.
+- [ ] Executar o novo smoke no PostgreSQL 16 e corrigir eventuais falhas.
+- [ ] Confirmar API CI, Docker Compose smoke, Quality Gates e Security Scans aprovados no mesmo SHA.
+
+Limite: o smoke de serviço cobre um handler DEVICE_HEARTBEAT sem efeitos de domínio. A atomicidade de handlers transaccionais continua coberta separadamente pelo smoke Edge ACK; este ensaio não activa nem injecta essa registry. A validação operacional permanece pendente até CI verde.
+
+---
+
 ## P1 — Resiliência operacional Edge: diagnóstico seguro (2026-11-27)
 
 - [x] Remover logs de traceback/texto de excepção nas falhas de renovação de lease e execução de handlers; manter apenas tipo da excepção e inbox_id.

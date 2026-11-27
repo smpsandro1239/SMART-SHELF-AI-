@@ -1,3 +1,19 @@
+## 2026-11-27 — PostgreSQL Edge worker fault injection publicada (validação pendente)
+
+SHA base: `1b5d9dbe83f5edd6dfe9d7042b97766ac80dafee`.
+
+- Adicionado `apps/api/scripts/postgres_edge_worker_outage_smoke.py`.
+- O teste distingue a terminação de um backend PostgreSQL através de `pg_terminate_backend` da paragem do container PostgreSQL 16 inteiro e confirma que uma sessão nova funciona após o primeiro cenário.
+- No cenário de indisponibilidade, um processo filho executa `process_one_edge_event()` com handler heartbeat controlado. O serviço PostgreSQL é efectivamente parado durante uma janela que força uma tentativa de heartbeat; após o restabelecimento, o handler é libertado e o teste exige que o worker não confirme o resultado local.
+- O teste espera a expiração natural da lease, reclama o evento com um segundo worker, exige incremento do fencing token e rejeita a conclusão com as credenciais antigas.
+- Um evento elegível apenas no futuro numa segunda loja permanece PENDING; a contagem global de `InventoryMovement` tem de permanecer inalterada.
+- O script só permite a paragem do container exacto `postgres:16` em GitHub Actions e falha fora desse ambiente.
+- O novo passo foi ligado ao fim do job API CI, após os outros smokes PostgreSQL, para evitar competir com fixtures Edge anteriores.
+- **Não foram executados testes localmente nem existe ainda resultado CI para este novo SHA.** A implementação está publicada; a validação PostgreSQL 16 e os quatro workflows permanecem pendentes.
+- Limites preservados: `TASK_ACKNOWLEDGED` continua fail-closed, não é injectada a registry transaccional, `COMPLETED` continua `REVIEW_REQUIRED` e o teste não cria nem altera movimentos de inventário.
+
+---
+
 ## 2026-11-27 — Auditoria operacional Edge: primeira correcção de diagnóstico seguro
 
 SHA base: `290bb4cc8bb05eab0985ffbf63e8eece688223fc`.

@@ -2240,3 +2240,8 @@ A loja de um `InventorySyncJob` é definida no enqueue e não pode ser alterada 
 O consumo de eventos Edge é executado pelo serviço independente `edge-event-worker` (`python -m app.edge_event_worker`), separado da API e do `vision-worker`. O container usa utilizador não-root, filesystem read-only, capabilities removidas, `no-new-privileges` e `/tmp` temporário para escrita.
 
 A existência do worker não activa o handler transaccional `TASK_ACKNOWLEDGED`: a registry continua a exigir injecção explícita. Declarações `COMPLETED` permanecem evidência `REVIEW_REQUIRED`; mensagens Edge não concluem tarefas nem alteram inventário. A validação de crash/recovery exige o smoke PostgreSQL 16 e a verificação de estabilidade/hardening no Docker Compose, ambos no SHA final.
+
+
+### PostgreSQL Edge worker fault injection
+
+O API CI executa `apps/api/scripts/postgres_edge_worker_outage_smoke.py` contra PostgreSQL 16. O ensaio distingue a terminação de uma sessão (`pg_terminate_backend`) da paragem efectiva do container PostgreSQL, confirma o restabelecimento, falha do heartbeat, abandono do resultado local, expiração da lease, takeover e rejeição do fencing token antigo. Um evento de controlo numa segunda loja e a contagem de movimentos de inventário verificam isolamento e ausência de mutações. O script só pode parar o container `postgres:16` descartável do GitHub Actions; não é executável fora desse ambiente. A existência do teste não equivale a validação até a CI terminar com sucesso.
