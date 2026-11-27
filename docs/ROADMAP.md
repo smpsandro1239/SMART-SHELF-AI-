@@ -1843,3 +1843,20 @@ A validação de `action` rejeita agora explicitamente valores que não sejam te
 - Acrescentados quatro cenários parametrizados de identidade cross-store em `test_edge_task_acknowledgement_service.py` (tarefa estrangeira, dispositivo estrangeiro, loja estrangeira com tarefa local e conjunto de identidades estrangeiras sem associação). Commit dos testes: `a840fac4b12d6f324c29c6a6b0b441a58aba85a5`.
 - A API CI/Quality Gates/Security Scans/Docker Compose do commit `a840fac4b12d6f324c29c6a6b0b441a58aba85a5` foi observada em execução; a validação do commit corretivo `6c4379e` ainda tem de ser confirmada. Não declarar suite aprovada.
 - A prova PostgreSQL de concorrência entre revogação e processamento ainda não foi acrescentada; manter este ponto explicitamente aberto. A registry permanece opt-in e `COMPLETED` continua apenas `REVIEW_REQUIRED`.
+
+
+## 2026-11-27 — P0 Edge ACK vs revogação: concorrência PostgreSQL 16 validada
+
+O smoke `apps/api/scripts/postgres_edge_task_acknowledgement_smoke.py` prova as duas ordens concorrentes. A prova de bloqueio não depende de sleeps como evidência: consulta `pg_stat_activity`, exige `wait_event_type='Lock'` e confirma o PID bloqueador através de `pg_blocking_pids()`.
+
+**Revogação primeiro:** a transacção de revogação obtém os locks na ordem Store → Task → Device → Assignment. O ACK bloqueia efectivamente; após commit da revogação, retoma e é rejeitado como `UNASSIGNED_DEVICE`, sem registo no ledger.
+
+**ACK primeiro:** o ACK obtém os locks e mantém a transacção aberta. A revogação fica bloqueada; após commit do ACK, a revogação retoma e confirma. O acknowledgement permanece no ledger com `received_at` anterior a `revoked_at`.
+
+A primeira CI encontrou `DetachedInstanceError`, corrigido pela captura dos identificadores antes de fechar as sessões. A execução seguinte expôs a reutilização do mesmo par dispositivo/tarefa entre cenários; o cenário B passou a usar um dispositivo independente, respeitando a unicidade histórica das associações.
+
+**Evidência:** SHA de código `cd28865c03abaf4ccde959e098e1dcf462943299`; API CI `45998882415` (incluindo o passo de smoke PostgreSQL 16), Quality Gates `45998882598`, Security Scans `45998882484` e Docker Compose `45998882648` — todos concluídos com sucesso.
+
+**Precisão do teste:** o cenário revogação-primeiro constrói manualmente a transacção com a ordem canónica de locks; o cenário ACK-primeiro invoca `revoke_edge_task_assignment`. Assim, a prova não deve ser descrita como exercício do serviço real nos dois cenários.
+
+O handler `TASK_ACKNOWLEDGED` continua desactivado/opt-in. `COMPLETED` permanece evidência `REVIEW_REQUIRED`, sem alteração automática da tarefa ou inventário. A validação desta garantia de concorrência não equivale a autorização para activar o handler em produção.
