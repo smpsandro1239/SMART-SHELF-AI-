@@ -1858,3 +1858,21 @@ A primeira CI encontrou `DetachedInstanceError`, corrigido pela captura dos iden
 **Precisão do teste:** o cenário revogação-primeiro constrói manualmente a transacção com a ordem canónica de locks; o cenário ACK-primeiro invoca `revoke_edge_task_assignment`. Assim, a prova não deve ser descrita como exercício do serviço real nos dois cenários.
 
 O handler `TASK_ACKNOWLEDGED` continua desactivado/opt-in. `COMPLETED` permanece evidência `REVIEW_REQUIRED`, sem alteração automática da tarefa ou inventário. A validação desta garantia de concorrência não equivale a autorização para activar o handler em produção.
+
+
+## P0 — Deployment real do worker Edge antes da feature flag (2026-11-27)
+
+**Estado: bloqueado por ausência de processo de execução/deployment dedicado.**
+
+A inspecção do HEAD `d0b8da341d331d271a1d9bd5771eddbffa8dac0d` confirmou que o Compose não define serviço `edge-event-worker`. O serviço `api` executa apenas Uvicorn; `vision-worker` executa inferência de imagens; `inventory-sync-worker` trata sincronizações ERP/WMS. O módulo `app.edge_event_worker` contém a função de processamento unitário, mas não oferece entrypoint/loop de polling próprio nem é arrancado por estes serviços. A configuração `Settings` também não contém flag de ACK.
+
+**Decisão de segurança:** não adicionar uma variável `EDGE_TASK_ACKNOWLEDGEMENT_ENABLED` sem consumidor real, não reutilizar o `vision-worker` e não injectar `BUILTIN_TRANSACTIONAL_HANDLERS` implicitamente. A flag isolada não constituiria uma activação operacional verificável.
+
+**Sequência obrigatória para retomar:**
+1. Implementar um processo Edge dedicado com entrypoint, polling, shutdown gracioso, identidade de worker e integração com health/supervisão do deployment.
+2. Adicionar testes do ciclo de vida, idle/poll, falhas e recuperação do processo.
+3. Só depois adicionar flag fail-closed: ausente/false = desactivada; true = opt-in apenas no processo Edge; valor inválido = erro de configuração.
+4. Preservar a injecção explícita de handlers transaccionais; a flag nunca escolhe nem injecta handlers por si só.
+5. Validar em testes e CI que a flag não altera tarefa, `task_version`, stock ou movimentos; `COMPLETED` permanece `REVIEW_REQUIRED`.
+
+Não existe activação operacional nem autorização de produção nesta fase.
