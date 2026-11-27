@@ -109,11 +109,14 @@ def process_one_edge_event(
                         fencing_token=claim["fencing_token"],
                         lease_seconds=lease_seconds,
                     )
-            except Exception:
+            except Exception as exc:
                 lease_lost.set()
-                logger.exception(
-                    "Edge event lease renewal failed; abandoning local result: inbox_id=%s",
-                    claim["inbox_id"],
+                # Database/driver exception text can contain connection details.
+                # Keep diagnostics useful without logging provider-supplied text.
+                logger.error(
+                    "Edge event lease renewal failed; abandoning local result: "
+                    "inbox_id=%s error_type=%s",
+                    claim["inbox_id"], type(exc).__name__,
                 )
                 return
 
@@ -162,7 +165,7 @@ def process_one_edge_event(
                     )
                 except EdgeEventProcessingError:
                     logger.warning("Transactional Edge handler lost its lease: inbox_id=%s", claim["inbox_id"])
-        except Exception:
+        except Exception as exc:
             with session_factory() as db:
                 try:
                     fail_edge_event(
@@ -172,7 +175,10 @@ def process_one_edge_event(
                     )
                 except EdgeEventProcessingError:
                     logger.warning("Transactional Edge handler failed after lease loss: inbox_id=%s", claim["inbox_id"])
-            logger.exception("Transactional Edge event handler failed: inbox_id=%s", claim["inbox_id"])
+            logger.error(
+                "Transactional Edge event handler failed: inbox_id=%s error_type=%s",
+                claim["inbox_id"], type(exc).__name__,
+            )
         else:
             logger.info(
                 "Edge event processed transactionally: type=%s inbox_id=%s attempt=%s",
@@ -200,7 +206,7 @@ def process_one_edge_event(
             exc.code, claim["inbox_id"],
         )
         return True
-    except Exception:
+    except Exception as exc:
         stop_and_join_heartbeat()
         if lease_lost.is_set():
             return True
@@ -213,7 +219,10 @@ def process_one_edge_event(
                 error_code="WORKER_ERROR",
                 retryable=True,
             )
-        logger.exception("Edge event handler failed: inbox_id=%s", claim["inbox_id"])
+        logger.error(
+            "Edge event handler failed: inbox_id=%s error_type=%s",
+            claim["inbox_id"], type(exc).__name__,
+        )
         return True
     else:
         stop_and_join_heartbeat()
