@@ -2121,3 +2121,15 @@ A validação de `action` rejeita agora explicitamente valores que não sejam te
 - **Quality Gates** `45998882598`, **Security Scans** `45998882484` e **Docker Compose** `45998882648` — sucesso, todos no mesmo SHA.
 - **Limite de implementação do teste:** o cenário revogação-primeiro reproduz manualmente a transacção/ordem de locks da revogação; o cenário ACK-primeiro chama o serviço real `revoke_edge_task_assignment`. Não afirmar que ambos exercitam o serviço real de revogação.
 - `TASK_ACKNOWLEDGED` permanece desactivado/opt-in. `COMPLETED` continua `REVIEW_REQUIRED`; não há mutação automática de tarefa ou inventário.
+
+
+## 2026-11-27 — Verificação de deployment Edge e decisão fail-closed
+
+- HEAD confirmado na `main`: `d0b8da341d331d271a1d9bd5771eddbffa8dac0d`.
+- Inspecção do `docker-compose.yml`: existem `api`, `vision-worker` e `inventory-sync-worker`, mas não existe serviço `edge-event-worker`.
+- O container `api` arranca `uvicorn app.main:app`; o `vision-worker` arranca `python -m app.vision_worker` e trata jobs de inferência de imagens. Nenhum destes é o consumidor da inbox Edge.
+- `apps/api/app/edge_event_worker.py` fornece `process_one_edge_event()`, mas não contém entrypoint de processo, loop de polling ou ciclo de shutdown/supervisão. `apps/api/app/config.py` não define configuração Edge ACK.
+- **Decisão:** não criar `EDGE_TASK_ACKNOWLEDGEMENT_ENABLED` isoladamente nem ligar a registry ao `vision-worker`/API. Isso produziria uma falsa indicação de activação operacional. A flag fica adiada até existir um worker Edge dedicado e realmente supervisionado.
+- Nenhum código executável foi alterado nesta ronda. A registry transaccional continua a exigir injecção explícita; `TASK_ACKNOWLEDGED` permanece inactivo por omissão; `COMPLETED` continua `REVIEW_REQUIRED`; não há mutação automática de tarefa ou inventário.
+- Limitação de execução: o acesso GitHub utilizado nesta ronda permite inspecção e commits documentais, mas não executar localmente pytest, Docker Compose ou smokes PostgreSQL. Não foram executados testes locais e não se declara validação de código nova.
+- Próxima implementação concreta: criar o entrypoint/loop do worker Edge com shutdown limpo e supervisão no deployment; testar o consumidor com flag ausente/desactivada/activada/inválida e verificar que só o caminho explicitamente injectado processa ACK.
