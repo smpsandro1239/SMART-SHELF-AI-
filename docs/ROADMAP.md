@@ -1,30 +1,28 @@
-## 2026-11-27 — Concorrência Edge ACK vs revogação: smoke acrescentado, CI pendente
+## 2026-11-27 — Edge ACK: concorrência validada e fronteira operacional em revisão
 
-O smoke `postgres_edge_task_acknowledgement_smoke.py` inclui agora dois cenários concorrentes em PostgreSQL. Não usa apenas uma barreira/temporização para inferir bloqueio: consulta `pg_stat_activity`, exige `wait_event_type='Lock'` e verifica que `pg_blocking_pids()` contém o PID da transacção que detém a cadeia de locks.
+### Evidência de validação
+O código do Edge ACK foi validado no SHA `cd28865c03abaf4ccde959e098e1dcf462943299`:
+- API CI / PostgreSQL 16: `45998882415` — sucesso, incluindo o smoke de atomicidade, concorrência, fencing e imutabilidade.
+- Quality Gates: `45998882598` — sucesso.
+- Security Scans: `45998882484` — sucesso.
+- Docker Compose: `45998882648` — sucesso.
 
-No cenário revogação-primeiro, a transacção de revogação mantém Store → Task → Device → Assignment bloqueados; o ACK aguarda, retoma após o commit, observa a associação revogada e falha sem persistir acknowledgement. No cenário ACK-primeiro, o handler mantém a transacção depois de adquirir os locks; a chamada de revogação fica bloqueada, retoma após o commit ACK e revoga a associação. O ledger conserva a evidência com timestamp anterior à revogação.
+As alterações documentais posteriores foram também verificadas:
+- Quality Gates `45999727222` — todos os jobs concluídos com sucesso.
+- Security Scans `45999727282` — todos os jobs concluídos com sucesso, incluindo OWASP ZAP passive baseline.
 
-O smoke existente já está ligado ao API CI PostgreSQL 16; não foi alterado qualquer workflow ou migration. A alteração foi publicada directamente na main, commits `daa9055a` e `bb9d84a1`. A execução do smoke, a suite API e os quatro workflows no SHA final permanecem pendentes. O handler continua opt-in e não deve ser activado até validação integral.
+A prova de concorrência cobre ambas as ordens. No cenário revogação-primeiro, o smoke constrói manualmente a transacção com a ordem canónica Store → Task → Device → Assignment; no cenário ACK-primeiro, chama o serviço real `revoke_edge_task_assignment`. A documentação não atribui falsamente o serviço real aos dois cenários.
 
-### Correcção de dependência circular — 2026-11-27
+### Revisão da fronteira operacional
+- **Autorização/tenant:** o handler confirma loja, dispositivo ACTIVE, associação vigente e `task_version`; testes de serviço cobrem identidades cross-store. Continua por definir uma matriz de permissões por acção do dispositivo.
+- **Opt-in:** a registry transaccional está disponível, mas não é injectada por omissão no worker. Não foi encontrada uma feature flag/configuração de deployment específica para activar o ACK; a registry explícita não deve ser apresentada como feature flag operacional.
+- **Observabilidade:** o worker emite logs de sucesso/falha e códigos de erro. Não foram identificadas métricas específicas para ACK, rejeições, retries, dead-letter, lease loss ou latência; não declarar observabilidade operacional completa.
+- **Retry/recuperação:** existem leases, heartbeat, fencing, retries limitados com backoff exponencial e DEAD_LETTER. É necessário ensaio end-to-end de crash/takeover e reconciliação dos estados terminais antes do piloto.
+- **Auditoria/revisão humana:** o ledger é append-only; `COMPLETED` resulta em `REVIEW_REQUIRED`. Falta formalizar o fluxo de revisão humana, actor, decisão e motivo.
+- **Segurança/E2E:** os testes de serviço cobrem cross-store; o smoke PostgreSQL prova concorrência ACK/revogação. Falta a matriz operacional por acção, feature flag fail-closed, métricas e ensaio completo de recuperação/revisão.
 
-EdgeEventHandlerError passou para um módulo partilhado, evitando importação circular entre o worker e o serviço de acknowledgements. A registry transaccional continua opt-in. O SHA cb0036ec1c8e5911f8005657ccbdd11db0a2c9a8 aguarda validação CI; não activar o handler antes dos quatro workflows concluírem com sucesso.
-
-
-## 2026-11-27 — Integração controlada do Edge ACK (opt-in)
-
-O serviço apply_edge_task_acknowledgement foi ligado à fronteira transactional_handlers através de uma registry explícita. A registry não é seleccionada automaticamente pelo worker: o evento TASK_ACKNOWLEDGED continua sem handler activo por omissão até à validação integral da CI.
-
-Foi acrescentado um teste de worker que percorre a registry explicitamente e prova o caminho transaccional: acknowledgement e PROCESSED são confirmados juntos; COMPLETED fica REVIEW_REQUIRED; tarefa, versão e inventário permanecem inalterados.
-
-O smoke PostgreSQL 16 dedicado já está presente no repositório e no API CI. A sua cobertura inclui rollback após insert, commit conjunto, replay duplicado, claim concorrente, fencing e imutabilidade através de triggers reais PostgreSQL. Ainda falta validar o novo SHA em todos os workflows e acrescentar concorrência explícita entre revogação da associação e processamento, além de isolamento cross-store.
-
-Estado: implementação publicada, validação CI pendente. Não activar o handler no worker de produção antes de API CI/PostgreSQL 16, Quality Gates, Security Scans e Docker Compose passarem no mesmo SHA.
-
-
-## 2026-11-27 — Correcção de timestamps no serviço Edge ACK
-
-A suite API no SHA `d1190003ad52d8b66d105f49530ac0bfa47227c7` falhou num único teste (1757 passed, 1 skipped): SQLite remove `tzinfo` ao ler `DateTime(timezone=True)`. A associação é criada pelo serviço de atribuições, que normaliza `valid_from` e `valid_until` para UTC antes da persistência; por isso, os valores naïve lidos do SQLite representam UTC. O serviço de ACK passou a usar uma normalização própria para estes campos persistidos, mantendo a validação estrita do timestamp externo `occurred_at`. Correcção publicada no commit `63554528867b3e432b0d117da1902d98370f0dc6`. A validação dos workflows deste SHA está pendente. O worker mantém o handler `TASK_ACKNOWLEDGED` desactivado e as restantes restrições de inventário mantêm-se.
+### Estado e decisão
+`TASK_ACKNOWLEDGED` continua desactivado por omissão. `COMPLETED` não conclui a tarefa nem altera inventário. A validação CI não equivale a autorização para produção. Próximo marco: fechar os gaps operacionais acima e obter aprovação explícita antes de qualquer activação.
 
 ---
 
