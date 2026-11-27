@@ -226,3 +226,14 @@ def process_one_edge_event(
             claim["event_type"], claim["inbox_id"], claim["attempt_count"],
         )
         return True
+
+
+def main() -> int:
+    """Entrypoint retained at the established worker module path."""
+    from app.edge_event_worker_runtime import main as runtime_main
+
+    return runtime_main()
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
