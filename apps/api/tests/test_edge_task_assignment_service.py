@@ -61,6 +61,9 @@ def test_create_and_revoke_assignment_are_audited_atomically(db_session):
     )
     assert assignment.task_version == task.task_version
     assert assignment.allowed_actions == ["ACCEPTED", "COMPLETED"]
+    from app.schemas import EdgeTaskAssignmentRead
+    response = EdgeTaskAssignmentRead.model_validate(assignment)
+    assert response.allowed_actions == ["ACCEPTED", "COMPLETED"]
     created = db.query(models.EdgeDeviceTaskAssignmentEvent).filter_by(
         assignment_id=assignment.id, event_type="CREATED"
     ).one()

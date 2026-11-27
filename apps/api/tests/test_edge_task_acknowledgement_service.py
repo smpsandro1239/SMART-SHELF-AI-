@@ -192,3 +192,17 @@ def test_acknowledgement_rejects_action_not_granted_by_assignment(ack_db):
 
     assert error.value.code == "DEVICE_ACTION_NOT_ALLOWED"
     assert db.query(models.EdgeTaskAcknowledgement).count() == 0
+
+
+def test_legacy_assignment_without_action_scope_denies_ack(ack_db):
+    db, _task_id, event = ack_db
+    created = db.query(models.EdgeDeviceTaskAssignmentEvent).filter_by(event_type="CREATED").one()
+    created.details = {"task_version": event["payload"]["task_version"], "device_id": event["device_id"]}
+    db.commit()
+
+    from app.edge_event_errors import EdgeEventHandlerError
+    with pytest.raises(EdgeEventHandlerError) as error:
+        apply_edge_task_acknowledgement(db, event)
+
+    assert error.value.code == "DEVICE_ACTION_NOT_ALLOWED"
+    assert db.query(models.EdgeTaskAcknowledgement).count() == 0
