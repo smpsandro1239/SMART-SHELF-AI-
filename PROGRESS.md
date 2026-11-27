@@ -2,67 +2,50 @@
 
 ## Estado atual
 - Branch: `main`
-- Último commit de código validado: `4ea755b6a110bb6766748cb970db0458583444b8`
-- Último commit publicado: `e45015296ad2221828af6a94f53178abc822c9e2` (documentação)
+- HEAD inicial confirmado nesta sessão: `0b0bc58874a9b3c3bf29276c6a867a206de4a959`
 - Última atualização: 2026-11-27
 
 ## Tarefa atual
-- Identificador: EDGE-ACK-REVIEW-01
-- Descrição: formalizar o fluxo auditável de revisão humana para ACK COMPLETED.
-- Estado: PENDING — manter COMPLETED em REVIEW_REQUIRED e sem efeitos no inventário até existir revisão autenticada e auditável.
+- Identificador: EDGE-OBSERVABILITY-02
+- Descrição: completar contadores operacionais Edge no heartbeat privado e definir fronteira segura de exportação.
+- Estado: IMPLEMENTADO — validação CI pendente no novo SHA.
 
 ## Tarefas concluídas
-- [x] Supervisor independente com subprocesso, heartbeat, PID e estado operacional.
-- [x] Watchdog para crash, SIGKILL e heartbeat obsoleto; backoff exponencial limitado.
-- [x] Lock exclusivo para impedir supervisores duplicados no mesmo runtime.
-- [x] Shutdown SIGTERM/SIGINT gracioso, timeout e SIGKILL de último recurso.
-- [x] Healthcheck do supervisor e do processo filho.
-- [x] Docker Compose smoke de recuperação SIGKILL, heartbeat obsoleto, shutdown SIGTERM e reinício limpo.
-- [x] Métricas do polling no heartbeat e propagação do snapshot ao estado do supervisor.
-- [x] Logs de outcomes correlacionados por IDs internos, tentativa, duração e resultado; sem payload ou texto de excepção.
-- [x] Scopes de acção por associação dispositivo-tarefa; lista vazia e associações antigas são deny-by-default.
-- [x] Configuração ACK fail-closed com flag false por omissão e selector explícito de registry.
-- [x] Injecção explícita do mapa transaccional; flag isolada não activa handlers.
-- [x] Erro de configuração do filho deixa supervisor em FAILED sem restart loop.
-- [x] Testes de ACK_RECORDED, ACK_REJECTED, RETRY, DEAD_LETTER, LEASE_LOST, scopes e configuração fail-closed.
+- [x] Supervisor independente com subprocesso, heartbeat, watchdog, backoff, singleton lock e shutdown gracioso.
+- [x] Heartbeat de polling e propagação do snapshot para o estado do supervisor.
+- [x] Logs de outcomes correlacionados sem payload nem texto de excepção.
+- [x] Contadores de PROCESSED, RETRY, DEAD_LETTER, LEASE_LOST, ACK_CLAIMED, ACK_RECORDED e ACK_REJECTED.
+- [x] Contadores de falhas de handler, duplicados rejeitados e renovações/falhas de lease.
+- [x] Observadores best-effort: falha da telemetria não interrompe nem altera a operação transaccional.
+- [x] Decisão de exportação: ficheiros privados em /tmp e logs; sem endpoint HTTP/porta adicional nesta fase.
+- [x] Testes de observação de outcomes e rejeição de ACK duplicado.
 
 ## Tarefas pendentes
-- [ ] Implementar revisão humana auditável de COMPLETED (actor, decisão, motivo, timestamp, evidência).
-- [ ] Decidir mecanismo de exportação/consumo das métricas sem adicionar infraestrutura desnecessária.
-- [ ] Manter ACK desactivado até aprovação operacional explícita.
+- [ ] Contabilizar eventos recebidos no ponto de ingestão HTTP, separadamente de eventos reclamados pelo worker.
+- [ ] Definir agregação durável e retenção de métricas históricas antes de analytics.
+- [ ] Implementar revisão humana append-only de declarações COMPLETED (actor, decisão, motivo, timestamp e evidência), sem mutação automática de tarefa/inventário.
+- [ ] Validar API CI/PostgreSQL 16, Docker Compose, Quality Gates e Security Scans no SHA desta alteração.
 
 ## Tarefas bloqueadas
-- A activação de ACK em produção exige aprovação operacional; não está autorizada nesta fase.
+- Activação de ACK em produção: exige aprovação operacional explícita; permanece desactivada por omissão.
 
 ## Testes
-- Compilação Python e suite API: SUCCESS.
-- PostgreSQL 16 ACK smoke: SUCCESS, incluindo scope deny-by-default e DEAD_LETTER.
-- Docker Compose smoke: SUCCESS.
-- Quality Gates: SUCCESS.
-- Security Scans: SUCCESS.
-- Testes locais: não executados; esta execução não dispõe de terminal ligado ao repositório.
+- Adicionados: observação dos outcomes PROCESSED/CLAIMED e ACK_CLAIMED/ACK_REJECTED por duplicado.
+- Execução local: não disponível nesta sessão; aguardar GitHub Actions.
+- Regressões a confirmar: suite Edge worker, suite API e PostgreSQL 16.
 
 ## CI/CD
-- SHA integralmente validado: `4ea755b6a110bb6766748cb970db0458583444b8`.
-- API CI: SUCCESS — run 46023483063.
-- Docker Compose smoke: SUCCESS — run 46023483209.
-- Quality Gates: SUCCESS — run 46023483050.
-- Security Scans: SUCCESS — run 46023483060.
+- Último SHA observado antes da alteração: `0b0bc58874a9b3c3bf29276c6a867a206de4a959`.
+- Quality Gates e Security Scans: SUCCESS nesse SHA.
+- API CI e Docker Compose: SUCCESS no SHA validado anteriormente `4ea755b6a110bb6766748cb970db0458583444b8`.
+- Resultado da nova alteração: pendente.
 
 ## Decisões técnicas
-- O supervisor é processo independente, não uma thread no worker.
-- Heartbeats e estado são ficheiros JSON atómicos em `/tmp`.
-- O timeout do heartbeat do filho é configurável; o valor por omissão é 120 s.
-- O lock `flock` evita duplicação de supervisores no mesmo volume.
-- Os contadores são snapshots voláteis por processo, não um ledger histórico.
-- `EDGE_TASK_ACKNOWLEDGEMENT_ENABLED` é false por omissão; true exige `EDGE_TASK_ACKNOWLEDGEMENT_HANDLER_REGISTRY=builtin-v1`.
-- O mapa transaccional é injectado explicitamente; flag isolada não activa ACK.
-- O supervisor mantém-se FAILED em erro de configuração, sem reinícios repetidos.
-- `COMPLETED` continua apenas `REVIEW_REQUIRED`; nenhum acknowledgement altera tarefa, versão, stock ou movimentos.
-- Nenhuma migration foi necessária para scopes: a allowlist é guardada no evento CREATED append-only.
+- Heartbeat JSON continua privado no filesystem efémero do container.
+- Não expor endpoint Prometheus/HTTP sem autenticação, isolamento multi-loja e consumidor definido.
+- Snapshots de métricas são operacionais e voláteis; não substituem ledger append-only nem analytics históricos.
+- Métricas nunca alteram inventário, tarefa, ACK ou estado transaccional.
+- `TASK_ACKNOWLEDGED` continua fail-closed e `COMPLETED` continua `REVIEW_REQUIRED`.
 
 ## Próxima ação obrigatória
-- Desenhar e implementar revisão humana append-only para declarações COMPLETED, sem concluir tarefas nem alterar inventário automaticamente.
-
----
-
+- Adicionar contagem de eventos recebidos no ponto de ingestão, sem confundir recepção com claim/processamento; depois retomar o desenho da revisão humana auditável.

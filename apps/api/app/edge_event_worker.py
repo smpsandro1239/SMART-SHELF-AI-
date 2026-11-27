@@ -66,6 +66,8 @@ def process_one_edge_event(
     lease_seconds: int = 60,
     handlers: dict[str, EdgeEventHandler] | None = None,
     transactional_handlers: dict[str, TransactionalEdgeEventHandler] | None = None,
+    outcome_observer: Callable[[str, str | None], None] | None = None,
+    lease_observer: Callable[[bool], None] | None = None,
 ) -> bool:
     """Claim and process at most one event; return False when the queue is idle."""
     with session_factory() as db:
@@ -102,6 +104,14 @@ def process_one_edge_event(
             error_code,
             error_type,
         )
+        if outcome_observer is not None:
+            try:
+                outcome_observer(outcome, error_code)
+            except Exception as observer_error:
+                logger.error(
+                    "Edge metrics outcome observer failed: error_type=%s",
+                    type(observer_error).__name__,
+                )
 
     log_outcome("ACK_CLAIMED" if claim["event_type"] == "TASK_ACKNOWLEDGED" else "CLAIMED")
 
@@ -143,7 +153,23 @@ def process_one_edge_event(
                         fencing_token=claim["fencing_token"],
                         lease_seconds=lease_seconds,
                     )
+                if lease_observer is not None:
+                    try:
+                        lease_observer(True)
+                    except Exception as observer_error:
+                        logger.error(
+                            "Edge metrics lease observer failed: error_type=%s",
+                            type(observer_error).__name__,
+                        )
             except Exception as exc:
+                if lease_observer is not None:
+                    try:
+                        lease_observer(False)
+                    except Exception as observer_error:
+                        logger.error(
+                            "Edge metrics lease observer failed: error_type=%s",
+                            type(observer_error).__name__,
+                        )
                 lease_lost.set()
                 # Database/driver exception text can contain connection details.
                 # Keep diagnostics useful without logging provider-supplied text.
@@ -331,10 +357,52 @@ def run_worker(
         "claimed_events": 0,
         "idle_polls": 0,
         "poll_failures": 0,
+        "events_processed": 0,
+        "events_retried": 0,
+        "events_dead_lettered": 0,
+        "handler_failures": 0,
+        "duplicate_events": 0,
+        "lease_renewals": 0,
+        "lease_renewal_failures": 0,
+        "lease_losses": 0,
+        "ack_claimed": 0,
+        "ack_recorded": 0,
+        "ack_rejected": 0,
+        "last_outcome": None,
+        "last_outcome_at": None,
         "last_poll_duration_ms": 0,
         "last_event_at": None,
         "last_error_type": None,
     }
+    metrics_lock = threading.Lock()
+
+    def increment_metric(name: str, amount: int = 1) -> None:
+        with metrics_lock:
+            metrics[name] += amount
+
+    def observe_outcome(outcome: str, error_code: str | None) -> None:
+        with metrics_lock:
+            metrics["last_outcome"] = outcome
+            metrics["last_outcome_at"] = time.time()
+            outcome_counters = {
+                "PROCESSED": "events_processed",
+                "RETRY": "events_retried",
+                "DEAD_LETTER": "events_dead_lettered",
+                "LEASE_LOST": "lease_losses",
+                "ACK_CLAIMED": "ack_claimed",
+                "ACK_RECORDED": "ack_recorded",
+                "ACK_REJECTED": "ack_rejected",
+            }
+            counter = outcome_counters.get(outcome)
+            if counter is not None:
+                metrics[counter] += 1
+            if outcome in {"RETRY", "DEAD_LETTER", "ACK_REJECTED"}:
+                metrics["handler_failures"] += 1
+            if error_code in {"DUPLICATE_ACK_EVENT", "DUPLICATE_EVENT"}:
+                metrics["duplicate_events"] += 1
+
+    def observe_lease_renewal(succeeded: bool) -> None:
+        increment_metric("lease_renewals" if succeeded else "lease_renewal_failures")
 
     def write_heartbeat() -> None:
         if not heartbeat_path:
@@ -342,10 +410,13 @@ def run_worker(
         target = Path(heartbeat_path)
         target.parent.mkdir(parents=True, exist_ok=True)
         temporary = target.with_name(f".{target.name}.{os.getpid()}.tmp")
+        with metrics_lock:
+            snapshot = metrics.copy()
         payload = {
+            "schema_version": 2,
             "pid": os.getpid(),
             "heartbeat_at": time.time(),
-            "metrics": metrics.copy(),
+            "metrics": snapshot,
         }
         temporary.write_text(json.dumps(payload), encoding="utf-8")
         os.replace(temporary, target)
@@ -357,20 +428,24 @@ def run_worker(
             logger.error("Edge worker heartbeat write failed: error_type=%s", type(exc).__name__)
             return 1
 
-        metrics["poll_attempts"] += 1
+        increment_metric("poll_attempts")
         poll_started = time.monotonic()
         try:
             process_kwargs: dict[str, Any] = {
                 "worker_id": worker_id,
                 "lease_seconds": lease_seconds,
             }
+            if process_event is process_one_edge_event:
+                process_kwargs["outcome_observer"] = observe_outcome
+                process_kwargs["lease_observer"] = observe_lease_renewal
             if enable_transactional_ack:
                 process_kwargs["transactional_handlers"] = transactional_handlers
             processed = process_event(SessionLocal, **process_kwargs)
         except Exception as exc:
-            metrics["poll_failures"] += 1
-            metrics["last_error_type"] = type(exc).__name__
-            metrics["last_poll_duration_ms"] = round((time.monotonic() - poll_started) * 1000)
+            with metrics_lock:
+                metrics["poll_failures"] += 1
+                metrics["last_error_type"] = type(exc).__name__
+                metrics["last_poll_duration_ms"] = round((time.monotonic() - poll_started) * 1000)
             logger.error(
                 "Edge event polling failed; recovering: error_type=%s",
                 type(exc).__name__,
@@ -385,13 +460,14 @@ def run_worker(
             stop_event.wait(poll_interval)
             continue
 
-        metrics["last_poll_duration_ms"] = round((time.monotonic() - poll_started) * 1000)
-        metrics["last_error_type"] = None
-        if processed:
-            metrics["claimed_events"] += 1
-            metrics["last_event_at"] = time.time()
-        else:
-            metrics["idle_polls"] += 1
+        with metrics_lock:
+            metrics["last_poll_duration_ms"] = round((time.monotonic() - poll_started) * 1000)
+            metrics["last_error_type"] = None
+            if processed:
+                metrics["claimed_events"] += 1
+                metrics["last_event_at"] = time.time()
+            else:
+                metrics["idle_polls"] += 1
 
         try:
             write_heartbeat()

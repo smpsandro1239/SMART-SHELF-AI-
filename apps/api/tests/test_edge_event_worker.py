@@ -318,3 +318,39 @@ def test_transactional_ack_rejection_is_correlated_without_payload(session_facto
     assert "edge_event_outcome outcome=ACK_REJECTED" in caplog.text
     assert "error_code=ACK_NOT_AUTHORIZED" in caplog.text
     assert "must-not-be-logged" not in caplog.text
+
+
+
+def test_worker_reports_outcomes_to_observer(session_factory):
+    observed = []
+
+    assert process_one_edge_event(
+        session_factory,
+        worker_id="edge-worker-observer",
+        outcome_observer=lambda outcome, error_code: observed.append((outcome, error_code)),
+    )
+
+    assert observed == [("CLAIMED", None), ("PROCESSED", None)]
+
+
+def test_worker_reports_dead_letter_and_duplicate_reason_to_observer(session_factory):
+    observed = []
+
+    def duplicate_ack(_db, _event):
+        raise EdgeEventHandlerError("DUPLICATE_ACK_EVENT", retryable=False)
+
+    with session_factory() as db:
+        inbox = db.query(models.EdgeDeviceEventInbox).one()
+        inbox.event_type = "TASK_ACKNOWLEDGED"
+        inbox.payload = {"task_id": 1, "task_version": 1, "action": "COMPLETED"}
+        db.commit()
+
+    assert process_one_edge_event(
+        session_factory,
+        worker_id="edge-worker-observer",
+        transactional_handlers={"TASK_ACKNOWLEDGED": duplicate_ack},
+        outcome_observer=lambda outcome, error_code: observed.append((outcome, error_code)),
+    )
+
+    assert ("ACK_CLAIMED", None) in observed
+    assert ("ACK_REJECTED", "DUPLICATE_ACK_EVENT") in observed

@@ -20,7 +20,9 @@ A configuração é dedicada ao subprocesso `app.edge_event_worker`; não é lid
 - [x] Acrescentar logs correlacionados por evento com event_id, inbox_id, processing_id, store_id, device_id, worker_id, tentativa, duração e outcome PROCESSED/RETRY/DEAD_LETTER/LEASE_LOST/ACK_CLAIMED/ACK_RECORDED/ACK_REJECTED.
 - [x] Acrescentar testes para contadores de polling, duração, falhas sem texto de excepção e correlação de ACK aplicado/DEAD_LETTER.
 - [x] Confirmar API CI, Quality Gates, Security Scans e Docker Compose no SHA `4ea755b6a110bb6766748cb970db0458583444b8` — todos SUCCESS.
-- [ ] Decidir mecanismo de exportação/consumo das métricas sem introduzir dependências ou portas expostas desnecessárias.
+- [x] Decidir exportação: manter heartbeat JSON privado em `/tmp` + logs correlacionados; não abrir endpoint/porta Prometheus até existir consumidor autenticado, política tenant-scoped e retenção durável.
+- [x] Acrescentar contadores voláteis de outcomes, ACK, duplicados, falhas de handler e renovações/perdas de lease ao heartbeat do worker; propagar snapshot pelo supervisor.
+- [ ] Contabilizar eventos recebidos no ponto de ingestão da API e definir agregação durável/histórica antes de apresentar analytics.
 
 Limite: os contadores no heartbeat são snapshots voláteis por processo, não um ledger durável nem métricas agregadas históricas. A implementação não activa ACK nem altera efeitos de domínio.
 

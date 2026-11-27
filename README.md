@@ -1,3 +1,13 @@
+## Edge worker — métricas de outcomes e leases (2026-11-27)
+
+O heartbeat privado do processo Edge (`/tmp/edge-worker-child.json`) passa a expor `schema_version=2` e contadores voláteis de outcomes: PROCESSED, RETRY, DEAD_LETTER, LEASE_LOST, ACK_CLAIMED, ACK_RECORDED e ACK_REJECTED; renovações e falhas de renovação de lease; falhas de handler e duplicados explicitamente rejeitados. O supervisor continua a propagar o snapshot para o seu ficheiro de estado. Os observadores são best-effort e isolados: uma falha de telemetria não altera o resultado transaccional nem o ciclo do worker.
+
+A exportação mantém-se local ao container através dos ficheiros JSON atómicos em `/tmp` e dos logs estruturados já existentes. Não é exposta uma rota HTTP, porta adicional, Prometheus endpoint ou serviço externo: o deployment actual não tem consumidor de métricas autenticado nem retenção histórica, e expor um endpoint sem política de autorização/tenant e sem armazenamento durável criaria superfície de ataque e falsa expectativa de analytics. O healthcheck continua a validar liveness/heartbeats, não a interpretar métricas como prova de integridade do inventário.
+
+Limites: os contadores reiniciam com o processo e não são agregados entre reinícios. Eventos recebidos devem ser contabilizados no ponto de ingestão da API; o worker só observa eventos reclamados. Os contadores não são ledger de auditoria e não alteram inventário, tarefas ou ACK.
+
+---
+
 ## Supervisor independente do Edge Event Worker (2026-11-27)
 
 O serviço `edge-event-worker` é iniciado através de `python -m app.edge_event_supervisor`. O supervisor mantém um heartbeat operacional próprio, inicia o worker como processo filho, monitoriza o PID e o heartbeat do ciclo de polling e reinicia processos terminados ou sem heartbeat. O backoff é exponencial e limitado; SIGTERM/SIGINT desencadeiam encerramento gracioso com timeout e kill como último recurso.
