@@ -28,6 +28,8 @@ jobs:
     name: Docker Compose demo stack
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      EDGE_SUPERVISOR_HEARTBEAT_TIMEOUT: 15
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -106,6 +108,78 @@ jobs:
           grep -q 'no-new-privileges:true' <<< "$security_options"
           docker compose exec -T vision-worker python -c "import os; assert os.geteuid() == 65532; assert os.access('/tmp', os.W_OK); assert not os.access('/app', os.W_OK); assert not os.access('/app/storage/shelf-images', os.W_OK); assert not os.access('/models', os.W_OK)"
           echo "Verified non-root worker, read-only root filesystem, dropped capabilities, no-new-privileges and writable temporary directory only."
+
+          # The Edge event worker is a separate long-running process, not the vision worker.
+          edge_worker_id="$(docker compose ps -q edge-event-worker)"
+          test -n "$edge_worker_id"
+          edge_state="$(docker inspect "$edge_worker_id" --format '{{.State.Status}}')"
+          test "$edge_state" = "running"
+          edge_health="$(docker inspect "$edge_worker_id" --format '{{.State.Health.Status}}')"
+          test "$edge_health" = "healthy"
+          docker compose exec -T edge-event-worker python -m app.edge_event_supervisor --healthcheck
+          edge_restart_count_before="$(docker inspect "$edge_worker_id" --format '{{.RestartCount}}')"
+          sleep 5
+          edge_state_after="$(docker inspect "$edge_worker_id" --format '{{.State.Status}}')"
+          edge_restart_count_after="$(docker inspect "$edge_worker_id" --format '{{.RestartCount}}')"
+          test "$edge_state_after" = "running"
+          test "$edge_restart_count_before" = "$edge_restart_count_after"
+          edge_user="$(docker inspect "$edge_worker_id" --format '{{.Config.User}}')"
+          edge_rootfs_read_only="$(docker inspect "$edge_worker_id" --format '{{.HostConfig.ReadonlyRootfs}}')"
+          edge_dropped_caps="$(docker inspect "$edge_worker_id" --format '{{join .HostConfig.CapDrop ","}}')"
+          edge_security_options="$(docker inspect "$edge_worker_id" --format '{{join .HostConfig.SecurityOpt ","}}')"
+          edge_command="$(docker inspect "$edge_worker_id" --format '{{json .Config.Cmd}}')"
+          test "$edge_user" = "65532:65532"
+          test "$edge_rootfs_read_only" = "true"
+          grep -q 'ALL' <<< "$edge_dropped_caps"
+          grep -q 'no-new-privileges:true' <<< "$edge_security_options"
+          grep -q 'app.edge_event_supervisor' <<< "$edge_command"
+          docker compose exec -T edge-event-worker python -c "import os; assert os.geteuid() == 65532; assert os.access('/tmp', os.W_OK); assert not os.access('/app', os.W_OK)"
+          
+          # Kill the actual worker child and prove that the independent supervisor replaces it.
+          restart_before="$(docker compose exec -T edge-event-worker python -c "import json; print(json.load(open('/tmp/edge-supervisor-state.json'))['restart_count'])")"
+          docker compose exec -T edge-event-worker python -c "import json, os, signal; state=json.load(open('/tmp/edge-supervisor-state.json')); os.kill(state['child_pid'], signal.SIGKILL)"
+          recovered=0
+          for attempt in $(seq 1 30); do
+            restart_after="$(docker compose exec -T edge-event-worker python -c "import json; print(json.load(open('/tmp/edge-supervisor-state.json'))['restart_count'])" 2>/dev/null || echo 0)"
+            if [[ "$restart_after" -gt "$restart_before" ]] && docker compose exec -T edge-event-worker python -m app.edge_event_supervisor --healthcheck; then
+              recovered=1
+              break
+            fi
+            sleep 1
+          done
+          test "$recovered" = "1"
+
+          # Freeze the child: its polling heartbeat must become stale and trigger replacement.
+          child_pid="$(docker compose exec -T edge-event-worker python -c "import json; print(json.load(open('/tmp/edge-supervisor-state.json'))['child_pid'])")"
+          restart_before="$(docker compose exec -T edge-event-worker python -c "import json; print(json.load(open('/tmp/edge-supervisor-state.json'))['restart_count'])")"
+          docker compose exec -T edge-event-worker python -c "import os, signal; os.kill($child_pid, signal.SIGSTOP)"
+          recovered=0
+          for attempt in $(seq 1 30); do
+            restart_after="$(docker compose exec -T edge-event-worker python -c "import json; print(json.load(open('/tmp/edge-supervisor-state.json'))['restart_count'])" 2>/dev/null || echo 0)"
+            if [[ "$restart_after" -gt "$restart_before" ]] && docker compose exec -T edge-event-worker python -m app.edge_event_supervisor --healthcheck; then
+              recovered=1
+              break
+            fi
+            sleep 1
+          done
+          test "$recovered" = "1"
+
+          # Exercise the real container SIGTERM path and restart the service cleanly.
+          docker compose stop --timeout 30 edge-event-worker
+          shutdown_logs="$(docker compose logs --no-color edge-event-worker)"
+          grep -q 'Supervisor shutdown requested' <<< "$shutdown_logs"
+          grep -q 'Edge event worker stopped' <<< "$shutdown_logs"
+          docker compose start edge-event-worker
+          healthy=0
+          for attempt in $(seq 1 30); do
+            if docker compose exec -T edge-event-worker python -m app.edge_event_supervisor --healthcheck; then
+              healthy=1
+              break
+            fi
+            sleep 1
+          done
+          test "$healthy" = "1"
+          echo "Verified independent Edge supervisor healthcheck, SIGKILL recovery, stale-heartbeat recovery, graceful SIGTERM shutdown/restart, non-root execution and container hardening."
 
           while IFS='|' read -r role email password; do
             response="$(curl --fail --silent --show-error \

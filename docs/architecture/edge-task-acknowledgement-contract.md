@@ -1,6 +1,6 @@
 # Contrato de acknowledgements de tarefas por dispositivos Edge
 
-Estado: **implementação parcial; handler registado em modo opt-in, não activo por omissão**
+Estado: **implementação técnica validada pela CI; handler disponível apenas por opt-in explícito, não activo por omissão. Autorização operacional/produção não concedida.**
 Data: 2026-11-26
 
 ## 1. Objectivo e fronteira
@@ -88,7 +88,7 @@ Rejeições de autorização não devem revelar a existência de tarefas de outr
 
 A migration 0102, o serviço/API de associação dispositivo-tarefa, a migration 0103 e o serviço de acknowledgement estão implementados. A fronteira transaccional do worker executa o handler, insere o acknowledgement e muda o processamento da inbox para PROCESSED na mesma transacção SQLAlchemy, sob validação do owner, fencing token e lease.
 
-O handler apply_edge_task_acknowledgement está disponível numa registry transaccional explícita, mas essa registry não é activada por omissão pelo worker. TASK_ACKNOWLEDGED permanece fail-closed até a CI integral passar no SHA final. O smoke PostgreSQL 16 já ligado ao API CI cobre rollback após insert, commit conjunto, rejeição de replay, claim concorrente com vencedor único, fencing e triggers append-only. Foi acrescentado teste do worker para o percurso transaccional opt-in.
+O handler apply_edge_task_acknowledgement está disponível numa registry transaccional explícita, mas essa registry não é activada por omissão pelo worker. A CI integral do código passou no SHA cd28865c03abaf4ccde959e098e1dcf462943299 (API CI 45998882415, Quality Gates 45998882598, Security Scans 45998882484 e Docker Compose 45998882648). Os workflows documentais posteriores Quality Gates 45999727222 e Security Scans 45999727282 também terminaram com sucesso. Isto valida os cenários automatizados, não concede autorização operacional ou de produção. A registry Python opt-in não é uma feature flag de deployment. Ainda faltam configuração fail-closed dedicada, matriz de permissões por acção, métricas/alertas, fluxo auditável de revisão humana e ensaios end-to-end de crash/recuperação. O smoke PostgreSQL 16 cobre rollback após insert, commit conjunto, replay, claim concorrente, fencing, triggers append-only e concorrência ACK/revogação.
 
 Ainda falta validar os workflows no SHA final, acrescentar concorrência explícita entre revogação da associação e processamento e reforçar o isolamento cross-store no smoke dedicado. A implementação não declara integração com robôs homologada. COMPLETED continua a produzir apenas REVIEW_REQUIRED, sem alterar tarefa ou inventário.
 
@@ -119,3 +119,36 @@ A unicidade e as regras de validade são garantidas no PostgreSQL, não apenas p
 ### 2026-11-27 — Validação defensiva adicional do Edge ACK
 
 A validação de `action` rejeita agora explicitamente valores que não sejam texto, incluindo listas, objectos, booleanos e números. Foram acrescentados cinco casos parametrizados para garantir `INVALID_ACK_ACTION` sem persistência. A execução dos testes e os workflows CI continuam pendentes; não activar a registry por omissão. A revisão também confirmou que o smoke PostgreSQL existente ainda não cobre concorrência entre revogação e ACK nem isolamento adversarial cross-store — estas provas permanecem em falta.
+
+
+## 2026-11-27 — Regressão CI do worker Edge ACK identificada e corrigida
+
+- A API CI `45994745435` no commit `09fc570e7032aa66fa6f8c16f4a998f988509bed` executou PostgreSQL 16 e os smokes anteriores com sucesso, mas a suite terminou com `1 failed, 1764 passed, 1 skipped`. A falha foi `test_worker_routes_task_acknowledgement_through_fenced_transaction`: `occurred_at` foi lido da inbox SQLite sem `tzinfo`, levando o serviço a rejeitar um timestamp já normalizado na ingestão.
+- Corrigido em `6c4379ecc85bbe4e43d276ac97af01cce5a81520`: o timestamp persistido da inbox é normalizado com `_database_utc`, tal como os timestamps persistidos da associação. O timestamp externo continua sujeito à validação estrita no ponto de ingestão.
+- Acrescentados quatro cenários parametrizados de identidade cross-store em `test_edge_task_acknowledgement_service.py` (tarefa estrangeira, dispositivo estrangeiro, loja estrangeira com tarefa local e conjunto de identidades estrangeiras sem associação). Commit dos testes: `a840fac4b12d6f324c29c6a6b0b441a58aba85a5`.
+- A API CI/Quality Gates/Security Scans/Docker Compose do commit `a840fac4b12d6f324c29c6a6b0b441a58aba85a5` foi observada em execução; a validação do commit corretivo `6c4379e` ainda tem de ser confirmada. Não declarar suite aprovada.
+- A prova PostgreSQL de concorrência entre revogação e processamento ainda não foi acrescentada; manter este ponto explicitamente aberto. A registry permanece opt-in e `COMPLETED` continua apenas `REVIEW_REQUIRED`.
+
+
+## 12. Revisão da fronteira operacional — 2026-11-27
+
+A inspecção do worker confirma que `BUILTIN_TRANSACTIONAL_HANDLERS` só é usado quando um chamador fornece explicitamente `transactional_handlers`; `process_one_edge_event()` não selecciona essa registry por omissão. Não foi identificada uma configuração de deployment/feature flag dedicada ao evento. O handler valida a loja, o estado ACTIVE do dispositivo, a associação vigente e a versão da tarefa, mas ainda não existe uma matriz explícita de permissões/scopes por acção (`ACCEPTED`, `STARTED`, `COMPLETED`).
+
+O worker já dispõe de lease, heartbeat, fencing, retry exponencial limitado e dead-letter. Os logs existentes registam sucesso/falha, mas não constituem métricas/alertas operacionais específicos do ACK. O ledger conserva evidência append-only e `COMPLETED` é `REVIEW_REQUIRED`; falta formalizar o fluxo de revisão humana com actor, decisão e motivo.
+
+**Decisão:** manter o handler desactivado por omissão. Não concluir tarefa nem alterar inventário com eventos Edge. Não autorizar produção até os gaps operacionais serem fechados, ensaiados e aprovados explicitamente.
+
+
+## 13. Fronteira de deployment e feature flag — verificação 2026-11-27
+
+A configuração opt-in de deployment não foi introduzida porque a inspecção do repositório confirmou que ainda não existe um consumidor Edge implantado:
+
+- O Compose não define um serviço `edge-event-worker`.
+- O serviço `api` executa `uvicorn app.main:app`; não arranca o processador da inbox.
+- O serviço `vision-worker` executa `app.vision_worker` e processa inferência de imagens; não é o worker de eventos Edge.
+- O módulo `app.edge_event_worker` disponibiliza `process_one_edge_event()`, mas não contém entrypoint/loop de polling e não é iniciado por um serviço de deployment.
+- `app.config.Settings` não contém uma configuração Edge ACK.
+
+**Regra fail-closed:** não declarar a feature como configurável/operacional nem criar uma flag sem consumidor real. Não ligar a registry ao API ou ao vision-worker. A próxima implementação deve criar primeiro o processo Edge supervisionado; só depois poderá adicionar `EDGE_TASK_ACKNOWLEDGEMENT_ENABLED` (ausente/false desactivada, true opt-in exclusivo do processo Edge, valor inválido rejeitado). Mesmo com a flag activa, `BUILTIN_TRANSACTIONAL_HANDLERS` tem de continuar a ser injectada explicitamente pelo ponto de arranque autorizado.
+
+Até essa implementação e respectiva CI, `TASK_ACKNOWLEDGED` mantém-se inactivo por omissão. `COMPLETED` continua apenas `REVIEW_REQUIRED`; nenhum acknowledgement altera tarefa, versão, stock ou movimentos.

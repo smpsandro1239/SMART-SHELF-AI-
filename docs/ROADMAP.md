@@ -1,22 +1,68 @@
-### Correcção de dependência circular — 2026-11-27
+## P1 — Métricas operacionais Edge (2026-11-27)
 
-EdgeEventHandlerError passou para um módulo partilhado, evitando importação circular entre o worker e o serviço de acknowledgements. A registry transaccional continua opt-in. O SHA cb0036ec1c8e5911f8005657ccbdd11db0a2c9a8 aguarda validação CI; não activar o handler antes dos quatro workflows concluírem com sucesso.
+- [x] Definir heartbeat do worker com contadores de polling, eventos reclamados, polls ociosos e falhas.
+- [x] Registar duração do último polling, instante do último evento e tipo da última falha, sem texto de excepção.
+- [x] Propagar snapshot de métricas do filho para o estado operacional do supervisor.
+- [ ] Acrescentar correlação/outcomes por evento: PROCESSED, RETRY, DEAD_LETTER, lease perdida e ACK recebido/aplicado/rejeitado.
+- [ ] Testar contadores, reinício/reset do processo, isolamento de dados sensíveis e workflows no SHA final.
+- [ ] Decidir mecanismo de exportação/consumo das métricas sem introduzir dependências ou portas expostas desnecessárias.
 
+Limite: os contadores no heartbeat são snapshots voláteis por processo, não um ledger durável nem métricas agregadas históricas. A implementação não activa ACK nem altera efeitos de domínio.
 
-## 2026-11-27 — Integração controlada do Edge ACK (opt-in)
+---
 
-O serviço apply_edge_task_acknowledgement foi ligado à fronteira transactional_handlers através de uma registry explícita. A registry não é seleccionada automaticamente pelo worker: o evento TASK_ACKNOWLEDGED continua sem handler activo por omissão até à validação integral da CI.
+## 2026-11-27 — Supervisor independente do Edge Worker
 
-Foi acrescentado um teste de worker que percorre a registry explicitamente e prova o caminho transaccional: acknowledgement e PROCESSED são confirmados juntos; COMPLETED fica REVIEW_REQUIRED; tarefa, versão e inventário permanecem inalterados.
+Implementado em `app.edge_event_supervisor` como processo pai independente. O supervisor gere o processo filho, heartbeat operacional, PID, estado, reinícios, falhas consecutivas, último exit code, backoff exponencial limitado, lock singleton e shutdown gracioso com timeout. O worker escreve heartbeat do ciclo de polling de forma atómica; o healthcheck valida frescura dos dois heartbeats e a existência dos PIDs correspondentes.
 
-O smoke PostgreSQL 16 dedicado já está presente no repositório e no API CI. A sua cobertura inclui rollback após insert, commit conjunto, replay duplicado, claim concorrente, fencing e imutabilidade através de triggers reais PostgreSQL. Ainda falta validar o novo SHA em todos os workflows e acrescentar concorrência explícita entre revogação da associação e processamento, além de isolamento cross-store.
+O Docker Compose mantém o serviço dedicado com utilizador não-root, rootfs read-only, capabilities removidas e sem activar handlers transaccionais. No SHA `9be6f3fb7a446f537bf989544df178a100050c7b`, API CI, Quality Gates, Security Scans e Docker Compose passaram. O smoke Docker provou recuperação após SIGKILL e heartbeat obsoleto.
 
-Estado: implementação publicada, validação CI pendente. Não activar o handler no worker de produção antes de API CI/PostgreSQL 16, Quality Gates, Security Scans e Docker Compose passarem no mesmo SHA.
+O commit `c5779e1b02c903db5bfd3b947da01b55814c78aa` acrescenta validação de SIGTERM real ao container, encerramento do processo filho e novo arranque saudável. A CI desse SHA ainda tem de ser confirmada. Não foram executados testes locais nesta ronda.
 
+## 2026-11-27 — Edge worker: fault injection PostgreSQL 16 (implementação publicada; CI pendente)
 
-## 2026-11-27 — Correcção de timestamps no serviço Edge ACK
+- Adicionado ensaio distinto para terminação de uma sessão via `pg_terminate_backend` e indisponibilidade total do serviço PostgreSQL através de stop/start do container descartável `postgres:16`.
+- O processo real do worker mantém um handler heartbeat controlado durante a paragem; a renovação da lease falha e o resultado local não pode ser confirmado após a recuperação.
+- O ensaio verifica expiração natural, takeover, fencing token monotónico, rejeição do worker antigo, evento de controlo noutra loja e inventário imutável.
+- O script recusa execução fora de GitHub Actions e exige exactamente um container com a imagem `postgres:16`.
+- Integrado no API CI imediatamente após o smoke de atribuições Edge e antes do smoke Edge ACK, evitando que fixtures posteriores deixem leases expiradas elegíveis para claim.
+- **Validação pendente:** execução do novo smoke e confirmação de API CI, Docker Compose smoke, Quality Gates e Security Scans no mesmo SHA. Não confundir publicação com aprovação.
 
-A suite API no SHA `d1190003ad52d8b66d105f49530ac0bfa47227c7` falhou num único teste (1757 passed, 1 skipped): SQLite remove `tzinfo` ao ler `DateTime(timezone=True)`. A associação é criada pelo serviço de atribuições, que normaliza `valid_from` e `valid_until` para UTC antes da persistência; por isso, os valores naïve lidos do SQLite representam UTC. O serviço de ACK passou a usar uma normalização própria para estes campos persistidos, mantendo a validação estrita do timestamp externo `occurred_at`. Correcção publicada no commit `63554528867b3e432b0d117da1902d98370f0dc6`. A validação dos workflows deste SHA está pendente. O worker mantém o handler `TASK_ACKNOWLEDGED` desactivado e as restantes restrições de inventário mantêm-se.
+---
+
+## 2026-11-27 — Edge: resiliência e segurança dos logs
+
+A auditoria operacional começou pela fronteira de diagnóstico. O runtime já evitava expor o texto da excepção no ciclo principal de polling, mas os caminhos de renovação de lease e de falha dos handlers ainda emitiam traceback integral. Esses caminhos foram alterados para registar apenas o tipo da excepção e o inbox_id. Foram adicionadas regressões para mensagens sensíveis de handler, renovação e polling.
+
+**Estado:** implementação publicada nos commits `cd12c512`, `53c0428a` e `c0b14a48`; validação CI pendente. Isto não constitui prova de recuperação PostgreSQL. O próximo ensaio deve cobrir interrupção real da ligação, falha/recuperação do heartbeat e novo claim após lease expirar, sem efeitos de inventário.
+
+---
+
+## 2026-11-27 — Edge ACK: concorrência validada e fronteira operacional em revisão
+
+### Evidência de validação
+O código do Edge ACK foi validado no SHA `cd28865c03abaf4ccde959e098e1dcf462943299`:
+- API CI / PostgreSQL 16: `45998882415` — sucesso, incluindo o smoke de atomicidade, concorrência, fencing e imutabilidade.
+- Quality Gates: `45998882598` — sucesso.
+- Security Scans: `45998882484` — sucesso.
+- Docker Compose: `45998882648` — sucesso.
+
+As alterações documentais posteriores foram também verificadas:
+- Quality Gates `45999727222` — todos os jobs concluídos com sucesso.
+- Security Scans `45999727282` — todos os jobs concluídos com sucesso, incluindo OWASP ZAP passive baseline.
+
+A prova de concorrência cobre ambas as ordens. No cenário revogação-primeiro, o smoke constrói manualmente a transacção com a ordem canónica Store → Task → Device → Assignment; no cenário ACK-primeiro, chama o serviço real `revoke_edge_task_assignment`. A documentação não atribui falsamente o serviço real aos dois cenários.
+
+### Revisão da fronteira operacional
+- **Autorização/tenant:** o handler confirma loja, dispositivo ACTIVE, associação vigente e `task_version`; testes de serviço cobrem identidades cross-store. Continua por definir uma matriz de permissões por acção do dispositivo.
+- **Opt-in:** a registry transaccional está disponível, mas não é injectada por omissão no worker. Não foi encontrada uma feature flag/configuração de deployment específica para activar o ACK; a registry explícita não deve ser apresentada como feature flag operacional.
+- **Observabilidade:** o worker emite logs de sucesso/falha e códigos de erro. Não foram identificadas métricas específicas para ACK, rejeições, retries, dead-letter, lease loss ou latência; não declarar observabilidade operacional completa.
+- **Retry/recuperação:** existem leases, heartbeat, fencing, retries limitados com backoff exponencial e DEAD_LETTER. É necessário ensaio end-to-end de crash/takeover e reconciliação dos estados terminais antes do piloto.
+- **Auditoria/revisão humana:** o ledger é append-only; `COMPLETED` resulta em `REVIEW_REQUIRED`. Falta formalizar o fluxo de revisão humana, actor, decisão e motivo.
+- **Segurança/E2E:** os testes de serviço cobrem cross-store; o smoke PostgreSQL prova concorrência ACK/revogação. Falta a matriz operacional por acção, feature flag fail-closed, métricas e ensaio completo de recuperação/revisão.
+
+### Estado e decisão
+`TASK_ACKNOWLEDGED` continua desactivado por omissão. `COMPLETED` não conclui a tarefa nem altera inventário. A validação CI não equivale a autorização para produção. Próximo marco: fechar os gaps operacionais acima e obter aprovação explícita antes de qualquer activação.
 
 ---
 
@@ -1826,3 +1872,47 @@ A fronteira transaccional existente passa a fornecer o fingerprint do evento ori
 ### 2026-11-27 — Validação defensiva adicional do Edge ACK
 
 A validação de `action` rejeita agora explicitamente valores que não sejam texto, incluindo listas, objectos, booleanos e números. Foram acrescentados cinco casos parametrizados para garantir `INVALID_ACK_ACTION` sem persistência. A execução dos testes e os workflows CI continuam pendentes; não activar a registry por omissão. A revisão também confirmou que o smoke PostgreSQL existente ainda não cobre concorrência entre revogação e ACK nem isolamento adversarial cross-store — estas provas permanecem em falta.
+
+
+## 2026-11-27 — Regressão CI do worker Edge ACK identificada e corrigida
+
+- A API CI `45994745435` no commit `09fc570e7032aa66fa6f8c16f4a998f988509bed` executou PostgreSQL 16 e os smokes anteriores com sucesso, mas a suite terminou com `1 failed, 1764 passed, 1 skipped`. A falha foi `test_worker_routes_task_acknowledgement_through_fenced_transaction`: `occurred_at` foi lido da inbox SQLite sem `tzinfo`, levando o serviço a rejeitar um timestamp já normalizado na ingestão.
+- Corrigido em `6c4379ecc85bbe4e43d276ac97af01cce5a81520`: o timestamp persistido da inbox é normalizado com `_database_utc`, tal como os timestamps persistidos da associação. O timestamp externo continua sujeito à validação estrita no ponto de ingestão.
+- Acrescentados quatro cenários parametrizados de identidade cross-store em `test_edge_task_acknowledgement_service.py` (tarefa estrangeira, dispositivo estrangeiro, loja estrangeira com tarefa local e conjunto de identidades estrangeiras sem associação). Commit dos testes: `a840fac4b12d6f324c29c6a6b0b441a58aba85a5`.
+- A API CI/Quality Gates/Security Scans/Docker Compose do commit `a840fac4b12d6f324c29c6a6b0b441a58aba85a5` foi observada em execução; a validação do commit corretivo `6c4379e` ainda tem de ser confirmada. Não declarar suite aprovada.
+- A prova PostgreSQL de concorrência entre revogação e processamento ainda não foi acrescentada; manter este ponto explicitamente aberto. A registry permanece opt-in e `COMPLETED` continua apenas `REVIEW_REQUIRED`.
+
+
+## 2026-11-27 — P0 Edge ACK vs revogação: concorrência PostgreSQL 16 validada
+
+O smoke `apps/api/scripts/postgres_edge_task_acknowledgement_smoke.py` prova as duas ordens concorrentes. A prova de bloqueio não depende de sleeps como evidência: consulta `pg_stat_activity`, exige `wait_event_type='Lock'` e confirma o PID bloqueador através de `pg_blocking_pids()`.
+
+**Revogação primeiro:** a transacção de revogação obtém os locks na ordem Store → Task → Device → Assignment. O ACK bloqueia efectivamente; após commit da revogação, retoma e é rejeitado como `UNASSIGNED_DEVICE`, sem registo no ledger.
+
+**ACK primeiro:** o ACK obtém os locks e mantém a transacção aberta. A revogação fica bloqueada; após commit do ACK, a revogação retoma e confirma. O acknowledgement permanece no ledger com `received_at` anterior a `revoked_at`.
+
+A primeira CI encontrou `DetachedInstanceError`, corrigido pela captura dos identificadores antes de fechar as sessões. A execução seguinte expôs a reutilização do mesmo par dispositivo/tarefa entre cenários; o cenário B passou a usar um dispositivo independente, respeitando a unicidade histórica das associações.
+
+**Evidência:** SHA de código `cd28865c03abaf4ccde959e098e1dcf462943299`; API CI `45998882415` (incluindo o passo de smoke PostgreSQL 16), Quality Gates `45998882598`, Security Scans `45998882484` e Docker Compose `45998882648` — todos concluídos com sucesso.
+
+**Precisão do teste:** o cenário revogação-primeiro constrói manualmente a transacção com a ordem canónica de locks; o cenário ACK-primeiro invoca `revoke_edge_task_assignment`. Assim, a prova não deve ser descrita como exercício do serviço real nos dois cenários.
+
+O handler `TASK_ACKNOWLEDGED` continua desactivado/opt-in. `COMPLETED` permanece evidência `REVIEW_REQUIRED`, sem alteração automática da tarefa ou inventário. A validação desta garantia de concorrência não equivale a autorização para activar o handler em produção.
+
+
+## P0 — Deployment real do worker Edge antes da feature flag (2026-11-27)
+
+**Estado: bloqueado por ausência de processo de execução/deployment dedicado.**
+
+A inspecção do HEAD `d0b8da341d331d271a1d9bd5771eddbffa8dac0d` confirmou que o Compose não define serviço `edge-event-worker`. O serviço `api` executa apenas Uvicorn; `vision-worker` executa inferência de imagens; `inventory-sync-worker` trata sincronizações ERP/WMS. O módulo `app.edge_event_worker` contém a função de processamento unitário, mas não oferece entrypoint/loop de polling próprio nem é arrancado por estes serviços. A configuração `Settings` também não contém flag de ACK.
+
+**Decisão de segurança:** não adicionar uma variável `EDGE_TASK_ACKNOWLEDGEMENT_ENABLED` sem consumidor real, não reutilizar o `vision-worker` e não injectar `BUILTIN_TRANSACTIONAL_HANDLERS` implicitamente. A flag isolada não constituiria uma activação operacional verificável.
+
+**Sequência obrigatória para retomar:**
+1. Implementar um processo Edge dedicado com entrypoint, polling, shutdown gracioso, identidade de worker e integração com health/supervisão do deployment.
+2. Adicionar testes do ciclo de vida, idle/poll, falhas e recuperação do processo.
+3. Só depois adicionar flag fail-closed: ausente/false = desactivada; true = opt-in apenas no processo Edge; valor inválido = erro de configuração.
+4. Preservar a injecção explícita de handlers transaccionais; a flag nunca escolhe nem injecta handlers por si só.
+5. Validar em testes e CI que a flag não altera tarefa, `task_version`, stock ou movimentos; `COMPLETED` permanece `REVIEW_REQUIRED`.
+
+Não existe activação operacional nem autorização de produção nesta fase.

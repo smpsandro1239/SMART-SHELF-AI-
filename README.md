@@ -1,3 +1,19 @@
+## Supervisor independente do Edge Event Worker (2026-11-27)
+
+O serviço `edge-event-worker` é iniciado através de `python -m app.edge_event_supervisor`. O supervisor mantém um heartbeat operacional próprio, inicia o worker como processo filho, monitoriza o PID e o heartbeat do ciclo de polling e reinicia processos terminados ou sem heartbeat. O backoff é exponencial e limitado; SIGTERM/SIGINT desencadeiam encerramento gracioso com timeout e kill como último recurso.
+
+O healthcheck do container executa `python -m app.edge_event_supervisor --healthcheck` e exige heartbeats recentes, PID coincidente e processo filho vivo. Os ficheiros de estado ficam em `/tmp`, compatível com o root filesystem read-only do container. O timeout do heartbeat do filho é configurável por `EDGE_SUPERVISOR_HEARTBEAT_TIMEOUT` (por omissão 120 segundos) e deve exceder a duração máxima esperada do ciclo de processamento. O supervisor não injecta handlers transaccionais nem activa Edge ACK.
+
+**Validação:** API CI, Quality Gates, Security Scans e Docker Compose aprovados no SHA `9be6f3fb7a446f537bf989544df178a100050c7b`, incluindo crash SIGKILL e heartbeat obsoleto. O commit `c5779e1b02c903db5bfd3b947da01b55814c78aa` acrescenta o smoke de SIGTERM real ao container e reinício limpo; a nova CI está pendente.
+
+---
+
+## Edge worker — protecção de dados de diagnóstico (2026-11-27)
+
+As falhas de polling, renovação de lease e execução de handlers são registadas sem incluir o texto original da excepção. Mensagens de drivers e providers podem conter detalhes de ligação ou dados operacionais; os logs usam apenas o tipo da excepção e o identificador interno do evento. Esta alteração não muda retries, leases, handlers, ACK ou inventário. A validação automatizada desta correcção depende da CI no SHA publicado.
+
+---
+
 ## Segurança P0 — histórico de reconciliações e identidade do actor (2026-11-26)
 
 A listagem paginada de reconciliações carrega criadores/revisores numa consulta em lote e os eventos numa segunda consulta em lote, além da consulta principal. A serialização mantém a ordenação dos registos e dos eventos, o contrato JSON e o filtro tenant-scoped; não junta eventos à query paginada. Os novos eventos CREATED e de revisão guardam em evidence.actor_snapshot o user_id, role, store_id e full_name observados no momento da operação. Não existe backfill dos eventos históricos nem é bloqueada a transferência legítima de utilizadores entre lojas. Validação CI pendente no SHA desta alteração.
@@ -2227,3 +2243,15 @@ As escritas de observações, sessões de captura e imagens bloqueiam a linhagem
 ### Identidade multi-loja imutável nos jobs ERP/WMS
 
 A loja de um `InventorySyncJob` é definida no enqueue e não pode ser alterada posteriormente. A loja determina o tenant autorizado a consultar o histórico de eventos, que é associado ao job por `job_id`, e integra a chave idempotente do pedido. A migration `0101_inventory_sync_job_store_immutable` protege esta identidade ao nível da base de dados em PostgreSQL e SQLite, sem bloquear actualizações de estado, lease ou fencing token. Foram adicionados testes SQLite e um smoke PostgreSQL concorrente; a validação CI no HEAD final permanece pendente.
+
+
+## Edge Event Worker — fronteira operacional
+
+O consumo de eventos Edge é executado pelo serviço independente `edge-event-worker` (`python -m app.edge_event_worker`), separado da API e do `vision-worker`. O container usa utilizador não-root, filesystem read-only, capabilities removidas, `no-new-privileges` e `/tmp` temporário para escrita.
+
+A existência do worker não activa o handler transaccional `TASK_ACKNOWLEDGED`: a registry continua a exigir injecção explícita. Declarações `COMPLETED` permanecem evidência `REVIEW_REQUIRED`; mensagens Edge não concluem tarefas nem alteram inventário. A validação de crash/recovery exige o smoke PostgreSQL 16 e a verificação de estabilidade/hardening no Docker Compose, ambos no SHA final.
+
+
+### PostgreSQL Edge worker fault injection
+
+O API CI executa `apps/api/scripts/postgres_edge_worker_outage_smoke.py` contra PostgreSQL 16. O ensaio distingue a terminação de uma sessão (`pg_terminate_backend`) da paragem efectiva do container PostgreSQL, confirma o restabelecimento, falha do heartbeat, abandono do resultado local, expiração da lease, takeover e rejeição do fencing token antigo. Um evento de controlo numa segunda loja e a contagem de movimentos de inventário verificam isolamento e ausência de mutações. O script só pode parar o container `postgres:16` descartável do GitHub Actions; não é executável fora desse ambiente. A existência do teste não equivale a validação até a CI terminar com sucesso.

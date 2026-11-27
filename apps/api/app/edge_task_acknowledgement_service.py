@@ -52,7 +52,9 @@ def apply_edge_task_acknowledgement(db: Session, event: dict) -> None:
     event_id = event.get("event_id")
     sequence_number = event.get("sequence_number")
     fingerprint = event.get("fingerprint_sha256")
-    occurred_at = _utc(event["occurred_at"])
+    # occurred_at is read back from the persisted inbox row; SQLite drops tzinfo
+    # for DateTime(timezone=True), while ingestion already normalized it to UTC.
+    occurred_at = _database_utc(event["occurred_at"])
     received_at = datetime.now(timezone.utc)
 
     # Lock order matches the assignment service. Processing row is already

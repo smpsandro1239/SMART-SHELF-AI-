@@ -213,6 +213,52 @@ services:
       migrate:
         condition: service_completed_successfully
 
+  # API CI exercises lease loss and PostgreSQL service recovery for this independent process.
+  edge-event-worker:
+    build:
+      context: ./apps/api
+    restart: unless-stopped
+    stop_grace_period: 30s
+    user: "65532:65532"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=32m,mode=1777,uid=65532,gid=65532
+    command:
+      - python
+      - -m
+      - app.edge_event_supervisor
+    healthcheck:
+      test: ["CMD", "python", "-m", "app.edge_event_supervisor", "--healthcheck"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 15s
+    environment:
+      APP_ENV: ${APP_ENV:-development}
+      HOME: /tmp
+      TMPDIR: /tmp
+      DATABASE_URL: postgresql+psycopg://${APP_DB_USER:-smart_shelf_runtime}:${APP_DB_PASSWORD:-local_runtime_change_me}@db:5432/${POSTGRES_DB:-smart_shelf}
+      EDGE_EVENT_WORKER_ID: ${EDGE_EVENT_WORKER_ID:-edge-event-worker-1}
+      EDGE_EVENT_POLL_INTERVAL: ${EDGE_EVENT_POLL_INTERVAL:-5}
+      EDGE_EVENT_LEASE_SECONDS: ${EDGE_EVENT_LEASE_SECONDS:-60}
+      EDGE_EVENT_CHILD_HEARTBEAT_PATH: /tmp/edge-worker-child.json
+      EDGE_SUPERVISOR_STATE_PATH: /tmp/edge-supervisor-state.json
+      EDGE_SUPERVISOR_HEARTBEAT_INTERVAL: ${EDGE_SUPERVISOR_HEARTBEAT_INTERVAL:-2}
+      EDGE_SUPERVISOR_HEARTBEAT_TIMEOUT: ${EDGE_SUPERVISOR_HEARTBEAT_TIMEOUT:-120}
+      EDGE_SUPERVISOR_RESTART_BASE_SECONDS: ${EDGE_SUPERVISOR_RESTART_BASE_SECONDS:-1}
+      EDGE_SUPERVISOR_RESTART_MAX_SECONDS: ${EDGE_SUPERVISOR_RESTART_MAX_SECONDS:-60}
+      EDGE_SUPERVISOR_SHUTDOWN_TIMEOUT: ${EDGE_SUPERVISOR_SHUTDOWN_TIMEOUT:-10}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
 volumes:
   shelf_images:
   dataset_outputs:

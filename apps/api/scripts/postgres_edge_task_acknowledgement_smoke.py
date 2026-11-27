@@ -1,7 +1,11 @@
 """Prove PostgreSQL atomicity, concurrency, fencing and ACK immutability."""
 from concurrent.futures import ThreadPoolExecutor
+from multiprocessing import get_context
+import os
+import signal
 from datetime import datetime, timedelta, timezone
-from threading import Barrier
+import time
+from threading import Barrier, Event, Thread
 from types import SimpleNamespace
 from uuid import uuid4
 
@@ -13,11 +17,156 @@ from app.database import SessionLocal
 from app.edge_event_processing import (
     EdgeEventProcessingError,
     claim_next_edge_event,
+    complete_edge_event,
     complete_edge_event_transactionally,
 )
 from app.edge_event_worker import EdgeEventHandlerError
 from app.edge_task_acknowledgement_service import apply_edge_task_acknowledgement
-from app.edge_task_assignment_service import create_edge_task_assignment
+from app.edge_task_assignment_service import (
+    create_edge_task_assignment,
+    revoke_edge_task_assignment,
+)
+
+
+
+def _edge_sigkill_claim_worker(ready_queue, hold_event) -> None:
+    """Claim a real inbox event in a child process, then remain alive until SIGKILL."""
+    worker_id = "edge-sigkill-child"
+    with SessionLocal() as db:
+        claim = claim_next_edge_event(
+            db, worker_id=worker_id, lease_seconds=5,
+        )
+    if claim is None:
+        raise AssertionError("SIGKILL child could not claim the Edge inbox event")
+    ready_queue.put({
+        "processing_id": claim["processing_id"],
+        "inbox_id": claim["inbox_id"],
+        "worker_id": worker_id,
+        "fencing_token": claim["fencing_token"],
+        "lease_expires_at": claim["lease_expires_at"].isoformat(),
+    })
+    hold_event.wait(60)
+
+
+def _verify_sigkill_recovery_and_fencing() -> None:
+    """Prove process death, real lease expiry, takeover and stale-owner rejection."""
+    suffix = uuid4().hex[:10]
+    now = datetime.now(timezone.utc)
+    with SessionLocal() as db:
+        store = models.Store(
+            code=f"EDGE-KILL-{suffix}", name="Edge SIGKILL recovery smoke",
+        )
+        db.add(store)
+        db.flush()
+        device_id = f"edge-kill-device-{suffix}"
+        db.add(models.EdgeDevice(
+            device_id=device_id, store_id=store.id,
+            device_type="robot", status="ACTIVE",
+        ))
+        inbox = models.EdgeDeviceEventInbox(
+            device_id=device_id,
+            event_id=str(uuid4()),
+            sequence_number=1,
+            event_type="DEVICE_HEARTBEAT",
+            store_id=store.id,
+            shelf_id=None,
+            occurred_at=now,
+            payload={"smoke": "sigkill-recovery"},
+            fingerprint_sha256=uuid4().hex + uuid4().hex,
+            received_at=now,
+        )
+        db.add(inbox)
+        db.flush()
+        processing = models.EdgeDeviceEventProcessing(
+            inbox_id=inbox.id,
+            status="PENDING",
+            attempt_count=0,
+            max_attempts=8,
+            available_at=now,
+            fencing_token=0,
+            created_at=now,
+            updated_at=now,
+        )
+        db.add(processing)
+        db.commit()
+        inbox_id = inbox.id
+        processing_id = processing.id
+
+    context = get_context("spawn")
+    ready_queue = context.Queue()
+    hold_event = context.Event()
+    process = context.Process(
+        target=_edge_sigkill_claim_worker,
+        args=(ready_queue, hold_event),
+        name="edge-sigkill-smoke-worker",
+    )
+    try:
+        process.start()
+        child_claim = ready_queue.get(timeout=30)
+        assert child_claim["inbox_id"] == inbox_id
+        assert child_claim["processing_id"] == processing_id
+        with SessionLocal() as verify:
+            claimed = verify.get(models.EdgeDeviceEventProcessing, processing_id)
+            assert claimed is not None
+            assert claimed.status == "PROCESSING"
+            assert claimed.lease_owner == child_claim["worker_id"]
+            assert claimed.fencing_token == child_claim["fencing_token"]
+            lease_expires_at = claimed.lease_expires_at
+            assert lease_expires_at is not None
+        os.kill(process.pid, signal.SIGKILL)
+        process.join(timeout=15)
+        assert process.exitcode == -signal.SIGKILL, (
+            f"expected SIGKILL exit {-signal.SIGKILL}, got {process.exitcode}"
+        )
+        # Wait for the database lease to expire naturally; do not move its
+        # timestamp forward or inject a synthetic clock into the takeover.
+        remaining = (lease_expires_at - datetime.now(timezone.utc)).total_seconds()
+        if remaining > 0:
+            time.sleep(remaining + 0.25)
+
+        recovery_worker_id = "edge-sigkill-recovery"
+        with SessionLocal() as recovery_db:
+            recovered = claim_next_edge_event(
+                recovery_db,
+                worker_id=recovery_worker_id,
+                lease_seconds=30,
+            )
+        assert recovered is not None
+        assert recovered["processing_id"] == processing_id
+        assert recovered["inbox_id"] == inbox_id
+        assert recovered["fencing_token"] == child_claim["fencing_token"] + 1
+
+        try:
+            with SessionLocal() as stale_db:
+                complete_edge_event(
+                    stale_db,
+                    processing_id=processing_id,
+                    worker_id=child_claim["worker_id"],
+                    fencing_token=child_claim["fencing_token"],
+                )
+        except EdgeEventProcessingError:
+            pass
+        else:
+            raise AssertionError("SIGKILL worker credentials completed after takeover")
+
+        with SessionLocal() as current_db:
+            complete_edge_event(
+                current_db,
+                processing_id=processing_id,
+                worker_id=recovery_worker_id,
+                fencing_token=recovered["fencing_token"],
+            )
+        with SessionLocal() as verify:
+            final = verify.get(models.EdgeDeviceEventProcessing, processing_id)
+            assert final is not None and final.status == "PROCESSED"
+            assert final.lease_owner is None and final.lease_expires_at is None
+            assert final.fencing_token == recovered["fencing_token"]
+    finally:
+        if process.is_alive():
+            process.kill()
+            process.join(timeout=15)
+        ready_queue.close()
+        ready_queue.join_thread()
 
 
 def _expect_database_rejection(statement: str, acknowledgement_id: int) -> None:
@@ -35,7 +184,243 @@ def _expect_database_rejection(statement: str, acknowledgement_id: int) -> None:
         db.close()
 
 
+def _set_application_name(db, name: str) -> int:
+    db.execute(text("SELECT set_config('application_name', :name, false)"), {"name": name})
+    return db.execute(text("SELECT pg_backend_pid()")).scalar_one()
+
+
+def _wait_for_postgres_lock(application_name: str, blocker_pid: int) -> None:
+    """Require PostgreSQL itself to report the waiter and its actual blocker."""
+    deadline = time.monotonic() + 15
+    last_state = None
+    while time.monotonic() < deadline:
+        with SessionLocal() as observer:
+            row = observer.execute(text("""
+                SELECT pid, wait_event_type, wait_event, pg_blocking_pids(pid) AS blockers
+                FROM pg_stat_activity
+                WHERE application_name = :application_name
+            """), {"application_name": application_name}).mappings().first()
+        if row is not None:
+            last_state = dict(row)
+            if row["wait_event_type"] == "Lock" and blocker_pid in row["blockers"]:
+                return
+        time.sleep(0.05)
+    raise AssertionError(
+        f"PostgreSQL did not report the expected lock wait for {application_name}; "
+        f"last state={last_state!r}, blocker_pid={blocker_pid}"
+    )
+
+
+def _create_race_assignment_and_claim(
+    *, suffix: str, scenario: str, store_id: int, task_id: int, device_id: str,
+    actor, task_version: int,
+) -> tuple[int, dict]:
+    now = datetime.now(timezone.utc)
+    with SessionLocal() as db:
+        assignment = create_edge_task_assignment(
+            db, store_id=store_id, task_id=task_id, device_id=device_id,
+            actor=actor, reason=f"ACK race {scenario}",
+            valid_from=now - timedelta(minutes=5),
+            valid_until=now + timedelta(hours=1),
+        )
+        assignment_id = assignment.id
+        inbox = models.EdgeDeviceEventInbox(
+            device_id=device_id, event_id=str(uuid4()), sequence_number=100 + (1 if scenario == "A" else 2),
+            event_type="TASK_ACKNOWLEDGED", store_id=store_id, shelf_id=None,
+            occurred_at=now - timedelta(seconds=1),
+            payload={"task_id": task_id, "task_version": task_version, "action": "ACCEPTED"},
+            fingerprint_sha256=(uuid4().hex * 2)[:64],
+            received_at=now - timedelta(seconds=1),
+        )
+        db.add(inbox)
+        db.flush()
+        inbox_id = inbox.id
+        processing = models.EdgeDeviceEventProcessing(
+            inbox_id=inbox_id, status="PENDING", attempt_count=0, max_attempts=8,
+            available_at=now - timedelta(seconds=1), fencing_token=0,
+            created_at=now, updated_at=now,
+        )
+        db.add(processing)
+        db.commit()
+    with SessionLocal() as claim_db:
+        claim = claim_next_edge_event(
+            claim_db, worker_id=f"ack-race-{suffix}-{scenario}",
+            lease_seconds=120, now=now,
+        )
+    assert claim is not None and claim["inbox_id"] == inbox_id
+    return assignment_id, claim
+
+
+def _prove_revocation_ack_races(
+    *, suffix: str, store_id: int, task_id: int, device_id: str,
+    actor, task_version: int, original_assignment_id: int,
+) -> None:
+    # Free the original assignment so each race gets an independent, auditable
+    # association and a distinct inbox event.
+    with SessionLocal() as db:
+        revoke_edge_task_assignment(
+            db, assignment_id=original_assignment_id, actor=actor,
+            reason="Preparar cenários concorrentes ACK",
+        )
+
+    # Scenario A: revocation owns Store -> Task -> Device -> Assignment first.
+    assignment_a, claim_a = _create_race_assignment_and_claim(
+        suffix=suffix, scenario="A", store_id=store_id, task_id=task_id,
+        device_id=device_id, actor=actor, task_version=task_version,
+    )
+    revoke_tx = SessionLocal()
+    blocker_pid = _set_application_name(revoke_tx, f"ack-race-{suffix}-revoke-a")
+    revoke_tx.query(models.Store).filter_by(id=store_id).with_for_update().populate_existing().one()
+    revoke_tx.query(models.ReplenishmentTask).filter_by(
+        id=task_id, store_id=store_id
+    ).with_for_update().populate_existing().one()
+    revoke_tx.query(models.EdgeDevice).filter_by(
+        device_id=device_id, store_id=store_id
+    ).with_for_update().populate_existing().one()
+    assignment_row = revoke_tx.query(models.EdgeDeviceTaskAssignment).filter_by(
+        id=assignment_a, store_id=store_id
+    ).with_for_update().populate_existing().one()
+    revoked_at = models.utc_now()
+    assignment_row.revoked_at = revoked_at
+    assignment_row.revoked_by_user_id = actor.id
+    assignment_row.revocation_reason = "Revogação vence corrida ACK"
+    revoke_tx.add(models.EdgeDeviceTaskAssignmentEvent(
+        assignment_id=assignment_a, event_type="REVOKED",
+        actor_user_id=actor.id, reason="Revogação vence corrida ACK",
+        details={"task_version": task_version}, created_at=revoked_at,
+    ))
+    revoke_tx.flush()
+
+    started_a = Event()
+    outcome_a = {}
+
+    def process_after_revocation_lock():
+        with SessionLocal() as worker_db:
+            pid = _set_application_name(worker_db, f"ack-race-{suffix}-ack-a")
+            outcome_a["pid"] = pid
+            started_a.set()
+            try:
+                complete_edge_event_transactionally(
+                    worker_db, processing_id=claim_a["processing_id"],
+                    worker_id=f"ack-race-{suffix}-A",
+                    fencing_token=claim_a["fencing_token"], event=claim_a,
+                    handler=apply_edge_task_acknowledgement,
+                )
+            except EdgeEventHandlerError as exc:
+                outcome_a["error"] = exc.code
+
+    worker_a = Thread(target=process_after_revocation_lock, daemon=True)
+    worker_a.start()
+    assert started_a.wait(10), "ACK worker A did not start"
+    _wait_for_postgres_lock(f"ack-race-{suffix}-ack-a", blocker_pid)
+    revoke_tx.commit()
+    revoke_tx.close()
+    worker_a.join(15)
+    assert not worker_a.is_alive(), "ACK worker A did not resume after revocation commit"
+    assert outcome_a.get("error") == "UNASSIGNED_DEVICE", outcome_a
+    with SessionLocal() as verify:
+        assert verify.query(models.EdgeTaskAcknowledgement).filter_by(
+            inbox_id=claim_a["inbox_id"]
+        ).count() == 0
+        assert verify.get(models.EdgeDeviceTaskAssignment, assignment_a).revoked_at is not None
+        # The transactional handler rolls back atomically on rejection; the
+        # worker retry/dead-letter policy is deliberately outside this smoke.
+        assert verify.query(models.EdgeDeviceEventProcessing).filter_by(
+            id=claim_a["processing_id"], status="PROCESSING"
+        ).count() == 1
+
+    # Scenario B: ACK owns the same canonical lock chain first. The revocation
+    # service must wait on Store, then commit after the ACK transaction commits.
+    # Assignment history is retained and the database uniqueness rule is
+    # scoped to a device/task pair. Use a second active device for the second
+    # independent race instead of trying to recycle the same pair.
+    device_id_b = f"{device_id}-race-b"
+    with SessionLocal() as db:
+        db.add(models.EdgeDevice(
+            device_id=device_id_b, store_id=store_id,
+            device_type="robot", status="ACTIVE",
+        ))
+        db.commit()
+
+    assignment_b, claim_b = _create_race_assignment_and_claim(
+        suffix=suffix, scenario="B", store_id=store_id, task_id=task_id,
+        device_id=device_id_b, actor=actor, task_version=task_version,
+    )
+    ack_locks_acquired = Event()
+    allow_ack_commit = Event()
+    outcome_b = {}
+
+    def hold_ack_after_domain_locks(session, event):
+        apply_edge_task_acknowledgement(session, event)
+        ack_locks_acquired.set()
+        if not allow_ack_commit.wait(15):
+            raise AssertionError("timed out waiting to release ACK transaction B")
+
+    def process_ack_b():
+        with SessionLocal() as worker_db:
+            outcome_b["pid"] = _set_application_name(
+                worker_db, f"ack-race-{suffix}-ack-b"
+            )
+            complete_edge_event_transactionally(
+                worker_db, processing_id=claim_b["processing_id"],
+                worker_id=f"ack-race-{suffix}-B",
+                fencing_token=claim_b["fencing_token"], event=claim_b,
+                handler=hold_ack_after_domain_locks,
+            )
+            outcome_b["committed"] = True
+
+    worker_b = Thread(target=process_ack_b, daemon=True)
+    worker_b.start()
+    assert ack_locks_acquired.wait(10), "ACK B did not acquire domain locks"
+    revoke_started_b = Event()
+    revoke_outcome_b = {}
+
+    def revoke_after_ack_lock():
+        with SessionLocal() as revoke_db:
+            _set_application_name(revoke_db, f"ack-race-{suffix}-revoke-b")
+            revoke_started_b.set()
+            try:
+                revoke_edge_task_assignment(
+                    revoke_db, assignment_id=assignment_b, actor=actor,
+                    reason="Revogação aguarda ACK",
+                )
+                revoke_outcome_b["committed"] = True
+            except Exception as exc:  # surfaced below with its exact type/message
+                revoke_outcome_b["error"] = f"{type(exc).__name__}: {exc}"
+
+    revoker_b = Thread(target=revoke_after_ack_lock, daemon=True)
+    revoker_b.start()
+    assert revoke_started_b.wait(10), "revocation B did not start"
+    _wait_for_postgres_lock(f"ack-race-{suffix}-revoke-b", outcome_b["pid"])
+    allow_ack_commit.set()
+    worker_b.join(15)
+    revoker_b.join(15)
+    assert not worker_b.is_alive() and not revoker_b.is_alive(), (
+        "scenario B transactions did not finish"
+    )
+    assert outcome_b.get("committed") is True, outcome_b
+    assert revoke_outcome_b.get("committed") is True, revoke_outcome_b
+
+    with SessionLocal() as verify:
+        ack_b = verify.query(models.EdgeTaskAcknowledgement).filter_by(
+            inbox_id=claim_b["inbox_id"]
+        ).one()
+        assignment_after = verify.get(models.EdgeDeviceTaskAssignment, assignment_b)
+        assert assignment_after.revoked_at is not None
+        assert ack_b.assignment_id == assignment_b
+        assert ack_b.result == "ACCEPTED"
+        assert ack_b.received_at <= assignment_after.revoked_at
+        assert verify.query(models.EdgeDeviceTaskAssignmentEvent).filter_by(
+            assignment_id=assignment_b
+        ).order_by(models.EdgeDeviceTaskAssignmentEvent.id).all()[-1].event_type == "REVOKED"
+        assert verify.query(models.EdgeDeviceEventProcessing).filter_by(
+            id=claim_b["processing_id"], status="PROCESSED"
+        ).count() == 1
+
+
+
 def main() -> None:
+    _verify_sigkill_recovery_and_fencing()
     suffix = uuid4().hex[:12]
     now = datetime.now(timezone.utc)
     db = SessionLocal()
@@ -298,10 +683,15 @@ def main() -> None:
     with SessionLocal() as verify:
         assert verify.query(models.EdgeTaskAcknowledgement).count() == 2
 
+    _prove_revocation_ack_races(
+        suffix=suffix, store_id=store_id, task_id=task_id, device_id=device_id,
+        actor=actor, task_version=task_version, original_assignment_id=assignment_id,
+    )
+
     print(
-        "PostgreSQL Edge ACK smoke passed: atomic rollback/commit, replay rejection, "
+        "PostgreSQL Edge ACK smoke passed: real SIGKILL recovery, lease expiry, takeover/fencing, stale-owner rejection, atomic rollback/commit, replay rejection, "
         "single-winner concurrent claim, fencing, COMPLETED review-only semantics, "
-        "no inventory side effects and database-enforced append-only triggers."
+        "no inventory side effects, append-only triggers and deterministic ACK/revocation lock ordering."
     )
 
 

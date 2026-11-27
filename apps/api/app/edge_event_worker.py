@@ -6,12 +6,22 @@ dead-letter queue until their domain handlers and durable side effects exist.
 """
 from __future__ import annotations
 
+import argparse
+import json
 import logging
+import os
+import re
+import signal
+import socket
 import threading
+import time
+from pathlib import Path
 from collections.abc import Callable
 from typing import Any
 
 from sqlalchemy.orm import Session, sessionmaker
+
+from app.database import SessionLocal
 
 from app.edge_event_errors import EdgeEventHandlerError
 from app.edge_task_acknowledgement_service import apply_edge_task_acknowledgement
@@ -102,11 +112,14 @@ def process_one_edge_event(
                         fencing_token=claim["fencing_token"],
                         lease_seconds=lease_seconds,
                     )
-            except Exception:
+            except Exception as exc:
                 lease_lost.set()
-                logger.exception(
-                    "Edge event lease renewal failed; abandoning local result: inbox_id=%s",
-                    claim["inbox_id"],
+                # Database/driver exception text can contain connection details.
+                # Keep diagnostics useful without logging provider-supplied text.
+                logger.error(
+                    "Edge event lease renewal failed; abandoning local result: "
+                    "inbox_id=%s error_type=%s",
+                    claim["inbox_id"], type(exc).__name__,
                 )
                 return
 
@@ -155,7 +168,7 @@ def process_one_edge_event(
                     )
                 except EdgeEventProcessingError:
                     logger.warning("Transactional Edge handler lost its lease: inbox_id=%s", claim["inbox_id"])
-        except Exception:
+        except Exception as exc:
             with session_factory() as db:
                 try:
                     fail_edge_event(
@@ -165,7 +178,10 @@ def process_one_edge_event(
                     )
                 except EdgeEventProcessingError:
                     logger.warning("Transactional Edge handler failed after lease loss: inbox_id=%s", claim["inbox_id"])
-            logger.exception("Transactional Edge event handler failed: inbox_id=%s", claim["inbox_id"])
+            logger.error(
+                "Transactional Edge event handler failed: inbox_id=%s error_type=%s",
+                claim["inbox_id"], type(exc).__name__,
+            )
         else:
             logger.info(
                 "Edge event processed transactionally: type=%s inbox_id=%s attempt=%s",
@@ -193,7 +209,7 @@ def process_one_edge_event(
             exc.code, claim["inbox_id"],
         )
         return True
-    except Exception:
+    except Exception as exc:
         stop_and_join_heartbeat()
         if lease_lost.is_set():
             return True
@@ -206,7 +222,10 @@ def process_one_edge_event(
                 error_code="WORKER_ERROR",
                 retryable=True,
             )
-        logger.exception("Edge event handler failed: inbox_id=%s", claim["inbox_id"])
+        logger.error(
+            "Edge event handler failed: inbox_id=%s error_type=%s",
+            claim["inbox_id"], type(exc).__name__,
+        )
         return True
     else:
         stop_and_join_heartbeat()
@@ -226,3 +245,165 @@ def process_one_edge_event(
             claim["event_type"], claim["inbox_id"], claim["attempt_count"],
         )
         return True
+
+
+def run_worker(
+    *,
+    worker_id: str,
+    poll_interval: float,
+    lease_seconds: int,
+    stop_event: threading.Event,
+    process_event: Callable[..., bool] = process_one_edge_event,
+    once: bool = False,
+) -> int:
+    """Poll until shutdown; finish an in-flight event before stopping."""
+    if not 0.5 <= poll_interval <= 300:
+        raise ValueError("poll_interval must be between 0.5 and 300 seconds")
+    if not 5 <= lease_seconds <= 3600:
+        raise ValueError("lease_seconds must be between 5 and 3600")
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,159}", worker_id or ""):
+        raise ValueError("worker_id must be 1-160 safe ASCII characters")
+
+    logger.info("Edge event worker started: worker_id=%s", worker_id)
+    heartbeat_path = os.getenv("EDGE_EVENT_CHILD_HEARTBEAT_PATH")
+    metrics: dict[str, Any] = {
+        "poll_attempts": 0,
+        "claimed_events": 0,
+        "idle_polls": 0,
+        "poll_failures": 0,
+        "last_poll_duration_ms": 0,
+        "last_event_at": None,
+        "last_error_type": None,
+    }
+
+    def write_heartbeat() -> None:
+        if not heartbeat_path:
+            return
+        target = Path(heartbeat_path)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        temporary = target.with_name(f".{target.name}.{os.getpid()}.tmp")
+        payload = {
+            "pid": os.getpid(),
+            "heartbeat_at": time.time(),
+            "metrics": metrics.copy(),
+        }
+        temporary.write_text(json.dumps(payload), encoding="utf-8")
+        os.replace(temporary, target)
+
+    while not stop_event.is_set():
+        try:
+            write_heartbeat()
+        except OSError as exc:
+            logger.error("Edge worker heartbeat write failed: error_type=%s", type(exc).__name__)
+            return 1
+
+        metrics["poll_attempts"] += 1
+        poll_started = time.monotonic()
+        try:
+            processed = process_event(
+                SessionLocal,
+                worker_id=worker_id,
+                lease_seconds=lease_seconds,
+            )
+        except Exception as exc:
+            metrics["poll_failures"] += 1
+            metrics["last_error_type"] = type(exc).__name__
+            metrics["last_poll_duration_ms"] = round((time.monotonic() - poll_started) * 1000)
+            logger.error(
+                "Edge event polling failed; recovering: error_type=%s",
+                type(exc).__name__,
+            )
+            try:
+                write_heartbeat()
+            except OSError as heartbeat_exc:
+                logger.error("Edge worker heartbeat write failed: error_type=%s", type(heartbeat_exc).__name__)
+                return 1
+            if once:
+                return 1
+            stop_event.wait(poll_interval)
+            continue
+
+        metrics["last_poll_duration_ms"] = round((time.monotonic() - poll_started) * 1000)
+        metrics["last_error_type"] = None
+        if processed:
+            metrics["claimed_events"] += 1
+            metrics["last_event_at"] = time.time()
+        else:
+            metrics["idle_polls"] += 1
+
+        try:
+            write_heartbeat()
+        except OSError as exc:
+            logger.error("Edge worker heartbeat write failed: error_type=%s", type(exc).__name__)
+            return 1
+
+        if once:
+            return 0
+        if not processed:
+            stop_event.wait(poll_interval)
+
+    logger.info("Edge event worker stopped: worker_id=%s", worker_id)
+    return 0
+
+
+def _default_worker_id() -> str:
+    configured = os.getenv("EDGE_EVENT_WORKER_ID", "").strip()
+    return configured or f"{socket.gethostname()}-{os.getpid()}"
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        description="Supervised SMART SHELF AI Edge event inbox worker"
+    )
+    parser.add_argument(
+        "--poll-interval",
+        type=float,
+        default=float(os.getenv("EDGE_EVENT_POLL_INTERVAL", "5")),
+        help="Seconds between idle queue checks (0.5-300)",
+    )
+    parser.add_argument(
+        "--lease-seconds",
+        type=int,
+        default=int(os.getenv("EDGE_EVENT_LEASE_SECONDS", "60")),
+        help="Processing lease duration (5-3600)",
+    )
+    parser.add_argument("--worker-id", default=_default_worker_id())
+    parser.add_argument(
+        "--once",
+        action="store_true",
+        help="Process at most one event and exit (diagnostics only)",
+    )
+    args = parser.parse_args(argv)
+
+    if not 0.5 <= args.poll_interval <= 300:
+        parser.error("--poll-interval must be between 0.5 and 300 seconds")
+    if not 5 <= args.lease_seconds <= 3600:
+        parser.error("--lease-seconds must be between 5 and 3600 seconds")
+
+    logging.basicConfig(
+        level=os.getenv("LOG_LEVEL", "INFO").upper(),
+        format="%(asctime)s %(levelname)s %(name)s %(message)s",
+    )
+    stop_event = threading.Event()
+
+    def request_shutdown(signum: int, _frame: Any) -> None:
+        logger.info("Shutdown signal received: signal=%s", signum)
+        stop_event.set()
+
+    previous_sigterm = signal.signal(signal.SIGTERM, request_shutdown)
+    previous_sigint = signal.signal(signal.SIGINT, request_shutdown)
+    try:
+        return run_worker(
+            worker_id=args.worker_id,
+            poll_interval=args.poll_interval,
+            lease_seconds=args.lease_seconds,
+            stop_event=stop_event,
+            once=args.once,
+        )
+    finally:
+        signal.signal(signal.SIGTERM, previous_sigterm)
+        signal.signal(signal.SIGINT, previous_sigint)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
