@@ -1,6 +1,6 @@
 """Fenced, transactional application of authenticated Edge task acknowledgements.
 
-This module is deliberately not registered as a worker handler yet.
+The worker exposes this handler through an explicit opt-in transactional registry.
 """
 from __future__ import annotations
 
@@ -43,7 +43,7 @@ def apply_edge_task_acknowledgement(db: Session, event: dict) -> None:
     action = payload["action"]
     if type(task_id) is not int or task_id <= 0 or type(task_version) is not int or task_version <= 0:
         raise EdgeEventHandlerError("INVALID_ACK_PAYLOAD", retryable=False)
-    if action not in {"ACCEPTED", "STARTED", "COMPLETED"}:
+    if not isinstance(action, str) or action not in {"ACCEPTED", "STARTED", "COMPLETED"}:
         raise EdgeEventHandlerError("INVALID_ACK_ACTION", retryable=False)
 
     store_id = event.get("store_id")
