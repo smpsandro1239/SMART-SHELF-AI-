@@ -31,6 +31,7 @@ def override_get_db():
 
 @pytest.fixture()
 def review_api(monkeypatch):
+    previous_override = app.dependency_overrides.get(get_db)
     Base.metadata.drop_all(bind=ENGINE)
     Base.metadata.create_all(bind=ENGINE)
     app.dependency_overrides[get_db]=override_get_db
@@ -70,7 +71,10 @@ def review_api(monkeypatch):
         read_db.expunge(actor)
     monkeypatch.setattr(main_module,"_request_user",lambda db,request: actor)
     yield ack_id,actor
-    app.dependency_overrides.pop(get_db,None)
+    if previous_override is None:
+        app.dependency_overrides.pop(get_db,None)
+    else:
+        app.dependency_overrides[get_db]=previous_override
     Base.metadata.drop_all(bind=ENGINE)
 
 
