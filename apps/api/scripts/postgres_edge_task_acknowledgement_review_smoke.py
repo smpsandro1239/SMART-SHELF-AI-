@@ -92,21 +92,46 @@ def wait_for_both_postgres_lock_waits(
     while monotonic() < deadline:
         with SessionLocal() as observer:
             rows = observer.execute(text("""
-                SELECT application_name, wait_event_type, pg_blocking_pids(pid) AS blockers
-                FROM pg_stat_activity
-                WHERE application_name IN (:first, :second)
-            """), {"first": app_names[0], "second": app_names[1]}).mappings().all()
+                WITH RECURSIVE lock_chain(waiter_pid, blocker_pid, depth) AS (
+                    SELECT activity.pid, unnest(pg_blocking_pids(activity.pid)), 1
+                    FROM pg_stat_activity AS activity
+                    WHERE activity.application_name IN (:first, :second)
+                    UNION ALL
+                    SELECT chain.waiter_pid,
+                           unnest(pg_blocking_pids(chain.blocker_pid)),
+                           chain.depth + 1
+                    FROM lock_chain AS chain
+                    WHERE chain.depth < 8
+                )
+                SELECT activity.application_name,
+                       activity.wait_event_type,
+                       pg_blocking_pids(activity.pid) AS blockers,
+                       EXISTS (
+                           SELECT 1
+                           FROM lock_chain
+                           WHERE lock_chain.waiter_pid = activity.pid
+                             AND lock_chain.blocker_pid = :blocker_pid
+                       ) AS blocked_by_task_holder
+                FROM pg_stat_activity AS activity
+                WHERE activity.application_name IN (:first, :second)
+            """), {
+                "first": app_names[0],
+                "second": app_names[1],
+                "blocker_pid": blocker_pid,
+            }).mappings().all()
         last_state = [dict(row) for row in rows]
         waiting = {
             row["application_name"]
             for row in rows
             if row["wait_event_type"] == "Lock"
         }
-        # PostgreSQL reports soft blockers too: the second waiter can be
-        # blocked by the first waiter in the lock queue, while the first is
-        # blocked by the transaction that owns the task row.
-        blockers = {pid for row in rows for pid in row["blockers"]}
-        if waiting == set(app_names) and blocker_pid in blockers:
+        # pg_blocking_pids() can report only the immediate soft blocker for
+        # one waiter. Walk the lock queue transitively to prove that both
+        # HTTP requests ultimately depend on the transaction holding the task.
+        if (
+            waiting == set(app_names)
+            and all(row["blocked_by_task_holder"] for row in rows)
+        ):
             return
         sleep(0.05)
     raise AssertionError(
