@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 
 from app import models
-from app.edge_event_worker import EdgeEventHandlerError
+from app.edge_event_errors import EdgeEventHandlerError
 
 
 def _utc(value: datetime) -> datetime:
