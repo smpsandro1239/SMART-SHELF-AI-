@@ -5,7 +5,6 @@ from datetime import datetime, timedelta, timezone
 os.environ["APP_ENV"]="test"
 os.environ["DATABASE_URL"]="sqlite:///./test_unused.db"
 
-import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -64,8 +63,10 @@ def review_api(monkeypatch):
             "occurred_at":now,"payload":inbox.payload})
         db.commit()
         ack_id=db.query(models.EdgeTaskAcknowledgement).one().id
-        actor_id,employee_id=actor.id,employee.id
-    actor=TestingSession().get(models.User,actor_id)
+        actor_id=actor.id
+    with TestingSession() as read_db:
+        actor=read_db.get(models.User,actor_id)
+        read_db.expunge(actor)
     monkeypatch.setattr(main_module,"_request_user",lambda db,request: actor)
     yield ack_id,actor
     app.dependency_overrides.pop(get_db,None)
@@ -86,7 +87,7 @@ def test_review_http_post_get_and_idempotent_replay(review_api):
         assert history.status_code==200 and len(history.json())==1
 
 
-def test_review_http_denies_employee_and_hides_foreign_ack(review_api,monkeypatch):
+def test_review_http_denies_employee_and_hides_foreign_ack(review_api):
     ack_id,actor=review_api
     actor.role="EMPLOYEE"
     payload={"decision":"REJECTED","reason":"Não foi possível confirmar","evidence_reference":"evidence://shift/124",
