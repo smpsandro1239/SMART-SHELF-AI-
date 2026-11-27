@@ -1,3 +1,17 @@
+## 2026-11-27 — Primeiro incremento do Edge Event Worker autónomo
+
+- HEAD de referência antes da implementação: `09f2b4ffacb00e8bfc4d899c9bb2a93d782dc3f6`.
+- Criado `apps/api/app/edge_event_worker_runtime.py` com polling supervisionado, validação de parâmetros, recuperação de falhas de polling e espera interruptível.
+- `apps/api/app/edge_event_worker.py` passa a expor `python -m app.edge_event_worker`, preservando a função de processamento existente.
+- SIGTERM/SIGINT solicitam shutdown gracioso; o ciclo deixa terminar o evento em curso e não inicia outro.
+- Criado `edge-event-worker` no Docker Compose, independente da API e do vision-worker, com restart policy, utilizador não-root, filesystem read-only, capabilities removidas e dependências de DB/migrations.
+- Acrescentados testes unitários do runtime para conclusão do evento em curso, fila vazia e erro em modo `--once`.
+- O runtime não injecta `BUILTIN_TRANSACTIONAL_HANDLERS`; `TASK_ACKNOWLEDGED` permanece desactivado por omissão. Não foi criada feature flag.
+- Commits de implementação: `9aaeafe`, `0d5fa72`, `268b892`, `bef8e8b`, `c39cf01`.
+- **Validação ainda não executada nesta ronda:** pytest, PostgreSQL 16, Docker Compose config/build/start e workflows CI. Não declarar o worker operacionalmente validado até estes passos terminarem.
+
+---
+
 ## 2026-11-27 — Reconciliação da validação P0 e revisão da fronteira operacional Edge ACK
 
 - SHA de código com quatro workflows aprovados: `cd28865c03abaf4ccde959e098e1dcf462943299`.
