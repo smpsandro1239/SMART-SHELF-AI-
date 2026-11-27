@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import logging
 import os
+import re
 import signal
 import socket
 import threading
@@ -36,7 +37,7 @@ def run_worker(
         raise ValueError("poll_interval must be between 0.5 and 300 seconds")
     if not 5 <= lease_seconds <= 3600:
         raise ValueError("lease_seconds must be between 5 and 3600")
-    if not worker_id or len(worker_id) > 160:
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,159}", worker_id or ""):
         raise ValueError("worker_id must be 1-160 safe ASCII characters")
 
     logger.info("Edge event worker started: worker_id=%s", worker_id)
