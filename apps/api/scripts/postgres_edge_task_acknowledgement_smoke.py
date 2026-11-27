@@ -88,8 +88,9 @@ def _create_race_assignment_and_claim(
         )
         db.add(inbox)
         db.flush()
+        inbox_id = inbox.id
         processing = models.EdgeDeviceEventProcessing(
-            inbox_id=inbox.id, status="PENDING", attempt_count=0, max_attempts=8,
+            inbox_id=inbox_id, status="PENDING", attempt_count=0, max_attempts=8,
             available_at=now - timedelta(seconds=1), fencing_token=0,
             created_at=now, updated_at=now,
         )
@@ -100,7 +101,7 @@ def _create_race_assignment_and_claim(
             claim_db, worker_id=f"ack-race-{suffix}-{scenario}",
             lease_seconds=120, now=now,
         )
-    assert claim is not None and claim["inbox_id"] == inbox.id
+    assert claim is not None and claim["inbox_id"] == inbox_id
     return assignment.id, claim
 
 
