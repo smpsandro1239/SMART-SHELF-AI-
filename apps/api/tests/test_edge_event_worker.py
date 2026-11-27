@@ -75,9 +75,10 @@ def test_worker_dead_letters_event_without_registered_domain_handler(session_fac
     assert row.finished_at is not None
 
 
-def test_worker_retries_transient_handler_failure(session_factory):
+def test_worker_retries_transient_handler_failure(session_factory, caplog):
+    private_detail = "private diagnostic must not be persisted"
     def transient_failure(_event):
-        raise RuntimeError("private diagnostic must not be persisted")
+        raise RuntimeError(private_detail)
 
     assert process_one_edge_event(
         session_factory,
@@ -88,6 +89,7 @@ def test_worker_retries_transient_handler_failure(session_factory):
     assert row.status == "RETRY"
     assert row.last_error_code == "WORKER_ERROR"
     assert row.finished_at is None
+    assert private_detail not in caplog.text
 
 
 def test_worker_respects_explicit_non_retryable_handler_failure(session_factory):
@@ -104,7 +106,7 @@ def test_worker_respects_explicit_non_retryable_handler_failure(session_factory)
     assert row.last_error_code == "INVALID_CAPTURE"
 
 
-def test_worker_abandons_result_when_lease_renewal_fails(session_factory, monkeypatch):
+def test_worker_abandons_result_when_lease_renewal_fails(session_factory, monkeypatch, caplog):
     renewal_started = threading.Event()
 
     def fail_renewal(*_args, **_kwargs):
@@ -128,6 +130,7 @@ def test_worker_abandons_result_when_lease_renewal_fails(session_factory, monkey
     assert row.status == "PROCESSING"
     assert row.lease_owner == "edge-worker-a"
     assert row.finished_at is None
+    assert "database connection interrupted" not in caplog.text
 
 
 @pytest.mark.parametrize(
