@@ -1410,6 +1410,18 @@ class EdgeDeviceTaskAssignment(Base):
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     revoked_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=True)
     revocation_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    events: Mapped[list["EdgeDeviceTaskAssignmentEvent"]] = relationship(
+        back_populates="assignment", order_by="EdgeDeviceTaskAssignmentEvent.id"
+    )
+
+    @property
+    def allowed_actions(self) -> list[str]:
+        for event in self.events:
+            if event.event_type == "CREATED" and isinstance(event.details, dict):
+                actions = event.details.get("allowed_actions", [])
+                if isinstance(actions, list) and all(type(action) is str for action in actions):
+                    return actions
+        return []
 
 
 class EdgeDeviceTaskAssignmentEvent(Base):
@@ -1432,6 +1444,7 @@ class EdgeDeviceTaskAssignmentEvent(Base):
     reason: Mapped[str] = mapped_column(Text, nullable=False)
     details: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    assignment: Mapped["EdgeDeviceTaskAssignment"] = relationship(back_populates="events")
 
 
 class EdgeDeviceCredential(Base):

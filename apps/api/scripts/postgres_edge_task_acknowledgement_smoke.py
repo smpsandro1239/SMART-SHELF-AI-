@@ -222,6 +222,7 @@ def _create_race_assignment_and_claim(
             actor=actor, reason=f"ACK race {scenario}",
             valid_from=now - timedelta(minutes=5),
             valid_until=now + timedelta(hours=1),
+            allowed_actions=["ACCEPTED"],
         )
         assignment_id = assignment.id
         inbox = models.EdgeDeviceEventInbox(
@@ -473,6 +474,7 @@ def main() -> None:
             reason="Associação para smoke de ACK",
             valid_from=now - timedelta(minutes=2),
             valid_until=now + timedelta(hours=1),
+            allowed_actions=["ACCEPTED", "COMPLETED"],
         )
         assignment_id = assignment.id
         task_version = task.task_version

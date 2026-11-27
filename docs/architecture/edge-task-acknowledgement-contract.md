@@ -26,9 +26,10 @@ Antes de processar um acknowledgement, o sistema tem de provar cumulativamente:
 1. O dispositivo e a credencial continuam activos e autenticados.
 2. A loja do dispositivo coincide com a loja da tarefa.
 3. Existe uma associação explícita e vigente entre o dispositivo e a tarefa (ou uma atribuição de dispositivo equivalente, versionada e auditável).
-4. O dispositivo está autorizado para o tipo de tarefa e para a acção declarada.
-5. `task_version` corresponde à versão operacional esperada; uma mensagem atrasada para uma versão anterior não pode alterar a versão actual.
-6. O evento não foi já processado com conteúdo diferente.
+4. A associação contém uma allowlist explícita de acções (`allowed_actions`), registada no evento CREATED imutável. A lista vazia é deny-by-default; não inferir permissões pelo tipo de dispositivo.
+5. O dispositivo está autorizado para o tipo de tarefa e para a acção declarada.
+6. `task_version` corresponde à versão operacional esperada; uma mensagem atrasada para uma versão anterior não pode alterar a versão actual.
+7. O evento não foi já processado com conteúdo diferente.
 
 A pertença à mesma loja, por si só, não autoriza qualquer dispositivo a aceitar ou concluir qualquer tarefa. Não inferir associação a partir de `shelf_id`, proximidade, tipo de dispositivo ou nome declarado no payload.
 
@@ -152,3 +153,10 @@ A configuração opt-in de deployment não foi introduzida porque a inspecção 
 **Regra fail-closed:** não declarar a feature como configurável/operacional nem criar uma flag sem consumidor real. Não ligar a registry ao API ou ao vision-worker. A próxima implementação deve criar primeiro o processo Edge supervisionado; só depois poderá adicionar `EDGE_TASK_ACKNOWLEDGEMENT_ENABLED` (ausente/false desactivada, true opt-in exclusivo do processo Edge, valor inválido rejeitado). Mesmo com a flag activa, `BUILTIN_TRANSACTIONAL_HANDLERS` tem de continuar a ser injectada explicitamente pelo ponto de arranque autorizado.
 
 Até essa implementação e respectiva CI, `TASK_ACKNOWLEDGED` mantém-se inactivo por omissão. `COMPLETED` continua apenas `REVIEW_REQUIRED`; nenhum acknowledgement altera tarefa, versão, stock ou movimentos.
+
+
+## 13. Autorização por acção — implementação técnica (2026-11-27)
+
+A criação de uma associação aceita `allowed_actions` com os valores `ACCEPTED`, `STARTED` e `COMPLETED`. O valor por omissão é uma lista vazia. A allowlist é gravada no evento CREATED append-only, na mesma transacção que cria a associação. O handler de ACK consulta esse evento sob lock e rejeita acções fora da lista com `DEVICE_ACTION_NOT_ALLOWED`. Associações históricas sem a chave `allowed_actions` são tratadas como lista vazia, portanto não recebem permissões retroactivas.
+
+A API não deriva permissões do tipo de dispositivo. Uma alteração de permissões exige revogar a associação anterior e criar outra com a nova allowlist, preservando a auditoria. O handler continua opt-in e inactivo por omissão; esta alteração não constitui autorização de produção.

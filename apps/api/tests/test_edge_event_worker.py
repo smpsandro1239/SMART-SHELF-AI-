@@ -249,6 +249,7 @@ def test_worker_routes_task_acknowledgement_through_fenced_transaction(session_f
             actor=actor, reason="Teste de encaminhamento transaccional",
             valid_from=now - timedelta(minutes=1),
             valid_until=now + timedelta(hours=1),
+            allowed_actions=["COMPLETED"],
         )
         inbox = models.EdgeDeviceEventInbox(
             device_id=device_id,

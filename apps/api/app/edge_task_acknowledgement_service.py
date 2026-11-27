@@ -94,6 +94,14 @@ def apply_edge_task_acknowledgement(db: Session, event: dict) -> None:
     ):
         raise EdgeEventHandlerError("UNASSIGNED_DEVICE", retryable=False)
 
+    created_event = db.query(models.EdgeDeviceTaskAssignmentEvent).filter_by(
+        assignment_id=assignment.id, event_type="CREATED"
+    ).with_for_update().first()
+    details = created_event.details if created_event is not None else {}
+    allowed_actions = details.get("allowed_actions", []) if isinstance(details, dict) else []
+    if not isinstance(allowed_actions, list) or action not in allowed_actions:
+        raise EdgeEventHandlerError("DEVICE_ACTION_NOT_ALLOWED", retryable=False)
+
     if db.query(models.EdgeTaskAcknowledgement.id).filter(
         models.EdgeTaskAcknowledgement.device_id == device_id,
         models.EdgeTaskAcknowledgement.event_id == event_id,

@@ -53,11 +53,26 @@ def _validate_actor(actor: models.User, store_id: int) -> None:
         raise EdgeTaskAssignmentError(404, "STORE_NOT_FOUND", "Loja não encontrada.")
 
 
+EDGE_TASK_ACTIONS = frozenset({"ACCEPTED", "STARTED", "COMPLETED"})
+
+
+def _normalize_allowed_actions(value: list[str] | tuple[str, ...]) -> list[str]:
+    if not isinstance(value, (list, tuple)):
+        raise EdgeTaskAssignmentError(422, "INVALID_ALLOWED_ACTIONS", "allowed_actions tem de ser uma lista.")
+    if any(type(action) is not str or action not in EDGE_TASK_ACTIONS for action in value):
+        raise EdgeTaskAssignmentError(422, "INVALID_ALLOWED_ACTIONS", "allowed_actions contém uma acção inválida.")
+    if len(value) != len(set(value)):
+        raise EdgeTaskAssignmentError(422, "INVALID_ALLOWED_ACTIONS", "allowed_actions não pode conter duplicados.")
+    return sorted(value)
+
+
 def create_edge_task_assignment(
     db: Session, *, store_id: int, task_id: int, device_id: str, actor: models.User,
     reason: str, valid_from: datetime, valid_until: datetime | None = None,
+    allowed_actions: list[str] | tuple[str, ...] = (),
 ) -> models.EdgeDeviceTaskAssignment:
     reason = reason.strip()
+    allowed_actions = _normalize_allowed_actions(allowed_actions)
     if len(reason) < 3:
         raise EdgeTaskAssignmentError(422, "REASON_REQUIRED", "O motivo deve conter pelo menos três caracteres.")
     valid_from = _aware(valid_from, "valid_from")
@@ -86,7 +101,11 @@ def create_edge_task_assignment(
         db.flush()
         db.add(models.EdgeDeviceTaskAssignmentEvent(
             assignment_id=assignment.id, event_type="CREATED", actor_user_id=actor.id,
-            reason=reason, details={"task_version": task.task_version, "device_id": device.device_id},
+            reason=reason, details={
+                "task_version": task.task_version,
+                "device_id": device.device_id,
+                "allowed_actions": allowed_actions,
+            },
             created_at=now,
         ))
         db.commit()

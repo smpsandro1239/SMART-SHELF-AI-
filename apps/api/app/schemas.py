@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 ObservationStatus = Literal["NORMAL", "LOW_STOCK", "EMPTY", "MISPLACED", "DAMAGED", "UNKNOWN", "OCCLUDED"]
 ObservationSource = Literal["fixed_camera", "robot", "mobile", "simulation"]
+EdgeTaskAction = Literal["ACCEPTED", "STARTED", "COMPLETED"]
 
 
 class StoreCreate(BaseModel):
@@ -1631,8 +1632,16 @@ class InventorySyncJobEnqueue(BaseModel):
 
 class EdgeTaskAssignmentCreate(BaseModel):
     reason: str = Field(min_length=3, max_length=2000)
+    allowed_actions: list[EdgeTaskAction] = Field(default_factory=list, max_length=3)
     valid_from: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     valid_until: datetime | None = None
+
+    @field_validator("allowed_actions")
+    @classmethod
+    def require_unique_allowed_actions(cls, value: list[EdgeTaskAction]) -> list[EdgeTaskAction]:
+        if len(value) != len(set(value)):
+            raise ValueError("allowed_actions não pode conter acções duplicadas.")
+        return value
 
     @field_validator("reason")
     @classmethod
@@ -1667,6 +1676,7 @@ class EdgeTaskAssignmentRevoke(BaseModel):
 
 class EdgeTaskAssignmentRead(BaseModel):
     id: int
+    allowed_actions: list[EdgeTaskAction] = Field(default_factory=list)
     store_id: int
     task_id: int
     device_id: str

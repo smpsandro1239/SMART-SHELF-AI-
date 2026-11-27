@@ -57,13 +57,16 @@ def test_create_and_revoke_assignment_are_audited_atomically(db_session):
         db, store_id=store.id, task_id=task.id, device_id=device.device_id,
         actor=actor, reason="Inspecção e reposição assistida",
         valid_from=start, valid_until=start + timedelta(hours=2),
+        allowed_actions=["ACCEPTED", "COMPLETED"],
     )
     assert assignment.task_version == task.task_version
+    assert assignment.allowed_actions == ["ACCEPTED", "COMPLETED"]
     created = db.query(models.EdgeDeviceTaskAssignmentEvent).filter_by(
         assignment_id=assignment.id, event_type="CREATED"
     ).one()
     assert created.actor_user_id == actor.id
     assert created.reason == "Inspecção e reposição assistida"
+    assert created.details["allowed_actions"] == ["ACCEPTED", "COMPLETED"]
 
     revoked = revoke_edge_task_assignment(
         db, assignment_id=assignment.id, actor=actor, reason="Equipamento substituído"
@@ -132,4 +135,30 @@ def test_cross_store_device_cannot_be_assigned_to_task(db_session):
             valid_from=datetime.now(timezone.utc),
         )
     assert error.value.status_code == 404
+    assert db.query(models.EdgeDeviceTaskAssignment).count() == 0
+
+
+def test_assignment_without_explicit_actions_is_deny_by_default(db_session):
+    db, store, actor, task, device = db_session
+    assignment = create_edge_task_assignment(
+        db, store_id=store.id, task_id=task.id, device_id=device.device_id,
+        actor=actor, reason="Associação sem permissões", valid_from=datetime.now(timezone.utc),
+    )
+    created = db.query(models.EdgeDeviceTaskAssignmentEvent).filter_by(
+        assignment_id=assignment.id, event_type="CREATED"
+    ).one()
+    assert assignment.allowed_actions == []
+    assert created.details["allowed_actions"] == []
+
+
+@pytest.mark.parametrize("invalid_actions", [["DELETE"], ["ACCEPTED", "ACCEPTED"], [1], "ACCEPTED"])
+def test_assignment_rejects_invalid_action_scopes(db_session, invalid_actions):
+    db, store, actor, task, device = db_session
+    with pytest.raises(EdgeTaskAssignmentError) as error:
+        create_edge_task_assignment(
+            db, store_id=store.id, task_id=task.id, device_id=device.device_id,
+            actor=actor, reason="Associação com scope inválido",
+            valid_from=datetime.now(timezone.utc), allowed_actions=invalid_actions,
+        )
+    assert error.value.code == "INVALID_ALLOWED_ACTIONS"
     assert db.query(models.EdgeDeviceTaskAssignment).count() == 0

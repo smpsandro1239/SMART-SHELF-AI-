@@ -42,6 +42,7 @@ def ack_db():
         db, store_id=store.id, task_id=task.id, device_id=device.device_id,
         actor=user, reason="Associação para teste ACK", valid_from=now - timedelta(minutes=1),
         valid_until=now + timedelta(hours=1),
+        allowed_actions=["COMPLETED"],
     )
     inbox = models.EdgeDeviceEventInbox(
         device_id=device.device_id,
@@ -179,3 +180,15 @@ def test_acknowledgement_rejects_cross_store_identity(ack_db, identity_override,
     assert db.query(models.EdgeTaskAcknowledgement).count() == 0
     assert db.query(models.ReplenishmentTask).filter_by(store_id=local_store_id).one().status == "PENDING"
     assert db.query(models.ReplenishmentTask).filter_by(store_id=foreign_store.id).one().status == "PENDING"
+
+
+def test_acknowledgement_rejects_action_not_granted_by_assignment(ack_db):
+    db, _task_id, event = ack_db
+    event["payload"] = {**event["payload"], "action": "STARTED"}
+    from app.edge_event_errors import EdgeEventHandlerError
+
+    with pytest.raises(EdgeEventHandlerError) as error:
+        apply_edge_task_acknowledgement(db, event)
+
+    assert error.value.code == "DEVICE_ACTION_NOT_ALLOWED"
+    assert db.query(models.EdgeTaskAcknowledgement).count() == 0

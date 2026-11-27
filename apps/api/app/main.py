@@ -10587,6 +10587,7 @@ def create_edge_device_task_assignment_endpoint(
             reason=payload.reason,
             valid_from=payload.valid_from,
             valid_until=payload.valid_until,
+            allowed_actions=payload.allowed_actions,
         )
     except EdgeTaskAssignmentError as exc:
         raise HTTPException(
