@@ -1,3 +1,11 @@
+## 2026-11-27 — Edge: resiliência e segurança dos logs
+
+A auditoria operacional começou pela fronteira de diagnóstico. O runtime já evitava expor o texto da excepção no ciclo principal de polling, mas os caminhos de renovação de lease e de falha dos handlers ainda emitiam traceback integral. Esses caminhos foram alterados para registar apenas o tipo da excepção e o inbox_id. Foram adicionadas regressões para mensagens sensíveis de handler, renovação e polling.
+
+**Estado:** implementação publicada nos commits `cd12c512`, `53c0428a` e `c0b14a48`; validação CI pendente. Isto não constitui prova de recuperação PostgreSQL. O próximo ensaio deve cobrir interrupção real da ligação, falha/recuperação do heartbeat e novo claim após lease expirar, sem efeitos de inventário.
+
+---
+
 ## 2026-11-27 — Edge ACK: concorrência validada e fronteira operacional em revisão
 
 ### Evidência de validação
