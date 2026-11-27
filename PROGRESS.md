@@ -2065,3 +2065,8 @@ Estado: a prova concorrente 0099 passou de observação genérica de lock para c
 - Commits: `d0fbada2e660a977db92228ea1dd4b938d9f633c` e `bf4b1be34a15b4077904ff2ab9775651ff14f174`.
 - O handler não foi registado nem activado. A validação CI da migration e dos novos modelos está em curso; testes do serviço e smoke dedicado ainda pendentes.
 - Auditoria BOLA/IDOR permanece suspensa.
+
+
+### 2026-11-27 — Validação defensiva adicional do Edge ACK
+
+A validação de `action` rejeita agora explicitamente valores que não sejam texto, incluindo listas, objectos, booleanos e números. Foram acrescentados cinco casos parametrizados para garantir `INVALID_ACK_ACTION` sem persistência. A execução dos testes e os workflows CI continuam pendentes; não activar a registry por omissão. A revisão também confirmou que o smoke PostgreSQL existente ainda não cobre concorrência entre revogação e ACK nem isolamento adversarial cross-store — estas provas permanecem em falta.
