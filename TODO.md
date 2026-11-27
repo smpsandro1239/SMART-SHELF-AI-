@@ -1,3 +1,17 @@
+## 2026-11-27 — Supervisor independente do Edge Worker (implementação publicada; CI pendente)
+
+- Adicionado `app.edge_event_supervisor`: processo pai independente que arranca o worker como subprocesso, monitoriza PID e heartbeat, termina processos bloqueados e aplica backoff exponencial limitado.
+- O worker publica heartbeat atómico do ciclo de polling em `/tmp/edge-worker-child.json`; o supervisor publica estado operacional em `/tmp/edge-supervisor-state.json`.
+- O healthcheck valida frescura dos dois heartbeats, correspondência do PID e existência do processo filho.
+- SIGTERM/SIGINT no supervisor iniciam shutdown gracioso; o filho recebe terminate, dispõe de timeout e só depois é morto forçadamente.
+- Docker Compose passa a executar o supervisor no serviço dedicado `edge-event-worker`, preservando o utilizador não-root, rootfs read-only, capabilities removidas e sem activar handlers transaccionais.
+- Testes adicionados para heartbeat atómico, heartbeat obsoleto, PID divergente, backoff, reinício após crash e shutdown.
+- **Validação pendente:** pytest, compilação Python, Docker Compose config/build/smoke e quatro workflows no SHA publicado. O acesso actual permite escrever via GitHub API, mas não executar terminal local.
+
+Limite operacional: o heartbeat do filho representa progresso do ciclo de polling, não uma garantia de conclusão de domínio. O timeout por omissão é 120 s (ou maior que 2× lease configurada); ajustar apenas com base na duração máxima validada dos handlers. `TASK_ACKNOWLEDGED` continua fail-closed e nenhuma operação de inventário foi alterada.
+
+---
+
 ## P0 — PostgreSQL Edge worker fault injection (2026-11-27)
 
 ### Implementação publicada — execução CI pendente

@@ -7,12 +7,15 @@ dead-letter queue until their domain handlers and durable side effects exist.
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import os
 import re
 import signal
 import socket
 import threading
+import time
+from pathlib import Path
 from collections.abc import Callable
 from typing import Any
 
@@ -262,7 +265,23 @@ def run_worker(
         raise ValueError("worker_id must be 1-160 safe ASCII characters")
 
     logger.info("Edge event worker started: worker_id=%s", worker_id)
+    heartbeat_path = os.getenv("EDGE_EVENT_CHILD_HEARTBEAT_PATH")
+
+    def write_heartbeat() -> None:
+        if not heartbeat_path:
+            return
+        target = Path(heartbeat_path)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        temporary = target.with_name(f".{target.name}.{os.getpid()}.tmp")
+        temporary.write_text(json.dumps({"pid": os.getpid(), "heartbeat_at": time.time()}), encoding="utf-8")
+        os.replace(temporary, target)
+
     while not stop_event.is_set():
+        try:
+            write_heartbeat()
+        except OSError as exc:
+            logger.error("Edge worker heartbeat write failed: error_type=%s", type(exc).__name__)
+            return 1
         try:
             processed = process_event(
                 SessionLocal,
@@ -280,6 +299,12 @@ def run_worker(
                 return 1
             stop_event.wait(poll_interval)
             continue
+
+        try:
+            write_heartbeat()
+        except OSError as exc:
+            logger.error("Edge worker heartbeat write failed: error_type=%s", type(exc).__name__)
+            return 1
 
         if once:
             return 0

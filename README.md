@@ -1,3 +1,13 @@
+## Supervisor independente do Edge Event Worker (2026-11-27)
+
+O serviço `edge-event-worker` é iniciado através de `python -m app.edge_event_supervisor`. O supervisor mantém um heartbeat operacional próprio, inicia o worker como processo filho, monitoriza o PID e o heartbeat do ciclo de polling e reinicia processos terminados ou sem heartbeat. O backoff é exponencial e limitado; SIGTERM/SIGINT desencadeiam encerramento gracioso com timeout e kill como último recurso.
+
+O healthcheck do container executa `python -m app.edge_event_supervisor --healthcheck` e exige heartbeats recentes, PID coincidente e processo filho vivo. Os ficheiros de estado ficam em `/tmp`, compatível com o root filesystem read-only do container. O timeout do heartbeat do filho é configurável por `EDGE_SUPERVISOR_HEARTBEAT_TIMEOUT` (por omissão 120 segundos) e deve exceder a duração máxima esperada do ciclo de processamento. O supervisor não injecta handlers transaccionais nem activa Edge ACK.
+
+**Estado:** implementação publicada; validação CI/Docker pendente no SHA desta alteração. Não considerar o mecanismo operacionalmente aprovado até os workflows passarem e o smoke de crash/bloqueio ser executado.
+
+---
+
 ## Edge worker — protecção de dados de diagnóstico (2026-11-27)
 
 As falhas de polling, renovação de lease e execução de handlers são registadas sem incluir o texto original da excepção. Mensagens de drivers e providers podem conter detalhes de ligação ou dados operacionais; os logs usam apenas o tipo da excepção e o identificador interno do evento. Esta alteração não muda retries, leases, handlers, ACK ou inventário. A validação automatizada desta correcção depende da CI no SHA publicado.

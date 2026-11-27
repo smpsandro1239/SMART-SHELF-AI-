@@ -230,11 +230,13 @@ services:
     command:
       - python
       - -m
-      - app.edge_event_worker
-      - --poll-interval
-      - ${EDGE_EVENT_POLL_INTERVAL:-5}
-      - --lease-seconds
-      - ${EDGE_EVENT_LEASE_SECONDS:-60}
+      - app.edge_event_supervisor
+    healthcheck:
+      test: ["CMD", "python", "-m", "app.edge_event_supervisor", "--healthcheck"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 15s
     environment:
       APP_ENV: ${APP_ENV:-development}
       HOME: /tmp
@@ -243,6 +245,13 @@ services:
       EDGE_EVENT_WORKER_ID: ${EDGE_EVENT_WORKER_ID:-edge-event-worker-1}
       EDGE_EVENT_POLL_INTERVAL: ${EDGE_EVENT_POLL_INTERVAL:-5}
       EDGE_EVENT_LEASE_SECONDS: ${EDGE_EVENT_LEASE_SECONDS:-60}
+      EDGE_EVENT_CHILD_HEARTBEAT_PATH: /tmp/edge-worker-child.json
+      EDGE_SUPERVISOR_STATE_PATH: /tmp/edge-supervisor-state.json
+      EDGE_SUPERVISOR_HEARTBEAT_INTERVAL: ${EDGE_SUPERVISOR_HEARTBEAT_INTERVAL:-2}
+      EDGE_SUPERVISOR_HEARTBEAT_TIMEOUT: ${EDGE_SUPERVISOR_HEARTBEAT_TIMEOUT:-120}
+      EDGE_SUPERVISOR_RESTART_BASE_SECONDS: ${EDGE_SUPERVISOR_RESTART_BASE_SECONDS:-1}
+      EDGE_SUPERVISOR_RESTART_MAX_SECONDS: ${EDGE_SUPERVISOR_RESTART_MAX_SECONDS:-60}
+      EDGE_SUPERVISOR_SHUTDOWN_TIMEOUT: ${EDGE_SUPERVISOR_SHUTDOWN_TIMEOUT:-10}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     depends_on:
       db:
