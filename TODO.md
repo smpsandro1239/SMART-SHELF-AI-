@@ -19,7 +19,7 @@ A configuração é dedicada ao subprocesso `app.edge_event_worker`; não é lid
 - [x] Propagar snapshot de métricas do filho para o estado operacional do supervisor.
 - [x] Acrescentar logs correlacionados por evento com event_id, inbox_id, processing_id, store_id, device_id, worker_id, tentativa, duração e outcome PROCESSED/RETRY/DEAD_LETTER/LEASE_LOST/ACK_CLAIMED/ACK_RECORDED/ACK_REJECTED.
 - [x] Acrescentar testes para contadores de polling, duração, falhas sem texto de excepção e correlação de ACK aplicado/DEAD_LETTER.
-- [x] Confirmar API CI, Quality Gates, Security Scans e Docker Compose no SHA `4024763c177dfad63179e3b3cb73648371a729dc` — todos SUCCESS.
+- [x] Confirmar API CI, Quality Gates, Security Scans e Docker Compose no SHA `4ea755b6a110bb6766748cb970db0458583444b8` — todos SUCCESS.
 - [ ] Decidir mecanismo de exportação/consumo das métricas sem introduzir dependências ou portas expostas desnecessárias.
 
 Limite: os contadores no heartbeat são snapshots voláteis por processo, não um ledger durável nem métricas agregadas históricas. A implementação não activa ACK nem altera efeitos de domínio.
@@ -36,7 +36,7 @@ Limite: os contadores no heartbeat são snapshots voláteis por processo, não u
 - [x] Implementar SIGTERM/SIGINT gracioso, timeout e SIGKILL como último recurso.
 - [x] Criar healthcheck que valida heartbeats recentes e PIDs vivos/coincidentes.
 - [x] Integrar o supervisor no serviço Docker Compose mantendo hardening e ACK fail-closed.
-- [x] Validar compileall, suite API, PostgreSQL 16, Quality Gates, Security Scans e Docker Compose no SHA `4024763c177dfad63179e3b3cb73648371a729dc`.
+- [x] Validar compileall, suite API, PostgreSQL 16, Quality Gates, Security Scans e Docker Compose no SHA `4ea755b6a110bb6766748cb970db0458583444b8`.
 - [x] Smoke Docker comprovou arranque, SIGKILL, heartbeat obsoleto, SIGTERM real, shutdown do filho e reinício saudável.
 
 Limite: não foram executados comandos localmente; os resultados provêm dos workflows GitHub Actions. O heartbeat do filho representa progresso do ciclo de polling; o timeout deve exceder a duração máxima esperada dos handlers. `TASK_ACKNOWLEDGED` continua fail-closed e não há alterações ao inventário.

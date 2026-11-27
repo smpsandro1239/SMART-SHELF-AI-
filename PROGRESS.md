@@ -2,7 +2,8 @@
 
 ## Estado atual
 - Branch: `main`
-- Último commit validado: `4ea755b6a110bb6766748cb970db0458583444b8`
+- Último commit de código validado: `4ea755b6a110bb6766748cb970db0458583444b8`
+- Último commit publicado: `e45015296ad2221828af6a94f53178abc822c9e2` (documentação)
 - Última atualização: 2026-11-27
 
 ## Tarefa atual
