@@ -194,7 +194,7 @@ def test_transactional_handler_and_completion_share_commit(db):
     complete_edge_event_transactionally(
         db, processing_id=processing_id, worker_id="worker-atomic",
         fencing_token=claim["fencing_token"], event=claim, handler=handler,
-    now=now + timedelta(seconds=1),
+        now=now + timedelta(seconds=1),
     )
     db.expire_all()
     row = db.get(models.EdgeDeviceEventProcessing, processing_id)
