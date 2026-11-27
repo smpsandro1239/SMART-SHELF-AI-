@@ -20,6 +20,7 @@ from app.edge_device_service import (
     sign_edge_device_request,
 )
 from app.edge_event_contract import EdgeEventEnvelope
+from app.edge_ingest_metrics import edge_ingest_metrics_snapshot, reset_edge_ingest_metrics
 from app.main import app
 
 ENGINE = create_engine(
@@ -40,6 +41,7 @@ def override_get_db():
 
 @pytest.fixture(autouse=True)
 def isolated_database():
+    reset_edge_ingest_metrics()
     previous = app.dependency_overrides.get(get_db)
     Base.metadata.drop_all(bind=ENGINE)
     Base.metadata.create_all(bind=ENGINE)
@@ -113,6 +115,10 @@ def test_signed_edge_event_http_endpoint_accepts_and_persists_event():
     assert response.json()["accepted"] is True
     assert response.json()["disposition"] == "NEXT"
     assert response.json()["duplicate"] is False
+    metrics = edge_ingest_metrics_snapshot()
+    assert metrics["events_received"] == 1
+    assert metrics["events_accepted"] == 1
+    assert metrics["events_duplicate"] == 0
     db = Session()
     assert db.query(models.EdgeDeviceEventInbox).count() == 1
     device = db.query(models.EdgeDevice).filter_by(device_id="edge-http-camera").one()
@@ -159,3 +165,30 @@ def test_edge_http_rejects_reused_nonce_and_cross_tenant_envelope():
             headers=signed_headers(token, foreign_body, nonce="d" * 32),
         )
     assert response.status_code == 403
+
+
+def test_edge_ingest_metrics_distinguish_duplicate_sequence_and_auth_rejection():
+    store_id, token, _ = seed_device()
+    event = build_event(store_id)
+    body = json.dumps(event.model_dump(mode="json"), sort_keys=True, separators=(",", ":")).encode()
+    with TestClient(app) as client:
+        accepted = client.post("/api/v1/edge/events", content=body,
+            headers=signed_headers(token, body, nonce="e" * 32))
+        duplicate = client.post("/api/v1/edge/events", content=body,
+            headers=signed_headers(token, body, nonce="f" * 32))
+        stale = build_event(store_id, sequence=1)
+        stale_body = json.dumps(stale.model_dump(mode="json"), sort_keys=True, separators=(",", ":")).encode()
+        sequence_conflict = client.post("/api/v1/edge/events", content=stale_body,
+            headers=signed_headers(token, stale_body, nonce="g" * 32))
+        unauthorized = client.post("/api/v1/edge/events", content=b"{}")
+    assert accepted.status_code == 202
+    assert duplicate.status_code == 202
+    assert sequence_conflict.status_code == 409
+    assert unauthorized.status_code == 401
+    metrics = edge_ingest_metrics_snapshot()
+    assert metrics["events_received"] == 4
+    assert metrics["events_accepted"] == 1
+    assert metrics["events_duplicate"] == 1
+    assert metrics["events_rejected"] == 2
+    assert metrics["sequence_conflicts"] == 1
+    assert metrics["authentication_rejected"] == 1

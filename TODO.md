@@ -22,7 +22,8 @@ A configuração é dedicada ao subprocesso `app.edge_event_worker`; não é lid
 - [x] Confirmar API CI, Quality Gates, Security Scans e Docker Compose no SHA `4ea755b6a110bb6766748cb970db0458583444b8` — todos SUCCESS.
 - [x] Decidir exportação: manter heartbeat JSON privado em `/tmp` + logs correlacionados; não abrir endpoint/porta Prometheus até existir consumidor autenticado, política tenant-scoped e retenção durável.
 - [x] Acrescentar contadores voláteis de outcomes, ACK, duplicados, falhas de handler e renovações/perdas de lease ao heartbeat do worker; propagar snapshot pelo supervisor.
-- [ ] Contabilizar eventos recebidos no ponto de ingestão da API e definir agregação durável/histórica antes de apresentar analytics.
+- [x] Contabilizar eventos recebidos, aceites, duplicados e rejeitados na rota HTTP de ingestão, distinguindo autenticação, autorização/tenant, contrato, replay de nonce, conflito de sequência e conflito de event_id.
+- [ ] Definir agregação durável e retenção histórica antes de apresentar analytics. Os contadores actuais são voláteis por processo API.
 
 Limite: os contadores no heartbeat são snapshots voláteis por processo, não um ledger durável nem métricas agregadas históricas. A implementação não activa ACK nem altera efeitos de domínio.
 

@@ -1,3 +1,11 @@
+## Edge API — métricas de ingestão (2026-11-27)
+
+A rota autenticada POST /api/v1/edge/events contabiliza no próprio processo da API os eventos recebidos, aceites, duplicados e rejeitados, distinguindo rejeições de autenticação, autorização/tenant, contrato, replay de nonce, conflito de sequência e conflito de identidade do event_id. Os contadores são protegidos por lock, têm nomes limitados e são emitidos em logs estruturados sem payload, credenciais, assinatura ou texto de excepção. Não existe endpoint público de métricas.
+
+Os contadores são voláteis e locais a cada processo API; os logs podem ser agregados pelo sistema de observabilidade do deployment, mas não constituem ledger nem retenção histórica. events_received mede pedidos que entram na rota; events_accepted e events_duplicate só são incrementados após resultado confirmado pelo serviço transaccional. Uma falha de ingestão nunca é inferida a partir do worker. Métricas não alteram inventário, tarefas, ACK ou transacções.
+
+---
+
 ## Edge worker — métricas de outcomes e leases (2026-11-27)
 
 O heartbeat privado do processo Edge (`/tmp/edge-worker-child.json`) passa a expor `schema_version=2` e contadores voláteis de outcomes: PROCESSED, RETRY, DEAD_LETTER, LEASE_LOST, ACK_CLAIMED, ACK_RECORDED e ACK_REJECTED; renovações e falhas de renovação de lease; falhas de handler e duplicados explicitamente rejeitados. O supervisor continua a propagar o snapshot para o seu ficheiro de estado. Os observadores são best-effort e isolados: uma falha de telemetria não altera o resultado transaccional nem o ciclo do worker.
