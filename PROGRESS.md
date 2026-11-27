@@ -1,14 +1,56 @@
-## 2026-11-27 — Supervisor independente do Edge Worker (implementação publicada; CI pendente)
+# PROGRESS — SMART SHELF AI
 
-- Adicionado `app.edge_event_supervisor`: processo pai independente que arranca o worker como subprocesso, monitoriza PID e heartbeat, termina processos bloqueados e aplica backoff exponencial limitado.
-- O worker publica heartbeat atómico do ciclo de polling em `/tmp/edge-worker-child.json`; o supervisor publica estado operacional em `/tmp/edge-supervisor-state.json`.
-- O healthcheck valida frescura dos dois heartbeats, correspondência do PID e existência do processo filho.
-- SIGTERM/SIGINT no supervisor iniciam shutdown gracioso; o filho recebe terminate, dispõe de timeout e só depois é morto forçadamente.
-- Docker Compose passa a executar o supervisor no serviço dedicado `edge-event-worker`, preservando o utilizador não-root, rootfs read-only, capabilities removidas e sem activar handlers transaccionais.
-- Testes adicionados para heartbeat atómico, heartbeat obsoleto, PID divergente, backoff, reinício após crash e shutdown.
-- **Validação pendente:** pytest, compilação Python, Docker Compose config/build/smoke e quatro workflows no SHA publicado. O acesso actual permite escrever via GitHub API, mas não executar terminal local.
+## Estado atual
+- Branch: `main`
+- Último commit de código validado: `9be6f3fb7a446f537bf989544df178a100050c7b`
+- Último commit publicado: `c5779e1b02c903db5bfd3b947da01b55814c78aa`
+- Última atualização: 2026-11-27
 
-Limite operacional: o heartbeat do filho representa progresso do ciclo de polling, não uma garantia de conclusão de domínio. O timeout por omissão é 120 s (ou maior que 2× lease configurada); ajustar apenas com base na duração máxima validada dos handlers. `TASK_ACKNOWLEDGED` continua fail-closed e nenhuma operação de inventário foi alterada.
+## Tarefa atual
+- Identificador: EDGE-SUPERVISOR-01
+- Descrição: supervisor independente do Edge Event Worker.
+- Estado: PARTIALLY_COMPLETED — implementação e recuperação SIGKILL/heartbeat validadas; extensão SIGTERM no smoke à espera de CI.
+
+## Tarefas concluídas
+- [x] Supervisor independente com subprocesso, heartbeat, PID e estado operacional.
+- [x] Watchdog para crash e heartbeat obsoleto.
+- [x] Backoff exponencial limitado e contagem de reinícios/falhas.
+- [x] Lock exclusivo para impedir supervisores duplicados no mesmo runtime.
+- [x] Shutdown gracioso com timeout e terminação forçada de último recurso.
+- [x] Healthcheck do supervisor e do processo filho.
+- [x] Integração Docker Compose com rootfs read-only, utilizador não-root e capabilities removidas.
+- [x] API CI, Quality Gates, Security Scans e Docker Compose no SHA 9be6f3f: SUCCESS.
+- [x] Smoke Docker de SIGKILL e heartbeat obsoleto: SUCCESS.
+
+## Tarefas pendentes
+- [ ] Validar smoke de SIGTERM real ao container e reinício limpo no SHA c5779e1.
+- [ ] Confirmar os quatro workflows no SHA actual.
+- [ ] Próxima prioridade após validação: observabilidade operacional do Edge (métricas/correlação de ACK, retries, lease perdida e DEAD_LETTER), sem activar handlers transaccionais.
+
+## Tarefas bloqueadas
+- Nenhuma dependência externa identificada nesta fase.
+
+## Testes
+- Executados via CI: compilação Python, suite API, smokes PostgreSQL 16, Docker Compose.
+- Resultado no SHA 9be6f3f: API CI, Quality Gates, Security Scans e Docker Compose — SUCCESS.
+- Pendente: nova execução CI no SHA c5779e1.
+- Testes locais: não executados; esta execução não dispõe de terminal ligado ao repositório.
+
+## CI/CD
+- Último SHA integralmente validado: 9be6f3fb7a446f537bf989544df178a100050c7b.
+- Último SHA publicado: c5779e1b02c903db5bfd3b947da01b55814c78aa.
+- Workflows do SHA c5779e1: em execução/por confirmar.
+
+## Decisões técnicas
+- O supervisor é processo independente, não uma thread no worker.
+- Heartbeats e estado são ficheiros JSON atómicos em `/tmp`.
+- O timeout do heartbeat do filho é configurável; o valor por omissão é 120 s.
+- O lock `flock` evita duplicação de supervisores no mesmo volume.
+- `TASK_ACKNOWLEDGED` continua opt-in e não é injectado no runtime.
+- Nenhuma operação de inventário ou migration foi alterada.
+
+## Próxima ação obrigatória
+- Aguardar e verificar os quatro workflows no SHA c5779e1; corrigir qualquer falha do smoke de shutdown antes de avançar para métricas operacionais Edge.
 
 ---
 

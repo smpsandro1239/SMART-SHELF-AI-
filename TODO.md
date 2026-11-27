@@ -1,14 +1,19 @@
-## 2026-11-27 — Supervisor independente do Edge Worker (implementação validada; smoke SIGTERM em expansão)
+## P1 — Supervisor independente do Edge Worker (2026-11-27)
 
-- Adicionado `app.edge_event_supervisor`: processo pai independente que arranca o worker como subprocesso, monitoriza PID e heartbeat, termina processos bloqueados e aplica backoff exponencial limitado.
-- O worker publica heartbeat atómico do ciclo de polling em `/tmp/edge-worker-child.json`; o supervisor publica estado operacional em `/tmp/edge-supervisor-state.json`.
-- O healthcheck valida frescura dos dois heartbeats, correspondência do PID e existência do processo filho.
-- SIGTERM/SIGINT no supervisor iniciam shutdown gracioso; o filho recebe terminate, dispõe de timeout e só depois é morto forçadamente.
-- Docker Compose passa a executar o supervisor no serviço dedicado `edge-event-worker`, preservando o utilizador não-root, rootfs read-only, capabilities removidas e sem activar handlers transaccionais.
-- Testes adicionados para heartbeat atómico, heartbeat obsoleto, PID divergente, backoff, reinício após crash e shutdown.
-- **Validação pendente:** pytest, compilação Python, Docker Compose config/build/smoke e quatro workflows no SHA publicado. O acesso actual permite escrever via GitHub API, mas não executar terminal local.
+- [x] Criar supervisor independente em `app.edge_event_supervisor`, com processo filho separado.
+- [x] Publicar heartbeat operacional do supervisor e do worker, com timestamp, PID e estado.
+- [x] Detectar crash, SIGKILL, heartbeat ausente/desactualizado e reiniciar o filho.
+- [x] Aplicar backoff exponencial limitado e registar falhas consecutivas, reinícios e último exit code.
+- [x] Impedir duas instâncias supervisoras no mesmo volume através de lock exclusivo.
+- [x] Implementar SIGTERM/SIGINT gracioso, timeout e SIGKILL como último recurso.
+- [x] Criar healthcheck que valida heartbeats recentes e PIDs vivos/coincidentes.
+- [x] Integrar o supervisor no serviço Docker Compose mantendo hardening e ACK fail-closed.
+- [x] Validar compileall, suite API, Quality Gates, Security Scans e Docker Compose no SHA `9be6f3fb7a446f537bf989544df178a100050c7b`.
+- [x] Smoke Docker comprovou arranque, SIGKILL e recuperação de heartbeat obsoleto no SHA `9be6f3fb7a446f537bf989544df178a100050c7b`.
+- [ ] Validar o novo smoke de SIGTERM real ao container, encerramento do filho e novo arranque saudável no SHA actual.
+- [ ] Confirmar os quatro workflows no SHA final após a extensão do smoke.
 
-Limite operacional: o heartbeat do filho representa progresso do ciclo de polling, não uma garantia de conclusão de domínio. O timeout por omissão é 120 s (ou maior que 2× lease configurada); ajustar apenas com base na duração máxima validada dos handlers. `TASK_ACKNOWLEDGED` continua fail-closed e nenhuma operação de inventário foi alterada.
+Limite: não foram executados comandos localmente; os resultados positivos provêm dos workflows GitHub Actions. O heartbeat do filho representa progresso do ciclo de polling; o timeout deve exceder a duração máxima esperada dos handlers. `TASK_ACKNOWLEDGED` continua fail-closed e não há alterações ao inventário.
 
 ---
 
