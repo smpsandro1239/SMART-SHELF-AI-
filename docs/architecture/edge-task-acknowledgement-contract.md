@@ -1,6 +1,6 @@
 # Contrato de acknowledgements de tarefas por dispositivos Edge
 
-Estado: **contrato de produto proposto; implementação operacional não autorizada por este documento**
+Estado: **implementação parcial; handler registado em modo opt-in, não activo por omissão**
 Data: 2026-11-26
 
 ## 1. Objectivo e fronteira
@@ -43,7 +43,7 @@ A implementação futura deve preservar o evento original no inbox e acrescentar
 - resultado de validação e razão de rejeição, sem guardar segredos;
 - identidade da associação dispositivo-tarefa que autorizou a mensagem.
 
-A chave de deduplicação deve impedir duas aplicações do mesmo evento. Uma repetição exacta é idempotente; reutilização do mesmo event ID com conteúdo diferente é conflito. A persistência do acknowledgement e a transição do processamento para `PROCESSED` têm de ser atómicas.
+A chave de deduplicação impede duas aplicações do mesmo evento. Na implementação actual, qualquer repetição do mesmo par dispositivo/event_id é rejeitada como DUPLICATE_ACK_EVENT; não é devolvido um resultado idempotente positivo. A reutilização do event ID com conteúdo diferente também é rejeitada. A persistência do acknowledgement e a transição do processamento para PROCESSED têm de ser atómicas.
 
 ## 5. Concorrência e fencing
 
@@ -84,11 +84,13 @@ Rejeições de autorização não devem revelar a existência de tarefas de outr
 - Testes de perda/expiração de lease e fencing.
 - CI completa e documentação operacional antes de activar o handler.
 
-## 9. Estado actual
+## 9. Estado actual (2026-11-27)
 
-A API de ingestão e o worker Edge já existem. O worker mantém apenas `DEVICE_HEARTBEAT` como handler built-in; eventos sem handler vão para dead-letter. Esta é a política correcta até estarem implementadas a associação dispositivo-tarefa e as garantias acima.
+A migration 0102, o serviço/API de associação dispositivo-tarefa, a migration 0103 e o serviço de acknowledgement estão implementados. A fronteira transaccional do worker executa o handler, insere o acknowledgement e muda o processamento da inbox para PROCESSED na mesma transacção SQLAlchemy, sob validação do owner, fencing token e lease.
 
-Este documento não autoriza a activação do handler `TASK_ACKNOWLEDGED`, não declara integração com robôs homologada e não altera o estado de tarefas ou inventário.
+O handler apply_edge_task_acknowledgement está disponível numa registry transaccional explícita, mas essa registry não é activada por omissão pelo worker. TASK_ACKNOWLEDGED permanece fail-closed até a CI integral passar no SHA final. O smoke PostgreSQL 16 já ligado ao API CI cobre rollback após insert, commit conjunto, rejeição de replay, claim concorrente com vencedor único, fencing e triggers append-only. Foi acrescentado teste do worker para o percurso transaccional opt-in.
+
+Ainda falta validar os workflows no SHA final, acrescentar concorrência explícita entre revogação da associação e processamento e reforçar o isolamento cross-store no smoke dedicado. A implementação não declara integração com robôs homologada. COMPLETED continua a produzir apenas REVIEW_REQUIRED, sem alterar tarefa ou inventário.
 
 
 ## 10. Descoberta de implementação no código actual (2026-11-26)
