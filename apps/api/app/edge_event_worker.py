@@ -13,8 +13,6 @@ from typing import Any
 
 from sqlalchemy.orm import Session, sessionmaker
 
-from app.edge_task_acknowledgement_service import apply_edge_task_acknowledgement
-
 from app.edge_event_processing import (
     EdgeEventProcessingError,
     claim_next_edge_event,
@@ -38,6 +36,9 @@ class EdgeEventHandlerError(RuntimeError):
 
 EdgeEventHandler = Callable[[dict[str, Any]], None]
 TransactionalEdgeEventHandler = Callable[[Session, dict[str, Any]], None]
+
+# Imported after EdgeEventHandlerError is defined: the service uses that error type.
+from app.edge_task_acknowledgement_service import apply_edge_task_acknowledgement
 
 
 def _heartbeat_event_handler(event: dict[str, Any]) -> None:
