@@ -1,3 +1,23 @@
+## P0 — Edge Event Worker autónomo (2026-11-27)
+
+### Implementação publicada — validação pendente
+- [x] Criar runtime de polling dedicado em `app.edge_event_worker_runtime`, mantendo o módulo de serviço `app.edge_event_worker`.
+- [x] Expor o entrypoint `python -m app.edge_event_worker`.
+- [x] Implementar espera interruptível, tratamento de falhas de polling e encerramento gracioso por SIGTERM/SIGINT (termina o evento em curso antes de sair).
+- [x] Validar intervalo de polling, lease e identidade do worker antes do ciclo.
+- [x] Adicionar serviço independente `edge-event-worker` no Docker Compose, com restart policy, utilizador não-root, filesystem read-only, capabilities removidas e dependência de DB/migrations.
+- [x] Manter `TASK_ACKNOWLEDGED` fail-closed: o runtime não injecta `BUILTIN_TRANSACTIONAL_HANDLERS`; a injecção transaccional continua explícita.
+- [x] Acrescentar testes unitários do ciclo runtime para shutdown, fila vazia e falha no modo `--once`.
+- [ ] Executar testes focados e suite API no SHA final.
+- [ ] Validar `docker compose config`, build e arranque real do serviço.
+- [ ] Executar smoke PostgreSQL 16 para concorrência multi-worker, lease expirada, takeover e fencing.
+- [ ] Confirmar API CI, Quality Gates, Security Scans e Docker Compose verdes no mesmo SHA.
+- [ ] Só depois avaliar configuração fail-closed do ACK; não adicionar a flag nem injectar a registry nesta fase.
+
+**Limite conhecido:** o runtime de produção consome eventos com os handlers não transaccionais predefinidos (actualmente DEVICE_HEARTBEAT). Os restantes tipos sem handler configurado seguem a política existente de DEAD_LETTER. O handler transaccional TASK_ACKNOWLEDGED continua fora da injecção de deployment. A existência do processo não constitui autorização de ACK nem de produção.
+
+---
+
 ## P0 — Edge Task Acknowledgement: validação e fronteira operacional (2026-11-27)
 
 ### Validação concluída — código
