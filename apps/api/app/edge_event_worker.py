@@ -234,7 +234,7 @@ def process_one_edge_event(
                 "Edge event processed transactionally: type=%s inbox_id=%s attempt=%s",
                 claim["event_type"], claim["inbox_id"], claim["attempt_count"],
             )
-            log_outcome("ACK_APPLIED" if claim["event_type"] == "TASK_ACKNOWLEDGED" else "PROCESSED")
+            log_outcome("ACK_RECORDED" if claim["event_type"] == "TASK_ACKNOWLEDGED" else "PROCESSED")
         return True
 
     try:

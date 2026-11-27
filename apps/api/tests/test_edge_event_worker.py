@@ -285,6 +285,6 @@ def test_worker_routes_task_acknowledgement_through_fenced_transaction(session_f
         assert task.completed_at is None
         assert db.query(models.InventoryMovement).count() == movement_count_before
 
-    assert "edge_event_outcome outcome=ACK_APPLIED" in caplog.text
+    assert "edge_event_outcome outcome=ACK_RECORDED" in caplog.text
     assert "event_id=00000000-0000-4000-8000-000000000103" in caplog.text
     assert "duration_ms=" in caplog.text
