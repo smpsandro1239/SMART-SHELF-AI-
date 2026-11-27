@@ -1,3 +1,19 @@
+## 2026-11-27 — Reconciliação da validação P0 e revisão da fronteira operacional Edge ACK
+
+- SHA de código com quatro workflows aprovados: `cd28865c03abaf4ccde959e098e1dcf462943299`.
+- API CI PostgreSQL 16 `45998882415`, Quality Gates `45998882598`, Security Scans `45998882484` e Docker Compose `45998882648`: sucesso no mesmo SHA de código.
+- Quality Gates documental `45999727222` e Security Scans documental `45999727282`: todos os jobs concluídos com sucesso.
+- O smoke concorrente prova revogação-primeiro e ACK-primeiro. Precisão preservada: o primeiro cenário constrói manualmente a transacção de revogação; o segundo invoca `revoke_edge_task_assignment`.
+- Revisão do código: a registry `BUILTIN_TRANSACTIONAL_HANDLERS` existe, mas só é usada quando um chamador injecta explicitamente `transactional_handlers`; o worker não a activa por omissão. Não existe ainda uma feature flag/configuração de deployment dedicada ao ACK.
+- O serviço valida identidade da loja, dispositivo ACTIVE, associação vigente, timestamps e `task_version`. A política de autorização específica para cada acção ainda não está definida/implementada.
+- O processamento já dispõe de lease, heartbeat, fencing, retry exponencial limitado e DEAD_LETTER. A observabilidade actual é baseada sobretudo em logs; faltam métricas e alertas operacionais específicos do ACK.
+- `COMPLETED` continua `REVIEW_REQUIRED`; a transacção não altera tarefa, versão ou inventário.
+- Próximos gaps P0: feature flag fail-closed; matriz de permissões por acção; métricas/correlação; fluxo auditável de revisão humana; ensaios de crash/recovery e dead-letter.
+- Não foram executados comandos locais nesta ronda; a validação de código aqui registada provém dos workflows GitHub Actions e da inspecção dos ficheiros no repositório.
+- Decisão: manter o handler desactivado e não autorizar produção até os gaps operacionais serem fechados e aprovados.
+
+---
+
 ## 2026-11-27 — Smoke concorrente PostgreSQL Edge ACK vs revogação
 
 - SHA inicial desta ronda: `68a488f46fe1fa2d536c37443f3faeac7f459e16`.
