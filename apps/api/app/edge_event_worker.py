@@ -76,11 +76,9 @@ def process_one_edge_event(
 
     routes = BUILTIN_HANDLERS if handlers is None else handlers
     handler = routes.get(claim["event_type"])
-    transactional_routes = (
-        BUILTIN_TRANSACTIONAL_HANDLERS
-        if transactional_handlers is None
-        else transactional_handlers
-    )
+    # Keep domain handlers opt-in: TASK_ACKNOWLEDGED is not enabled by the
+    # production worker until the complete CI validation is accepted.
+    transactional_routes = transactional_handlers or {}
     transactional_handler = transactional_routes.get(claim["event_type"])
     if handler is None and transactional_handler is None:
         with session_factory() as db:
