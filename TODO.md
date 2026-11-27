@@ -1,3 +1,15 @@
+## P0 — Corrigir normalização temporal do Edge acknowledgement (2026-11-27)
+
+- [x] Identificar a falha exacta no teste `test_completed_ack_is_review_evidence_only`: SQLite remove `tzinfo` ao materializar colunas `DateTime(timezone=True)`; o serviço estava a tratar o timestamp persistido da associação como timestamp externo inválido.
+- [x] Separar a validação estrita do timestamp recebido no evento da normalização dos timestamps persistidos da associação.
+- [x] Interpretar como UTC apenas valores naïve lidos da associação, cuja escrita já normaliza `valid_from`/`valid_until` para UTC.
+- [ ] Confirmar suite API, PostgreSQL 16, Quality Gates, Security Scans e Docker Compose no SHA `63554528867b3e432b0d117da1902d98370f0dc6`.
+- [ ] Prosseguir para smoke PostgreSQL 16 dedicado a atomicidade, concorrência, duplicados, fencing e triggers append-only; manter o handler desactivado até validação integral.
+
+Limite: não relaxar a validação de `occurred_at` recebido do dispositivo. Nenhuma migration anterior foi alterada. `COMPLETED` continua a resultar em `REVIEW_REQUIRED`, sem mutação da tarefa ou inventário.
+
+---
+
 ## P0 — Histórico de reconciliações: consultas em lote e actor histórico (2026-11-26)
 
 - [x] Substituir serialização N+1 por uma consulta paginada, uma consulta de utilizadores e uma consulta de eventos.
