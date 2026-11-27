@@ -1,6 +1,6 @@
 import threading
 
-from app.edge_event_worker_runtime import run_worker
+from app.edge_event_worker import run_worker
 
 
 def test_runtime_processes_one_event_and_stops_after_shutdown_request():
