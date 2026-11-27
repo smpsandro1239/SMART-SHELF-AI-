@@ -1,3 +1,9 @@
+## Edge worker — protecção de dados de diagnóstico (2026-11-27)
+
+As falhas de polling, renovação de lease e execução de handlers são registadas sem incluir o texto original da excepção. Mensagens de drivers e providers podem conter detalhes de ligação ou dados operacionais; os logs usam apenas o tipo da excepção e o identificador interno do evento. Esta alteração não muda retries, leases, handlers, ACK ou inventário. A validação automatizada desta correcção depende da CI no SHA publicado.
+
+---
+
 ## Segurança P0 — histórico de reconciliações e identidade do actor (2026-11-26)
 
 A listagem paginada de reconciliações carrega criadores/revisores numa consulta em lote e os eventos numa segunda consulta em lote, além da consulta principal. A serialização mantém a ordenação dos registos e dos eventos, o contrato JSON e o filtro tenant-scoped; não junta eventos à query paginada. Os novos eventos CREATED e de revisão guardam em evidence.actor_snapshot o user_id, role, store_id e full_name observados no momento da operação. Não existe backfill dos eventos históricos nem é bloqueada a transferência legítima de utilizadores entre lojas. Validação CI pendente no SHA desta alteração.
