@@ -1,4 +1,7 @@
+import subprocess
+import sys
 import threading
+from pathlib import Path
 
 from app.edge_event_worker import run_worker
 
@@ -61,3 +64,20 @@ def test_runtime_once_returns_failure_when_polling_raises():
     )
 
     assert result == 1
+
+
+def test_module_entrypoint_loads_and_exposes_cli_help():
+    api_root = Path(__file__).resolve().parents[1]
+    result = subprocess.run(
+        [sys.executable, "-m", "app.edge_event_worker", "--help"],
+        cwd=api_root,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=15,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "--poll-interval" in result.stdout
+    assert "--lease-seconds" in result.stdout
+    assert "--once" in result.stdout
