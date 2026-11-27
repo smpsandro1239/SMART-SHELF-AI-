@@ -1988,7 +1988,7 @@ class EdgeTaskAcknowledgement(Base):
     __tablename__ = "edge_task_acknowledgements"
     __table_args__ = (
         UniqueConstraint("inbox_id", name="uq_edge_task_ack_inbox"),
-        UniqueConstraint("id", "store_id", "task_id", name="uq_edge_task_ack_id_store_task"),
+        Index("uq_edge_task_ack_id_store_task", "id", "store_id", "task_id", unique=True),
         UniqueConstraint("device_id", "event_id", name="uq_edge_task_ack_device_event"),
         ForeignKeyConstraint(
             ["device_id", "event_id"],

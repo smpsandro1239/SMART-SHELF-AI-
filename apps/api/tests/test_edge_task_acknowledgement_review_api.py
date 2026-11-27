@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 os.environ["APP_ENV"]="test"
 os.environ["DATABASE_URL"]="sqlite:///./test_unused.db"
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
