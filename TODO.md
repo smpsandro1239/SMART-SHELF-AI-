@@ -1,3 +1,10 @@
+### Actualização da integração opt-in — SHA cb0036ec1c8e5911f8005657ccbdd11db0a2c9a8
+
+- [x] Extrair EdgeEventHandlerError para módulo partilhado, removendo a dependência circular entre worker e serviço.
+- [ ] Validar imports, teste focal e suite API no CI deste SHA.
+- [ ] Aguardar os workflows completos antes de activar TASK_ACKNOWLEDGED.
+
+
 ## P0 — Integração controlada do Edge Task Acknowledgement (2026-11-27)
 
 - [x] Exportar o handler TASK_ACKNOWLEDGED numa registry transaccional explícita, usando apply_edge_task_acknowledgement.
