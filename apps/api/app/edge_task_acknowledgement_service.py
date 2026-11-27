@@ -74,10 +74,10 @@ def apply_edge_task_acknowledgement(db: Session, event: dict) -> None:
     if (
         assignment is None or assignment.revoked_at is not None
         or assignment.task_version != task_version
-        or assignment.valid_from > received_at
-        or (assignment.valid_until is not None and assignment.valid_until <= received_at)
-        or assignment.valid_from > occurred_at
-        or (assignment.valid_until is not None and assignment.valid_until <= occurred_at)
+        or _utc(assignment.valid_from) > received_at
+        or (assignment.valid_until is not None and _utc(assignment.valid_until) <= received_at)
+        or _utc(assignment.valid_from) > occurred_at
+        or (assignment.valid_until is not None and _utc(assignment.valid_until) <= occurred_at)
     ):
         raise EdgeEventHandlerError("UNASSIGNED_DEVICE", retryable=False)
 
