@@ -137,3 +137,18 @@ A inspecção do worker confirma que `BUILTIN_TRANSACTIONAL_HANDLERS` só é usa
 O worker já dispõe de lease, heartbeat, fencing, retry exponencial limitado e dead-letter. Os logs existentes registam sucesso/falha, mas não constituem métricas/alertas operacionais específicos do ACK. O ledger conserva evidência append-only e `COMPLETED` é `REVIEW_REQUIRED`; falta formalizar o fluxo de revisão humana com actor, decisão e motivo.
 
 **Decisão:** manter o handler desactivado por omissão. Não concluir tarefa nem alterar inventário com eventos Edge. Não autorizar produção até os gaps operacionais serem fechados, ensaiados e aprovados explicitamente.
+
+
+## 13. Fronteira de deployment e feature flag — verificação 2026-11-27
+
+A configuração opt-in de deployment não foi introduzida porque a inspecção do repositório confirmou que ainda não existe um consumidor Edge implantado:
+
+- O Compose não define um serviço `edge-event-worker`.
+- O serviço `api` executa `uvicorn app.main:app`; não arranca o processador da inbox.
+- O serviço `vision-worker` executa `app.vision_worker` e processa inferência de imagens; não é o worker de eventos Edge.
+- O módulo `app.edge_event_worker` disponibiliza `process_one_edge_event()`, mas não contém entrypoint/loop de polling e não é iniciado por um serviço de deployment.
+- `app.config.Settings` não contém uma configuração Edge ACK.
+
+**Regra fail-closed:** não declarar a feature como configurável/operacional nem criar uma flag sem consumidor real. Não ligar a registry ao API ou ao vision-worker. A próxima implementação deve criar primeiro o processo Edge supervisionado; só depois poderá adicionar `EDGE_TASK_ACKNOWLEDGEMENT_ENABLED` (ausente/false desactivada, true opt-in exclusivo do processo Edge, valor inválido rejeitado). Mesmo com a flag activa, `BUILTIN_TRANSACTIONAL_HANDLERS` tem de continuar a ser injectada explicitamente pelo ponto de arranque autorizado.
+
+Até essa implementação e respectiva CI, `TASK_ACKNOWLEDGED` mantém-se inactivo por omissão. `COMPLETED` continua apenas `REVIEW_REQUIRED`; nenhum acknowledgement altera tarefa, versão, stock ou movimentos.
