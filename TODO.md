@@ -2647,3 +2647,13 @@ A migration não altera snapshots, não enfraquece a retenção 0098 e não modi
 - Foram adicionados testes para commit conjunto, rollback e worker transaccional. Validados no SHA `5072f05c9ffb5dc2576e5eb8a6e4be7b033263ae`: API CI/PostgreSQL 16 **1755 passed, 1 skipped**; Quality Gates (API e Web), Security Scans (Python, Web, Gitleaks e OWASP ZAP) e Docker Compose — sucesso.
 - Correcção de relógio: `complete_edge_event_transactionally` aceita `now` opcional para testes determinísticos; em produção usa UTC real. Os testes injectam o instante posterior ao claim sem falsear a duração do lease.
 - Próximo: ledger append-only de acknowledgements, ligação ao evento da inbox, validação de associação activa e `task_version`, idempotência/conflitos de `event_id`, e smoke PostgreSQL 16 dedicado a fencing/concorrência/leases obsoletos. `TASK_ACKNOWLEDGED` permanece desactivado.
+
+
+## Edge AI — Ledger de acknowledgements (2026-11-27)
+
+- [x] Criar migration 0103 com ledger append-only separado do histórico operacional da tarefa.
+- [x] Impor unicidade por inbox e por dispositivo/event_id; ligar por FKs compostas a identidade do evento e da associação versionada.
+- [x] Acrescentar serviço transaccional que valida loja, dispositivo activo, associação vigente, timestamps e task_version.
+- [x] Garantir que COMPLETED fica como REVIEW_REQUIRED e não altera tarefa nem inventário.
+- [ ] Ligar o serviço à fronteira transaccional do worker sem activar TASK_ACKNOWLEDGED até aos testes e smoke PostgreSQL 16.
+- [ ] Acrescentar testes de atomicidade/fencing, replay e concorrência; executar CI completa.

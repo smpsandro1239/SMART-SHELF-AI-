@@ -1395,6 +1395,7 @@ class EdgeDeviceTaskAssignment(Base):
         ),
         Index("ix_edge_task_assignment_store_task", "store_id", "task_id", "valid_from"),
         Index("ix_edge_task_assignment_device_validity", "device_id", "valid_from", "valid_until"),
+        Index("uq_edge_task_assignment_ack_identity", "id", "device_id", "task_id", "store_id", "task_version", unique=True),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)

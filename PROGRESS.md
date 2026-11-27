@@ -2023,3 +2023,15 @@ Estado: a prova concorrente 0099 passou de observação genérica de lock para c
 - Foram adicionados testes para commit conjunto, rollback e worker transaccional. Validados no SHA `5072f05c9ffb5dc2576e5eb8a6e4be7b033263ae`: API CI/PostgreSQL 16 **1755 passed, 1 skipped**; Quality Gates (API e Web), Security Scans (Python, Web, Gitleaks e OWASP ZAP) e Docker Compose — sucesso.
 - Correcção de relógio: `complete_edge_event_transactionally` aceita `now` opcional para testes determinísticos; em produção usa UTC real. Os testes injectam o instante posterior ao claim sem falsear a duração do lease.
 - Próximo: ledger append-only de acknowledgements, ligação ao evento da inbox, validação de associação activa e `task_version`, idempotência/conflitos de `event_id`, e smoke PostgreSQL 16 dedicado a fencing/concorrência/leases obsoletos. `TASK_ACKNOWLEDGED` permanece desactivado.
+
+
+## 2026-11-27 — Primeira implementação do Edge Task Acknowledgement Ledger
+
+- HEAD inicial: `2298664e8e74287c02bbf8f5f28fee30258b7b85`.
+- Criada migration `0103_edge_task_acknowledgements`, sem alterar migrations anteriores. O ledger é independente do histórico da tarefa, append-only em PostgreSQL/SQLite e tem unicidade por inbox e por dispositivo/event_id.
+- As FKs compostas ligam o acknowledgement à identidade original do evento e à associação dispositivo/tarefa/loja/versão.
+- Criado serviço transaccional que valida loja, tarefa, dispositivo activo, associação vigente, janela temporal e task_version. COMPLETED é guardado como REVIEW_REQUIRED.
+- A fronteira transaccional do worker passa agora também o fingerprint original do inbox ao handler.
+- Commits: `d0fbada2e660a977db92228ea1dd4b938d9f633c` e `bf4b1be34a15b4077904ff2ab9775651ff14f174`.
+- O handler não foi registado nem activado. A validação CI da migration e dos novos modelos está em curso; testes do serviço e smoke dedicado ainda pendentes.
+- Auditoria BOLA/IDOR permanece suspensa.

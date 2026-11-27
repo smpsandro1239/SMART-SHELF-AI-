@@ -1792,3 +1792,10 @@ Foi implementado o primeiro fluxo operacional da associação Edge: serviço tra
 - Foram adicionados testes para commit conjunto, rollback e worker transaccional. Validados no SHA `5072f05c9ffb5dc2576e5eb8a6e4be7b033263ae`: API CI/PostgreSQL 16 **1755 passed, 1 skipped**; Quality Gates (API e Web), Security Scans (Python, Web, Gitleaks e OWASP ZAP) e Docker Compose — sucesso.
 - Correcção de relógio: `complete_edge_event_transactionally` aceita `now` opcional para testes determinísticos; em produção usa UTC real. Os testes injectam o instante posterior ao claim sem falsear a duração do lease.
 - Próximo: ledger append-only de acknowledgements, ligação ao evento da inbox, validação de associação activa e `task_version`, idempotência/conflitos de `event_id`, e smoke PostgreSQL 16 dedicado a fencing/concorrência/leases obsoletos. `TASK_ACKNOWLEDGED` permanece desactivado.
+
+
+## 2026-11-27 — Edge Task Acknowledgement Ledger: primeira camada
+
+A migration 0103 introduz um ledger append-only independente, ligado por chaves estrangeiras compostas ao evento autenticado da inbox e à associação dispositivo-tarefa versionada. O serviço de aplicação valida loja, dispositivo activo, associação não revogada, validade temporal e revisão da tarefa. As declarações COMPLETED são persistidas como REVIEW_REQUIRED e não alteram a tarefa nem o inventário.
+
+A fronteira transaccional existente passa a fornecer o fingerprint do evento original ao handler. O handler continua desactivado: falta fechar cobertura de replay, fencing/rollback, concorrência PostgreSQL 16 e CI integral antes de qualquer registo de rota.
