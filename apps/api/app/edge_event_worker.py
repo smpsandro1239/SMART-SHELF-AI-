@@ -13,6 +13,8 @@ from typing import Any
 
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.edge_task_acknowledgement_service import apply_edge_task_acknowledgement
+
 from app.edge_event_processing import (
     EdgeEventProcessingError,
     claim_next_edge_event,
@@ -49,6 +51,13 @@ BUILTIN_HANDLERS: dict[str, EdgeEventHandler] = {
 }
 
 
+BUILTIN_TRANSACTIONAL_HANDLERS: dict[str, TransactionalEdgeEventHandler] = {
+    # Persist the device declaration and mark its inbox processing row PROCESSED
+    # in the same fenced SQL transaction. COMPLETED remains review-only.
+    "TASK_ACKNOWLEDGED": apply_edge_task_acknowledgement,
+}
+
+
 def process_one_edge_event(
     session_factory: sessionmaker,
     *,
@@ -67,7 +76,12 @@ def process_one_edge_event(
 
     routes = BUILTIN_HANDLERS if handlers is None else handlers
     handler = routes.get(claim["event_type"])
-    transactional_handler = (transactional_handlers or {}).get(claim["event_type"])
+    transactional_routes = (
+        BUILTIN_TRANSACTIONAL_HANDLERS
+        if transactional_handlers is None
+        else transactional_handlers
+    )
+    transactional_handler = transactional_routes.get(claim["event_type"])
     if handler is None and transactional_handler is None:
         with session_factory() as db:
             state = fail_edge_event(
