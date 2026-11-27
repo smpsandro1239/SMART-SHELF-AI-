@@ -225,22 +225,32 @@ def _verify_real_service_outage_and_takeover() -> None:
             assert original_expiry is not None
 
         # Stop the actual PostgreSQL 16 service container, not just one backend.
+        # Mark before invoking Docker so the finally block attempts recovery
+        # even if the stop command times out after the daemon acted.
+        stopped = True
         subprocess.run(
             ["docker", "stop", "--time", "1", container_id],
             check=True, capture_output=True, text=True, timeout=20,
         )
-        stopped = True
         # The worker heartbeat interval is lease_seconds / 3 (>= 1s).
         # Keep PostgreSQL unavailable long enough for a real renewal attempt.
         time.sleep(2.5)
     finally:
-        if stopped:
-            subprocess.run(
-                ["docker", "start", container_id],
-                check=True, capture_output=True, text=True, timeout=30,
-            )
-            _wait_for_postgres()
-        release_event.set()
+        try:
+            if stopped:
+                subprocess.run(
+                    ["docker", "start", container_id],
+                    check=True, capture_output=True, text=True, timeout=30,
+                )
+                _wait_for_postgres()
+        finally:
+            # Always unblock the child, including when database restoration
+            # itself fails, so CI does not leave a waiting worker process.
+            release_event.set()
+            worker.join(timeout=10)
+            if worker.is_alive():
+                worker.kill()
+                worker.join(timeout=10)
 
     finished = ready_queue.get(timeout=30)
     assert finished.get("phase") == "worker_finished", finished
