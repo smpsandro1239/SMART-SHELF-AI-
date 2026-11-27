@@ -1,3 +1,16 @@
+## 2026-11-27 — Handler Edge ACK integrado em modo opt-in
+
+- SHA inicial desta ronda: 2f872309d98c02fb71d0873d4f080ea782ce13ce.
+- Registado apply_edge_task_acknowledgement numa registry transaccional explícita em apps/api/app/edge_event_worker.py.
+- A registry é deliberadamente opt-in: o worker continua a usar apenas os handlers fornecidos pelo chamador em transactional_handlers; não existe activação automática de TASK_ACKNOWLEDGED.
+- Acrescentado teste em apps/api/tests/test_edge_event_worker.py que prepara associação autorizada, envia COMPLETED através do worker e verifica persistência conjunta do acknowledgement e do estado PROCESSED, resultado REVIEW_REQUIRED, tarefa/versão inalteradas e zero movimentos adicionais.
+- O smoke apps/api/scripts/postgres_edge_task_acknowledgement_smoke.py já existia e já estava ligado ao workflow API CI. A inspecção confirma que cobre rollback após inserção, commit atómico, replay duplicado, claim concorrente com vencedor único, fencing de worker obsoleto e triggers PostgreSQL append-only.
+- Commits desta ronda: 2ebcf251857b824dffc14df39b2c64d71ad76ace (registry), 194ef53d4ae8fc72e5ac8e8db50282c49b2834a1 (opt-in explícito) e 7122b9bf9b7c5ec7543313decb7a7c57d6a853a2 (teste do worker).
+- Não foram executados testes localmente nesta sessão; não há ainda resultados CI confirmados para o SHA final desta ronda.
+- Próximos gaps: teste de revogação concorrente com processamento e isolamento cross-store no smoke ACK; validar todos os workflows antes de considerar activar o handler.
+- COMPLETED continua a ser apenas evidência REVIEW_REQUIRED; não conclui tarefa nem cria movimentos/snapshots. Auditoria BOLA/IDOR permanece suspensa.
+
+
 ## 2026-11-27 — Diagnóstico e correcção da falha temporal do Edge ACK
 
 - SHA inicial: `d1190003ad52d8b66d105f49530ac0bfa47227c7`.
