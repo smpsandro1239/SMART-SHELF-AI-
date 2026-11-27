@@ -1,8 +1,8 @@
 """Prove PostgreSQL atomicity, concurrency, fencing and ACK immutability."""
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
-from threading import Barrier, Event, Thread
 import time
+from threading import Barrier, Event, Thread
 from types import SimpleNamespace
 from uuid import uuid4
 
@@ -78,6 +78,7 @@ def _create_race_assignment_and_claim(
             valid_from=now - timedelta(minutes=5),
             valid_until=now + timedelta(hours=1),
         )
+        assignment_id = assignment.id
         inbox = models.EdgeDeviceEventInbox(
             device_id=device_id, event_id=str(uuid4()), sequence_number=100 + (1 if scenario == "A" else 2),
             event_type="TASK_ACKNOWLEDGED", store_id=store_id, shelf_id=None,
@@ -102,7 +103,7 @@ def _create_race_assignment_and_claim(
             lease_seconds=120, now=now,
         )
     assert claim is not None and claim["inbox_id"] == inbox_id
-    return assignment.id, claim
+    return assignment_id, claim
 
 
 def _prove_revocation_ack_races(
