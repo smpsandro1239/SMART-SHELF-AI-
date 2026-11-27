@@ -2147,3 +2147,13 @@ A validação de `action` rejeita agora explicitamente valores que não sejam te
 - Nenhum código executável foi alterado nesta ronda. A registry transaccional continua a exigir injecção explícita; `TASK_ACKNOWLEDGED` permanece inactivo por omissão; `COMPLETED` continua `REVIEW_REQUIRED`; não há mutação automática de tarefa ou inventário.
 - Limitação de execução: o acesso GitHub utilizado nesta ronda permite inspecção e commits documentais, mas não executar localmente pytest, Docker Compose ou smokes PostgreSQL. Não foram executados testes locais e não se declara validação de código nova.
 - Próxima implementação concreta: criar o entrypoint/loop do worker Edge com shutdown limpo e supervisão no deployment; testar o consumidor com flag ausente/desactivada/activada/inválida e verificar que só o caminho explicitamente injectado processa ACK.
+
+
+## 2026-11-27 — Correcção crítica do entrypoint Edge Event Worker
+
+- Revisão pós-publicação detectou que `edge_event_worker.py` ainda continha um `main()` antigo a importar o módulo removido `app.edge_event_worker_runtime`, seguido de um bloco `if __name__ == "__main__"` antes da definição do runtime integrado. Ao executar `python -m app.edge_event_worker`, esse bloco era executado primeiro e falhava com importação do módulo inexistente; o entrypoint publicado não arrancava.
+- Removido o bloco obsoleto; o único `main()` e o bloco de execução ficam agora depois de `run_worker`, no próprio módulo.
+- Acrescentado teste de regressão que executa `python -m app.edge_event_worker --help` num subprocesso e valida as opções CLI.
+- Commits publicados na `main`: correcção `0a150b20f9971f6c714acd8949f3422a409b4c39`; teste `986043f946ec053a8f03b1ee7f32b63a7bed3605`.
+- **Validação ainda pendente:** pytest/API CI, PostgreSQL 16, concorrência multi-worker, crash/lease/takeover/fencing e Docker Compose. Não afirmar o arranque validado até a CI executar o teste de subprocesso.
+- A registry transaccional continua sem injecção automática; `TASK_ACKNOWLEDGED` não foi activado; `COMPLETED` continua `REVIEW_REQUIRED`.
