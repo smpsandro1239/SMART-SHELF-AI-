@@ -17,6 +17,17 @@ def _utc(value: datetime) -> datetime:
         raise EdgeEventHandlerError("INVALID_EVENT_TIMESTAMP", retryable=False)
     return value.astimezone(timezone.utc)
 
+def _database_utc(value: datetime) -> datetime:
+    """Normalize persisted UTC timestamps across PostgreSQL and SQLite.
+
+    SQLite drops tzinfo for DateTime(timezone=True). Assignment timestamps are
+    normalized to UTC before persistence by edge_task_assignment_service, so a
+    naive value read back from SQLite represents UTC, not an untrusted event time.
+    """
+    if value.tzinfo is None or value.utcoffset() is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
 
 def apply_edge_task_acknowledgement(db: Session, event: dict) -> None:
     """Persist an authorized device declaration; never mutate task or inventory."""
@@ -74,10 +85,10 @@ def apply_edge_task_acknowledgement(db: Session, event: dict) -> None:
     if (
         assignment is None or assignment.revoked_at is not None
         or assignment.task_version != task_version
-        or _utc(assignment.valid_from) > received_at
-        or (assignment.valid_until is not None and _utc(assignment.valid_until) <= received_at)
-        or _utc(assignment.valid_from) > occurred_at
-        or (assignment.valid_until is not None and _utc(assignment.valid_until) <= occurred_at)
+        or _database_utc(assignment.valid_from) > received_at
+        or (assignment.valid_until is not None and _database_utc(assignment.valid_until) <= received_at)
+        or _database_utc(assignment.valid_from) > occurred_at
+        or (assignment.valid_until is not None and _database_utc(assignment.valid_until) <= occurred_at)
     ):
         raise EdgeEventHandlerError("UNASSIGNED_DEVICE", retryable=False)
 
