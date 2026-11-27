@@ -120,3 +120,62 @@ def test_acknowledgement_rejects_non_string_action(ack_db, invalid_action):
 
     assert error.value.code == "INVALID_ACK_ACTION"
     assert db.query(models.EdgeTaskAcknowledgement).count() == 0
+
+
+@pytest.mark.parametrize(
+    ("identity_override", "expected_code"),
+    [
+        ("foreign_task", "ACK_NOT_AUTHORIZED"),
+        ("foreign_device", "DEVICE_NOT_ALLOWED"),
+        ("foreign_store_local_task", "ACK_NOT_AUTHORIZED"),
+        ("foreign_store_foreign_task_device", "UNASSIGNED_DEVICE"),
+    ],
+)
+def test_acknowledgement_rejects_cross_store_identity(ack_db, identity_override, expected_code):
+    db, _local_task_id, event = ack_db
+    local_store_id = event["store_id"]
+
+    foreign_store = models.Store(code="EDGE-ACK-FOREIGN", name="Loja estrangeira")
+    db.add(foreign_store)
+    db.flush()
+    foreign_zone = models.Zone(store_id=foreign_store.id, name="Zona estrangeira")
+    foreign_device = models.EdgeDevice(
+        device_id="edge-ack-foreign-device",
+        store_id=foreign_store.id,
+        device_type="robot",
+        status="ACTIVE",
+    )
+    db.add_all([foreign_zone, foreign_device])
+    db.flush()
+    foreign_shelf = models.Shelf(zone_id=foreign_zone.id, code="ACK-FOREIGN-01")
+    db.add(foreign_shelf)
+    db.flush()
+    foreign_task = models.ReplenishmentTask(
+        store_id=foreign_store.id,
+        shelf_id=foreign_shelf.id,
+        product_id=db.query(models.Product.id).filter_by(sku="SKU-ACK-1").scalar(),
+        status="PENDING",
+        priority="NORMAL",
+    )
+    db.add(foreign_task)
+    db.commit()
+
+    if identity_override == "foreign_task":
+        event["payload"] = {**event["payload"], "task_id": foreign_task.id}
+    elif identity_override == "foreign_device":
+        event["device_id"] = foreign_device.device_id
+    elif identity_override == "foreign_store_local_task":
+        event["store_id"] = foreign_store.id
+    else:
+        event["store_id"] = foreign_store.id
+        event["payload"] = {**event["payload"], "task_id": foreign_task.id}
+        event["device_id"] = foreign_device.device_id
+
+    from app.edge_event_errors import EdgeEventHandlerError
+    with pytest.raises(EdgeEventHandlerError) as error:
+        apply_edge_task_acknowledgement(db, event)
+
+    assert error.value.code == expected_code
+    assert db.query(models.EdgeTaskAcknowledgement).count() == 0
+    assert db.query(models.ReplenishmentTask).filter_by(store_id=local_store_id).one().status == "PENDING"
+    assert db.query(models.ReplenishmentTask).filter_by(store_id=foreign_store.id).one().status == "PENDING"
