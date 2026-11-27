@@ -65,7 +65,7 @@ def test_worker_processes_heartbeat_and_completes_inbox(session_factory):
     assert not process_one_edge_event(session_factory, worker_id="edge-worker-a")
 
 
-def test_worker_dead_letters_event_without_registered_domain_handler(session_factory):
+def test_worker_dead_letters_event_without_registered_domain_handler(session_factory, caplog):
     assert process_one_edge_event(
         session_factory, worker_id="edge-worker-a", handlers={}
     )
@@ -73,6 +73,8 @@ def test_worker_dead_letters_event_without_registered_domain_handler(session_fac
     assert row.status == "DEAD_LETTER"
     assert row.last_error_code == "HANDLER_NOT_IMPLEMENTED"
     assert row.finished_at is not None
+    assert "edge_event_outcome outcome=DEAD_LETTER" in caplog.text
+    assert "error_code=HANDLER_NOT_IMPLEMENTED" in caplog.text
 
 
 def test_worker_retries_transient_handler_failure(session_factory, caplog):
@@ -196,7 +198,7 @@ def test_transactional_handler_failure_rolls_back_domain_work(session_factory):
         assert db.get(models.EdgeDevice, "edge-worker-camera").firmware_version is None
 
 
-def test_worker_routes_task_acknowledgement_through_fenced_transaction(session_factory):
+def test_worker_routes_task_acknowledgement_through_fenced_transaction(session_factory, caplog):
     from datetime import timedelta
     from types import SimpleNamespace
 
@@ -282,3 +284,7 @@ def test_worker_routes_task_acknowledgement_through_fenced_transaction(session_f
         assert task.task_version == task_version
         assert task.completed_at is None
         assert db.query(models.InventoryMovement).count() == movement_count_before
+
+    assert "edge_event_outcome outcome=ACK_APPLIED" in caplog.text
+    assert "event_id=00000000-0000-4000-8000-000000000103" in caplog.text
+    assert "duration_ms=" in caplog.text

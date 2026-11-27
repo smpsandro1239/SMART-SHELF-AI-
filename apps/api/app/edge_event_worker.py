@@ -75,6 +75,36 @@ def process_one_edge_event(
     if claim is None:
         return False
 
+    event_started_at = time.monotonic()
+
+    def log_outcome(
+        outcome: str,
+        *,
+        error_code: str | None = None,
+        error_type: str | None = None,
+        level: int = logging.INFO,
+    ) -> None:
+        logger.log(
+            level,
+            "edge_event_outcome outcome=%s event_type=%s event_id=%s inbox_id=%s "
+            "processing_id=%s store_id=%s device_id=%s worker_id=%s attempt=%s "
+            "duration_ms=%s error_code=%s error_type=%s",
+            outcome,
+            claim["event_type"],
+            claim["event_id"],
+            claim["inbox_id"],
+            claim["processing_id"],
+            claim["store_id"],
+            claim["device_id"],
+            worker_id,
+            claim["attempt_count"],
+            round((time.monotonic() - event_started_at) * 1000),
+            error_code,
+            error_type,
+        )
+
+    log_outcome("ACK_CLAIMED" if claim["event_type"] == "TASK_ACKNOWLEDGED" else "CLAIMED")
+
     routes = BUILTIN_HANDLERS if handlers is None else handlers
     handler = routes.get(claim["event_type"])
     # Keep domain handlers opt-in: TASK_ACKNOWLEDGED is not enabled by the
@@ -95,6 +125,7 @@ def process_one_edge_event(
             "Edge event moved to %s: type=%s inbox_id=%s",
             state, claim["event_type"], claim["inbox_id"],
         )
+        log_outcome(state, error_code="HANDLER_NOT_IMPLEMENTED", level=logging.ERROR)
         return True
 
     stop_heartbeat = threading.Event()
@@ -121,6 +152,7 @@ def process_one_edge_event(
                     "inbox_id=%s error_type=%s",
                     claim["inbox_id"], type(exc).__name__,
                 )
+                log_outcome("LEASE_LOST", error_type=type(exc).__name__, level=logging.ERROR)
                 return
 
     heartbeat_thread = threading.Thread(
@@ -141,12 +173,14 @@ def process_one_edge_event(
                 "Edge event heartbeat did not stop promptly; abandoning local result: inbox_id=%s",
                 claim["inbox_id"],
             )
+            log_outcome("LEASE_LOST", error_code="HEARTBEAT_THREAD_STUCK", level=logging.ERROR)
 
     if transactional_handler is not None:
         # Stop renewals before acquiring the processing row lock. The fenced
         # handler and PROCESSED transition then share one database transaction.
         stop_and_join_heartbeat()
         if lease_lost.is_set():
+            log_outcome("LEASE_LOST", level=logging.ERROR)
             return True
         try:
             with session_factory() as db:
@@ -161,23 +195,36 @@ def process_one_edge_event(
         except EdgeEventHandlerError as exc:
             with session_factory() as db:
                 try:
-                    fail_edge_event(
+                    state = fail_edge_event(
                         db, processing_id=claim["processing_id"], worker_id=worker_id,
                         fencing_token=claim["fencing_token"], error_code=exc.code,
                         retryable=exc.retryable,
                     )
+                    log_outcome(
+                        "ACK_REJECTED" if claim["event_type"] == "TASK_ACKNOWLEDGED" else state,
+                        error_code=exc.code,
+                        level=logging.WARNING,
+                    )
                 except EdgeEventProcessingError:
                     logger.warning("Transactional Edge handler lost its lease: inbox_id=%s", claim["inbox_id"])
+                    log_outcome("LEASE_LOST", error_code=exc.code, level=logging.ERROR)
         except Exception as exc:
             with session_factory() as db:
                 try:
-                    fail_edge_event(
+                    state = fail_edge_event(
                         db, processing_id=claim["processing_id"], worker_id=worker_id,
                         fencing_token=claim["fencing_token"], error_code="WORKER_ERROR",
                         retryable=True,
                     )
+                    log_outcome(
+                        "ACK_REJECTED" if claim["event_type"] == "TASK_ACKNOWLEDGED" else state,
+                        error_code="WORKER_ERROR",
+                        error_type=type(exc).__name__,
+                        level=logging.ERROR,
+                    )
                 except EdgeEventProcessingError:
                     logger.warning("Transactional Edge handler failed after lease loss: inbox_id=%s", claim["inbox_id"])
+                    log_outcome("LEASE_LOST", error_type=type(exc).__name__, level=logging.ERROR)
             logger.error(
                 "Transactional Edge event handler failed: inbox_id=%s error_type=%s",
                 claim["inbox_id"], type(exc).__name__,
@@ -187,6 +234,7 @@ def process_one_edge_event(
                 "Edge event processed transactionally: type=%s inbox_id=%s attempt=%s",
                 claim["event_type"], claim["inbox_id"], claim["attempt_count"],
             )
+            log_outcome("ACK_APPLIED" if claim["event_type"] == "TASK_ACKNOWLEDGED" else "PROCESSED")
         return True
 
     try:
@@ -194,9 +242,10 @@ def process_one_edge_event(
     except EdgeEventHandlerError as exc:
         stop_and_join_heartbeat()
         if lease_lost.is_set():
+            log_outcome("LEASE_LOST", error_code=exc.code, level=logging.ERROR)
             return True
         with session_factory() as db:
-            fail_edge_event(
+            state = fail_edge_event(
                 db,
                 processing_id=claim["processing_id"],
                 worker_id=worker_id,
@@ -208,13 +257,15 @@ def process_one_edge_event(
             "Edge event handler rejected event: code=%s inbox_id=%s",
             exc.code, claim["inbox_id"],
         )
+        log_outcome(state, error_code=exc.code, level=logging.WARNING)
         return True
     except Exception as exc:
         stop_and_join_heartbeat()
         if lease_lost.is_set():
+            log_outcome("LEASE_LOST", error_type=type(exc).__name__, level=logging.ERROR)
             return True
         with session_factory() as db:
-            fail_edge_event(
+            state = fail_edge_event(
                 db,
                 processing_id=claim["processing_id"],
                 worker_id=worker_id,
@@ -226,12 +277,14 @@ def process_one_edge_event(
             "Edge event handler failed: inbox_id=%s error_type=%s",
             claim["inbox_id"], type(exc).__name__,
         )
+        log_outcome(state, error_code="WORKER_ERROR", error_type=type(exc).__name__, level=logging.ERROR)
         return True
     else:
         stop_and_join_heartbeat()
         if lease_lost.is_set():
             # A worker whose lease could not be renewed must never acknowledge
             # side effects; a replacement worker will recover the expired lease.
+            log_outcome("LEASE_LOST", level=logging.ERROR)
             return True
         with session_factory() as db:
             complete_edge_event(
@@ -244,6 +297,7 @@ def process_one_edge_event(
             "Edge event processed: type=%s inbox_id=%s attempt=%s",
             claim["event_type"], claim["inbox_id"], claim["attempt_count"],
         )
+        log_outcome("PROCESSED")
         return True
 
 
