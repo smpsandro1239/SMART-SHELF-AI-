@@ -2738,3 +2738,13 @@ A validação de `action` rejeita agora explicitamente valores que não sejam te
 - [ ] Manter `TASK_ACKNOWLEDGED` opt-in/desactivado até revisão operacional explícita e decisão separada de activação.
 
 **Limite da prova:** no cenário revogação-primeiro, o smoke constrói manualmente a transacção de revogação com a ordem canónica Store → Task → Device → Assignment; no cenário ACK-primeiro, invoca `revoke_edge_task_assignment`. A evidência demonstra a serialização das duas ordens, mas não deve ser descrita como chamada do serviço real nos dois cenários.
+
+
+## 2026-11-27 — Correcção crítica do entrypoint Edge Event Worker
+
+- Revisão pós-publicação detectou que `edge_event_worker.py` ainda continha um `main()` antigo a importar o módulo removido `app.edge_event_worker_runtime`, seguido de um bloco `if __name__ == "__main__"` antes da definição do runtime integrado. Ao executar `python -m app.edge_event_worker`, esse bloco era executado primeiro e falhava com importação do módulo inexistente; o entrypoint publicado não arrancava.
+- Removido o bloco obsoleto; o único `main()` e o bloco de execução ficam agora depois de `run_worker`, no próprio módulo.
+- Acrescentado teste de regressão que executa `python -m app.edge_event_worker --help` num subprocesso e valida as opções CLI.
+- Commits publicados na `main`: correcção `0a150b20f9971f6c714acd8949f3422a409b4c39`; teste `986043f946ec053a8f03b1ee7f32b63a7bed3605`.
+- **Validação ainda pendente:** pytest/API CI, PostgreSQL 16, concorrência multi-worker, crash/lease/takeover/fencing e Docker Compose. Não afirmar o arranque validado até a CI executar o teste de subprocesso.
+- A registry transaccional continua sem injecção automática; `TASK_ACKNOWLEDGED` não foi activado; `COMPLETED` continua `REVIEW_REQUIRED`.
