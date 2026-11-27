@@ -1,3 +1,15 @@
+## 2026-11-27 — Diagnóstico e correcção da falha temporal do Edge ACK
+
+- SHA inicial: `d1190003ad52d8b66d105f49530ac0bfa47227c7`.
+- A leitura do log GitHub Actions confirmou **1 falha, 1757 aprovados e 1 ignorado** na suite API. A falha ocorria em `test_completed_ack_is_review_evidence_only`: `assignment.valid_from` regressava do SQLite sem `tzinfo`, e `_utc()` lançava `INVALID_EVENT_TIMESTAMP`.
+- Causa: SQLite não preserva `tzinfo` em `DateTime(timezone=True)`; a função de atribuição normaliza os valores para UTC antes de os persistir. O serviço de ACK estava a aplicar validação de timestamp externo a um timestamp interno já persistido.
+- Correcção publicada na main: commit `63554528867b3e432b0d117da1902d98370f0dc6`. Foi introduzido `_database_utc()` apenas para timestamps da associação. Os timestamps recebidos no evento continuam sujeitos à validação estrita de timezone.
+- Nenhuma migration foi alterada. O handler continua não registado no worker. `COMPLETED` permanece `REVIEW_REQUIRED`; não há mutação da tarefa, stock ou movimentos.
+- Workflows disparados no SHA corrigido: API CI `45921082701`, Quality Gates `45921082704`, Docker Compose `45921082739`, Security Scans `45921082836`. No momento deste registo, estavam em fila; não declarar validação concluída.
+- Próximo passo: confirmar os resultados CI e depois implementar/provar o smoke PostgreSQL dedicado, imutabilidade via triggers e transacção atómica inbox + acknowledgement + fencing.
+
+---
+
 ## 2026-11-26 — Estado de suspensão segura da ronda Edge
 
 - Último commit documental: `b2ceb8c5cdbc1ebd95597b0401f53f33d552d7d7` (roadmap); branch `main`.
