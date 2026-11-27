@@ -13,11 +13,12 @@ import re
 import signal
 import socket
 import threading
-import time
 from collections.abc import Callable
 from typing import Any
 
 from sqlalchemy.orm import Session, sessionmaker
+
+from app.database import SessionLocal
 
 from app.edge_event_errors import EdgeEventHandlerError
 from app.edge_task_acknowledgement_service import apply_edge_task_acknowledgement
@@ -267,7 +268,7 @@ def run_worker(
     while not stop_event.is_set():
         try:
             processed = process_event(
-                __import__("app.database", fromlist=["SessionLocal"]).SessionLocal,
+                SessionLocal,
                 worker_id=worker_id,
                 lease_seconds=lease_seconds,
             )
