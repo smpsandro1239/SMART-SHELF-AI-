@@ -1,3 +1,22 @@
+## 2026-11-27 — Auditoria operacional Edge: primeira correcção de diagnóstico seguro
+
+SHA base: `290bb4cc8bb05eab0985ffbf63e8eece688223fc`.
+
+A inspecção do runtime encontrou três caminhos que usavam `logger.exception` durante falhas de renovação de lease ou de handlers. O texto da excepção/traceback podia incluir detalhes do driver PostgreSQL, endpoint de ligação ou dados fornecidos pelo handler, apesar de o ciclo de polling já evitar registar a mensagem da excepção.
+
+Alteração publicada em commits sequenciais:
+- `cd12c512b17e1bc430e110278ec62e147db8811f` — logs do worker passam a registar apenas `error_type` e `inbox_id`, sem traceback nem texto externo.
+- `53c0428aa55d8d16c566ea07ce233c4f2fe791e9` — teste de regressão para mensagem privada de handler e falha de renovação.
+- `c0b14a48429926f335bc518d436d092dd8d507c4` — teste de regressão para mensagem sensível durante polling.
+
+Validação: ainda não executada nesta sessão. O acesso disponível permite consultar e actualizar ficheiros GitHub, mas não executar pytest localmente, nem iniciar PostgreSQL/Docker local. A confirmação depende da API CI e dos workflows no SHA final.
+
+Limites preservados: ACK continua desactivado por omissão; handlers transaccionais continuam a exigir injecção explícita; `COMPLETED` permanece `REVIEW_REQUIRED`; esta alteração não escreve no inventário.
+
+Próximo passo: validar CI e, depois, construir smoke PostgreSQL controlado para indisponibilidade temporária durante polling/renovação e recuperação após restabelecimento.
+
+---
+
 ## 2026-11-27 — Primeiro incremento do Edge Event Worker autónomo
 
 - HEAD de referência antes da implementação: `09f2b4ffacb00e8bfc4d899c9bb2a93d782dc3f6`.
