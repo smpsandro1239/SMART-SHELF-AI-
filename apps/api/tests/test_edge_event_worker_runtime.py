@@ -12,6 +12,7 @@ from app.edge_event_supervisor import (
     child_heartbeat,
     healthcheck,
     run_supervisor,
+    _acquire_singleton_lock,
 )
 from app.edge_event_worker import run_worker
 
@@ -87,7 +88,7 @@ def test_child_heartbeat_is_atomic_and_identifies_current_process(tmp_path):
     assert not list(tmp_path.glob("*.tmp"))
 
 
-def test_supervisor_healthcheck_rejects_stale_heartbeat(tmp_path, monkeypatch):
+def test_supervisor_healthcheck_rejects_stale_heartbeat(tmp_path):
     state = tmp_path / "state.json"
     child = tmp_path / "child.json"
     now = time.time()
@@ -196,3 +197,16 @@ def test_supervisor_entrypoint_exposes_healthcheck():
     )
     assert result.returncode == 0, result.stderr
     assert "--healthcheck" in result.stdout
+
+
+def test_supervisor_singleton_lock_rejects_a_second_instance(tmp_path):
+    lock_path = tmp_path / "supervisor.lock"
+    first = _acquire_singleton_lock(lock_path)
+    assert first is not None
+    try:
+        assert _acquire_singleton_lock(lock_path) is None
+    finally:
+        os.close(first)
+    second = _acquire_singleton_lock(lock_path)
+    assert second is not None
+    os.close(second)

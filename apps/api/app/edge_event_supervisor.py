@@ -7,6 +7,7 @@ causes the child to be terminated and replaced. No domain handler is enabled her
 from __future__ import annotations
 
 import argparse
+import fcntl
 import json
 import logging
 import os
@@ -234,6 +235,19 @@ def run_supervisor(
     return 0
 
 
+def _acquire_singleton_lock(path: Path) -> int | None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor = os.open(path, os.O_CREAT | os.O_RDWR, 0o600)
+    try:
+        fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        os.close(descriptor)
+        return None
+    os.ftruncate(descriptor, 0)
+    os.write(descriptor, str(os.getpid()).encode("ascii"))
+    return descriptor
+
+
 def _config_from_env() -> SupervisorConfig:
     lease = int(os.getenv("EDGE_EVENT_LEASE_SECONDS", "60"))
     poll = float(os.getenv("EDGE_EVENT_POLL_INTERVAL", "5"))
@@ -277,6 +291,12 @@ def main(argv: list[str] | None = None) -> int:
         level=os.getenv("LOG_LEVEL", "INFO").upper(),
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
     )
+    lock_path = Path(os.getenv("EDGE_SUPERVISOR_LOCK_PATH", "/tmp/edge-supervisor.lock"))
+    lock_descriptor = _acquire_singleton_lock(lock_path)
+    if lock_descriptor is None:
+        logger.error("Another Edge supervisor already owns the singleton lock")
+        return 1
+
     stop_event = threading.Event()
 
     def request_shutdown(signum: int, _frame: Any) -> None:
@@ -290,6 +310,7 @@ def main(argv: list[str] | None = None) -> int:
     finally:
         signal.signal(signal.SIGTERM, previous_term)
         signal.signal(signal.SIGINT, previous_int)
+        os.close(lock_descriptor)
 
 
 if __name__ == "__main__":
