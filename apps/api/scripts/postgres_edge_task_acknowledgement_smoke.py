@@ -646,7 +646,69 @@ def main() -> None:
             now=concurrent_now + timedelta(seconds=1),
         )
 
-    # 5. PostgreSQL triggers, not Python-only guards, enforce append-only.
+    # 5. An action omitted from the immutable assignment allowlist must be denied.
+    permission_now = datetime.now(timezone.utc)
+    with SessionLocal() as db:
+        denied_inbox = models.EdgeDeviceEventInbox(
+            device_id=device_id,
+            event_id=str(uuid4()),
+            sequence_number=3,
+            event_type="TASK_ACKNOWLEDGED",
+            store_id=store_id,
+            shelf_id=None,
+            occurred_at=permission_now,
+            payload={"task_id": task_id, "task_version": task_version, "action": "STARTED"},
+            fingerprint_sha256=(uuid4().hex * 2)[:64],
+            received_at=permission_now,
+        )
+        db.add(denied_inbox)
+        db.flush()
+        denied_processing = models.EdgeDeviceEventProcessing(
+            inbox_id=denied_inbox.id,
+            status="PENDING",
+            attempt_count=0,
+            max_attempts=8,
+            available_at=permission_now,
+            fencing_token=0,
+            created_at=permission_now,
+            updated_at=permission_now,
+        )
+        db.add(denied_processing)
+        db.commit()
+        denied_inbox_id = denied_inbox.id
+
+    with SessionLocal() as claim_db:
+        denied_claim = claim_next_edge_event(
+            claim_db, worker_id=f"ack-smoke-{suffix}-denied",
+            lease_seconds=30, now=permission_now,
+        )
+    assert denied_claim is not None and denied_claim["inbox_id"] == denied_inbox_id
+    try:
+        with SessionLocal() as tx:
+            complete_edge_event_transactionally(
+                tx,
+                processing_id=denied_claim["processing_id"],
+                worker_id=f"ack-smoke-{suffix}-denied",
+                fencing_token=denied_claim["fencing_token"],
+                event=denied_claim,
+                handler=apply_edge_task_acknowledgement,
+                now=permission_now + timedelta(seconds=1),
+            )
+    except EdgeEventHandlerError as exc:
+        assert exc.code == "DEVICE_ACTION_NOT_ALLOWED"
+    else:
+        raise AssertionError("ACK action outside the assignment allowlist was accepted")
+
+    with SessionLocal() as verify:
+        assert verify.query(models.EdgeTaskAcknowledgement).filter_by(
+            inbox_id=denied_inbox_id
+        ).count() == 0
+        denied_row = verify.query(models.EdgeDeviceEventProcessing).filter_by(
+            inbox_id=denied_inbox_id
+        ).one()
+        assert denied_row.status == "PROCESSING"
+
+    # 6. PostgreSQL triggers, not Python-only guards, enforce append-only.
     with SessionLocal() as verify:
         acknowledgements = (
             verify.query(models.EdgeTaskAcknowledgement)
@@ -693,7 +755,7 @@ def main() -> None:
     print(
         "PostgreSQL Edge ACK smoke passed: real SIGKILL recovery, lease expiry, takeover/fencing, stale-owner rejection, atomic rollback/commit, replay rejection, "
         "single-winner concurrent claim, fencing, COMPLETED review-only semantics, "
-        "no inventory side effects, append-only triggers and deterministic ACK/revocation lock ordering."
+        "no inventory side effects, append-only triggers, per-assignment action deny-by-default and deterministic ACK/revocation lock ordering."
     )
 
 
