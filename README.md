@@ -4,7 +4,7 @@ O serviço `edge-event-worker` é iniciado através de `python -m app.edge_event
 
 O healthcheck do container executa `python -m app.edge_event_supervisor --healthcheck` e exige heartbeats recentes, PID coincidente e processo filho vivo. O snapshot de heartbeat inclui contadores de polling e o estado do supervisor agrega o snapshot do filho. Os logs `edge_event_outcome` correlacionam IDs internos, tentativa, duração e resultados do processamento/ACK, sem payload ou texto de excepção. Os ficheiros de estado ficam em `/tmp`, compatível com o root filesystem read-only do container. O timeout do heartbeat do filho é configurável por `EDGE_SUPERVISOR_HEARTBEAT_TIMEOUT` (por omissão 120 segundos) e deve exceder a duração máxima esperada do ciclo de processamento. O supervisor não injecta handlers transaccionais nem activa Edge ACK.
 
-**Validação:** API CI, Quality Gates, Security Scans e Docker Compose aprovados no SHA `9be6f3fb7a446f537bf989544df178a100050c7b`, incluindo crash SIGKILL e heartbeat obsoleto. O commit `c5779e1b02c903db5bfd3b947da01b55814c78aa` acrescenta o smoke de SIGTERM real ao container e reinício limpo; a nova CI está pendente.
+**Validação:** API CI, Quality Gates, Security Scans e Docker Compose aprovados no SHA `4024763c177dfad63179e3b3cb73648371a729dc`. Os smokes Docker cobrem SIGKILL, heartbeat obsoleto, SIGTERM real ao container e reinício limpo. A suite também valida contadores, outcomes correlacionados, ACK registado/rejeitado e ausência de payload nos logs.
 
 ---
 

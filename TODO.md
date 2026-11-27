@@ -5,7 +5,7 @@
 - [x] Propagar snapshot de métricas do filho para o estado operacional do supervisor.
 - [x] Acrescentar logs correlacionados por evento com event_id, inbox_id, processing_id, store_id, device_id, worker_id, tentativa, duração e outcome PROCESSED/RETRY/DEAD_LETTER/LEASE_LOST/ACK_CLAIMED/ACK_RECORDED/ACK_REJECTED.
 - [x] Acrescentar testes para contadores de polling, duração, falhas sem texto de excepção e correlação de ACK aplicado/DEAD_LETTER.
-- [ ] Confirmar API CI, Quality Gates, Security Scans e Docker Compose no SHA actual.
+- [x] Confirmar API CI, Quality Gates, Security Scans e Docker Compose no SHA `4024763c177dfad63179e3b3cb73648371a729dc` — todos SUCCESS.
 - [ ] Decidir mecanismo de exportação/consumo das métricas sem introduzir dependências ou portas expostas desnecessárias.
 
 Limite: os contadores no heartbeat são snapshots voláteis por processo, não um ledger durável nem métricas agregadas históricas. A implementação não activa ACK nem altera efeitos de domínio.

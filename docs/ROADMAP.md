@@ -4,7 +4,7 @@ O heartbeat do worker passou a incluir contadores por processo: tentativas de po
 
 Os outcomes por evento passaram a produzir logs correlacionados com event_id, inbox_id, processing_id, store_id, device_id, worker_id, tentativa, duração e resultado. Os resultados distinguem CLAIMED/ACK_CLAIMED, PROCESSED, RETRY, DEAD_LETTER, LEASE_LOST, ACK_RECORDED e ACK_REJECTED. Não é registado payload nem texto de excepções. A implementação não activa ACK automaticamente nem altera o inventário.
 
-Testes adicionados para contadores, falhas sem detalhes sensíveis, ACK aplicado e dead-letter. A validação da nova telemetria depende dos workflows no SHA actual. A exportação para um sistema de métricas permanece em aberto para evitar infraestrutura ou dependências sem consumidor demonstrado.
+Testes adicionados para contadores, falhas sem detalhes sensíveis, ACK aplicado e dead-letter. A validação no SHA `4024763c177dfad63179e3b3cb73648371a729dc` terminou com sucesso: API CI run 46019666164, Quality Gates 46019666195, Security Scans 46019666137 e Docker Compose 46019666111. A exportação para um sistema de métricas permanece em aberto para evitar infraestrutura ou dependências sem consumidor demonstrado.
 
 ## P1 — Métricas operacionais Edge (2026-11-27)
 

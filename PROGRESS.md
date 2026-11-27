@@ -2,14 +2,14 @@
 
 ## Estado atual
 - Branch: `main`
-- Último commit de código validado: `9be6f3fb7a446f537bf989544df178a100050c7b`
-- Último commit publicado: `c5779e1b02c903db5bfd3b947da01b55814c78aa`
+- Último commit de código validado: `4024763c177dfad63179e3b3cb73648371a729dc`
+- Último commit publicado: `4024763c177dfad63179e3b3cb73648371a729dc`
 - Última atualização: 2026-11-27
 
 ## Tarefa atual
-- Identificador: EDGE-OBSERVABILITY-01
-- Descrição: métricas operacionais do Edge Worker e correlação de eventos.
-- Estado: PARTIALLY_COMPLETED — contadores no heartbeat e outcomes correlacionados por evento implementados; validação CI do último commit pendente.
+- Identificador: EDGE-ACK-AUTH-01
+- Descrição: rever e fechar a autorização por acção dos acknowledgements Edge sem activar o handler.
+- Estado: PENDING — a matriz de capacidades por acção ainda não está definida; manter ACK fail-closed.
 
 ## Tarefas concluídas
 - [x] Supervisor independente com subprocesso, heartbeat, PID e estado operacional.
@@ -26,7 +26,7 @@
 
 ## Tarefas pendentes
 - [ ] Confirmar os workflows do smoke SIGTERM e do supervisor.
-- [ ] Confirmar testes e workflows para outcomes correlacionados no SHA actual.
+- [x] Confirmar API CI, Quality Gates, Security Scans e Docker Compose no SHA `4024763c177dfad63179e3b3cb73648371a729dc` — todos SUCCESS.
 - [ ] Definir consumo/exportação das métricas sem expor uma porta ou adicionar dependências desnecessárias.
 
 ## Tarefas bloqueadas
@@ -52,7 +52,7 @@
 - Nenhuma operação de inventário ou migration foi alterada.
 
 ## Próxima ação obrigatória
-- Validar CI da telemetria correlacionada; depois decidir o mecanismo de exportação/consumo sem dependências nem portas desnecessárias.
+- Auditar a autorização por acção de `TASK_ACKNOWLEDGED`; manter a registry transaccional desactivada e definir comportamento deny-by-default.
 
 ---
 
