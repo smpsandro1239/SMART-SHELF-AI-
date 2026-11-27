@@ -1,4 +1,4 @@
-## 2026-11-27 — Supervisor independente do Edge Worker (implementação publicada; CI pendente)
+## 2026-11-27 — Supervisor independente do Edge Worker (implementação validada; smoke SIGTERM em expansão)
 
 - Adicionado `app.edge_event_supervisor`: processo pai independente que arranca o worker como subprocesso, monitoriza PID e heartbeat, termina processos bloqueados e aplica backoff exponencial limitado.
 - O worker publica heartbeat atómico do ciclo de polling em `/tmp/edge-worker-child.json`; o supervisor publica estado operacional em `/tmp/edge-supervisor-state.json`.
