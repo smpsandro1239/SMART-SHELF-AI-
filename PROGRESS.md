@@ -1,31 +1,40 @@
 # PROGRESS — SMART SHELF AI
 
 ## Estado actual
-- Branch de trabalho: main
-- SHA inicial desta ronda: 5f4a9a2a944ca7b41ae1206653d3e77c4211b4c8
-- Último commit de implementação: 5e6713c68993d2cffec5517e3ad5ef3b584a0c79
+- Branch: main
+- SHA validado: f9ff01b477575b8f1ebc8534a940ffac25d1f637
 - Última actualização: 2026-11-27
 
 ## EDGE-INGEST-OBSERVABILITY-01
-- A instrumentação da ingestão HTTP foi validada no SHA inicial desta ronda: API CI 46030149210, Quality Gates 46030149206, Security Scans 46030149185 e Docker Compose Smoke 46030149183 — todos SUCCESS.
-- Os contadores continuam process-local e não constituem retenção histórica.
+- A instrumentação da ingestão HTTP foi validada no SHA 5f4a9a2a944ca7b41ae1206653d3e77c4211b4c8: API CI 46030149210, Quality Gates 46030149206, Security Scans 46030149185 e Docker Compose Smoke 46030149183 — todos SUCCESS.
+- Os contadores são process-local; não constituem retenção histórica.
 
-## EDGE-HUMAN-ACK-REVIEW-01
-- Adicionado ledger append-only para decisões humanas sobre ACK COMPLETED/REVIEW_REQUIRED.
-- Implementados serviço transaccional, idempotência por store/ACK/actor, autorização ADMIN/SUPERVISOR, isolamento multi-loja e endpoints POST/GET.
-- O registo de revisão é também o registo de auditoria atómico; nenhuma tarefa, ACK ou entidade de inventário é actualizada.
-- Adicionados testes de serviço, API e migration SQLite.
-- A primeira execução Quality Gates revelou 7 falhas colaterais em `test_observations.py`: o novo fixture API removia um override de dependência definido ao nível do módulo por outro ficheiro de testes. Corrigido para restaurar o override anterior. A repetição da suite está pendente no SHA final.
-- Não foram executados testes localmente nesta sessão.
-- Acrescentado smoke PostgreSQL 16 que mantém a linha da tarefa bloqueada, envia dois POST HTTP concorrentes com a mesma chave e exige bloqueio real em `pg_stat_activity`, uma revisão persistida e respostas 201/200.
-- A primeira execução do smoke falhou na selecção do ACK, corrigida com filtro por `inbox_id`. A segunda execução confirmou que os dois pedidos esperavam por locks PostgreSQL, mas a asserção exigia que cada waiter listasse directamente o blocker raiz; PostgreSQL reporta também blockers suaves da fila (o segundo waiter pode listar o primeiro). Ajustada a verificação para exigir ambos em espera e o blocker raiz no conjunto dos blockers. Repetir API CI pendente.
+## EDGE-HUMAN-ACK-REVIEW-01 — IMPLEMENTADO E VALIDADO
+- Ledger edge_task_acknowledgement_reviews append-only, com FKs compostas para loja/tarefa/ACK, actor autenticado, decisão, motivo, referência de evidência, idempotency key e timestamp UTC.
+- Serviço transaccional e endpoints POST/GET autenticados.
+- ADMIN/SUPERVISOR activos; supervisor limitado à própria loja. Utilizadores EMPLOYEE e contas inactivas são recusados.
+- Idempotência por store/ACK/actor; replay idêntico devolve o registo (HTTP 200), reutilização com conteúdo diferente gera conflito.
+- Locks PostgreSQL da tarefa e ACK serializam pedidos concorrentes. Triggers PostgreSQL e SQLite impedem UPDATE/DELETE.
+- O ledger é o próprio registo de auditoria atómico. A revisão não altera tarefa, ACK, snapshots, movimentos ou inventário.
+- Testes de serviço, API e migration: 1802 passed, 1 skipped.
+- Smoke PostgreSQL 16: dois POST concorrentes com a mesma chave aguardaram o lock da mesma tarefa; foi persistida uma única revisão, com respostas HTTP 201 e 200. Confirmada a ausência de mutação de tarefa, ACK e inventário.
+
+## Validação final no SHA f9ff01b477575b8f1ebc8534a940ffac25d1f637
+
+| Workflow | Run | Resultado |
+|---|---:|---|
+| API CI / PostgreSQL 16 | 46033847401 | **SUCCESS** |
+| Quality Gates | 46033847516 | **SUCCESS** |
+| Security Scans / OWASP ZAP | 46033847557 | **SUCCESS** |
+| Docker Compose Smoke | 46033847475 | **SUCCESS** |
+
+A API CI confirmou a migration 0104 em PostgreSQL 16, o smoke de concorrência/idempotência da revisão humana e a suite completa de testes.
 
 ## Próximas tarefas
-- [ ] Confirmar API CI/PostgreSQL 16, Quality Gates, Security Scans e Docker Compose no SHA final.
-- [ ] Acrescentar smoke concorrente PostgreSQL dedicado a duas revisões simultâneas do mesmo ACK.
-- [ ] Manter `TASK_ACKNOWLEDGED` desactivado por omissão e sem autorização de produção.
-- [ ] Definir agregação durável e retenção histórica das métricas operacionais.
+- [ ] Avaliar agregação durável e retenção histórica das métricas operacionais Edge.
+- [ ] Manter TASK_ACKNOWLEDGED desactivado por omissão e sem autorização de produção até existir aprovação operacional explícita.
+- [ ] Definir eventual fluxo de reconciliação posterior, separado da revisão humana, sem efeitos automáticos de inventário.
 
 ## Limites de validação
-- Sem execução local; a validação depende dos workflows GitHub Actions.
-- A revisão humana não confirma fisicamente reposição nem altera inventário.
+- Não foram executados testes localmente nesta sessão; a validação foi efectuada pelos workflows GitHub Actions indicados.
+- A revisão humana aprova ou rejeita a declaração do dispositivo; não comprova fisicamente a reposição.
