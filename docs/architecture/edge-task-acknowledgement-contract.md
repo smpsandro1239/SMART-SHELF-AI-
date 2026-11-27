@@ -114,3 +114,8 @@ A implementação do serviço/API ainda deve bloquear Store → Task → Device 
 A unicidade e as regras de validade são garantidas no PostgreSQL, não apenas por validação Python. SQLite mantém cobertura unitária, mas não é prova de concorrência.
 
 **Estado:** schema e modelos implementados no commit `6ae449d883c845072127f188861be44e57dd2193`. A migration completa passou no passo `alembic upgrade head` do API CI run `45876761643`; a suite concluiu com **1747 passed, 1 skipped**. Quality Gates `45876761651`, Security Scans `45876761497` e Docker Compose `45876761707` também passaram no mesmo SHA de código. Serviço/API, handler e smoke concorrente dedicado permanecem pendentes. O worker mantém comportamento fail-closed.
+
+
+### 2026-11-27 — Validação defensiva adicional do Edge ACK
+
+A validação de `action` rejeita agora explicitamente valores que não sejam texto, incluindo listas, objectos, booleanos e números. Foram acrescentados cinco casos parametrizados para garantir `INVALID_ACK_ACTION` sem persistência. A execução dos testes e os workflows CI continuam pendentes; não activar a registry por omissão. A revisão também confirmou que o smoke PostgreSQL existente ainda não cobre concorrência entre revogação e ACK nem isolamento adversarial cross-store — estas provas permanecem em falta.
