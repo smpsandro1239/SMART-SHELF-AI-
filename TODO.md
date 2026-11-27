@@ -9,8 +9,8 @@
 - [x] Manter `TASK_ACKNOWLEDGED` fail-closed: o runtime não injecta `BUILTIN_TRANSACTIONAL_HANDLERS`; a injecção transaccional continua explícita.
 - [x] Acrescentar testes unitários do ciclo runtime para shutdown, fila vazia e falha no modo `--once`.
 - [ ] Executar testes focados e suite API no SHA final.
-- [ ] Validar `docker compose config`, build e arranque real do serviço.
-- [ ] Executar smoke PostgreSQL 16 para concorrência multi-worker, lease expirada, takeover e fencing.
+- [ ] Validar `docker compose config`, build, arranque estável e hardening do `edge-event-worker` no smoke Docker Compose.
+- [ ] Executar smoke PostgreSQL 16 com processo Edge real terminado por SIGKILL, expiração natural da lease, takeover e rejeição de credenciais antigas.
 - [ ] Confirmar API CI, Quality Gates, Security Scans e Docker Compose verdes no mesmo SHA.
 - [ ] Só depois avaliar configuração fail-closed do ACK; não adicionar a flag nem injectar a registry nesta fase.
 
@@ -32,8 +32,8 @@
 - [x] Confirmar que `TASK_ACKNOWLEDGED` não está activo por omissão: `process_one_edge_event()` só consulta `transactional_handlers` fornecido explicitamente; `BUILTIN_TRANSACTIONAL_HANDLERS` não é injectada automaticamente.
 - [x] Confirmar que `COMPLETED` é persistido como `REVIEW_REQUIRED` e não altera tarefa, versão ou inventário.
 - [x] Confirmar que o worker dispõe de lease, heartbeat, fencing, retry exponencial limitado e DEAD_LETTER.
-- [x] Confirmar a fronteira de deployment: não existe serviço/processo `edge-event-worker` no `docker-compose.yml`; `api` arranca apenas `uvicorn app.main:app`, `vision-worker` executa `app.vision_worker` (inferência de imagens) e `edge_event_worker.py` expõe apenas `process_one_edge_event()`, sem entrypoint/loop de supervisão. `Settings` também não define flag Edge ACK. **Decisão fail-closed:** não adicionar uma flag isolada nem injectar a registry num worker diferente; a activação de deployment fica bloqueada até existir um processo Edge dedicado, com ciclo de vida e supervisão reais.
-- [ ] Implementar processo dedicado de consumo Edge (entrypoint, loop, shutdown, identidade/lease e supervisão no deployment) e só então introduzir `EDGE_TASK_ACKNOWLEDGEMENT_ENABLED`, ausente/`false` por omissão, `true` apenas nesse processo e valores inválidos rejeitados. A flag nunca pode substituir a injecção explícita de `transactional_handlers`.
+- [x] Confirmar a fronteira de deployment: existe um serviço/processo `edge-event-worker` independente no `docker-compose.yml`, com entrypoint `python -m app.edge_event_worker`, ciclo de polling, lease/fencing, shutdown gracioso e supervisão por restart policy. O `vision-worker` continua dedicado à inferência de imagens.
+- [x] Manter a decisão fail-closed: não adicionar `EDGE_TASK_ACKNOWLEDGEMENT_ENABLED` nem injectar automaticamente a registry transaccional. A existência do processo Edge não autoriza ACK; `transactional_handlers` continua a exigir injecção explícita.
 - [ ] Definir autorização por acção (ACCEPTED/STARTED/COMPLETED), incluindo scopes/capacidades do dispositivo e política de revogação; a implementação actual valida dispositivo ACTIVE, loja, associação vigente e versão, mas não demonstra uma matriz de permissões por acção.
 - [ ] Acrescentar métricas e correlação estruturada para ACK recebido/aplicado/rejeitado, duplicados, stale version, retries, dead-letter, lease perdido e latência; logs actuais não substituem métricas/alertas operacionais.
 - [ ] Definir procedimento de revisão humana de `REVIEW_REQUIRED`, actor, decisão, motivo e reconciliação posterior, sem automatizar stock.
@@ -42,7 +42,7 @@
 
 ### Decisão de deployment — 2026-11-27
 
-A fase de configuração não pode ser implementada isoladamente: o repositório não contém actualmente um processo de deployment que consuma a inbox Edge. `vision-worker` não é um worker de eventos. Não declarar activação operacional nem adicionar variável de ambiente sem consumidor real. Próximo passo técnico: criar e testar o processo Edge supervisionado; depois ligar-lhe a flag fail-closed e manter a registry transaccional explicitamente injectada.
+A decisão histórica de não adicionar uma flag sem consumidor real foi respeitada. O processo dedicado `edge-event-worker` foi entretanto implementado e publicado; esta evolução não altera a decisão de manter ACK fail-closed. A validação de crash real e do container continua pendente até os smokes PostgreSQL e Docker Compose passarem no mesmo SHA.
 
 ### Restrições não negociáveis
 - `TASK_ACKNOWLEDGED` permanece desactivado por omissão.

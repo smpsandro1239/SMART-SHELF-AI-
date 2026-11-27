@@ -1,5 +1,8 @@
 """Prove PostgreSQL atomicity, concurrency, fencing and ACK immutability."""
 from concurrent.futures import ThreadPoolExecutor
+from multiprocessing import get_context
+import os
+import signal
 from datetime import datetime, timedelta, timezone
 import time
 from threading import Barrier, Event, Thread
@@ -14,6 +17,7 @@ from app.database import SessionLocal
 from app.edge_event_processing import (
     EdgeEventProcessingError,
     claim_next_edge_event,
+    complete_edge_event,
     complete_edge_event_transactionally,
 )
 from app.edge_event_worker import EdgeEventHandlerError
@@ -22,6 +26,147 @@ from app.edge_task_assignment_service import (
     create_edge_task_assignment,
     revoke_edge_task_assignment,
 )
+
+
+
+def _edge_sigkill_claim_worker(ready_queue, hold_event) -> None:
+    """Claim a real inbox event in a child process, then remain alive until SIGKILL."""
+    worker_id = "edge-sigkill-child"
+    with SessionLocal() as db:
+        claim = claim_next_edge_event(
+            db, worker_id=worker_id, lease_seconds=5,
+        )
+    if claim is None:
+        raise AssertionError("SIGKILL child could not claim the Edge inbox event")
+    ready_queue.put({
+        "processing_id": claim["processing_id"],
+        "inbox_id": claim["inbox_id"],
+        "worker_id": worker_id,
+        "fencing_token": claim["fencing_token"],
+        "lease_expires_at": claim["lease_expires_at"].isoformat(),
+    })
+    hold_event.wait(60)
+
+
+def _verify_sigkill_recovery_and_fencing() -> None:
+    """Prove process death, real lease expiry, takeover and stale-owner rejection."""
+    suffix = uuid4().hex[:10]
+    now = datetime.now(timezone.utc)
+    with SessionLocal() as db:
+        store = models.Store(
+            code=f"EDGE-KILL-{suffix}", name="Edge SIGKILL recovery smoke",
+        )
+        db.add(store)
+        db.flush()
+        device_id = f"edge-kill-device-{suffix}"
+        db.add(models.EdgeDevice(
+            device_id=device_id, store_id=store.id,
+            device_type="robot", status="ACTIVE",
+        ))
+        inbox = models.EdgeDeviceEventInbox(
+            device_id=device_id,
+            event_id=str(uuid4()),
+            sequence_number=1,
+            event_type="DEVICE_HEARTBEAT",
+            store_id=store.id,
+            shelf_id=None,
+            occurred_at=now,
+            payload={"smoke": "sigkill-recovery"},
+            fingerprint_sha256=uuid4().hex + uuid4().hex,
+            received_at=now,
+        )
+        db.add(inbox)
+        db.flush()
+        processing = models.EdgeDeviceEventProcessing(
+            inbox_id=inbox.id,
+            status="PENDING",
+            attempt_count=0,
+            max_attempts=8,
+            available_at=now,
+            fencing_token=0,
+            created_at=now,
+            updated_at=now,
+        )
+        db.add(processing)
+        db.commit()
+        inbox_id = inbox.id
+        processing_id = processing.id
+
+    context = get_context("spawn")
+    ready_queue = context.Queue()
+    hold_event = context.Event()
+    process = context.Process(
+        target=_edge_sigkill_claim_worker,
+        args=(ready_queue, hold_event),
+        name="edge-sigkill-smoke-worker",
+    )
+    try:
+        process.start()
+        child_claim = ready_queue.get(timeout=30)
+        assert child_claim["inbox_id"] == inbox_id
+        assert child_claim["processing_id"] == processing_id
+        with SessionLocal() as verify:
+            claimed = verify.get(models.EdgeDeviceEventProcessing, processing_id)
+            assert claimed is not None
+            assert claimed.status == "PROCESSING"
+            assert claimed.lease_owner == child_claim["worker_id"]
+            assert claimed.fencing_token == child_claim["fencing_token"]
+            lease_expires_at = claimed.lease_expires_at
+            assert lease_expires_at is not None
+        os.kill(process.pid, signal.SIGKILL)
+        process.join(timeout=15)
+        assert process.exitcode == -signal.SIGKILL, (
+            f"expected SIGKILL exit {-signal.SIGKILL}, got {process.exitcode}"
+        )
+        # Wait for the database lease to expire naturally; do not move its
+        # timestamp forward or inject a synthetic clock into the takeover.
+        remaining = (lease_expires_at - datetime.now(timezone.utc)).total_seconds()
+        if remaining > 0:
+            time.sleep(remaining + 0.25)
+
+        recovery_worker_id = "edge-sigkill-recovery"
+        with SessionLocal() as recovery_db:
+            recovered = claim_next_edge_event(
+                recovery_db,
+                worker_id=recovery_worker_id,
+                lease_seconds=30,
+            )
+        assert recovered is not None
+        assert recovered["processing_id"] == processing_id
+        assert recovered["inbox_id"] == inbox_id
+        assert recovered["fencing_token"] == child_claim["fencing_token"] + 1
+
+        try:
+            with SessionLocal() as stale_db:
+                complete_edge_event(
+                    stale_db,
+                    processing_id=processing_id,
+                    worker_id=child_claim["worker_id"],
+                    fencing_token=child_claim["fencing_token"],
+                )
+        except EdgeEventProcessingError:
+            pass
+        else:
+            raise AssertionError("SIGKILL worker credentials completed after takeover")
+
+        with SessionLocal() as current_db:
+            complete_edge_event(
+                current_db,
+                processing_id=processing_id,
+                worker_id=recovery_worker_id,
+                fencing_token=recovered["fencing_token"],
+            )
+        with SessionLocal() as verify:
+            final = verify.get(models.EdgeDeviceEventProcessing, processing_id)
+            assert final is not None and final.status == "PROCESSED"
+            assert final.lease_owner is None and final.lease_expires_at is None
+            assert final.fencing_token == recovered["fencing_token"]
+    finally:
+        if process.is_alive():
+            process.kill()
+            process.join(timeout=15)
+        ready_queue.close()
+        ready_queue.join_thread()
 
 
 def _expect_database_rejection(statement: str, acknowledgement_id: int) -> None:
@@ -275,6 +420,7 @@ def _prove_revocation_ack_races(
 
 
 def main() -> None:
+    _verify_sigkill_recovery_and_fencing()
     suffix = uuid4().hex[:12]
     now = datetime.now(timezone.utc)
     db = SessionLocal()
@@ -543,7 +689,7 @@ def main() -> None:
     )
 
     print(
-        "PostgreSQL Edge ACK smoke passed: atomic rollback/commit, replay rejection, "
+        "PostgreSQL Edge ACK smoke passed: real SIGKILL recovery, lease expiry, takeover/fencing, stale-owner rejection, atomic rollback/commit, replay rejection, "
         "single-winner concurrent claim, fencing, COMPLETED review-only semantics, "
         "no inventory side effects, append-only triggers and deterministic ACK/revocation lock ordering."
     )

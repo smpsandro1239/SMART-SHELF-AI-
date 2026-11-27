@@ -2227,3 +2227,10 @@ As escritas de observações, sessões de captura e imagens bloqueiam a linhagem
 ### Identidade multi-loja imutável nos jobs ERP/WMS
 
 A loja de um `InventorySyncJob` é definida no enqueue e não pode ser alterada posteriormente. A loja determina o tenant autorizado a consultar o histórico de eventos, que é associado ao job por `job_id`, e integra a chave idempotente do pedido. A migration `0101_inventory_sync_job_store_immutable` protege esta identidade ao nível da base de dados em PostgreSQL e SQLite, sem bloquear actualizações de estado, lease ou fencing token. Foram adicionados testes SQLite e um smoke PostgreSQL concorrente; a validação CI no HEAD final permanece pendente.
+
+
+## Edge Event Worker — fronteira operacional
+
+O consumo de eventos Edge é executado pelo serviço independente `edge-event-worker` (`python -m app.edge_event_worker`), separado da API e do `vision-worker`. O container usa utilizador não-root, filesystem read-only, capabilities removidas, `no-new-privileges` e `/tmp` temporário para escrita.
+
+A existência do worker não activa o handler transaccional `TASK_ACKNOWLEDGED`: a registry continua a exigir injecção explícita. Declarações `COMPLETED` permanecem evidência `REVIEW_REQUIRED`; mensagens Edge não concluem tarefas nem alteram inventário. A validação de crash/recovery exige o smoke PostgreSQL 16 e a verificação de estabilidade/hardening no Docker Compose, ambos no SHA final.

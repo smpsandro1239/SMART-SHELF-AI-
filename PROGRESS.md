@@ -2157,3 +2157,13 @@ A validação de `action` rejeita agora explicitamente valores que não sejam te
 - Commits publicados na `main`: correcção `0a150b20f9971f6c714acd8949f3422a409b4c39`; teste `986043f946ec053a8f03b1ee7f32b63a7bed3605`.
 - **Validação ainda pendente:** pytest/API CI, PostgreSQL 16, concorrência multi-worker, crash/lease/takeover/fencing e Docker Compose. Não afirmar o arranque validado até a CI executar o teste de subprocesso.
 - A registry transaccional continua sem injecção automática; `TASK_ACKNOWLEDGED` não foi activado; `COMPLETED` continua `REVIEW_REQUIRED`.
+
+
+## 2026-11-27 — P0 Edge Event Worker: prova de crash real e validação Compose
+
+- Implementado no smoke PostgreSQL Edge ACK um processo filho independente que obtém um claim real e fica bloqueado até ser terminado pelo processo pai com `SIGKILL`.
+- O cenário verifica o estado `PROCESSING` persistido, aguarda a expiração natural da lease de cinco segundos, reclama o mesmo evento com novo worker e exige incremento exacto do fencing token.
+- A conclusão com as credenciais do processo morto tem de ser rejeitada; o worker de recuperação conclui o evento sem handler de domínio. O cenário não executa ACK nem altera inventário.
+- Reforçado o Docker Compose smoke para confirmar que `edge-event-worker` permanece em execução sem reinícios durante a janela de observação, executa `app.edge_event_worker` e respeita utilizador 65532, root filesystem read-only, `cap_drop: ALL`, `no-new-privileges` e escrita apenas em `/tmp`.
+- Corrigida a secção histórica obsoleta do TODO: o processo Edge já existe; a decisão de não activar ACK nem injectar handlers mantém-se.
+- **Validação local não executada:** esta sessão dispõe de operações GitHub, mas não de terminal ligado ao checkout nem de PostgreSQL/Docker local. A validação efectiva depende dos workflows API CI e Docker Compose no SHA publicado. Não declarar os smokes aprovados antes dos resultados.
