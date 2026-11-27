@@ -173,6 +173,12 @@ jobs:
           APP_ENV: test
           JWT_SECRET_KEY: test-only-secret-not-for-production
         run: python scripts/postgres_edge_task_assignment_smoke.py
+
+      - name: Verify PostgreSQL Edge task acknowledgement atomicity, concurrency, fencing and immutability
+        env:
+          DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/smart_shelf_ci
+          APP_ENV: test
+        run: python scripts/postgres_edge_task_acknowledgement_smoke.py
       - name: Verify PostgreSQL observation-alert concurrency and immutable audit
         env:
           DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/smart_shelf_ci
