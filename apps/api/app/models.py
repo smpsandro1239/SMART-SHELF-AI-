@@ -1966,3 +1966,39 @@ class InventorySyncJobEvent(Base):
     fencing_token: Mapped[int] = mapped_column(Integer, nullable=False)
     details: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+
+class EdgeTaskAcknowledgement(Base):
+    """Immutable device declaration tied to one authenticated inbox event."""
+
+    __tablename__ = "edge_task_acknowledgements"
+    __table_args__ = (
+        UniqueConstraint("inbox_id", name="uq_edge_task_ack_inbox"),
+        UniqueConstraint("device_id", "event_id", name="uq_edge_task_ack_device_event"),
+        CheckConstraint("task_version > 0", name="ck_edge_task_ack_task_version"),
+        CheckConstraint("sequence_number > 0", name="ck_edge_task_ack_sequence"),
+        CheckConstraint("length(fingerprint_sha256) = 64", name="ck_edge_task_ack_fingerprint"),
+        CheckConstraint("action IN ('ACCEPTED', 'STARTED', 'COMPLETED')", name="ck_edge_task_ack_action"),
+        CheckConstraint("result IN ('ACCEPTED', 'STARTED', 'REVIEW_REQUIRED')", name="ck_edge_task_ack_result"),
+        Index("ix_edge_task_ack_store_task_created", "store_id", "task_id", "received_at"),
+        Index("ix_edge_task_ack_assignment_created", "assignment_id", "received_at"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    store_id: Mapped[int] = mapped_column(ForeignKey("stores.id", ondelete="RESTRICT"), nullable=False)
+    task_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    task_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    device_id: Mapped[str] = mapped_column(String(120), nullable=False)
+    assignment_id: Mapped[int] = mapped_column(
+        ForeignKey("edge_device_task_assignments.id", ondelete="RESTRICT"), nullable=False
+    )
+    inbox_id: Mapped[int] = mapped_column(
+        ForeignKey("edge_device_event_inbox.id", ondelete="RESTRICT"), nullable=False
+    )
+    event_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    sequence_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    fingerprint_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    action: Mapped[str] = mapped_column(String(12), nullable=False)
+    result: Mapped[str] = mapped_column(String(16), nullable=False)
+    declared_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
