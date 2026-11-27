@@ -1,9 +1,10 @@
 """Prove concurrent human reviews of one Edge ACK serialize and remain idempotent."""
 from concurrent.futures import ThreadPoolExecutor
-from threading import Event, local
+from threading import Event
 from time import monotonic, sleep
 from uuid import uuid4
 
+from fastapi import Request
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 
@@ -13,9 +14,6 @@ from app.edge_task_acknowledgement_service import apply_edge_task_acknowledgemen
 from app.edge_task_assignment_service import create_edge_task_assignment
 from app.main import app
 from app.security import create_access_token
-
-
-request_context = local()
 
 
 def create_fixture(suffix: str) -> tuple[int, int, int, int]:
@@ -138,10 +136,12 @@ def main() -> None:
                 raise TimeoutError("review task lock was not released")
             return blocker_pid
 
-    def scoped_get_db():
+    def scoped_get_db(request: Request):
         db = SessionLocal()
         try:
-            name = request_context.application_name
+            name = request.headers.get("X-Smoke-Application", "")
+            if name not in request_names:
+                raise AssertionError("missing or invalid smoke application identity")
             db.execute(text("SELECT set_config('application_name', :name, false)"), {"name": name})
             request_started[name].set()
             yield db
@@ -149,28 +149,30 @@ def main() -> None:
             db.close()
 
     def submit_review(name: str) -> None:
-        request_context.application_name = name
         payload = {
             "decision": "APPROVED",
             "reason": "Reposição confirmada por verificação presencial",
             "evidence_reference": f"evidence://concurrency/{suffix}",
             "idempotency_key": f"edge-review-{suffix}-same-key",
         }
-        app.dependency_overrides[main_module.get_db] = scoped_get_db
         try:
             with TestClient(app) as client:
                 response = client.post(
                     f"/api/v1/edge-task-acknowledgements/{acknowledgement_id}/reviews",
                     json=payload,
-                    headers={"Authorization": f"Bearer {token}"},
+                    headers={
+                        "Authorization": f"Bearer {token}",
+                        "X-Smoke-Application": name,
+                    },
                 )
             results[name] = {"status_code": response.status_code, "body": response.json()}
         finally:
-            app.dependency_overrides.pop(main_module.get_db, None)
+            pass
 
     original_settings = main_module.settings
     main_module.settings = original_settings.model_copy(update={"app_env": "production"})
     try:
+        app.dependency_overrides[main_module.get_db] = scoped_get_db
         with ThreadPoolExecutor(max_workers=3) as executor:
             blocker_future = executor.submit(hold_task_lock)
             assert task_locked.wait(10), "smoke transaction did not acquire the task row lock"
