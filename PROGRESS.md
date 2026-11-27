@@ -1,3 +1,8 @@
+### Correcção estrutural após revisão — SHA cb0036ec1c8e5911f8005657ccbdd11db0a2c9a8
+
+A revisão da importação identificou uma dependência circular potencial entre edge_event_worker e edge_task_acknowledgement_service. Foi eliminada extraindo EdgeEventHandlerError para apps/api/app/edge_event_errors.py, importado pelo worker e pelo serviço. O handler permanece opt-in. Não foram executados testes localmente; CI ainda sem resultado confirmado para este SHA.
+
+
 ## 2026-11-27 — Handler Edge ACK integrado em modo opt-in
 
 - SHA inicial desta ronda: 2f872309d98c02fb71d0873d4f080ea782ce13ce.
