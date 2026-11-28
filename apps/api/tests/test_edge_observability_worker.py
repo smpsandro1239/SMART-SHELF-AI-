@@ -1,5 +1,6 @@
 """Service tests for bounded, idempotent Edge observability aggregation."""
 from datetime import datetime, timedelta, timezone
+from uuid import uuid4
 
 import pytest
 from sqlalchemy import create_engine, select
@@ -17,29 +18,29 @@ def db_factory(tmp_path):
     factory = sessionmaker(bind=engine, expire_on_commit=False)
     with factory.begin() as db:
         db.add_all([
-            models.Store(id=1, name="Store 1"),
-            models.Store(id=2, name="Store 2"),
+            models.Store(id=1, code="STORE-1", name="Store 1"),
+            models.Store(id=2, code="STORE-2", name="Store 2"),
         ])
     yield factory
     engine.dispose()
 
 
-def _add_inbox(factory, store_id, event_type, received_at):
+def _add_inbox(factory, store_id, event_type, received_at, sequence):
     with factory.begin() as db:
-        device = db.get(models.EdgeDevice, f"device-{store_id}")
+        device_id = f"device-{store_id}"
+        device = db.get(models.EdgeDevice, device_id)
         if device is None:
-            # Minimal device fields are supplied by the actual model's defaults/constraints.
             device = models.EdgeDevice(
-                device_id=f"device-{store_id}", store_id=store_id,
-                name=f"Device {store_id}", status="ACTIVE",
+                device_id=device_id, store_id=store_id,
+                device_type="gateway", status="ACTIVE",
             )
             db.add(device)
             db.flush()
         db.add(models.EdgeDeviceEventInbox(
-            device_id=device.device_id, event_id=f"{store_id}-{event_type}-{received_at.isoformat()}",
-            sequence_number=int(received_at.timestamp()) % 2000000000,
-            event_type=event_type, store_id=store_id, occurred_at=received_at,
-            payload={}, fingerprint_sha256="a" * 64, received_at=received_at,
+            device_id=device.device_id, event_id=str(uuid4()),
+            sequence_number=sequence, event_type=event_type, store_id=store_id,
+            occurred_at=received_at, payload={}, fingerprint_sha256="a" * 64,
+            received_at=received_at,
         ))
 
 
@@ -52,9 +53,9 @@ def test_floor_window_uses_utc_boundaries():
 def test_aggregation_is_idempotent_and_store_scoped(db_factory):
     now = datetime(2026, 11, 28, 12, 40, tzinfo=timezone.utc)
     event_at = datetime(2026, 11, 28, 12, 20, tzinfo=timezone.utc)
-    _add_inbox(db_factory, 1, "DEVICE_HEARTBEAT", event_at)
-    _add_inbox(db_factory, 1, "DEVICE_HEARTBEAT", event_at + timedelta(seconds=1))
-    _add_inbox(db_factory, 2, "DEVICE_HEARTBEAT", event_at)
+    _add_inbox(db_factory, 1, "DEVICE_HEARTBEAT", event_at, 1)
+    _add_inbox(db_factory, 1, "DEVICE_HEARTBEAT", event_at + timedelta(seconds=1), 2)
+    _add_inbox(db_factory, 2, "DEVICE_HEARTBEAT", event_at, 1)
     aggregate_cycle(db_factory, now=now, max_windows_per_granularity=1000)
     aggregate_cycle(db_factory, now=now, max_windows_per_granularity=1000)
     with db_factory() as db:
@@ -79,7 +80,9 @@ def test_retention_only_deletes_observability_rows(db_factory):
             store_id=1, granularity="daily", window_start=now - timedelta(days=91),
             metric_name="events_received", dimension_value="ALL", value_count=1,
         ))
-        db.add(models.EdgeDevice(device_id="keep-device", store_id=1, name="Keep", status="ACTIVE"))
+        db.add(models.EdgeDevice(
+            device_id="keep-device", store_id=1, device_type="gateway", status="ACTIVE",
+        ))
     deleted = purge_expired(db_factory, now=now, batch_size=1)
     assert deleted == {"aggregates": 1, "supervisor_events": 1}
     with db_factory() as db:
