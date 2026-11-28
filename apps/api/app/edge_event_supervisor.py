@@ -16,6 +16,7 @@ import subprocess
 import sys
 import threading
 import time
+import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
@@ -122,11 +123,25 @@ def run_supervisor(
     popen_factory: Callable[..., subprocess.Popen[Any]] = subprocess.Popen,
     monotonic: Callable[[], float] = time.monotonic,
     wall_clock: Callable[[], float] = time.time,
+    event_sink: Callable[..., None] | None = None,
 ) -> int:
     consecutive_failures = 0
     restart_count = 0
     last_restart_at: float | None = None
     last_exit_code: int | None = None
+    supervisor_instance_id = uuid.uuid4().hex
+
+    def emit(event_type: str, *, reason_code: str | None = None, exit_code: int | None = None) -> None:
+        if event_sink is None:
+            return
+        try:
+            event_sink(event_type=event_type, supervisor_instance_id=supervisor_instance_id,
+                       worker_id=config.worker_id, reason_code=reason_code,
+                       restart_count=restart_count, exit_code=exit_code)
+        except Exception:
+            logger.warning("Supervisor event enqueue failed")
+
+    emit("STARTED")
 
     for path in (config.state_path, config.child_heartbeat_path):
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -153,6 +168,7 @@ def run_supervisor(
             consecutive_failures += 1
             restart_count += 1
             delay = calculate_backoff(consecutive_failures, config.restart_base_seconds, config.restart_max_seconds)
+            emit("RESTARTING", reason_code="SPAWN_FAILED")
             _write_json_atomic(config.state_path, {
                 "status": "RESTARTING", "supervisor_pid": os.getpid(),
                 "heartbeat_at": wall_clock(), "child_pid": None,
@@ -163,6 +179,7 @@ def run_supervisor(
             stop_event.wait(delay)
             continue
 
+        emit("STARTED")
         started_at = monotonic()
         last_heartbeat_at = wall_clock()
         child_seen = False
@@ -180,15 +197,18 @@ def run_supervisor(
                     child_heartbeat_at = 0.0
                 if child_seen and wall_clock() - child_heartbeat_at > config.heartbeat_timeout:
                     failure_reason = "CHILD_HEARTBEAT_STALE"
+                    emit("HEARTBEAT_STALE", reason_code="CHILD_HEARTBEAT_STALE")
                     break
             elif now_mono - started_at > config.heartbeat_timeout:
                 failure_reason = "CHILD_HEARTBEAT_MISSING"
+                emit("HEARTBEAT_STALE", reason_code="CHILD_HEARTBEAT_MISSING")
                 break
 
             return_code = child.poll()
             if return_code is not None:
                 last_exit_code = return_code
                 failure_reason = "CHILD_CONFIGURATION_ERROR" if return_code == 2 else "CHILD_EXITED"
+                emit("CHILD_EXITED", reason_code=failure_reason, exit_code=return_code)
                 break
 
             last_heartbeat_at = wall_clock()
@@ -204,6 +224,7 @@ def run_supervisor(
             stop_event.wait(config.heartbeat_interval)
 
         if not stop_event.is_set() and failure_reason == "CHILD_CONFIGURATION_ERROR":
+            emit("FAILED", reason_code="CHILD_CONFIGURATION_ERROR", exit_code=last_exit_code)
             logger.error("Edge worker configuration is invalid; supervisor remains degraded until operator restart")
             while not stop_event.is_set():
                 _write_json_atomic(config.state_path, {
@@ -224,6 +245,7 @@ def run_supervisor(
             return 0
 
         if stop_event.is_set():
+            emit("STOPPED", reason_code="SHUTDOWN_REQUESTED", exit_code=child.poll())
             _terminate_child(child, config.shutdown_timeout)
             _write_json_atomic(config.state_path, {
                 "status": "STOPPED", "supervisor_pid": os.getpid(),
@@ -242,6 +264,7 @@ def run_supervisor(
         restart_count += 1
         last_restart_at = wall_clock()
         delay = calculate_backoff(consecutive_failures, config.restart_base_seconds, config.restart_max_seconds)
+        emit("RESTARTING", reason_code=failure_reason or "UNKNOWN", exit_code=last_exit_code)
         logger.warning(
             "Edge worker child will restart: reason=%s restart_count=%s backoff_seconds=%s",
             failure_reason or "UNKNOWN", restart_count, delay,
@@ -328,9 +351,13 @@ def main(argv: list[str] | None = None) -> int:
 
     previous_term = signal.signal(signal.SIGTERM, request_shutdown)
     previous_int = signal.signal(signal.SIGINT, request_shutdown)
+    from app.edge_supervisor_events import AsyncSupervisorEventWriter
+    event_writer = AsyncSupervisorEventWriter()
+    event_writer.start()
     try:
-        return run_supervisor(config, stop_event)
+        return run_supervisor(config, stop_event, event_sink=event_writer.emit)
     finally:
+        event_writer.close(timeout=float(os.getenv("EDGE_SUPERVISOR_EVENT_FLUSH_SECONDS", "2")))
         signal.signal(signal.SIGTERM, previous_term)
         signal.signal(signal.SIGINT, previous_int)
         os.close(lock_descriptor)

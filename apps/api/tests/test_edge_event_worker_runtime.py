@@ -171,6 +171,70 @@ def test_supervisor_restarts_crashed_child_and_stops_second_child(tmp_path):
     assert state["restart_count"] == 1
 
 
+def test_supervisor_emits_allowlisted_lifecycle_events_without_affecting_restart(tmp_path):
+    class FakeChild:
+        def __init__(self, pid, return_code):
+            self.pid = pid
+            self.return_code = return_code
+        def poll(self):
+            return self.return_code
+        def terminate(self):
+            pass
+        def wait(self, timeout=None):
+            return self.return_code
+        def kill(self):
+            self.return_code = -9
+
+    stop = threading.Event()
+    emitted = []
+    children = []
+    def spawn(_command, **_kwargs):
+        child = FakeChild(os.getpid() + len(children) + 10, 23 if not children else None)
+        children.append(child)
+        if len(children) == 2:
+            stop.set()
+        return child
+    config = SupervisorConfig(
+        worker_id="supervisor-events-test", poll_interval=0.5, lease_seconds=30,
+        heartbeat_interval=0.5, heartbeat_timeout=10, restart_base_seconds=1,
+        restart_max_seconds=2, shutdown_timeout=1,
+        state_path=tmp_path / "state.json", child_heartbeat_path=tmp_path / "child.json",
+    )
+    result = run_supervisor(config, stop, popen_factory=spawn, event_sink=lambda **event: emitted.append(event))
+    assert result == 0
+    assert [event["event_type"] for event in emitted] == ["STARTED", "STARTED", "CHILD_EXITED", "RESTARTING", "STARTED", "STOPPED"]
+    assert all(event["supervisor_instance_id"] for event in emitted)
+    assert all(event["worker_id"] == config.worker_id for event in emitted)
+
+
+def test_supervisor_event_writer_is_bounded_and_allowlisted():
+    from app.edge_supervisor_events import AsyncSupervisorEventWriter
+    writer = AsyncSupervisorEventWriter(max_queue_size=1)
+    assert writer.emit(event_type="STARTED", supervisor_instance_id="instance", worker_id="worker")
+    assert not writer.emit(event_type="UNSAFE_EVENT", supervisor_instance_id="instance", worker_id="worker")
+    assert not writer.emit(event_type="STOPPED", supervisor_instance_id="instance", worker_id="worker")
+    assert writer._queue.qsize() == 1
+    writer.close(timeout=0)
+
+
+def test_supervisor_event_writer_persists_without_raw_payload():
+    from app.edge_supervisor_events import AsyncSupervisorEventWriter
+    persisted = []
+    class FakeSession:
+        def __enter__(self): return self
+        def __exit__(self, *_args): return False
+        def add(self, event): persisted.append(event)
+        def commit(self): pass
+        def rollback(self): pass
+    writer = AsyncSupervisorEventWriter(session_factory=FakeSession)
+    writer.start()
+    assert writer.emit(event_type="CHILD_EXITED", supervisor_instance_id="instance", worker_id="worker", reason_code="CHILD_EXITED", exit_code=17)
+    writer.close(timeout=1)
+    assert len(persisted) == 1
+    assert persisted[0].event_type == "CHILD_EXITED"
+    assert len(persisted[0].event_key) == 64
+    assert not hasattr(persisted[0], "payload")
+
 def test_module_entrypoint_loads_and_exposes_cli_help():
     api_root = Path(__file__).resolve().parents[1]
     result = subprocess.run(
