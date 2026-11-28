@@ -68,6 +68,18 @@ def test_aggregation_is_idempotent_and_store_scoped(db_factory):
         assert len(rows) == len({(r.store_id, r.granularity, r.window_start, r.metric_name, r.dimension_value) for r in rows})
 
 
+def test_checkpoint_naive_timestamp_is_interpreted_as_utc(db_factory):
+    now = datetime(2026, 11, 28, 12, 40, tzinfo=timezone.utc)
+    with db_factory.begin() as db:
+        db.add(models.EdgeObservabilityCheckpoint(
+            job_name="edge-observability-15m-v1",
+            last_completed_window=datetime(2026, 11, 28, 12, 15),
+            updated_at=now,
+        ))
+    result = aggregate_cycle(db_factory, now=now, max_windows_per_granularity=1)
+    assert result["15m"] == 1
+
+
 def test_retention_only_deletes_observability_rows(db_factory):
     now = datetime(2026, 11, 28, tzinfo=timezone.utc)
     with db_factory.begin() as db:

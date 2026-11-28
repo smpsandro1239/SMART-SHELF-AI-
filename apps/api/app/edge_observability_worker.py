@@ -32,8 +32,15 @@ def utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _database_utc(value: datetime) -> datetime:
+    """Normalize DB-returned timestamps; SQLite drops timezone metadata."""
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
 def floor_window(value: datetime, interval: timedelta) -> datetime:
-    value = value.astimezone(timezone.utc)
+    value = _database_utc(value)
     seconds = int(interval.total_seconds())
     epoch = int(value.timestamp())
     return datetime.fromtimestamp((epoch // seconds) * seconds, tz=timezone.utc)
@@ -117,7 +124,7 @@ def aggregate_cycle(session_factory=SessionLocal, *, now: datetime | None = None
                 if checkpoint.last_completed_window is None:
                     cursor = floor_window(retention_cutoff, interval) - interval
                 else:
-                    cursor = checkpoint.last_completed_window - interval * OVERLAP_WINDOWS[granularity]
+                    cursor = _database_utc(checkpoint.last_completed_window) - interval * OVERLAP_WINDOWS[granularity]
                 processed = 0
                 while cursor + interval <= completed_boundary and processed < max_windows_per_granularity:
                     _aggregate_window(db, granularity, cursor, cursor + interval, current)
