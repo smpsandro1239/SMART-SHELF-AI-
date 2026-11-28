@@ -44,6 +44,13 @@ def _add_inbox(factory, store_id, event_type, received_at, sequence):
         ))
 
 
+def _as_utc(value: datetime) -> datetime:
+    """Normalize timestamps read back from SQLite, which drops timezone metadata."""
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
 def test_floor_window_uses_utc_boundaries():
     value = datetime(2026, 11, 28, 12, 29, tzinfo=timezone.utc)
     assert floor_window(value, timedelta(minutes=15)) == datetime(2026, 11, 28, 12, 15, tzinfo=timezone.utc)
@@ -67,8 +74,9 @@ def test_aggregation_is_idempotent_and_store_scoped(db_factory):
     aggregate_cycle(db_factory, now=now, max_windows_per_granularity=1000)
     with db_factory() as db:
         rows = db.scalars(select(models.EdgeObservabilityAggregate)).all()
+        target_window = datetime(2026, 11, 28, 12, 15, tzinfo=timezone.utc)
         found = {(r.store_id, r.granularity, r.dimension_value): r.value_count for r in rows
-                 if r.window_start == datetime(2026, 11, 28, 12, 15, tzinfo=timezone.utc)}
+                 if _as_utc(r.window_start) == target_window}
         assert found[(1, "15m", "DEVICE_HEARTBEAT")] == 2
         assert found[(1, "15m", "ALL")] == 2
         assert found[(2, "15m", "ALL")] == 1
