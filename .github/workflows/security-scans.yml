@@ -134,13 +134,37 @@ jobs:
           allow_issue_writing: false
           fail_action: false
 
+      - name: Resolve Compose network and verify API DNS/readiness
+        shell: bash
+        run: |
+          set -euo pipefail
+          api_container="$(docker compose ps -q api)"
+          if [[ -z "$api_container" ]]; then
+            echo "API container was not found in the Compose project." >&2
+            docker compose ps
+            exit 1
+          fi
+
+          compose_network="$(docker inspect --format '{{range $name, $_ := .NetworkSettings.Networks}}{{println $name}}{{end}}' "$api_container" | head -n 1)"
+          if [[ -z "$compose_network" ]]; then
+            echo "Could not resolve the API container's Compose network." >&2
+            exit 1
+          fi
+
+          echo "Using Compose network: $compose_network"
+          echo "ZAP_COMPOSE_NETWORK=$compose_network" >> "$GITHUB_ENV"
+
+          docker run --rm --network "$compose_network" \
+            --entrypoint python3 ghcr.io/zaproxy/zaproxy:stable \
+            -c "import urllib.request; urllib.request.urlopen('http://api:8000/health/ready', timeout=10)"
+
       - name: Import OpenAPI and run safe-mode API baseline
         run: |
-          docker run --rm --network host \
+          docker run --rm --network "$ZAP_COMPOSE_NETWORK" \
             -v "$GITHUB_WORKSPACE:/zap/wrk/:rw" \
-            -t ghcr.io/zaproxy/zaproxy:stable \
+            ghcr.io/zaproxy/zaproxy:stable \
             zap-api-scan.py -S -I \
-            -t http://127.0.0.1:8000/openapi.json -f openapi \
+            -t http://api:8000/openapi.json -f openapi \
             -J zap-api-report.json -w zap-api-report.md -r zap-api-report.html
 
       - name: Upload OpenAPI baseline report
