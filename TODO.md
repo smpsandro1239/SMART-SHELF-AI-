@@ -2858,3 +2858,14 @@ A validação de `action` rejeita agora explicitamente valores que não sejam te
 - Commits publicados na `main`: correcção `0a150b20f9971f6c714acd8949f3422a409b4c39`; teste `986043f946ec053a8f03b1ee7f32b63a7bed3605`.
 - **Validação ainda pendente:** pytest/API CI, PostgreSQL 16, concorrência multi-worker, crash/lease/takeover/fencing e Docker Compose. Não afirmar o arranque validado até a CI executar o teste de subprocesso.
 - A registry transaccional continua sem injecção automática; `TASK_ACKNOWLEDGED` não foi activado; `COMPLETED` continua `REVIEW_REQUIRED`.
+
+
+## P1 — Observabilidade histórica Edge (2026-11-28)
+
+- [x] Criar migration 0105 posterior à 0104 para agregações tenant-scoped, checkpoints e eventos operacionais allowlisted do supervisor.
+- [x] Acrescentar modelos SQLAlchemy correspondentes e constraints de unicidade, granularidade, métrica e códigos de evento.
+- [x] Acrescentar cobertura SQLite da migration para isolamento por loja, idempotência e allowlists.
+- [ ] Implementar agregador independente com janelas UTC de 15 minutos/diárias, UPSERT, recuperação de atraso e checkpoints transaccionais.
+- [ ] Implementar persistência best-effort de eventos do supervisor, processo Docker e retenção em lotes de 90 dias.
+- [ ] Executar smoke PostgreSQL 16, suite completa e quatro workflows no mesmo SHA.
+- Limite desta entrega: apenas schema/modelos/teste de migration; não existe ainda agregação nem retenção executável.

@@ -1944,3 +1944,10 @@ A inspecção do HEAD `d0b8da341d331d271a1d9bd5771eddbffa8dac0d` confirmou que o
 5. Validar em testes e CI que a flag não altera tarefa, `task_version`, stock ou movimentos; `COMPLETED` permanece `REVIEW_REQUIRED`.
 
 Não existe activação operacional nem autorização de produção nesta fase.
+
+
+## 2026-11-28 — EDGE-OBSERVABILITY-HISTORY-01: schema inicial
+
+Foi preparado o incremento de schema com a migration 0105, posterior à 0104. A estrutura separa agregados derivados por loja, checkpoints transaccionais e eventos globais do supervisor. Os eventos globais não recebem um store_id fictício: o supervisor gere um processo global e não dispõe de uma identidade de loja de origem. Os eventos guardam apenas códigos allowlisted, sem payloads, segredos ou mensagens de excepção.
+
+A migration não altera as tabelas originais nem a retenção dos registos de negócio. O teste SQLite cobre constraints e idempotência estrutural. O agregador, a integração do supervisor, a retenção automática e a validação PostgreSQL continuam pendentes.

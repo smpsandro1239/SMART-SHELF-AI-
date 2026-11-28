@@ -1,13 +1,14 @@
 # PROGRESS — SMART SHELF AI
 
-## EDGE-OBSERVABILITY-HISTORY-01 — desenho aprovado; implementação por iniciar
+## EDGE-OBSERVABILITY-HISTORY-01 — implementação de schema iniciada
 
 - HEAD da main confirmado no início desta fase: 9bac2589727c9fe75d8a077736f9d29e616e8cea.
 - Política aprovada: 90 dias para agregados de 15 minutos, agregados diários e eventos operacionais do supervisor.
 - Inbox, processing, ACK, revisões humanas, auditoria de dispositivos e telemetria actual permanecem fora desta política.
 - Agregador independente do Edge Worker; agregação idempotente e tenant-scoped; sem endpoint público.
 - Não se pretende guardar cada transição/tentativa individual nem inferir contadores de rejeições/duplicados sem fonte durável.
-- Nesta actualização foi formalizado o contrato arquitectural. Não foram alterados código, migrations ou dados; não foram executados testes.
+- Commit de implementação em preparação: migration 0105, modelos SQLAlchemy e teste SQLite da migration. O agregador, persistência do supervisor, processo Docker e retenção ainda não estão implementados.
+- Não declarar a fase concluída até CI e smoke PostgreSQL 16 aprovados.
 
 
 ## Estado actual
@@ -48,3 +49,10 @@ A API CI confirmou a migration 0104 em PostgreSQL 16, o smoke de concorrência/i
 ## Limites de validação
 - Não foram executados testes localmente nesta sessão; a validação foi efectuada pelos workflows GitHub Actions indicados.
 - A revisão humana aprova ou rejeita a declaração do dispositivo; não comprova fisicamente a reposição.
+
+## EDGE-OBSERVABILITY-HISTORY-01 — incremento 1
+
+- Migration `0105_edge_observability_history` encadeada depois de 0104; cria agregados por loja/janela, checkpoints e eventos do supervisor com campos allowlisted.
+- Modelos SQLAlchemy adicionados sem alterar inbox, processing, ACK, revisões humanas ou telemetria actual.
+- Teste SQLite cobre unicidade, constraints de granularidade/métrica, FK de loja, allowlist de eventos e chave idempotente.
+- Validação pendente: execução da suite e PostgreSQL 16 pela CI.

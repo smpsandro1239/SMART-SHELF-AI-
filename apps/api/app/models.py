@@ -2067,3 +2067,68 @@ class EdgeTaskAcknowledgementReview(Base):
     idempotency_key: Mapped[str] = mapped_column(String(128), nullable=False)
     reviewed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
 
+
+
+class EdgeObservabilityAggregate(Base):
+    """Idempotent store-scoped aggregates derived from durable Edge source records."""
+    __tablename__ = "edge_observability_aggregates"
+    __table_args__ = (
+        UniqueConstraint(
+            "store_id", "granularity", "window_start", "metric_name", "dimension_value",
+            name="uq_edge_observability_aggregate_identity",
+        ),
+        CheckConstraint("granularity IN ('15m', 'daily')", name="ck_edge_observability_aggregate_granularity"),
+        CheckConstraint("metric_name IN ('events_received')", name="ck_edge_observability_aggregate_metric"),
+        CheckConstraint("value_count >= 0", name="ck_edge_observability_aggregate_value"),
+        CheckConstraint("length(dimension_value) BETWEEN 1 AND 32", name="ck_edge_observability_aggregate_dimension"),
+        Index("ix_edge_observability_aggregate_store_window", "store_id", "granularity", "window_start"),
+        Index("ix_edge_observability_aggregate_retention", "window_start"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    store_id: Mapped[int] = mapped_column(ForeignKey("stores.id", ondelete="RESTRICT"), nullable=False)
+    granularity: Mapped[str] = mapped_column(String(8), nullable=False)
+    window_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    metric_name: Mapped[str] = mapped_column(String(40), nullable=False)
+    dimension_value: Mapped[str] = mapped_column(String(32), default="ALL", nullable=False)
+    value_count: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+
+class EdgeObservabilityCheckpoint(Base):
+    """Transactional cursor for independent, resumable observability aggregation jobs."""
+    __tablename__ = "edge_observability_checkpoints"
+
+    job_name: Mapped[str] = mapped_column(String(80), primary_key=True)
+    last_completed_window: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+
+class EdgeSupervisorEvent(Base):
+    """Allowlisted supervisor lifecycle facts; deliberately stores no raw payload or exception text."""
+    __tablename__ = "edge_supervisor_events"
+    __table_args__ = (
+        UniqueConstraint("event_key", name="uq_edge_supervisor_event_key"),
+        CheckConstraint(
+            "event_type IN ('STARTED', 'RESTARTING', 'FAILED', 'STOPPED', 'CHILD_EXITED', 'HEARTBEAT_STALE')",
+            name="ck_edge_supervisor_event_type",
+        ),
+        CheckConstraint("restart_count >= 0", name="ck_edge_supervisor_event_restart_count"),
+        CheckConstraint(
+            "reason_code IS NULL OR reason_code IN "
+            "('CHILD_CONFIGURATION_ERROR', 'CHILD_EXITED', 'CHILD_HEARTBEAT_STALE', "
+            "'CHILD_HEARTBEAT_MISSING', 'SPAWN_FAILED', 'SHUTDOWN_REQUESTED', 'UNKNOWN')",
+            name="ck_edge_supervisor_event_reason",
+        ),
+        Index("ix_edge_supervisor_events_occurred_at", "occurred_at"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    event_key: Mapped[str] = mapped_column(String(64), nullable=False)
+    supervisor_instance_id: Mapped[str] = mapped_column(String(120), nullable=False)
+    event_type: Mapped[str] = mapped_column(String(24), nullable=False)
+    worker_id: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    reason_code: Mapped[str | None] = mapped_column(String(48), nullable=True)
+    restart_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    exit_code: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
