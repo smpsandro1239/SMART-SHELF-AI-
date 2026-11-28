@@ -2,11 +2,11 @@
 
 **Decisão aprovada:** retenção de 90 dias para agregações de 15 minutos, agregações diárias e eventos operacionais do supervisor. As fontes de verdade de negócio ficam fora desta política.
 
-- [ ] Criar migration posterior a 0104 para agregados, checkpoints e eventos operacionais do supervisor.
-- [ ] Implementar agregador independente do Edge Worker, com janelas UTC de 15 minutos/diárias, UPSERT idempotente e checkpoints transaccionais.
+- [x] Criar migration 0105 posterior a 0104 para agregados, checkpoints e eventos operacionais do supervisor; validada em PostgreSQL 16 e CI (8966ffdf91bf6d81437cc504f337b15cfce4db13).
+- [ ] Implementar/validar agregador independente do Edge Worker, com janelas UTC de 15 minutos/diárias, UPSERT idempotente e checkpoints transaccionais.
 - [ ] Derivar métricas apenas da inbox/processing/ledgers existentes; não inferir rejeições ou duplicados não persistidos.
 - [ ] Persistir eventos do supervisor com allowlist de campos e sem payloads, segredos ou texto de excepção.
-- [ ] Aplicar retenção configurável com default 90 dias, em lotes limitados e sem purga das fontes de verdade.
+- [ ] Validar retenção configurável (default 90 dias), em lotes limitados e sem purga das fontes de verdade.
 - [ ] Testar replay, atraso, janelas UTC, isolamento multi-loja, concorrência PostgreSQL 16, falha do agregador e retenção.
 - [ ] Integrar processo independente no Docker Compose com hardening; sem endpoint público/porta adicional.
 - [ ] Validar API CI/PostgreSQL 16, Quality Gates, Security Scans e Docker Compose no mesmo SHA.

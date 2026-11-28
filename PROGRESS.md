@@ -1,13 +1,14 @@
 # PROGRESS — SMART SHELF AI
 
-## EDGE-OBSERVABILITY-HISTORY-01 — implementação de schema iniciada
+## EDGE-OBSERVABILITY-HISTORY-01 — schema validado e agregador em implementação
 
 - HEAD da main confirmado no início desta fase: 9bac2589727c9fe75d8a077736f9d29e616e8cea.
 - Política aprovada: 90 dias para agregados de 15 minutos, agregados diários e eventos operacionais do supervisor.
 - Inbox, processing, ACK, revisões humanas, auditoria de dispositivos e telemetria actual permanecem fora desta política.
 - Agregador independente do Edge Worker; agregação idempotente e tenant-scoped; sem endpoint público.
 - Não se pretende guardar cada transição/tentativa individual nem inferir contadores de rejeições/duplicados sem fonte durável.
-- Commit de implementação em preparação: migration 0105, modelos SQLAlchemy e teste SQLite da migration. O agregador, persistência do supervisor, processo Docker e retenção ainda não estão implementados.
+- Migration 0105 publicada no SHA 8966ffdf91bf6d81437cc504f337b15cfce4db13; API CI, Quality Gates, Security Scans e Docker Compose Smoke concluíram SUCCESS. Suite API: 1803 passed, 1 skipped.
+- Incremento seguinte em preparação: agregador independente, UPSERT, checkpoints, retenção em lotes e serviço Docker. Persistência assíncrona de eventos do supervisor permanece pendente.
 - Não declarar a fase concluída até CI e smoke PostgreSQL 16 aprovados.
 
 
