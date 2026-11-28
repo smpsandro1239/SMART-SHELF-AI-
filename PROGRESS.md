@@ -1,5 +1,22 @@
 # PROGRESS — SMART SHELF AI
 
+## EDGE-OBSERVABILITY-VALIDATION-02 — cobertura operacional em preparação
+
+- Estado inicial confirmado: `main` no SHA `890d46d0a60fccf7414cd11a112de404bce156fe`.
+- A implementação base da observabilidade histórica já existe: migration 0105, modelos, agregador independente, UPSERT idempotente, checkpoints transaccionais, retenção configurável de 90 dias, writer assíncrono do supervisor e serviço Docker independente.
+- A validação anterior no SHA `890d46d` confirmou API CI, Quality Gates, Security Scans e Docker Compose Smoke — 4/4 SUCCESS; API CI e Quality Gates reportaram 1810 passed, 1 skipped.
+- A correcção dos timestamps SQLite está publicada; não reabrir nem duplicar essa alteração.
+- Incremento actual: testes dedicados do `AsyncSupervisorEventWriter` e smoke PostgreSQL 16 para interrupção de transacção, replay concorrente, persistência real de eventos do supervisor e retenção isolada.
+- Critérios de fecho: suite API, smoke PostgreSQL 16 dedicado e quatro workflows aprovados no mesmo SHA.
+- Salvaguardas: não alterar migrations 0103/0104; não purgar inbox, processing, ACK, revisões, auditoria de dispositivos ou inventário; não activar `TASK_ACKNOWLEDGED`; não criar endpoint público de métricas; falhas de observabilidade não podem bloquear o ciclo Edge.
+
+## Estado actual antes da validação
+- Branch: main
+- SHA: 890d46d0a60fccf7414cd11a112de404bce156fe
+- Última actualização: 2026-11-28
+
+---
+
 ## EDGE-OBSERVABILITY-HISTORY-01 — schema validado e agregador em implementação
 
 - HEAD da main confirmado no início desta fase: 9bac2589727c9fe75d8a077736f9d29e616e8cea.

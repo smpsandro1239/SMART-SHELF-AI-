@@ -4,11 +4,11 @@
 
 - [x] Criar migration 0105 posterior a 0104 para agregados, checkpoints e eventos operacionais do supervisor; validada em PostgreSQL 16 e CI (8966ffdf91bf6d81437cc504f337b15cfce4db13).
 - [ ] Implementar/validar agregador independente do Edge Worker, com janelas UTC de 15 minutos/diárias, UPSERT idempotente e checkpoints transaccionais.
-- [ ] Derivar métricas apenas da inbox/processing/ledgers existentes; não inferir rejeições ou duplicados não persistidos.
-- [ ] Persistir eventos do supervisor com allowlist de campos e sem payloads, segredos ou texto de excepção.
-- [ ] Validar retenção configurável (default 90 dias), em lotes limitados e sem purga das fontes de verdade.
+- [x] Derivar `events_received` exclusivamente da inbox durável, com isolamento por loja; não inferir rejeições ou duplicados não persistidos.
+- [x] Persistir eventos do supervisor de forma assíncrona, best-effort e com allowlist; sem payloads, segredos ou texto de excepção.
+- [x] Implementar retenção configurável (default 90 dias), em lotes limitados e sem purga das fontes de verdade.
 - [ ] Testar replay, atraso, janelas UTC, isolamento multi-loja, concorrência PostgreSQL 16, falha do agregador e retenção.
-- [ ] Integrar processo independente no Docker Compose com hardening; sem endpoint público/porta adicional.
+- [x] Integrar processo independente no Docker Compose com hardening e healthcheck; sem endpoint público/porta adicional.
 - [ ] Validar API CI/PostgreSQL 16, Quality Gates, Security Scans e Docker Compose no mesmo SHA.
 
 Contrato: [docs/architecture/edge-observability-retention-contract.md](docs/architecture/edge-observability-retention-contract.md).
@@ -2865,7 +2865,11 @@ A validação de `action` rejeita agora explicitamente valores que não sejam te
 - [x] Criar migration 0105 posterior à 0104 para agregações tenant-scoped, checkpoints e eventos operacionais allowlisted do supervisor.
 - [x] Acrescentar modelos SQLAlchemy correspondentes e constraints de unicidade, granularidade, métrica e códigos de evento.
 - [x] Acrescentar cobertura SQLite da migration para isolamento por loja, idempotência e allowlists.
-- [ ] Implementar agregador independente com janelas UTC de 15 minutos/diárias, UPSERT, recuperação de atraso e checkpoints transaccionais.
-- [ ] Implementar persistência best-effort de eventos do supervisor, processo Docker e retenção em lotes de 90 dias.
+- [x] Implementar agregador independente com janelas UTC de 15 minutos/diárias, UPSERT, recuperação de atraso e checkpoints transaccionais.
+- [x] Implementar persistência best-effort de eventos do supervisor, processo Docker e retenção em lotes de 90 dias.
+- [x] Corrigir comparação de timestamps SQLite no teste de agregação (commit `890d46d`).
+- [ ] Acrescentar testes dedicados ao AsyncSupervisorEventWriter: allowlist, falha DB, saturação da fila e shutdown gracioso.
+- [ ] Acrescentar smoke PostgreSQL 16 para rollback após interrupção, replay concorrente, persistência do supervisor e retenção sem tocar nos ledgers de negócio.
 - [ ] Executar smoke PostgreSQL 16, suite completa e quatro workflows no mesmo SHA.
-- Limite desta entrega: apenas schema/modelos/teste de migration; não existe ainda agregação nem retenção executável.
+
+Contrato: [docs/architecture/edge-observability-retention-contract.md](docs/architecture/edge-observability-retention-contract.md).

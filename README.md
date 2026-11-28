@@ -1,3 +1,13 @@
+## Observabilidade histórica Edge — implementação publicada e validação adicional (2026-11-28)
+
+A implementação base está publicada: o processo `edge-observability-worker` agrega eventos duráveis da inbox em janelas UTC de 15 minutos e diárias, com UPSERT idempotente e checkpoints transaccionais; o writer assíncrono do supervisor persiste apenas eventos allowlisted; a retenção configurável remove em lotes apenas agregados e eventos do supervisor (90 dias por omissão). O serviço é independente do Edge Event Worker e não expõe endpoint ou porta de métricas.
+
+A observabilidade é secundária: falhas de agregação, retenção ou persistência nunca podem afectar ingestão, processamento, ACK, revisão humana ou inventário. A inbox, processing, ACK, revisões humanas, auditoria de dispositivos e telemetria actual permanecem fora da política de purga. A fonte da métrica `events_received` é exclusivamente a inbox durável; não são estimadas rejeições ou duplicados não persistidos.
+
+A validação operacional específica PostgreSQL 16 está a ser reforçada com testes do writer assíncrono, interrupção de transacção, replay concorrente e prova de que a retenção não altera ledgers de negócio. O contrato detalhado está em [docs/architecture/edge-observability-retention-contract.md](docs/architecture/edge-observability-retention-contract.md).
+
+---
+
 ## Observabilidade histórica Edge — política aprovada (2026-11-27)
 
 A próxima camada de observabilidade utilizará as fontes PostgreSQL já existentes (inbox, estado de processamento, ACK, revisões humanas e estado actual dos dispositivos), sem duplicar ledgers de negócio. Os agregados de 15 minutos, diários e eventos operacionais do supervisor terão retenção de **90 dias**. A retenção não se aplica à inbox, processing, ACK, revisões humanas, auditoria de dispositivos ou telemetria actual. O agregador será independente do Edge Worker, idempotente, tenant-scoped e sem endpoint público; uma falha de observabilidade nunca pode afectar o processamento de negócio. O contrato detalhado e os critérios de aceitação estão em [docs/architecture/edge-observability-retention-contract.md](docs/architecture/edge-observability-retention-contract.md).

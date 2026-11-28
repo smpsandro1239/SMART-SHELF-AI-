@@ -344,5 +344,10 @@ jobs:
           DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/smart_shelf_ci
           APP_ENV: test
         run: python scripts/postgres_inventory_sync_job_smoke.py
+      - name: Verify PostgreSQL 16 Edge observability crash recovery, concurrency and retention
+        env:
+          DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/smart_shelf_ci
+          APP_ENV: test
+        run: python scripts/postgres_edge_observability_smoke.py
       - name: Run tests
         run: pytest -q
