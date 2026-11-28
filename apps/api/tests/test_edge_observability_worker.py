@@ -56,6 +56,13 @@ def test_aggregation_is_idempotent_and_store_scoped(db_factory):
     _add_inbox(db_factory, 1, "DEVICE_HEARTBEAT", event_at, 1)
     _add_inbox(db_factory, 1, "DEVICE_HEARTBEAT", event_at + timedelta(seconds=1), 2)
     _add_inbox(db_factory, 2, "DEVICE_HEARTBEAT", event_at, 1)
+    # Start the bounded backfill immediately before the window under test.
+    with db_factory.begin() as db:
+        db.add(models.EdgeObservabilityCheckpoint(
+            job_name="edge-observability-15m-v1",
+            last_completed_window=event_at + timedelta(minutes=60),
+            updated_at=now,
+        ))
     aggregate_cycle(db_factory, now=now, max_windows_per_granularity=1000)
     aggregate_cycle(db_factory, now=now, max_windows_per_granularity=1000)
     with db_factory() as db:
