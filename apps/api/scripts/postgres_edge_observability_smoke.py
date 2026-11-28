@@ -11,7 +11,6 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from multiprocessing import get_context
 from threading import Barrier
-from time import sleep
 from uuid import uuid4
 
 from sqlalchemy import select, text
@@ -84,7 +83,7 @@ def _seed_fixture():
         return store.id, device_id, now, window_15m, window_daily, old, inbox_rows[-1].id
 
 
-def _interrupt_transaction(queue, now, target_window):
+def _interrupt_transaction(queue, release_event, now, target_window):
     import app.edge_observability_worker as worker
 
     original = worker._aggregate_window
@@ -94,7 +93,7 @@ def _interrupt_transaction(queue, now, target_window):
         if granularity == "15m" and window_start == target_window:
             backend_pid = db.execute(text("SELECT pg_backend_pid()")).scalar_one()
             queue.put(backend_pid)
-            sleep(120)
+            release_event.wait(timeout=30)
         return result
 
     worker._aggregate_window = aggregate_then_pause
@@ -131,9 +130,10 @@ def main():
     # the transaction but before the checkpoint/aggregate transaction commits.
     context = get_context("spawn")
     backend_queue = context.Queue()
+    release_event = context.Event()
     process = context.Process(
         target=_interrupt_transaction,
-        args=(backend_queue, now, window_15m),
+        args=(backend_queue, release_event, now, window_15m),
         name="edge-observability-interrupted-transaction",
     )
     process.start()
@@ -145,10 +145,12 @@ def main():
                 {"pid": backend_pid},
             ).scalar_one()
         assert terminated is True, "failed to terminate observability transaction backend"
-        process.join(timeout=30)
+        release_event.set()
+        process.join(timeout=20)
         assert not process.is_alive(), "interrupted aggregation process did not exit"
         assert process.exitcode != 0, "terminated transaction unexpectedly committed"
     finally:
+        release_event.set()
         if process.is_alive():
             process.kill()
             process.join(timeout=15)
