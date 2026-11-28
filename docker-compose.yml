@@ -261,6 +261,43 @@ services:
       migrate:
         condition: service_completed_successfully
 
+  edge-observability-worker:
+    build:
+      context: ./apps/api
+    restart: unless-stopped
+    stop_grace_period: 20s
+    user: "65532:65532"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=16m,mode=1777,uid=65532,gid=65532
+    command: ["python", "-m", "app.edge_observability_worker"]
+    healthcheck:
+      test: ["CMD", "python", "-m", "app.edge_observability_worker", "--healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 180s
+    environment:
+      APP_ENV: ${APP_ENV:-development}
+      HOME: /tmp
+      TMPDIR: /tmp
+      DATABASE_URL: postgresql+psycopg://${APP_DB_USER:-smart_shelf_runtime}:${APP_DB_PASSWORD:-local_runtime_change_me}@db:5432/${POSTGRES_DB:-smart_shelf}
+      EDGE_OBSERVABILITY_POLL_SECONDS: ${EDGE_OBSERVABILITY_POLL_SECONDS:-60}
+      EDGE_OBSERVABILITY_MAX_WINDOWS_PER_CYCLE: ${EDGE_OBSERVABILITY_MAX_WINDOWS_PER_CYCLE:-96}
+      EDGE_OBSERVABILITY_RETENTION_DAYS: ${EDGE_OBSERVABILITY_RETENTION_DAYS:-90}
+      EDGE_OBSERVABILITY_RETENTION_BATCH_SIZE: ${EDGE_OBSERVABILITY_RETENTION_BATCH_SIZE:-500}
+      EDGE_OBSERVABILITY_HEALTH_MAX_AGE: ${EDGE_OBSERVABILITY_HEALTH_MAX_AGE:-180}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
 volumes:
   shelf_images:
   dataset_outputs:

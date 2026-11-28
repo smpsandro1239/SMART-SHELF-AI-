@@ -5,12 +5,15 @@ mutates inbox, processing, ACK, review, task, or inventory records.
 """
 from __future__ import annotations
 
+import argparse
+import json
 import logging
 import os
 import signal
 import threading
 import time
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 from sqlalchemy import delete, func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -168,7 +171,30 @@ def run_once() -> dict[str, object]:
     return {"aggregated_windows": aggregated, "purged": retention}
 
 
-def main() -> int:
+def healthcheck(path: Path | None = None, *, now: float | None = None, max_age: int = 180) -> bool:
+    target = path or Path(os.getenv("EDGE_OBSERVABILITY_HEARTBEAT_PATH", "/tmp/edge-observability-heartbeat.json"))
+    try:
+        payload = json.loads(target.read_text(encoding="utf-8"))
+        age = (time.time() if now is None else now) - float(payload["heartbeat_at"])
+    except (OSError, ValueError, TypeError, KeyError, json.JSONDecodeError):
+        return False
+    return 0 <= age <= max_age
+
+
+def _write_health_heartbeat() -> None:
+    target = Path(os.getenv("EDGE_OBSERVABILITY_HEARTBEAT_PATH", "/tmp/edge-observability-heartbeat.json"))
+    target.parent.mkdir(parents=True, exist_ok=True)
+    temporary = target.with_name(f".{target.name}.{os.getpid()}.tmp")
+    temporary.write_text(json.dumps({"pid": os.getpid(), "heartbeat_at": time.time()}), encoding="utf-8")
+    os.replace(temporary, target)
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="Independent Edge observability aggregator and retention worker")
+    parser.add_argument("--healthcheck", action="store_true")
+    args = parser.parse_args(argv)
+    if args.healthcheck:
+        return 0 if healthcheck(max_age=int(os.getenv("EDGE_OBSERVABILITY_HEALTH_MAX_AGE", "180"))) else 1
     interval = float(os.getenv("EDGE_OBSERVABILITY_POLL_SECONDS", "60"))
     batch = int(os.getenv("EDGE_OBSERVABILITY_MAX_WINDOWS_PER_CYCLE", "96"))
     if not 5 <= interval <= 3600 or not 1 <= batch <= 1000:
@@ -188,6 +214,7 @@ def main() -> int:
                 retention_days=int(os.getenv("EDGE_OBSERVABILITY_RETENTION_DAYS", "90")),
                 batch_size=int(os.getenv("EDGE_OBSERVABILITY_RETENTION_BATCH_SIZE", "500")),
             )
+            _write_health_heartbeat()
             logger.info("Edge observability cycle completed: windows=%s retention=%s", result, retention)
         except Exception as exc:
             # This process is deliberately independent; errors never reach business workers.
